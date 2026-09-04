@@ -2145,6 +2145,31 @@ export const workoutSetEntries = pgTable(
   // reviewing this set later can tell which reps' numbers to actually
   // believe instead of only ever seeing that context live, in the tracker
   // dialog, at the moment the set was captured.
+  // The set's load in POUNDS, and its rep count as a number, both resolved
+  // once at save time from the free-text columns above.
+  //
+  // reps and weight are text because they have to be: "8-10", "AMRAP", a
+  // weight an athlete typed however they type it. But every consumer that
+  // wants to compute with them was re-deriving them independently -- twenty
+  // parseFloat sites for weight alone -- and each one decided for itself
+  // whether to convert kg to lbs. Ten of them did not, including the
+  // platform-wide research aggregates (pooled 1RM per sport, the ACWR load
+  // series). Since weightUnit is per ENTRY and the schema explicitly
+  // supports a superset pairing a dumbbell lift in lbs with a kettlebell
+  // lift in kg, those sums were adding two different units together.
+  //
+  // Pounds rather than kilograms only because that is what
+  // preferredWeightUnit defaults to and what most of the existing
+  // comparisons already assumed; nothing here depends on which was picked,
+  // only on there being one.
+  //
+  // Null, not zero, whenever there is no numeric load to speak of -- a
+  // bodyweight, band or box set did not lift zero pounds, it lifted an
+  // amount this schema does not record. Same for a weight that will not
+  // parse. Consumers must keep skipping nulls rather than treating them as
+  // a floor.
+  weightLbs: real("weight_lbs"),
+  repsCount: integer("reps_count"),
   trustScores: json("trust_scores"),
   // The one number you can ask about across every capture mode.
   //

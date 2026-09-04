@@ -2495,6 +2495,45 @@ WHERE "trust_score_pct" IS NULL
 -- is null, so an account that predates this behaves exactly as it did before.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "time_zone" text;
 
+-- ---------------------------------------------------------------------------
+-- Normalized load and rep count on each logged set.
+--
+-- See shared/schema.ts's own comment on workoutSetEntries.weightLbs. Short version: reps and
+-- weight are free text by necessity, twenty separate places re-parsed them, and ten of those
+-- ignored weight_unit_at_log entirely -- including the platform-wide pooled 1RM per sport and
+-- the ACWR load series, both of which therefore summed kilograms and pounds together.
+-- ---------------------------------------------------------------------------
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "weight_lbs" real;
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "reps_count" integer;
+
+-- Backfill, reproducing exactly what the application now does at save time.
+--
+-- The weight regex accepts a leading decimal (".5") and surrounding whitespace, matching what
+-- parseFloat accepted at every site this replaces -- the point is to change WHICH unit the
+-- number is in, not which strings count as a number. regexp_match yields NULL on no match, and
+-- subscripting a NULL match gives NULL, so an unparseable value lands as NULL rather than
+-- erroring or as a misleading zero.
+--
+-- weight_mode lives on the parent entry, so only sets under a 'numeric' entry get a load at
+-- all; a bodyweight, band or box set keeps NULL. Only touches rows where the column is still
+-- NULL, so re-running on every deploy is a no-op and it never overwrites a value written at
+-- save time.
+UPDATE "workout_set_entries" wse
+SET "weight_lbs" = (
+  (regexp_match(wse."weight", '^\\s*([0-9]*\\.?[0-9]+)'))[1]::numeric
+  * (CASE WHEN wse."weight_unit_at_log" = 'kg' THEN 2.20462 ELSE 1 END)
+)::real
+FROM "workout_log_entries" wle
+WHERE wle."id" = wse."log_entry_id"
+  AND wse."weight_lbs" IS NULL
+  AND wle."weight_mode" = 'numeric'
+  AND wse."weight" ~ '^\\s*[0-9]*\\.?[0-9]+';
+
+UPDATE "workout_set_entries"
+SET "reps_count" = (regexp_match("reps", '^\\s*([0-9]+)'))[1]::integer
+WHERE "reps_count" IS NULL
+  AND "reps" ~ '^\\s*[0-9]+';
+
 `;
 
 async function main() {

@@ -432,6 +432,34 @@ function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number)
 // Only the number. A trust score's notes are prose written about one
 // athlete's specific capture, which is why the archive does not copy them
 // either.
+// The one place free-text reps/weight become numbers, so every consumer
+// reads the same value instead of re-deriving it. See
+// workoutSetEntries.weightLbs' own schema comment for why that mattered:
+// twenty sites parsed weight independently and ten ignored the logged unit,
+// including the platform-wide pooled 1RM and the ACWR load series, which
+// were therefore adding kilograms to pounds.
+//
+// Accepts what parseFloat accepted at those sites -- a leading decimal,
+// surrounding whitespace -- because the point is to change which UNIT the
+// number is in, not which strings count as a number. Null rather than zero
+// when there is nothing numeric to read: a bodyweight set did not lift zero.
+function normalizeSetLoad(input: {
+  weightMode: string;
+  weight: string | null | undefined;
+  weightUnit: "lbs" | "kg" | null | undefined;
+  reps: string | null | undefined;
+}): { weightLbs: number | null; repsCount: number | null } {
+  const parsedWeight =
+    input.weightMode === "numeric" && input.weight ? parseFloat(input.weight) : NaN;
+  const weightLbs = Number.isFinite(parsedWeight)
+    ? input.weightUnit === "kg"
+      ? parsedWeight * 2.20462
+      : parsedWeight
+    : null;
+  const parsedReps = input.reps ? parseInt(input.reps, 10) : NaN;
+  return { weightLbs, repsCount: Number.isFinite(parsedReps) ? parsedReps : null };
+}
+
 function resolveTrustScorePct(source: {
   trustScores?: unknown;
   swingTrustScore?: unknown;
@@ -16782,6 +16810,12 @@ ${catalog}`;
                 jumpBreakdown: s.jumpBreakdown ?? null,
                 legDriveAsymmetry: s.legDriveAsymmetry ?? null,
                 armDriveAsymmetry: s.armDriveAsymmetry ?? null,
+                ...normalizeSetLoad({
+                  weightMode: entry.weightMode,
+                  weight: s.weight,
+                  weightUnit: entryWeightUnit,
+                  reps: s.reps,
+                }),
                 trustScores: s.trustScores ?? null,
                 trustScorePct: resolveTrustScorePct(s),
                 isPr,
