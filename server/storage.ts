@@ -4862,7 +4862,16 @@ export const storage = {
     }[];
     total: number;
   }> {
-    db.insert(aggregateDataAccessLog).values({ adminId }).catch(() => {});
+    // Deliberately not awaited -- an audit write must never make an admin's
+    // own query fail or wait. But the failure is logged rather than
+    // swallowed: this table is the ONLY accountability mechanism on
+    // platform-wide athlete data (nothing else restricts who may run these
+    // queries), so a write that silently never lands means the access
+    // happened and left no trace, which is the one outcome the log exists
+    // to prevent.
+    db.insert(aggregateDataAccessLog)
+      .values({ adminId })
+      .catch((err) => console.error("Failed to write aggregate-data access log:", err));
     const [rows, [{ count: total }]] = await Promise.all([
       db
         .select({
@@ -7219,7 +7228,17 @@ Hard rules, no exceptions:
       contributionByAthlete = new Map(rows.rows.map((r) => [r.athlete_id, Number(r.total)]));
     } else if (challenge.metric === "total_reps") {
       const rows = await db.execute<{ athlete_id: number; total: string }>(sql`
-        SELECT wl.athlete_id, sum((regexp_match(wse.reps, '^\\d+'))[1]::numeric) AS total
+        SELECT wl.athlete_id, sum(
+          -- CASE, not the WHERE alone. Postgres does not promise a WHERE
+          -- qual is applied before the select list is evaluated, so a row
+          -- whose reps are free text ("AMRAP", "8-10") could still reach
+          -- ::numeric and error the whole query out. A CASE branch is the
+          -- documented way to guarantee the cast never runs on a value
+          -- that would not survive it. The matching WHERE below stays --
+          -- it still prunes rows for the planner, it just is not the thing
+          -- keeping this safe.
+          CASE WHEN wse.reps ~ '^\\d+' THEN (regexp_match(wse.reps, '^\\d+'))[1]::numeric ELSE 0 END
+        ) AS total
         FROM workout_logs wl
         JOIN workout_log_entries wle ON wle.workout_log_id = wl.id
         JOIN workout_set_entries wse ON wse.log_entry_id = wle.id
@@ -7234,8 +7253,17 @@ Hard rules, no exceptions:
       const rows = await db.execute<{ athlete_id: number; total: string }>(sql`
         SELECT wl.athlete_id,
           sum(
-            (regexp_match(wse.reps, '^\\d+'))[1]::numeric *
-            wse.weight::numeric * (CASE WHEN wse.weight_unit_at_log = 'kg' THEN 2.20462 ELSE 1 END)
+            -- Same CASE-not-WHERE reasoning as the total_reps query above:
+            -- weight is a free-text column, so the ::numeric cast has to be
+            -- guarded structurally rather than by a filter Postgres is free
+            -- to apply after the projection.
+            CASE
+              WHEN wse.reps ~ '^\\d+' AND wse.weight ~ '^[0-9]+(\\.[0-9]+)?$'
+              THEN (regexp_match(wse.reps, '^\\d+'))[1]::numeric *
+                   wse.weight::numeric *
+                   (CASE WHEN wse.weight_unit_at_log = 'kg' THEN 2.20462 ELSE 1 END)
+              ELSE 0
+            END
           ) AS total
         FROM workout_logs wl
         JOIN workout_log_entries wle ON wle.workout_log_id = wl.id
@@ -10154,43 +10182,61 @@ Hard rules, no exceptions:
     return new Set(rows.map((r) => r.lessonId));
   },
 
+  // Wrapped in one transaction, matching createClassWithStructure on the
+  // Classes side. A track, its lessons, its questions and each question's
+  // answers are one thing as far as an admin is concerned; a failure
+  // partway through used to leave a track that exists with some of its
+  // lessons, or a quiz question with no answers under it. The read-back
+  // runs after the commit, not inside -- getAcademyTrackFull goes through
+  // `db`, which is a different connection and would not see uncommitted
+  // rows.
   async createAcademyTrackWithStructure(structure: AcademyTrackStructureInput) {
-    const [track] = await db
-      .insert(academyTracks)
-      .values({
-        title: structure.title,
-        description: structure.description,
-        keyPrinciplesForAi: structure.keyPrinciplesForAi,
-        orderIndex: structure.orderIndex,
-      })
-      .returning();
-    if (structure.lessons.length > 0) {
-      await db.insert(academyLessons).values(
-        structure.lessons.map((l) => ({
-          trackId: track.id,
-          lessonNumber: l.lessonNumber,
-          title: l.title,
-          content: l.content,
-          estMinutes: l.estMinutes ?? null,
-        })),
-      );
-    }
-    for (const q of structure.quizQuestions) {
-      const [question] = await db
-        .insert(academyQuizQuestions)
-        .values({ trackId: track.id, orderIndex: q.orderIndex, questionText: q.questionText })
+    const trackId = await db.transaction(async (tx) => {
+      const [track] = await tx
+        .insert(academyTracks)
+        .values({
+          title: structure.title,
+          description: structure.description,
+          keyPrinciplesForAi: structure.keyPrinciplesForAi,
+          orderIndex: structure.orderIndex,
+        })
         .returning();
-      await db.insert(academyQuizAnswers).values(
-        q.answers.map((a) => ({
-          questionId: question.id,
-          orderIndex: a.orderIndex,
-          answerText: a.answerText,
-          isCorrect: a.isCorrect,
-          explanation: a.explanation,
-        })),
-      );
-    }
-    return this.getAcademyTrackFull(track.id);
+      if (structure.lessons.length > 0) {
+        await tx.insert(academyLessons).values(
+          structure.lessons.map((l) => ({
+            trackId: track.id,
+            lessonNumber: l.lessonNumber,
+            title: l.title,
+            content: l.content,
+            estMinutes: l.estMinutes ?? null,
+          })),
+        );
+      }
+      for (const q of structure.quizQuestions) {
+        const [question] = await tx
+          .insert(academyQuizQuestions)
+          .values({ trackId: track.id, orderIndex: q.orderIndex, questionText: q.questionText })
+          .returning();
+        // A question with no answers is not a question -- the input schema
+        // already requires at least two (see academyQuizQuestionInputSchema),
+        // and an empty .values([]) would throw rather than no-op, so this
+        // guard is about the insert being reachable at all, not about
+        // tolerating an empty quiz.
+        if (q.answers.length > 0) {
+          await tx.insert(academyQuizAnswers).values(
+            q.answers.map((a) => ({
+              questionId: question.id,
+              orderIndex: a.orderIndex,
+              answerText: a.answerText,
+              isCorrect: a.isCorrect,
+              explanation: a.explanation,
+            })),
+          );
+        }
+      }
+      return track.id;
+    });
+    return this.getAcademyTrackFull(trackId);
   },
 
   // Same wipe-and-rebuild-by-id-match pattern as updateClassStructure --
@@ -10200,95 +10246,127 @@ Hard rules, no exceptions:
   // (nothing reads Coaches Corner content off a schedule), so this is
   // considerably simpler than its Class counterpart.
   async updateAcademyTrackStructure(trackId: number, structure: AcademyTrackStructureInput) {
-    await db
-      .update(academyTracks)
-      .set({
-        title: structure.title,
-        description: structure.description,
-        keyPrinciplesForAi: structure.keyPrinciplesForAi,
-        orderIndex: structure.orderIndex,
-      })
-      .where(eq(academyTracks.id, trackId));
+    // One transaction, same as createAcademyTrackWithStructure above and
+    // updateClassStructure on the Classes side. This function deletes
+    // removed lessons, deletes removed questions, and wipes every surviving
+    // question's answers before reinserting them -- nine statements, and a
+    // failure anywhere after the first left a track with quizzes whose
+    // answers were gone. The read-back stays outside the transaction, since
+    // getAcademyTrackFull reads through `db` and would not see uncommitted
+    // rows.
+    await db.transaction(async (tx) => {
+      await tx
+        .update(academyTracks)
+        .set({
+          title: structure.title,
+          description: structure.description,
+          keyPrinciplesForAi: structure.keyPrinciplesForAi,
+          orderIndex: structure.orderIndex,
+        })
+        .where(eq(academyTracks.id, trackId));
 
-    const existing = await db.query.academyLessons.findMany({
-      where: eq(academyLessons.trackId, trackId),
-    });
-    const keepIds = new Set(structure.lessons.filter((l) => l.id != null).map((l) => l.id));
-    const toDelete = existing.filter((l) => !keepIds.has(l.id));
-    if (toDelete.length > 0) {
-      await db.delete(academyLessons).where(
-        inArray(
-          academyLessons.id,
-          toDelete.map((l) => l.id),
-        ),
-      );
-    }
-    for (const lesson of structure.lessons) {
-      if (lesson.id != null) {
-        await db
-          .update(academyLessons)
-          .set({
+      const existing = await tx.query.academyLessons.findMany({
+        where: eq(academyLessons.trackId, trackId),
+      });
+      const keepIds = new Set(structure.lessons.filter((l) => l.id != null).map((l) => l.id));
+      const toDelete = existing.filter((l) => !keepIds.has(l.id));
+      if (toDelete.length > 0) {
+        await tx.delete(academyLessons).where(
+          inArray(
+            academyLessons.id,
+            toDelete.map((l) => l.id),
+          ),
+        );
+      }
+      for (const lesson of structure.lessons) {
+        if (lesson.id != null) {
+          await tx
+            .update(academyLessons)
+            .set({
+              lessonNumber: lesson.lessonNumber,
+              title: lesson.title,
+              content: lesson.content,
+              estMinutes: lesson.estMinutes ?? null,
+            })
+            // trackId is in the predicate, not just the id. An id is taken
+            // straight from the submitted payload, and without this a
+            // lesson id belonging to a DIFFERENT track would be overwritten
+            // by this track's content -- the update reached any row in the
+            // table that happened to carry that id. Narrowing to rows this
+            // track already owns can only ever exclude a write that should
+            // not have happened; a legitimate edit always matches, because
+            // the ids the client holds came from this track's own read.
+            .where(and(eq(academyLessons.id, lesson.id), eq(academyLessons.trackId, trackId)));
+        } else {
+          await tx.insert(academyLessons).values({
+            trackId,
             lessonNumber: lesson.lessonNumber,
             title: lesson.title,
             content: lesson.content,
             estMinutes: lesson.estMinutes ?? null,
-          })
-          .where(eq(academyLessons.id, lesson.id));
-      } else {
-        await db.insert(academyLessons).values({
-          trackId,
-          lessonNumber: lesson.lessonNumber,
-          title: lesson.title,
-          content: lesson.content,
-          estMinutes: lesson.estMinutes ?? null,
-        });
+          });
+        }
       }
-    }
 
-    // Same id-match pattern as lessons above for the questions themselves;
-    // each question's answers are simpler to just replace wholesale on
-    // every save rather than id-matching individual answers too, since
-    // nothing else in the app ever references a specific answer row.
-    const existingQuestions = await db.query.academyQuizQuestions.findMany({
-      where: eq(academyQuizQuestions.trackId, trackId),
-    });
-    const keepQuestionIds = new Set(
-      structure.quizQuestions.filter((q) => q.id != null).map((q) => q.id),
-    );
-    const questionsToDelete = existingQuestions.filter((q) => !keepQuestionIds.has(q.id));
-    if (questionsToDelete.length > 0) {
-      await db.delete(academyQuizQuestions).where(
-        inArray(
-          academyQuizQuestions.id,
-          questionsToDelete.map((q) => q.id),
-        ),
+      // Same id-match pattern as lessons above for the questions themselves;
+      // each question's answers are simpler to just replace wholesale on
+      // every save rather than id-matching individual answers too, since
+      // nothing else in the app ever references a specific answer row.
+      const existingQuestions = await tx.query.academyQuizQuestions.findMany({
+        where: eq(academyQuizQuestions.trackId, trackId),
+      });
+      const keepQuestionIds = new Set(
+        structure.quizQuestions.filter((q) => q.id != null).map((q) => q.id),
       );
-    }
-    for (const q of structure.quizQuestions) {
-      let questionId = q.id;
-      if (questionId != null) {
-        await db
-          .update(academyQuizQuestions)
-          .set({ orderIndex: q.orderIndex, questionText: q.questionText })
-          .where(eq(academyQuizQuestions.id, questionId));
-        await db.delete(academyQuizAnswers).where(eq(academyQuizAnswers.questionId, questionId));
-      } else {
-        const [inserted] = await db
-          .insert(academyQuizQuestions)
-          .values({ trackId, orderIndex: q.orderIndex, questionText: q.questionText })
-          .returning();
-        questionId = inserted.id;
+      const questionsToDelete = existingQuestions.filter((q) => !keepQuestionIds.has(q.id));
+      if (questionsToDelete.length > 0) {
+        await tx.delete(academyQuizQuestions).where(
+          inArray(
+            academyQuizQuestions.id,
+            questionsToDelete.map((q) => q.id),
+          ),
+        );
       }
-      await db.insert(academyQuizAnswers).values(
-        q.answers.map((a) => ({
-          questionId: questionId!,
-          orderIndex: a.orderIndex,
-          answerText: a.answerText,
-          isCorrect: a.isCorrect,
-          explanation: a.explanation,
-        })),
-      );
-    }
+      // Ids this track actually owns, so a submitted question id that
+      // belongs to another track falls through to the insert branch below
+      // instead of overwriting that other track's question -- same
+      // reasoning as the lesson predicate above, expressed as a set here
+      // because the answer wipe underneath it needs the same guarantee.
+      const ownedQuestionIds = new Set(existingQuestions.map((q) => q.id));
+      for (const q of structure.quizQuestions) {
+        let questionId = q.id != null && ownedQuestionIds.has(q.id) ? q.id : null;
+        if (questionId != null) {
+          await tx
+            .update(academyQuizQuestions)
+            .set({ orderIndex: q.orderIndex, questionText: q.questionText })
+            .where(
+              and(eq(academyQuizQuestions.id, questionId), eq(academyQuizQuestions.trackId, trackId)),
+            );
+          await tx.delete(academyQuizAnswers).where(eq(academyQuizAnswers.questionId, questionId));
+        } else {
+          const [inserted] = await tx
+            .insert(academyQuizQuestions)
+            .values({ trackId, orderIndex: q.orderIndex, questionText: q.questionText })
+            .returning();
+          questionId = inserted.id;
+        }
+        // See createAcademyTrackWithStructure's own note -- the schema
+        // requires at least two answers, and .values([]) throws rather than
+        // no-ops, so this guards reachability rather than tolerating an
+        // empty quiz.
+        if (q.answers.length > 0) {
+          await tx.insert(academyQuizAnswers).values(
+            q.answers.map((a) => ({
+              questionId: questionId!,
+              orderIndex: a.orderIndex,
+              answerText: a.answerText,
+              isCorrect: a.isCorrect,
+              explanation: a.explanation,
+            })),
+          );
+        }
+      }
+    });
     return this.getAcademyTrackFull(trackId);
   },
 
@@ -12736,14 +12814,14 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
         // "blind spot for this athlete," it's just an empty knowledge base.
         db.insert(aiKnowledgeGapLog)
           .values({ context, position: profile.position ?? null, gender: profile.gender as any, age: profile.age ?? null })
-          .catch(() => {});
+          .catch((err) => console.error("Failed to write AI knowledge gap log:", err));
       }
       return "";
     }
     if (context) {
       db.insert(aiKnowledgeUsageLog)
         .values(entries.map((e) => ({ entryId: e.id, context })))
-        .catch(() => {});
+        .catch((err) => console.error("Failed to write AI knowledge usage log:", err));
     }
     const established = entries.filter((e) => e.maturity === "established");
     const experimental = entries.filter((e) => e.maturity === "experimental");
@@ -12838,7 +12916,16 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
     limit = 200,
     offset = 0,
   ): Promise<{ rows: AggregateAthleteRow[]; total: number }> {
-    db.insert(aggregateDataAccessLog).values({ adminId }).catch(() => {});
+    // Deliberately not awaited -- an audit write must never make an admin's
+    // own query fail or wait. But the failure is logged rather than
+    // swallowed: this table is the ONLY accountability mechanism on
+    // platform-wide athlete data (nothing else restricts who may run these
+    // queries), so a write that silently never lands means the access
+    // happened and left no trace, which is the one outcome the log exists
+    // to prevent.
+    db.insert(aggregateDataAccessLog)
+      .values({ adminId })
+      .catch((err) => console.error("Failed to write aggregate-data access log:", err));
     const [rows, [{ count: total }]] = await Promise.all([
       this.queryAggregateAthleteData({ limit, offset }),
       db.select({ count: count() }).from(users).where(eq(users.role, "athlete")),
@@ -12916,7 +13003,16 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       caraCapUsagePercent: number | null;
     })[]
   > {
-    db.insert(aggregateDataAccessLog).values({ adminId }).catch(() => {});
+    // Deliberately not awaited -- an audit write must never make an admin's
+    // own query fail or wait. But the failure is logged rather than
+    // swallowed: this table is the ONLY accountability mechanism on
+    // platform-wide athlete data (nothing else restricts who may run these
+    // queries), so a write that silently never lands means the access
+    // happened and left no trace, which is the one outcome the log exists
+    // to prevent.
+    db.insert(aggregateDataAccessLog)
+      .values({ adminId })
+      .catch((err) => console.error("Failed to write aggregate-data access log:", err));
 
     const cutoff = new Date(Date.now() - filters.lookbackDays * 24 * 60 * 60 * 1000)
       .toISOString()

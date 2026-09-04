@@ -89,10 +89,30 @@ export async function resolveLocation(ip: string | undefined): Promise<string | 
 const LAST_SEEN_THROTTLE_MS = 10 * 60 * 1000;
 const lastTouchedAt = new Map<number, number>();
 
+// An entry is dead once it is older than the throttle window -- the next
+// call for that session would return true and rewrite it anyway, so keeping
+// it buys nothing. Without this the map only ever grew: one entry per
+// session record the process has seen, held until restart, which on a
+// long-lived instance with real signup volume is a slow leak of exactly the
+// kind nothing ever surfaces (no error, no slow query, just a process that
+// gets heavier the longer it stays up).
+//
+// Swept on write rather than on a timer, so there is no interval to own and
+// no work at all on an idle process. The scan is over a map whose live size
+// is bounded by "sessions active in the last ten minutes," and it runs at
+// most once per ten minutes per session, so it is far cheaper than the DB
+// write it exists to avoid.
+function evictStaleLastSeen(now: number): void {
+  for (const [id, at] of lastTouchedAt) {
+    if (now - at >= LAST_SEEN_THROTTLE_MS) lastTouchedAt.delete(id);
+  }
+}
+
 export function shouldTouchLastSeen(sessionRecordId: number): boolean {
   const now = Date.now();
   const last = lastTouchedAt.get(sessionRecordId) ?? 0;
   if (now - last < LAST_SEEN_THROTTLE_MS) return false;
+  evictStaleLastSeen(now);
   lastTouchedAt.set(sessionRecordId, now);
   return true;
 }

@@ -2063,7 +2063,7 @@ CREATE INDEX IF NOT EXISTS "tracker_diagnosis_reports_created_idx" ON "tracker_d
 -- reconciliation (it runs on every deploy) never inserts a duplicate.
 INSERT INTO "ai_knowledge_entries" ("content", "category", "maturity", "source_type", "source_excerpt", "taught_by")
 SELECT
-  'Forge''s camera tracking cross-checks independent signals against each other to score confidence, rather than trusting any single reading alone. Med-ball throws and kettlebell-swing speed blend the tracked object''s own speed against a body-joint-derived proxy (wrist speed), weighted by each signal''s own confidence -- agreement raises the trust score, disagreement lowers it and the reading gets flagged. Golf/baseball swing separation (X-Factor) is cross-checked against a geometrically independent cross-diagonal distance measurement between the opposite shoulder and hip. Bar-path/full lifts additionally cross-check hip-knee-ankle (for a squat/hinge/lunge) or shoulder-elbow-wrist (for a press/pull) joint consistency within each rep -- a joint moving far less than its neighbors in the same kinetic chain during the same rep is a tracking-glitch signal even when that joint''s own raw confidence score looks fine, since a misdetected landmark can still report high confidence while tracking the wrong feature. When discussing a set''s trust score, or why a tracked reading might be uncertain, reference this cross-check system rather than treating a single confidence number as unexplainable.',
+  'Forge''s camera tracking cross-checks independent signals against each other to score confidence, rather than trusting any single reading alone. Med-ball throws and kettlebell-swing speed blend the tracked object''s own speed against a body-joint-derived proxy (wrist speed), weighted by each signal''s own confidence -- agreement raises the trust score, disagreement lowers it and the reading gets flagged. Golf/baseball swing separation (X-Factor) is cross-checked against a geometrically independent cross-diagonal distance measurement between the opposite shoulder and hip. Bar-path/full lifts on iOS additionally cross-check hip-knee-ankle (for a squat/hinge/lunge) or shoulder-elbow-wrist (for a press/pull) joint consistency within each rep -- a joint moving far less than its neighbors in the same kinetic chain during the same rep is a tracking-glitch signal even when that joint''s own raw confidence score looks fine, since a misdetected landmark can still report high confidence while tracking the wrong feature. That kinetic-chain check is iOS-only today (chainConsistencyPenalty is called from the AVFoundation/Vision bar dialog and not from the MediaPipe one), so an Android or web lift''s trust score is built from the other signals alone -- never tell a coach or athlete that an Android reading was chain-checked. When discussing a set''s trust score, or why a tracked reading might be uncertain, reference this cross-check system rather than treating a single confidence number as unexplainable.',
   'tracking',
   'established',
   'pasted_text',
@@ -2075,6 +2075,24 @@ WHERE
     SELECT 1 FROM "ai_knowledge_entries"
     WHERE "source_excerpt" = 'Session note: tracking confidence cross-check system (blendSpeedEstimates, chainConsistencyPenalty, crossDiagonalSpread) -- see pose-tracking.ts, rotation-tracking.ts, bar-tracking.ts'
   );
+
+-- The entry above shipped asserting the kinetic-chain cross-check as a plain property of
+-- bar-path/full lifts, with no platform caveat. It is iOS-only: chainConsistencyPenalty has one
+-- call site, in the AVFoundation/Vision bar dialog, and the MediaPipe dialog that serves Android
+-- and web omits it when it builds the same trust score. Every AI feature reads active entries
+-- and this one is marked 'established', which the app treats as guidance to apply as a hard
+-- rule -- so the coach chat could explain an Android athlete's trust score by citing a check
+-- that never ran on their capture.
+--
+-- The INSERT above is guarded on source_excerpt, so on a database that already has the row it
+-- does nothing and the old wording would stand forever. This rewrites content in place for
+-- those databases. Idempotent by construction: it only matches rows whose content is not
+-- already the corrected text, so re-running it on every deploy is a no-op, and it never touches
+-- an entry an admin has since edited into something else of their own.
+UPDATE "ai_knowledge_entries"
+SET "content" = 'Forge''s camera tracking cross-checks independent signals against each other to score confidence, rather than trusting any single reading alone. Med-ball throws and kettlebell-swing speed blend the tracked object''s own speed against a body-joint-derived proxy (wrist speed), weighted by each signal''s own confidence -- agreement raises the trust score, disagreement lowers it and the reading gets flagged. Golf/baseball swing separation (X-Factor) is cross-checked against a geometrically independent cross-diagonal distance measurement between the opposite shoulder and hip. Bar-path/full lifts on iOS additionally cross-check hip-knee-ankle (for a squat/hinge/lunge) or shoulder-elbow-wrist (for a press/pull) joint consistency within each rep -- a joint moving far less than its neighbors in the same kinetic chain during the same rep is a tracking-glitch signal even when that joint''s own raw confidence score looks fine, since a misdetected landmark can still report high confidence while tracking the wrong feature. That kinetic-chain check is iOS-only today (chainConsistencyPenalty is called from the AVFoundation/Vision bar dialog and not from the MediaPipe one), so an Android or web lift''s trust score is built from the other signals alone -- never tell a coach or athlete that an Android reading was chain-checked. When discussing a set''s trust score, or why a tracked reading might be uncertain, reference this cross-check system rather than treating a single confidence number as unexplainable.'
+WHERE "source_excerpt" = 'Session note: tracking confidence cross-check system (blendSpeedEstimates, chainConsistencyPenalty, crossDiagonalSpread) -- see pose-tracking.ts, rotation-tracking.ts, bar-tracking.ts'
+  AND "content" <> 'Forge''s camera tracking cross-checks independent signals against each other to score confidence, rather than trusting any single reading alone. Med-ball throws and kettlebell-swing speed blend the tracked object''s own speed against a body-joint-derived proxy (wrist speed), weighted by each signal''s own confidence -- agreement raises the trust score, disagreement lowers it and the reading gets flagged. Golf/baseball swing separation (X-Factor) is cross-checked against a geometrically independent cross-diagonal distance measurement between the opposite shoulder and hip. Bar-path/full lifts on iOS additionally cross-check hip-knee-ankle (for a squat/hinge/lunge) or shoulder-elbow-wrist (for a press/pull) joint consistency within each rep -- a joint moving far less than its neighbors in the same kinetic chain during the same rep is a tracking-glitch signal even when that joint''s own raw confidence score looks fine, since a misdetected landmark can still report high confidence while tracking the wrong feature. That kinetic-chain check is iOS-only today (chainConsistencyPenalty is called from the AVFoundation/Vision bar dialog and not from the MediaPipe one), so an Android or web lift''s trust score is built from the other signals alone -- never tell a coach or athlete that an Android reading was chain-checked. When discussing a set''s trust score, or why a tracked reading might be uncertain, reference this cross-check system rather than treating a single confidence number as unexplainable.';
 
 -- Backfill height_in/body_weight_lbs for any athlete missing them -- calibrateFromFrames hard-
 -- requires a real height (see its own comment in pose-tracking.ts), so a test athlete with none
@@ -2159,6 +2177,100 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "mean_eai" real;
 -- see skeletonReplayFrameSchema's own comment in shared/schema.ts for why this exists (Vision
 -- framework has no "re-run the model against a stored clip" replay path the way MediaPipe does).
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "skeleton_frames" json;
+-- ---------------------------------------------------------------------------
+-- Foreign-key indexes.
+--
+-- Postgres indexes the PARENT side of a foreign key automatically, because that side is a
+-- primary key. It never indexes the CHILD side. So every column below points at another table
+-- and had no index of its own, which costs twice over:
+--
+--   1. ON DELETE CASCADE has to FIND the child rows before it can remove them. With no index
+--      that is a sequential scan of the whole child table, per parent row deleted. Deleting one
+--      account (the self-service deletion Apple and Google Play both require) fanned out into
+--      dozens of full table scans inside a single implicit transaction.
+--   2. The same columns are what ordinary reads filter on -- a coach's exercise bank filters
+--      exercises by coach_id, the program builder filters program_exercises by exercise_id, and
+--      so on.
+--
+-- Additive and idempotent: CREATE INDEX IF NOT EXISTS changes no data, no constraint, and no
+-- query result. The only cost is that building an index takes a brief write lock on that table,
+-- once, on the first deploy that runs this. Every table here is small enough today for that to
+-- be well under a second, except workout_log_entries -- if that one's pause is a concern, run
+-- its three statements by hand with CREATE INDEX CONCURRENTLY first and this block becomes a
+-- no-op for them. (CONCURRENTLY cannot be used here: it is not allowed inside a transaction
+-- block, and each SQL_PART is sent as one multi-statement string, which Postgres treats as one
+-- implicit transaction.)
+--
+-- Deliberately NOT here: any index on workout_set_entries. It is the largest table in the
+-- schema and its own FK column already has one.
+-- ---------------------------------------------------------------------------
+
+-- Exercise library. exercises had no indexes at all, and it is the most-read table in the app.
+CREATE INDEX IF NOT EXISTS "exercises_coach_idx" ON "exercises" ("coach_id");
+CREATE INDEX IF NOT EXISTS "program_exercises_exercise_idx" ON "program_exercises" ("exercise_id");
+CREATE INDEX IF NOT EXISTS "skill_program_exercises_skill_exercise_idx" ON "skill_program_exercises" ("skill_exercise_id");
+CREATE INDEX IF NOT EXISTS "favorite_exercises_exercise_idx" ON "favorite_exercises" ("exercise_id");
+CREATE INDEX IF NOT EXISTS "favorite_skill_exercises_skill_exercise_idx" ON "favorite_skill_exercises" ("skill_exercise_id");
+CREATE INDEX IF NOT EXISTS "exercise_usage_log_exercise_idx" ON "exercise_usage_log" ("exercise_id");
+CREATE INDEX IF NOT EXISTS "skill_exercise_usage_log_skill_exercise_idx" ON "skill_exercise_usage_log" ("skill_exercise_id");
+CREATE INDEX IF NOT EXISTS "exercise_submissions_exercise_idx" ON "exercise_submissions" ("exercise_id");
+CREATE INDEX IF NOT EXISTS "exercise_submissions_submitted_by_idx" ON "exercise_submissions" ("submitted_by");
+CREATE INDEX IF NOT EXISTS "exercise_reports_exercise_idx" ON "exercise_reports" ("exercise_id");
+CREATE INDEX IF NOT EXISTS "exercise_reports_reported_by_idx" ON "exercise_reports" ("reported_by");
+
+-- Logging path. These three are what every historical read joins through.
+CREATE INDEX IF NOT EXISTS "workout_log_entries_program_exercise_idx" ON "workout_log_entries" ("program_exercise_id");
+CREATE INDEX IF NOT EXISTS "workout_log_entries_exercise_idx" ON "workout_log_entries" ("exercise_id");
+CREATE INDEX IF NOT EXISTS "workout_log_entries_corrective_idx" ON "workout_log_entries" ("corrective_id");
+CREATE INDEX IF NOT EXISTS "workout_logs_program_day_idx" ON "workout_logs" ("program_day_id");
+
+-- Programs and assignments.
+CREATE INDEX IF NOT EXISTS "programs_coach_idx" ON "programs" ("coach_id");
+CREATE INDEX IF NOT EXISTS "skill_programs_coach_idx" ON "skill_programs" ("coach_id");
+CREATE INDEX IF NOT EXISTS "assignments_program_idx" ON "assignments" ("program_id");
+CREATE INDEX IF NOT EXISTS "skill_assignments_skill_program_idx" ON "skill_assignments" ("skill_program_id");
+CREATE INDEX IF NOT EXISTS "assignment_correctives_program_day_idx" ON "assignment_correctives" ("program_day_id");
+CREATE INDEX IF NOT EXISTS "assignment_correctives_exercise_idx" ON "assignment_correctives" ("exercise_id");
+CREATE INDEX IF NOT EXISTS "assignment_exercise_overrides_program_day_only_idx" ON "assignment_exercise_overrides" ("program_day_id");
+CREATE INDEX IF NOT EXISTS "assignment_exercise_overrides_program_exercise_idx" ON "assignment_exercise_overrides" ("program_exercise_id");
+CREATE INDEX IF NOT EXISTS "assignment_exercise_overrides_substitute_exercise_idx" ON "assignment_exercise_overrides" ("substitute_exercise_id");
+CREATE INDEX IF NOT EXISTS "workout_comments_program_day_only_idx" ON "workout_comments" ("program_day_id");
+CREATE INDEX IF NOT EXISTS "workout_comments_author_idx" ON "workout_comments" ("author_id");
+
+-- Skills.
+CREATE INDEX IF NOT EXISTS "skill_session_logs_skill_program_day_idx" ON "skill_session_logs" ("skill_program_day_id");
+CREATE INDEX IF NOT EXISTS "skill_session_logs_skill_program_exercise_idx" ON "skill_session_logs" ("skill_program_exercise_id");
+CREATE INDEX IF NOT EXISTS "skill_day_logs_skill_program_day_idx" ON "skill_day_logs" ("skill_program_day_id");
+CREATE INDEX IF NOT EXISTS "skill_day_comments_skill_program_day_idx" ON "skill_day_comments" ("skill_program_day_id");
+CREATE INDEX IF NOT EXISTS "skill_day_comments_author_idx" ON "skill_day_comments" ("author_id");
+
+-- Classes and Coaches Corner.
+CREATE INDEX IF NOT EXISTS "classes_coach_idx" ON "classes" ("coach_id");
+CREATE INDEX IF NOT EXISTS "class_lessons_skill_program_idx" ON "class_lessons" ("skill_program_id");
+CREATE INDEX IF NOT EXISTS "class_lesson_progress_class_lesson_idx" ON "class_lesson_progress" ("class_lesson_id");
+CREATE INDEX IF NOT EXISTS "class_lesson_progress_skill_assignment_idx" ON "class_lesson_progress" ("skill_assignment_id");
+CREATE INDEX IF NOT EXISTS "class_enrollments_coach_idx" ON "class_enrollments" ("coach_id");
+CREATE INDEX IF NOT EXISTS "class_coach_settings_coach_idx" ON "class_coach_settings" ("coach_id");
+CREATE INDEX IF NOT EXISTS "academy_lesson_completions_lesson_idx" ON "academy_lesson_completions" ("lesson_id");
+
+-- Teams, goals, screens, reports.
+CREATE INDEX IF NOT EXISTS "team_members_athlete_idx" ON "team_members" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "team_posts_author_idx" ON "team_posts" ("author_id");
+CREATE INDEX IF NOT EXISTS "coach_athlete_requests_coach_idx" ON "coach_athlete_requests" ("coach_id");
+CREATE INDEX IF NOT EXISTS "goals_created_by_idx" ON "goals" ("created_by");
+CREATE INDEX IF NOT EXISTS "goals_exercise_idx" ON "goals" ("exercise_id");
+CREATE INDEX IF NOT EXISTS "goals_skill_exercise_idx" ON "goals" ("skill_exercise_id");
+CREATE INDEX IF NOT EXISTS "movement_screens_coach_idx" ON "movement_screens" ("coach_id");
+CREATE INDEX IF NOT EXISTS "movement_screen_batteries_coach_idx" ON "movement_screen_batteries" ("coach_id");
+CREATE INDEX IF NOT EXISTS "problem_reports_user_idx" ON "problem_reports" ("user_id");
+
+-- Auth tokens. Both are looked up by token_hash on every reset/verify click and deleted by
+-- user_id every time a new one is issued, and neither table had an index of any kind.
+CREATE INDEX IF NOT EXISTS "password_reset_tokens_token_hash_idx" ON "password_reset_tokens" ("token_hash");
+CREATE INDEX IF NOT EXISTS "password_reset_tokens_user_idx" ON "password_reset_tokens" ("user_id");
+CREATE INDEX IF NOT EXISTS "email_verification_tokens_token_hash_idx" ON "email_verification_tokens" ("token_hash");
+CREATE INDEX IF NOT EXISTS "email_verification_tokens_user_idx" ON "email_verification_tokens" ("user_id");
+
 `;
 
 async function main() {
