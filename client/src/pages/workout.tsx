@@ -26,6 +26,7 @@ import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
 import { AvJumpTrackerDialog } from "@/components/av-jump-tracker-dialog";
 import { AvBarTrackerDialog } from "@/components/av-bar-tracker-dialog";
 import { AvSwingTrackerDialog, type AvSwingSetMetrics } from "@/components/av-swing-tracker-dialog";
+import { SwingTrackerDialog } from "@/components/swing-tracker-dialog";
 import {
   AvMedballTrackerDialog,
   type MedballSetMetrics,
@@ -3301,24 +3302,18 @@ function ExerciseLogContent({
                 />
               );
             }
-            // MediaPipe-based rotation/tempo tracking for swings isn't
-            // built yet -- see ar-swing-tracker-dialog.tsx's own comment on
-            // why ARKit (now the AV pipeline) went first here too (same "no
-            // implement to follow" reasoning jump mode used). Falls back to
-            // a plain video-only capture rather than forcing this through
-            // BarTrackerDialog's bar/jump-shaped tracking, which doesn't
-            // fit a swing at all.
+            // MediaPipe's own rotation/tempo tracking -- see swing-tracker-dialog.tsx's own
+            // file comment for how this differs from the AV pipeline above (own scoring-math
+            // fork in android-swing-tracking.ts, no athlete-height calibration needed, frames
+            // already collected live by the time recording stops).
             return (
-              <FormVideoRecorderDialog
+              <SwingTrackerDialog
                 open={trackingSet !== null}
                 onOpenChange={(open) => !open && setTrackingSet(null)}
+                sport={item.trackingLevel === "golf_swing" ? "golf" : "baseball"}
+                recordVideo={mergedTracking}
+                onCapture={handleSwingCapture}
                 videoContext={videoContextFor(trackingSet)}
-                onSaved={(url) => {
-                  if (trackingSet == null) return;
-                  onUpdateSet(trackingSet, { formCheckVideoUrl: url }, { immediate: true });
-                  setTrackingSet(null);
-                }}
-                onQueued={() => setTrackingSet(null)}
               />
             );
           }
