@@ -1550,3 +1550,65 @@ export function implausibleRangeOfMotion(
     `was misread, so every number from this take would be wrong by the same factor.`
   );
 }
+
+// Fraction of a take's own typical rep size that a reversal must clear to count as a rep.
+//
+// The existing rep gate is BASE_MIN_REP_AMPLITUDE_CM, an absolute 20cm. That is a good gate
+// when a real-world scale exists, and it stays in use for every lift that has one. It cannot
+// work without one: a threshold in centimetres applied to a trace in pixel-units is meaningless,
+// and when the scale was merely WRONG it did visible damage -- at a 4x-inflated scale an
+// athlete's ordinary settling wobble cleared 20cm and 11 real bench reps segmented into 18.
+//
+// So when there is no scale, the take calibrates its own gate. Real reps in a set are all
+// roughly the same size and are far larger than the noise between them, so a fraction of the
+// take's own typical reversal separates them cleanly without knowing what a centimetre is.
+//
+// 0.4 sits in the wide gap between those two populations: settling, grip adjustment and pose
+// jitter run well under half a real rep, while genuine reps -- including a last rep that
+// shortens with fatigue -- stay comfortably above it.
+const RELATIVE_REP_AMPLITUDE_FRACTION = 0.4;
+
+// A take needs at least this many candidate reversals before its own typical size means
+// anything. Below it there is nothing to take a median of, and one reversal would define
+// itself as typical and always pass.
+const MIN_REVERSALS_FOR_RELATIVE_GATE = 3;
+
+/**
+ * Segments reps WITHOUT a real-world scale, by deriving the amplitude gate from the trace
+ * itself. `positions` may be in any consistent unit, including raw pixel-space.
+ *
+ * Two passes. The first uses a deliberately permissive gate to enumerate every reversal,
+ * including noise. The median of those amplitudes is then the take's own sense of "a normal
+ * movement", and the second pass gates at a fraction of it.
+ *
+ * A median, not a mean or a max: a single tracking spike would drag a mean upward and would
+ * BE the max, and either would then raise the gate high enough to discard real reps -- the
+ * failure mode that matters most, since a missed rep is worse than an extra one here.
+ *
+ * Returns null when the take has too few reversals to judge, so the caller can fall back
+ * rather than trust a gate derived from nothing.
+ */
+export function segmentPhasesRelative(
+  positions: number[],
+): { startIdx: number; endIdx: number }[] | null {
+  if (positions.length < 2) return null;
+  const span = Math.max(...positions) - Math.min(...positions);
+  if (!(span > 0)) return null;
+
+  // Permissive enough to catch everything real while still collapsing single-sample jitter.
+  const exploratory = segmentPhases(positions, span * 0.02);
+  if (exploratory.length < MIN_REVERSALS_FOR_RELATIVE_GATE) return null;
+
+  const amplitudes = exploratory
+    .map((p) => Math.abs(positions[p.endIdx] - positions[p.startIdx]))
+    .filter((a) => a > 0)
+    .sort((a, b) => a - b);
+  if (amplitudes.length < MIN_REVERSALS_FOR_RELATIVE_GATE) return null;
+
+  const mid = Math.floor(amplitudes.length / 2);
+  const typical =
+    amplitudes.length % 2 === 0 ? (amplitudes[mid - 1] + amplitudes[mid]) / 2 : amplitudes[mid];
+  if (!(typical > 0)) return null;
+
+  return segmentPhases(positions, typical * RELATIVE_REP_AMPLITUDE_FRACTION);
+}
