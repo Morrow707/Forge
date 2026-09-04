@@ -221,6 +221,7 @@ import { ALL_TROPHY_DEFINITIONS } from "@shared/achievements";
 import { FAULT_CORRECTIVE_KEYWORDS } from "@shared/fault-correctives";
 import { resolveSkillFaultThresholds, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { resolveCoachFeatures, type CoachFeature } from "@shared/team-features";
+import { todayInZone, utcToday, shiftIsoDate } from "@shared/athlete-day";
 import { EXERCISE_FAMILIES, EQUIPMENT_ORDER } from "@shared/exercise-family";
 import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
 import type { CoachSection } from "@shared/coach-sections";
@@ -18759,13 +18760,41 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return map.get(athleteId) ?? { currentStreak: 0, longestStreak: 0, totalCompleted: 0 };
   },
 
+  // What "today" is for each of these athletes, which is not one answer.
+  //
+  // A roster spans time zones, and every date-bounded number an athlete sees
+  // -- their streak, their trailing load windows -- is only right if it is
+  // computed against their own calendar day rather than the server's. One
+  // query for the whole set rather than a lookup per athlete, since every
+  // caller here is already working in batches.
+  //
+  // An athlete with no zone on file falls back to UTC, which is exactly what
+  // the code did for everybody before this existed.
+  async todayByAthlete(athleteIds: number[]): Promise<Map<number, string>> {
+    const out = new Map<number, string>();
+    if (athleteIds.length === 0) return out;
+    const rows = await db
+      .select({ id: users.id, timeZone: users.timeZone })
+      .from(users)
+      .where(inArray(users.id, athleteIds));
+    const now = new Date();
+    for (const row of rows) out.set(row.id, todayInZone(row.timeZone, now));
+    for (const id of athleteIds) if (!out.has(id)) out.set(id, utcToday(now));
+    return out;
+  },
+
   async computeStreaks(athleteIds: number[]) {
     const athleteAssignments = await db.query.assignments.findMany({
       where: inArray(assignments.athleteId, athleteIds),
       with: { program: { with: { weeks: { with: { days: true } } } } },
     });
 
-    const today = formatISO(new Date(), { representation: "date" });
+    // Was one server-side date for the whole batch. A scheduled day counts
+    // toward a streak only once it has actually arrived, so on a UTC server
+    // an athlete in the Americas had tomorrow's session counted as already
+    // due for several hours every evening -- which broke the streak they
+    // were mid-way through building.
+    const todayByAthlete = await this.todayByAthlete(athleteIds);
     const assignmentAthlete = new Map(athleteAssignments.map((a) => [a.id, a.athleteId]));
 
     const scheduledByAthlete = new Map<
@@ -18788,7 +18817,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
             resolveAssignmentDate(a, calendarWeekNumber, day.dayNumber, day.id, isFirstCycle),
             { representation: "date" },
           );
-          if (dateStr <= today && !byDate.has(dateStr)) {
+          if (dateStr <= (todayByAthlete.get(a.athleteId) ?? utcToday()) && !byDate.has(dateStr)) {
             byDate.set(dateStr, { assignmentId: a.id, programDayId: day.id });
           }
         }

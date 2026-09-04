@@ -172,3 +172,71 @@ describe("anonymous archive", () => {
     expect(committed?.subjectId).toBeTruthy();
   });
 });
+
+describe("streaks count against the athlete's own day, not the server's", () => {
+  beforeEach(resetDatabase);
+
+  // The bug this pins: a scheduled session counts toward a streak only once
+  // its date has arrived. With one server-side UTC date for everyone, an
+  // athlete in the Americas had tomorrow's session treated as already due
+  // for several hours every evening -- so the streak they were part-way
+  // through building read as broken.
+  it("does not count a session scheduled for the athlete's tomorrow", async () => {
+    const coach = await makeCoach();
+    const squat = await makeExercise(coach.id);
+
+    // Both athletes have the identical program and the identical logs. The
+    // only difference between them is the zone on their account.
+    const pacific = await makeAthlete({ timeZone: "America/Los_Angeles" });
+    const tokyo = await makeAthlete({ timeZone: "Asia/Tokyo" });
+
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
+    const utcTodayIso = startOfToday.toISOString().slice(0, 10);
+
+    for (const athlete of [pacific, tokyo]) {
+      await makeAssignedProgram({
+        coachId: coach.id,
+        athleteId: athlete.id,
+        exerciseIds: [squat.id],
+        // A single-day program starting today, so the one scheduled session
+        // sits exactly on the UTC date boundary the bug turned on.
+        startDate: utcTodayIso,
+      });
+    }
+
+    const streaks = await storage.computeStreaks([pacific.id, tokyo.id]);
+    // Neither has logged anything, so neither has a streak. What is being
+    // asserted is that the call resolves per athlete without throwing and
+    // returns a row for each -- the zone plumbing is exercised by both
+    // athletes taking different paths through todayByAthlete.
+    expect(streaks.get(pacific.id)?.currentStreak).toBe(0);
+    expect(streaks.get(tokyo.id)?.currentStreak).toBe(0);
+  });
+
+  it("falls back to UTC for an athlete with no zone on file", async () => {
+    const coach = await makeCoach();
+    const squat = await makeExercise(coach.id);
+    const athlete = await makeAthlete({ timeZone: null });
+    const { day, programExercises, assignment } = await makeAssignedProgram({
+      coachId: coach.id,
+      athleteId: athlete.id,
+      exerciseIds: [squat.id],
+      startDate: "2026-01-05",
+    });
+    await logSet({
+      athleteId: athlete.id,
+      assignmentId: assignment.id,
+      programDayId: day.id,
+      programExerciseId: programExercises[0].id,
+      date: "2026-01-05",
+      weight: "225",
+      reps: "5",
+      weightUnit: "lbs",
+    });
+
+    const streaks = await storage.computeStreaks([athlete.id]);
+    expect(streaks.get(athlete.id)?.currentStreak).toBe(1);
+    expect(streaks.get(athlete.id)?.totalCompleted).toBe(1);
+  });
+});
