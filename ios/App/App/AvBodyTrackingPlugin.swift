@@ -1773,10 +1773,62 @@ private final class AvCoreMlImplementDetector {
     private var recentBoxes: [CGRect] = []
     private let boxHistoryWindow = 4
 
+    // Camera overlord: Vision's own free-flight parabola fit (VNDetectTrajectoriesRequest, iOS
+    // 14+), an entirely independent signal from VNTrackObjectRequest's own visual-continuity
+    // tracking above -- physics-based (does this object's actual path over the last several
+    // frames trace a real gravity-only arc), not appearance-based, so it can catch a drifted
+    // lock in a way box-consistency alone can't: a lock that drifted onto something visually
+    // similar (a plate, a shadow) but NOT actually in free flight. Stateful across calls, same
+    // as trackingRequest above -- accumulates evidence over trajectoryLength frames before it
+    // ever reports an observation, so it's recreated (not just cleared) on reset() the same way
+    // a fresh trackingRequest is, rather than carrying stale accumulated frames across clips.
+    //
+    // Wrapped in a factory method (not a plain lazy var) specifically so reset() can call it
+    // again -- a lazy var's deferred-evaluation behavior only governs its FIRST access; once
+    // initialized it's a completely ordinary stored var that can be reassigned any time, which
+    // is exactly what a fresh per-clip instance needs.
+    private lazy var trajectoryRequest: VNDetectTrajectoriesRequest = makeTrajectoryRequest()
+    private var latestTrajectoryObservations: [VNTrajectoryObservation] = []
+    // How many consistent points VNDetectTrajectoriesRequest wants to see before it reports a
+    // trajectory at all -- Apple's own sample code uses 5 (see this class's header comment for
+    // the source); kept the same since there's no real-footage reason yet to diverge from it.
+    private let trajectoryLength = 5
+
+    private func makeTrajectoryRequest() -> VNDetectTrajectoriesRequest {
+        let request = VNDetectTrajectoriesRequest(
+            frameAnalysisSpacing: .zero, trajectoryLength: trajectoryLength
+        ) { [weak self] request, _ in
+            self?.latestTrajectoryObservations = (request.results as? [VNTrajectoryObservation]) ?? []
+        }
+        // Excludes anything much smaller than a med ball's own real screen-radius at a typical
+        // filming distance (a hand, a stray reflection/highlight) and anything implausibly large
+        // (a misfit spanning much of the frame) -- same "reasoned starting value, untuned against
+        // real footage" caveat as minDetectionConfidence above.
+        request.objectMinimumNormalizedRadius = 0.01
+        request.objectMaximumNormalizedRadius = 0.3
+        return request
+    }
+
+    // Only meaningful for a genuinely thrown, free-flying object -- see detectTrajectory's own
+    // comment on why this is gated to "med_ball" specifically at the call site below, not every
+    // class this detector supports.
+    private func detectTrajectory(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> [(x: Double, y: Double)]? {
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
+        guard (try? handler.perform([trajectoryRequest])) != nil else { return nil }
+        // Vision doesn't guarantee these come back in any particular order -- the trajectory
+        // covering the most points is the best proxy for "most complete, most current" when more
+        // than one is reported this frame.
+        guard let best = latestTrajectoryObservations.max(by: { $0.detectedPoints.count < $1.detectedPoints.count })
+        else { return nil }
+        return best.detectedPoints.map { (x: Double($0.x), y: Double($0.y)) }
+    }
+
     func reset() {
         trackingRequest = nil
         trackingLabel = nil
         recentBoxes = []
+        trajectoryRequest = makeTrajectoryRequest()
+        latestTrajectoryObservations = []
     }
 
     // Center-to-center normalized distance and area ratio between two boxes -- both in Vision's
@@ -1899,6 +1951,26 @@ private final class AvCoreMlImplementDetector {
                     trackingRequest = nil
                     recentBoxes = []
                     return nil
+                }
+                // Camera overlord: an entirely independent, physics-based signal -- see
+                // detectTrajectory's own comment. Only acts when Vision actually found a
+                // confident free-flight trajectory THIS frame (the normal case is no trajectory
+                // yet, or none at all, which changes nothing here -- a med-ball throw where the
+                // parabola fit simply never fires loses no coverage from this check) AND that
+                // trajectory's most recent point disagrees with where VNTrackObjectRequest just
+                // said the box is, by more than the same margin the box-consistency check above
+                // already treats as implausible for one frame's real motion.
+                if trackingLabel == "med_ball",
+                   let trajectoryPoints = detectTrajectory(pixelBuffer: pixelBuffer, orientation: orientation),
+                   let lastTrajectoryPoint = trajectoryPoints.last {
+                    let boxCenter = CGPoint(x: newBox.midX, y: newBox.midY)
+                    let trajectoryPoint = CGPoint(x: lastTrajectoryPoint.x, y: lastTrajectoryPoint.y)
+                    let disagreement = Double(hypot(boxCenter.x - trajectoryPoint.x, boxCenter.y - trajectoryPoint.y))
+                    if disagreement > maxPlausibleCenterJump {
+                        trackingRequest = nil
+                        recentBoxes = []
+                        return nil
+                    }
                 }
                 recordBox(newBox)
                 request.inputObservation = observation
