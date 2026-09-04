@@ -712,9 +712,18 @@ function uprightEnough(verticalSpan: number, head: Landmark, ankleY: number, ank
   return verticalSpan / totalLength >= MIN_UPRIGHT_VERTICAL_FRACTION;
 }
 
-// Biacromial (shoulder-to-shoulder) breadth as a fraction of standing height -- same
-// Drillis & Contini anthropometric family as SHOULDER_HEIGHT_FRACTION above. A standing
-// athlete's height is therefore about 4.1x their shoulder width.
+// Biacromial (shoulder-to-shoulder) breadth as a fraction of standing height.
+//
+// The attribution here used to say Drillis & Contini, which is wrong: their figure is ~0.259,
+// and 0.245 sits above every measured population mean found since (NHANES ~0.226, ANSUR II
+// ~0.237, a weightlifter sample ~0.238). It is a round number someone picked, not a sourced
+// one. That is harmless for the ONLY thing it is used for below -- a loose rejection threshold,
+// where being a few percent generous costs nothing -- but it would be a +3 to +8% systematic
+// bias the moment anything treats it as a real scale constant. Do not promote it to one.
+//
+// Population variability is the deeper reason not to: biacromial breadth correlates with
+// stature at only r ~ 0.42 in men, so knowing an athlete's height barely predicts their
+// shoulder width. The residual is ~4.2% at one sigma, ~8.4% at two.
 const SHOULDER_BREADTH_FRACTION = 0.245;
 
 // The floor on impliedHeight / shoulderWidth before a frame is trusted to be showing a
@@ -1203,6 +1212,33 @@ export const MIN_CALIBRATION_SAMPLES = 5;
 // falls back to the last known-good sign rather than defaulting to a guess), and returns the
 // median of every valid computePixelToMeterScale sample. Consolidated here so a fix to this
 // logic (or the sample-count bar) lands in one place, not three separately-drifting copies.
+// Movements performed lying down, matched by NAME rather than inferred from the landmarks.
+//
+// That choice is the whole point. Two attempts to infer "is this athlete lying down" from the
+// geometry have now been defeated by real footage, and a third was modelled and defeated before
+// shipping. The exercise, by contrast, is not ambiguous: a bench press is performed supine from
+// every camera angle there is, on every rep, for every athlete. Reading it off the name is
+// something no camera position can fool.
+//
+// Deliberately narrow and defaulting to false. An unrecognised exercise keeps today's behaviour
+// exactly; only these named movements change. Not routed through expectedPatternFromName,
+// which groups presses with rows -- a Pendlay row is performed standing and its athlete-height
+// calibration is fine.
+const SUPINE_MOVEMENT_PATTERNS = [
+  /bench\s*press/i,
+  /floor\s*press/i,
+  /chest\s*(fly|flye)/i,
+  /skull\s*crusher/i,
+  /(lying|supine)\s+/i,
+  /hip\s*thrust/i,
+  /glute\s*bridge/i,
+];
+
+export function isKnownSupineMovement(exerciseName: string | null | undefined): boolean {
+  if (!exerciseName) return false;
+  return SUPINE_MOVEMENT_PATTERNS.some((re) => re.test(exerciseName));
+}
+
 export function calibrateFromFrames(
   frames: { worldLandmarks: Landmark[] }[],
   heightIn: number | null | undefined,

@@ -286,3 +286,67 @@ the surrounding comments exist to warn against.
 Preview softness is the one thing given up. It is a preview-layer problem
 (`resizeAspectFill` upscaling a 1080p buffer ~25-30% to a modern iPhone's portrait
 pixel count) and wants a preview-layer fix, not a 4x larger recording.
+
+### Bench press: height calibration is refused, and why (2026-09-04)
+
+A simulated sweep over 48 realistic prop positions (camera 0.4-2.0m behind the toes,
+0.15-0.90m high, 0-20 degrees of pitch), driving the REAL `calibrateFromFrames` /
+`calibrationMethodBreakdown` / `implausibleRangeOfMotion`, against a true bench range
+of motion of 39.4cm measured by a bar sensor:
+
+| Outcome | Count | Published range of motion |
+| --- | --- | --- |
+| Refused | 23 | -- |
+| **Published silently** | **25** | **6.1 - 75.4 cm (-85% to +91%)** |
+
+`implausibleRangeOfMotion` fired on **none** of the 25. The athlete's reported 154 /
+180.5 / 299cm were the visible tail of a much larger silent band. The flip between
+refusing and publishing sits at a camera height of about **0.47m -- the height of the
+bench itself**, so moving the phone from the floor onto an adjacent bench turns a loud
+refusal into a confident 72cm.
+
+So athlete-height calibration is now refused BY EXERCISE NAME for supine movements
+(`isKnownSupineMovement`). Not by inspecting the landmarks: two shipped attempts to infer
+posture geometrically were defeated by real footage and a third was defeated in
+simulation before shipping. A bench press is performed lying down from every camera
+angle, on every rep, for every athlete -- the name is the one signal no prop position
+can fool.
+
+`implausibleRangeOfMotion` also gained a FLOOR. It only ever had a ceiling, which catches
+a scale read too large; the sweep shows under-reads are just as common, and a 6cm bench
+press is exactly as impossible as a 299cm one.
+
+#### What would actually measure a bench, and what it would cost
+
+Shoulder breadth is the best in-plane reference: across the identical 48-position sweep
+it gave 36.0-49.5cm, a **1.38x prop-to-prop spread against the height path's 12.4x**.
+That ~9x stability gain is the real argument for it -- not accuracy, but that the same
+lift stops giving three different answers.
+
+Three findings shape how it must be built, and all three kill the obvious design:
+
+1. **Do not fit `SHOULDER_BREADTH_FRACTION` against bar-sensor data.** The net error is
+   the difference of two large opposing terms: geometry (J-path 5-20cm, camera pitch)
+   biases LOW by 30%, while 0.245 against a modelled Vision shoulder span biases HIGH by
+   21%. They partly cancel, which is why 0.245 looks accidentally right here. That
+   cancellation is prop-dependent and fatigue-dependent (the J-path widens as the lifter
+   tires), so fitting it bakes in a coincidence that is wrong in the other direction at
+   the next camera position.
+2. **A dispersion (CV or IQR) refusal gate is backwards.** Measured directly: full
+   rep-phase coverage gives CV 5.7% and +6.5% error; lockout-frames-only gives CV 0.9%
+   and -0.6%; chest-frames-only gives CV 1.0% and +14.7%. Narrow phase selection of a
+   biased landmark is MORE self-consistent than broad sampling of an honest one, so such
+   a gate preferentially refuses the good takes.
+3. **It must not be a branch inside `impliedStandingHeightPixels`.** That would pollute
+   the shared median. It needs its own function and its own sample pool, selected between
+   rather than averaged, and gated on `isKnownSupineMovement`.
+
+A regression scenario to respect: a back squat filmed from the corner of the rack with
+the feet out of frame currently refuses correctly (fewer than 5 frames have both ankles).
+An ungated shoulder branch would resolve on nearly every frame and publish a yaw-corrupted
+number. The gate is what keeps that refusing.
+
+**Free validation available with no calibration at all:** time-to-peak-velocity is
+scale-invariant. A bar sensor reported 0.26s on footage that already exists. If the
+tracker's own time-to-peak does not match that, no amount of scale work will fix the
+numbers, and that is worth checking before building any of the above.

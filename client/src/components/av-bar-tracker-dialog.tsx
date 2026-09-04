@@ -35,6 +35,7 @@ import {
   wristConfidence,
   calibrateFromFrames,
   calibrationMethodBreakdown,
+  isKnownSupineMovement,
   scaleWorldLandmarks,
   computeReferenceObjectScale,
   CALIBRATION_REFERENCES,
@@ -525,7 +526,26 @@ export function AvBarTrackerDialog({
     forSetNumber: number,
   ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
-    const heightScaleFactor = calibrateFromFrames(calibrationInput, heightIn);
+    // Athlete-height calibration measures head-to-ankle and calls it standing height. That
+    // identity requires an UPRIGHT body, so for a movement performed lying down it is invalid
+    // at every camera angle -- there is no prop position that makes it correct.
+    //
+    // It has to be refused by NAME, not by inspecting the frames. Two shipped attempts to
+    // detect the posture geometrically were defeated by real footage, and a simulation over 48
+    // realistic prop positions (camera 0.4-2.0m behind the toes, 0.15-0.90m high, 0-20 degrees
+    // of pitch) shows why the current state is worse than it looks: 25 of the 48 PUBLISHED a
+    // height-derived range of motion, from 6.1cm to 75.4cm against a true 39.4cm, and
+    // implausibleRangeOfMotion caught none of them. The athlete's reported 154 / 180.5 / 299cm
+    // were the visible tail of a much larger silent band. The flip between refusing and
+    // silently publishing sits at a camera height of ~0.47m -- the height of the bench itself,
+    // so moving the phone from the floor to an adjacent bench turns a loud refusal into a
+    // confident 72cm.
+    //
+    // Refusing costs a bench set its numbers until an in-plane reference is built (see
+    // docs/camera-tracking-notes.md). Publishing a number that is wrong by anywhere from -85%
+    // to +91%, with no indication, costs more.
+    const supineMovement = isKnownSupineMovement(exerciseName);
+    const heightScaleFactor = supineMovement ? null : calibrateFromFrames(calibrationInput, heightIn);
     // Plate-based scale (see plateScaleFromFrames' own comment) only ever has something to find
     // when coreMlTrackingMode was "plate" for this clip -- everything else leaves this null and
     // heightScaleFactor decides alone, unchanged from before this existed. When BOTH resolve
@@ -540,8 +560,9 @@ export function AvBarTrackerDialog({
         : (plateScale?.scale ?? heightScaleFactor);
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {
-      const message =
-        coreMlTrackingMode === "plate"
+      const message = supineMovement
+        ? "This lift is done lying down, so your height can't be used to work out real-world scale -- that only works for a standing athlete, at any camera angle. Numbers are withheld rather than guessed. (Video saved for your coach.)"
+        : coreMlTrackingMode === "plate"
           ? "Couldn't calibrate real-world scale for this take -- make sure a bumper plate is clearly visible on the bar at some point in frame (or your height is set and you're visible standing)."
           : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";
       await saveEmptyAndWarn(

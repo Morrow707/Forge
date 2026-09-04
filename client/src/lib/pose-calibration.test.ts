@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { calibrateFromFrames, calibrationMethodBreakdown, POSE_LANDMARKS } from "./pose-tracking";
+import {
+  calibrateFromFrames,
+  calibrationMethodBreakdown,
+  isKnownSupineMovement,
+  POSE_LANDMARKS,
+} from "./pose-tracking";
 import type { Landmark } from "@mediapipe/tasks-vision";
 
 // Every fixture below sets z to 0, because that is what the real iOS path produces:
@@ -137,5 +142,50 @@ describe("diagnostics agree with the real path", () => {
     expect(b.noseToAnkleFrames).toBe(0);
     expect(b.shoulderToAnkleFrames).toBe(0);
     expect(b.unresolvedFrames).toBe(30);
+  });
+});
+
+describe("isKnownSupineMovement", () => {
+  it("recognises the movements an athlete performs lying down", () => {
+    for (const name of [
+      "Bench Press",
+      "bench press",
+      "Incline Bench Press",
+      "Close-Grip Bench Press",
+      "Floor Press",
+      "Machine Chest Fly",
+      "Dumbbell Chest Flye",
+      "Skull Crusher",
+      "Lying Triceps Extension",
+      "Supine Row",
+      "Hip Thrust",
+      "Glute Bridge",
+    ]) {
+      expect(isKnownSupineMovement(name), name).toBe(true);
+    }
+  });
+
+  it("leaves standing movements alone, including ones a pattern matcher would group with presses", () => {
+    for (const name of [
+      "Back Squat",
+      "Front Squat",
+      "Deadlift",
+      "Pendlay Row",
+      "Barbell Row",
+      "Overhead Press",
+      "Push Press",
+      "Box Jump",
+      "Power Clean",
+      "Snatch",
+    ]) {
+      expect(isKnownSupineMovement(name), name).toBe(false);
+    }
+  });
+
+  it("defaults to false for anything unrecognised, so nothing changes by accident", () => {
+    expect(isKnownSupineMovement("Some New Exercise")).toBe(false);
+    expect(isKnownSupineMovement("")).toBe(false);
+    expect(isKnownSupineMovement(null)).toBe(false);
+    expect(isKnownSupineMovement(undefined)).toBe(false);
   });
 });

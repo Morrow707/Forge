@@ -52,3 +52,32 @@ describe("implausibleRangeOfMotion", () => {
     expect(implausibleRangeOfMotion(90, 48, "horizontal_press_or_row")).not.toBeNull();
   });
 });
+
+describe("implausibleRangeOfMotion floor", () => {
+  // A ceiling alone only catches a scale read too large. A simulation over 48 realistic
+  // camera positions produced published ranges of motion from 6.1cm upward against a true
+  // 39.4cm, so under-reads are just as real and were passing silently.
+  it("rejects the 6.1cm bench the simulation produced", () => {
+    expect(implausibleRangeOfMotion(6.1, HEIGHT_IN, "horizontal_press_or_row")).not.toBeNull();
+  });
+
+  it("says SHORTER, not further, so the message points the right way", () => {
+    const reason = implausibleRangeOfMotion(6.1, HEIGHT_IN, "horizontal_press_or_row");
+    expect(reason).toContain("SHORTER");
+  });
+
+  it("still accepts the true bench range a bar sensor measured", () => {
+    expect(implausibleRangeOfMotion(38.9, HEIGHT_IN, "horizontal_press_or_row")).toBeNull();
+  });
+
+  it("accepts a genuinely short but real press for a short athlete", () => {
+    // 20cm of travel for a 5ft athlete benching to a high touch point.
+    expect(implausibleRangeOfMotion(20, 60, "horizontal_press_or_row")).toBeNull();
+  });
+
+  it("brackets a real squat from both sides", () => {
+    expect(implausibleRangeOfMotion(75, HEIGHT_IN, "squat")).toBeNull();
+    expect(implausibleRangeOfMotion(5, HEIGHT_IN, "squat")).not.toBeNull();
+    expect(implausibleRangeOfMotion(300, HEIGHT_IN, "squat")).not.toBeNull();
+  });
+});

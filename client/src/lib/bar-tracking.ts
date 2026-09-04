@@ -1492,6 +1492,24 @@ const MAX_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
 // their own model regardless.
 const DEFAULT_MAX_ROM_FRACTION = 1.3;
 
+// The other half, and it was missing. A ceiling alone only catches a scale read too LARGE. A
+// simulation over 48 realistic camera positions produced published ranges of motion from 6.1cm
+// upward against a true 39.4cm -- so under-reads are just as real as over-reads, and a 6cm
+// bench press is exactly as impossible as a 299cm one. Anything at or below these fractions
+// is not a rep that was measured badly, it is a scale that was read wrong.
+//
+// Set well under any real working range: a bench press moves the bar roughly 0.2x of standing
+// height even for a very short-armed lifter benching to a high touch point, so 0.08 leaves
+// generous room while still catching a scale several times too small.
+const MIN_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
+  horizontal_press_or_row: 0.08,
+  squat: 0.10,
+  deadlift: 0.12,
+  overhead_press: 0.10,
+};
+
+const DEFAULT_MIN_ROM_FRACTION = 0.05;
+
 /**
  * Whether a computed range of motion is physically possible for this athlete and movement.
  * Returns null when it is fine (or when there is not enough information to judge), otherwise a
@@ -1512,6 +1530,18 @@ export function implausibleRangeOfMotion(
     ? (MAX_ROM_FRACTION_OF_HEIGHT[movementPattern] ?? DEFAULT_MAX_ROM_FRACTION)
     : DEFAULT_MAX_ROM_FRACTION;
   const ceilingCm = heightCm * fraction;
+  const floorFraction = movementPattern
+    ? (MIN_ROM_FRACTION_OF_HEIGHT[movementPattern] ?? DEFAULT_MIN_ROM_FRACTION)
+    : DEFAULT_MIN_ROM_FRACTION;
+  const floorCm = heightCm * floorFraction;
+  if (romCm < floorCm) {
+    const underBy = Math.round((floorCm / romCm) * 10) / 10;
+    return (
+      `Range of motion came out as ${Math.round(romCm)}cm, about ${underBy}x SHORTER than this ` +
+      `movement can travel for your height. That means the camera's real-world scale was ` +
+      `misread, so every number from this take would be wrong by the same factor.`
+    );
+  }
   if (romCm <= ceilingCm) return null;
   const overBy = Math.round((romCm / ceilingCm) * 10) / 10;
   return (
