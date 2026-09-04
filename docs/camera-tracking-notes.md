@@ -254,3 +254,35 @@ Two routes, both real, neither dependent on the athlete's body being measurable:
    On a frame with 3D pose there is nothing to calibrate, the landmarks are already
    metric, and foreshortening stops mattering at any angle. Closing that gap is a
    separate change and needs a device to validate.
+
+### Capture is pinned to 1080p60 (2026-09-04)
+
+`applyHighestFrameRate` previously chose the highest-resolution format that could
+clear 60fps, which on a modern iPhone is 3840x2160. That was a fix for preview blur,
+not for accuracy, and it cost a great deal for pixels nothing downstream reads:
+
+| Consumer | Resolution it actually uses |
+| --- | --- |
+| Vision body pose | 1280x720 (`decodeMaxDim` in the reader's outputSettings) |
+| Motion-diff implement tracker | 160px long edge (`implementWorkingMaxDim`) |
+| CoreML implement detector | 640x640 (the model's own input) |
+
+Because the analysis reader already decodes through `kCVPixelBufferWidth/HeightKey`
+at 1280, a 4K source and a 1080p source both arrive at Vision as the same 1280x720
+buffer. Tracking accuracy is not merely similar between the two, it is **identical**.
+
+What 4K did cost, all field-reported on 3840x2160@60 clips: 48.2s to analyse a 34.3s
+set; `AVAssetReader` dying partway with -11819 `mediaServicesWereReset`, which
+restarts the phone's media server and takes the athlete's own music down with it, so
+the "analysis stopped early" bug and the "Spotify cuts out at the save step" bug are
+the same event; and "Out of offline storage" from the clip sizes.
+
+The frame rate is now pinned to exactly 60 rather than the format's top speed. The
+old code set both min and max frame duration to the range's `minFrameDuration` (its
+FASTEST rate), so a 1080p format advertising 1-240fps would have been locked to
+240fps -- the slow-motion range with binned readout and non-converging autofocus that
+the surrounding comments exist to warn against.
+
+Preview softness is the one thing given up. It is a preview-layer problem
+(`resizeAspectFill` upscaling a 1080p buffer ~25-30% to a modern iPhone's portrait
+pixel count) and wants a preview-layer fix, not a 4x larger recording.

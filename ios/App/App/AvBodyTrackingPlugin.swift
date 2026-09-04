@@ -607,86 +607,106 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
     }
 
-    // Formats above this are the slow-motion-oriented end of a device's range (240fps and
-    // similar) -- continuous autofocus is well documented to struggle to converge, or stop
-    // converging altogether, at those frame rates on iPhone hardware, and some of those formats
-    // use a reduced-quality/binned sensor readout that looks soft even genuinely in focus. This
-    // is exactly what testing hit: applyContinuousFocusAndExposure below correctly reported
-    // focus/exposure both set to continuous mode, yet the picture stayed persistently blurred --
-    // the mode was on, but not actually working at the 240fps format this function had greedily
-    // picked. 120fps is still a large motion-blur improvement over a device's un-tuned default
-    // (~30fps) while staying well inside the range every iPhone rear camera keeps full,
-    // functional continuous AF/AE at.
-    private let maxUsableFrameRate: Double = 120
+    // Two findings from earlier on-device testing, kept because the pinned format below is
+    // chosen to respect both and would look arbitrary without them.
+    //
+    // Do not go above ~120fps. Those are the slow-motion-oriented formats, where continuous
+    // autofocus struggles to converge or stops converging entirely, and where some devices use
+    // a reduced-quality binned sensor readout that looks soft even when genuinely in focus.
+    // Testing hit exactly that: applyContinuousFocusAndExposure reported focus and exposure
+    // both in continuous mode while the picture stayed persistently blurred, because the mode
+    // was on but not working at the 240fps format a greedier version of this code had picked.
+    //
+    // The persistent preview blur was never a focus problem. Telemetry (lens=0.78,
+    // adjustingFocus=false on every sample) proved AF was settled, not hunting. The cause is
+    // that AVCaptureVideoPreviewLayer's resizeAspectFill upscales a 1080p buffer by roughly
+    // 25-30% to cover a modern iPhone's portrait pixel count. Capturing at 4K hid that, at the
+    // cost the comment below details. It is a preview-layer problem and wants a preview-layer
+    // fix, not a 4x larger recording.
 
-    // The other half of the tradeoff maxUsableFrameRate's comment describes. On-device telemetry
-    // (lens=0.78, adjustingFocus=false on every sample -- AF genuinely settled, not hunting or
-    // stuck at macro) proved focus/exposure were never the cause of the persistent on-screen
-    // blur -- the real cause sits upstream of AF entirely. Every iPhone format that clears
-    // 120fps is capped at 1920x1080, and AVCaptureVideoPreviewLayer's resizeAspectFill then has
-    // to upscale that buffer roughly 25-30% to cover a modern iPhone's actual portrait pixel
-    // count -- a soft, uniform blur baked into every frame regardless of focus, exactly what was
-    // reported. Requiring only 60fps (still double the ~30fps hardware default -- a real
-    // motion-blur win) instead of maximizing fps outright is what unlocks a device's much
-    // higher-resolution formats below.
-    private let minAcceptableFrameRate: Double = 60
+    // Capture is pinned to 1920x1080 at exactly 60fps. Both halves of that are deliberate and
+    // both reverse an earlier decision, so the reasoning matters.
+    //
+    // RESOLUTION. This used to pick the highest-resolution format that could clear 60fps, which
+    // on a modern iPhone is 3840x2160. That was chosen to fix a PREVIEW problem: every format
+    // above 120fps is capped at 1080p, and AVCaptureVideoPreviewLayer's resizeAspectFill has to
+    // upscale a 1080p buffer to cover a modern iPhone's portrait pixel count, which reads as a
+    // soft, uniform blur. Real fix for a real complaint -- but it bought sharpness on screen at
+    // a price paid by everything downstream, and NOTHING downstream reads those extra pixels:
+    //
+    //   - runPoseAnalysis decodes through kCVPixelBufferWidth/HeightKey at decodeMaxDim 1280,
+    //     so Vision receives 1280x720 whether the source was 4K or 1080p. Byte for byte the
+    //     same input, so body-pose accuracy is not merely similar, it is identical.
+    //   - the motion-diff implement tracker works at implementWorkingMaxDim 160.
+    //   - the CoreML detector's own model takes 640x640.
+    //
+    // So 4K cost 4x the decode work, 4x the memory per frame, and 3-4x the file size, and every
+    // pixel of it was discarded before a single measurement was taken. Field-reported
+    // consequences, all on 3840x2160@60 clips: 48.2s to analyse a 34.3s set; AVAssetReader
+    // dying partway with -11819 mediaServicesWereReset (which restarts the phone's media server,
+    // taking the athlete's own music down with it); and "Out of offline storage" from the clip
+    // sizes. The preview softness is the one thing given up here, and it is worth giving up --
+    // if it needs solving again, it needs solving in the preview layer, not by making the
+    // recording 4x larger.
+    //
+    // FRAME RATE. Exactly 60, not "the fastest this format offers." The old code set both min
+    // and max frame duration to the range's minFrameDuration, i.e. its TOP speed -- so a 1080p
+    // format advertising 1-240fps would have been locked to 240fps, the very slow-motion range
+    // the note above warns against (soft binned readout, autofocus that will not converge).
+    // 60fps is double the ~30fps hardware default, which is the motion-blur win that mattered,
+    // and it halves the frame count analysis has to chew through compared to 120.
+    private let targetFrameRate: Double = 60
+    private let targetWidth: Int32 = 1920
+    private let targetHeight: Int32 = 1080
 
-    // Explicit, not left to the session preset's default -- the exact lesson
-    // ArCameraPreviewPlugin.swift's own comment already documents (a fast movement blurs
-    // measurably worse at a conservative default capture rate). Restricted to formats at
-    // least matching the 1080p session preset -- an unfiltered search can land on a tiny
-    // low-res slow-motion format (some devices offer very high fps at a fraction of full
-    // resolution), which would quietly undo the resolution pose detection actually needs.
     private func applyHighestFrameRate(to device: AVCaptureDevice) {
-        let eligibleFormats = device.formats.filter { format in
-            let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-            guard dims.width >= 1920 && dims.height >= 1080 else { return false }
-            // Needs a range whose own top speed lands inside [60, 120] -- not just >= 60. A
-            // format whose only qualifying range tops out above maxUsableFrameRate (e.g. a
-            // single 1-240fps range) would otherwise pass this check but then get excluded
-            // entirely by the <= maxUsableFrameRate filter below, leaving activeFormat unset.
-            return format.videoSupportedFrameRateRanges.contains {
-                $0.maxFrameRate >= minAcceptableFrameRate && $0.maxFrameRate <= maxUsableFrameRate
+        func dims(_ format: AVCaptureDevice.Format) -> CMVideoDimensions {
+            CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+        }
+        func canRun60(_ format: AVCaptureDevice.Format) -> Bool {
+            format.videoSupportedFrameRateRanges.contains {
+                $0.minFrameRate <= targetFrameRate && $0.maxFrameRate >= targetFrameRate
             }
         }
-        let candidates = eligibleFormats.isEmpty ? device.formats : eligibleFormats
-        // "Best" now means highest RESOLUTION among formats that clear minAcceptableFrameRate --
-        // see this function's and minAcceptableFrameRate's own comments for why resolution, not
-        // fps, is the dimension actually worth maximizing here. usableMaxFps clamps each format's
-        // own highest range to the ceiling, used only as a tiebreaker between two formats that
-        // happen to offer the same pixel count.
-        func usableMaxFps(_ format: AVCaptureDevice.Format) -> Double {
-            format.videoSupportedFrameRateRanges
-                .map { $0.maxFrameRate }
-                .filter { $0 <= maxUsableFrameRate }
-                .max() ?? 0
+        // Exactly 1080p, which every iPhone rear camera offers at 60fps. Not "<= 1080p": a
+        // range would let a device with an unusual format list quietly land somewhere smaller,
+        // and 1080p is the resolution this pipeline is tuned around.
+        let exact = device.formats.filter { f in
+            let d = dims(f)
+            return d.width == targetWidth && d.height == targetHeight && canRun60(f)
         }
-        func pixelCount(_ format: AVCaptureDevice.Format) -> Int64 {
-            let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-            return Int64(dims.width) * Int64(dims.height)
+        // Fallback for anything that genuinely cannot do 1080p60: the largest format that is
+        // still no bigger than 1080p and can hold 60fps, then the largest that can hold 60fps
+        // at all. Never silently leaves activeFormat unset the way the old eligibility filter
+        // could -- that would fall back to the session preset's own conservative default rate.
+        let underBudget = device.formats.filter { f in
+            let d = dims(f)
+            return d.width <= targetWidth && d.height <= targetHeight && canRun60(f)
         }
-        guard let bestFormat = candidates.max(by: { a, b in
-            let pxA = pixelCount(a), pxB = pixelCount(b)
-            if pxA != pxB { return pxA < pxB }
-            return usableMaxFps(a) < usableMaxFps(b)
-        }) else { return }
-        guard
-            let bestRange = bestFormat.videoSupportedFrameRateRanges
-                .filter({ $0.maxFrameRate <= maxUsableFrameRate })
-                .max(by: { $0.maxFrameRate < $1.maxFrameRate })
-        else {
+        let anySixty = device.formats.filter(canRun60)
+        func largest(_ formats: [AVCaptureDevice.Format]) -> AVCaptureDevice.Format? {
+            formats.max { a, b in
+                Int64(dims(a).width) * Int64(dims(a).height) < Int64(dims(b).width) * Int64(dims(b).height)
+            }
+        }
+        guard let chosen = exact.first ?? largest(underBudget) ?? largest(anySixty) else {
+            logDiag("WARNING: no format supports \(Int(targetFrameRate))fps -- leaving device default")
             return
         }
+        // One exact duration for both min and max pins the rate rather than leaving the device
+        // free to drop frames under load, which would put a variable, unrecorded sample interval
+        // underneath every velocity number.
+        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(targetFrameRate))
         do {
             try device.lockForConfiguration()
-            device.activeFormat = bestFormat
-            device.activeVideoMinFrameDuration = bestRange.minFrameDuration
-            device.activeVideoMaxFrameDuration = bestRange.minFrameDuration
+            device.activeFormat = chosen
+            device.activeVideoMinFrameDuration = frameDuration
+            device.activeVideoMaxFrameDuration = frameDuration
             device.unlockForConfiguration()
-            let dims = CMVideoFormatDescriptionGetDimensions(bestFormat.formatDescription)
-            logDiag("activeFormat set: \(dims.width)x\(dims.height) @ up to \(bestRange.maxFrameRate)fps")
+            let d = dims(chosen)
+            logDiag("activeFormat set: \(d.width)x\(d.height) @ \(Int(targetFrameRate))fps (capped)")
         } catch {
-            logDiag("WARNING: failed to set highest frame rate: \(error.localizedDescription)")
+            logDiag("WARNING: failed to set capture format: \(error.localizedDescription)")
         }
     }
 
