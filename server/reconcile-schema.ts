@@ -2402,6 +2402,57 @@ CREATE TABLE IF NOT EXISTS "archived_health_flags" (
 );
 CREATE INDEX IF NOT EXISTS "archived_health_flags_subject_idx" ON "archived_health_flags" ("subject_id", "week");
 
+-- ---------------------------------------------------------------------------
+-- Backfill workout_log_entries.exercise_id.
+--
+-- This column is the snapshot of which exercise a logged entry was actually performed against.
+-- shared/schema.ts's own comment on it says every historical read should resolve exercise
+-- identity through it rather than through the live program_exercises join, and roughly fifteen
+-- reads still do not -- PR detection, both leaderboards, the ACWR and load queries, the athlete
+-- progress summary, form overwatch, coach analytics and the video retention sweep among them.
+--
+-- Those reads cannot be switched over while older rows have a NULL here, because switching would
+-- trade one silent disappearance for a worse one: today an athlete loses history when their
+-- coach edits a program day, and after a naive switch they would lose everything logged before
+-- this column existed. This backfill is the prerequisite, and it is deliberately shipped ahead
+-- of the read changes so the two can be verified separately.
+--
+-- Only ever touches rows where exercise_id IS NULL, so it never overwrites a value
+-- submitWorkoutLog already resolved at save time, and re-running it on every deploy is a no-op
+-- once it has run once.
+--
+-- One honest caveat about the first UPDATE. storage.substituteExercise can change
+-- program_exercises.exercise_id in place (an AI swap on a live program), so for an entry logged
+-- before such a swap, program_exercise_id now points at a row describing a different exercise.
+-- That is the relabelling the column's own comment warns about. Backfilling from it freezes
+-- that wrong answer for those rows -- but it is the SAME wrong answer all fifteen reads already
+-- produce for them today, because they resolve through that identical join. So this is not
+-- introducing error; it is freezing existing error in place and stopping it drifting further,
+-- while getting every unswapped row right and immunising all of them against future edits.
+-- Rows whose program_exercise_id is already NULL (a program day edited at any point since --
+-- updateProgramDay replaces the whole row set) are unrecoverable and stay NULL either way.
+--
+-- Sizing: workout_log_entries is the largest table this script writes to. The first run updates
+-- however many rows predate the column and takes a write lock on those rows for its duration;
+-- every run after that matches nothing and costs a single indexed scan. If the first run's pause
+-- is a concern, run both statements by hand ahead of the deploy -- they are ordinary idempotent
+-- UPDATEs and are safe to run against a live database.
+-- ---------------------------------------------------------------------------
+UPDATE "workout_log_entries" wle
+SET "exercise_id" = pe."exercise_id"
+FROM "program_exercises" pe
+WHERE wle."exercise_id" IS NULL
+  AND wle."program_exercise_id" = pe."id";
+
+-- The corrective branch of the same entry shape. Unlike program_exercises above,
+-- assignment_correctives rows are never reassigned to a different exercise in place, so this
+-- half carries no relabelling caveat at all.
+UPDATE "workout_log_entries" wle
+SET "exercise_id" = ac."exercise_id"
+FROM "assignment_correctives" ac
+WHERE wle."exercise_id" IS NULL
+  AND wle."corrective_id" = ac."id";
+
 `;
 
 async function main() {
