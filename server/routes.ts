@@ -2667,6 +2667,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(pdf);
   });
 
+  // Builds one athlete's anonymous archive record and, optionally, writes
+  // it. Deliberately separate from account deletion, which this does not
+  // touch: archiving is purely additive, so it can be run against a real
+  // account and the rows read back and judged before anything destructive
+  // is wired to it. See storage.archiveAthlete for the de-identification
+  // rules, and shared/schema.ts's archive block for why they are what they
+  // are.
+  //
+  // Dry by default. `commit: true` writes the rows; even then it deletes
+  // nothing, so a committed archive of a still-live account is a duplicate
+  // to clean up, never a loss.
+  //
+  // Responds with counts plus a small sample of each table rather than the
+  // full payload -- a real athlete's tracked sets run to thousands of rows,
+  // and the question this endpoint exists to answer ("does this read as
+  // anonymous?") is answerable from a handful.
+  app.post("/api/admin/athletes/:athleteId/archive", requireRole("admin"), async (req, res) => {
+    const athleteId = Number(req.params.athleteId);
+    if (!Number.isInteger(athleteId)) {
+      return res.status(400).json({ message: "Invalid athlete id" });
+    }
+    const commit = req.body?.commit === true;
+    const result = await storage.archiveAthlete(athleteId, { commit });
+    if (!result) {
+      return res.status(404).json({
+        message:
+          "No archive built. Either that account isn't an athlete, or the athlete is opted out -- an opted-out athlete is deliberately never archived.",
+      });
+    }
+    const sample = <T,>(rows: T[]) => rows.slice(0, 5);
+    res.json({
+      subjectId: result.subjectId,
+      committed: result.committed,
+      counts: {
+        testing: result.testing.length,
+        wellness: result.wellness.length,
+        trackedSets: result.trackedSets.length,
+        skillSessions: result.skillSessions.length,
+        healthFlags: result.healthFlags.length,
+      },
+      athlete: result.athlete,
+      sample: {
+        testing: sample(result.testing),
+        wellness: sample(result.wellness),
+        trackedSets: sample(result.trackedSets),
+        skillSessions: sample(result.skillSessions),
+        healthFlags: sample(result.healthFlags),
+      },
+    });
+  });
+
   app.get("/api/admin/aggregate-athlete-data", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "200"), 10) || 200, 1), 500);

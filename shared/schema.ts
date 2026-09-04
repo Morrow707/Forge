@@ -12,6 +12,7 @@ import {
   json,
   index,
   real,
+  uuid,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -4925,6 +4926,232 @@ export const movementProfileStatusEnum = pgEnum("movement_profile_status", ["act
 // for audit/revert. Nothing here affects a live tracker until
 // storage.applyMovementProfileProposal commits it; a chat proposal sits in
 // the conversation only, with zero effect, until that explicit step.
+
+// ---------------------------------------------------------------------------
+// Anonymous archive.
+//
+// What survives an athlete deleting their account. Every table here is
+// deliberately severed from the live schema: no foreign key to users, or to
+// anything that references users, so the cascade that removes an account
+// cannot reach these rows. That severance is the whole design -- it is what
+// makes the archive structurally safe rather than safe by convention.
+//
+// subjectId is a fresh crypto.randomUUID() generated at archive time and is
+// NEVER derived from the user id. A hash of the id would be trivially
+// reversible, since ids are sequential integers and there are only so many
+// of them to try. There is also no mapping table anywhere from user id to
+// subject id: keeping one would make this pseudonymous rather than
+// anonymous, and an erasure request would not actually be satisfied. The
+// cost is real and worth stating plainly -- once a subject is archived,
+// nothing can ever answer "which of these rows were this person's," and
+// that inability is the point rather than a limitation to work around
+// later.
+//
+// Five rules govern what is copied, each aimed at a specific way anonymity
+// breaks:
+//
+//   1. No coach, team, or class link. This is the strongest re-identifier
+//      in the schema -- "the athlete on this coach's roster who ran a 4.4"
+//      is a name. Nothing about who trained this athlete survives.
+//   2. No free text. Coach comments, workout notes, manual skill results
+//      and injury descriptions routinely contain names.
+//   3. Dates coarsened to the week they fell in. A precise training
+//      calendar plus a sport plus an age is close to unique on its own.
+//   4. No video, and no raw traces. Video is faces; skeleton frames and
+//      bar-path traces are gait and movement signature, which is
+//      biometric. The derived scalars are kept, the frame-by-frame data is
+//      not.
+//   5. No identity columns at all -- name, email, date of birth, invite
+//      codes, calendar token.
+//
+// Enum-valued fields land here as plain text rather than reusing the live
+// pgEnum types. An archive has to keep meaning after the live schema moves
+// on, and a value dropped from an enum would otherwise make old rows
+// unreadable or block the migration that dropped it.
+//
+// Reads of these tables are subject to the same PLATFORM_TRENDS_MIN_COHORT
+// floor as the live trends view -- see summarizeCohort in storage.ts. A
+// slice thin enough to single somebody out suppresses instead.
+// ---------------------------------------------------------------------------
+
+export const archivedAthletes = pgTable(
+  "archived_athletes",
+  {
+    subjectId: uuid("subject_id").primaryKey(),
+    // Profile dimensions the platform-wide reads actually filter and group
+    // on -- see buildPlatformTrends, queryTrackedCohort and
+    // queryAggregateAthleteData. Nothing is kept here that none of them
+    // uses.
+    age: integer("age"),
+    gender: text("gender"),
+    sport: text("sport"),
+    position: text("position"),
+    heightIn: integer("height_in"),
+    bodyWeightLbs: real("body_weight_lbs"),
+    seasonPhase: text("season_phase"),
+    trainingStylePreference: text("training_style_preference"),
+    nutritionGoal: text("nutrition_goal"),
+    healthStatus: text("health_status"),
+    // Final combine snapshot as of the moment of archiving.
+    // archivedTestingResults below carries the history behind it.
+    fortyYardDash: real("forty_yard_dash"),
+    verticalJumpIn: real("vertical_jump_in"),
+    broadJumpIn: real("broad_jump_in"),
+    proAgilitySeconds: real("pro_agility_seconds"),
+    benchMaxLbs: real("bench_max_lbs"),
+    squatMaxLbs: real("squat_max_lbs"),
+    deadliftMaxLbs: real("deadlift_max_lbs"),
+    // How consent was originally obtained, kept because it is a fact about
+    // the record rather than about the person -- see
+    // users.provisionedViaCoachConsent.
+    provisionedViaCoachConsent: boolean("provisioned_via_coach_consent").notNull().default(false),
+    // Week, not day: enough to place an account in a season, not enough to
+    // line it up against a known signup.
+    accountCreatedWeek: date("account_created_week"),
+    archivedAt: timestamp("archived_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    sportIdx: index("archived_athletes_sport_idx").on(table.sport),
+    genderAgeIdx: index("archived_athletes_gender_age_idx").on(table.gender, table.age),
+  }),
+);
+
+export const archivedTestingResults = pgTable(
+  "archived_testing_results",
+  {
+    id: serial("id").primaryKey(),
+    subjectId: uuid("subject_id").notNull(),
+    week: date("week").notNull(),
+    fortyYardDash: real("forty_yard_dash"),
+    verticalJumpIn: real("vertical_jump_in"),
+    broadJumpIn: real("broad_jump_in"),
+    proAgilitySeconds: real("pro_agility_seconds"),
+    benchMaxLbs: real("bench_max_lbs"),
+    squatMaxLbs: real("squat_max_lbs"),
+    deadliftMaxLbs: real("deadlift_max_lbs"),
+  },
+  (table) => ({
+    subjectIdx: index("archived_testing_results_subject_idx").on(table.subjectId, table.week),
+  }),
+);
+
+export const archivedWellness = pgTable(
+  "archived_wellness",
+  {
+    id: serial("id").primaryKey(),
+    subjectId: uuid("subject_id").notNull(),
+    week: date("week").notNull(),
+    sleepHours: real("sleep_hours"),
+    soreness: integer("soreness"),
+    stress: integer("stress"),
+    hydration: integer("hydration"),
+    mentalFocus: integer("mental_focus"),
+    // Which body parts were flagged, from the fixed BODY_PAIN_PARTS
+    // vocabulary -- a closed list of anatomy, never free text.
+    bodyPainMap: json("body_pain_map").$type<string[]>(),
+    restingHeartRate: real("resting_heart_rate"),
+    hrv: real("hrv"),
+    vo2Max: real("vo2_max"),
+  },
+  (table) => ({
+    subjectIdx: index("archived_wellness_subject_idx").on(table.subjectId, table.week),
+  }),
+);
+
+export const archivedTrackedSets = pgTable(
+  "archived_tracked_sets",
+  {
+    id: serial("id").primaryKey(),
+    subjectId: uuid("subject_id").notNull(),
+    week: date("week").notNull(),
+    // The exercise's NAME, not its id. An exercise row is owned by a coach
+    // and cascades away when that coach's account goes, so an id would rot
+    // into a dangling number; the name is what a researcher reads anyway,
+    // and names nobody.
+    exerciseName: text("exercise_name"),
+    trackingLevel: text("tracking_level"),
+    // Normalized to pounds at archive time so the archive never repeats the
+    // mixed-unit comparison bug the live leaderboard had -- see
+    // getFullLeaderboardForExercise. Null when the set carried no numeric
+    // weight (bodyweight, band, box) or the free-text value would not parse.
+    weightLbs: real("weight_lbs"),
+    reps: integer("reps"),
+    peakVelocityMps: real("peak_velocity_mps"),
+    meanVelocityMps: real("mean_velocity_mps"),
+    romCm: real("rom_cm"),
+    peakPowerWatts: real("peak_power_watts"),
+    meanPowerWatts: real("mean_power_watts"),
+    velocityLossPercent: real("velocity_loss_percent"),
+    jumpHeightCm: real("jump_height_cm"),
+    jumpDistanceCm: real("jump_distance_cm"),
+    groundContactSeconds: real("ground_contact_seconds"),
+    reactiveStrengthIndex: real("reactive_strength_index"),
+    kbSwingPeakSpeedMps: real("kb_swing_peak_speed_mps"),
+    medBallPeakSpeedMps: real("med_ball_peak_speed_mps"),
+    horizontalLoadAvgSpeedYardsPerSec: real("horizontal_load_avg_speed_yards_per_sec"),
+    swingSeparationDeg: real("swing_separation_deg"),
+    // The set-level trust score's number only. Its notes are prose written
+    // for a specific athlete, so they stay behind with rule 2.
+    trustScorePct: integer("trust_score_pct"),
+  },
+  (table) => ({
+    subjectIdx: index("archived_tracked_sets_subject_idx").on(table.subjectId, table.week),
+    exerciseIdx: index("archived_tracked_sets_exercise_idx").on(table.exerciseName),
+  }),
+);
+
+export const archivedSkillSessions = pgTable(
+  "archived_skill_sessions",
+  {
+    id: serial("id").primaryKey(),
+    subjectId: uuid("subject_id").notNull(),
+    week: date("week").notNull(),
+    // Same name-not-id reasoning as archivedTrackedSets.exerciseName.
+    skillExerciseName: text("skill_exercise_name"),
+    trackingLevel: text("tracking_level"),
+    presetId: text("preset_id"),
+    elapsedSeconds: real("elapsed_seconds"),
+    distanceYards: real("distance_yards"),
+    hipShoulderSeparationDeg: real("hip_shoulder_separation_deg"),
+    weightTransferPct: real("weight_transfer_pct"),
+    hipRotationDeg: real("hip_rotation_deg"),
+    armSlotDeg: real("arm_slot_deg"),
+    peakWristSpeedMps: real("peak_wrist_speed_mps"),
+    strideLengthM: real("stride_length_m"),
+    kneeBendDepthDeg: real("knee_bend_depth_deg"),
+    // manualResult is deliberately absent: it is a free-text field an
+    // athlete or coach types into, which is rule 2.
+  },
+  (table) => ({
+    subjectIdx: index("archived_skill_sessions_subject_idx").on(table.subjectId, table.week),
+  }),
+);
+
+export const archivedHealthFlags = pgTable(
+  "archived_health_flags",
+  {
+    id: serial("id").primaryKey(),
+    subjectId: uuid("subject_id").notNull(),
+    week: date("week").notNull(),
+    // "injury" or "movement_screen" -- text rather than an enum for the
+    // same forward-compatibility reason as every other enum-valued field
+    // in the archive.
+    kind: text("kind").notNull(),
+    // The injury's body part or the screen test's key, both from closed
+    // vocabularies. An injury's free-text description is not copied.
+    label: text("label"),
+    side: text("side"),
+    flagged: boolean("flagged"),
+    resolved: boolean("resolved"),
+    scoreValue: real("score_value"),
+  },
+  (table) => ({
+    subjectIdx: index("archived_health_flags_subject_idx").on(table.subjectId, table.week),
+  }),
+);
+
+export type ArchivedAthlete = typeof archivedAthletes.$inferSelect;
+
 export const movementProfiles = pgTable(
   "movement_profiles",
   {

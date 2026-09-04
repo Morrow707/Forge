@@ -2271,6 +2271,137 @@ CREATE INDEX IF NOT EXISTS "password_reset_tokens_user_idx" ON "password_reset_t
 CREATE INDEX IF NOT EXISTS "email_verification_tokens_token_hash_idx" ON "email_verification_tokens" ("token_hash");
 CREATE INDEX IF NOT EXISTS "email_verification_tokens_user_idx" ON "email_verification_tokens" ("user_id");
 
+-- ---------------------------------------------------------------------------
+-- Anonymous archive. See shared/schema.ts's own block comment for the five rules governing
+-- what may be copied here and why each one exists.
+--
+-- The defining property, and the reason this is a separate set of tables rather than a flag on
+-- the existing ones: NOT ONE COLUMN BELOW IS A FOREIGN KEY. subject_id references nothing. The
+-- cascade that removes an account therefore cannot reach these rows -- not by oversight, but
+-- because there is no edge for it to travel along. Anyone editing this block should keep it
+-- that way: a REFERENCES clause added here, to users or to anything that itself references
+-- users, silently converts the archive back into something a deletion can erase.
+--
+-- subject_id is a uuid supplied by the application (crypto.randomUUID at archive time), not a
+-- database default. It is generated where a reader can see it is random rather than derived,
+-- which is the property the whole design rests on.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS "archived_athletes" (
+  "subject_id" uuid PRIMARY KEY,
+  "age" integer,
+  "gender" text,
+  "sport" text,
+  "position" text,
+  "height_in" integer,
+  "body_weight_lbs" real,
+  "season_phase" text,
+  "training_style_preference" text,
+  "nutrition_goal" text,
+  "health_status" text,
+  "forty_yard_dash" real,
+  "vertical_jump_in" real,
+  "broad_jump_in" real,
+  "pro_agility_seconds" real,
+  "bench_max_lbs" real,
+  "squat_max_lbs" real,
+  "deadlift_max_lbs" real,
+  "provisioned_via_coach_consent" boolean NOT NULL DEFAULT false,
+  "account_created_week" date,
+  "archived_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "archived_athletes_sport_idx" ON "archived_athletes" ("sport");
+CREATE INDEX IF NOT EXISTS "archived_athletes_gender_age_idx" ON "archived_athletes" ("gender", "age");
+
+CREATE TABLE IF NOT EXISTS "archived_testing_results" (
+  "id" serial PRIMARY KEY,
+  "subject_id" uuid NOT NULL,
+  "week" date NOT NULL,
+  "forty_yard_dash" real,
+  "vertical_jump_in" real,
+  "broad_jump_in" real,
+  "pro_agility_seconds" real,
+  "bench_max_lbs" real,
+  "squat_max_lbs" real,
+  "deadlift_max_lbs" real
+);
+CREATE INDEX IF NOT EXISTS "archived_testing_results_subject_idx" ON "archived_testing_results" ("subject_id", "week");
+
+CREATE TABLE IF NOT EXISTS "archived_wellness" (
+  "id" serial PRIMARY KEY,
+  "subject_id" uuid NOT NULL,
+  "week" date NOT NULL,
+  "sleep_hours" real,
+  "soreness" integer,
+  "stress" integer,
+  "hydration" integer,
+  "mental_focus" integer,
+  "body_pain_map" json,
+  "resting_heart_rate" real,
+  "hrv" real,
+  "vo2_max" real
+);
+CREATE INDEX IF NOT EXISTS "archived_wellness_subject_idx" ON "archived_wellness" ("subject_id", "week");
+
+CREATE TABLE IF NOT EXISTS "archived_tracked_sets" (
+  "id" serial PRIMARY KEY,
+  "subject_id" uuid NOT NULL,
+  "week" date NOT NULL,
+  "exercise_name" text,
+  "tracking_level" text,
+  "weight_lbs" real,
+  "reps" integer,
+  "peak_velocity_mps" real,
+  "mean_velocity_mps" real,
+  "rom_cm" real,
+  "peak_power_watts" real,
+  "mean_power_watts" real,
+  "velocity_loss_percent" real,
+  "jump_height_cm" real,
+  "jump_distance_cm" real,
+  "ground_contact_seconds" real,
+  "reactive_strength_index" real,
+  "kb_swing_peak_speed_mps" real,
+  "med_ball_peak_speed_mps" real,
+  "horizontal_load_avg_speed_yards_per_sec" real,
+  "swing_separation_deg" real,
+  "trust_score_pct" integer
+);
+CREATE INDEX IF NOT EXISTS "archived_tracked_sets_subject_idx" ON "archived_tracked_sets" ("subject_id", "week");
+CREATE INDEX IF NOT EXISTS "archived_tracked_sets_exercise_idx" ON "archived_tracked_sets" ("exercise_name");
+
+CREATE TABLE IF NOT EXISTS "archived_skill_sessions" (
+  "id" serial PRIMARY KEY,
+  "subject_id" uuid NOT NULL,
+  "week" date NOT NULL,
+  "skill_exercise_name" text,
+  "tracking_level" text,
+  "preset_id" text,
+  "elapsed_seconds" real,
+  "distance_yards" real,
+  "hip_shoulder_separation_deg" real,
+  "weight_transfer_pct" real,
+  "hip_rotation_deg" real,
+  "arm_slot_deg" real,
+  "peak_wrist_speed_mps" real,
+  "stride_length_m" real,
+  "knee_bend_depth_deg" real
+);
+CREATE INDEX IF NOT EXISTS "archived_skill_sessions_subject_idx" ON "archived_skill_sessions" ("subject_id", "week");
+
+CREATE TABLE IF NOT EXISTS "archived_health_flags" (
+  "id" serial PRIMARY KEY,
+  "subject_id" uuid NOT NULL,
+  "week" date NOT NULL,
+  "kind" text NOT NULL,
+  "label" text,
+  "side" text,
+  "flagged" boolean,
+  "resolved" boolean,
+  "score_value" real
+);
+CREATE INDEX IF NOT EXISTS "archived_health_flags_subject_idx" ON "archived_health_flags" ("subject_id", "week");
+
 `;
 
 async function main() {

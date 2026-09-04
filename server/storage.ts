@@ -100,6 +100,12 @@ import {
   familyGroups,
   movementKnowledgeMessages,
   movementProfiles,
+  archivedAthletes,
+  archivedTestingResults,
+  archivedWellness,
+  archivedTrackedSets,
+  archivedSkillSessions,
+  archivedHealthFlags,
   weaknessDeficitSchema,
   PERIODIZATION_PHASE_LABEL,
   NUTRITION_GOAL_LABEL,
@@ -125,7 +131,7 @@ import {
   TIER2_VIDEO_RETENTION_DAYS,
   type PrivacyTier,
 } from "@shared/privacy-tiers";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
   MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
@@ -2614,6 +2620,325 @@ export const storage = {
       .where(eq(users.id, userId))
       .returning({ id: users.id, coachingPhilosophy: users.coachingPhilosophy });
     return row ?? null;
+  },
+
+  // ---------- Anonymous archive ----------
+  //
+  // Builds the de-identified record of one athlete, and optionally writes
+  // it. Nothing in here deletes anything: archiving and deleting are
+  // separate steps on purpose, so this one can be run against a real test
+  // account and the resulting rows read back and judged before it is ever
+  // wired into a destructive path.
+  //
+  // See shared/schema.ts's archive block comment for the five rules that
+  // decide what may be copied. The two that shape this function most: the
+  // subject id is a fresh crypto.randomUUID() and is never derived from
+  // athleteId, and no mapping between the two is written anywhere -- which
+  // is why this returns the id to its caller rather than storing it.
+  //
+  // Returns null when the athlete opted out. A parent's opt-out is a
+  // request that Forge not keep their child's data, and an anonymous
+  // archive is still Forge keeping it, so an opted-out athlete is not
+  // archived at all -- their account deletion simply removes everything.
+  async archiveAthlete(
+    athleteId: number,
+    opts: { commit: boolean },
+  ): Promise<{
+    subjectId: string;
+    committed: boolean;
+    athlete: typeof archivedAthletes.$inferInsert;
+    testing: (typeof archivedTestingResults.$inferInsert)[];
+    wellness: (typeof archivedWellness.$inferInsert)[];
+    trackedSets: (typeof archivedTrackedSets.$inferInsert)[];
+    skillSessions: (typeof archivedSkillSessions.$inferInsert)[];
+    healthFlags: (typeof archivedHealthFlags.$inferInsert)[];
+  } | null> {
+    const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
+    if (!athlete || athlete.role !== "athlete") return null;
+    if (athlete.trackingOptOut) return null;
+
+    const subjectId = randomUUID();
+    // Rule 3: every date lands on the Sunday of the week it fell in. A
+    // precise training calendar plus a sport plus an age is close to unique
+    // on its own, and the research questions this archive exists to answer
+    // are all week-scale or coarser.
+    const week = (d: string | Date) =>
+      formatISO(startOfWeek(typeof d === "string" ? parseISO(d) : d, { weekStartsOn: 0 }), {
+        representation: "date",
+      });
+
+    const athleteRow: typeof archivedAthletes.$inferInsert = {
+      subjectId,
+      age: athlete.age,
+      gender: athlete.gender,
+      sport: athlete.sport,
+      position: athlete.position,
+      heightIn: athlete.heightIn,
+      bodyWeightLbs: athlete.bodyWeightLbs,
+      seasonPhase: athlete.seasonPhase,
+      trainingStylePreference: athlete.trainingStylePreference,
+      nutritionGoal: athlete.nutritionGoal,
+      healthStatus: athlete.healthStatus,
+      fortyYardDash: athlete.fortyYardDash,
+      verticalJumpIn: athlete.verticalJumpIn,
+      broadJumpIn: athlete.broadJumpIn,
+      proAgilitySeconds: athlete.proAgilitySeconds,
+      benchMaxLbs: athlete.benchMaxLbs,
+      squatMaxLbs: athlete.squatMaxLbs,
+      deadliftMaxLbs: athlete.deadliftMaxLbs,
+      provisionedViaCoachConsent: athlete.provisionedViaCoachConsent,
+      accountCreatedWeek: week(athlete.createdAt),
+    };
+
+    const testingRows = await db.query.testingResults.findMany({
+      where: eq(testingResults.athleteId, athleteId),
+    });
+    const testing = testingRows.map((r) => ({
+      subjectId,
+      week: week(r.date),
+      fortyYardDash: r.fortyYardDash,
+      verticalJumpIn: r.verticalJumpIn,
+      broadJumpIn: r.broadJumpIn,
+      proAgilitySeconds: r.proAgilitySeconds,
+      benchMaxLbs: r.benchMaxLbs,
+      squatMaxLbs: r.squatMaxLbs,
+      deadliftMaxLbs: r.deadliftMaxLbs,
+    }));
+
+    const wellnessRows = await db.query.wellnessCheckins.findMany({
+      where: eq(wellnessCheckins.athleteId, athleteId),
+    });
+    const wellness = wellnessRows.map((r) => ({
+      subjectId,
+      week: week(r.date),
+      sleepHours: r.sleepHours,
+      soreness: r.soreness,
+      stress: r.stress,
+      hydration: r.hydration,
+      mentalFocus: r.mentalFocus,
+      bodyPainMap: (r.bodyPainMap as string[] | null) ?? null,
+      restingHeartRate: r.restingHeartRate,
+      hrv: r.hrv,
+      vo2Max: r.vo2Max,
+    }));
+
+    // Exercise identity comes off workoutLogEntries.exerciseId, the snapshot
+    // column, NOT the live programExercises join -- see that column's own
+    // schema comment. A coach editing a program day nulls program_exercise_id
+    // on every historical entry for that day, so the live join would silently
+    // drop exactly the sets an athlete accumulated before their last program
+    // change. correctiveExercise covers the other branch, where the entry was
+    // logged against a corrective rather than a programmed exercise.
+    const correctiveExercise = alias(exercises, "corrective_exercise");
+    const setRows = await db
+      .select({
+        date: workoutLogs.date,
+        exerciseName: exercises.name,
+        correctiveName: correctiveExercise.name,
+        weightMode: workoutLogEntries.weightMode,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        reps: workoutSetEntries.reps,
+        peakVelocityMps: workoutSetEntries.peakVelocityMps,
+        meanVelocityMps: workoutSetEntries.meanVelocityMps,
+        romCm: workoutSetEntries.romCm,
+        peakPowerWatts: workoutSetEntries.peakPowerWatts,
+        meanPowerWatts: workoutSetEntries.meanPowerWatts,
+        velocityLossPercent: workoutSetEntries.velocityLossPercent,
+        jumpHeightCm: workoutSetEntries.jumpHeightCm,
+        jumpDistanceCm: workoutSetEntries.jumpDistanceCm,
+        groundContactSeconds: workoutSetEntries.groundContactSeconds,
+        reactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
+        kbSwingPeakSpeedMps: workoutSetEntries.kbSwingPeakSpeedMps,
+        medBallPeakSpeedMps: workoutSetEntries.medBallPeakSpeedMps,
+        horizontalLoadAvgSpeedYardsPerSec: workoutSetEntries.horizontalLoadAvgSpeedYardsPerSec,
+        swingSeparationDeg: workoutSetEntries.swingSeparationDeg,
+        trustScores: workoutSetEntries.trustScores,
+        swingTrustScore: workoutSetEntries.swingTrustScore,
+        medBallTrustScore: workoutSetEntries.medBallTrustScore,
+        kbSwingTrustScore: workoutSetEntries.kbSwingTrustScore,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .leftJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      .leftJoin(assignmentCorrectives, eq(workoutLogEntries.correctiveId, assignmentCorrectives.id))
+      .leftJoin(correctiveExercise, eq(assignmentCorrectives.exerciseId, correctiveExercise.id))
+      .where(eq(workoutLogs.athleteId, athleteId));
+
+    const trackedSets = setRows.map((r) => {
+      // Normalized to pounds here, once, so the archive can never repeat the
+      // mixed-unit comparison the live leaderboard got wrong. Null rather
+      // than zero when there is no numeric load to speak of: a bodyweight
+      // set did not lift zero pounds, it lifted an amount this schema does
+      // not record.
+      const parsedWeight = r.weightMode === "numeric" && r.weight ? parseFloat(r.weight) : NaN;
+      const weightLbs = Number.isNaN(parsedWeight)
+        ? null
+        : r.weightUnit === "kg"
+          ? parsedWeight * 2.20462
+          : parsedWeight;
+      const parsedReps = r.reps ? parseInt(r.reps, 10) : NaN;
+      // The lowest per-rep trust score in the set, matching how
+      // queryAthletesAdvanced reports minTrustScorePct, or the set-level
+      // score for the best-of-set modes that carry one instead. Only the
+      // number: a trust score's notes are prose written about one athlete's
+      // capture, which is rule 2.
+      const repScores = ((r.trustScores as { score: number }[] | null) ?? []).map((t) => t.score);
+      const setScore =
+        (r.swingTrustScore as { score: number } | null)?.score ??
+        (r.medBallTrustScore as { score: number } | null)?.score ??
+        (r.kbSwingTrustScore as { score: number } | null)?.score ??
+        null;
+      const trustScorePct =
+        repScores.length > 0 ? Math.round(Math.min(...repScores)) : setScore != null ? Math.round(setScore) : null;
+      // Derived from which metric family the set actually carries, rather
+      // than read off programExercises.trackingLevel -- same reasoning as
+      // exerciseName above, and it avoids re-introducing that join purely
+      // for a label. Golf and baseball swing collapse to one value, since
+      // nothing on the set row distinguishes them.
+      const trackingLevel =
+        r.jumpHeightCm != null || r.jumpDistanceCm != null
+          ? "jump"
+          : r.kbSwingPeakSpeedMps != null
+            ? "kb_swing"
+            : r.medBallPeakSpeedMps != null
+              ? "med_ball"
+              : r.horizontalLoadAvgSpeedYardsPerSec != null
+                ? "horizontal_load"
+                : r.swingSeparationDeg != null
+                  ? "swing"
+                  : r.peakVelocityMps != null || r.meanVelocityMps != null
+                    ? "bar_path_or_full"
+                    : null;
+      return {
+        subjectId,
+        week: week(r.date),
+        exerciseName: r.exerciseName ?? r.correctiveName ?? null,
+        trackingLevel,
+        weightLbs,
+        reps: Number.isNaN(parsedReps) ? null : parsedReps,
+        peakVelocityMps: r.peakVelocityMps,
+        meanVelocityMps: r.meanVelocityMps,
+        romCm: r.romCm,
+        peakPowerWatts: r.peakPowerWatts,
+        meanPowerWatts: r.meanPowerWatts,
+        velocityLossPercent: r.velocityLossPercent,
+        jumpHeightCm: r.jumpHeightCm,
+        jumpDistanceCm: r.jumpDistanceCm,
+        groundContactSeconds: r.groundContactSeconds,
+        reactiveStrengthIndex: r.reactiveStrengthIndex,
+        kbSwingPeakSpeedMps: r.kbSwingPeakSpeedMps,
+        medBallPeakSpeedMps: r.medBallPeakSpeedMps,
+        horizontalLoadAvgSpeedYardsPerSec: r.horizontalLoadAvgSpeedYardsPerSec,
+        swingSeparationDeg: r.swingSeparationDeg,
+        trustScorePct,
+      };
+    });
+
+    const skillRows = await db
+      .select({
+        createdAt: skillSessionLogs.createdAt,
+        skillExerciseName: skillExercises.name,
+        trackingLevel: skillSessionLogs.trackingLevel,
+        presetId: skillSessionLogs.presetId,
+        elapsedSeconds: skillSessionLogs.elapsedSeconds,
+        distanceYards: skillSessionLogs.distanceYards,
+        hipShoulderSeparationDeg: skillSessionLogs.hipShoulderSeparationDeg,
+        weightTransferPct: skillSessionLogs.weightTransferPct,
+        hipRotationDeg: skillSessionLogs.hipRotationDeg,
+        armSlotDeg: skillSessionLogs.armSlotDeg,
+        peakWristSpeedMps: skillSessionLogs.peakWristSpeedMps,
+        strideLengthM: skillSessionLogs.strideLengthM,
+        kneeBendDepthDeg: skillSessionLogs.kneeBendDepthDeg,
+      })
+      .from(skillSessionLogs)
+      .leftJoin(
+        skillProgramExercises,
+        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
+      )
+      .leftJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .where(eq(skillSessionLogs.athleteId, athleteId));
+    const skillSessions = skillRows.map((r) => ({
+      subjectId,
+      week: week(r.createdAt),
+      skillExerciseName: r.skillExerciseName ?? null,
+      trackingLevel: r.trackingLevel,
+      presetId: r.presetId,
+      elapsedSeconds: r.elapsedSeconds,
+      distanceYards: r.distanceYards,
+      hipShoulderSeparationDeg: r.hipShoulderSeparationDeg,
+      weightTransferPct: r.weightTransferPct,
+      hipRotationDeg: r.hipRotationDeg,
+      armSlotDeg: r.armSlotDeg,
+      peakWristSpeedMps: r.peakWristSpeedMps,
+      strideLengthM: r.strideLengthM,
+      kneeBendDepthDeg: r.kneeBendDepthDeg,
+    }));
+
+    // Injuries contribute body part and whether they resolved. Their
+    // free-text description is rule 2 and does not come.
+    const injuries = await db.query.injuryHistory.findMany({
+      where: eq(injuryHistory.athleteId, athleteId),
+    });
+    const screenRows = await db
+      .select({
+        date: movementScreens.date,
+        testKey: movementScreenResults.testKey,
+        side: movementScreenResults.side,
+        flagged: movementScreenResults.flagged,
+        scoreValue: movementScreenResults.scoreValue,
+      })
+      .from(movementScreenResults)
+      .innerJoin(movementScreens, eq(movementScreenResults.screenId, movementScreens.id))
+      .where(eq(movementScreens.athleteId, athleteId));
+    const healthFlags: (typeof archivedHealthFlags.$inferInsert)[] = [
+      ...injuries.map((i) => ({
+        subjectId,
+        week: week(i.occurredOn),
+        kind: "injury",
+        label: i.bodyPart,
+        side: null,
+        flagged: true,
+        resolved: i.resolved,
+        scoreValue: null,
+      })),
+      ...screenRows.map((r) => ({
+        subjectId,
+        week: week(r.date),
+        kind: "movement_screen",
+        label: r.testKey,
+        side: r.side ?? null,
+        flagged: r.flagged,
+        resolved: null,
+        scoreValue: r.scoreValue,
+      })),
+    ];
+
+    const payload = {
+      subjectId,
+      committed: false,
+      athlete: athleteRow,
+      testing,
+      wellness,
+      trackedSets,
+      skillSessions,
+      healthFlags,
+    };
+    if (!opts.commit) return payload;
+
+    // One transaction for the whole subject: a half-written archive is
+    // worse than none, because nothing downstream could tell the difference
+    // between "this athlete trained little" and "the copy stopped early."
+    await db.transaction(async (tx) => {
+      await tx.insert(archivedAthletes).values(athleteRow);
+      if (testing.length > 0) await tx.insert(archivedTestingResults).values(testing);
+      if (wellness.length > 0) await tx.insert(archivedWellness).values(wellness);
+      if (trackedSets.length > 0) await tx.insert(archivedTrackedSets).values(trackedSets);
+      if (skillSessions.length > 0) await tx.insert(archivedSkillSessions).values(skillSessions);
+      if (healthFlags.length > 0) await tx.insert(archivedHealthFlags).values(healthFlags);
+    });
+    return { ...payload, committed: true };
   },
 
   // Self-service account deletion (Apple 5.1.1(v) / Google Play's account-
