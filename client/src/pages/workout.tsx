@@ -33,8 +33,11 @@ import {
   type MedballRepBreakdownEntry,
 } from "@/components/av-medball-tracker-dialog";
 import { AvKbSwingTrackerDialog } from "@/components/av-kb-swing-tracker-dialog";
+import { KbSwingTrackerDialog } from "@/components/kb-swing-tracker-dialog";
 import type { KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
 import { AvHorizontalLoadTrackerDialog, type HorizontalLoadSetMetrics } from "@/components/av-horizontal-load-tracker-dialog";
+import { HorizontalLoadTrackerDialog } from "@/components/horizontal-load-tracker-dialog";
+import { MedballTrackerDialog } from "@/components/medball-tracker-dialog";
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
@@ -3317,11 +3320,12 @@ function ExerciseLogContent({
           }
 
           if (item.trackingLevel === "kb_swing" || item.trackingLevel === "horizontal_load") {
-            // AVFoundation + Vision pipeline only -- no ARKit equivalent was ever built for
-            // either of these (genuinely new "arc" and "horizontal-linear" trajectory patterns
-            // -- see trackingLevelEnum's own comment in shared/schema.ts). Android/web falls
-            // through to a plain video-only capture, same fallback pattern med_ball/golf/
-            // baseball swing already use for "no non-iOS pipeline exists yet."
+            // Both platforms now have a real tracking pipeline for these -- AVFoundation +
+            // Vision on iOS, MediaPipe on Android/web (kb-swing-tracker-dialog.tsx/
+            // horizontal-load-tracker-dialog.tsx, deliberately separate implementations from
+            // their iOS twins, same "same style, independently tunable" pattern this pass's
+            // other Android ports already established). No more FormVideoRecorderDialog
+            // fallback for either -- that only ever covered the gap before these existed.
             if (isAvPreviewPlatform()) {
               if (item.trackingLevel === "kb_swing") {
                 return (
@@ -3345,28 +3349,32 @@ function ExerciseLogContent({
                 />
               );
             }
+            if (item.trackingLevel === "kb_swing") {
+              return (
+                <KbSwingTrackerDialog
+                  open={trackingSet !== null}
+                  onOpenChange={(open) => !open && setTrackingSet(null)}
+                  recordVideo={mergedTracking}
+                  onCapture={handleKbSwingCapture}
+                  videoContext={videoContextFor(trackingSet)}
+                />
+              );
+            }
             return (
-              <FormVideoRecorderDialog
+              <HorizontalLoadTrackerDialog
                 open={trackingSet !== null}
                 onOpenChange={(open) => !open && setTrackingSet(null)}
+                recordVideo={mergedTracking}
+                onCapture={handleHorizontalLoadCapture}
                 videoContext={videoContextFor(trackingSet)}
-                onSaved={(url) => {
-                  if (trackingSet == null) return;
-                  onUpdateSet(trackingSet, { formCheckVideoUrl: url }, { immediate: true });
-                  setTrackingSet(null);
-                }}
-                onQueued={() => setTrackingSet(null)}
               />
             );
           }
 
           if (item.trackingLevel === "med_ball") {
-            // AVFoundation + Vision pipeline only -- no ARKit equivalent was ever built for
-            // med ball tracking (see av-medball-tracker-dialog.tsx's own file comment), so
-            // there's no isAvPreviewPlatform() branch to an Ar* fallback dialog the way every
-            // other mode has. Android/web falls through to a plain video-only capture, same
-            // fallback golf/baseball swing already uses for the identical "no non-iOS pipeline
-            // exists yet" reason.
+            // AVFoundation + Vision on iOS, MediaPipe on Android/web
+            // (medball-tracker-dialog.tsx, a deliberately separate implementation) -- no more
+            // FormVideoRecorderDialog fallback, same reasoning as kb_swing/horizontal_load above.
             if (isAvPreviewPlatform()) {
               return (
                 <AvMedballTrackerDialog
@@ -3380,16 +3388,12 @@ function ExerciseLogContent({
               );
             }
             return (
-              <FormVideoRecorderDialog
+              <MedballTrackerDialog
                 open={trackingSet !== null}
                 onOpenChange={(open) => !open && setTrackingSet(null)}
+                recordVideo={mergedTracking}
+                onCapture={handleMedballCapture}
                 videoContext={videoContextFor(trackingSet)}
-                onSaved={(url) => {
-                  if (trackingSet == null) return;
-                  onUpdateSet(trackingSet, { formCheckVideoUrl: url }, { immediate: true });
-                  setTrackingSet(null);
-                }}
-                onQueued={() => setTrackingSet(null)}
               />
             );
           }
