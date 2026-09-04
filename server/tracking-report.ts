@@ -58,6 +58,7 @@ type TrackingDiagnostics = {
     scaleFactor: number | null;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
+    supineFullLengthFrames?: number;
     unresolvedFrames: number;
   } | null;
 };
@@ -392,13 +393,20 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
   }
   if (d.calibration) {
     const c = d.calibration;
-    const totalFrames = c.noseToAnkleFrames + c.shoulderToAnkleFrames + c.unresolvedFrames;
+    const supineFrames = c.supineFullLengthFrames ?? 0;
+    const totalFrames =
+      c.noseToAnkleFrames + c.shoulderToAnkleFrames + supineFrames + c.unresolvedFrames;
     lines.push({
       label: "Calibration",
       value:
         c.scaleFactor != null
-          ? `succeeded -- nose-to-ankle on ${c.noseToAnkleFrames}/${totalFrames} frames, shoulder-to-ankle fallback on ${c.shoulderToAnkleFrames}/${totalFrames}`
-          : `failed -- unresolved (neither method found ankles+nose or ankles+shoulders) on ${c.unresolvedFrames}/${totalFrames} frames`,
+          ? `succeeded -- nose-to-ankle on ${c.noseToAnkleFrames}/${totalFrames} frames, ` +
+            `shoulder-to-ankle fallback on ${c.shoulderToAnkleFrames}/${totalFrames}, ` +
+            `lying-flat full-length on ${supineFrames}/${totalFrames}`
+          : `failed -- unresolved on ${c.unresolvedFrames}/${totalFrames} frames. Either no frame ` +
+            `showed ankles plus nose/shoulders, or the body was too foreshortened to measure ` +
+            `(pointing away from the lens -- e.g. a bench filmed from the head or foot of the ` +
+            `bench rather than square to its side)`,
     });
   }
   return lines;

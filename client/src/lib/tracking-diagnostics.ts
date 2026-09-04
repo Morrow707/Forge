@@ -58,6 +58,7 @@ export type TrackingDiagnostics = {
     scaleFactor: number | null;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
+    supineFullLengthFrames?: number;
     unresolvedFrames: number;
   } | null;
 };
@@ -179,6 +180,7 @@ export function buildTrackingDiagnostics(args: {
     scaleFactor: number | null;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
+    supineFullLengthFrames?: number;
     unresolvedFrames: number;
   } | null;
 }): TrackingDiagnostics {

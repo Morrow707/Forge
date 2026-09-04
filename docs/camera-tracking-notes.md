@@ -193,3 +193,64 @@ Two separate things have to be true before bench can be compared to OVR:
 Do not tune constants against the table above until bench is re-shot from the side
 with a plate in frame. Fitting a fudge factor to depth-axis data would bake the
 camera angle into the model.
+
+### Which angle each lift needs, and why it is not the same answer for all of them
+
+The pipeline has ONE camera and no depth on the 2D Vision path
+(visionJointsToWorldLandmarks fills z with 0). Two independent things have to survive
+whatever angle is chosen:
+
+**Scale** -- how many centimetres a pixel-unit is worth. Today this comes from the
+athlete's own body, so the body has to be visible at its true length. A body pointing
+away from the lens is foreshortened and its length is unknowable from that frame; no
+amount of maths recovers it. There are now three ways a frame can resolve:
+
+| Frame shows | Method | Works for |
+| --- | --- | --- |
+| Upright body, head over ankles | Vertical head-to-ankle drop | Squat, deadlift, clean, snatch, row, press, jump |
+| Upright body, no head | Shoulder-to-ankle / 0.818 | Same, when the head leaves frame |
+| Lying body ACROSS the frame at full length | Full head-to-ankle segment length | Bench, floor press, hip thrust |
+| Body pointing at or away from the lens | Rejected | -- |
+
+**Axis** -- whether the movement being measured lies in the image plane. Vertical bar
+travel is in-plane from ANY azimuth around the lift as long as the camera is LEVEL with
+the movement. Filming down at 45 degrees is what breaks it: that mixes real vertical
+travel with depth, and depth is the least reliable number the tracker produces. The
+failing bench set was shot from a raised corner, which is why its numbers were wrong in
+two ways at once.
+
+So, per lift:
+
+- **Squat, deadlift, clean, snatch, Pendlay row, overhead press** -- the athlete is
+  upright, so scale resolves from any azimuth. Film from the SIDE, camera level with the
+  athlete's mid-torso. Side view also puts the bar's fore-aft drift in plane, which is
+  the drift that matters for all of them. Filming from behind still calibrates, but bar
+  path becomes a depth measurement and should not be trusted.
+- **Bench press, floor press, hip thrust** -- the athlete is horizontal, so scale
+  resolves ONLY from the side. Camera square to the side of the bench, level with the
+  bar's travel. From the head or foot of the bench the body points down the lens and
+  calibration correctly refuses.
+- **Box jump** -- upright, and the measured axis is vertical. Any azimuth, camera level.
+
+The one case that genuinely cannot be solved by choosing an angle is measuring BOTH
+horizontal bar-drift axes at once. One camera sees one of them. Fore-aft is the one worth
+keeping for every lift here, and side-on is where it lives.
+
+### Getting there from any angle (not yet built)
+
+Two routes, both real, neither dependent on the athlete's body being measurable:
+
+1. **Scale off the equipment instead of the athlete.** computeReferenceObjectScale and
+   CALIBRATION_REFERENCES already exist. A bumper plate is 450mm and shows as a full
+   circle from the side; a bar is ~2.13m sleeve-to-sleeve and shows unforeshortened from
+   the head or foot of a bench. So every angle has a known-size object in frame -- the
+   detector just is not wired to bench today (av-bar-tracker-dialog only sets
+   coreMlTrackingMode to "plate" for modes that already traded corroboration for it).
+   This is the single highest-value piece of work for "accurate from any angle."
+2. **Use the real 3D pose.** VNDetectHumanBodyPose3DRequest (iOS 17+) returns joints in
+   actual metres, and visionBody3DToWorldLandmarks already bridges it -- the TRACKING
+   path prefers it per frame. Calibration does not: av-bar-tracker-dialog builds
+   calibrationInput from visionJointsToWorldLandmarks alone, the depthless 2D bridge.
+   On a frame with 3D pose there is nothing to calibrate, the landmarks are already
+   metric, and foreshortening stops mattering at any angle. Closing that gap is a
+   separate change and needs a device to validate.

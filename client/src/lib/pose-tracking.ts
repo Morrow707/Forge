@@ -712,6 +712,53 @@ function uprightEnough(verticalSpan: number, head: Landmark, ankleY: number, ank
   return verticalSpan / totalLength >= MIN_UPRIGHT_VERTICAL_FRACTION;
 }
 
+// Biacromial (shoulder-to-shoulder) breadth as a fraction of standing height -- same
+// Drillis & Contini anthropometric family as SHOULDER_HEIGHT_FRACTION above. A standing
+// athlete's height is therefore about 4.1x their shoulder width.
+const SHOULDER_BREADTH_FRACTION = 0.245;
+
+// The floor on impliedHeight / shoulderWidth before a frame is trusted to be showing a
+// body at something like its true length.
+//
+// uprightEnough above is necessary but NOT sufficient, and on the 2D Vision path it is
+// weaker than it looks: visionJointsToWorldLandmarks fills z with 0 (Vision's 2D request
+// has no depth), so that check reduces to "which way does this body run across the IMAGE."
+// It correctly rejects a supine athlete filmed from the side of the bench, whose body lies
+// across the frame -- but a supine athlete filmed end-on, from the foot or the head of the
+// bench, runs UP AND DOWN the frame just like a standing one. Direction alone waves that
+// through, and it is the single most foreshortened view there is: the body points straight
+// away from the lens, so head-to-ankle collapses to a fraction of its real length and the
+// scale inflates by exactly that fraction.
+//
+// Shoulder width is the check that catches it, because it is roughly perpendicular to the
+// body's long axis: rotating a body away from the camera about its left-right axis
+// foreshortens head-to-ankle while leaving shoulder width alone. So the RATIO between them
+// measures foreshortening directly, and it is free of everything that would otherwise have
+// to be known -- the athlete's real height, their distance from the lens, the units of
+// whatever pipeline produced the landmarks.
+//
+// 2.5 against an anatomical ~4.1 leaves generous room for real build variation, a shoulder
+// width itself partly foreshortened, and ordinary perspective, while still sitting far
+// above the ~1-2 an end-on supine frame produces. A standing athlete filmed from the side
+// has overlapping shoulders and a tiny shoulder width, which only pushes this ratio up.
+const MIN_HEIGHT_TO_SHOULDER_RATIO = 2.5;
+
+// Whether the implied standing height is anatomically consistent with the shoulder width
+// measured on the same frame. Returns true when shoulder width can't be measured at all --
+// this is a check for a specific, identifiable failure, not another visibility gate.
+function foreshorteningPlausible(impliedHeight: number, worldLandmarks: Landmark[]): boolean {
+  const lShoulder = worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+  if (!visible(lShoulder) || !visible(rShoulder)) return true;
+  const shoulderWidth = Math.hypot(
+    lShoulder.x - rShoulder.x,
+    lShoulder.y - rShoulder.y,
+    lShoulder.z - rShoulder.z,
+  );
+  if (!(shoulderWidth > 0)) return true;
+  return impliedHeight / shoulderWidth >= MIN_HEIGHT_TO_SHOULDER_RATIO;
+}
+
 function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1 | -1): number | null {
   const lAnkle = worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
   const rAnkle = worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
@@ -723,25 +770,87 @@ function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1
   const nose = worldLandmarks[POSE_LANDMARKS.NOSE];
   if (visible(nose)) {
     const span = verticalSign * (ankleY - nose.y);
-    if (span > 0 && uprightEnough(span, nose, ankleY, ankleX, ankleZ)) return span;
+    if (
+      span > 0 &&
+      uprightEnough(span, nose, ankleY, ankleX, ankleZ) &&
+      foreshorteningPlausible(span, worldLandmarks)
+    ) {
+      return span;
+    }
   }
 
   const lShoulder = worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
   const rShoulder = worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
-  if (!visible(lShoulder) || !visible(rShoulder)) return null;
-  const shoulderY = (lShoulder.y + rShoulder.y) / 2;
-  const shoulderToAnkle = verticalSign * (ankleY - shoulderY);
-  if (!(shoulderToAnkle > 0)) return null;
-  // Same gate on the fallback -- a supine athlete's shoulders are no more above their ankles
-  // than their head is, so letting this branch through unchecked would just relocate the bug.
-  const shoulderMid: Landmark = {
-    ...lShoulder,
-    x: (lShoulder.x + rShoulder.x) / 2,
-    y: shoulderY,
-    z: (lShoulder.z + rShoulder.z) / 2,
-  };
-  if (!uprightEnough(shoulderToAnkle, shoulderMid, ankleY, ankleX, ankleZ)) return null;
-  return shoulderToAnkle / SHOULDER_HEIGHT_FRACTION;
+  if (visible(lShoulder) && visible(rShoulder)) {
+    const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+    const shoulderToAnkle = verticalSign * (ankleY - shoulderY);
+    const shoulderMid: Landmark = {
+      ...lShoulder,
+      x: (lShoulder.x + rShoulder.x) / 2,
+      y: shoulderY,
+      z: (lShoulder.z + rShoulder.z) / 2,
+    };
+    const impliedHeight = shoulderToAnkle / SHOULDER_HEIGHT_FRACTION;
+    if (
+      shoulderToAnkle > 0 &&
+      uprightEnough(shoulderToAnkle, shoulderMid, ankleY, ankleX, ankleZ) &&
+      foreshorteningPlausible(impliedHeight, worldLandmarks)
+    ) {
+      return impliedHeight;
+    }
+  }
+
+  // Neither upright branch could resolve this frame. Before giving up, the one remaining
+  // case worth trying is a body that is lying down but still shown at its true length --
+  // see supineInPlaneHeightPixels. Reached for every upright failure, not just a failed
+  // uprightEnough check: a body square-on to a side camera has a vertical span of almost
+  // exactly zero, so it falls out at the `span > 0` tests above long before orientation is
+  // ever considered.
+  return supineInPlaneHeightPixels(worldLandmarks, ankleX, ankleY, ankleZ);
+}
+
+// Above this share of its own length lying along the vertical axis, a body is not "lying
+// down" in any useful sense and the supine branch below must not touch it. Deliberately far
+// below MIN_UPRIGHT_VERTICAL_FRACTION rather than just under it, so the two leave a wide
+// band of nothing between them: a body in that band (an athlete folded at the bottom of a
+// deep squat, a hinge) calibrates through neither, which is the correct answer for both.
+// Without that gap the supine branch would happily accept a squat's bottom frames, whose
+// straight-line head-to-ankle distance is barely half a real standing height, and inflate
+// the scale for the one lift this pipeline measures best today.
+const MAX_SUPINE_VERTICAL_FRACTION = 0.35;
+
+// The one case where a lying athlete CAN still be calibrated from their own height: filmed
+// from the side, their head-to-ankle segment lies flat in the image plane at very close to
+// its true length, even though almost none of it is vertical. Measure that segment's full
+// length instead of its vertical component, and the athlete's real height maps onto it the
+// same way it maps onto a standing body's vertical drop.
+//
+// This is what makes a side-on bench press measurable at all. It deliberately does NOT help
+// the end-on view (camera at the foot or head of the bench): there the same segment points
+// straight away from the lens, and foreshorteningPlausible rejects it -- correctly, since
+// there is no information in that frame about how long the body really is.
+//
+// UNVALIDATED against real footage (this environment has no camera). The geometry is sound
+// and the foreshortening guard is the same one the upright path uses, but treat the numbers
+// it produces as provisional until a side-on set has been shot against a bar sensor -- see
+// docs/camera-tracking-notes.md.
+function supineInPlaneHeightPixels(
+  worldLandmarks: Landmark[],
+  ankleX: number,
+  ankleY: number,
+  ankleZ: number,
+): number | null {
+  const nose = worldLandmarks[POSE_LANDMARKS.NOSE];
+  if (!visible(nose)) return null;
+  const totalLength = Math.hypot(nose.x - ankleX, nose.y - ankleY, nose.z - ankleZ);
+  if (!(totalLength > 0)) return null;
+  const verticalFraction = Math.abs(nose.y - ankleY) / totalLength;
+  if (verticalFraction > MAX_SUPINE_VERTICAL_FRACTION) return null;
+  // Same anatomical check as every other branch, and here it is doing the whole job: it is
+  // what separates a body lying ACROSS the frame at true length (side-on, ratio ~4) from one
+  // pointing AWAY from the lens (end-on, ratio ~1).
+  if (!foreshorteningPlausible(totalLength, worldLandmarks)) return null;
+  return totalLength;
 }
 
 // Diagnostic-only mirror of impliedStandingHeightPixels' own branching, for the AR Diagnosis
@@ -753,9 +862,15 @@ function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1
 // completely unchanged while still answering "why didn't this calibrate" for a failed set.
 export function calibrationMethodBreakdown(
   frames: { worldLandmarks: Landmark[] }[],
-): { noseToAnkleFrames: number; shoulderToAnkleFrames: number; unresolvedFrames: number } {
+): {
+  noseToAnkleFrames: number;
+  shoulderToAnkleFrames: number;
+  supineFullLengthFrames: number;
+  unresolvedFrames: number;
+} {
   let noseToAnkleFrames = 0;
   let shoulderToAnkleFrames = 0;
+  let supineFullLengthFrames = 0;
   let unresolvedFrames = 0;
   let lastSign: 1 | -1 = 1;
   for (const f of frames) {
@@ -777,7 +892,12 @@ export function calibrationMethodBreakdown(
     // Without this the diagnostics actively mislead: the field report that found the supine
     // bug read "calibration succeeded -- nose-to-ankle on 140/781 frames" for a bench set
     // whose scale was ~4x wrong.
-    if (visible(nose) && noseSpan > 0 && uprightEnough(noseSpan, nose, ankleY, ankleX, ankleZ)) {
+    if (
+      visible(nose) &&
+      noseSpan > 0 &&
+      uprightEnough(noseSpan, nose, ankleY, ankleX, ankleZ) &&
+      foreshorteningPlausible(noseSpan, f.worldLandmarks)
+    ) {
       noseToAnkleFrames++;
       continue;
     }
@@ -792,16 +912,23 @@ export function calibrationMethodBreakdown(
         y: shoulderY,
         z: (lShoulder.z + rShoulder.z) / 2,
       };
-      if (shoulderSpan > 0 && uprightEnough(shoulderSpan, shoulderMid, ankleY, ankleX, ankleZ)) {
+      if (
+        shoulderSpan > 0 &&
+        uprightEnough(shoulderSpan, shoulderMid, ankleY, ankleX, ankleZ) &&
+        foreshorteningPlausible(shoulderSpan / SHOULDER_HEIGHT_FRACTION, f.worldLandmarks)
+      ) {
         shoulderToAnkleFrames++;
-      } else {
-        unresolvedFrames++;
+        continue;
       }
+    }
+    // Same last-resort branch the real path takes -- a lying body shown at true length.
+    if (supineInPlaneHeightPixels(f.worldLandmarks, ankleX, ankleY, ankleZ) != null) {
+      supineFullLengthFrames++;
     } else {
       unresolvedFrames++;
     }
   }
-  return { noseToAnkleFrames, shoulderToAnkleFrames, unresolvedFrames };
+  return { noseToAnkleFrames, shoulderToAnkleFrames, supineFullLengthFrames, unresolvedFrames };
 }
 
 // First of Vision's two calibration mechanisms: the athlete's own known real height compared

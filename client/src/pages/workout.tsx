@@ -350,6 +350,7 @@ type TrackingDiagnostics = {
     scaleFactor: number | null;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
+    supineFullLengthFrames?: number;
     unresolvedFrames: number;
   } | null;
 };
