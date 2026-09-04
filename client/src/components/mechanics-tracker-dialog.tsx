@@ -441,6 +441,9 @@ export function MechanicsTrackerDialog({
         skillProgramDayId,
         skillProgramExerciseId,
         trackingLevel: "mechanics",
+        // ARC-1 -- the normalized confidence column both capture tracks now
+        // share (see skillSessionLogs.trustScorePct's own schema comment).
+        trustScorePct: result.trust?.score ?? null,
         cameraAngle,
         faults,
         hipShoulderSeparationDeg: result.hipShoulderSeparationDeg,

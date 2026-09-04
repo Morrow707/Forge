@@ -24,6 +24,8 @@ import {
   type PathTracePoint,
 } from "./bar-tracking";
 import type { FormFault, LandingAsymmetryEntry } from "./pose-tracking";
+import { jumpTrustScores, type JumpRepTrustInput } from "./capture-trust";
+import type { RepTrustScore } from "./bar-tracking";
 
 const GRAVITY_MPS2 = 9.81;
 // How many consecutive near-still SAMPLES count as "landed" -- see its own comment further
@@ -118,6 +120,14 @@ export type JumpSetMetrics = {
   // reads when nothing qualified; undefined only for a caller (kb-swing/ar-jump, the untouched
   // ARKit fallback) that never populates this field at all.
   bestBoxClearanceCm?: number | null;
+  // Per-jump confidence, same RepTrustScore shape (and same 0-100 scale)
+  // bar_path/full's own computeRepTrustScores produces -- see
+  // capture-trust.ts's jumpTrustScores for what it folds in and why jump
+  // mode had none of this until now (ARC-1). repNumber lines up with
+  // repBreakdown's, so the caller passes it straight through to
+  // workoutSetEntries.trustScores and the server's resolveTrustScorePct
+  // normalizes it into trust_score_pct with no jump-specific handling.
+  trustScores?: RepTrustScore[] | null;
   // Session-level camera/AI context for this recording -- see bar-tracking.ts's RepMetrics'
   // own comment on this same field.
   captureDeviceInfo?: CaptureDeviceInfo | null;
@@ -199,6 +209,10 @@ export function summarizeJumpSet(
   const settleToleranceM = triggerM;
 
   const reps: JumpRep[] = [];
+  // Mean TrackedPoint.confidence over each pushed rep's own window, in the
+  // same order as reps -- kept for jumpTrustScores below rather than
+  // recomputed from the trace, since the rep windows are only known here.
+  const repConfidences: number[] = [];
   let previousLandingT: number | null = null;
 
   let state: "grounded" | "airborne" = "grounded";
@@ -223,8 +237,27 @@ export function summarizeJumpSet(
         takeoffIdx = baselineIdx; // last confirmed-grounded frame, not this one
         peakIdx = i;
       }
-      // A rise below the trigger, or a downward move, isn't a takeoff --
-      // keep waiting rather than resetting the baseline off a noisy frame.
+      // A DOWNWARD move past the trigger isn't a takeoff either, but it can't just be
+      // waited out: the drift-tracking branch above only re-anchors the baseline while the
+      // ankle stays WITHIN triggerM of it, so a real step down -- the way every set of box
+      // jumps past the first rep begins -- leaves the baseline stranded at the box's own
+      // height for the rest of the recording. Nothing after that can clear
+      // `baseline - y >= triggerM` unless the athlete jumps higher than the box they just
+      // stepped off, so every remaining rep silently never gets looked for at all: the same
+      // "logged 5 reps but tracking only found 1" failure the airborne branch's own recovery
+      // valve below exists to prevent, reached from the opposite direction. Re-anchoring
+      // requires the new height to actually HOLD for SETTLE_FRAMES, the same settled test the
+      // landing path uses, so a countermovement dip or a single noisy frame on the way into a
+      // jump can't move the baseline -- only a genuine change of standing height does.
+      if (ySmoothed[i] - baseline >= triggerM && i >= SETTLE_FRAMES - 1) {
+        const window = ySmoothed.slice(i - SETTLE_FRAMES + 1, i + 1);
+        if (Math.max(...window) - Math.min(...window) < settleToleranceM) {
+          baseline = window.reduce((a, b) => a + b, 0) / window.length;
+          baselineIdx = i;
+        }
+      }
+      // A rise below the trigger isn't a takeoff -- keep waiting rather than resetting the
+      // baseline off a noisy frame.
     } else {
       // Recovery valve: without this, a landing whose post-touchdown tracking never settles
       // (never holds still for a full SETTLE_FRAMES stretch -- a box landing's own balance
@@ -298,6 +331,7 @@ export function summarizeJumpSet(
             const boxClearanceCm =
               boxTopWorldY != null ? Math.round((boxTopWorldY - ySmoothed[peakIdx]) * 100 * 10) / 10 : null;
 
+            repConfidences.push(avgConfidence);
             reps.push({
               repNumber: reps.length + 1,
               flightSeconds: Math.round(flightSeconds * 1000) / 1000,
@@ -332,16 +366,18 @@ export function summarizeJumpSet(
   // could just as easily be real fatigue as a tracking glitch. Median
   // (not mean) so a single wild rep can't drag the baseline it's being
   // compared against toward itself.
+  const outlierAgainstSet = new Array(reps.length).fill(false);
   if (reps.length >= 3) {
     const heights = reps.map((r) => r.jumpHeightCm).sort((a, b) => a - b);
     const mid = Math.floor(heights.length / 2);
     const medianHeightCm =
       heights.length % 2 !== 0 ? heights[mid] : (heights[mid - 1] + heights[mid]) / 2;
     if (medianHeightCm > 0) {
-      for (const rep of reps) {
+      reps.forEach((rep, i) => {
         const deviationPercent = (Math.abs(rep.jumpHeightCm - medianHeightCm) / medianHeightCm) * 100;
-        rep.likelyTrackingGlitch = rep.likelyTrackingGlitch || deviationPercent > outlierPercent;
-      }
+        outlierAgainstSet[i] = deviationPercent > outlierPercent;
+        rep.likelyTrackingGlitch = rep.likelyTrackingGlitch || outlierAgainstSet[i];
+      });
     }
   }
 
@@ -361,12 +397,24 @@ export function summarizeJumpSet(
   const boxClearances = reps.map((r) => r.boxClearanceCm).filter((c): c is number => c != null);
   const bestBoxClearanceCm = boxClearances.length ? Math.max(...boxClearances) : null;
 
+  // ARC-1: jump mode cross-checks something and records what it found.
+  // Both height estimates were already computed per rep and deliberately
+  // kept separate; this is where they finally get compared to each other.
+  const trustInputs: JumpRepTrustInput[] = reps.map((rep, i) => ({
+    repNumber: rep.repNumber,
+    avgConfidence: repConfidences[i] ?? 1,
+    jumpHeightCm: rep.jumpHeightCm,
+    peakHeightCm: rep.peakHeightCm,
+    outlierAgainstSet: outlierAgainstSet[i],
+  }));
+
   return {
     bestJumpHeightCm,
     bestHorizontalDistanceCm,
     avgGroundContactSeconds,
     reactiveStrengthIndex,
     repBreakdown: reps,
+    trustScores: jumpTrustScores(trustInputs),
     pathTrace: buildPathTrace(rawPoints, { x: rawPoints[0].x, y: rawPoints[0].y }),
     formFaults: [],
     bestBoxClearanceCm,

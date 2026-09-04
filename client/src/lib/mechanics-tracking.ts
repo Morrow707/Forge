@@ -28,7 +28,9 @@ import {
   worldVerticalSign,
   frameKneeAngles,
   visible,
+  type SetTrustScore,
 } from "./pose-tracking";
+import { mechanicsTrustScore } from "./capture-trust";
 import {
   DEFAULT_SKILL_FAULT_THRESHOLDS,
   type SkillFaultThresholds,
@@ -168,6 +170,15 @@ export type MechanicsResult = {
   // joint-angle reasoning pose-tracking.ts's detectFormFaults already
   // applies to a squat's depth.
   kneeBendDepthDeg: number | null;
+  // ARC-1: mechanics measured a dozen things and recorded nothing about how
+  // much to believe any of them, which is why skillSessionLogs.trust_score_pct
+  // is null for every mechanics row. Same SetTrustScore shape (and same 0-100
+  // scale) the best-of-set modes already use via blendSpeedEstimates -- see
+  // capture-trust.ts's mechanicsTrustScore for what it folds in. Nothing here
+  // is a new measurement: it is coverage of the joints these numbers were
+  // read from, whether the rotation peaks the sequencing verdict depends on
+  // were actually found, and whether the wrist-speed ceiling was breached.
+  trust: SetTrustScore;
 };
 
 // Peer-reviewed pitching-biomechanics studies put elite throwing-wrist
@@ -224,6 +235,7 @@ export function analyzeMechanics(
   let elbowExtensionDeg: number | null = null;
   let releaseHeightM: number | null = null;
   let setPointPauseSeconds: number | null = null;
+  let implausibleWristSpeed = false;
   if (mode === "throw") {
     // The throwing arm is whichever wrist travels the most during the
     // capture -- the glove-side arm barely moves by comparison, so this
@@ -276,6 +288,9 @@ export function analyzeMechanics(
       .map((s) => s.speed)
       .filter((v) => v <= MAX_PLAUSIBLE_WRIST_SPEED_MPS);
     const wristSpeeds = plausibleWristSpeeds.length > 0 ? plausibleWristSpeeds : wristSpeedSamples.map((s) => s.speed);
+    // The ceiling filter above quietly discards these; the trust score is where the fact that
+    // there WERE any finally gets recorded rather than only ever affecting the number.
+    implausibleWristSpeed = wristSpeedSamples.length > 0 && plausibleWristSpeeds.length < wristSpeedSamples.length;
     peakWristSpeedMps = wristSpeeds.length > 0 ? Math.round(percentile(wristSpeeds, 0.95) * 100) / 100 : null;
 
     const armAnglesRaw = frames.map((f) => {
@@ -416,6 +431,17 @@ export function analyzeMechanics(
     releaseHeightM,
     setPointPauseSeconds,
     kneeBendDepthDeg,
+    // separations counts exactly the frames where BOTH the shoulder line and the hip line
+    // resolved -- the joints every headline number above is read from -- so it is already the
+    // torso-coverage figure, no second pass needed.
+    trust: mechanicsTrustScore({
+      totalFrames: frames.length,
+      framesWithTorso: separations.length,
+      hipPeakFound: hipPeakTimeMs0 != null,
+      shoulderPeakFound: shoulderPeakTimeMs0 != null,
+      armPeakFound: mode === "throw" ? armPeakTimeMs != null : undefined,
+      implausibleWristSpeed,
+    }),
   };
 }
 

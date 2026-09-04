@@ -76,6 +76,16 @@ export type SprintResult = {
   // result the athlete can see and choose to retake is strictly better than
   // a capture that never finishes.
   likelyGlitch: boolean;
+  // Wall-clock gap, in ms, between the two frames each checkpoint crossing
+  // was interpolated between -- one entry per crossing, in crossing order.
+  // The crossing instant is only ever known to within this gap, so the
+  // worst one against the measured elapsed time is a real precision bound
+  // on the whole result rather than a heuristic: a 33ms straddle on a 5.2s
+  // 40 is nothing, the same 33ms on a 0.4s split is 8%. Feeds
+  // capture-trust.ts's crossingTrustScore (ARC-1); nothing else reads it,
+  // and a manually-scrubbed result has none (see the dialogs' own manual
+  // fallback, which is timed by eye, not by frame).
+  crossingFrameGapsMs: number[];
 };
 
 // Usain Bolt's peak instantaneous speed (~12.4 m/s) is the fastest speed
@@ -135,6 +145,8 @@ export function detectSprintCrossings(
   let checkpointIdx = 0;
   let skipRemaining = checkpoints[0]?.skipCrossings ?? 0;
   const crossingTimes: number[] = [];
+  // Positionally aligned with crossingTimes -- see SprintResult's own field comment.
+  const crossingFrameGapsMs: number[] = [];
   for (let i = 1; i < points.length && checkpointIdx < checkpoints.length; i++) {
     const direction = checkpointDirection(checkpoints, checkpointIdx);
     const targetX = checkpoints[checkpointIdx].x;
@@ -150,6 +162,7 @@ export function detectSprintCrossings(
       const span = curr.x - prev.x;
       const frac = span !== 0 ? (targetX - prev.x) / span : 0;
       crossingTimes.push(prev.t + frac * (curr.t - prev.t));
+      crossingFrameGapsMs.push(curr.t - prev.t);
       checkpointIdx++;
       skipRemaining = checkpoints[checkpointIdx]?.skipCrossings ?? 0;
     }
@@ -188,6 +201,7 @@ export function detectSprintCrossings(
     splits,
     avgSpeedYardsPerSec,
     likelyGlitch,
+    crossingFrameGapsMs,
   };
 }
 
