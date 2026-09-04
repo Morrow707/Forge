@@ -415,6 +415,39 @@ function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number)
   return { lastPerformance, setHistory };
 }
 
+// The one reduction that turns whatever per-mode trust score a capture
+// carries into the single normalized number stored on
+// workoutSetEntries.trustScorePct -- see that column's own schema comment
+// for why one column exists at all.
+//
+// Modes that score every rep (bar path, full) report the LOWEST of them,
+// matching how queryAthletesAdvanced already surfaces minTrustScorePct: a
+// set is only as trustworthy as its least trustworthy rep. Best-of-set
+// modes (swing, med ball, kettlebell swing) carry one score for the whole
+// capture and report that. A set with neither is null rather than zero --
+// a hand-logged set has no confidence to report, which is not the same as
+// having no confidence.
+//
+// Only the number. A trust score's notes are prose written about one
+// athlete's specific capture, which is why the archive does not copy them
+// either.
+function resolveTrustScorePct(source: {
+  trustScores?: unknown;
+  swingTrustScore?: unknown;
+  medBallTrustScore?: unknown;
+  kbSwingTrustScore?: unknown;
+}): number | null {
+  const repScores = (Array.isArray(source.trustScores) ? source.trustScores : [])
+    .map((t) => (t as { score?: unknown })?.score)
+    .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+  if (repScores.length > 0) return Math.round(Math.min(...repScores));
+  for (const candidate of [source.swingTrustScore, source.medBallTrustScore, source.kbSwingTrustScore]) {
+    const score = (candidate as { score?: unknown } | null | undefined)?.score;
+    if (typeof score === "number" && Number.isFinite(score)) return Math.round(score);
+  }
+  return null;
+}
+
 const TESTING_FIELDS = [
   "fortyYardDash",
   "verticalJumpIn",
@@ -2756,6 +2789,7 @@ export const storage = {
         medBallPeakSpeedMps: workoutSetEntries.medBallPeakSpeedMps,
         horizontalLoadAvgSpeedYardsPerSec: workoutSetEntries.horizontalLoadAvgSpeedYardsPerSec,
         swingSeparationDeg: workoutSetEntries.swingSeparationDeg,
+        trustScorePct: workoutSetEntries.trustScorePct,
         trustScores: workoutSetEntries.trustScores,
         swingTrustScore: workoutSetEntries.swingTrustScore,
         medBallTrustScore: workoutSetEntries.medBallTrustScore,
@@ -2787,14 +2821,10 @@ export const storage = {
       // score for the best-of-set modes that carry one instead. Only the
       // number: a trust score's notes are prose written about one athlete's
       // capture, which is rule 2.
-      const repScores = ((r.trustScores as { score: number }[] | null) ?? []).map((t) => t.score);
-      const setScore =
-        (r.swingTrustScore as { score: number } | null)?.score ??
-        (r.medBallTrustScore as { score: number } | null)?.score ??
-        (r.kbSwingTrustScore as { score: number } | null)?.score ??
-        null;
-      const trustScorePct =
-        repScores.length > 0 ? Math.round(Math.min(...repScores)) : setScore != null ? Math.round(setScore) : null;
+      // Prefer the column resolved at save time; fall back to reducing the
+      // per-mode json for rows written before that column existed and not
+      // yet reached by its backfill.
+      const trustScorePct = r.trustScorePct ?? resolveTrustScorePct(r);
       // Derived from which metric family the set actually carries, rather
       // than read off programExercises.trackingLevel -- same reasoning as
       // exerciseName above, and it avoids re-introducing that join purely
@@ -16743,6 +16773,7 @@ ${catalog}`;
                 legDriveAsymmetry: s.legDriveAsymmetry ?? null,
                 armDriveAsymmetry: s.armDriveAsymmetry ?? null,
                 trustScores: s.trustScores ?? null,
+                trustScorePct: resolveTrustScorePct(s),
                 isPr,
                 swingSeparationDeg: s.swingSeparationDeg ?? null,
                 swingTempoRatio: s.swingTempoRatio ?? null,

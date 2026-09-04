@@ -1485,6 +1485,13 @@ export const skillSessionLogs = pgTable(
     // system the way the strength side's workoutComments does.
     videoUrl: text("video_url"),
     coachAnnotationUrl: text("coach_annotation_url"),
+    // Skills' half of workoutSetEntries.trustScorePct -- see that column's
+    // own comment. Null for every row today: sprint and mechanics are two
+    // of the four capture modes that still cross-check nothing and so
+    // compute no confidence at all. The column exists so that when they do,
+    // the answer lands somewhere queryable alongside the strength side
+    // rather than as a fifth differently-named column.
+    trustScorePct: integer("trust_score_pct"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     // Retention-management fields, exact mirror of workoutSetEntries'
     // videoFavorited/pendingDeletionAt (see that column's own comment) --
@@ -2122,6 +2129,26 @@ export const workoutSetEntries = pgTable(
   // believe instead of only ever seeing that context live, in the tracker
   // dialog, at the moment the set was captured.
   trustScores: json("trust_scores"),
+  // The one number you can ask about across every capture mode.
+  //
+  // Confidence is otherwise spread across four differently-named columns --
+  // trustScores (per rep, bar path and full), swingTrustScore,
+  // medBallTrustScore and kbSwingTrustScore (set-level, best-of-set modes)
+  // -- with each new mode adding another. That shape makes "which captures
+  // came back low-confidence" unanswerable in SQL, because there is no
+  // column to ask it of, and it is why a mode can ship with no cross-check
+  // at all without anything noticing.
+  //
+  // Derived server-side at save time (see resolveTrustScorePct in
+  // storage.ts) rather than sent by the client: the per-mode payloads
+  // already carry it, so this is a normalization of data the client is
+  // sending anyway, and a client cannot claim a confidence its own numbers
+  // do not support. The lowest per-rep score for the modes that score per
+  // rep, matching how queryAthletesAdvanced already reports
+  // minTrustScorePct; the set-level score for the modes that carry one
+  // instead. Null when a set carried no trust score at all, which includes
+  // every hand-logged set and the modes that still compute no confidence.
+  trustScorePct: integer("trust_score_pct"),
   // Session-level camera/AI context for this set's recording -- see
   // captureDeviceInfoSchema's own comment. Null for sets logged before this existed, and for
   // any set that isn't camera-tracked (nothing to capture).

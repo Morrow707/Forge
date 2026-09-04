@@ -2453,6 +2453,43 @@ FROM "assignment_correctives" ac
 WHERE wle."exercise_id" IS NULL
   AND wle."corrective_id" = ac."id";
 
+-- ---------------------------------------------------------------------------
+-- One normalized confidence column per capture, on both tracks.
+--
+-- Confidence was spread across four differently-named json columns on workout_set_entries and
+-- did not exist at all on skill_session_logs, so "which captures came back low-confidence" had
+-- no column to ask it of. See shared/schema.ts's own comment on workoutSetEntries.trustScorePct.
+-- ---------------------------------------------------------------------------
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "trust_score_pct" integer;
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "trust_score_pct" integer;
+CREATE INDEX IF NOT EXISTS "workout_set_entries_trust_idx" ON "workout_set_entries" ("trust_score_pct")
+  WHERE "trust_score_pct" IS NOT NULL;
+
+-- Backfill from the per-mode json already on each row, using exactly the reduction the
+-- application now applies at save time: the lowest per-rep score where reps are scored
+-- individually, otherwise whichever set-level score the mode carries. COALESCE over the json
+-- columns rather than a CASE on mode, because a row only ever populates one of them.
+--
+-- COALESCE(trust_scores, '[]'::json) guards the array expansion the same way
+-- queryAthletesAdvanced's own minTrustScore subquery does -- json_array_elements errors on
+-- NULL rather than yielding no rows. Only touches rows where the new column is still NULL, so
+-- re-running it on every deploy is a no-op and it never overwrites a value saved at write time.
+UPDATE "workout_set_entries"
+SET "trust_score_pct" = COALESCE(
+  (SELECT MIN((elem->>'score')::numeric)
+     FROM json_array_elements(COALESCE("trust_scores", '[]'::json)) elem),
+  ("swing_trust_score"->>'score')::numeric,
+  ("med_ball_trust_score"->>'score')::numeric,
+  ("kb_swing_trust_score"->>'score')::numeric
+)::integer
+WHERE "trust_score_pct" IS NULL
+  AND (
+    "trust_scores" IS NOT NULL
+    OR "swing_trust_score" IS NOT NULL
+    OR "med_ball_trust_score" IS NOT NULL
+    OR "kb_swing_trust_score" IS NOT NULL
+  );
+
 `;
 
 async function main() {
