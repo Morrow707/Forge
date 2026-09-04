@@ -79,6 +79,25 @@ jobs:
           npm run db:reconcile
           npm run db:seed
 
+      # Does the database actually have the foreign keys shared/schema.ts
+      # declares? reconcile-schema.ts is additive-only, and CREATE TABLE IF
+      # NOT EXISTS is a no-op against a table that already exists, so every
+      # REFERENCES ... ON DELETE CASCADE inside one of those blocks reaches
+      # only databases where that table did not yet exist. Proven by dropping
+      # a foreign key from a reconciled database and re-running the
+      # migration: it exits zero, prints "complete", and leaves it missing.
+      #
+      # On a from-scratch CI database this passes trivially, since every
+      # table was just created with its constraints. That is the point: it
+      # pins the DECLARATION against what the migration actually builds, so
+      # a future constraint added only inside a CREATE TABLE block -- which
+      # would silently never reach production -- fails here instead.
+      #
+      # Pointing this at a copy of the production database is what would
+      # answer the open question of which constraints are missing there.
+      - name: Check for foreign-key drift
+        run: npm run db:check-drift
+
       # The half of the suite that needs a real database (*.itest.ts). It
       # provisions its OWN database on this same server rather than using
       # forge_ci above -- these tests truncate every table between cases,
