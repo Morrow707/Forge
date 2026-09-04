@@ -3179,6 +3179,46 @@ function ExerciseLogContent({
             const targetSetNumber = explicitSetNumber ?? trackingSet;
             if (targetSetNumber == null) return;
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+
+            // A re-take whose numbers were WITHHELD must not erase a previous take's good ones.
+            //
+            // When calibration is refused, or no clean read was possible, the tracker dialogs
+            // still call back -- with an all-zero metrics object, because the clip is worth
+            // uploading for the coach even when the numbers are not trustworthy. updateSet
+            // merges the patch with { ...s, ...patch }, so those zeros land on top of whatever
+            // the set already held. Re-recording a set that already tracked cleanly, and
+            // catching a bad camera angle on the retry, silently replaced real numbers with
+            // nothing. There is no undo.
+            //
+            // Deliberately narrow: this ONLY declines to overwrite when the incoming take has
+            // no reps at all AND the set already has some. Replacing a good take with another
+            // good take is a thing athletes legitimately want, and still works. The new video
+            // and the new diagnostics are attached either way -- the coach should see the
+            // retry, and the diagnostics are how anyone finds out why it failed.
+            // Both RepMetrics and JumpSetMetrics carry repBreakdown, so this needs no branch.
+            const incomingRepCount = metrics.repBreakdown.length;
+            const existingSet = item.sets.find((s) => s.setNumber === targetSetNumber);
+            const existingRepCount = existingSet?.repBreakdown?.length ?? existingSet?.jumpBreakdown?.length ?? 0;
+            if (incomingRepCount === 0 && existingRepCount > 0) {
+              onUpdateSet(
+                targetSetNumber,
+                {
+                  captureDeviceInfo: metrics.captureDeviceInfo ?? null,
+                  trackingDiagnostics: metrics.trackingDiagnostics ?? null,
+                  ...videoPatch,
+                },
+                { immediate: true },
+              );
+              toast.warning(
+                "That retake couldn't be measured, so this set kept the numbers it already had. The new video was still sent to your coach.",
+                { duration: 8000 },
+              );
+              if (videoUrl) {
+                if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSetNumber, videoUrl });
+                else postFormVideoMutation.mutate({ setNumber: targetSetNumber, videoUrl });
+              }
+              return;
+            }
             if ("bestJumpHeightCm" in metrics) {
               // A box jump's flight time is cut short by landing on the
               // elevated box, not the ground -- jumpHeightCm's flight-time
