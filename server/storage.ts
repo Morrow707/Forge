@@ -2983,6 +2983,25 @@ export const storage = {
         ...skillVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.annotation)]),
         ...commentVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.image)]),
       ]);
+    } else {
+      // A coach or admin DOES have files of their own, contrary to what
+      // this function assumed when it only cleaned up for athletes. Every
+      // comment they wrote can carry a video and a drawn-on still (see
+      // workoutComments.videoUrl / .imageUrl), and author_id cascades from
+      // users -- so deleting a coach removed the rows and left the files on
+      // the mounted disk with nothing left pointing at them. Scoped by
+      // authorship, not by roster: these are the files this account
+      // uploaded, and an athlete's own clips are never reachable from here
+      // (a comment's videoUrl is the commenter's upload; the athlete's set
+      // videos live on workoutSetEntries and belong to the athlete's own
+      // deletion path above).
+      const authoredComments = await db
+        .select({ url: workoutComments.videoUrl, image: workoutComments.imageUrl })
+        .from(workoutComments)
+        .where(eq(workoutComments.authorId, userId));
+      await Promise.all(
+        authoredComments.flatMap((c) => [deleteUploadedFile(c.url), deleteUploadedFile(c.image)]),
+      );
     }
 
     await db.delete(users).where(eq(users.id, userId));
@@ -8733,9 +8752,38 @@ Hard rules, no exceptions:
       if (existing) {
         const [row] = await db
           .update(skillSessionLogs)
-          .set(values)
+          .set({
+            ...values,
+            // Both grace clocks reset with the clip they were counting
+            // down. Without this, a set that the retention sweep had
+            // already warned about kept its old pendingDeletionAt through a
+            // re-record, so the NEW video inherited a countdown started
+            // against the one it replaced and could be purged days early,
+            // against a warning the athlete received about different
+            // footage. See workoutSetEntries' equivalent columns for what
+            // each clock means.
+            pendingDeletionAt: null,
+            staleAccountPendingDeletionAt: null,
+          })
           .where(eq(skillSessionLogs.id, existing.id))
           .returning();
+        // The row's video pointer has just been overwritten, so whatever it
+        // pointed at before is now unreachable -- delete the file rather
+        // than leave it on the mounted disk forever. Every retake of the
+        // same set used to strand one more clip there.
+        //
+        // Guarded on the url actually changing, so re-saving a set without
+        // touching its video (editing a sprint time, say) never deletes the
+        // clip that is still in use. The coach's annotation goes with it:
+        // it is a drawing on a frame of a video that no longer exists.
+        // Deliberately after the update rather than before, and not awaited
+        // inside a transaction -- a filesystem delete cannot roll back, so
+        // it must not run until the row that replaced it is committed. This
+        // mirrors what submitWorkoutLog already does on the strength side.
+        if (existing.videoUrl && existing.videoUrl !== videoUrl) {
+          await deleteUploadedFile(existing.videoUrl);
+          await deleteUploadedFile(existing.coachAnnotationUrl);
+        }
         return row;
       }
       const [row] = await db
