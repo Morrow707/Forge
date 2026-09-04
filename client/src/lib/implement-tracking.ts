@@ -229,6 +229,30 @@ const MAX_LOCK_DRIFT_FRACTION = 0.3;
 // LOCK_RAMP_FRAMES above if that ever needs revisiting too.
 const DRIFT_HISTORY_WINDOW = 5;
 
+// Camera overlord: if a held lock's average drift-from-wrist ratio stays
+// this high across a full DRIFT_HISTORY_WINDOW of frames, it's drifted onto
+// something that isn't the actual implement anymore (a spotter's arm, a
+// rack post) rather than genuinely tracking it -- force a clean
+// reacquisition instead of continuing to trust it. Ported from the
+// identical check in AvImplementTracker (AvBodyTrackingPlugin.swift, iOS)
+// so both camera platforms apply the same scrutiny to a held lock.
+const SUSPICIOUS_DRIFT_THRESHOLD = 0.7;
+
+// Camera overlord: below this many confidence samples there's no reliable
+// "recent average" yet to compare a fresh reading against.
+const MIN_HISTORY_FOR_DIP_CHECK = 3;
+// Only treat a dip as suspicious when the recent average was already
+// reasonably trusted -- a dip from an already-low baseline isn't new
+// information.
+const DIP_RECENT_AVG_FLOOR = 0.5;
+// A single frame's confidence falling below this fraction of the recent
+// average is more likely a transient misread (motion blur, a bad centroid)
+// than a real change in tracking quality -- suppress it (report null, same
+// as "nothing found this frame") rather than let it drag a fused result
+// down for one frame and bounce back the next. Same constants as the iOS
+// port for the same reason as SUSPICIOUS_DRIFT_THRESHOLD above.
+const DIP_RATIO_THRESHOLD = 0.3;
+
 export type BarTrackResult = {
   // World-space position the tracker itself is reporting this frame, in
   // the same raw (hip-centered, not yet vertical-sign-corrected)
@@ -294,6 +318,12 @@ export class ImplementTracker {
   // drifting-but-technically-still-plausible lock instead of trusting it
   // fully.
   private driftRatioHistory: number[] = [];
+  // Camera overlord: rolling window of recent reported-confidence values
+  // (not drift ratios -- see isSuspiciousDip below), for catching an
+  // isolated confidence dip that's more likely noise than a genuine
+  // tracking-quality change. Ported from AvImplementTracker.confidenceHistory
+  // (AvBodyTrackingPlugin.swift, iOS).
+  private confidenceHistory: number[] = [];
 
   reset(): void {
     this.prevGray = null;
@@ -304,6 +334,7 @@ export class ImplementTracker {
     this.lockStreak = 0;
     this.lastColor = null;
     this.driftRatioHistory = [];
+    this.confidenceHistory = [];
   }
 
   // Average of driftRatioHistory, 0 (perfectly on the wrist) when nothing's
@@ -318,6 +349,33 @@ export class ImplementTracker {
     return Math.min(1, this.lockStreak / LOCK_RAMP_FRAMES) * (1 - this.avgDriftRatio());
   }
 
+  // Camera overlord: a held lock that's been drifting far from the wrist
+  // for a sustained stretch (not just one noisy frame) has almost certainly
+  // settled onto something that isn't the actual implement. Ported from
+  // AvImplementTracker.isSuspiciousLock() (AvBodyTrackingPlugin.swift, iOS).
+  private isSuspiciousLock(): boolean {
+    return (
+      this.driftRatioHistory.length === DRIFT_HISTORY_WINDOW &&
+      this.avgDriftRatio() > SUSPICIOUS_DRIFT_THRESHOLD
+    );
+  }
+
+  // Camera overlord: an isolated confidence dip against a recently-trusted
+  // lock is treated as noise and suppressed (reported as "nothing this
+  // frame") rather than passed through to the caller's fusion. Ported from
+  // AvImplementTracker.isSuspiciousDip() (AvBodyTrackingPlugin.swift, iOS).
+  private isSuspiciousDip(current: number): boolean {
+    if (this.confidenceHistory.length < MIN_HISTORY_FOR_DIP_CHECK) return false;
+    const recentAvg =
+      this.confidenceHistory.reduce((sum, c) => sum + c, 0) / this.confidenceHistory.length;
+    return recentAvg > DIP_RECENT_AVG_FLOOR && current < recentAvg * DIP_RATIO_THRESHOLD;
+  }
+
+  private recordConfidence(value: number): void {
+    this.confidenceHistory.push(value);
+    if (this.confidenceHistory.length > DRIFT_HISTORY_WINDOW) this.confidenceHistory.shift();
+  }
+
   private getCanvas(): HTMLCanvasElement {
     if (!this.canvas) this.canvas = document.createElement("canvas");
     return this.canvas;
@@ -329,6 +387,7 @@ export class ImplementTracker {
     this.lockStreak = 0;
     this.lastColor = null;
     this.driftRatioHistory = [];
+    this.confidenceHistory = [];
   }
 
   // Public escape hatch for a caller-side sanity check this tracker has no
@@ -484,10 +543,25 @@ export class ImplementTracker {
     this.driftRatioHistory.push(driftRatio);
     if (this.driftRatioHistory.length > DRIFT_HISTORY_WINDOW) this.driftRatioHistory.shift();
 
+    // Camera overlord checks -- see isSuspiciousLock/isSuspiciousDip above.
+    // Ordered to match the iOS port exactly: a sustained drift forces a full
+    // reacquisition (drop the lock); a transient dip just suppresses this
+    // one frame's report without disturbing the lock itself.
+    if (this.isSuspiciousLock()) {
+      this.dropLock();
+      return null;
+    }
+    const rawConfidence = this.confidence();
+    if (this.isSuspiciousDip(rawConfidence)) {
+      this.recordConfidence(rawConfidence);
+      return null;
+    }
+    this.recordConfidence(rawConfidence);
+
     return {
       worldX: this.lockWorldX,
       worldY: this.lockWorldY,
-      confidence: this.confidence(),
+      confidence: rawConfidence,
       color: this.lastColor,
     };
   }
