@@ -561,7 +561,9 @@ export function AvBarTrackerDialog({
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {
       const message = supineMovement
-        ? "This lift is done lying down, so your height can't be used to work out real-world scale -- that only works for a standing athlete, at any camera angle. Numbers are withheld rather than guessed. (Video saved for your coach.)"
+        ? // No "(Video saved for your coach.)" here -- saveEmptyAndWarn appends that itself, and
+          // including it produced the message twice on a real device.
+          "This lift is done lying down, so your height can't be used to work out real-world scale -- that only works for a standing athlete, at any camera angle. Numbers are withheld rather than guessed."
         : coreMlTrackingMode === "plate"
           ? "Couldn't calibrate real-world scale for this take -- make sure a bumper plate is clearly visible on the bar at some point in frame (or your height is set and you're visible standing)."
           : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";

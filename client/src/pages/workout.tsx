@@ -356,6 +356,44 @@ type TrackingDiagnostics = {
   } | null;
 };
 
+// Everything a tracked capture writes, set back to null. Used by the "Clear old numbers"
+// action on the retake warning, so an athlete can discard numbers they know are wrong.
+//
+// Explicit nulls, and every field listed rather than a spread of undefineds: the save reads an
+// ABSENT key as "keep the stored value" and an explicit null as "clear it" (see
+// priorCaptureByKey in server/storage.ts). An omitted field would preserve exactly the data
+// this is meant to erase.
+//
+// formCheckVideoUrl is deliberately NOT here. Clearing it deletes the clip from disk, and the
+// video is the one artifact still worth keeping when the numbers were not trustworthy -- the
+// coach can watch the lift regardless.
+const CLEARED_TRACKING_PATCH = {
+  peakVelocityMps: null,
+  meanVelocityMps: null,
+  concentricSeconds: null,
+  eccentricSeconds: null,
+  barPathDeviationCm: null,
+  barPathTrace: null,
+  formFaults: null,
+  repBreakdown: null,
+  armPathTrace: null,
+  peakPowerWatts: null,
+  meanPowerWatts: null,
+  eccentricMeanVelocityMps: null,
+  romCm: null,
+  meanEai: null,
+  velocityLossPercent: null,
+  legDriveAsymmetry: null,
+  armDriveAsymmetry: null,
+  trustScores: null,
+  skeletonFrames: null,
+  jumpHeightCm: null,
+  jumpDistanceCm: null,
+  groundContactSeconds: null,
+  reactiveStrengthIndex: null,
+  jumpBreakdown: null,
+} as const;
+
 type SetMetrics = {
   peakVelocityMps: number | null;
   meanVelocityMps: number | null;
@@ -3269,9 +3307,28 @@ function ExerciseLogContent({
                 },
                 { immediate: true },
               );
+              // The keep is the safe DEFAULT, not a verdict. Preserving beats silently zeroing a
+              // good take, but it also preserves a BAD one: a set whose numbers came from a
+              // calibration that has since been proven wrong is now un-clearable by re-recording,
+              // because every retake refuses and every refusal keeps. Reported immediately by the
+              // first athlete to hit it, on a set still showing 18 reps from a 4x scale error.
+              // So the athlete gets the other option, explicitly, at the one moment they are
+              // looking at the problem.
               toast.warning(
                 "That retake couldn't be measured, so this set kept the numbers it already had. The new video was still sent to your coach.",
-                { duration: 8000 },
+                {
+                  duration: 12000,
+                  action: {
+                    label: "Clear old numbers",
+                    onClick: () => {
+                      // Explicit nulls, not omitted keys. The server reads an absent field as
+                      // "keep what you have" and an explicit null as "clear it", so this is
+                      // the only shape that actually erases the stored capture data.
+                      onUpdateSet(targetSetNumber, CLEARED_TRACKING_PATCH, { immediate: true });
+                      toast.success("Cleared. Record the set again to measure it fresh.");
+                    },
+                  },
+                },
               );
               if (videoUrl) {
                 if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSetNumber, videoUrl });
