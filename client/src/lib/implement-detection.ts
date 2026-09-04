@@ -310,6 +310,20 @@ export class WebImplementDetector {
     this.loadedSession = await getSession();
   }
 
+  // Every path that gives up the current lock. prevGray MUST be cleared with it: it is only
+  // ever refreshed inside trackByMotion, which only runs while locked, so a lock dropped here
+  // and reacquired FRESH_DETECTION_STRIDE frames later would otherwise have the next motion
+  // diff taken against a frame from ten frames ago. That diff is meaningless -- the whole
+  // scene has moved -- so findMotionCentroid lands somewhere arbitrary, isImplausibleJump
+  // rejects it, and the lock is dropped again: a reacquire/drop cycle that never converges,
+  // in the one mechanism the whole two-tier design leans on between classifications.
+  private dropLock(): void {
+    this.lockedBox = null;
+    this.recentBoxes = [];
+    this.recentTrajectoryPoints = [];
+    this.prevGray = null;
+  }
+
   reset(): void {
     this.lockedBox = null;
     this.lockedLabel = null;
@@ -359,21 +373,36 @@ export class WebImplementDetector {
   private isTrajectoryDisagreement(video: HTMLVideoElement, candidateBox: PixelBox): boolean {
     const points = this.recentTrajectoryPoints;
     if (points.length < TRAJECTORY_MIN_POINTS) return false;
-    const t = points.map((p) => p.t);
+    // Fit in time RELATIVE to the first point, never in raw video.currentTime. The normal
+    // equations these two fits reduce to are built from sums of t, t^2, t^3 and t^4, so an
+    // absolute timestamp makes the 3x3 system catastrophically ill-conditioned: the five
+    // samples here span roughly a tenth of a second, and at t~=20s the t^4 terms are ~10^5
+    // times the t^2 ones while the differences that carry the actual curvature are lost to
+    // float precision. Measured on a synthetic PERFECT parabola, the residual this computes
+    // climbs from ~1e-31 at t0=0 to ~5e-15 at t0=20, and past ~t0=60 solveLinearSystem's own
+    // pivot guard trips and the fit returns null outright. Since a residual over
+    // TRAJECTORY_MAX_FIT_RESIDUAL (and a null fit) both mean "no opinion", the whole check was
+    // quietly switching itself off the longer a clip ran -- failing open, silently, exactly on
+    // the longer recordings where a drifted lock has had the most time to happen. Centering
+    // costs nothing and changes no threshold: the residual is in y-units either way, and the
+    // prediction below is evaluated at the same shifted origin.
+    const t0 = points[0].t;
+    const t = points.map((p) => p.t - t0);
     const quad = fitQuadratic(t, points.map((p) => p.y));
     const lin = fitLinear(t, points.map((p) => p.x));
     if (!quad || !lin) return false;
 
     let sse = 0;
-    for (const p of points) {
-      const fittedY = quad.a * p.t * p.t + quad.b * p.t + quad.c;
-      const fittedX = lin.d * p.t + lin.e;
+    points.forEach((p, i) => {
+      const ti = t[i];
+      const fittedY = quad.a * ti * ti + quad.b * ti + quad.c;
+      const fittedX = lin.d * ti + lin.e;
       sse += (p.y - fittedY) ** 2 + (p.x - fittedX) ** 2;
-    }
+    });
     const residual = sse / points.length;
     if (residual > TRAJECTORY_MAX_FIT_RESIDUAL) return false; // doesn't look like a clean arc -- no opinion.
 
-    const now = video.currentTime;
+    const now = video.currentTime - t0;
     const predictedY = quad.a * now * now + quad.b * now + quad.c;
     const predictedX = lin.d * now + lin.e;
     const candidateCenterX = (candidateBox.x0 + candidateBox.x1) / 2;
@@ -492,7 +521,9 @@ export class WebImplementDetector {
   // returning nil for a trackingMode this model was never trained on.
   async track(video: HTMLVideoElement, targetLabel: string): Promise<WebImplementResult | null> {
     if (this.lockedLabel !== targetLabel) {
-      this.lockedBox = null;
+      // Switching target class abandons the current lock the same way any other drop does --
+      // see dropLock's own comment on why prevGray has to go with it.
+      this.dropLock();
       this.lockedLabel = targetLabel;
       this.framesSinceClassify = 0;
       this.framesSinceFreshAttempt = 0;
@@ -502,21 +533,15 @@ export class WebImplementDetector {
       this.framesSinceClassify++;
       const tracked = this.trackByMotion(video, this.lockedBox);
       if (!tracked) {
-        this.lockedBox = null;
-        this.recentBoxes = [];
-        this.recentTrajectoryPoints = [];
+        this.dropLock();
         return null;
       }
       if (this.recentBoxes.length > 0 && this.isImplausibleJump(this.recentBoxes[this.recentBoxes.length - 1], tracked)) {
-        this.lockedBox = null;
-        this.recentBoxes = [];
-        this.recentTrajectoryPoints = [];
+        this.dropLock();
         return null;
       }
       if (targetLabel === "med_ball" && this.isTrajectoryDisagreement(video, tracked)) {
-        this.lockedBox = null;
-        this.recentBoxes = [];
-        this.recentTrajectoryPoints = [];
+        this.dropLock();
         return null;
       }
       this.lockedBox = tracked;
@@ -535,9 +560,7 @@ export class WebImplementDetector {
 
     const result = await this.classify(video, targetLabel);
     if (!result) {
-      this.lockedBox = null;
-      this.recentBoxes = [];
-      this.recentTrajectoryPoints = [];
+      this.dropLock();
       return null;
     }
     this.lockedBox = result.box;

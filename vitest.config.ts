@@ -15,7 +15,13 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["server/**/*.test.ts", "shared/**/*.test.ts"],
+    // client/src/lib is included for the PURE modules there only -- the
+    // tracking math (bar-tracking, jump-tracking, capture-trust) imports
+    // nothing but types across module boundaries and runs fine under Node.
+    // A test for anything that actually touches the DOM, MediaPipe or
+    // Capacitor does not belong here; it would need a browser environment
+    // this config deliberately does not set up.
+    include: ["server/**/*.test.ts", "shared/**/*.test.ts", "client/src/lib/**/*.test.ts"],
     // *.itest.ts is the database-backed suite -- see
     // vitest.integration.config.ts. Excluded here so `npm test` keeps
     // running with no Postgres at all.

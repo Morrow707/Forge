@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { cn } from "@/lib/utils";
 import { apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
-import { getPoseLandmarker, SubjectContinuityGate, MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
+import { getPoseLandmarker, SubjectContinuityGate, MIN_VISIBILITY, POSE_LANDMARKS, type PoseFrame, type SetTrustScore } from "@/lib/pose-tracking";
 import { lockCameraExposure } from "@/lib/camera-exposure";
 import { WebCameraChrome } from "@/components/web-camera-chrome";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
@@ -33,6 +33,7 @@ import {
   type SprintCheckpoint,
   type SprintPreset,
 } from "@/lib/sprint-tracking";
+import { crossingTrustScore } from "@/lib/capture-trust";
 import { DEFAULT_SKILL_FAULT_THRESHOLDS, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
@@ -134,6 +135,14 @@ export function SprintTrackerDialog({
   const lastVideoTimeRef = useRef(-1);
   const checkpointsRef = useRef<number[]>([]);
   const pointsRef = useRef<SprintPoint[]>([]);
+  // ARC-1: sprint computed no confidence at all, which is why
+  // skillSessionLogs.trust_score_pct is null for every row. This is half of what
+  // crossingTrustScore needs -- every tick spent capturing, against the ticks that produced a
+  // usable hip midpoint. Counted here rather than derived from pointsRef because a tick where
+  // MediaPipe found no body never reaches pointsRef, and that is exactly the "athlete out of
+  // frame" case the coverage signal exists to catch.
+  const frameCoverageRef = useRef({ totalFrames: 0, framesWithReferencePoint: 0 });
+  const [trust, setTrust] = useState<SetTrustScore | null>(null);
   const framesRef = useRef<PoseFrame[]>([]);
   const captureStartRef = useRef(0);
   const stepRef = useRef<Step>("warning");
@@ -185,6 +194,7 @@ export function SprintTrackerDialog({
     setCameraAngle(null);
     setCameraError(null);
     setResult(null);
+    setTrust(null);
     setFaults([]);
     setSavedToProfile(false);
     checkpointsRef.current = [];
@@ -192,6 +202,7 @@ export function SprintTrackerDialog({
     setPresetId("40yd");
     setDistanceYards("40");
     pointsRef.current = [];
+    frameCoverageRef.current = { totalFrames: 0, framesWithReferencePoint: 0 };
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
     subjectGateRef.current.reset();
@@ -381,9 +392,11 @@ export function SprintTrackerDialog({
       if (landmarks) drawSkeleton(ctx, landmarks, canvas.width, canvas.height);
     }
 
+    if (stepRef.current === "capture") frameCoverageRef.current.totalFrames++;
     if (stepRef.current === "capture" && landmarks && worldLandmarks) {
       const ref = deriveSprintReferencePoint(landmarks);
       if (ref) {
+        frameCoverageRef.current.framesWithReferencePoint++;
         pointsRef.current.push({ t: now - captureStartRef.current, x: ref.x });
         framesRef.current.push({ t: now - captureStartRef.current, landmarks, worldLandmarks });
 
@@ -403,6 +416,14 @@ export function SprintTrackerDialog({
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     setResult(crossing);
+    setTrust(
+      crossingTrustScore({
+        likelyGlitch: crossing.likelyGlitch,
+        ...frameCoverageRef.current,
+        crossingFrameGapsMs: crossing.crossingFrameGapsMs,
+        totalElapsedSeconds: crossing.totalElapsedSeconds,
+      }),
+    );
     setFaults(
       cameraAngle
         ? detectSprintFaults(framesRef.current, cameraAngle, undefined, thresholds ?? DEFAULT_SKILL_FAULT_THRESHOLDS)
@@ -481,6 +502,7 @@ export function SprintTrackerDialog({
 
   function startCapture() {
     pointsRef.current = [];
+    frameCoverageRef.current = { totalFrames: 0, framesWithReferencePoint: 0 };
     framesRef.current = [];
     captureStartRef.current = performance.now();
     changeStep("capture");
@@ -524,6 +546,7 @@ export function SprintTrackerDialog({
     setFavoriteClip(false);
     resetCheckpoints();
     setResult(null);
+    setTrust(null);
     setFaults([]);
     setSavedToProfile(false);
     changeStep("calibrate");
@@ -585,6 +608,12 @@ export function SprintTrackerDialog({
         skillProgramDayId,
         skillProgramExerciseId,
         trackingLevel: "sprint",
+        // ARC-1 -- the normalized confidence column both capture tracks now
+        // share (see skillSessionLogs.trustScorePct's own schema comment).
+        // Null rather than a made-up number when the score couldn't be
+        // computed, same "no number beats a fake-confident one" convention
+        // the rest of this pipeline follows.
+        trustScorePct: trust?.score ?? null,
         elapsedSeconds: result.totalElapsedSeconds,
         distanceYards: result.totalDistanceYards || null,
         presetId,

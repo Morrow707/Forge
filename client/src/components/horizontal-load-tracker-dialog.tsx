@@ -26,6 +26,7 @@ import {
   type SprintResult,
 } from "@/lib/sprint-tracking";
 import type { HorizontalLoadSetMetrics } from "@/components/av-horizontal-load-tracker-dialog";
+import { crossingTrustScore, asSingleRepTrust } from "@/lib/capture-trust";
 import { toast } from "sonner";
 import { AlertTriangle, Play, Square, RotateCcw, Check, X, Flag } from "lucide-react";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
@@ -50,24 +51,53 @@ function drawCheckpoints(ctx: CanvasRenderingContext2D, checkpointXs: number[], 
   ctx.setLineDash([]);
 }
 
-function buildManualResult(startTime: number, finishTime: number, distanceYards: number): HorizontalLoadSetMetrics | null {
+// ARC-1, this platform's half -- see av-horizontal-load-tracker-dialog.tsx's own copies of
+// these two, and capture-trust.ts's crossingTrustScore for what the score folds in. Duplicated
+// rather than imported from the iOS twin, same "each platform stays separately tunable"
+// precedent this file already follows for everything else it mirrors.
+type FrameCoverage = { totalFrames: number; framesWithReferencePoint: number };
+
+function buildManualResult(
+  startTime: number,
+  finishTime: number,
+  distanceYards: number,
+  coverage: FrameCoverage,
+): HorizontalLoadSetMetrics | null {
   const elapsedSeconds = Math.round((finishTime - startTime) * 1000) / 1000;
   if (elapsedSeconds <= 0 || distanceYards <= 0) return null;
   const avgSpeedYardsPerSec = Math.round((distanceYards / elapsedSeconds) * 100) / 100;
+  const likelyGlitch = avgSpeedYardsPerSec > MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC;
   return {
     elapsedSeconds,
     distanceYards,
     avgSpeedYardsPerSec,
-    likelyGlitch: avgSpeedYardsPerSec > MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC,
+    likelyGlitch,
+    trustScores: asSingleRepTrust(
+      crossingTrustScore({
+        likelyGlitch,
+        ...coverage,
+        crossingFrameGapsMs: [],
+        totalElapsedSeconds: elapsedSeconds,
+        manuallyTimed: true,
+      }),
+    ),
   };
 }
 
-function fromSprintResult(result: SprintResult): HorizontalLoadSetMetrics {
+function fromSprintResult(result: SprintResult, coverage: FrameCoverage): HorizontalLoadSetMetrics {
   return {
     elapsedSeconds: result.totalElapsedSeconds,
     distanceYards: result.totalDistanceYards,
     avgSpeedYardsPerSec: result.avgSpeedYardsPerSec,
     likelyGlitch: result.likelyGlitch,
+    trustScores: asSingleRepTrust(
+      crossingTrustScore({
+        likelyGlitch: result.likelyGlitch,
+        ...coverage,
+        crossingFrameGapsMs: result.crossingFrameGapsMs,
+        totalElapsedSeconds: result.totalElapsedSeconds,
+      }),
+    ),
   };
 }
 
@@ -116,6 +146,11 @@ export function HorizontalLoadTrackerDialog({
   const lastVideoTimeRef = useRef(-1);
   const checkpointsRef = useRef<number[]>([]);
   const pointsRef = useRef<SprintPoint[]>([]);
+  // Every tick spent in "capture", against the ticks that produced a usable hip-midpoint --
+  // see crossingTrustScore. Counted here (not derived from pointsRef alone) because a tick
+  // where MediaPipe found no body at all never reaches pointsRef, and that is exactly the
+  // "athlete was out of frame" case the coverage signal is meant to catch.
+  const frameCoverageRef = useRef<FrameCoverage>({ totalFrames: 0, framesWithReferencePoint: 0 });
   const framesRef = useRef<PoseFrame[]>([]);
   const captureStartRef = useRef(0);
   const stepRef = useRef<Step>("calibrate");
@@ -150,6 +185,7 @@ export function HorizontalLoadTrackerDialog({
     setCheckpointCount(0);
     setDistanceYards("20");
     pointsRef.current = [];
+    frameCoverageRef.current = { totalFrames: 0, framesWithReferencePoint: 0 };
     framesRef.current = [];
     lastVideoTimeRef.current = -1;
     subjectGateRef.current.reset();
@@ -282,9 +318,11 @@ export function HorizontalLoadTrackerDialog({
     const landmarks = subjectGateRef.current.admit(rawLandmarks);
     const worldLandmarks = landmarks ? (detection.worldLandmarks[0] ?? null) : null;
 
+    if (stepRef.current === "capture") frameCoverageRef.current.totalFrames++;
     if (stepRef.current === "capture" && landmarks && worldLandmarks) {
       const ref = deriveSprintReferencePoint(landmarks);
       if (ref) {
+        frameCoverageRef.current.framesWithReferencePoint++;
         const t = now - captureStartRef.current;
         pointsRef.current.push({ t, x: ref.x });
         framesRef.current.push({ t, landmarks, worldLandmarks });
@@ -317,6 +355,7 @@ export function HorizontalLoadTrackerDialog({
   function startCapture() {
     changeStep("capture");
     pointsRef.current = [];
+    frameCoverageRef.current = { totalFrames: 0, framesWithReferencePoint: 0 };
     framesRef.current = [];
     chunksRef.current = [];
     captureStartRef.current = performance.now();
@@ -345,7 +384,7 @@ export function HorizontalLoadTrackerDialog({
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     setRecording(false);
     hapticLight();
-    finishWithResult(fromSprintResult(crossing));
+    finishWithResult(fromSprintResult(crossing, frameCoverageRef.current));
   }
 
   // The athlete tapped Stop before a clean crossing was ever auto-detected --
@@ -392,7 +431,7 @@ export function HorizontalLoadTrackerDialog({
     const startTime = manualStartRef.current;
     if (finishTime == null || startTime == null) return;
     const distanceNum = Number(distanceYards) || 0;
-    const manualResult = buildManualResult(startTime, finishTime, distanceNum);
+    const manualResult = buildManualResult(startTime, finishTime, distanceNum, frameCoverageRef.current);
     if (!manualResult) {
       toast.error("Finish must be after start (and distance must be set) -- scrub back and try again");
       return;

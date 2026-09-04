@@ -1380,7 +1380,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             var coreMlImplement: [String: Any]?
             if coreMlDetectionEnabled, let targetLabel = coreMlTargetLabel,
                let result = coreMlImplementDetector.track(
-                   pixelBuffer: pixelBuffer, orientation: orientation, targetLabel: targetLabel,
+                   pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, orientation: orientation, targetLabel: targetLabel,
                    regionOfInterest: AvCoreMlImplementDetector.regionOfInterest(leftWrist: leftWristJoint, rightWrist: rightWristJoint)
                ) {
                 coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence)
@@ -1942,8 +1942,16 @@ private final class AvCoreMlImplementDetector {
     // Only meaningful for a genuinely thrown, free-flying object -- see detectTrajectory's own
     // comment on why this is gated to "med_ball" specifically at the call site below, not every
     // class this detector supports.
-    private func detectTrajectory(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> [(x: Double, y: Double)]? {
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
+    // Takes the CMSampleBuffer, NOT the bare CVPixelBuffer it was extracted from, and that
+    // distinction is the whole point: VNDetectTrajectoriesRequest is stateful across frames and
+    // orders what it sees by each frame's PRESENTATION TIMESTAMP. A handler built from a bare
+    // pixel buffer carries no timestamp at all, so every frame handed to the request looked
+    // like it arrived at the same instant, and it could never assemble the time-ordered run of
+    // points a parabola fit needs -- meaning it never reported a trajectory, and this whole
+    // physics cross-check silently did nothing on every clip. The cmSampleBuffer initializer
+    // carries the timestamp through, which is what Apple's own trajectory sample relies on.
+    private func detectTrajectory(sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) -> [(x: Double, y: Double)]? {
+        let handler = VNImageRequestHandler(cmSampleBuffer: sampleBuffer, orientation: orientation, options: [:])
         guard (try? handler.perform([trajectoryRequest])) != nil else { return nil }
         // Vision doesn't guarantee these come back in any particular order -- the trajectory
         // covering the most points is the best proxy for "most complete, most current" when more
@@ -2052,7 +2060,7 @@ private final class AvCoreMlImplementDetector {
     // frame) skips a fresh detection outright rather than falling back to a full-frame scan --
     // same "only worth it when there's a wrist to anchor on" precedent
     // extractWorkingFrame's own caller already established for the motion-diff tracker.
-    func track(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation, targetLabel: String, regionOfInterest: CGRect?) -> (box: CGRect, confidence: Float)? {
+    func track(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation, targetLabel: String, regionOfInterest: CGRect?) -> (box: CGRect, confidence: Float)? {
         guard let visionModel = visionModel else { return nil }
 
         if trackingLabel != targetLabel {
@@ -2091,7 +2099,7 @@ private final class AvCoreMlImplementDetector {
                 // said the box is, by more than the same margin the box-consistency check above
                 // already treats as implausible for one frame's real motion.
                 if trackingLabel == "med_ball",
-                   let trajectoryPoints = detectTrajectory(pixelBuffer: pixelBuffer, orientation: orientation),
+                   let trajectoryPoints = detectTrajectory(sampleBuffer: sampleBuffer, orientation: orientation),
                    let lastTrajectoryPoint = trajectoryPoints.last {
                     let boxCenter = CGPoint(x: newBox.midX, y: newBox.midY)
                     let trajectoryPoint = CGPoint(x: lastTrajectoryPoint.x, y: lastTrajectoryPoint.y)

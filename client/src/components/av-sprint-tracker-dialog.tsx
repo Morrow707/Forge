@@ -13,7 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
+import { POSE_LANDMARKS, type PoseFrame, type SetTrustScore } from "@/lib/pose-tracking";
+import { crossingTrustScore } from "@/lib/capture-trust";
 import { type PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
@@ -106,7 +107,10 @@ function buildManualResult(startTime: number, finishTime: number, checkpoints: S
   const splits: SprintSplit[] = [
     { fromCheckpoint: 0, toCheckpoint: checkpoints.length - 1, elapsedSeconds: totalElapsedSeconds, distanceYards: totalDistanceYards },
   ];
-  return { totalElapsedSeconds, totalDistanceYards, splits, avgSpeedYardsPerSec, likelyGlitch };
+  // No auto-detected crossings at all here -- the two times came off the coach's own eye on
+  // the clip, not off two straddling frames -- so there is no frame-gap precision bound to
+  // report. crossingTrustScore's manuallyTimed flag is what accounts for this path instead.
+  return { totalElapsedSeconds, totalDistanceYards, splits, avgSpeedYardsPerSec, likelyGlitch, crossingFrameGapsMs: [] };
 }
 
 /** AVFoundation + Vision sprint/agility timing -- the first real tracker built on the new
@@ -177,6 +181,18 @@ export function AvSprintTrackerDialog({
   const preset: SprintPreset = SPRINT_PRESETS.find((p) => p.id === presetId) ?? SPRINT_PRESETS[2];
   const [distanceYards, setDistanceYards] = useState("40");
   const [result, setResult] = useState<SprintResult | null>(null);
+  // ARC-1: sprint computed no confidence at all, which is why
+  // skillSessionLogs.trust_score_pct is null for every row. See
+  // capture-trust.ts's crossingTrustScore for what this folds in.
+  const [trust, setTrust] = useState<SetTrustScore | null>(null);
+  // How many analyzed frames the clip produced, against how many yielded a usable hip
+  // midpoint -- a run tracked in a third of its frames still crosses every checkpoint, just
+  // far less precisely.
+  const frameCoverageRef = useRef({ totalFrames: 0, framesWithReferencePoint: 0 });
+  // Whether the times on screen came from the coach scrubbing the clip rather than from
+  // detected crossings -- a real measurement, but not a camera cross-check, and the score
+  // should not claim it is.
+  const manuallyTimedRef = useRef(false);
   const [faults, setFaults] = useState<SprintFault[]>([]);
   const [saving, setSaving] = useState(false);
   const [savingToProfile, setSavingToProfile] = useState(false);
@@ -213,6 +229,7 @@ export function AvSprintTrackerDialog({
     setCameraAngle(null);
     setError(null);
     setResult(null);
+    setTrust(null);
     setFaults([]);
     setSavedToProfile(false);
     checkpointsRef.current = [];
@@ -338,9 +355,15 @@ export function AvSprintTrackerDialog({
       });
     }
 
+    frameCoverageRef.current = {
+      totalFrames: rawFrames.length,
+      framesWithReferencePoint: pointsRef.current.length,
+    };
+
     const checkpoints = buildCheckpoints();
     const crossing = checkpoints ? detectSprintCrossings(pointsRef.current, { checkpoints }) : null;
     if (crossing) {
+      manuallyTimedRef.current = false;
       finishWithResult(crossing);
     } else {
       manualStartRef.current = null;
@@ -352,6 +375,15 @@ export function AvSprintTrackerDialog({
   function finishWithResult(sprintResult: SprintResult) {
     changeStep("review");
     setResult(sprintResult);
+    setTrust(
+      crossingTrustScore({
+        likelyGlitch: sprintResult.likelyGlitch,
+        ...frameCoverageRef.current,
+        crossingFrameGapsMs: sprintResult.crossingFrameGapsMs,
+        totalElapsedSeconds: sprintResult.totalElapsedSeconds,
+        manuallyTimed: manuallyTimedRef.current,
+      }),
+    );
     setFaults(
       cameraAngle
         ? detectSprintFaults(framesRef.current, cameraAngle, undefined, thresholds ?? DEFAULT_SKILL_FAULT_THRESHOLDS)
@@ -372,6 +404,7 @@ export function AvSprintTrackerDialog({
     if (finishTime == null || startTime == null) return;
     const checkpoints = buildCheckpoints();
     if (!checkpoints) return;
+    manuallyTimedRef.current = true;
     const manualResult = buildManualResult(startTime, finishTime, checkpoints);
     if (!manualResult) {
       toast.error("Finish must be after start -- scrub back and try again");
@@ -389,6 +422,7 @@ export function AvSprintTrackerDialog({
     setFavoriteClip(false);
     resetCheckpoints();
     setResult(null);
+    setTrust(null);
     setFaults([]);
     setSavedToProfile(false);
     setError(null);
@@ -435,6 +469,12 @@ export function AvSprintTrackerDialog({
         skillProgramDayId,
         skillProgramExerciseId,
         trackingLevel: "sprint",
+        // ARC-1 -- the normalized confidence column both capture tracks now
+        // share (see skillSessionLogs.trustScorePct's own schema comment).
+        // Null rather than a made-up number when the score couldn't be
+        // computed, same "no number beats a fake-confident one" convention
+        // the rest of this pipeline follows.
+        trustScorePct: trust?.score ?? null,
         elapsedSeconds: result.totalElapsedSeconds,
         distanceYards: result.totalDistanceYards || null,
         presetId,

@@ -1,4 +1,4 @@
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 
 // Lets the athlete workout page keep working -- viewing and logging -- in a
@@ -60,12 +60,85 @@ function readQueue(): PendingLog[] {
   }
 }
 
-function writeQueue(entries: PendingLog[]) {
+// The heaviest things a queued /log payload carries, in the order it is
+// worth giving them up. A camera-tracked set's skeletonFrames is by far the
+// largest -- one full-body landmark set per frame for the whole recording --
+// followed by the traces. All three are review/overlay detail: losing them
+// costs the coach a skeleton replay, while losing the ENTRY costs the
+// athlete the workout. See dropHeavyFields.
+const HEAVY_SET_FIELDS = ["skeletonFrames", "barPathTrace", "armPathTrace", "pathTrace"] as const;
+
+function trySetQueue(entries: PendingLog[]): boolean {
   try {
     localStorage.setItem(PENDING_LOGS_KEY, JSON.stringify(entries));
+    return true;
   } catch {
-    // best-effort
+    return false;
   }
+}
+
+/** Everything cached purely as a rendering convenience -- the offline day
+ * snapshots. Evicting these to make room for a queued LOG is always the
+ * right trade: a lost day cache means a screen renders empty until the
+ * connection comes back, a lost log means a workout the athlete actually
+ * did never reaches the server. */
+function evictDayCaches(): boolean {
+  let removedAny = false;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(DAY_CACHE_PREFIX)) keys.push(key);
+    }
+    for (const key of keys) {
+      localStorage.removeItem(key);
+      removedAny = true;
+    }
+  } catch {
+    // Storage unavailable entirely -- nothing to evict, and the caller's
+    // next attempt will fail the same way it already did.
+  }
+  return removedAny;
+}
+
+/** Strips the bulky capture detail out of a /log payload's sets, in place on
+ * a shallow-cloned copy, returning null when the payload isn't the shape
+ * this knows how to trim (in which case the caller has nothing to try). The
+ * athlete's actual numbers -- reps, weight, velocities, heights, trust
+ * scores, faults -- all survive; only the frame-by-frame replay data goes. */
+function dropHeavyFields(payload: unknown): unknown | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const root = payload as { items?: unknown };
+  if (!Array.isArray(root.items)) return null;
+  let dropped = false;
+  const items = root.items.map((item) => {
+    if (typeof item !== "object" || item === null) return item;
+    const sets = (item as { sets?: unknown }).sets;
+    if (!Array.isArray(sets)) return item;
+    return {
+      ...(item as object),
+      sets: sets.map((set) => {
+        if (typeof set !== "object" || set === null) return set;
+        const trimmed = { ...(set as Record<string, unknown>) };
+        for (const field of HEAVY_SET_FIELDS) {
+          if (trimmed[field] != null) {
+            trimmed[field] = null;
+            dropped = true;
+          }
+        }
+        return trimmed;
+      }),
+    };
+  });
+  return dropped ? { ...(payload as object), items } : null;
+}
+
+// Writes that MUST NOT silently vanish go through queueLog/writeQueueOrWarn
+// below; this stays the plain best-effort write for the paths where losing
+// the change is genuinely harmless (marking an entry's failure count,
+// removing a synced entry).
+function writeQueue(entries: PendingLog[]) {
+  trySetQueue(entries);
 }
 
 export function getPendingLogs(): PendingLog[] {
@@ -77,8 +150,30 @@ export function hasPendingLog(dayKey: string): boolean {
 }
 
 /** Only the most recent queued save per day matters -- an older queued
- * attempt for the same day is stale the moment a newer one exists. */
-export function queueLog(dayKey: string, url: string, payload: unknown) {
+ * attempt for the same day is stale the moment a newer one exists.
+ *
+ * CAM-5: this used to be one best-effort setItem. A camera-tracked set's
+ * payload carries skeletonFrames (one full landmark set per recorded frame)
+ * plus the traces, and a single tracked set can exceed a browser's whole
+ * 5-10MB localStorage allowance on its own -- so the write that failed
+ * silently was, disproportionately often, the one for the athlete who just
+ * filmed a whole session in a gym with no signal. Which is the exact
+ * scenario this queue exists for.
+ *
+ * So a full store is no longer a shrug. In order, giving up the least
+ * valuable thing first, and stopping the moment the entry is safely stored:
+ *   1. Evict the day caches -- pure render convenience, always worth trading.
+ *   2. Drop the older queued days, newest first: an unsynced day already at
+ *      risk is still worth less than the one just logged, and each is a
+ *      whole day's payload.
+ *   3. Strip the capture replay detail (skeletonFrames, traces) from THIS
+ *      payload. Every number the athlete actually logged survives; the
+ *      skeleton overlay does not.
+ *   4. Tell the athlete, loudly, that this one did not save -- because at
+ *      that point it genuinely has not, and silence is the failure mode this
+ *      whole change exists to remove.
+ * Returns the stored entry, or null when even step 4 was reached. */
+export function queueLog(dayKey: string, url: string, payload: unknown): PendingLog | null {
   const entry: PendingLog = {
     id: crypto.randomUUID(),
     dayKey,
@@ -86,8 +181,41 @@ export function queueLog(dayKey: string, url: string, payload: unknown) {
     payload,
     queuedAt: new Date().toISOString(),
   };
-  writeQueue([...readQueue().filter((p) => p.dayKey !== dayKey), entry]);
-  return entry;
+  const others = readQueue().filter((p) => p.dayKey !== dayKey);
+
+  if (trySetQueue([...others, entry])) return entry;
+
+  if (evictDayCaches() && trySetQueue([...others, entry])) return entry;
+
+  // Oldest first, so each pass gives up the least recent day still queued.
+  const byAge = [...others].sort((a, b) => a.queuedAt.localeCompare(b.queuedAt));
+  for (let drop = 1; drop <= byAge.length; drop++) {
+    if (trySetQueue([...byAge.slice(drop), entry])) {
+      toast.warning(
+        "Ran out of offline storage -- an older unsynced day was dropped to make room for this one.",
+        { duration: 10000 },
+      );
+      return entry;
+    }
+  }
+
+  const trimmed = dropHeavyFields(payload);
+  if (trimmed) {
+    const trimmedEntry = { ...entry, payload: trimmed };
+    if (trySetQueue([trimmedEntry])) {
+      toast.warning(
+        "Ran out of offline storage -- your set was saved, but the skeleton replay for it was dropped.",
+        { duration: 10000 },
+      );
+      return trimmedEntry;
+    }
+  }
+
+  toast.error(
+    "Out of offline storage -- this workout could NOT be saved on your device. Write your numbers down, or reconnect and log them again before closing the app.",
+    { duration: 30000 },
+  );
+  return null;
 }
 
 // WorkoutPage runs its own in-flight save queue (saveInFlightRef/
@@ -138,7 +266,28 @@ export async function flushPendingLogs() {
       await apiRequest("POST", entry.url, entry.payload);
       writeQueue(readQueue().filter((p) => p.id !== entry.id));
       syncedAny = true;
-    } catch {
+    } catch (err) {
+      // CAM-8: a permanent rejection is not a network failure and must not
+      // be retried for the life of the install. A 4xx that isn't 401 (an
+      // expired session that the 30-day cookie usually renews), 408, or 429
+      // (both explicitly "try again") means the server has looked at this
+      // payload and will keep refusing it -- the day it targeted was
+      // deleted, the assignment was reassigned, the body no longer
+      // validates. Re-POSTing it on every "online" event forever accomplishes
+      // nothing except hiding the failure behind one warning at the fifth
+      // attempt. Drop it and say so plainly, once, while the athlete can
+      // still do something about it.
+      const status = err instanceof ApiError ? err.status : null;
+      const permanentlyRejected =
+        status != null && status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+      if (permanentlyRejected) {
+        writeQueue(readQueue().filter((p) => p.id !== entry.id));
+        toast.error(
+          "A workout you logged offline was rejected by the server and can't be synced -- open that day and re-enter it.",
+          { duration: 20000 },
+        );
+        continue;
+      }
       // Still offline, or the server rejected it -- leave it queued and try
       // again on the next flush rather than losing the athlete's data (an
       // outright drop here risks discarding a real set over what might just

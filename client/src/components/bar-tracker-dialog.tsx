@@ -65,6 +65,7 @@ import {
   scaleWorldLandmarks,
   assessCameraAlignment,
   usesSharedBarEquipment,
+  chainConsistencyPenalty,
   LOWER_BODY_MOVEMENT_TYPES,
   MIN_VISIBILITY,
   POSE_LANDMARKS,
@@ -1969,6 +1970,28 @@ export function BarTrackerDialog({
     const guessExpectedPattern = expectedPatternFromName(exerciseName);
     const guessMismatch =
       guess.pattern !== "unknown" && !!guessExpectedPattern && guess.pattern !== guessExpectedPattern;
+    // ARC-2: this argument existed and only iOS ever passed it, so an Android lift's trust
+    // score was computed without the one check aimed at confidently-wrong data -- a
+    // misdetected landmark that keeps reporting high confidence, which every OTHER signal in
+    // computeRepTrustScores reads as fine. Same gating as the iOS twin (see
+    // av-bar-tracker-dialog.tsx): leg chain for a lower-body lift, arm chain for a press/pull,
+    // no entry at all otherwise, which computeRepTrustScores treats as no penalty. This dialog
+    // also serves jump mode on Android, so it closes that gap on both.
+    const chainType: "leg" | "arm" | null =
+      movementType != null && LOWER_BODY_MOVEMENT_TYPES.has(movementType)
+        ? "leg"
+        : movementType === "Push" || movementType === "Pull"
+          ? "arm"
+          : null;
+    const chainPenalties = chainType
+      ? new Map(
+          metrics.repBreakdown.map((r) => [
+            r.repNumber,
+            chainConsistencyPenalty(framesRef.current, r.startT, r.endT, chainType),
+          ]),
+        )
+      : undefined;
+
     metrics.trustScores = computeRepTrustScores(
       metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, startT: r.startT, endT: r.endT })),
       // Reads confidence straight off the primary trace's own points (see
@@ -1984,6 +2007,7 @@ export function BarTrackerDialog({
       rejectionEventsRef.current,
       guessMismatch,
       lastAlignmentReasonRef.current,
+      chainPenalties,
     );
 
     if (voiceEnabledRef.current) {

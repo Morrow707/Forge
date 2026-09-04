@@ -26,6 +26,8 @@ import {
   type SprintResult,
   type SprintCheckpoint,
 } from "@/lib/sprint-tracking";
+import { crossingTrustScore, asSingleRepTrust } from "@/lib/capture-trust";
+import type { RepTrustScore } from "@/lib/bar-tracking";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
 import { AlertTriangle, Play, Square, RotateCcw, Check, X, Flag, XCircle } from "lucide-react";
@@ -52,6 +54,12 @@ export type HorizontalLoadSetMetrics = {
   distanceYards: number;
   avgSpeedYardsPerSec: number;
   likelyGlitch: boolean;
+  // ARC-1: horizontal_load recorded nothing about its own confidence until
+  // now. A single-entry RepTrustScore[] rather than a mode-specific column
+  // -- a carry is one effort, and workoutSetEntries.trustScores is the
+  // confidence field the server's resolveTrustScorePct already normalizes
+  // into trust_score_pct. See capture-trust.ts's asSingleRepTrust.
+  trustScores?: RepTrustScore[] | null;
   captureDeviceInfo?: CaptureDeviceInfo | null;
 };
 
@@ -89,24 +97,54 @@ function sparseHipLandmarksFromVisionFrame(frame: NativePoseFrame): NormalizedLa
   return landmarks;
 }
 
-function buildManualResult(startTime: number, finishTime: number, distanceYards: number): HorizontalLoadSetMetrics | null {
+function buildManualResult(
+  startTime: number,
+  finishTime: number,
+  distanceYards: number,
+  coverage: { totalFrames: number; framesWithReferencePoint: number },
+): HorizontalLoadSetMetrics | null {
   const elapsedSeconds = Math.round((finishTime - startTime) * 1000) / 1000;
   if (elapsedSeconds <= 0 || distanceYards <= 0) return null;
   const avgSpeedYardsPerSec = Math.round((distanceYards / elapsedSeconds) * 100) / 100;
+  const likelyGlitch = avgSpeedYardsPerSec > MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC;
   return {
     elapsedSeconds,
     distanceYards,
     avgSpeedYardsPerSec,
-    likelyGlitch: avgSpeedYardsPerSec > MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC,
+    likelyGlitch,
+    trustScores: asSingleRepTrust(
+      crossingTrustScore({
+        likelyGlitch,
+        totalFrames: coverage.totalFrames,
+        framesWithReferencePoint: coverage.framesWithReferencePoint,
+        // Marked by eye on the clip, not interpolated between two frames --
+        // no frame-gap bound to report, see crossingTrustScore's own comment.
+        crossingFrameGapsMs: [],
+        totalElapsedSeconds: elapsedSeconds,
+        manuallyTimed: true,
+      }),
+    ),
   };
 }
 
-function fromSprintResult(result: SprintResult): HorizontalLoadSetMetrics {
+function fromSprintResult(
+  result: SprintResult,
+  coverage: { totalFrames: number; framesWithReferencePoint: number },
+): HorizontalLoadSetMetrics {
   return {
     elapsedSeconds: result.totalElapsedSeconds,
     distanceYards: result.totalDistanceYards,
     avgSpeedYardsPerSec: result.avgSpeedYardsPerSec,
     likelyGlitch: result.likelyGlitch,
+    trustScores: asSingleRepTrust(
+      crossingTrustScore({
+        likelyGlitch: result.likelyGlitch,
+        totalFrames: coverage.totalFrames,
+        framesWithReferencePoint: coverage.framesWithReferencePoint,
+        crossingFrameGapsMs: result.crossingFrameGapsMs,
+        totalElapsedSeconds: result.totalElapsedSeconds,
+      }),
+    ),
   };
 }
 
@@ -127,6 +165,10 @@ export function AvHorizontalLoadTrackerDialog({
   const manualVideoRef = useRef<HTMLVideoElement>(null);
   const checkpointsRef = useRef<number[]>([]);
   const pointsRef = useRef<SprintPoint[]>([]);
+  // How many analyzed frames the recording produced in total, against how many of them
+  // actually yielded a hip-midpoint reference point -- a run tracked in a third of its frames
+  // still crosses every checkpoint, just far less precisely. Feeds crossingTrustScore (ARC-1).
+  const frameCoverageRef = useRef({ totalFrames: 0, framesWithReferencePoint: 0 });
   const stepRef = useRef<Step>("calibrate");
   const recordedBlobRef = useRef<Blob | null>(null);
   // Set by stopCaptureAndAnalyze's onBlobReady the instant the recording exists, well before
@@ -318,11 +360,15 @@ export function AvHorizontalLoadTrackerDialog({
       const ref = deriveSprintReferencePoint(hipLandmarks);
       if (ref) pointsRef.current.push({ t: elapsedMs, x: ref.x });
     }
+    frameCoverageRef.current = {
+      totalFrames: rawFrames.length,
+      framesWithReferencePoint: pointsRef.current.length,
+    };
 
     const checkpoints = buildCheckpoints();
     const crossing = checkpoints ? detectSprintCrossings(pointsRef.current, { checkpoints }) : null;
     if (crossing) {
-      finishWithResult(fromSprintResult(crossing));
+      finishWithResult(fromSprintResult(crossing, frameCoverageRef.current));
     } else {
       manualStartRef.current = null;
       setManualStartTime(null);
@@ -347,7 +393,7 @@ export function AvHorizontalLoadTrackerDialog({
     const startTime = manualStartRef.current;
     if (finishTime == null || startTime == null) return;
     const distanceNum = Number(distanceYards) || 0;
-    const manualResult = buildManualResult(startTime, finishTime, distanceNum);
+    const manualResult = buildManualResult(startTime, finishTime, distanceNum, frameCoverageRef.current);
     if (!manualResult) {
       toast.error("Finish must be after start (and distance must be set) -- scrub back and try again");
       return;
