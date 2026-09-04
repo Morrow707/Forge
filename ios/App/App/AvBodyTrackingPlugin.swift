@@ -483,13 +483,21 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     .first(where: { $0.activationState == .foregroundActive })
                     ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
             else { return }
+            // Both of these are iOS 16+. On 15 the app delegate's answer still changes, so the
+            // interface rotates the next time UIKit asks on its own; it simply is not forced.
+            // That is the same non-fatal degradation a refused geometry update produces below,
+            // and it costs nothing that matters: the capture connections are oriented
+            // independently (see captureOrientation), so the RECORDING is correct on every
+            // version and only the on-screen layout is affected.
+            guard #available(iOS 16.0, *) else {
+                self.logDiag("orientation lock set, rotation not forced (needs iOS 16)")
+                return
+            }
             scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
             let mask: UIInterfaceOrientationMask = landscape ? .landscapeRight : .portrait
             scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
                 // Non-fatal by design. A refused geometry update leaves the interface where it
-                // was; the capture connections are oriented independently (see
-                // captureOrientation), so the RECORDING is still correct either way and only
-                // the on-screen layout is affected.
+                // was, with the same consequences as the iOS 15 path above.
                 self.logDiag("orientation update refused: \(error.localizedDescription)")
             }
             self.logDiag("interface orientation lock -> \(landscape ? "landscape" : "portrait")")
