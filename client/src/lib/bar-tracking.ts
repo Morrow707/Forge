@@ -1453,3 +1453,70 @@ export function computeRepTrustScores(
   });
 }
 
+
+// The largest bar travel each movement pattern can physically produce, as a fraction of the
+// athlete's own standing height. Deliberately generous -- these are not form judgements, they
+// are "no human body can do this" ceilings, sized so a legitimate rep by anyone never trips
+// them and a broken calibration always does.
+//
+// Why this exists at all: every check upstream of here asks whether the CAMERA GEOMETRY looks
+// trustworthy, and that turned out to be genuinely hard to get right. Two attempts failed on
+// real footage. The first required head-to-ankle to be mostly vertical, which a bench filmed
+// end-on satisfies perfectly because the body runs up the frame just like a standing one. The
+// second compared head-to-ankle against shoulder width, expecting foreshortening to shrink the
+// body and leave the shoulders alone -- but under the strong perspective of a wide lens with
+// the athlete's feet close to it, the near ankles are magnified and the far shoulders shrink,
+// so the ratio moves the WRONG WAY and the check passes the very case it was written to catch.
+// Confirmed on a real set: camera at the foot of a bench, 121 of 639 frames still calibrated,
+// range of motion reported as 180.5cm against roughly 39cm actually pressed.
+//
+// This check asks a different question -- not "does the geometry look right" but "is the
+// ANSWER possible". It needs no view of the camera at all, so no angle can defeat it. It is a
+// backstop, not a cure: it makes a bad calibration fail loudly instead of publishing confident
+// nonsense. Getting a right answer for a given angle is a separate problem.
+const MAX_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
+  // Bounded by arm length. Upper arm plus forearm is ~0.35 of height, and a press cannot
+  // exceed it; 0.5 leaves generous room for a long-armed athlete and a deep arch.
+  horizontal_press_or_row: 0.5,
+  // Hip travel from lockout to below parallel; ~0.3 of height typically.
+  squat: 0.6,
+  // Floor to lockout, bounded by the distance from the bar's start height to the hip.
+  deadlift: 0.7,
+  overhead_press: 0.7,
+};
+
+// Anything not named above (jumps, carries, Olympic lifts, unknown exercises) gets this. A
+// snatch legitimately moves the bar from the floor to overhead, which for a short athlete can
+// exceed their own height, so the catch-all has to sit above 1.0 or it would reject correct
+// Olympic lifts -- see this file's note in docs/camera-tracking-notes.md about those needing
+// their own model regardless.
+const DEFAULT_MAX_ROM_FRACTION = 1.3;
+
+/**
+ * Whether a computed range of motion is physically possible for this athlete and movement.
+ * Returns null when it is fine (or when there is not enough information to judge), otherwise a
+ * human-readable reason the caller should surface INSTEAD of the metrics.
+ *
+ * Takes the athlete's height because every ceiling above is anthropometric -- an absolute
+ * centimetre limit would be wrong at both ends of the height range.
+ */
+export function implausibleRangeOfMotion(
+  romCm: number,
+  heightIn: number | null | undefined,
+  movementPattern: string | null | undefined,
+): string | null {
+  if (!heightIn || heightIn <= 0) return null;
+  if (!Number.isFinite(romCm) || romCm <= 0) return null;
+  const heightCm = heightIn * 2.54;
+  const fraction = movementPattern
+    ? (MAX_ROM_FRACTION_OF_HEIGHT[movementPattern] ?? DEFAULT_MAX_ROM_FRACTION)
+    : DEFAULT_MAX_ROM_FRACTION;
+  const ceilingCm = heightCm * fraction;
+  if (romCm <= ceilingCm) return null;
+  const overBy = Math.round((romCm / ceilingCm) * 10) / 10;
+  return (
+    `Range of motion came out as ${Math.round(romCm)}cm, about ${overBy}x further than this ` +
+    `movement can physically travel for your height. That means the camera's real-world scale ` +
+    `was misread, so every number from this take would be wrong by the same factor.`
+  );
+}

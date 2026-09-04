@@ -4,7 +4,15 @@ import { estimateImplementDiameterM, isPlausibleMedBallSize } from "@/lib/pose-t
 // Client-side mirror of trackingDiagnosticsSchema in shared/schema.ts -- kept in sync by hand,
 // same pattern CaptureDeviceInfo (native-av-preview.ts) already uses rather than importing the
 // zod schema's inferred type into every tracker dialog.
-export type TrackingOutcome = "tracked" | "empty_calibration_failed" | "empty_no_clean_read";
+export type TrackingOutcome =
+  | "tracked"
+  | "empty_calibration_failed"
+  | "empty_no_clean_read"
+  // Calibration reported success but produced a physically impossible result -- see
+  // implausibleRangeOfMotion in bar-tracking.ts. Distinct from empty_calibration_failed:
+  // there, nothing calibrated; here, something did and was wrong, which is the more
+  // dangerous case because it is the one that used to publish confident nonsense.
+  | "empty_implausible_scale";
 
 export type TrackingDiagnostics = {
   outcome: TrackingOutcome;

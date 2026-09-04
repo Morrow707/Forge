@@ -49,6 +49,7 @@ import {
   interpolateOcclusionGap,
   computeArmDriveAsymmetry,
   computeRepTrustScores,
+  implausibleRangeOfMotion,
   MIN_TRACKING_CONFIDENCE,
   type RepMetrics,
   type TrackedPoint,
@@ -706,6 +707,37 @@ export function AvBarTrackerDialog({
         captureDeviceInfo,
         buildTrackingDiagnostics({
           outcome: "empty_no_clean_read",
+          message,
+          rawFrames,
+          trackingMode: coreMlTrackingMode,
+          recording: recordingStats,
+          calibration: { scaleFactor, ...calibrationFrames },
+        }),
+        uploadPromise,
+        forSetNumber,
+      );
+      return;
+    }
+
+    // Last line of defence, and the only one no camera angle can defeat: every check before
+    // this asks whether the geometry LOOKED trustworthy, and two versions of that got fooled by
+    // a real bench set filmed from the foot of the bench. This asks whether the ANSWER is
+    // possible for a human body. A calibration off by 4x cannot hide from it, whatever the
+    // camera was doing. Routed through the same saveEmptyAndWarn path a failed calibration
+    // already uses -- the clip is still saved for the coach, only the numbers are withheld.
+    const romProblem = implausibleRangeOfMotion(
+      metrics.romCm,
+      heightIn,
+      expectedPatternFromName(exerciseName),
+    );
+    if (romProblem) {
+      const message = `${romProblem} Film this lift square to the side, with the camera level with the bar, and make sure you're fully in frame.`;
+      await saveEmptyAndWarn(
+        blob,
+        message,
+        captureDeviceInfo,
+        buildTrackingDiagnostics({
+          outcome: "empty_implausible_scale",
           message,
           rawFrames,
           trackingMode: coreMlTrackingMode,

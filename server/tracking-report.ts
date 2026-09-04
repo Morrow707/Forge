@@ -29,7 +29,7 @@ type CaptureDeviceInfo = {
 // Mirrors client/src/lib/tracking-diagnostics.ts's TrackingDiagnostics -- kept in sync by hand,
 // same pattern CaptureDeviceInfo above already uses.
 type TrackingDiagnostics = {
-  outcome: "tracked" | "empty_calibration_failed" | "empty_no_clean_read";
+  outcome: "tracked" | "empty_calibration_failed" | "empty_no_clean_read" | "empty_implausible_scale";
   message?: string | null;
   recording?: {
     frameCount: number;
