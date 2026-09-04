@@ -735,6 +735,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("av-\(UUID().uuidString)")
             .appendingPathExtension("mov")
+        // Registered before the write starts, not after -- purgeStaleRecordings runs off a
+        // start() call this plugin doesn't control the timing of.
+        Self.markPathActive(outputURL.path)
         DispatchQueue.main.async {
             movieOutput.startRecording(to: outputURL, recordingDelegate: self)
             self.logDiag("startRecording -> \(outputURL.lastPathComponent)")
@@ -796,6 +799,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             return
         }
         try? FileManager.default.removeItem(atPath: pathString)
+        // The JS side calls this once it's done with the clip (read into a blob AND analyzed),
+        // so this is the one point where both holds above are known to be finished.
+        Self.markPathInactive(pathString)
         logDiag("deleted recording at \(pathString)")
         call.resolve()
     }
@@ -826,6 +832,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // AvCoreMlImplementDetector's own header comment.
         let trackingMode = call.getString("trackingMode")
         let url = URL(fileURLWithPath: pathString)
+        // Held for the whole read. startRecording already marked this path active when it was
+        // written; re-marking is harmless (a Set) and covers the case where the recording was
+        // made before this process launched.
+        Self.markPathActive(url.path)
         logDiag(
             "analyzeRecording() called for \(url.lastPathComponent), sampleEveryNthFrame=\(sampleEveryNthFrame), "
                 + "detectBox=\(detectBox), trackingMode=\(trackingMode ?? "none")"
@@ -1666,14 +1676,63 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // here if the JS side's own deleteRecording call never ran (app killed before it could, a
     // crash, an upload that failed before cleanup). Swept at the start of every start() call
     // so a string of interrupted sessions can't slowly fill the device's storage.
+    //
+    // "Stale" has to mean stale. This swept EVERY av-*.mov in tmp unconditionally, which was
+    // safe only while analysis finished before the athlete could reach the camera again --
+    // no longer true since AvBarTrackerDialog started closing at stopRecording and leaving
+    // the (much slower) analysis pass running in the background. Opening the tracker for the
+    // very next set then called start() -> this, which deleted the clip AVAssetReader was
+    // still reading, and the read died partway through as status .failed / "Cannot Complete
+    // Action" -- surfacing to the athlete as "Analysis stopped early" with metrics covering
+    // only the frames that had been read before the file went away. Confirmed against a real
+    // field report: a 35.8s bench clip, 781 of 952 frames read, reader .failed.
+    //
+    // Two independent guards, because either alone leaves a real hole: activePaths covers
+    // this process's own in-flight recording/analysis exactly, and the age floor covers what
+    // it can't know about (a clip from a previous launch that the JS side is about to analyze,
+    // and any future caller that forgets to register a path).
     private func purgeStaleRecordings() {
         let tmp = FileManager.default.temporaryDirectory
-        guard let files = try? FileManager.default.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil) else {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: tmp, includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else {
             return
         }
+        let inUse = Self.activePathsQueue.sync { Self.activePaths }
+        let cutoff = Date().addingTimeInterval(-Self.staleRecordingAgeSeconds)
         for file in files where file.lastPathComponent.hasPrefix("av-") {
+            if inUse.contains(file.path) {
+                logDiag("purge: skipping in-use recording \(file.lastPathComponent)")
+                continue
+            }
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate
+            if let modified = modified, modified > cutoff {
+                logDiag("purge: skipping recent recording \(file.lastPathComponent)")
+                continue
+            }
             try? FileManager.default.removeItem(at: file)
         }
+    }
+
+    // Long enough to outlast any analysis pass this plugin can produce (the read loop's own
+    // watchdog gives up well before this) plus the upload that runs alongside it, short
+    // enough that a genuinely abandoned clip still gets swept the same session.
+    private static let staleRecordingAgeSeconds: TimeInterval = 30 * 60
+
+    // Every clip this process is currently writing or reading. Static (not per-instance)
+    // because purgeStaleRecordings sweeps a directory shared by every clip regardless of
+    // which plugin instance made it, and guarded by its own queue because startRecording
+    // (main), analyzeRecording (its analysis queue) and start() (main) all touch it.
+    private static var activePaths: Set<String> = []
+    private static let activePathsQueue = DispatchQueue(label: "forge.av.activePaths")
+
+    private static func markPathActive(_ path: String) {
+        activePathsQueue.sync { _ = activePaths.insert(path) }
+    }
+
+    private static func markPathInactive(_ path: String) {
+        activePathsQueue.sync { _ = activePaths.remove(path) }
     }
 
     // Downscaled working-resolution buffers for AvImplementTracker's motion-diff scan --

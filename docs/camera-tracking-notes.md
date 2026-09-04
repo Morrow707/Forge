@@ -141,3 +141,55 @@ second tracker to fuse with.
 scatter plot on the coach analytics page. Drawing it over the actual video has
 never been built, though the skeleton-replay overlay it would sit alongside
 has. The pieces exist and are not connected.
+
+## Bench press vs. a bar-mounted sensor (field report, 2026-09-04)
+
+One bench set (135lb x 9) tracked simultaneously by Forge and by an OVR bar sensor,
+which is the reference we are calibrating toward. Forge's numbers against OVR's:
+
+| Metric | OVR | Forge | Ratio |
+| --- | --- | --- | --- |
+| Range of motion | 15.3 in (38.9 cm) | 154 cm | 4.0x |
+| Peak velocity | 1.04 m/s | 3.0 m/s | 2.9x |
+| Mean velocity | 0.76 m/s | 1.31 m/s | 1.7x |
+| Peak power | 629 W | 3973 W | 6.3x |
+| Mean power | 456 W | 1735 W | 3.8x |
+| Reps | 9 | 18 | 2.0x |
+
+Every one of those traces back to **one** root cause, now fixed: height calibration
+read the vertical drop from head to ankles and called it the athlete's standing
+height. On a bench that segment is horizontal, so the vertical component is just
+bench incline plus camera tilt, and dividing a real 1.8m into it inflated the scale
+about 4x. The rep count doubled as a consequence rather than independently --
+BASE_MIN_REP_AMPLITUDE_CM rejects reversals under 20cm as noise, and at 4x the
+athlete's ordinary wobble clears that floor. The power ratios also carry a separate
+2.2x from the set being logged as 135 **kg** when 135 **lb** was lifted; the unit
+toggle was on KG. That is a data-entry trap, not a tracking bug, but it feeds power
+directly (power = mass x g x velocity) and 2.9 x 2.2 = 6.3 accounts for peak power
+exactly.
+
+**Consequence of the fix: a supine set now calibrates to nothing and reports no
+numbers at all**, per this pipeline's standing "no number is better than a wrong
+one" rule. That is the correct outcome for the footage above, and it is worse for
+the athlete than it sounds -- bench is simply not measurable from where it was
+filmed, and was never measurable there.
+
+Two separate things have to be true before bench can be compared to OVR:
+
+1. **Scale.** Height calibration cannot work on a lying athlete from any angle,
+   because it needs an upright body. A side view makes head-to-ankle lie flat in
+   the image plane, so a supine calibration branch using the segment's FULL length
+   (not just its vertical component) would work there. Not built -- it would be
+   guesswork without a device to validate against, which is exactly what the
+   Olympic-lift note above warns about. The already-built alternative is the CoreML
+   plate detector (computeReferenceObjectScale), which needs a bumper plate in shot
+   and no upright body at all.
+2. **Axis.** Filming from behind the head puts the bar's travel on the estimated
+   depth axis, the least reliable number the tracker produces (see the camera-angle
+   note above). Even with perfect scale, ROM and velocity from that angle are not
+   trustworthy. **Bench has to be filmed from the side** for these numbers to mean
+   anything.
+
+Do not tune constants against the table above until bench is re-shot from the side
+with a plate in frame. Fitting a fudge factor to depth-axis data would bake the
+camera angle into the model.

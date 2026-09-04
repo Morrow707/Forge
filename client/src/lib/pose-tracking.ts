@@ -672,16 +672,58 @@ const SHOULDER_HEIGHT_FRACTION = 0.818;
 // visible landmark pair in an ordinary lifting frame (already relied on elsewhere for exactly
 // this reason -- see implement-tracking.ts's own shoulderPixelsPerMeter), so this fallback
 // succeeds in most of the cases the strict version used to reject outright.
+// How much of a head-to-ankle segment's total length has to lie along the vertical axis
+// before that segment's VERTICAL component can stand in for the athlete's standing height.
+//
+// This whole calibration reads one number off the frame -- the vertical drop from head (or
+// shoulders) to ankles -- and calls it the athlete's height. That identity only holds while
+// they are actually upright. Lying on a bench, head-to-ankle is a mostly HORIZONTAL span, and
+// its vertical component is just the leftovers: bench incline, camera tilt, perspective. That
+// leftover is still a positive number, so the bare `span > 0` test this used to do accepted
+// it, divided a real 1.8m height by a fraction of the pixels it should have, and handed every
+// downstream metric a scale several times too large.
+//
+// Confirmed against a real field report -- bench press, camera behind the head, athlete's
+// height on file. Reported 154cm of range of motion against 39cm actually pressed (~4x), and
+// the same 4x rode through into velocity, power, bar-path deviation and the "bar drifted 29.4
+// in" form fault. It also doubled the rep count: BASE_MIN_REP_AMPLITUDE_CM (bar-tracking.ts)
+// rejects reversals under 20cm as noise, and at 4x the athlete's ordinary 5cm of wobble clears
+// that floor, so 9 real reps segmented into 18. Every one of those numbers was presented with
+// no indication anything was wrong, because nothing checked.
+//
+// 0.75 sits well clear of both cases rather than splitting them: a standing athlete runs
+// ~0.97-1.0 here (head directly above ankles), and supine runs near zero. Deep squats and
+// hinges compress the ratio, but calibrateFromFrames takes a MEDIAN across every frame of the
+// take, and the setup/lockout frames that bracket any barbell set are upright -- so this costs
+// those lifts sample count, not calibration.
+const MIN_UPRIGHT_VERTICAL_FRACTION = 0.75;
+
+// True when the head-to-ankle segment is upright enough for its vertical component to mean
+// what impliedStandingHeightPixels needs it to mean. Compares against the segment's own full
+// 3D length rather than any absolute threshold, so it is independent of the athlete's real
+// height, their distance from the camera, and the units of whatever pipeline produced these
+// landmarks.
+function uprightEnough(verticalSpan: number, head: Landmark, ankleY: number, ankleX: number, ankleZ: number): boolean {
+  const dx = head.x - ankleX;
+  const dy = head.y - ankleY;
+  const dz = head.z - ankleZ;
+  const totalLength = Math.hypot(dx, dy, dz);
+  if (!(totalLength > 0)) return false;
+  return verticalSpan / totalLength >= MIN_UPRIGHT_VERTICAL_FRACTION;
+}
+
 function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1 | -1): number | null {
   const lAnkle = worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
   const rAnkle = worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
   if (!visible(lAnkle) || !visible(rAnkle)) return null;
   const ankleY = (lAnkle.y + rAnkle.y) / 2;
+  const ankleX = (lAnkle.x + rAnkle.x) / 2;
+  const ankleZ = (lAnkle.z + rAnkle.z) / 2;
 
   const nose = worldLandmarks[POSE_LANDMARKS.NOSE];
   if (visible(nose)) {
     const span = verticalSign * (ankleY - nose.y);
-    if (span > 0) return span;
+    if (span > 0 && uprightEnough(span, nose, ankleY, ankleX, ankleZ)) return span;
   }
 
   const lShoulder = worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
@@ -689,7 +731,17 @@ function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1
   if (!visible(lShoulder) || !visible(rShoulder)) return null;
   const shoulderY = (lShoulder.y + rShoulder.y) / 2;
   const shoulderToAnkle = verticalSign * (ankleY - shoulderY);
-  return shoulderToAnkle > 0 ? shoulderToAnkle / SHOULDER_HEIGHT_FRACTION : null;
+  if (!(shoulderToAnkle > 0)) return null;
+  // Same gate on the fallback -- a supine athlete's shoulders are no more above their ankles
+  // than their head is, so letting this branch through unchecked would just relocate the bug.
+  const shoulderMid: Landmark = {
+    ...lShoulder,
+    x: (lShoulder.x + rShoulder.x) / 2,
+    y: shoulderY,
+    z: (lShoulder.z + rShoulder.z) / 2,
+  };
+  if (!uprightEnough(shoulderToAnkle, shoulderMid, ankleY, ankleX, ankleZ)) return null;
+  return shoulderToAnkle / SHOULDER_HEIGHT_FRACTION;
 }
 
 // Diagnostic-only mirror of impliedStandingHeightPixels' own branching, for the AR Diagnosis
@@ -716,15 +768,35 @@ export function calibrationMethodBreakdown(
       continue;
     }
     const ankleY = (lAnkle.y + rAnkle.y) / 2;
+    const ankleX = (lAnkle.x + rAnkle.x) / 2;
+    const ankleZ = (lAnkle.z + rAnkle.z) / 2;
     const nose = f.worldLandmarks[POSE_LANDMARKS.NOSE];
-    if (visible(nose) && sign * (ankleY - nose.y) > 0) {
+    const noseSpan = visible(nose) ? sign * (ankleY - nose.y) : 0;
+    // Same MIN_UPRIGHT_VERTICAL_FRACTION gate the real path applies, so a supine take reports
+    // as unresolved here instead of claiming a calibration method that was actually rejected.
+    // Without this the diagnostics actively mislead: the field report that found the supine
+    // bug read "calibration succeeded -- nose-to-ankle on 140/781 frames" for a bench set
+    // whose scale was ~4x wrong.
+    if (visible(nose) && noseSpan > 0 && uprightEnough(noseSpan, nose, ankleY, ankleX, ankleZ)) {
       noseToAnkleFrames++;
       continue;
     }
     const lShoulder = f.worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
     const rShoulder = f.worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
-    if (visible(lShoulder) && visible(rShoulder) && sign * (ankleY - (lShoulder.y + rShoulder.y) / 2) > 0) {
-      shoulderToAnkleFrames++;
+    if (visible(lShoulder) && visible(rShoulder)) {
+      const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+      const shoulderSpan = sign * (ankleY - shoulderY);
+      const shoulderMid: Landmark = {
+        ...lShoulder,
+        x: (lShoulder.x + rShoulder.x) / 2,
+        y: shoulderY,
+        z: (lShoulder.z + rShoulder.z) / 2,
+      };
+      if (shoulderSpan > 0 && uprightEnough(shoulderSpan, shoulderMid, ankleY, ankleX, ankleZ)) {
+        shoulderToAnkleFrames++;
+      } else {
+        unresolvedFrames++;
+      }
     } else {
       unresolvedFrames++;
     }
