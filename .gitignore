@@ -160,3 +160,7 @@ scripts/med-ball-detector/runs/
 scripts/med-ball-detector/*.mlpackage
 scripts/med-ball-detector/*.pt
 scripts/med-ball-detector/*.onnx
+
+# Scratch upload root for the integration suite (vitest.integration.config.ts
+# points STORAGE_PATH here so deleteUploadedFile has real files to unlink).
+server/test-support/.uploads/

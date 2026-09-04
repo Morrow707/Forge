@@ -38,9 +38,22 @@ export default defineConfig({
     include: ["server/**/*.itest.ts"],
     globalSetup: ["./server/test-support/global-setup.ts"],
     fileParallelism: false,
-    // server/db.ts reads this at import time and throws without it, so it
-    // has to be set before any module under test loads.
-    env: { DATABASE_URL: integrationDatabaseUrl() },
+    env: {
+      // server/db.ts reads this at import time and throws without it, so it
+      // has to be set before any module under test loads.
+      DATABASE_URL: integrationDatabaseUrl(),
+      // Where deleteUploadedFile resolves /uploads/... paths. Pointed at a
+      // scratch directory so the destructive-path tests can assert on real
+      // files being unlinked without going near anything that matters.
+      STORAGE_PATH: path.resolve(import.meta.dirname, "server/test-support/.uploads"),
+      // Video retention limits are behind this flag and are UNLIMITED
+      // without it, which would make the retention sweeps untestable --
+      // they would correctly do nothing. Enabling it here tests the
+      // behaviour that ships the day the flag flips in production, which is
+      // the moment those sweeps start deleting real athletes' videos and
+      // the worst possible moment to discover they were never exercised.
+      BILLING_ENFORCEMENT_ENABLED: "true",
+    },
     testTimeout: 20_000,
     hookTimeout: 30_000,
   },

@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { sql } from "drizzle-orm";
 import { db, pool } from "../db";
 import {
@@ -8,7 +10,12 @@ import {
   programDays,
   programExercises,
   assignments,
+  assignmentCorrectives,
+  workoutLogs,
+  workoutLogEntries,
+  workoutSetEntries,
 } from "@shared/schema";
+import { UPLOADS_ROOT } from "../uploaded-files";
 
 // Clears every table between tests.
 //
@@ -121,3 +128,103 @@ export async function makeAssignedProgram(opts: {
 }
 
 export { db, pool, sql };
+
+
+/**
+ * Writes a real file under UPLOADS_ROOT and returns the /uploads/ path that
+ * points at it, so a test can assert the file is actually gone rather than
+ * only that a column was nulled. Those are different claims, and the whole
+ * class of bug here is the second happening without the first.
+ */
+export async function makeUploadedFile(name: string): Promise<string> {
+  const dir = path.join(UPLOADS_ROOT, "form-videos");
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, name), "not really a video");
+  return `/uploads/form-videos/${name}`;
+}
+
+export async function uploadedFileExists(url: string): Promise<boolean> {
+  try {
+    await fs.stat(path.join(UPLOADS_ROOT, url.slice("/uploads/".length)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A logged set carrying a video, written directly rather than through
+ * submitWorkoutLog. The real submission path gates every video URL through
+ * assertUploadedFileOwnedBy, which is correct there and just noise when the
+ * thing under test is what the retention sweep does with rows that already
+ * exist.
+ *
+ * `via: "corrective"` produces the shape the retention sweep used to miss
+ * entirely -- program_exercise_id null, corrective_id set -- which is how
+ * corrective videos escaped the per-exercise cap forever.
+ */
+export async function makeLoggedSetWithVideo(opts: {
+  athleteId: number;
+  assignmentId: number;
+  programDayId: number;
+  exerciseId: number;
+  programExerciseId?: number;
+  via?: "program" | "corrective";
+  date: string;
+  videoUrl: string;
+  favorited?: boolean;
+}) {
+  const [log] = await db
+    .insert(workoutLogs)
+    .values({
+      assignmentId: opts.assignmentId,
+      programDayId: opts.programDayId,
+      athleteId: opts.athleteId,
+      date: opts.date,
+      completed: true,
+    })
+    .returning();
+
+  let correctiveId: number | null = null;
+  if (opts.via === "corrective") {
+    const [corrective] = await db
+      .insert(assignmentCorrectives)
+      .values({
+        assignmentId: opts.assignmentId,
+        programDayId: opts.programDayId,
+        exerciseId: opts.exerciseId,
+        orderIndex: 0,
+        sets: 1,
+        reps: "10",
+      })
+      .returning();
+    correctiveId = corrective.id;
+  }
+
+  const [entry] = await db
+    .insert(workoutLogEntries)
+    .values({
+      workoutLogId: log.id,
+      programExerciseId: opts.via === "corrective" ? null : (opts.programExerciseId ?? null),
+      correctiveId,
+      exerciseId: opts.exerciseId,
+      weightMode: "numeric",
+    })
+    .returning();
+
+  const [set] = await db
+    .insert(workoutSetEntries)
+    .values({
+      logEntryId: entry.id,
+      setNumber: 1,
+      reps: "10",
+      weight: "100",
+      weightUnit: "lbs",
+      formCheckVideoUrl: opts.videoUrl,
+      videoFavorited: opts.favorited ?? false,
+      videoUploadedAt: new Date(),
+    })
+    .returning();
+
+  return { log, entry, set };
+}
