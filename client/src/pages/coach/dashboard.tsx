@@ -152,7 +152,22 @@ export default function CoachDashboard() {
     athleteName: string;
   } | null>(null);
 
-  const WIDGET_IDS = ["next-3-days", "stat-tiles", "recent-programs", "invite-athletes"];
+  // digest-banner/weekly-digest/team-pr-wall/reengagement used to render in a fixed block
+  // above the sortable list -- a coach could hide or reorder everything below them but not
+  // those four, which is exactly the "can't move those two things" gap. Listed first so a
+  // coach who's never touched Edit mode still sees them in the same top-of-page order they
+  // always have; resolveWidgetOrder appends them after anything already in an existing
+  // coach's saved layout instead of reshuffling it.
+  const WIDGET_IDS = [
+    "digest-banner",
+    "weekly-digest",
+    "team-pr-wall",
+    "reengagement",
+    "next-3-days",
+    "stat-tiles",
+    "recent-programs",
+    "invite-athletes",
+  ];
   const widgetOrder = resolveWidgetOrder(widgetVisibility.layout, WIDGET_IDS);
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   function handleDragEnd(event: DragEndEvent) {
@@ -168,6 +183,50 @@ export default function CoachDashboard() {
   // widgets exist and what's in each" part stays exactly the same JSX as
   // before, just addressed by id instead of appearing in fixed order.
   const widgetsById: Record<string, ReactNode> = {
+    "digest-banner": (
+      <SortableHideableWidget
+        id="digest-banner"
+        label="Digest Banner"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("digest-banner")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <CoachDigestBanner />
+      </SortableHideableWidget>
+    ),
+    "weekly-digest": (
+      <SortableHideableWidget
+        id="weekly-digest"
+        label="This Week"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("weekly-digest")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <WeeklyDigestCard />
+      </SortableHideableWidget>
+    ),
+    "team-pr-wall": (
+      <SortableHideableWidget
+        id="team-pr-wall"
+        label="Team PR Wall"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("team-pr-wall")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <TeamPrWallCard />
+      </SortableHideableWidget>
+    ),
+    "reengagement": (
+      <SortableHideableWidget
+        id="reengagement"
+        label="Athletes Haven't Logged"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("reengagement")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <ReengagementBanner />
+      </SortableHideableWidget>
+    ),
     "next-3-days": (
       <SortableHideableWidget
         id="next-3-days"
@@ -340,11 +399,6 @@ export default function CoachDashboard() {
         </div>
 
         <div className="flex flex-col gap-3">
-          <CoachDigestBanner />
-          <WeeklyDigestCard />
-          <TeamPrWallCard />
-          <ReengagementBanner />
-
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={widgetOrder} strategy={verticalListSortingStrategy}>
               {widgetOrder.map((id) => (

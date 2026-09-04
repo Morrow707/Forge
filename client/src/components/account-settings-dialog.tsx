@@ -33,14 +33,14 @@ const BACKGROUND_HUE_PRESETS = [
   { label: "Plum", hue: 280 },
 ];
 
-/** Account-level self-service: name, email, and password, none of which
- * had any in-app edit path before -- a coach in particular had no way to
- * fix their own name short of asking someone to edit the database, and
- * neither role could change their password without logging out first and
- * using the forgot-password email flow. Available to every role.
- * Personal accent color (coach-only, any staff member) rides along here
- * too since it's the same "about me, not the org" category as the rest
- * of this dialog. */
+/** Account-level self-service: name and login email -- neither had any
+ * in-app edit path before, and a coach in particular had no way to fix
+ * their own name short of asking someone to edit the database. Available
+ * to every role. Password change lives in its own standalone dialog
+ * (see ChangePasswordDialog, opened from the "Password" nav item) rather
+ * than here -- the two used to duplicate each other. Personal accent color
+ * (coach-only, any staff member) rides along here too since it's the same
+ * "about me, not the org" category as the rest of this dialog. */
 export function AccountSettingsDialog({
   user,
   open,
@@ -91,22 +91,6 @@ export function AccountSettingsDialog({
       setNewEmail("");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't update email"),
-  });
-
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const passwordMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("PATCH", "/api/account/password", { currentPassword, newPassword });
-    },
-    onSuccess: () => {
-      toast.success("Password updated");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update password"),
   });
 
   const [accentColor, setAccentColor] = useState(user.personalAccentColor ?? "");
@@ -172,7 +156,7 @@ export function AccountSettingsDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Account Settings</DialogTitle>
-          <DialogDescription>Your name, login email, and password.</DialogDescription>
+          <DialogDescription>Your name and login email.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -214,46 +198,6 @@ export function AccountSettingsDialog({
               disabled={!newEmail.trim() || !emailPassword || emailMutation.isPending}
             >
               Update email
-            </Button>
-          </div>
-
-          <div className="space-y-1.5 border-t border-border pt-4">
-            <Label>Password</Label>
-            <PasswordInput
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Current password"
-              autoComplete="current-password"
-            />
-            <PasswordInput
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="New password (at least 6 characters)"
-              autoComplete="new-password"
-              minLength={6}
-            />
-            <PasswordInput
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
-              autoComplete="new-password"
-            />
-            {newPassword && confirmPassword && newPassword !== confirmPassword && (
-              <p className="text-xs text-destructive">Passwords don't match</p>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => passwordMutation.mutate()}
-              disabled={
-                !currentPassword ||
-                newPassword.length < 6 ||
-                newPassword !== confirmPassword ||
-                passwordMutation.isPending
-              }
-            >
-              Update password
             </Button>
           </div>
 

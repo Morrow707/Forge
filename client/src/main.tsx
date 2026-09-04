@@ -5,6 +5,7 @@ import App from "./App";
 import { startOfflineLogSync } from "@/lib/offline-queue";
 import { startOfflineVideoSync } from "@/lib/video-offline-store";
 import { bootstrapNativeShell } from "@/lib/native-bootstrap";
+import { recoverFromStuckChunkLoad } from "@/lib/lazy-load-recovery";
 import "./index.css";
 
 const EMAIL_PATTERN = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
@@ -60,9 +61,11 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 // hashed filename (the old one no longer exists on the server at all). Not
 // a real bug in the app, just a stale tab; a fresh load picks up the
 // current index.html and current chunk hashes, which fixes it completely.
-// sessionStorage guard is a one-shot: if reloading doesn't actually help
-// (a genuinely broken deploy, not a stale tab), this falls through to the
-// normal ErrorBoundary fallback below instead of reload-looping forever.
+// Shares its one-shot reload guard with lib/lazy-load-recovery's
+// withLoadTimeout (see App.tsx) -- that one recovers the sibling failure
+// mode this listener can't see: an import() that hangs instead of
+// rejecting, most often on iOS when WKWebView's local Capacitor server
+// stalls a request rather than erroring it.
 //
 // event.preventDefault() matters here, confirmed against Vite's own
 // generated preload-helper source (node_modules/vite/dist/node/chunks --
@@ -79,9 +82,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 // way out).
 window.addEventListener("vite:preloadError", (event) => {
   event.preventDefault();
-  if (sessionStorage.getItem("reloaded-after-preload-error")) return;
-  sessionStorage.setItem("reloaded-after-preload-error", "1");
-  window.location.reload();
+  recoverFromStuckChunkLoad();
 });
 
 // A crash here means something in the React tree itself threw, so this

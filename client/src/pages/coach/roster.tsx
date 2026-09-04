@@ -892,7 +892,7 @@ export default function CoachRoster() {
                             <td className="max-w-[220px] truncate px-3 py-2 font-semibold">{a.name}</td>
                             <td className="px-3 py-2">
                               {a.sport ? (
-                                <Badge variant="secondary" className="text-[10px]">
+                                <Badge variant="secondary" className="whitespace-nowrap text-[10px]">
                                   {a.sport}
                                 </Badge>
                               ) : (
@@ -901,7 +901,7 @@ export default function CoachRoster() {
                             </td>
                             <td className="px-3 py-2">
                               {a.position ? (
-                                <Badge variant="outline" className="text-[10px]">
+                                <Badge variant="outline" className="whitespace-nowrap text-[10px]">
                                   {a.position}
                                 </Badge>
                               ) : (
