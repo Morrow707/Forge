@@ -69,6 +69,7 @@ import {
   releaseDayKeyForFlush,
   takePendingLog,
 } from "@/lib/offline-queue";
+import { dropHeavyFields } from "@/lib/log-payload-trim";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -1151,6 +1152,9 @@ export function WorkoutPage({
   // get surfaced instead of the athlete training an entire session under
   // the impression it's all being logged.
   const consecutiveAutosaveFailuresRef = useRef(0);
+  // HTTP status of the last save the server permanently refused, or null. Read by the
+  // unmount handler so it does not re-queue a payload already known to be unsyncable.
+  const lastPermanentRejectionRef = useRef<number | null>(null);
 
   const submitMutation = useMutation({
     mutationFn: async ({
@@ -1185,13 +1189,23 @@ export function WorkoutPage({
         // nothing typed is ever lost to a transient hiccup.
         const isPermanentRejection =
           err instanceof ApiError && err.status !== 401 && err.status < 500;
-        if (isPermanentRejection) throw err;
+        // Remembered for the unmount handler below, which used to re-queue this exact
+        // payload unconditionally. That turned a visible error into silent data loss: the
+        // queue replays it, gets the same 4xx, and DELETES the entry as unsyncable. The
+        // athlete then sees "A workout you logged offline was rejected by the server and
+        // can't be synced" for a save that had already failed in front of them.
+        if (isPermanentRejection) {
+          lastPermanentRejectionRef.current = (err as ApiError).status;
+          throw err;
+        }
+        lastPermanentRejectionRef.current = null;
         queueLog(dayKey, `${apiBase}/log`, payload);
         return { synced: false as const, data: null, silent };
       }
     },
     onSuccess: ({ synced, silent, data }, { payload }) => {
       consecutiveAutosaveFailuresRef.current = 0;
+      lastPermanentRejectionRef.current = null;
       // The offline banner needs to reflect reality regardless of which
       // save path triggered it -- only the toast and the query refetch
       // (items only ever hydrates from `data` once per mount, so refetching
@@ -1488,7 +1502,19 @@ export function WorkoutPage({
       // synced -- queueLog just gets replayed against an already-saved
       // state -- but never redundant with data loss.
       const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
-      queueLog(dayKey, `${apiBase}/log`, payload);
+      const rejectedStatus = lastPermanentRejectionRef.current;
+      if (rejectedStatus == null) {
+        queueLog(dayKey, `${apiBase}/log`, payload);
+        return;
+      }
+      // The server already refused this day for a reason that will not change on retry.
+      // Queueing it again only routes it to the queue's own drop-on-4xx path, losing the
+      // athlete's numbers instead of keeping them. A 413 is the one case worth another go:
+      // the frame-by-frame replay data is the overwhelming majority of a tracked day's
+      // bytes, so the same numbers without it are very likely to fit. Anything else is
+      // left alone -- the athlete already saw the error and can re-enter the day.
+      const trimmed = rejectedStatus === 413 ? dropHeavyFields(payload) : null;
+      if (trimmed) queueLog(dayKey, `${apiBase}/log`, trimmed);
     };
     // apiBase/dayKey are static for the life of this page; only needs to run once.
     // eslint-disable-next-line react-hooks/exhaustive-deps

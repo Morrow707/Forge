@@ -1,5 +1,7 @@
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+// Pure, and kept that way so it can be unit-tested with no DOM -- see its own comment.
+import { dropHeavyFields } from "@/lib/log-payload-trim";
 
 // Lets the athlete workout page keep working -- viewing and logging -- in a
 // gym with no signal, the single most common complaint about apps like
@@ -60,13 +62,6 @@ function readQueue(): PendingLog[] {
   }
 }
 
-// The heaviest things a queued /log payload carries, in the order it is
-// worth giving them up. A camera-tracked set's skeletonFrames is by far the
-// largest -- one full-body landmark set per frame for the whole recording --
-// followed by the traces. All three are review/overlay detail: losing them
-// costs the coach a skeleton replay, while losing the ENTRY costs the
-// athlete the workout. See dropHeavyFields.
-const HEAVY_SET_FIELDS = ["skeletonFrames", "barPathTrace", "armPathTrace", "pathTrace"] as const;
 
 function trySetQueue(entries: PendingLog[]): boolean {
   try {
@@ -101,37 +96,6 @@ function evictDayCaches(): boolean {
   return removedAny;
 }
 
-/** Strips the bulky capture detail out of a /log payload's sets, in place on
- * a shallow-cloned copy, returning null when the payload isn't the shape
- * this knows how to trim (in which case the caller has nothing to try). The
- * athlete's actual numbers -- reps, weight, velocities, heights, trust
- * scores, faults -- all survive; only the frame-by-frame replay data goes. */
-function dropHeavyFields(payload: unknown): unknown | null {
-  if (typeof payload !== "object" || payload === null) return null;
-  const root = payload as { items?: unknown };
-  if (!Array.isArray(root.items)) return null;
-  let dropped = false;
-  const items = root.items.map((item) => {
-    if (typeof item !== "object" || item === null) return item;
-    const sets = (item as { sets?: unknown }).sets;
-    if (!Array.isArray(sets)) return item;
-    return {
-      ...(item as object),
-      sets: sets.map((set) => {
-        if (typeof set !== "object" || set === null) return set;
-        const trimmed = { ...(set as Record<string, unknown>) };
-        for (const field of HEAVY_SET_FIELDS) {
-          if (trimmed[field] != null) {
-            trimmed[field] = null;
-            dropped = true;
-          }
-        }
-        return trimmed;
-      }),
-    };
-  });
-  return dropped ? { ...(payload as object), items } : null;
-}
 
 // Writes that MUST NOT silently vanish go through queueLog/writeQueueOrWarn
 // below; this stays the plain best-effort write for the paths where losing
