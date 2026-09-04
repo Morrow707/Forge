@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { notifyUser } from "./notify";
+import { scheduleDailyJob } from "./job-lock";
 
 // The one background job in the app -- everything else here is request-
 // triggered (see the "route layer owns notifyUser" convention throughout
@@ -51,18 +52,12 @@ export async function runReflectionJob() {
   }
 }
 
-// Runs once shortly after boot (data has to exist and this shouldn't block
-// startup) and then daily -- daily rather than the job's own weekly
-// cooldown so a finding lands within a day of first becoming true instead
-// of waiting up to a week for the next check.
+// Runs daily at a fixed UTC hour under an advisory lock (see job-lock.ts).
+// Daily rather than the job's own weekly cooldown so a finding lands within
+// a day of first becoming true instead of waiting up to a week for the next
+// check. Nothing here deletes data, but it does push+email every admin, and
+// the old boot-delay timer meant a deploy could re-notify them all over
+// again -- and two instances would notify each admin twice.
 export function startReflectionJob() {
-  setTimeout(() => {
-    runReflectionJob();
-  }, 60_000);
-  setInterval(
-    () => {
-      runReflectionJob();
-    },
-    24 * 60 * 60 * 1000,
-  );
+  scheduleDailyJob("reflection", 7, runReflectionJob);
 }

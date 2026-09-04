@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { notifyUser } from "./notify";
+import { scheduleDailyJob } from "./job-lock";
 
 // Daily sweep of form-check AND skill-drill videos -- applies to every
 // athlete (coached or Free Agent alike, see shared/video-retention.ts's own
@@ -87,19 +88,16 @@ export async function runStaleAccountVideoSweep() {
   }
 }
 
-// Same boot-delay-then-daily-interval shape as data-retention-job.ts's
-// startDataRetentionJob -- data has to exist and this shouldn't block
-// startup.
+// Scheduled on a fixed wall-clock hour under an advisory lock (see
+// job-lock.ts) rather than the old boot-delay-then-daily-interval shape.
+// Both of these sweeps permanently delete athletes' video files, and the
+// old shape restarted its timer on every deploy -- so the "daily" purge
+// actually ran once per deploy, and two overlapping instances during a
+// rolling deploy would each run it. The two sweeps take separate locks so
+// a slow cap sweep can't block the stale-account one on another instance,
+// and are staggered an hour apart so they don't contend for the same
+// connections.
 export function startVideoRetentionJob() {
-  setTimeout(() => {
-    runVideoRetentionSweep();
-    runStaleAccountVideoSweep();
-  }, 120_000);
-  setInterval(
-    () => {
-      runVideoRetentionSweep();
-      runStaleAccountVideoSweep();
-    },
-    24 * 60 * 60 * 1000,
-  );
+  scheduleDailyJob("video-retention-cap-sweep", 9, runVideoRetentionSweep);
+  scheduleDailyJob("stale-account-video-sweep", 10, runStaleAccountVideoSweep);
 }
