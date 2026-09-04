@@ -247,13 +247,30 @@ app.post(
   },
 );
 
-// Raised from Express's 100kb default -- the AI form-check route accepts a
-// handful of base64-encoded JPEG frames per request, which clears 100kb
-// easily even resized down. Raised again to 200mb so the admin AI-teaching
-// chats (coach AI, nutrition AI, camera/movement AI) can accept a single
-// large paste -- a whole reference document, not just a chat message -- in
-// one request; those routes' own Zod schemas have no length cap either.
-app.use(express.json({ limit: "200mb" }));
+// Raised from Express's 100kb default -- the AI form-check and photo-analysis
+// routes accept base64-encoded JPEGs, which clear 100kb easily even resized
+// down, and the admin AI-teaching chats (coach AI, nutrition AI,
+// camera/movement AI) accept a single large paste: a whole reference
+// document, not just a chat message.
+//
+// It was 200mb, which is a ceiling nothing legitimate comes close to and a
+// real hazard on a 1GB Postgres plan. The workout-log route writes eleven
+// json columns straight out of its request body, and the capture arrays
+// feeding them had no length bound of their own (see setLogInputSchema),
+// so one authenticated request could push most of the database's capacity
+// through in a single insert. That is now bounded from both directions:
+// those arrays have caps, and this is the outer wall.
+//
+// 25mb is chosen to clear every real use with a wide margin rather than to
+// sit near one. As plain text it is roughly twelve thousand pages, far past
+// any paste. As base64 it is about 18mb of image bytes, several phone
+// photos at full size. And it comfortably fits the largest plausible
+// tracked set now that skeletonFrames is capped.
+//
+// File uploads do not come through here at all -- video and image uploads
+// are multipart and carry their own per-route multer fileSize limits, which
+// this does not touch.
+app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {

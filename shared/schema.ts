@@ -6282,8 +6282,8 @@ export const repBreakdownEntrySchema = z.object({
 });
 
 export const armPathTraceSchema = z.object({
-  left: z.array(barPathPointSchema),
-  right: z.array(barPathPointSchema),
+  left: z.array(barPathPointSchema).max(7200),
+  right: z.array(barPathPointSchema).max(7200),
 });
 
 // One entry per rep of a bilateral lower-body lift, comparing how fast each
@@ -6481,6 +6481,19 @@ export const jumpBreakdownEntrySchema = z.object({
   boxClearanceCm: z.number().nullable().optional(),
 });
 
+// Every array below is bounded. None of them was, and the workout-log route writes eleven of
+// these straight into json columns, so one authenticated request could push most of a 1GB
+// database's capacity through in a single insert (see server/index.ts's body-limit comment for
+// the other half of this).
+//
+// The caps are sized to clear real captures with a wide margin, not to sit near them, so a
+// legitimate set is never rejected mid-workout:
+//   - Frame-rate arrays assume a four-minute set, which is far longer than any real one (a
+//     twenty-rep squat set runs about ninety seconds, and the two dialogs that DO cap recording
+//     stop at fifteen and thirty seconds). skeletonFrames lands at roughly 15fps after
+//     SKELETON_REPLAY_STRIDE, so 3,600; the denser position traces at roughly 30fps, so 7,200.
+//   - Per-rep arrays allow 200 reps in one set, which no programmable set approaches.
+//   - formFaults draws from a closed vocabulary of fault codes, so 50 is already unreachable.
 export const setLogInputSchema = z.object({
   setNumber: z.number(),
   reps: z.string().optional().nullable(),
@@ -6493,13 +6506,13 @@ export const setLogInputSchema = z.object({
   concentricSeconds: z.number().optional().nullable(),
   eccentricSeconds: z.number().optional().nullable(),
   barPathDeviationCm: z.number().optional().nullable(),
-  barPathTrace: z.array(barPathPointSchema).optional().nullable(),
-  formFaults: z.array(formFaultSchema).optional().nullable(),
-  repBreakdown: z.array(repBreakdownEntrySchema).optional().nullable(),
+  barPathTrace: z.array(barPathPointSchema).max(7200).optional().nullable(),
+  formFaults: z.array(formFaultSchema).max(50).optional().nullable(),
+  repBreakdown: z.array(repBreakdownEntrySchema).max(200).optional().nullable(),
   armPathTrace: armPathTraceSchema.optional().nullable(),
-  legDriveAsymmetry: z.array(legDriveAsymmetryEntrySchema).optional().nullable(),
-  armDriveAsymmetry: z.array(armDriveAsymmetryEntrySchema).optional().nullable(),
-  trustScores: z.array(repTrustScoreSchema).optional().nullable(),
+  legDriveAsymmetry: z.array(legDriveAsymmetryEntrySchema).max(200).optional().nullable(),
+  armDriveAsymmetry: z.array(armDriveAsymmetryEntrySchema).max(200).optional().nullable(),
+  trustScores: z.array(repTrustScoreSchema).max(200).optional().nullable(),
   peakPowerWatts: z.number().optional().nullable(),
   meanPowerWatts: z.number().optional().nullable(),
   eccentricMeanVelocityMps: z.number().optional().nullable(),
@@ -6519,7 +6532,7 @@ export const setLogInputSchema = z.object({
   jumpDistanceCm: z.number().optional().nullable(),
   groundContactSeconds: z.number().optional().nullable(),
   reactiveStrengthIndex: z.number().optional().nullable(),
-  jumpBreakdown: z.array(jumpBreakdownEntrySchema).optional().nullable(),
+  jumpBreakdown: z.array(jumpBreakdownEntrySchema).max(200).optional().nullable(),
   swingSeparationDeg: z.number().optional().nullable(),
   swingTempoRatio: z.number().optional().nullable(),
   swingBackswingMs: z.number().optional().nullable(),
@@ -6529,7 +6542,7 @@ export const setLogInputSchema = z.object({
   medBallPeakSpeedMps: z.number().optional().nullable(),
   medBallReleaseHeightCm: z.number().optional().nullable(),
   medBallTrustScore: setTrustScoreSchema.optional().nullable(),
-  medBallRepBreakdown: z.array(medBallRepBreakdownEntrySchema).optional().nullable(),
+  medBallRepBreakdown: z.array(medBallRepBreakdownEntrySchema).max(200).optional().nullable(),
   kbSwingPeakSpeedMps: z.number().optional().nullable(),
   kbSwingPeakHeightCm: z.number().optional().nullable(),
   kbSwingTrustScore: setTrustScoreSchema.optional().nullable(),
@@ -6538,7 +6551,7 @@ export const setLogInputSchema = z.object({
   horizontalLoadAvgSpeedYardsPerSec: z.number().optional().nullable(),
   captureDeviceInfo: captureDeviceInfoSchema.optional().nullable(),
   trackingDiagnostics: trackingDiagnosticsSchema.optional().nullable(),
-  skeletonFrames: z.array(skeletonReplayFrameSchema).optional().nullable(),
+  skeletonFrames: z.array(skeletonReplayFrameSchema).max(3600).optional().nullable(),
 });
 
 export const logEntryInputSchema = z
@@ -6555,7 +6568,10 @@ export const logEntryInputSchema = z
     weightUnit: z.enum(["lbs", "kg"]).optional().nullable(),
     rpe: z.number().optional().nullable(),
     notes: z.string().optional().nullable(),
-    sets: z.array(setLogInputSchema).default([]),
+    // One entry is one exercise's worth of sets. 100 is far past any real
+    // prescription and stops a single entry carrying an unbounded number of
+    // capture payloads.
+    sets: z.array(setLogInputSchema).max(100).default([]),
   })
   .refine(
     (data) => (data.programExerciseId != null) !== (data.correctiveId != null),
@@ -6572,7 +6588,10 @@ export const submitWorkoutLogSchema = z.object({
   programDayId: z.number(),
   date: z.string(),
   completed: z.boolean().default(false),
-  entries: z.array(logEntryInputSchema).default([]),
+  // Exercises logged in one day. The same reasoning as sets above, one
+  // level up: without this, the per-set caps could still be multiplied by an
+  // unbounded number of entries in the same request.
+  entries: z.array(logEntryInputSchema).max(100).default([]),
 });
 
 // ---------- Types ----------
