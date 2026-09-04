@@ -1060,7 +1060,16 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // against, which is exactly why it's gated behind its own stride constant from day one
         // (see body3DDetectionStride below) rather than trusted to run every sampled frame like
         // poseRequest/handPoseRequest already are.
-        let body3DRequest: VNDetectHumanBodyPose3DRequest? = {
+        // Typed as the pre-17-available VNRequest base class, not
+        // VNDetectHumanBodyPose3DRequest itself -- verify_build caught that a stored
+        // variable's static TYPE ANNOTATION is checked against the deployment target
+        // (15.0) independent of the runtime #available guard inside the closure below;
+        // only the guarded CONSTRUCTOR CALL was ever conditional, but the type name in
+        // the annotation still needed to resolve on every deployment target. VNRequest
+        // (the same common base every other request in this file already uses) sidesteps
+        // that entirely -- .perform([body3DRequest]) and .results below both operate on
+        // VNRequest's own pre-17 API surface, so nothing downstream needs to change.
+        let body3DRequest: VNRequest? = {
             guard #available(iOS 17.0, *) else { return nil }
             return VNDetectHumanBodyPose3DRequest()
         }()
