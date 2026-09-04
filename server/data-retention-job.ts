@@ -1,4 +1,5 @@
 import { storage } from "./storage";
+import { scheduleDailyJob } from "./job-lock";
 
 // Daily sweep that purges raw video for Tier 1/2 minor athletes once it's
 // past that tier's configured retention window (shared/privacy-tiers.ts) --
@@ -43,16 +44,10 @@ export async function runDataRetentionJob() {
   }
 }
 
-// Same boot-delay-then-daily-interval shape as reflection-job.ts's
-// startReflectionJob -- data has to exist and this shouldn't block startup.
+// Scheduled on a fixed wall-clock hour under an advisory lock (see
+// job-lock.ts). This job permanently deletes minor athletes' raw video, so
+// it must not run once per deploy (which the old boot-delay timer made it
+// do) and must not run on two instances at once.
 export function startDataRetentionJob() {
-  setTimeout(() => {
-    runDataRetentionJob();
-  }, 90_000);
-  setInterval(
-    () => {
-      runDataRetentionJob();
-    },
-    24 * 60 * 60 * 1000,
-  );
+  scheduleDailyJob("data-retention", 8, runDataRetentionJob);
 }
