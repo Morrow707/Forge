@@ -573,15 +573,16 @@ export function AvSprintTrackerDialog({
                 Checks hip drop during stance. Won't catch forward lean.
               </p>
             </button>
-            {/* The app is portrait-locked, so turning the phone leaves this UI sideways --
-                which reads as a bug unless it is asked for on purpose. Said here, on the last
-                screen before the camera opens, rather than over the live preview where it
-                would be competing with the framing guides. */}
+            {/* The screen genuinely rotates for this tracker (AppDelegate's
+                supportedInterfaceOrientationsFor, flipped by AvBodyTrackingPlugin while a
+                landscape capture is open), so this explains WHY rather than apologising for a
+                sideways layout. Said on the last screen before the camera opens rather than
+                over the live preview, where it would compete with the framing guides. */}
             <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">Turn the phone sideways for this one.</span>{" "}
-              A sprint runs across the frame, so landscape roughly halves how far back the phone
-              has to sit -- about 90ft instead of 240ft for a 60-yard run, or about 70ft on the
-              0.5x lens. The buttons will look rotated while you set up; that is expected.
+              <span className="font-semibold text-foreground">This one records sideways.</span>{" "}
+              The screen turns with it. A sprint runs across the frame, so landscape roughly
+              halves how far back the phone has to sit -- about 90ft instead of 240ft for a
+              60-yard run, or about 70ft on the 0.5x lens.
             </p>
             <DialogFooter>
               <Button disabled={!cameraAngle} onClick={() => changeStep("calibrate")}>

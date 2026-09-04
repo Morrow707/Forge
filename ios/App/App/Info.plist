@@ -64,9 +64,16 @@
 	     multitasking (error 90474, which the first attempt at this fix hit),
 	     and nothing about the reported bug involved iPad in the first
 	     place -- every report has been on iPhone. -->
+	<!-- Landscape is advertised here ONLY so iOS will consider rotating for the sprint
+	     tracker. It does not mean the app is free to rotate: AppDelegate's
+	     supportedInterfaceOrientationsFor returns .portrait for every screen except while
+	     AvBodyTrackingPlugin has a landscape capture open, and that callback overrides this
+	     list. Removing either half breaks the sprint camera or unlocks rotation everywhere. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

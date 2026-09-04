@@ -111,6 +111,19 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       const r = containerRef.current?.getBoundingClientRect();
       if (r) void updateAvPreviewRect(r);
     }
+    // The preview layer is a NATIVE view positioned behind the web view at a rect measured in
+    // CSS pixels, so it does not move with the layout on its own -- every change of the
+    // container's box has to be pushed down explicitly. A rotation is the largest such change
+    // there is (the sprint tracker now rotates the interface, see AppDelegate's
+    // supportedInterfaceOrientationsFor), and it is also the one WKWebView is least reliable
+    // about reporting: "resize" may fire before the new geometry has settled, or land on the
+    // pre-rotation size. Re-measuring on the next frame after the event, in addition to
+    // handling the event itself, costs one extra rect read and removes a preview stuck at the
+    // old portrait box over a landscape camera.
+    function onOrientationChange() {
+      onResize();
+      requestAnimationFrame(onResize);
+    }
 
     function tryStart() {
       if (cancelled) return;
@@ -148,6 +161,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
           if (!cancelled) setError(err instanceof Error ? err.message : "Could not start camera");
         });
       window.addEventListener("resize", onResize);
+      window.addEventListener("orientationchange", onOrientationChange);
     }
 
     tryStart();
@@ -155,6 +169,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       cancelled = true;
       if (rafId != null) cancelAnimationFrame(rafId);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onOrientationChange);
       if (started) {
         setAvCameraActive(false);
         void stopAvPreview();

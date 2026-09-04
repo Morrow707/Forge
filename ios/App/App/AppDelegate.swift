@@ -11,6 +11,38 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    // The app is portrait everywhere except one screen. Info.plist has to advertise landscape
+    // for iPhone before iOS will ever consider rotating, but advertising it alone would let
+    // EVERY screen rotate into a layout nothing here is designed for. This callback is what
+    // keeps that from happening: implemented on the app delegate, it takes precedence over the
+    // root view controller's own answer, so orientation is decided in exactly one place.
+    //
+    // The single exception is the sprint tracker. A sprint is the one capture where the athlete
+    // travels tens of metres ACROSS the frame, and a portrait 16:9 readout puts the narrow axis
+    // on precisely that travel -- roughly 240ft of standoff for a 60-yard run against roughly
+    // 90ft in landscape. AvBodyTrackingPlugin flips this while that camera is open and flips it
+    // back on stop, so the window is exactly as long as the sprint capture itself.
+    //
+    // In-memory and non-persisted on purpose: if the app is killed mid-capture, the next launch
+    // starts portrait rather than reopening stuck sideways.
+    static var landscapeCaptureActive = false
+
+    func application(
+        _ application: UIApplication,
+        supportedInterfaceOrientationsFor window: UIWindow?
+    ) -> UIInterfaceOrientationMask {
+        // .landscape, not .allButUpsideDown: while the sprint camera is up, the interface
+        // should ROTATE rather than merely be allowed to. Returning a mask that still contains
+        // portrait would leave a phone lying flat on the ground to pick whichever way it
+        // happened to settle.
+        if AppDelegate.landscapeCaptureActive {
+            return .landscape
+        }
+        // iPad has always been free to rotate (see Info.plist) and nothing about the sprint
+        // change should take that away.
+        return UIDevice.current.userInterfaceIdiom == .pad ? .all : .portrait
+    }
+
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
         // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.

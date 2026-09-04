@@ -264,6 +264,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // long edge, which is the orientation a phone naturally rests in against a wall or a
         // bag. Anything unrecognised stays portrait.
         captureOrientation = call.getString("orientation") == "landscape" ? .landscapeRight : .portrait
+        applyInterfaceOrientationLock(landscape: captureOrientation == .landscapeRight)
         purgeStaleRecordings()
 
         // Explicit authorizationStatus handling -- ARKit's ARSession absorbed this
@@ -463,7 +464,44 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             self.session = nil
             self.currentInput = nil
             self.movieOutput = nil
+            // Hand rotation back before resolving. stop() runs on every dialog close, including
+            // the cancel and error paths, so this is the one place guaranteed to be reached --
+            // leaving it to the sprint dialog's own success path would strand the whole app
+            // sideways whenever a capture was abandoned.
+            self.applyInterfaceOrientationLock(landscape: false)
             call.resolve()
+        }
+    }
+
+    // Opens or closes the one landscape window this app allows. AppDelegate's
+    // supportedInterfaceOrientationsFor reads the flag; the two calls after it are what make
+    // iOS act on the change immediately rather than at the next device rotation the user
+    // happens to perform.
+    //
+    // setNeedsUpdateOfSupportedInterfaceOrientations tells UIKit to re-ask the delegate, and
+    // requestGeometryUpdate then asks the window scene to actually move. Both are needed:
+    // without the first, the new answer is never read; without the second, a phone already
+    // lying flat never triggers a rotation on its own and the interface stays portrait over a
+    // landscape camera feed -- exactly the broken-looking state this is meant to remove.
+    private func applyInterfaceOrientationLock(landscape: Bool) {
+        DispatchQueue.main.async {
+            AppDelegate.landscapeCaptureActive = landscape
+            guard
+                let scene = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first(where: { $0.activationState == .foregroundActive })
+                    ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
+            else { return }
+            scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            let mask: UIInterfaceOrientationMask = landscape ? .landscapeRight : .portrait
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
+                // Non-fatal by design. A refused geometry update leaves the interface where it
+                // was; the capture connections are oriented independently (see
+                // captureOrientation), so the RECORDING is still correct either way and only
+                // the on-screen layout is affected.
+                self.logDiag("orientation update refused: \(error.localizedDescription)")
+            }
+            self.logDiag("interface orientation lock -> \(landscape ? "landscape" : "portrait")")
         }
     }
 
