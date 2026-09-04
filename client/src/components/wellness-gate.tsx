@@ -58,19 +58,35 @@ type WellnessCheckin = {
   heartRateRecovery: number | null;
 } | null;
 
-/** Inline, always-editable check-in card for today's training session --
- * not a blocking gate. Renders a one-line summary once submitted (tap to
- * edit, in case an athlete under- or over-estimated how sore or stressed
- * they were), or the open form when there's nothing on file yet. Never
- * blocks the rest of the page: the workout underneath is fully usable
- * either way. The 0-100 readiness score and its inputs always show in the
- * collapsed summary; the body-part pain map is deliberately left out of it
- * and only ever appears in the expanded edit form. */
-export function WellnessGate() {
+/** Inline check-in card for ONE training day -- not a blocking gate.
+ * Renders a one-line summary once submitted (tap to edit, in case an
+ * athlete under- or over-estimated how sore or stressed they were), or the
+ * open form when there's nothing on file yet. Never blocks the rest of the
+ * page: the workout underneath is fully usable either way. The 0-100
+ * readiness score and its inputs always show in the collapsed summary; the
+ * body-part pain map is deliberately left out of it and only ever appears
+ * in the expanded edit form.
+ *
+ * `date` is the training day this card belongs to, not "now" -- it comes
+ * from the day page's own route param, the same one ReadinessBanner beside
+ * it already uses. Before this, the card asked the server for whatever
+ * today was and ignored the page it was sitting on, so an athlete opening
+ * Monday's workout on Tuesday (to tick off the last two exercises they
+ * forgot to mark complete) was handed a blank readiness form for Tuesday,
+ * and filling it in also started a CARA training-time session for someone
+ * who wasn't training.
+ *
+ * `editable` is false for any day that isn't the athlete's current one.
+ * Then a day with a reading on file shows it read-only, and a day without
+ * one shows nothing at all rather than an empty form -- backfilling
+ * readiness for a day that has passed would quietly rewrite the trend
+ * chart, the ACWR windows, and the coach's flagged-today count. */
+export function WellnessGate({ date, editable }: { date: string; editable: boolean }) {
   const qc = useQueryClient();
+  const checkinQueryKey = ["/api/athlete/wellness/today", date] as const;
   const { data, isLoading } = useQuery<WellnessCheckin>({
-    queryKey: ["/api/athlete/wellness/today"],
-    queryFn: () => getJson("/api/athlete/wellness/today"),
+    queryKey: checkinQueryKey,
+    queryFn: () => getJson(`/api/athlete/wellness/today?date=${encodeURIComponent(date)}`),
   });
 
   // Same query (and cache -- AppShell already primes it) the rest of the
@@ -189,7 +205,11 @@ export function WellnessGate() {
   // would need native Swift + HealthKit background delivery this plugin
   // doesn't expose over its JS bridge).
   useEffect(() => {
-    if (data || isLoading || !isNativeHealthSupported()) return;
+    // `!editable` short-circuits with the rest: a day that can't be filled
+    // in has nothing to pre-fill, so opening an old workout must not prompt
+    // for Health access or start a five-minute poll behind a card the
+    // athlete can only read.
+    if (data || isLoading || !editable || !isNativeHealthSupported()) return;
     let cancelled = false;
 
     (async () => {
@@ -206,11 +226,12 @@ export function WellnessGate() {
       resumeListener.then((l) => l.remove());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, isLoading]);
+  }, [data, isLoading, editable]);
 
   const submitMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/athlete/wellness", {
+        date,
         sleepHours: Number(sleepHours),
         soreness,
         stress,
@@ -227,7 +248,7 @@ export function WellnessGate() {
       return res.json();
     },
     onSuccess: (checkin) => {
-      qc.setQueryData(["/api/athlete/wellness/today"], checkin);
+      qc.setQueryData(checkinQueryKey, checkin);
       // The very first submission of the day may have just started a CARA
       // training-time session server-side -- refetch so the timer widget
       // picks it up immediately instead of waiting up to 30s for its own
@@ -240,6 +261,10 @@ export function WellnessGate() {
   });
 
   if (isLoading) return null;
+  // A day that isn't the athlete's current one and has no reading on file
+  // renders nothing at all -- offering the form here is exactly the
+  // backfill this card now refuses (see the component's own docblock).
+  if (!editable && !data) return null;
 
   const sleepValue = Number(sleepHours);
   const canSubmit =
@@ -252,8 +277,67 @@ export function WellnessGate() {
     hydration != null &&
     mentalFocus != null;
 
-  if (data && !editing) {
+  // `!editable` joins the condition so a read-only day can never sit in the
+  // edit state -- nothing can set `editing` there, but this makes it true by
+  // construction rather than by the absence of a button.
+  if (data && (!editing || !editable)) {
     const { score, level } = computeReadiness(data);
+    const summary = (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                {score}/100
+                <span className="font-semibold text-muted-foreground">{READINESS_LABEL[level]}</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Moon className="h-3.5 w-3.5 shrink-0" /> {data.sleepHours}h sleep
+              </span>
+              {data.restingHeartRate != null && (
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.restingHeartRate)} bpm
+                  RHR
+                </span>
+              )}
+              {data.hrv != null && (
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <Watch className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.hrv)}ms HRV
+                </span>
+              )}
+              {data.heartRateRecovery != null && (
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <Gauge className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.heartRateRecovery)} bpm
+                  HRR
+                </span>
+              )}
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Activity className="h-3.5 w-3.5 shrink-0" />
+                {SORENESS_SCALE.find((s) => s.value === data.soreness)?.label}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Brain className="h-3.5 w-3.5 shrink-0" />
+                {STRESS_SCALE.find((s) => s.value === data.stress)?.label}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Droplets className="h-3.5 w-3.5 shrink-0" />
+                {HYDRATION_SCALE.find((s) => s.value === data.hydration)?.label}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Focus className="h-3.5 w-3.5 shrink-0" />
+                {MENTAL_FOCUS_SCALE.find((s) => s.value === data.mentalFocus)?.label}
+              </span>
+            </div>
+    );
+
+    // Read-only: the same summary, minus the tap-to-edit affordance and the
+    // Health re-sync button, both of which would write to a day that is
+    // already closed.
+    if (!editable) {
+      return (
+        <div className="flex w-full items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5">
+          {summary}
+        </div>
+      );
+    }
+
     return (
       <div className="flex gap-2">
         <button
@@ -261,48 +345,7 @@ export function WellnessGate() {
           onClick={() => setEditing(true)}
           className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-primary/40"
         >
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-              {score}/100
-              <span className="font-semibold text-muted-foreground">{READINESS_LABEL[level]}</span>
-            </span>
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <Moon className="h-3.5 w-3.5 shrink-0" /> {data.sleepHours}h sleep
-            </span>
-            {data.restingHeartRate != null && (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.restingHeartRate)} bpm
-                RHR
-              </span>
-            )}
-            {data.hrv != null && (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                <Watch className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.hrv)}ms HRV
-              </span>
-            )}
-            {data.heartRateRecovery != null && (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                <Gauge className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.heartRateRecovery)} bpm
-                HRR
-              </span>
-            )}
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <Activity className="h-3.5 w-3.5 shrink-0" />
-              {SORENESS_SCALE.find((s) => s.value === data.soreness)?.label}
-            </span>
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <Brain className="h-3.5 w-3.5 shrink-0" />
-              {STRESS_SCALE.find((s) => s.value === data.stress)?.label}
-            </span>
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <Droplets className="h-3.5 w-3.5 shrink-0" />
-              {HYDRATION_SCALE.find((s) => s.value === data.hydration)?.label}
-            </span>
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <Focus className="h-3.5 w-3.5 shrink-0" />
-              {MENTAL_FOCUS_SCALE.find((s) => s.value === data.mentalFocus)?.label}
-            </span>
-          </div>
+          {summary}
           <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
             <Pencil className="h-3 w-3" /> Edit
           </span>

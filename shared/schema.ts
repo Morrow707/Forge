@@ -3030,6 +3030,17 @@ export const wellnessCheckins = pgTable(
 export type WellnessCheckin = typeof wellnessCheckins.$inferSelect;
 
 export const submitWellnessCheckinSchema = z.object({
+  // Which training day this reading is FOR, not when it was typed. The
+  // athlete's day page is routed per (assignment, day, date) and its
+  // readiness banner already resolves per that date -- this is the
+  // check-in card catching up, so a reading taken on the page for a given
+  // day is stored against that day rather than against whatever the
+  // server's clock says. Optional so an older client that sends nothing
+  // keeps the previous "server's today" behavior exactly. The route bounds
+  // it to within a day of the server's own date (see its own comment): a
+  // client's local calendar date can legitimately sit either side of UTC's,
+  // but nothing beyond that is a real check-in, it's a backfill.
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date").optional(),
   sleepHours: z.number().min(0).max(24),
   soreness: z.number().int().min(1).max(5),
   stress: z.number().int().min(1).max(5),

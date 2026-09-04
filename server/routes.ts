@@ -6522,11 +6522,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
-  // Once-per-day self-report -- inline and always editable on the
-  // athlete's training day page, not a blocking gate.
+  // How far either side of the server's own date a submitted check-in date
+  // may sit. One day, because that is exactly the spread real time zones
+  // produce: an athlete in the Americas can still be on yesterday's local
+  // calendar date when UTC has already rolled over, and one in Asia can
+  // already be on tomorrow's. Anything outside that window is not somebody
+  // checking in, it is a backfill of a day that has passed -- which would
+  // quietly rewrite readiness history, the ACWR windows built on it, and
+  // the coach's trend chart. Rejected rather than clamped, so a client bug
+  // surfaces as an error instead of silently writing the wrong day.
+  const WELLNESS_DATE_WINDOW_DAYS = 1;
+
+  function wellnessDateWithinWindow(date: string): boolean {
+    const submitted = Date.parse(`${date}T00:00:00Z`);
+    if (Number.isNaN(submitted)) return false;
+    const serverToday = Date.parse(`${todayIso()}T00:00:00Z`);
+    return Math.abs(submitted - serverToday) <= WELLNESS_DATE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  }
+
+  // The check-in for one training day. `date` is the day the reading is
+  // FOR, defaulting to the server's today so an older client that sends
+  // nothing behaves exactly as before. The athlete's day page passes its
+  // own date, so opening Monday's workout on Tuesday to tick off the last
+  // two exercises shows Monday's reading rather than an empty form for
+  // Tuesday -- see WellnessGate, and submitWellnessCheckinSchema.date.
+  // Kept at the /today path rather than renamed: an app already installed
+  // on a phone keeps calling this exact URL.
   app.get("/api/athlete/wellness/today", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
-    const checkin = await storage.getWellnessCheckin(user.id, todayIso());
+    const requested = typeof req.query.date === "string" ? req.query.date : null;
+    // A read of any date is harmless -- it is this athlete's own row either
+    // way -- so a malformed one just falls back to today rather than 400ing
+    // a page that is otherwise fine.
+    const date = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : todayIso();
+    const checkin = await storage.getWellnessCheckin(user.id, date);
     res.json(checkin ?? null);
   });
 
@@ -6536,13 +6565,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    // Only the very first submission of the day should start a CARA
+    const { date: submittedDate, ...values } = parsed.data;
+    if (submittedDate && !wellnessDateWithinWindow(submittedDate)) {
+      return res.status(400).json({
+        message: "That check-in is for a day that's already passed -- it can't be filled in now.",
+      });
+    }
+    const date = submittedDate ?? todayIso();
+    // Only the very first submission for this day should start a CARA
     // session -- re-editing an already-submitted check-in later (an
     // athlete correcting their sleep number after the fact) must never
     // spin up a second training-time timer.
-    const isFirstSubmissionToday = !(await storage.getWellnessCheckin(user.id, todayIso()));
-    const checkin = await storage.upsertWellnessCheckin(user.id, todayIso(), parsed.data);
-    if (isFirstSubmissionToday && (await storage.getCaraCapMinutesForAthlete(user.id)) != null) {
+    const isFirstSubmissionForDate = !(await storage.getWellnessCheckin(user.id, date));
+    const checkin = await storage.upsertWellnessCheckin(user.id, date, values);
+    if (isFirstSubmissionForDate && (await storage.getCaraCapMinutesForAthlete(user.id)) != null) {
       await storage.startCaraTrainingSession(user.id);
     }
     res.status(201).json(checkin);

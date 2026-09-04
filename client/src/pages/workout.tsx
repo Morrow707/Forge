@@ -1902,7 +1902,15 @@ export function WorkoutPage({
           come back and fix it before or during the session. */}
       {user?.role === "athlete" && !data.day.isRestDay && (
         <div className="mb-4 space-y-2">
-          <WellnessGate />
+          {/* The page's own date, not "now" -- see WellnessGate's docblock.
+              `editable` compares against the BROWSER's local date rather
+              than asking the server, because the server computes its today
+              in UTC: an athlete training on a US evening is already on the
+              server's tomorrow, and gating on that would hide the check-in
+              from the very session it belongs to. The server still bounds
+              what it accepts to within a day either side of its own date,
+              which is exactly the spread real time zones produce. */}
+          <WellnessGate date={date} editable={date === format(new Date(), "yyyy-MM-dd")} />
           <CaraTimer />
         </div>
       )}
