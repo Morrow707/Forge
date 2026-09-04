@@ -13,7 +13,8 @@
     "test": "vitest run",
     "db:push": "drizzle-kit push --force",
     "db:reconcile": "tsx server/reconcile-schema.ts",
-    "db:seed": "tsx server/seed.ts"
+    "db:seed": "tsx server/seed.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

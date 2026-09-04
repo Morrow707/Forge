@@ -16,5 +16,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["server/**/*.test.ts", "shared/**/*.test.ts"],
+    // *.itest.ts is the database-backed suite -- see
+    // vitest.integration.config.ts. Excluded here so `npm test` keeps
+    // running with no Postgres at all.
+    exclude: ["**/node_modules/**", "**/*.itest.ts"],
   },
 });

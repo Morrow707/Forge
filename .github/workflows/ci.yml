@@ -79,6 +79,19 @@ jobs:
           npm run db:reconcile
           npm run db:seed
 
+      # The half of the suite that needs a real database (*.itest.ts). It
+      # provisions its OWN database on this same server rather than using
+      # forge_ci above -- these tests truncate every table between cases,
+      # and pointing them at the database the steps above just seeded would
+      # destroy what those steps proved.
+      #
+      # Runs last for the same reason, and covers what `npm test` above
+      # structurally cannot: server/storage.ts is 21,000 lines of queries,
+      # and mocking Drizzle well enough for an assertion to mean anything
+      # would amount to asserting against the mock.
+      - name: Integration tests (real Postgres)
+        run: npm run test:integration
+
   # This is the actual fix for the gap that let the 2026-08-19/20 incident
   # (and this morning's repeat of it) reach production: build-and-migrate
   # above proved CI *catches* a bad schema/reconcile drift, but Render was
