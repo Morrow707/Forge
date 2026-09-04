@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, Check, X } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import { MEASURABLE_JOINTS, measureJoint } from "@/lib/joint-angles";
 import { cameraGoniometerJointFor, convertCameraAngle } from "@/lib/movement-screen-vision";
 
@@ -89,7 +89,10 @@ export function AvGoniometerCaptureDialog({
     if (!result) return;
     const angles: number[] = [];
     for (const frame of result.rawFrames) {
-      const worldLm = visionJointsToWorldLandmarks(frame);
+      // Phase B: real depth when this frame has it -- see av-bar-tracker-dialog.tsx's own
+      // identical comment for the full reasoning. No scaleFactor here at all either way --
+      // measureJoint's angle math is scale-invariant, it only needs real z variation to exist.
+      const worldLm = visionBody3DToWorldLandmarks(frame) ?? visionJointsToWorldLandmarks(frame);
       const measured = measureJoint(null, worldLm, joint);
       const converted = measured ? convertCameraAngle(jointKey, movementKey, measured.insideDeg) : null;
       if (converted != null) angles.push(converted);

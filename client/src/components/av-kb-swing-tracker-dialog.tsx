@@ -12,7 +12,12 @@ import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoint } from "@/lib/vision-body-landmarks";
+import {
+  visionJointsToWorldLandmarks,
+  visionBody3DToWorldLandmarks,
+  visionImplementToPoint,
+  type ImplementPoint,
+} from "@/lib/vision-body-landmarks";
 import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
 import {
   calibrateFromFrames,
@@ -228,7 +233,11 @@ export function AvKbSwingTrackerDialog({
     // up front.
     const bellPoints: { t: number; x: number; y: number; confidence: number }[] = [];
     for (const f of rawFrames) {
-      const worldLm = scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
+      // Phase B: real depth when this frame has it -- see av-bar-tracker-dialog.tsx's own
+      // identical comment for the full reasoning (already real-world meters, checked per frame
+      // since availability can vary frame to frame even on iOS 17+).
+      const body3DLm = visionBody3DToWorldLandmarks(f);
+      const worldLm = body3DLm ?? scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
       const leftWrist = worldLm[POSE_LANDMARKS.LEFT_WRIST];
       const rightWrist = worldLm[POSE_LANDMARKS.RIGHT_WRIST];
       // Midpoint when both hands are visible (a standard two-handed swing); falls back to

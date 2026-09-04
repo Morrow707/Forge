@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Camera, Circle, Loader2, X } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import { assessOverheadSquat, type OverheadSquatAssessment } from "@/lib/movement-screen-vision";
 import type { PoseFrame } from "@/lib/pose-tracking";
 
@@ -73,10 +73,13 @@ export function AvOverheadSquatCaptureDialog({
     if (recordTimeoutRef.current) clearTimeout(recordTimeoutRef.current);
     const captured = await stopRecordingAndAnalyze();
     if (!captured) return;
+    // Phase B: real depth when a frame has it -- see av-bar-tracker-dialog.tsx's own identical
+    // comment for the full reasoning. Knee/ankle valgus ratio and torso lean are exactly the
+    // kind of metric that's only ever been a flattened 2D approximation on iOS until now.
     const frames: PoseFrame[] = captured.rawFrames.map((frame) => ({
       t: frame.timestamp,
       landmarks: [],
-      worldLandmarks: visionJointsToWorldLandmarks(frame),
+      worldLandmarks: visionBody3DToWorldLandmarks(frame) ?? visionJointsToWorldLandmarks(frame),
     }));
     const assessment = assessOverheadSquat(frames);
     if (!assessment) {

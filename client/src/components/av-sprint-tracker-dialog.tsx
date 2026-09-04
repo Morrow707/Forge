@@ -17,7 +17,7 @@ import { POSE_LANDMARKS, type PoseFrame } from "@/lib/pose-tracking";
 import { type PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import {
   detectSprintCrossings,
   detectSprintFaults,
@@ -327,10 +327,14 @@ export function AvSprintTrackerDialog({
       const hipLandmarks = sparseHipLandmarksFromVisionFrame(frame);
       const ref = deriveSprintReferencePoint(hipLandmarks);
       if (ref) pointsRef.current.push({ t: elapsedMs, x: ref.x });
+      // Phase B: real depth when a frame has it -- see av-bar-tracker-dialog.tsx's own identical
+      // comment. Sprint's own crossing detection (below) reads pointsRef, not this array's
+      // worldLandmarks, so this mainly benefits the review-step skeleton overlay's own angle
+      // tool, kept consistent with every other AV dialog rather than skipped as not worth it.
       framesRef.current.push({
         t: elapsedMs,
         landmarks: hipLandmarks,
-        worldLandmarks: visionJointsToWorldLandmarks(frame),
+        worldLandmarks: visionBody3DToWorldLandmarks(frame) ?? visionJointsToWorldLandmarks(frame),
       });
     }
 

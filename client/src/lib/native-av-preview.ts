@@ -72,6 +72,16 @@ export type PoseCameraDrift = { x: number; y: number };
 // convention as leftImplement above.
 export type PoseHandJoint = { hand: number; name: string; x: number; y: number; confidence: number };
 
+// Apple's own VNDetectHumanBodyPose3DRequest output (iOS 17+ only -- see AvAnalysisResult's own
+// body3DAvailable). Genuinely different coordinate space from every other joint this plugin
+// emits: real camera/skeleton-relative METERS (Vision's own VNPoint3D convention, relative to
+// the root/hip joint), not normalized 0-1 image-space -- see vision-body-landmarks.ts's
+// visionBody3DToWorldLandmarks for the bridge that writes these straight through with no
+// pixel-scale/Y-flip, unlike every 2D joint here. Omitted (not an empty array), same
+// omit-when-nil convention as handJoints, on any frame that didn't get a gated perform() call
+// (see AvBodyTrackingPlugin.swift's own body3DDetectionStride) or found no confident 3D pose.
+export type PoseBody3DJoint = { name: string; x: number; y: number; z: number; confidence: number };
+
 export type PoseFrame = {
   frameIndex: number;
   timestamp: number;
@@ -84,6 +94,7 @@ export type PoseFrame = {
   coreMlImplement?: PoseCoreMlImplement;
   cameraDrift?: PoseCameraDrift;
   handJoints?: PoseHandJoint[];
+  body3DJoints?: PoseBody3DJoint[];
 };
 
 // Shared by the plugin interface's own analyzeRecording method below and analyzeAvRecording's
@@ -129,6 +140,20 @@ export type AvAnalysisResult = {
   // visionFailureCount/maxInterFrameGapSeconds -- this is what decides whether hand tracking
   // needs its own sparser stride later, not something any metric reads.
   handPoseElapsedSeconds: number;
+  // Phase B diagnostics -- same reasoning as handPoseElapsedSeconds above, isolating
+  // VNDetectHumanBodyPose3DRequest's own cost. Always present (never omitted) -- unlike
+  // boxTopNormalizedY, this is a per-clip aggregate the native side always has a real number
+  // for, even when body3DFrameCount is 0 (nothing attempted) or body3DAvailable is false (iOS
+  // 15/16, the request was never even constructed).
+  body3DElapsedSeconds: number;
+  // How many sampled frames actually got a gated perform() call -- see
+  // AvBodyTrackingPlugin.swift's own body3DDetectionStride comment. Divides into
+  // body3DElapsedSeconds for a real per-call average, not one diluted by every skipped frame.
+  body3DFrameCount: number;
+  // Reflects the #available(iOS 17.0, *) gate itself, independent of whether any frame actually
+  // found a confident 3D pose this clip -- confirms the OS-version check fired correctly, not
+  // just that body3DJoints happened to come back empty on every frame.
+  body3DAvailable: boolean;
 };
 
 interface AvBodyTrackingPlugin {

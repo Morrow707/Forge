@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { Circle, Square, AlertTriangle, X, XCircle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import {
   calibrateFromFrames,
   calibrationMethodBreakdown,
@@ -181,11 +181,19 @@ export function AvSwingTrackerDialog({
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
     const calibrationFrames = calibrationMethodBreakdown(rawFrames);
 
-    const frames: PoseFrame[] = rawFrames.map((f) => ({
-      t: f.t,
-      landmarks: [],
-      worldLandmarks: scaleFactor != null ? scaleWorldLandmarks(f.worldLandmarks, scaleFactor) : f.worldLandmarks,
-    }));
+    // Phase B: real depth when a frame has it -- see av-bar-tracker-dialog.tsx's own identical
+    // comment for the full reasoning. This is the highest-value dialog for this swap: without
+    // real z, computeSeparationDeg's atan2(z-difference, x-difference) degenerates to reading
+    // almost pure x -- a rotating athlete's shoulder/hip line barely changes its OWN x-span, so
+    // peakSeparationDeg's whole premise depends on genuine z variation existing at all.
+    const frames: PoseFrame[] = rawFrames.map((f, i) => {
+      const body3DLm = visionBody3DToWorldLandmarks(nativeRawFrames[i]);
+      return {
+        t: f.t,
+        landmarks: [],
+        worldLandmarks: body3DLm ?? (scaleFactor != null ? scaleWorldLandmarks(f.worldLandmarks, scaleFactor) : f.worldLandmarks),
+      };
+    });
 
     const rotation = summarizeRotation(frames);
     const swing = summarizeSwing(frames);

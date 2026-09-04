@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks, visionBoxTopToWorldY } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks, visionBoxTopToWorldY } from "@/lib/vision-body-landmarks";
 import {
   deriveJumpPoint,
   detectFormFaults,
@@ -301,11 +301,18 @@ export function AvJumpTrackerDialog({
       return;
     }
 
-    const frames: PoseFrame[] = rawFrames.map((f) => ({
-      t: f.t,
-      landmarks: [],
-      worldLandmarks: scaleWorldLandmarks(f.worldLandmarks, scaleFactor),
-    }));
+    // Phase B: real depth when a frame has it -- see av-bar-tracker-dialog.tsx's own identical
+    // comment for the full reasoning. rawFrames/nativeRawFrames are positionally aligned (both
+    // derived from the same result.rawFrames via a plain, non-filtering .map()), so index i
+    // always names the same underlying frame in both arrays.
+    const frames: PoseFrame[] = rawFrames.map((f, i) => {
+      const body3DLm = visionBody3DToWorldLandmarks(nativeRawFrames[i]);
+      return {
+        t: f.t,
+        landmarks: [],
+        worldLandmarks: body3DLm ?? scaleWorldLandmarks(f.worldLandmarks, scaleFactor),
+      };
+    });
     // Same occlusion-gap bridging av-bar-tracker-dialog.tsx's own trace-building loop already
     // does. A jump's fastest, most blurred instant is exactly its mid-air phase -- a brief
     // ankle dropout there is common, and previously just silently dropped that frame from the

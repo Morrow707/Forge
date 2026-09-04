@@ -104,6 +104,41 @@ export function visionJointsToWorldLandmarks(frame: NativePoseFrame): Landmark[]
   return landmarks;
 }
 
+// Phase B: VNDetectHumanBodyPose3DRequest's own real depth (iOS 17+ only -- see
+// native-av-preview.ts's PoseBody3DJoint/AvAnalysisResult.body3DAvailable). A SEPARATE, parallel
+// bridge from visionJointsToWorldLandmarks above, not a replacement for it -- body3DJoints is
+// absent on iOS 15/16 and on any frame that found no confident 3D pose even on 17+, so the
+// caller picks per-frame which source to trust (see av-bar-tracker-dialog.tsx's own worldLm
+// construction for the fallback pattern this is meant to feed) rather than this bridge silently
+// merging two different-reliability sources into one.
+//
+// Reuses the exact same JOINT_NAME_TO_LANDMARK table above -- Vision's joint-name strings are
+// identical between the 2D and 3D APIs for every joint the two share (confirmed against Apple's
+// own published JointName case pages for this API, not assumed from the 2D table).
+// centerHead/topHead/centerShoulder/spine (this request's own 3D-only joints, no BlazePose
+// equivalent) stay unmapped, same as neck/root already do above.
+//
+// Deliberately NO pixel-scale or Y-flip here, unlike visionJointsToWorldLandmarks -- body3DJoints
+// already arrive in real-world meters, Vision's own sign convention (see
+// AvBodyTrackingPlugin.swift's own comment on point.position/VNPoint3D), not the raw
+// per-axis-independently-normalized 2D image space that transform exists to correct.
+//
+// Returns null (not an all-empty landmarks array) when nothing here actually mapped confidently
+// -- an empty-but-non-null array would look "real" to a naive truthy check at a call site and
+// suppress the 2D fallback exactly when it's still needed.
+export function visionBody3DToWorldLandmarks(frame: NativePoseFrame): Landmark[] | null {
+  if (!frame.body3DJoints || frame.body3DJoints.length === 0) return null;
+  const landmarks = emptyLandmarks();
+  let mappedAny = false;
+  for (const joint of frame.body3DJoints) {
+    const key = JOINT_NAME_TO_LANDMARK[joint.name];
+    if (!key || joint.confidence < MIN_JOINT_CONFIDENCE) continue;
+    landmarks[POSE_LANDMARKS[key]] = { x: joint.x, y: joint.y, z: joint.z, visibility: joint.confidence };
+    mappedAny = true;
+  }
+  return mappedAny ? landmarks : null;
+}
+
 // Phase 5: same pixel-scale + Y-flip transform as visionJointsToWorldLandmarks above, applied
 // to AvImplementTracker.swift's own leftImplement/rightImplement output instead of a body
 // joint -- see native-av-preview.ts's PoseImplement comment for why that's reported in the

@@ -181,6 +181,28 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         (.littleMCP, "littleMCP"), (.littlePIP, "littlePIP"), (.littleDIP, "littleDIP"), (.littleTip, "littleTip"),
     ]
 
+    // Phase B: VNHumanBodyPose3DObservation.JointName constants (iOS 17+), same mapped-to-plain-
+    // camelCase-string shape as bodyPoseJoints/handPoseJoints above. 17 joints total -- 12 have a
+    // direct bodyPoseJoints equivalent (both APIs share the same left/right shoulder/elbow/wrist/
+    // hip/knee/ankle vocabulary -- confirmed against Apple's own published JointName case pages,
+    // not guessed from the 2D table), plus root (also shared with the 2D table) and four
+    // 3D-only joints with no 2D equivalent: centerHead, topHead, centerShoulder, spine.
+    // #available-gated at the property itself (a computed static, evaluated once on first
+    // access) rather than gating every call site individually -- runPoseAnalysis's own
+    // body3DRequest local reads the SAME guard pattern to decide whether to build the request at
+    // all, so a pre-iOS-17 device simply never touches this table.
+    @available(iOS 17.0, *)
+    private static let body3DPoseJoints: [(VNHumanBodyPose3DObservation.JointName, String)] = [
+        (.centerHead, "centerHead"), (.topHead, "topHead"), (.centerShoulder, "centerShoulder"),
+        (.spine, "spine"), (.root, "root"),
+        (.leftShoulder, "leftShoulder"), (.rightShoulder, "rightShoulder"),
+        (.leftElbow, "leftElbow"), (.rightElbow, "rightElbow"),
+        (.leftWrist, "leftWrist"), (.rightWrist, "rightWrist"),
+        (.leftHip, "leftHip"), (.rightHip, "rightHip"),
+        (.leftKnee, "leftKnee"), (.rightKnee, "rightKnee"),
+        (.leftAnkle, "leftAnkle"), (.rightAnkle, "rightAnkle"),
+    ]
+
     @objc func isSupported(_ call: CAPPluginCall) {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         call.resolve([
@@ -1029,6 +1051,22 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // maximumHandCount=2 matches hand-tracking.ts's own numHands:2 on the MediaPipe side.
         let handPoseRequest = VNDetectHumanHandPoseRequest()
         handPoseRequest.maximumHandCount = 2
+        // Phase B: real depth, iOS 17+ only -- first #available gate in this file (deployment
+        // target is iOS 15.0). Built inside the guard itself (not constructed unconditionally
+        // and merely left unused pre-17) so the iOS-17-only initializer is never actually called
+        // on an older device -- nil here reads downstream as "not available," the same
+        // omit-rather-than-fail convention every other optional signal in this file already
+        // uses. A genuinely new, heavier per-frame cost with no existing precedent to size
+        // against, which is exactly why it's gated behind its own stride constant from day one
+        // (see body3DDetectionStride below) rather than trusted to run every sampled frame like
+        // poseRequest/handPoseRequest already are.
+        let body3DRequest: VNDetectHumanBodyPose3DRequest? = {
+            guard #available(iOS 17.0, *) else { return nil }
+            return VNDetectHumanBodyPose3DRequest()
+        }()
+        // Placeholder, not a measured value -- see body3DElapsedSeconds/body3DFrameCount below,
+        // the numbers this needs correcting from once real on-device timing exists.
+        let body3DDetectionStride = 3
         // Box jump's own object-detection signal -- see this file's own comment on
         // detectBoxTopCandidate below for the full reasoning. Configured once, reused every
         // sampled frame (Vision requests are safe to reuse across perform() calls -- only
@@ -1072,6 +1110,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // incremental per-frame cost, since that's what actually decides whether it's safe to
         // keep running on every sampled frame (see this file's own thermal-throttling history).
         var handPoseElapsedSeconds: Double = 0
+        // Phase B diagnostics -- same reasoning as handPoseElapsedSeconds above, isolating this
+        // genuinely new request's own cost so it's visible before deciding whether
+        // body3DDetectionStride needs widening. body3DFrameCount counts frames that actually got
+        // a gated perform() call (not every sampled frame -- see the stride check below), so
+        // elapsed/count gives a real per-call average, not one diluted by skipped frames.
+        var body3DElapsedSeconds: Double = 0
+        var body3DFrameCount = 0
 
         while reader.status == .reading {
             if analysisCancelled {
@@ -1209,6 +1254,50 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             }
             handPoseElapsedSeconds += Date().timeIntervalSince(handPoseStart)
 
+            // Phase B: real depth, iOS 17+ only -- see body3DRequest's own comment above for why
+            // this is nil (and this whole block a no-op) below that OS version. A separate
+            // perform() call on the same handler, same "isolate this request's own timing"
+            // reasoning as handPoseElapsedSeconds above, gated by its own stride (unlike hand
+            // pose, this hasn't earned "every sampled frame" trust yet -- see
+            // body3DDetectionStride's own comment).
+            var body3DJoints: [[String: Any]] = []
+            if let body3DRequest = body3DRequest, thisFrameIndex % body3DDetectionStride == 0 {
+                let body3DStart = Date()
+                do {
+                    try handler.perform([body3DRequest])
+                    if #available(iOS 17.0, *), let observation = body3DRequest.results?.first as? VNHumanBodyPose3DObservation {
+                        for (jointName, label) in Self.body3DPoseJoints {
+                            guard let point = try? observation.recognizedPoint(jointName), point.confidence > 0.1 else {
+                                continue
+                            }
+                            // .position is a simd_float4x4 (Apple's own documented convention for
+                            // every 3D point Vision reports, matching ARKit's own transform-matrix
+                            // shape) -- real-world meters, relative to the skeleton's root joint
+                            // (center of the hip), translation in the 4th column. NOT .localPosition
+                            // (relative to the PARENT joint in the skeleton hierarchy) -- every other
+                            // joint this plugin emits shares ONE coordinate space, and .position is
+                            // the one that matches that convention.
+                            let translation = point.position.columns.3
+                            body3DJoints.append([
+                                "name": label,
+                                "x": Double(translation.x),
+                                "y": Double(translation.y),
+                                "z": Double(translation.z),
+                                "confidence": Double(point.confidence),
+                            ])
+                        }
+                    }
+                } catch {
+                    // Deliberately not folded into visionFailureCount -- same reasoning as hand
+                    // pose's own catch block above: this is a brand-new, still-unproven request,
+                    // and conflating its failures with the already-trusted pose request's would
+                    // hide exactly the signal on-device validation needs to see.
+                    logDiag("3D body pose request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
+                }
+                body3DFrameCount += 1
+                body3DElapsedSeconds += Date().timeIntervalSince(body3DStart)
+            }
+
             if detectBox, thisFrameIndex % boxDetectionStride == 0,
                let candidate = detectBoxTopCandidate(
                    handler: handler, request: rectanglesRequest,
@@ -1308,6 +1397,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // genuinely "nothing to report this frame," the same semantics leftImplement/
             // cameraDrift already use, not core per-frame state every consumer depends on.
             if !handJoints.isEmpty { eventData["handJoints"] = handJoints }
+            if !body3DJoints.isEmpty { eventData["body3DJoints"] = body3DJoints }
             DispatchQueue.main.async {
                 self.notifyListeners("poseFrame", data: eventData)
             }
@@ -1353,6 +1443,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 + "handPoseElapsedSeconds=\(String(format: "%.2f", handPoseElapsedSeconds)) "
                 + "(avg \(processedCount > 0 ? String(format: "%.4f", handPoseElapsedSeconds / Double(processedCount)) : "n/a")s/frame)"
         )
+        // body3DAvailable reflects the #available(iOS 17.0, *) gate itself, independent of
+        // whether any frame actually got a gated perform() call this clip -- confirms the OS
+        // check fired correctly, not just that body3DJoints happened to come back empty.
+        let body3DAvailable: Bool = {
+            if #available(iOS 17.0, *) { return true }
+            return false
+        }()
+        logDiag(
+            "analyzeRecording body3D: available=\(body3DAvailable) framesAttempted=\(body3DFrameCount) "
+                + "elapsedSeconds=\(String(format: "%.2f", body3DElapsedSeconds)) "
+                + "(avg \(body3DFrameCount > 0 ? String(format: "%.4f", body3DElapsedSeconds / Double(body3DFrameCount)) : "n/a")s/frame)"
+        )
         // Below MIN_BOX_TOP_SAMPLES, this isn't a confident read -- reporting a "detection"
         // off one or two lucky/unlucky frames would be worse than reporting nothing at all
         // (the JS side's own no-number-is-better-than-a-wrong-one philosophy, see
@@ -1385,6 +1487,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     "thermalState": thermalState,
                     "lowPowerModeEnabled": lowPowerModeEnabled,
                     "handPoseElapsedSeconds": handPoseElapsedSeconds,
+                    "body3DElapsedSeconds": body3DElapsedSeconds,
+                    "body3DFrameCount": body3DFrameCount,
+                    "body3DAvailable": body3DAvailable,
                 ]
                 if let error = reader.error {
                     result["readerErrorMessage"] = error.localizedDescription

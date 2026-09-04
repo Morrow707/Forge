@@ -12,7 +12,12 @@ import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks, visionImplementToPoint, type ImplementPoint } from "@/lib/vision-body-landmarks";
+import {
+  visionJointsToWorldLandmarks,
+  visionBody3DToWorldLandmarks,
+  visionImplementToPoint,
+  type ImplementPoint,
+} from "@/lib/vision-body-landmarks";
 import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
 import {
   calibrateFromFrames,
@@ -314,7 +319,10 @@ export function AvMedballTrackerDialog({
     const rightBallPoints: { t: number; x: number; y: number; confidence: number }[] = [];
     for (const f of rawFrames) {
       const t = f.timestamp * 1000;
-      const worldLm = scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
+      // Phase B: real depth when this frame has it -- see av-bar-tracker-dialog.tsx's own
+      // identical comment for the full reasoning.
+      const body3DLm = visionBody3DToWorldLandmarks(f);
+      const worldLm = body3DLm ?? scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
       frames.push({ t, worldLandmarks: worldLm });
 
       const scalePoint = (raw: ImplementPoint | null) =>

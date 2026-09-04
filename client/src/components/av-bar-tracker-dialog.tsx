@@ -14,6 +14,7 @@ import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
 import {
   visionJointsToWorldLandmarks,
+  visionBody3DToWorldLandmarks,
   visionImplementToPoint,
   visionCoreMlBoxToPoint,
   visionRefineGripSeed,
@@ -614,7 +615,14 @@ export function AvBarTrackerDialog({
 
     for (const f of rawFrames) {
       const t = f.timestamp * 1000;
-      const worldLm = scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
+      // Phase B: real depth when this frame actually has it (iOS 17+, a confident 3D pose) --
+      // already real-world meters, so it bypasses the athlete-height scaleFactor entirely (see
+      // visionBody3DToWorldLandmarks's own comment on why double-scaling would be wrong).
+      // Falls back to the existing 2D-derived-plus-calibration path frame by frame, not once
+      // for the whole clip, since body3D availability can vary frame to frame even on a
+      // 17+ device (a low-confidence 3D read on one frame, a good one on the next).
+      const body3DLm = visionBody3DToWorldLandmarks(f);
+      const worldLm = body3DLm ?? scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
       frames.push({ t, landmarks: [], worldLandmarks: worldLm });
 
       const sign = worldVerticalSign(worldLm);

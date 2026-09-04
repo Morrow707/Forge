@@ -11,10 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
-import { isAvPreviewPlatform } from "@/lib/native-av-preview";
+import { isAvPreviewPlatform, type PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import { calibrateFromFrames, scaleWorldLandmarks } from "@/lib/pose-tracking";
 import {
   analyzeMechanics,
@@ -158,10 +158,15 @@ export function AvMechanicsTrackerDialog({
     finishCapture(
       result.blob,
       result.rawFrames.map((f) => ({ t: f.timestamp * 1000, worldLandmarks: visionJointsToWorldLandmarks(f) })),
+      result.rawFrames,
     );
   }
 
-  function finishCapture(blob: Blob, rawFrames: { t: number; worldLandmarks: Landmark[] }[]) {
+  function finishCapture(
+    blob: Blob,
+    rawFrames: { t: number; worldLandmarks: Landmark[] }[],
+    nativeRawFrames: NativePoseFrame[],
+  ) {
     if (rawFrames.length < MIN_TRACKED_FRAMES) {
       toast.error("That capture was too short to analyze -- try again with the full motion in frame.");
       changeStep("capture");
@@ -169,10 +174,16 @@ export function AvMechanicsTrackerDialog({
     }
 
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
-    const frames: MechanicsFrame[] = rawFrames.map((f) => ({
-      t: f.t,
-      worldLandmarks: scaleFactor != null ? scaleWorldLandmarks(f.worldLandmarks, scaleFactor) : f.worldLandmarks,
-    }));
+    // Phase B: real depth when a frame has it -- see av-bar-tracker-dialog.tsx's own identical
+    // comment for the full reasoning. rawFrames/nativeRawFrames are positionally aligned (both
+    // derived from the same result.rawFrames via a plain, non-filtering .map()).
+    const frames: MechanicsFrame[] = rawFrames.map((f, i) => {
+      const body3DLm = visionBody3DToWorldLandmarks(nativeRawFrames[i]);
+      return {
+        t: f.t,
+        worldLandmarks: body3DLm ?? (scaleFactor != null ? scaleWorldLandmarks(f.worldLandmarks, scaleFactor) : f.worldLandmarks),
+      };
+    });
 
     const effectiveThresholds = thresholds ?? DEFAULT_SKILL_FAULT_THRESHOLDS;
     const mechanicsResult = analyzeMechanics(frames, mode, effectiveThresholds);
