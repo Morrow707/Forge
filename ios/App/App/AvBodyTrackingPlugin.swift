@@ -333,28 +333,19 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // audio the athlete had playing (e.g. their own music) even though this
             // session never touches audio. false tells it to leave the audio session alone.
             session.automaticallyConfiguresApplicationAudioSession = false
-            // "Leave it alone" above turned out to be incomplete: it only stops THIS session
-            // from actively grabbing .playAndRecord -- it does nothing about whatever category
-            // the shared AVAudioSession is ALREADY sitting in, which for an app that has never
-            // explicitly configured one is .soloAmbient, the one category that silences other
-            // apps' audio the instant anything (this capture session starting, a Web Audio
-            // AudioContext elsewhere in the WebView -- see audio-cues.ts's own comment on why
-            // that goes through this exact same shared session) makes the app's audio active.
-            // Reported still cutting out specifically at the save/upload step, after recording
-            // itself had already been fixed -- consistent with .soloAmbient being the thing
-            // that bites, not this session's own config, since nothing anywhere in this app had
-            // ever explicitly asked for a mixable category. .ambient + .mixWithOthers is the
-            // standard fix for "this app's audio (native or web) should coexist with whatever
-            // else is already playing, never silence it" -- set once here, early, and left
-            // active (never setActive(false)'d back off) so nothing later in the flow can fall
-            // back to the default non-mixing category.
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
-                try AVAudioSession.sharedInstance().setActive(true, options: [])
-                self.logDiag("audio session set to .ambient/.mixWithOthers")
-            } catch {
-                self.logDiag("WARNING: failed to configure audio session: \(error.localizedDescription)")
-            }
+            // That flag only stops THIS session from grabbing .playAndRecord. It says nothing
+            // about the category the shared session is already sitting in -- which for a
+            // process that has never configured one is .soloAmbient, the category that
+            // silences other apps the instant this one becomes audible, whether that is the
+            // capture session or a Web Audio context in the web view (see audio-cues.ts).
+            // The category itself is owned by ForgeAudioSession (AppDelegate.swift), set at
+            // launch and re-asserted whenever iOS reports it moved. This used to be a one-shot
+            // write right here, which chose the right value with the wrong lifetime: by the
+            // time an athlete's music was reported to cut out -- at the save step, well after
+            // this plugin had been torn down -- the write had long since been overwritten by
+            // WebKit, or wiped by a media-services reset that nothing was listening for. All
+            // this call does now is confirm the invariant still holds as the camera opens.
+            ForgeAudioSession.shared.reassertIfNeeded(reason: "camera start")
             session.beginConfiguration()
             if session.canSetSessionPreset(.hd1920x1080) {
                 session.sessionPreset = .hd1920x1080
@@ -836,6 +827,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     }
 
     @objc func stopRecording(_ call: CAPPluginCall) {
+        // The reported moment: recording ends, the clip is read back through the web view and
+        // the upload starts, and that is when the athlete's music stopped.
+        ForgeAudioSession.shared.reassertIfNeeded(reason: "stop recording")
         guard let movieOutput = self.movieOutput, movieOutput.isRecording else {
             call.reject("Not recording")
             return
@@ -1011,6 +1005,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 let alreadySettled = settled
                 settleLock.unlock()
                 if alreadySettled { return }
+                // Piggybacked on a timer that already ticks for the entire analysis pass, so
+                // the whole window in which the music was reported to die is covered with no
+                // new timer and no new failure mode. Costs a category read per tick when
+                // nothing has moved; only writes when something else took the session.
+                ForgeAudioSession.shared.reassertIfNeeded(reason: "analysis tick")
                 let idleSeconds = progress.secondsSinceLastProgress()
                 if idleSeconds >= stallTimeoutSeconds {
                     fireWatchdog("no progress for \(Int(idleSeconds))s")

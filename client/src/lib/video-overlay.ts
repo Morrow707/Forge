@@ -67,7 +67,18 @@ export async function burnTrackingOverlay(
 
     const src = document.createElement("video");
     src.src = sourceUrl;
-    src.muted = false;
+    // Muted, and it matters. This element is not a preview -- it is played start to finish in
+    // real time during a SAVE (av-sprint-tracker-dialog calls burnTrackingOverlay from inside
+    // its save mutation), and an unmuted, actually-playing <video> is the textbook way to take
+    // iOS's audio session away from whatever the athlete had going. It costs nothing to mute:
+    // captureStream's audio track is unaffected by the element's own mute state, which is why
+    // video-watermark.ts:56 already does exactly this for the identical technique, and in any
+    // case NO clip this app records has an audio track at all (AvBodyTrackingPlugin records
+    // picture only, and every getUserMedia call here asks for video with no audio key). So the
+    // audio-track plumbing below is preserved for a clip that arrives with one from elsewhere,
+    // while the element itself stays silent. Muting also removes the most common reason a
+    // browser rejects play() outright.
+    src.muted = true;
     src.playsInline = true;
     // Must play at normal speed: canvas.captureStream(30) timestamps each
     // captured frame by real wall-clock time, not by source-content time,

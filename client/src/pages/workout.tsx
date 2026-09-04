@@ -2422,7 +2422,15 @@ function ExerciseLogContent({
   const aiFormCheckPath = `${programsApiBase}/programs/${programId}/form-check`;
   const aiFormCheckMutation = useMutation({
     mutationFn: async ({ setNumber, videoUrl }: { setNumber: number; videoUrl: string }) => {
-      const images = await extractVideoFrames(videoUrl);
+      // resolveApiUrl, not the bare path: the upload route returns a SERVER-RELATIVE url
+      // (/uploads/form-videos/...), and inside the native web view the origin is
+      // capacitor://localhost, so an unresolved path asks the local Capacitor handler for a
+      // file it does not have and gets the SPA shell or a 404 instead of the clip. Every other
+      // consumer of this same field already resolves it -- skill-workout.tsx's identical
+      // extractVideoFrames call, set-video-review's players, video-pose-analysis -- and this
+      // one did not, so AI form check never worked on iOS at all. The failure was invisible:
+      // the rejection is swallowed by this mutation's own onError toast.
+      const images = await extractVideoFrames(resolveApiUrl(videoUrl));
       // Now that a video is captured per set, this is the exact set it came
       // from -- no more guessing at "the most recently tracked set" for
       // this exercise.

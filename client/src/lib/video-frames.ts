@@ -9,16 +9,45 @@ export async function extractVideoFrames(
   count = 3,
 ): Promise<{ mediaType: "image/jpeg"; data: string }[]> {
   const video = document.createElement("video");
-  video.src = url;
+  // Every attribute is set BEFORE src, deliberately. Assigning src queues WebKit's
+  // resource-selection algorithm, and attributes it reads there (muted above all) have to
+  // already be in place -- setting muted afterwards can leave the element classified as
+  // audible for the load, which on iOS is the difference between joining the audio session
+  // and taking it. Same ordering and reasoning as video-pose-analysis.ts.
   video.muted = true;
   video.playsInline = true;
   video.preload = "auto";
+  // Never hand this off to an external display; it is an offscreen frame-grab, and an AirPlay
+  // route change is another way to disturb audio routing for no benefit here.
+  video.disableRemotePlayback = true;
+  video.src = url;
 
-  await new Promise<void>((resolve, reject) => {
-    video.onloadedmetadata = () => resolve();
-    video.onerror = () => reject(new Error("Could not load video"));
-  });
+  try {
+    // Inside the try, not before it. A failed load is the likeliest outcome of the two bugs
+    // this function sat between (an unresolved server-relative url reaching it on iOS), and
+    // that is exactly the path where an untorn-down element matters most: a media session
+    // created and abandoned on an error is a more disruptive audio event than a clean one.
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error("Could not load video"));
+    });
+    return await grabFrames(video, count);
+  } finally {
+    // Explicit teardown. Without it this element is simply dropped on the floor and its
+    // WebKit media session lives until garbage collection -- a non-deterministic moment, and
+    // this function runs at exactly the instant a set finishes analysing and starts saving,
+    // which is precisely when the athlete's music was reported to stop. Releasing the source
+    // here makes the media session end at a point this code chooses.
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  }
+}
 
+async function grabFrames(
+  video: HTMLVideoElement,
+  count: number,
+): Promise<{ mediaType: "image/jpeg"; data: string }[]> {
   const duration = video.duration;
   if (!duration || !Number.isFinite(duration)) {
     throw new Error("Video has no readable duration");
