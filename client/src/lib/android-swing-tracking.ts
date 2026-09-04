@@ -75,6 +75,50 @@ export function computeSeparationDeg(landmarks: Landmark[]): number | null {
   return angleDiffDeg(lineAngleDeg(ls, rs), lineAngleDeg(lh, rh));
 }
 
+// Camera overlord: same "sustained drift forces a full reacquisition, an isolated dip just gets
+// suppressed" two-check shape ImplementTracker's own live per-frame lock already established on
+// this platform, adapted here to a post-hoc angle trace instead -- see rotation-tracking.ts's own
+// cleanRotationTrace for the full reasoning (independently implemented here, not imported, same
+// "deliberate duplicate" stance this file's own header comment states for everything else in it).
+const MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S = 1200;
+const SUSTAINED_DRIFT_MIN_RUN = 4;
+
+function cleanRotationTrace(trace: RotationSample[]): RotationSample[] {
+  if (trace.length < 3) return trace;
+  const flagged = new Array(trace.length).fill(false);
+  for (let i = 1; i < trace.length; i++) {
+    const dtSec = (trace[i].t - trace[i - 1].t) / 1000;
+    if (dtSec <= 0) continue;
+    const velocity = Math.abs(angleDiffDeg(trace[i].separationDeg, trace[i - 1].separationDeg)) / dtSec;
+    if (velocity > MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S) flagged[i] = true;
+  }
+
+  const cleaned: RotationSample[] = [];
+  let i = 0;
+  while (i < trace.length) {
+    if (!flagged[i]) {
+      cleaned.push(trace[i]);
+      i++;
+      continue;
+    }
+    let runEnd = i;
+    while (runEnd < trace.length && flagged[runEnd]) runEnd++;
+    const before = trace[i - 1];
+    const after = trace[runEnd];
+    if (runEnd - i >= SUSTAINED_DRIFT_MIN_RUN || !before || !after) {
+      i = runEnd;
+      continue;
+    }
+    const span = after.t - before.t;
+    for (let k = i; k < runEnd; k++) {
+      const frac = span > 0 ? (trace[k].t - before.t) / span : 0;
+      cleaned.push({ t: trace[k].t, separationDeg: before.separationDeg + (after.separationDeg - before.separationDeg) * frac });
+    }
+    i = runEnd;
+  }
+  return cleaned;
+}
+
 export type RotationSample = { t: number; separationDeg: number };
 
 export type RotationSummary = {
@@ -85,14 +129,16 @@ export type RotationSummary = {
 };
 
 export function summarizeRotation(frames: PoseFrame[]): RotationSummary | null {
-  const trace: RotationSample[] = [];
+  const rawTrace: RotationSample[] = [];
   const spreadTrace: { t: number; spread: number }[] = [];
   for (const f of frames) {
     const sep = computeSeparationDeg(f.worldLandmarks);
-    if (sep != null) trace.push({ t: f.t, separationDeg: sep });
+    if (sep != null) rawTrace.push({ t: f.t, separationDeg: sep });
     const spread = crossDiagonalSpread(f.worldLandmarks);
     if (spread != null) spreadTrace.push({ t: f.t, spread });
   }
+  // Camera overlord -- see cleanRotationTrace's own comment above.
+  const trace = cleanRotationTrace(rawTrace);
   if (trace.length < 6) return null;
 
   const magnitudes = trace.map((s) => Math.abs(s.separationDeg));
@@ -183,6 +229,57 @@ function speedsMps(points: TrackedPoint[]): number[] {
   return speeds;
 }
 
+// Camera overlord: an isolated single-frame position glitch in the grip trace can imply a huge,
+// physically impossible velocity for that one frame, and since detectPhases below reads straight
+// off derived speed, a single bad frame can falsely trigger a phase transition well before the
+// real one -- see swing-tracking.ts's own cleanGripTrace for the full reasoning (independently
+// implemented here, not imported, same "deliberate duplicate" stance this file's own header
+// comment states for everything else in it). SUSTAINED_DRIFT_MIN_RUN is shared with
+// cleanRotationTrace above -- same run-length threshold, no reason for the two sections of this
+// one file to each declare their own copy of the identical value.
+const MAX_PLAUSIBLE_GRIP_SPEED_MPS = 15;
+
+function cleanGripTrace(points: TrackedPoint[]): TrackedPoint[] {
+  if (points.length < 3) return points;
+  const flagged = new Array(points.length).fill(false);
+  for (let i = 1; i < points.length; i++) {
+    const dt = (points[i].t - points[i - 1].t) / 1000;
+    if (dt <= 0) continue;
+    const dist = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
+    if (dist / dt > MAX_PLAUSIBLE_GRIP_SPEED_MPS) flagged[i] = true;
+  }
+
+  const cleaned: TrackedPoint[] = [];
+  let i = 0;
+  while (i < points.length) {
+    if (!flagged[i]) {
+      cleaned.push(points[i]);
+      i++;
+      continue;
+    }
+    let runEnd = i;
+    while (runEnd < points.length && flagged[runEnd]) runEnd++;
+    const before = points[i - 1];
+    const after = points[runEnd];
+    if (runEnd - i >= SUSTAINED_DRIFT_MIN_RUN || !before || !after) {
+      i = runEnd;
+      continue;
+    }
+    const span = after.t - before.t;
+    for (let k = i; k < runEnd; k++) {
+      const frac = span > 0 ? (points[k].t - before.t) / span : 0;
+      cleaned.push({
+        t: points[k].t,
+        x: before.x + (after.x - before.x) * frac,
+        y: before.y + (after.y - before.y) * frac,
+        z: before.z + (after.z - before.z) * frac,
+      });
+    }
+    i = runEnd;
+  }
+  return cleaned;
+}
+
 export type SwingPhases = {
   takeawayT: number;
   topT: number;
@@ -264,7 +361,9 @@ export type SwingSummary = {
 };
 
 export function summarizeSwing(frames: PoseFrame[]): SwingSummary {
-  const gripTrace = frames.map(gripPoint).filter((p): p is TrackedPoint => p != null);
+  const rawGripTrace = frames.map(gripPoint).filter((p): p is TrackedPoint => p != null);
+  // Camera overlord -- see cleanGripTrace's own comment above.
+  const gripTrace = cleanGripTrace(rawGripTrace);
   const phases = detectPhases(gripTrace);
   const headSwayCm = phases ? computeHeadSwayCm(frames, phases.takeawayT, phases.impactT) : null;
   return { phases, headSwayCm, gripTrace };

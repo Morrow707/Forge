@@ -16,6 +16,7 @@ import {
   visionJointsToWorldLandmarks,
   visionBody3DToWorldLandmarks,
   visionImplementToPoint,
+  visionRefineGripSeed,
   type ImplementPoint,
 } from "@/lib/vision-body-landmarks";
 import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
@@ -317,6 +318,14 @@ export function AvMedballTrackerDialog({
     const frames: MechanicsFrame[] = [];
     const leftBallPoints: { t: number; x: number; y: number; confidence: number }[] = [];
     const rightBallPoints: { t: number; x: number; y: number; confidence: number }[] = [];
+    // Resolves this file's own previously-deferred question (see the header comment on
+    // av-bar-tracker-dialog.tsx's fuseSide -- "a one-handed throw needs its own separate review
+    // of whether the same nudge applies"): yes, for the identical reason -- a real hand detected
+    // right where Pose predicted the wrist is independent corroboration against a ghost-skeleton
+    // misread, regardless of what (if anything) that hand happens to be gripping. Computed per
+    // side per frame here (throwingSide isn't known until after this whole loop runs), keyed by
+    // t so blendedSpeedForWindow below can look up whichever side it ends up needing.
+    const gripConfirmedByT = new Map<number, { left: boolean; right: boolean }>();
     for (const f of rawFrames) {
       const t = f.timestamp * 1000;
       // Phase B: real depth when this frame has it -- see av-bar-tracker-dialog.tsx's own
@@ -331,6 +340,13 @@ export function AvMedballTrackerDialog({
       const right = scalePoint(visionImplementToPoint(f.rightImplement, f));
       if (left) leftBallPoints.push(left);
       if (right) rightBallPoints.push(right);
+
+      const leftWristJoint = f.joints.find((j) => j.name === "leftWrist");
+      const rightWristJoint = f.joints.find((j) => j.name === "rightWrist");
+      gripConfirmedByT.set(t, {
+        left: leftWristJoint ? visionRefineGripSeed(f, leftWristJoint.x, leftWristJoint.y) != null : false,
+        right: rightWristJoint ? visionRefineGripSeed(f, rightWristJoint.x, rightWristJoint.y) != null : false,
+      });
     }
 
     // Whichever hand the tracker actually followed the ball with, for however this athlete
@@ -356,8 +372,15 @@ export function AvMedballTrackerDialog({
       const windowFrames = frames.filter((f) => f.t >= startT && f.t <= endT);
       const windowMechanics = startT === -Infinity && endT === Infinity ? mechanicsResult : analyzeMechanics(windowFrames, "throw");
       const ballSignal = peakImplementSpeed(windowBallPoints);
+      // Same 1.25x-capped-at-1 grip-corroboration nudge av-bar-tracker-dialog.tsx's own
+      // fuseSide applies to its wrist confidence -- see gripConfirmedByT's own comment above for
+      // why this was previously left as a deferred question rather than assumed.
       const wristConfidenceSamples = windowFrames
-        .map((f) => wristConfidence(f.worldLandmarks, throwingSide))
+        .map((f) => {
+          const raw = wristConfidence(f.worldLandmarks, throwingSide);
+          const confirmed = gripConfirmedByT.get(f.t)?.[throwingSide] ?? false;
+          return confirmed ? Math.min(1, raw * 1.25) : raw;
+        })
         .filter((c) => c > 0);
       const avgWristConfidence =
         wristConfidenceSamples.length > 0

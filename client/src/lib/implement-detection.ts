@@ -168,6 +168,99 @@ function boxDelta(a: PixelBox, b: PixelBox): { centerDistance: number; areaRatio
 const MAX_PLAUSIBLE_CENTER_JUMP = 0.35;
 const MAX_PLAUSIBLE_AREA_RATIO = 3.0;
 
+// Camera overlord: a from-scratch analogue of AvCoreMlImplementDetector's own trajectory check
+// (AvBodyTrackingPlugin.swift, VNDetectTrajectoriesRequest) -- Vision's free-flight parabola
+// fitter is a black-box CV algorithm with no browser equivalent, so this fits the same underlying
+// physics itself instead: real projectile motion (gravity-only, no thrust) traces y = a*t^2+b*t+c
+// and x = d*t+e almost exactly, while a lock that's drifted onto a different nearby object (the
+// same "a plate in the background looks like the med ball" failure mode isImplausibleJump above
+// already guards against, from a different angle) does not. An independent, physics-based signal
+// from the box-consistency check above (appearance/position-continuity based), wired in ALONGSIDE
+// it in track() below, not as a replacement -- same "only ever adds scrutiny, never removes
+// coverage" stance as the iOS twin: a clip too short to accumulate a confident fit, or one where
+// the fit's own residual is too high to trust, simply skips this check for that frame, same as
+// Vision's own trajectory request not firing yet.
+//
+// Deliberately its own separate implementation, not a port -- independently reasoned thresholds
+// below, not copied from the Swift side's own constants, same "two platforms retune separately"
+// stance this file's own header comment states.
+const TRAJECTORY_MIN_POINTS = 5; // matches VNDetectTrajectoriesRequest's own default trajectoryLength
+// Mean-squared fit residual (normalized box-coordinate units^2) above which the fitted curve
+// doesn't actually look like a clean parabola/line -- untuned starting point, same "no real
+// footage to calibrate against yet" caveat every heuristic constant in this file carries.
+const TRAJECTORY_MAX_FIT_RESIDUAL = 0.001;
+
+// Solves a small (n x n) linear system Ax = b via Gaussian elimination with partial pivoting --
+// n is always 2 or 3 below (the tiny, well-conditioned normal-equations systems the quadratic/
+// linear least-squares fits reduce to), so a plain elimination is both correct and fast enough to
+// run every locked frame without pulling in a linear-algebra dependency for it.
+function solveLinearSystem(a: number[][], b: number[]): number[] | null {
+  const n = b.length;
+  const m = a.map((row) => row.slice());
+  const rhs = b.slice();
+  for (let col = 0; col < n; col++) {
+    let pivotRow = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(m[row][col]) > Math.abs(m[pivotRow][col])) pivotRow = row;
+    }
+    if (Math.abs(m[pivotRow][col]) < 1e-10) return null;
+    if (pivotRow !== col) {
+      [m[col], m[pivotRow]] = [m[pivotRow], m[col]];
+      [rhs[col], rhs[pivotRow]] = [rhs[pivotRow], rhs[col]];
+    }
+    for (let row = col + 1; row < n; row++) {
+      const factor = m[row][col] / m[col][col];
+      for (let k = col; k < n; k++) m[row][k] -= factor * m[col][k];
+      rhs[row] -= factor * rhs[col];
+    }
+  }
+  const x = new Array(n).fill(0);
+  for (let row = n - 1; row >= 0; row--) {
+    let sum = rhs[row];
+    for (let col = row + 1; col < n; col++) sum -= m[row][col] * x[col];
+    x[row] = sum / m[row][row];
+  }
+  return x;
+}
+
+// Least-squares quadratic fit y = a*t^2 + b*t + c via the standard normal-equations system.
+function fitQuadratic(t: number[], y: number[]): { a: number; b: number; c: number } | null {
+  let s1 = 0, s2 = 0, s3 = 0, s4 = 0, sy0 = 0, sy1 = 0, sy2 = 0;
+  const s0 = t.length;
+  for (let i = 0; i < s0; i++) {
+    const ti = t[i], yi = y[i], ti2 = ti * ti;
+    s1 += ti; s2 += ti2; s3 += ti2 * ti; s4 += ti2 * ti2;
+    sy0 += yi; sy1 += ti * yi; sy2 += ti2 * yi;
+  }
+  const solved = solveLinearSystem(
+    [
+      [s4, s3, s2],
+      [s3, s2, s1],
+      [s2, s1, s0],
+    ],
+    [sy2, sy1, sy0],
+  );
+  return solved ? { a: solved[0], b: solved[1], c: solved[2] } : null;
+}
+
+// Least-squares linear fit x = d*t + e.
+function fitLinear(t: number[], x: number[]): { d: number; e: number } | null {
+  let s1 = 0, s2 = 0, sx0 = 0, sx1 = 0;
+  const s0 = t.length;
+  for (let i = 0; i < s0; i++) {
+    s1 += t[i]; s2 += t[i] * t[i];
+    sx0 += x[i]; sx1 += t[i] * x[i];
+  }
+  const solved = solveLinearSystem(
+    [
+      [s2, s1],
+      [s1, s0],
+    ],
+    [sx1, sx0],
+  );
+  return solved ? { d: solved[0], e: solved[1] } : null;
+}
+
 export class WebImplementDetector {
   private canvas: HTMLCanvasElement | null = null;
   private grayCanvas: HTMLCanvasElement | null = null;
@@ -184,6 +277,12 @@ export class WebImplementDetector {
   // guards against. Independent implementation, same idea.
   private recentBoxes: PixelBox[] = [];
   private readonly boxHistoryWindow = 4;
+  // Camera overlord: CONFIRMED (already-accepted) box centers with their own video.currentTime,
+  // oldest first -- see the trajectory-fit helpers' own header comment above. Kept separate from
+  // recentBoxes (which holds every accepted box, not just the ones this fits against) since the
+  // fit needs real elapsed time between samples, not just a fixed frame count.
+  private recentTrajectoryPoints: { t: number; x: number; y: number }[] = [];
+  private readonly trajectoryHistoryWindow = TRAJECTORY_MIN_POINTS;
   // Classification itself is async (onnxruntime-web's session.run returns a
   // Promise); this guards against overlapping runs stacking up if a caller's
   // own per-frame loop ticks faster than one inference call resolves.
@@ -219,6 +318,7 @@ export class WebImplementDetector {
     this.framesSinceFreshAttempt = 0;
     this.prevGray = null;
     this.recentBoxes = [];
+    this.recentTrajectoryPoints = [];
   }
 
   private getCanvas(): HTMLCanvasElement {
@@ -239,6 +339,47 @@ export class WebImplementDetector {
   private recordBox(box: PixelBox): void {
     this.recentBoxes.push(box);
     if (this.recentBoxes.length > this.boxHistoryWindow) this.recentBoxes.shift();
+  }
+
+  private recordTrajectoryPoint(video: HTMLVideoElement, box: PixelBox): void {
+    this.recentTrajectoryPoints.push({ t: video.currentTime, x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 });
+    if (this.recentTrajectoryPoints.length > this.trajectoryHistoryWindow) this.recentTrajectoryPoints.shift();
+  }
+
+  // Only meaningful for a genuinely thrown, free-flying object -- gated to "med_ball"
+  // specifically at the call site below, same reasoning AvCoreMlImplementDetector's own
+  // detectTrajectory carries: barbell/dumbbell/kettlebell/plate stay gripped throughout their
+  // tracked motion and are never in real free flight, so a parabola fit has nothing genuine to
+  // find for them. Fits the PRIOR confirmed points (not including candidateBox -- deliberately
+  // a forward prediction check, not a fit-then-test-a-point-already-in-the-fit check), then
+  // compares the fit's own extrapolated position at this frame's timestamp against
+  // candidateBox's actual tracked center. Returns false (never blocks) whenever there isn't
+  // enough history yet or the fit itself doesn't look like a clean arc -- same "a trajectory not
+  // firing this frame changes nothing" stance as the iOS twin.
+  private isTrajectoryDisagreement(video: HTMLVideoElement, candidateBox: PixelBox): boolean {
+    const points = this.recentTrajectoryPoints;
+    if (points.length < TRAJECTORY_MIN_POINTS) return false;
+    const t = points.map((p) => p.t);
+    const quad = fitQuadratic(t, points.map((p) => p.y));
+    const lin = fitLinear(t, points.map((p) => p.x));
+    if (!quad || !lin) return false;
+
+    let sse = 0;
+    for (const p of points) {
+      const fittedY = quad.a * p.t * p.t + quad.b * p.t + quad.c;
+      const fittedX = lin.d * p.t + lin.e;
+      sse += (p.y - fittedY) ** 2 + (p.x - fittedX) ** 2;
+    }
+    const residual = sse / points.length;
+    if (residual > TRAJECTORY_MAX_FIT_RESIDUAL) return false; // doesn't look like a clean arc -- no opinion.
+
+    const now = video.currentTime;
+    const predictedY = quad.a * now * now + quad.b * now + quad.c;
+    const predictedX = lin.d * now + lin.e;
+    const candidateCenterX = (candidateBox.x0 + candidateBox.x1) / 2;
+    const candidateCenterY = (candidateBox.y0 + candidateBox.y1) / 2;
+    const disagreement = Math.hypot(candidateCenterX - predictedX, candidateCenterY - predictedY);
+    return disagreement > MAX_PLAUSIBLE_CENTER_JUMP;
   }
 
   // Runs the real ONNX classifier against the full video frame, filtered to
@@ -363,15 +504,24 @@ export class WebImplementDetector {
       if (!tracked) {
         this.lockedBox = null;
         this.recentBoxes = [];
+        this.recentTrajectoryPoints = [];
         return null;
       }
       if (this.recentBoxes.length > 0 && this.isImplausibleJump(this.recentBoxes[this.recentBoxes.length - 1], tracked)) {
         this.lockedBox = null;
         this.recentBoxes = [];
+        this.recentTrajectoryPoints = [];
+        return null;
+      }
+      if (targetLabel === "med_ball" && this.isTrajectoryDisagreement(video, tracked)) {
+        this.lockedBox = null;
+        this.recentBoxes = [];
+        this.recentTrajectoryPoints = [];
         return null;
       }
       this.lockedBox = tracked;
       this.recordBox(tracked);
+      this.recordTrajectoryPoint(video, tracked);
       return { box: tracked, confidence: this.lockConfidence };
     }
 
@@ -387,11 +537,18 @@ export class WebImplementDetector {
     if (!result) {
       this.lockedBox = null;
       this.recentBoxes = [];
+      this.recentTrajectoryPoints = [];
       return null;
     }
     this.lockedBox = result.box;
     this.lockConfidence = result.confidence;
     this.recordBox(result.box);
+    // A fresh classification is a genuine re-acquisition, not a continuation of whatever arc
+    // came before it (the object could have been lost and reacquired anywhere) -- starts the
+    // trajectory history over rather than mixing a pre-reacquisition point into a fit that's
+    // supposed to represent one continuous flight.
+    this.recentTrajectoryPoints = [];
+    this.recordTrajectoryPoint(video, result.box);
     return result;
   }
 }

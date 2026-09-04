@@ -56,6 +56,69 @@ function speedsMps(points: TrackedPoint[]): number[] {
   return speeds;
 }
 
+// Camera overlord: an isolated single-frame position glitch in the grip trace (a brief
+// misdetection swapping which hand is which, an occlusion snap-back) can imply a huge,
+// physically impossible velocity for that one frame -- and since detectPhases' own state
+// machine below reads straight off derived speed, a single bad frame can falsely trigger a
+// phase transition (a premature "takeaway," a spurious "impact") well before the real one.
+// Same "detect an implausible frame-to-frame delta, interpolate through a short run, drop a
+// long one outright" two-check shape as rotation-tracking.ts's own cleanRotationTrace (see that
+// file's header comment for the full "sustained drift vs isolated dip" reasoning) and
+// kb-swing-tracking.ts's own rejectImplausible3dAccelerationSpikes -- independently implemented
+// here rather than imported from either, same "conceptually similar, organizationally separate"
+// precedent this codebase already sets between bar-tracking.ts's own Y-only spike rejection and
+// kb-swing-tracking.ts's 3D one.
+//
+// Untuned starting value -- a swing's grip (hands only, not the club/bat head itself) moves
+// well under this even at full speed, same "well above even an elite real effort" margin used
+// throughout this app, so this should only ever catch a genuine tracking glitch.
+const MAX_PLAUSIBLE_GRIP_SPEED_MPS = 15;
+const SUSTAINED_DRIFT_MIN_RUN = 4;
+
+function cleanGripTrace(points: TrackedPoint[]): TrackedPoint[] {
+  if (points.length < 3) return points;
+  const flagged = new Array(points.length).fill(false);
+  for (let i = 1; i < points.length; i++) {
+    const dt = (points[i].t - points[i - 1].t) / 1000;
+    if (dt <= 0) continue;
+    const dist = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
+    if (dist / dt > MAX_PLAUSIBLE_GRIP_SPEED_MPS) flagged[i] = true;
+  }
+
+  const cleaned: TrackedPoint[] = [];
+  let i = 0;
+  while (i < points.length) {
+    if (!flagged[i]) {
+      cleaned.push(points[i]);
+      i++;
+      continue;
+    }
+    let runEnd = i;
+    while (runEnd < points.length && flagged[runEnd]) runEnd++;
+    const before = points[i - 1];
+    const after = points[runEnd];
+    // Sustained (long run), or a short run with no trustworthy frame on one side to
+    // interpolate between -- drop outright, same reasoning as the header comment above.
+    if (runEnd - i >= SUSTAINED_DRIFT_MIN_RUN || !before || !after) {
+      i = runEnd;
+      continue;
+    }
+    // Isolated dip -- interpolate across it.
+    const span = after.t - before.t;
+    for (let k = i; k < runEnd; k++) {
+      const frac = span > 0 ? (points[k].t - before.t) / span : 0;
+      cleaned.push({
+        t: points[k].t,
+        x: before.x + (after.x - before.x) * frac,
+        y: before.y + (after.y - before.y) * frac,
+        z: before.z + (after.z - before.z) * frac,
+      });
+    }
+    i = runEnd;
+  }
+  return cleaned;
+}
+
 export type SwingPhases = {
   takeawayT: number;
   topT: number;
@@ -153,7 +216,9 @@ export type SwingSummary = {
 };
 
 export function summarizeSwing(frames: PoseFrame[]): SwingSummary {
-  const gripTrace = frames.map(gripPoint).filter((p): p is TrackedPoint => p != null);
+  const rawGripTrace = frames.map(gripPoint).filter((p): p is TrackedPoint => p != null);
+  // Camera overlord -- see cleanGripTrace's own comment above.
+  const gripTrace = cleanGripTrace(rawGripTrace);
   const phases = detectPhases(gripTrace);
   const headSwayCm = phases ? computeHeadSwayCm(frames, phases.takeawayT, phases.impactT) : null;
   return { phases, headSwayCm, gripTrace };
