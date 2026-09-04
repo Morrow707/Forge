@@ -581,7 +581,13 @@ export function ProgramBuilderPage({
       title="Program Builder"
       actions={
         <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2">
+          {/* flex-wrap + justify-end -- Back/Assign Program/Add to My Calendar together are
+              wider than a phone screen, and the AppShell actions wrapper scrolls horizontally
+              rather than clipping, which left the last button cut off at the screen edge with
+              no visible way to reach it. Wrapping to a second line keeps every button in view
+              without scrolling; justify-end keeps a lone wrapped button right-aligned under
+              the row above it, matching this container's own items-end on mobile. */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" onClick={() => navigate(routeBase)}>
               <ArrowLeft className="h-4 w-4" />
               Back
