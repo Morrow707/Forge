@@ -2060,13 +2060,16 @@ async function enforceVideoRetention(
     .from(workoutSetEntries)
     .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
     .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-    .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-    .leftJoin(assignmentCorrectives, eq(workoutLogEntries.correctiveId, assignmentCorrectives.id))
     .where(
       and(
         eq(workoutLogs.athleteId, athleteId),
         isNotNull(workoutSetEntries.formCheckVideoUrl),
-        or(eq(programExercises.exerciseId, exerciseId), eq(assignmentCorrectives.exerciseId, exerciseId)),
+        // One predicate covering both branches. This used to left-join
+        // program_exercises and assignment_correctives and OR their two
+        // exercise ids together, which missed every set whose
+        // programExerciseId a later program-day edit had nulled -- those
+        // videos then sat outside the per-exercise cap entirely.
+        eq(workoutLogEntries.exerciseId, exerciseId),
       ),
     )
     .orderBy(asc(workoutSetEntries.videoUploadedAt));
@@ -5336,11 +5339,10 @@ export const storage = {
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       .where(
         and(
           eq(assignments.athleteId, athleteId),
-          eq(programExercises.exerciseId, exerciseId),
+          eq(workoutLogEntries.exerciseId, exerciseId),
           eq(workoutLogEntries.weightMode, "numeric"),
         ),
       );
@@ -5790,8 +5792,7 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
       .innerJoin(users, eq(assignments.athleteId, users.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .where(
         and(
           inArray(assignments.coachId, coachIds),
@@ -16582,11 +16583,10 @@ ${catalog}`;
                   .from(workoutSetEntries)
                   .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
                   .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-                  .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
                   .where(
                     and(
                       eq(workoutLogs.athleteId, athleteId),
-                      eq(programExercises.exerciseId, programExercise.exerciseId),
+                      eq(workoutLogEntries.exerciseId, programExercise.exerciseId),
                       eq(workoutSetEntries.weightUnit, entryWeightUnit),
                       eq(workoutSetEntries.reps, s.reps),
                       lt(workoutLogs.date, input.date),
@@ -17037,85 +17037,20 @@ ${catalog}`;
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       .where(
         and(
           inArray(assignments.coachId, coachIds),
           eq(assignments.athleteId, athleteId),
-          eq(programExercises.exerciseId, exerciseId),
+          eq(workoutLogEntries.exerciseId, exerciseId),
         ),
       );
 
-    const correctiveRows = await db
-      .select({
-        date: workoutLogs.date,
-        setNumber: workoutSetEntries.setNumber,
-        reps: workoutSetEntries.reps,
-        weight: workoutSetEntries.weight,
-        weightUnit: workoutSetEntries.weightUnit,
-        bandColor: workoutSetEntries.bandColor,
-        boxHeight: workoutSetEntries.boxHeight,
-        boxHeightUnit: workoutSetEntries.boxHeightUnit,
-        weightMode: workoutLogEntries.weightMode,
-        rpe: workoutLogEntries.rpe,
-        peakVelocityMps: workoutSetEntries.peakVelocityMps,
-        meanVelocityMps: workoutSetEntries.meanVelocityMps,
-        concentricSeconds: workoutSetEntries.concentricSeconds,
-        eccentricSeconds: workoutSetEntries.eccentricSeconds,
-        barPathDeviationCm: workoutSetEntries.barPathDeviationCm,
-        barPathTrace: workoutSetEntries.barPathTrace,
-        formFaults: workoutSetEntries.formFaults,
-        repBreakdown: workoutSetEntries.repBreakdown,
-        armPathTrace: workoutSetEntries.armPathTrace,
-        peakPowerWatts: workoutSetEntries.peakPowerWatts,
-        meanPowerWatts: workoutSetEntries.meanPowerWatts,
-        eccentricMeanVelocityMps: workoutSetEntries.eccentricMeanVelocityMps,
-        romCm: workoutSetEntries.romCm,
-        velocityLossPercent: workoutSetEntries.velocityLossPercent,
-        formCheckVideoUrl: workoutSetEntries.formCheckVideoUrl,
-        formCheckFlag: workoutSetEntries.formCheckFlag,
-        jumpHeightCm: workoutSetEntries.jumpHeightCm,
-        jumpDistanceCm: workoutSetEntries.jumpDistanceCm,
-        groundContactSeconds: workoutSetEntries.groundContactSeconds,
-        reactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
-        jumpBreakdown: workoutSetEntries.jumpBreakdown,
-        legDriveAsymmetry: workoutSetEntries.legDriveAsymmetry,
-        armDriveAsymmetry: workoutSetEntries.armDriveAsymmetry,
-        trustScores: workoutSetEntries.trustScores,
-        swingSeparationDeg: workoutSetEntries.swingSeparationDeg,
-        swingTempoRatio: workoutSetEntries.swingTempoRatio,
-        swingBackswingMs: workoutSetEntries.swingBackswingMs,
-        swingDownswingMs: workoutSetEntries.swingDownswingMs,
-        swingHeadSwayCm: workoutSetEntries.swingHeadSwayCm,
-        swingTrustScore: workoutSetEntries.swingTrustScore,
-        medBallPeakSpeedMps: workoutSetEntries.medBallPeakSpeedMps,
-        medBallReleaseHeightCm: workoutSetEntries.medBallReleaseHeightCm,
-        medBallTrustScore: workoutSetEntries.medBallTrustScore,
-        medBallRepBreakdown: workoutSetEntries.medBallRepBreakdown,
-        kbSwingPeakSpeedMps: workoutSetEntries.kbSwingPeakSpeedMps,
-        kbSwingPeakHeightCm: workoutSetEntries.kbSwingPeakHeightCm,
-        kbSwingTrustScore: workoutSetEntries.kbSwingTrustScore,
-        horizontalLoadElapsedSeconds: workoutSetEntries.horizontalLoadElapsedSeconds,
-        horizontalLoadDistanceYards: workoutSetEntries.horizontalLoadDistanceYards,
-        horizontalLoadAvgSpeedYardsPerSec: workoutSetEntries.horizontalLoadAvgSpeedYardsPerSec,
-      })
-      .from(workoutSetEntries)
-      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(
-        assignmentCorrectives,
-        eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
-      )
-      .where(
-        and(
-          inArray(assignments.coachId, coachIds),
-          eq(assignments.athleteId, athleteId),
-          eq(assignmentCorrectives.exerciseId, exerciseId),
-        ),
-      );
-
-    const rows = [...peRows, ...correctiveRows]
+    // The separate correctives query that used to sit here is gone.
+    // workoutLogEntries.exerciseId is resolved at submission time from
+    // EITHER programExerciseId or correctiveId (see submitWorkoutLog's
+    // resolvedExerciseId), so the one query above now covers both branches.
+    // Keeping the second one would have double-counted every corrective set.
+        const rows = [...peRows]
       .filter((r) => r.reps != null)
       .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
 
@@ -17389,8 +17324,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .where(eq(assignments.athleteId, athleteId));
 
     const sorted = rows
@@ -17553,8 +17487,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .where(eq(assignments.athleteId, athleteId));
     const sortedLifts = liftRows
       .filter((r) => r.weightMode === "numeric" && r.weight && r.reps)
@@ -17619,8 +17552,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .where(and(eq(assignments.athleteId, athleteId), eq(programExercises.exerciseId, exerciseId)));
+      .where(and(eq(assignments.athleteId, athleteId), eq(workoutLogEntries.exerciseId, exerciseId)));
 
     const sorted = rows
       .filter((r) => r.weightMode === "numeric" && r.weight && r.reps)
@@ -17722,25 +17654,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .where(and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId)));
 
-    const correctiveRows = await db
-      .selectDistinct({ id: exercises.id, name: exercises.name })
-      .from(workoutSetEntries)
-      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(
-        assignmentCorrectives,
-        eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
-      )
-      .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
-      .where(and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId)));
-
-    const byId = new Map<number, string>();
-    for (const r of [...peRows, ...correctiveRows]) byId.set(r.id, r.name);
+    // The separate correctives query that used to sit here is gone.
+    // workoutLogEntries.exerciseId is resolved at submission time from
+    // EITHER programExerciseId or correctiveId (see submitWorkoutLog's
+    // resolvedExerciseId), so the one query above now covers both branches.
+    // Keeping the second one would have double-counted every corrective set.
+        const byId = new Map<number, string>();
+    for (const r of peRows) byId.set(r.id, r.name);
     return Array.from(byId.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -17767,8 +17690,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .where(
         and(
           inArray(assignments.coachId, coachIds),
@@ -17777,23 +17699,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         ),
       );
 
-    const correctiveRows = await db
-      .select(selection)
-      .from(workoutSetEntries)
-      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(assignmentCorrectives, eq(workoutLogEntries.correctiveId, assignmentCorrectives.id))
-      .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
-      .where(
-        and(
-          inArray(assignments.coachId, coachIds),
-          eq(assignments.athleteId, athleteId),
-          isNotNull(workoutSetEntries.formCheckVideoUrl),
-        ),
-      );
-
-    return [...peRows, ...correctiveRows].sort((a, b) =>
+    // The separate correctives query that used to sit here is gone.
+    // workoutLogEntries.exerciseId is resolved at submission time from
+    // EITHER programExerciseId or correctiveId (see submitWorkoutLog's
+    // resolvedExerciseId), so the one query above now covers both branches.
+    // Keeping the second one would have double-counted every corrective set.
+        return [...peRows].sort((a, b) =>
       a.date < b.date ? 1 : a.date > b.date ? -1 : b.setNumber - a.setNumber,
     );
   },
@@ -18679,25 +18590,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .where(inArray(assignments.coachId, coachIds));
 
-    const correctiveRows = await db
-      .selectDistinct({ id: exercises.id, name: exercises.name })
-      .from(workoutSetEntries)
-      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(
-        assignmentCorrectives,
-        eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
-      )
-      .innerJoin(exercises, eq(assignmentCorrectives.exerciseId, exercises.id))
-      .where(inArray(assignments.coachId, coachIds));
-
-    const byId = new Map<number, string>();
-    for (const r of [...peRows, ...correctiveRows]) byId.set(r.id, r.name);
+    // The separate correctives query that used to sit here is gone.
+    // workoutLogEntries.exerciseId is resolved at submission time from
+    // EITHER programExerciseId or correctiveId (see submitWorkoutLog's
+    // resolvedExerciseId), so the one query above now covers both branches.
+    // Keeping the second one would have double-counted every corrective set.
+        const byId = new Map<number, string>();
+    for (const r of peRows) byId.set(r.id, r.name);
     return Array.from(byId.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -18877,8 +18779,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .where(eq(assignments.athleteId, athleteId));
 
     const sorted = rows
@@ -18996,30 +18897,13 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .where(and(inArray(assignments.coachId, coachIds), eq(programExercises.exerciseId, exerciseId)));
+      .where(and(inArray(assignments.coachId, coachIds), eq(workoutLogEntries.exerciseId, exerciseId)));
 
-    const correctiveRows = await db
-      .select({
-        athleteId: assignments.athleteId,
-        date: workoutLogs.date,
-        reps: workoutSetEntries.reps,
-        weight: workoutSetEntries.weight,
-        weightUnit: workoutSetEntries.weightUnit,
-        weightMode: workoutLogEntries.weightMode,
-      })
-      .from(workoutSetEntries)
-      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
-      .innerJoin(
-        assignmentCorrectives,
-        eq(workoutLogEntries.correctiveId, assignmentCorrectives.id),
-      )
-      .where(
-        and(inArray(assignments.coachId, coachIds), eq(assignmentCorrectives.exerciseId, exerciseId)),
-      );
-
+    // The separate correctives query that used to sit here is gone.
+    // workoutLogEntries.exerciseId is resolved at submission time from
+    // EITHER programExerciseId or correctiveId (see submitWorkoutLog's
+    // resolvedExerciseId), so the one query above now covers both branches.
+    // Keeping the second one would have counted every corrective set twice.
     // estimatedOneRm stays in the unit the set was actually logged in --
     // the leaderboard renders it as `${estimatedOneRm} ${weightUnit}`, so
     // converting it would mislabel the number. Ranking, though, has to
@@ -19033,7 +18917,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       number,
       { estimatedOneRm: number; oneRmLbs: number; weight: number; reps: number; date: string; weightUnit: string }
     >();
-    for (const r of [...peRows, ...correctiveRows]) {
+    for (const r of peRows) {
       if (r.weightMode !== "numeric" || !r.weight || !r.reps) continue;
       const weight = parseFloat(r.weight);
       const reps = parseInt(r.reps, 10);
@@ -20474,8 +20358,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .where(
         and(
           inArray(workoutLogs.athleteId, [...capByAthlete.keys()]),
@@ -20715,8 +20598,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
-      .innerJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .innerJoin(exercises, eq(programExercises.exerciseId, exercises.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .where(
         and(inArray(workoutLogs.athleteId, [...staleAthleteIds]), isNotNull(workoutSetEntries.formCheckVideoUrl)),
       );
