@@ -7,6 +7,7 @@ import { getPoseLandmarker, isFullBodyInFrame, type PoseFrame } from "@/lib/pose
 import { assessOverheadSquat, type OverheadSquatAssessment } from "@/lib/movement-screen-vision";
 import { Camera, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
+import { WebCameraChrome } from "@/components/web-camera-chrome";
 
 const RECORD_MS = 4000;
 
@@ -27,6 +28,8 @@ export function OverheadSquatCaptureDialog({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const cameraChromeContainerRef = useRef<HTMLDivElement>(null);
   const landmarkerRef = useRef<PoseLandmarker | null>(null);
   const rafRef = useRef<number | null>(null);
   const framesRef = useRef<PoseFrame[]>([]);
@@ -80,6 +83,7 @@ export function OverheadSquatCaptureDialog({
             return;
           }
           streamRef.current = stream;
+          videoTrackRef.current = stream.getVideoTracks()[0] ?? null;
           if (videoRef.current) videoRef.current.srcObject = stream;
         })
         .catch(() => setCameraError("Camera access denied or unavailable."));
@@ -120,6 +124,7 @@ export function OverheadSquatCaptureDialog({
       stopped = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      videoTrackRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [open]);
@@ -147,8 +152,9 @@ export function OverheadSquatCaptureDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative overflow-hidden rounded-lg bg-black">
+        <div ref={cameraChromeContainerRef} className="relative overflow-hidden rounded-lg bg-black">
           <video ref={videoRef} autoPlay playsInline muted className="aspect-[9/16] w-full object-cover" />
+          <WebCameraChrome containerRef={cameraChromeContainerRef} videoTrackRef={videoTrackRef} active={open && !modelLoading && !cameraError} />
           {(modelLoading || cameraError) && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-4 text-center text-sm text-white">
               {cameraError ?? (
