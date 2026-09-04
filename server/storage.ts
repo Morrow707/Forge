@@ -1436,6 +1436,28 @@ const forgeAiProposeEntryResultSchema = z.object({
 // it if the platform's real population is much larger than today's.
 const PLATFORM_TRENDS_MIN_COHORT = 5;
 
+// Who counts as part of Forge's OWN platform-wide dataset, as opposed to
+// the data a coach sees about their own roster.
+//
+// users.trackingOptOut is a parent or guardian's relayed request to stop
+// Forge collecting on their child (see that column's own comment). It
+// started life gating camera capture specifically, and it still does that
+// on every tracked-submission route -- but the request a parent is actually
+// making is "your platform does not get to use my kid," not "your platform
+// may use my kid as long as it isn't a camera." So every platform-wide
+// read below excludes them: the trends view, the cohort engine, the admin
+// query engine, and the aggregate export.
+//
+// Deliberately NOT applied to: a coach's own roster views and leaderboards
+// (the coach who trains this athlete keeps working exactly as before, which
+// is the whole point of opting out of Forge rather than out of coaching);
+// getUsersForAdmin (account administration has to be able to see an account
+// exists); platform headcounts (a row count identifies nobody); the
+// compliance report (which exists precisely to count how many athletes are
+// opted out); and the video retention sweeps (their videos still need
+// purging on schedule -- more so, not less).
+const platformDatasetAthlete = () => and(eq(users.role, "athlete"), eq(users.trackingOptOut, false));
+
 function average(values: (number | null | undefined)[]): number | null {
   const nums = values.filter((v): v is number => v != null && !Number.isNaN(v));
   if (nums.length < PLATFORM_TRENDS_MIN_COHORT) return null;
@@ -1507,7 +1529,7 @@ async function buildPlatformTrends() {
       deadliftMaxLbs: users.deadliftMaxLbs,
     })
     .from(users)
-    .where(eq(users.role, "athlete"));
+    .where(platformDatasetAthlete());
 
   const totalAthletes = athletes.length;
   const sportBySportKey = new Map<string, string>();
@@ -1803,7 +1825,7 @@ async function queryTrackedCohort(filters: CohortQueryFilters) {
       deadliftMaxLbs: users.deadliftMaxLbs,
     })
     .from(users)
-    .where(eq(users.role, "athlete"));
+    .where(platformDatasetAthlete());
 
   const genderSet = filters.genders?.length ? new Set(filters.genders) : null;
   const sportSet = filters.sports?.length ? new Set(filters.sports.map((s) => s.toLowerCase())) : null;
@@ -12928,7 +12950,10 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       .catch((err) => console.error("Failed to write aggregate-data access log:", err));
     const [rows, [{ count: total }]] = await Promise.all([
       this.queryAggregateAthleteData({ limit, offset }),
-      db.select({ count: count() }).from(users).where(eq(users.role, "athlete")),
+      // Same predicate the rows themselves use. Counting every athlete here
+      // while the rows exclude opted-out ones would leave the pager
+      // promising pages that come back empty at the end of the list.
+      db.select({ count: count() }).from(users).where(platformDatasetAthlete()),
     ]);
     return { rows, total };
   },
@@ -12964,7 +12989,7 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
         deadliftMaxLbs: users.deadliftMaxLbs,
       })
       .from(users)
-      .where(eq(users.role, "athlete"));
+      .where(platformDatasetAthlete());
     if (!pagination) return base;
     return base.limit(pagination.limit).offset(pagination.offset);
   },
@@ -13099,7 +13124,7 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
     const caraCapUsagePct = sql<number | null>`(CASE WHEN ${effectiveCaraCap} IS NULL THEN NULL
       ELSE (${caraMinutesUsed} / NULLIF(${effectiveCaraCap}, 0)) * 100 END)`;
 
-    const conditions = [eq(users.role, "athlete")];
+    const conditions = [platformDatasetAthlete()];
     if (filters.sport?.length) conditions.push(inArray(users.sport, filters.sport));
     if (filters.position?.length) conditions.push(inArray(users.position, filters.position));
     if (filters.seasonPhase?.length) conditions.push(inArray(users.seasonPhase, filters.seasonPhase as any));

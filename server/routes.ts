@@ -3648,6 +3648,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const athleteId = Number(req.params.athleteId);
       const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      // A goniometer reading is a camera capture (see av-goniometer-capture-dialog.tsx
+      // -- the ARKit version was retired onto the AV/Vision pipeline alongside
+      // the overhead squat), so a parent's tracking opt-out covers it. It was
+      // missed originally because the opt-out was wired onto the three
+      // ATHLETE-facing tracked-submission routes and this one is
+      // coach-initiated -- which meant a parent could opt out and still have
+      // camera-derived joint angles collected on their child by their coach.
+      // Keyed on the athlete, not the requesting coach: the opt-out belongs
+      // to the athlete whose body is being measured.
+      if (await isTrackingOptedOut(athleteId)) {
+        return res
+          .status(403)
+          .json({ message: "Camera-tracking collection is turned off for this athlete at a parent/guardian's request." });
+      }
       const parsed = insertGoniometerReadingSchema.safeParse({ ...req.body, athleteId });
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -3801,7 +3815,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/coach/roster/:athleteId/movement-screens", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const parsed = createMovementScreenSchema.safeParse({ ...req.body, athleteId: Number(req.params.athleteId) });
+    const athleteId = Number(req.params.athleteId);
+    // Same reasoning as the goniometer route above: a movement screen is
+    // scored from a camera capture (movement-screen-vision.ts,
+    // av-overhead-squat-capture-dialog.tsx), it is coach-initiated, and it
+    // was missed by the original opt-out wiring for exactly that reason.
+    if (await isTrackingOptedOut(athleteId)) {
+      return res
+        .status(403)
+        .json({ message: "Camera-tracking collection is turned off for this athlete at a parent/guardian's request." });
+    }
+    const parsed = createMovementScreenSchema.safeParse({ ...req.body, athleteId });
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const screen = await storage.createMovementScreen(user.id, parsed.data);
     if (!screen) return res.status(404).json({ message: "Athlete not found" });
