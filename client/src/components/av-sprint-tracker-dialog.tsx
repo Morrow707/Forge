@@ -39,6 +39,7 @@ import { RadioChipGroup } from "@/components/filter-chip-group";
 import { DEFAULT_SKILL_FAULT_THRESHOLDS, type SkillFaultThresholds } from "@shared/skill-fault-thresholds";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { toast } from "sonner";
+import { sprintDefaultsFor } from "@shared/skill-camera-profile";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy, X, Flag, XCircle } from "lucide-react";
 import { SuggestedCorrective } from "@/components/suggested-corrective";
 import { videoFilenameForBlob } from "@/lib/video-recording";
@@ -177,9 +178,16 @@ export function AvSprintTrackerDialog({
   }
   const [cameraAngle, setCameraAngle] = useState<SprintCameraAngle | null>(null);
   const [checkpointCount, setCheckpointCount] = useState(0);
-  const [presetId, setPresetId] = useState("40yd");
+  // Opened on whatever this named drill actually is, rather than on the 40-yard dash for
+  // everything. Distance is what turns two timing taps into a speed, so a 20-yard dash left on
+  // the 40 default reports every speed at double -- and a 5-10-5 shuttle covers 20 yards over
+  // three legs, which no reading of its name gives you. See sprintDefaultsFor.
+  const drillDefaults = sprintDefaultsFor(drillName);
+  const [presetId, setPresetId] = useState(drillDefaults?.presetId ?? "40yd");
   const preset: SprintPreset = SPRINT_PRESETS.find((p) => p.id === presetId) ?? SPRINT_PRESETS[2];
-  const [distanceYards, setDistanceYards] = useState("40");
+  const [distanceYards, setDistanceYards] = useState(
+    drillDefaults?.distanceYards != null ? String(drillDefaults.distanceYards) : "40",
+  );
   const [result, setResult] = useState<SprintResult | null>(null);
   // ARC-1: sprint computed no confidence at all, which is why
   // skillSessionLogs.trust_score_pct is null for every row. See
@@ -243,8 +251,11 @@ export function AvSprintTrackerDialog({
     setSavedToProfile(false);
     checkpointsRef.current = [];
     setCheckpointCount(0);
-    setPresetId("40yd");
-    setDistanceYards("40");
+    // Back to THIS drill's own defaults, not to the 40-yard dash. The dialog resets every time
+    // it opens, so resetting to a flat 40 here would undo the per-drill default on the first
+    // render the athlete actually sees.
+    setPresetId(drillDefaults?.presetId ?? "40yd");
+    setDistanceYards(drillDefaults?.distanceYards != null ? String(drillDefaults.distanceYards) : "40");
     pointsRef.current = [];
     framesRef.current = [];
     if (videoUrl) URL.revokeObjectURL(videoUrl);

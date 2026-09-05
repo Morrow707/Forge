@@ -31,6 +31,7 @@ import {
   type SkillFaultThresholds,
 } from "@shared/skill-fault-thresholds";
 import { toast } from "sonner";
+import { skillCameraProfile } from "@shared/skill-camera-profile";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Activity, XCircle } from "lucide-react";
 import { SuggestedCorrective } from "@/components/suggested-corrective";
 import { videoFilenameForBlob } from "@/lib/video-recording";
@@ -68,6 +69,7 @@ export function AvMechanicsTrackerDialog({
   open,
   onOpenChange,
   drillName,
+  skillType,
   mode,
   actionLabel: actionLabelProp,
   heightIn,
@@ -80,6 +82,9 @@ export function AvMechanicsTrackerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   drillName: string;
+  /** Drives the per-drill camera guidance shown on the angle picker. Optional so an existing
+   * caller without it keeps working on the generic text. */
+  skillType?: string | null;
   mode: MechanicsMode;
   actionLabel?: string;
   heightIn?: number | null;
@@ -101,6 +106,7 @@ export function AvMechanicsTrackerDialog({
     stepRef.current = next;
     setStepState(next);
   }
+  const profile = skillCameraProfile(skillType, drillName);
   const [cameraAngle, setCameraAngle] = useState<MechanicsCameraAngle | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [result, setResult] = useState<MechanicsResult | null>(null);
@@ -287,6 +293,21 @@ export function AvMechanicsTrackerDialog({
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <p>Camera angle changes what this can measure. Pick the angle you're actually filming from.</p>
             </div>
+            {/* "Down the line" is meaningless without saying which line -- the target line in
+                golf, the plate-to-pitcher line when hitting, the service box in tennis, the
+                throwing direction in shot put. The picker used to name neither angle's position,
+                so an athlete guessing wrong did not get a worse number, they got a number
+                measuring the axis the analysis is blind to. */}
+            <div className="rounded-md border border-border p-3 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                In frame
+              </p>
+              <p className="mt-0.5">{profile.inFrame}</p>
+              <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                One rep
+              </p>
+              <p className="mt-0.5">{profile.oneRep}</p>
+            </div>
             <button
               type="button"
               onClick={() => setCameraAngle("face_on")}
@@ -295,8 +316,16 @@ export function AvMechanicsTrackerDialog({
                 cameraAngle === "face_on" ? "border-teal-500 bg-teal-950/30" : "border-border",
               )}
             >
-              <p className="font-semibold">Filming face-on</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="font-semibold">
+                Filming face-on
+                {profile.preferredAngle === "face_on" && (
+                  <span className="ml-2 text-xs font-normal text-teal-600 dark:text-teal-400">
+                    Best for this drill
+                  </span>
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{profile.faceOn}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
                 Checks weight transfer and hip rotation. Won't catch separation or sequencing.
               </p>
             </button>
@@ -308,8 +337,16 @@ export function AvMechanicsTrackerDialog({
                 cameraAngle === "down_the_line" ? "border-teal-500 bg-teal-950/30" : "border-border",
               )}
             >
-              <p className="font-semibold">Filming down the line</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="font-semibold">
+                Filming down the line
+                {profile.preferredAngle === "down_the_line" && (
+                  <span className="ml-2 text-xs font-normal text-teal-600 dark:text-teal-400">
+                    Best for this drill
+                  </span>
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{profile.downTheLine}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
                 Checks hip-shoulder separation and sequencing
                 {mode === "throw" ? ", plus arm slot" : ""}. Won't catch weight transfer or hip rotation.
               </p>

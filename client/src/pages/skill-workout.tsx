@@ -35,10 +35,10 @@ import {
 import { SprintTrackerDialog } from "@/components/sprint-tracker-dialog";
 import { AvSprintTrackerDialog } from "@/components/av-sprint-tracker-dialog";
 import { AvMechanicsTrackerDialog } from "@/components/av-mechanics-tracker-dialog";
+import { mechanicsModeFor, mechanicsActionLabelFor } from "@shared/skill-camera-profile";
 import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
-import type { MechanicsMode } from "@/lib/mechanics-tracking";
 
 type SkillSet = {
   setNumber: number;
@@ -71,17 +71,6 @@ type SkillDayInfo = {
   exercises: SkillExercise[];
 };
 
-// Exact mirror of skill-day-view-dialog.tsx's own mechanicsModeFor/
-// mechanicsActionLabelFor -- Hitting is the only "swing", Throwing/
-// Pitching/Shooting are "throw" (a jump shot shares a throw's one-arm-
-// extends-and-releases metrics), everything else defaults to "swing".
-function mechanicsModeFor(skillType: string): MechanicsMode {
-  return skillType === "Throwing" || skillType === "Pitching" || skillType === "Shooting" ? "throw" : "swing";
-}
-function mechanicsActionLabelFor(skillType: string): string {
-  if (skillType === "Shooting") return "Shot";
-  return mechanicsModeFor(skillType) === "throw" ? "Throw" : "Swing";
-}
 
 function isSetFilled(set: SkillSet): boolean {
   return set.elapsedSeconds != null || !!set.manualResult?.trim() || !!set.videoUrl;
@@ -542,8 +531,9 @@ export default function SkillWorkoutPage() {
           open={!!mechanicsExercise}
           onOpenChange={(o) => !o && setMechanicsExercise(null)}
           drillName={mechanicsExercise.name}
-          mode={mechanicsModeFor(mechanicsExercise.skillType)}
-          actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType)}
+          skillType={mechanicsExercise.skillType}
+          mode={mechanicsModeFor(mechanicsExercise.skillType, mechanicsExercise.name)}
+          actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType, mechanicsExercise.name)}
           heightIn={user?.heightIn}
           skillAssignmentId={assignmentId}
           skillProgramDayId={dayId}
@@ -556,8 +546,9 @@ export default function SkillWorkoutPage() {
           open={!!mechanicsExercise}
           onOpenChange={(o) => !o && setMechanicsExercise(null)}
           drillName={mechanicsExercise.name}
-          mode={mechanicsModeFor(mechanicsExercise.skillType)}
-          actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType)}
+          skillType={mechanicsExercise.skillType}
+          mode={mechanicsModeFor(mechanicsExercise.skillType, mechanicsExercise.name)}
+          actionLabel={mechanicsActionLabelFor(mechanicsExercise.skillType, mechanicsExercise.name)}
           skillAssignmentId={assignmentId}
           skillProgramDayId={dayId}
           skillProgramExerciseId={mechanicsExercise.id}

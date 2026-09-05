@@ -1,3 +1,4 @@
+import { skillCameraProfile } from "@shared/skill-camera-profile";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -76,6 +77,7 @@ export function MechanicsTrackerDialog({
   open,
   onOpenChange,
   drillName,
+  skillType,
   mode,
   actionLabel: actionLabelProp,
   skillAssignmentId,
@@ -87,6 +89,9 @@ export function MechanicsTrackerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   drillName: string;
+  /** Drives the per-drill camera guidance on the angle picker. Optional so any caller without
+   * it keeps working on the generic text. */
+  skillType?: string | null;
   mode: MechanicsMode;
   // Overrides the default "Throw"/"Swing" button/toast wording -- a jump
   // shot uses "throw" mode (same one-arm-extends-and-releases metrics) but
@@ -138,6 +143,7 @@ export function MechanicsTrackerDialog({
     stepRef.current = next;
     setStepState(next);
   }
+  const profile = skillCameraProfile(skillType, drillName);
   const [cameraAngle, setCameraAngle] = useState<MechanicsCameraAngle | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [modelLoading, setModelLoading] = useState(true);
@@ -499,7 +505,13 @@ export function MechanicsTrackerDialog({
                 cameraAngle === "face_on" ? "border-teal-500 bg-teal-950/30" : "border-border",
               )}
             >
-              <p className="font-semibold">Filming face-on</p>
+              <p className="font-semibold">
+                Filming face-on
+                {profile.preferredAngle === "face_on" && (
+                  <span className="ml-2 text-xs font-normal text-teal-600 dark:text-teal-400">Best for this drill</span>
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{profile.faceOn}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Checks weight transfer and hip rotation. Won't catch separation or sequencing.
               </p>
@@ -512,7 +524,13 @@ export function MechanicsTrackerDialog({
                 cameraAngle === "down_the_line" ? "border-teal-500 bg-teal-950/30" : "border-border",
               )}
             >
-              <p className="font-semibold">Filming down the line</p>
+              <p className="font-semibold">
+                Filming down the line
+                {profile.preferredAngle === "down_the_line" && (
+                  <span className="ml-2 text-xs font-normal text-teal-600 dark:text-teal-400">Best for this drill</span>
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{profile.downTheLine}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Checks hip-shoulder separation and sequencing
                 {mode === "throw" ? ", plus arm slot" : ""}. Won't catch weight transfer or hip rotation.
