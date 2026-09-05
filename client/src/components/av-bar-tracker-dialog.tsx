@@ -50,6 +50,9 @@ import {
   computeArmDriveAsymmetry,
   computeRepTrustScores,
   implausibleRangeOfMotion,
+  toScaleFreeMetrics,
+  normalizeTraceScale,
+  type ScaleFreeMetrics,
   MIN_TRACKING_CONFIDENCE,
   type RepMetrics,
   type TrackedPoint,
@@ -60,6 +63,7 @@ import {
   postureForExercise,
   heightCalibrationUnreliable,
   filmGuidanceForExercise,
+  barPathAssumptionInvalid,
   calibrationRefusalReason,
   firstMoveForExercise,
   romBucketForExercise,
@@ -450,6 +454,72 @@ export function AvBarTrackerDialog({
     }
   }
 
+  // A capture that has real numbers, just not the ones that need a scale.
+  //
+  // The whole-set durations and the velocity-loss percentage go into their own real columns --
+  // every one of those is a time or a ratio, so it means the same thing with or without
+  // calibration. Everything that would need metres stays at the empty value it already had.
+  // The per-rep detail rides in trackingDiagnostics rather than repBreakdown: that type's
+  // velocity fields are non-null and read by every chart downstream, so widening them to carry
+  // a null for this one case would push the question onto all of them.
+  async function saveScaleFreeAndWarn(
+    blob: Blob,
+    scaleFree: ScaleFreeMetrics,
+    message: string,
+    captureDeviceInfo: CaptureDeviceInfo,
+    trackingDiagnostics: TrackingDiagnostics,
+    uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
+    forSetNumber: number,
+  ) {
+    const metrics: RepMetrics = {
+      ...EMPTY_REP_METRICS,
+      concentricSeconds: scaleFree.concentricSeconds,
+      eccentricSeconds: scaleFree.eccentricSeconds ?? 0,
+      velocityLossPercent: scaleFree.velocityLossPercent,
+      captureDeviceInfo,
+      trackingDiagnostics: { ...trackingDiagnostics, scaleFree },
+    };
+    const summary =
+      `Got ${scaleFree.repCount} rep${scaleFree.repCount === 1 ? "" : "s"}, tempo` +
+      (scaleFree.velocityLossPercent != null
+        ? ` and ${Math.abs(Math.round(scaleFree.velocityLossPercent))}% velocity loss.`
+        : ".");
+    const full = `${message} ${summary}`;
+    if (recordVideo && uploadPromise) {
+      try {
+        const result = await uploadPromise;
+        toast.warning(
+          result.status === "queued"
+            ? `${full} (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)`
+            : `${full} (Video saved for your coach.)`,
+        );
+        if (result.status === "queued") {
+          if (!hasWarnedAboutQueueing()) {
+            markWarnedAboutQueueing();
+            toast.info(
+              "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
+              { duration: 10000 },
+            );
+          }
+          onCapture(metrics, undefined, forSetNumber);
+        } else {
+          onCapture(metrics, result.url, forSetNumber);
+        }
+        onOpenChange(false);
+      } catch (err) {
+        const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
+        toast.error(`${full} And the video didn't save either: ${detail}`);
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      toast.warning(full);
+      onCapture(metrics, undefined, forSetNumber);
+      onOpenChange(false);
+      setSaving(false);
+    }
+  }
+
   async function stopTracking() {
     // Captured once, up front -- every callback below (onAnalysisStarted, onCapture,
     // onProcessingSettled) uses this same value for the whole lifetime of this one Stop Set,
@@ -576,32 +646,35 @@ export function AvBarTrackerDialog({
         ? (heightScaleFactor + plateScale.scale) / 2
         : (plateScale?.scale ?? heightScaleFactor);
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
-    if (scaleFactor == null) {
-      // No "(Video saved for your coach.)" in any of these -- saveEmptyAndWarn appends that
-      // itself, and including it produced the message twice on a real device.
-      const message = calibrationRefusalReason(posture)
-        ?? (!canUseHeight
-          ? "This is a hold or a stretch rather than a lift with reps, so there's no range of motion to measure and your height can't be used to set scale. Numbers are withheld rather than guessed."
-          : coreMlTrackingMode === "plate"
-          ? "Couldn't calibrate real-world scale for this take -- make sure a bumper plate is clearly visible on the bar at some point in frame (or your height is set and you're visible standing)."
-          : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.");
-      await saveEmptyAndWarn(
-        blob,
-        message,
-        captureDeviceInfo,
-        buildTrackingDiagnostics({
-          outcome: "empty_calibration_failed",
-          message,
-          rawFrames,
-          trackingMode: coreMlTrackingMode,
-          recording: recordingStats,
-          calibration: { scaleFactor: null, ...calibrationFrames },
-        }),
-        uploadPromise,
-        forSetNumber,
-      );
-      return;
-    }
+
+    // No scale used to end the take here, with nothing saved but the video. It no longer does.
+    //
+    // Plenty of what a set is worth knowing never needed a real-world scale: how long each rep
+    // took, how much the bar slowed across the set, how long it took to reach top speed, how far
+    // it drifted as a share of its own travel. Those are times and ratios, and metres cancel out
+    // of every one. Velocity loss in particular is the number a velocity-based-training athlete
+    // trains against, it is a percentage, and it was being discarded along with the metres it
+    // does not need.
+    //
+    // So the trace is still built (at a scale of 1, which is honest: the units are arbitrary),
+    // and the scale-free half is computed and saved below. Only the metres, the metres per
+    // second and the watts are withheld.
+    //
+    // No "(Video saved for your coach.)" in any of these -- saveEmptyAndWarn appends that
+    // itself, and including it produced the message twice on a real device.
+    const scaleRefusalMessage =
+      scaleFactor != null
+        ? null
+        : (calibrationRefusalReason(posture) ??
+          (!canUseHeight
+            ? "This is a hold or a stretch rather than a lift with reps, so there's no range of motion to measure and your height can't be used to set scale. Numbers are withheld rather than guessed."
+            : coreMlTrackingMode === "plate"
+              ? "Couldn't calibrate real-world scale for this take -- make sure a bumper plate is clearly visible on the bar at some point in frame (or your height is set and you're visible standing)."
+              : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame."));
+    // 1 rather than null so the trace-building loop below reads the same either way. Every
+    // position it produces is then in arbitrary units, which is exactly what the scale-free path
+    // expects and what nothing else is allowed to read.
+    const effectiveScale = scaleFactor ?? 1;
 
     const trace: TrackedPoint[] = [];
     const frames: PoseFrame[] = [];
@@ -675,13 +748,13 @@ export function AvBarTrackerDialog({
     for (const f of rawFrames) {
       const t = f.timestamp * 1000;
       // Phase B: real depth when this frame actually has it (iOS 17+, a confident 3D pose) --
-      // already real-world meters, so it bypasses the athlete-height scaleFactor entirely (see
+      // already real-world meters, so it bypasses the athlete-height effectiveScale entirely (see
       // visionBody3DToWorldLandmarks's own comment on why double-scaling would be wrong).
       // Falls back to the existing 2D-derived-plus-calibration path frame by frame, not once
       // for the whole clip, since body3D availability can vary frame to frame even on a
       // 17+ device (a low-confidence 3D read on one frame, a good one on the next).
       const body3DLm = visionBody3DToWorldLandmarks(f);
-      const worldLm = body3DLm ?? scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
+      const worldLm = body3DLm ?? scaleWorldLandmarks(visionJointsToWorldLandmarks(f), effectiveScale);
       frames.push({ t, landmarks: [], worldLandmarks: worldLm });
 
       const sign = worldVerticalSign(worldLm);
@@ -692,14 +765,14 @@ export function AvBarTrackerDialog({
       // convention as a joint (see AvImplementTracker's own comment) --
       // visionImplementToPoint applies the identical pixel-scale+Y-flip
       // transform worldLm above already went through, so scaling by the
-      // same scaleFactor lands both in the same real-meters space.
+      // same effectiveScale lands both in the same real-meters space.
       const leftImplementRaw = visionImplementToPoint(f.leftImplement, f);
       const rightImplementRaw = visionImplementToPoint(f.rightImplement, f);
       const leftImplement: ImplementPoint | null = leftImplementRaw
-        ? { ...leftImplementRaw, x: leftImplementRaw.x * scaleFactor, y: leftImplementRaw.y * scaleFactor, z: 0 }
+        ? { ...leftImplementRaw, x: leftImplementRaw.x * effectiveScale, y: leftImplementRaw.y * effectiveScale, z: 0 }
         : null;
       const rightImplement: ImplementPoint | null = rightImplementRaw
-        ? { ...rightImplementRaw, x: rightImplementRaw.x * scaleFactor, y: rightImplementRaw.y * scaleFactor, z: 0 }
+        ? { ...rightImplementRaw, x: rightImplementRaw.x * effectiveScale, y: rightImplementRaw.y * effectiveScale, z: 0 }
         : null;
 
       // Same raw-Vision-convention-then-scale treatment as leftImplement/rightImplement above,
@@ -712,7 +785,7 @@ export function AvBarTrackerDialog({
       // against the same reading.
       const coreMlPointRaw = visionCoreMlBoxToPoint(f.coreMlImplement, f);
       const coreMlPoint: ImplementPoint | null = coreMlPointRaw
-        ? { ...coreMlPointRaw, x: coreMlPointRaw.x * scaleFactor, y: coreMlPointRaw.y * scaleFactor, z: 0 }
+        ? { ...coreMlPointRaw, x: coreMlPointRaw.x * effectiveScale, y: coreMlPointRaw.y * effectiveScale, z: 0 }
         : null;
 
       const { fused: fusedLeft, nextPrev: nextPrevLeft } = fuseSide(worldLm, "left", leftImplement, prevFusedLeft, leftVelocitySamples, t, coreMlPoint, f);
@@ -747,6 +820,62 @@ export function AvBarTrackerDialog({
         }
         trace.push(point);
       }
+    }
+
+    // The scale-free branch. Runs before anything that reads a real-world unit -- form-fault
+    // detection, the range-of-motion plausibility check and the power maths all compare against
+    // absolute centimetres and would be nonsense here.
+    if (scaleRefusalMessage) {
+      const unscaled = summarizeTrackedSet(
+        normalizeTraceScale(trace),
+        // No load: watts are mass times gravity times velocity, and the velocity is in arbitrary
+        // units. A power number here would be wrong by whatever the scale turned out to be.
+        undefined,
+        undefined,
+        firstMoveForExercise(exerciseName),
+        rejectionEvents,
+        1,
+        // Rep boundaries relative to this take's own typical rep, since the absolute 20cm floor
+        // means nothing without a scale.
+        true,
+      );
+      const scaleFree = unscaled ? toScaleFreeMetrics(unscaled) : null;
+      if (scaleFree) {
+        await saveScaleFreeAndWarn(
+          blob,
+          scaleFree,
+          scaleRefusalMessage,
+          captureDeviceInfo,
+          buildTrackingDiagnostics({
+            outcome: "scale_free_only",
+            message: scaleRefusalMessage,
+            rawFrames,
+            trackingMode: coreMlTrackingMode,
+            recording: recordingStats,
+            calibration: { scaleFactor: null, ...calibrationFrames },
+          }),
+          uploadPromise,
+          forSetNumber,
+        );
+        return;
+      }
+      // Not even a rep boundary could be found, so there is genuinely nothing to report.
+      await saveEmptyAndWarn(
+        blob,
+        scaleRefusalMessage,
+        captureDeviceInfo,
+        buildTrackingDiagnostics({
+          outcome: "empty_calibration_failed",
+          message: scaleRefusalMessage,
+          rawFrames,
+          trackingMode: coreMlTrackingMode,
+          recording: recordingStats,
+          calibration: { scaleFactor: null, ...calibrationFrames },
+        }),
+        uploadPromise,
+        forSetNumber,
+      );
+      return;
     }
 
     const metrics = summarizeTrackedSet(
@@ -815,9 +944,30 @@ export function AvBarTrackerDialog({
       return;
     }
 
+    // On an Olympic lift the bar deliberately does not travel a straight vertical line -- it
+    // loops back around the knees and in under the athlete. Bar-path deviation measures distance
+    // from a straight line and peak velocity is read off that same trace, so on these lifts a
+    // technically correct rep scores WORSE than a bad one hauled up in a straight line. Those
+    // two numbers are not imprecise here, they are inverted, so they are withheld rather than
+    // shown with a caveat nobody reads. Range of motion, timing, velocity loss and rep count all
+    // still mean what they usually mean and are kept.
+    const olympicPath = barPathAssumptionInvalid(exerciseName);
+    if (olympicPath) {
+      metrics.barPathDeviationCm = null;
+      metrics.peakVelocityMps = null;
+      metrics.peakPowerWatts = null;
+      // Per-rep values are left as computed and flagged instead of nulled: they feed internal
+      // maths and several existing charts that type them as plain numbers, and threading a null
+      // through all of that to express one lift family's caveat would push the question onto
+      // every consumer. The flag is the signal not to chart them.
+      metrics.barPathAssumptionInvalid = true;
+    }
+
     metrics.formFaults = detectFormFaults(
       frames,
-      metrics.barPathDeviationCm,
+      // 0, not the withheld null: on an Olympic lift there is no meaningful drift to flag, and
+      // 0 is how this parameter spells "nothing to report" to the fault detector.
+      metrics.barPathDeviationCm ?? 0,
       "lift",
       movementType,
       equipment,

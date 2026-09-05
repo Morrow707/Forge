@@ -121,11 +121,22 @@ export type RepBreakdown = {
 export type PathTracePoint = { t: number; x: number; y: number };
 
 export type RepMetrics = {
-  peakVelocityMps: number;
+  // Nullable because a lift can have a rep whose peak velocity is genuinely not measurable
+  // rather than zero. On an Olympic lift the bar deliberately does not travel a straight line,
+  // so both this and barPathDeviationCm are read off an assumption that does not hold -- see
+  // barPathAssumptionInvalid. Zero would be a different lie: charts plot it, coaches read it.
+  peakVelocityMps: number | null;
+  // True when this lift's bar deliberately does not travel a straight vertical line, so the two
+  // numbers derived from that assumption -- barPathDeviationCm and peakVelocityMps -- are
+  // withheld at the set level and the per-rep equivalents must not be charted either. The
+  // per-rep fields stay non-null so every internal computation and every existing consumer keeps
+  // its types; this flag is how a renderer knows not to trust them. See barPathAssumptionInvalid
+  // in exercise-camera-profile.ts for why a straight-line assumption inverts on these lifts.
+  barPathAssumptionInvalid?: boolean;
   meanVelocityMps: number;
   concentricSeconds: number;
   eccentricSeconds: number;
-  barPathDeviationCm: number;
+  barPathDeviationCm: number | null;
   barPathTrace: PathTracePoint[];
   // Per-rep numbers for the velocity-decay / depth-consistency breakdown --
   // the whole-set numbers above stay as they were (best/average across the
@@ -861,6 +872,20 @@ export function summarizeTrackedSet(
   // from velocity) all scale by exactly this factor as a result, with no
   // separate correction needed for each.
   positionScaleCorrection = 1,
+  // Segment reps by each reversal's size relative to this take's OWN typical rep, instead of
+  // against an absolute centimetre floor.
+  //
+  // Only for a trace with no real-world scale. BASE_MIN_REP_AMPLITUDE_CM is a good gate when a
+  // scale exists and meaningless without one -- a threshold in centimetres applied to a trace in
+  // arbitrary units is not a threshold at all. Worse, when the scale was merely WRONG it did
+  // visible damage: at a 4x-inflated scale an athlete's ordinary settling wobble cleared the
+  // 20cm floor and 11 real bench reps segmented into 18.
+  //
+  // Everything else in this function is left alone deliberately. The concentric-vs-eccentric
+  // call, the first-phase hint, and the phantom-phase filter are all ratios and comparisons
+  // within the set, so they work identically with or without a scale -- and duplicating them
+  // into a parallel function would be how the two copies drift apart.
+  relativeSegmentation = false,
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
@@ -888,7 +913,9 @@ export function summarizeTrackedSet(
   const confidences = points.map((p) => p.confidence ?? 1);
 
   const minAmplitudeM = minRepAmplitudeCm / 100;
-  const phases = segmentPhases(ySmoothed, minAmplitudeM);
+  const phases = relativeSegmentation
+    ? (segmentPhasesRelative(ySmoothed) ?? [])
+    : segmentPhases(ySmoothed, minAmplitudeM);
   if (phases.length === 0) return null;
 
   const phaseStats = phases.map((phase) => {
@@ -1629,4 +1656,125 @@ export function segmentPhasesRelative(
   if (!(typical > 0)) return null;
 
   return segmentPhases(positions, typical * RELATIVE_REP_AMPLITUDE_FRACTION);
+}
+
+// A trace with no real-world scale still has to pass through filters that assume one.
+//
+// rejectImplausibleAccelerationSpikes caps acceleration at a multiple of gravity, and
+// robustPeakSpeed discards any frame reading faster than MAX_PLAUSIBLE_LIFT_VELOCITY_MPS. Both
+// are stated in metres. Handed a trace in arbitrary units they do not merely stop helping, they
+// actively corrupt: a trace whose numbers happen to be large reads as one continuous
+// physically-impossible event, so every frame is rejected and the peak collapses to the ceiling;
+// one whose numbers are small sails through unfiltered. The same five reps segmented as four at
+// one scale and eight at another, which is how this was found.
+//
+// So the trace is first rescaled to a nominal, physically ordinary size. The choice of nominal
+// value does not matter and is not a claim about the athlete: every number the scale-free path
+// reports is either a duration or a ratio, and multiplying every position by a constant changes
+// neither. What it buys is that the filters run in the regime they were tuned for and go back to
+// removing tracking glitches, which is their real job.
+const NOMINAL_SCALE_FREE_ROM_M = 0.5;
+
+export function normalizeTraceScale(points: TrackedPoint[]): TrackedPoint[] {
+  if (points.length < 2) return points;
+  const ys = points.map((p) => p.y).sort((a, b) => a - b);
+  // 5th to 95th percentile rather than min-to-max, so one stray frame cannot set the scale for
+  // the whole take.
+  const low = ys[Math.floor(ys.length * 0.05)];
+  const high = ys[Math.floor(ys.length * 0.95)];
+  const span = Math.abs(high - low);
+  if (!(span > 0) || !Number.isFinite(span)) return points;
+  const factor = NOMINAL_SCALE_FREE_ROM_M / span;
+  return points.map((p) => ({ ...p, x: p.x * factor, y: p.y * factor, z: p.z * factor }));
+}
+
+// What a set is still worth reporting when no real-world scale could be established.
+//
+// Until now the answer was "nothing". A bench press, and every seated lift after the posture
+// work, saved its video and withheld every number -- including the ones that never needed a
+// scale in the first place. How long each rep took, how much the bar slowed across the set, how
+// long it took to reach top speed, and how far it drifted as a share of its own travel are all
+// times or ratios. Metres cancel out of every one of them.
+//
+// That matters most on exactly the lift where it was worst. Velocity loss across a set is the
+// number a velocity-based-training athlete actually trains against, and it is a percentage. It
+// was being thrown away with the metres it does not need.
+//
+// Nothing here carries a unit that depends on calibration. There is deliberately no "velocity"
+// field of any kind, in any disguise: a number in trace units per second would look like a
+// speed, sort like a speed, and be compared against last week's speed by an athlete who has no
+// way to know the units changed.
+export type ScaleFreeRep = {
+  repNumber: number;
+  concentricSeconds: number;
+  eccentricSeconds: number | null;
+  timeToPeakVelocitySeconds: number;
+  /** This rep's peak speed as a share of the set's fastest rep. The fastest rep is 1. */
+  relativePeakVelocity: number;
+  /** Knee/hip angle at the bottom, in degrees. An angle is a ratio of two lengths, so it needs
+   * no scale -- this is the one positional metric that survives. */
+  depthDeg?: number | null;
+};
+
+export type ScaleFreeMetrics = {
+  repCount: number;
+  reps: ScaleFreeRep[];
+  /** Mean concentric and eccentric duration across the set, in seconds. */
+  concentricSeconds: number;
+  eccentricSeconds: number | null;
+  /** Drop in mean speed from the first rep to the last, as a percentage. Null for a single rep. */
+  velocityLossPercent: number | null;
+  /** Bar drift, as a percentage of the distance the bar actually travelled. The absolute
+   * centimetre version needs a scale; this one is drift divided by travel, so it does not. */
+  barPathDriftPercentOfRom: number | null;
+};
+
+/** The scale-invariant part of a set's metrics.
+ *
+ * Takes a RepMetrics computed from an UNSCALED trace (summarizeTrackedSet with
+ * relativeSegmentation on). Every unit-bearing field on that input is in arbitrary trace units
+ * and is dropped here rather than reported. */
+export function toScaleFreeMetrics(metrics: RepMetrics): ScaleFreeMetrics | null {
+  const reps = metrics.repBreakdown;
+  if (!reps.length) return null;
+
+  const fastest = Math.max(...reps.map((r) => r.peakVelocityMps), 0);
+  const scaleFreeReps: ScaleFreeRep[] = reps.map((r, i) => ({
+    repNumber: r.repNumber ?? i + 1,
+    concentricSeconds: r.concentricSeconds,
+    eccentricSeconds: r.eccentricSeconds ?? null,
+    timeToPeakVelocitySeconds: r.timeToPeakVelocitySeconds,
+    relativePeakVelocity:
+      fastest > 0 ? Math.round((r.peakVelocityMps / fastest) * 1000) / 1000 : 0,
+    depthDeg: r.depthDeg ?? null,
+  }));
+
+  const meanConcentric =
+    Math.round((reps.reduce((a, r) => a + r.concentricSeconds, 0) / reps.length) * 100) / 100;
+  const eccentricValues = reps
+    .map((r) => r.eccentricSeconds)
+    .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const meanEccentric =
+    eccentricValues.length > 0
+      ? Math.round((eccentricValues.reduce((a, v) => a + v, 0) / eccentricValues.length) * 100) / 100
+      : null;
+
+  // Both sides of this ratio come from the same unscaled trace, so whatever the units were, they
+  // divide out. Guarded on the mean ROM being positive: a set whose reps registered no travel at
+  // all has nothing to express drift as a share of.
+  const meanRom = reps.reduce((a, r) => a + (r.romCm ?? 0), 0) / reps.length;
+  const deviation = metrics.barPathDeviationCm;
+  const barPathDriftPercentOfRom =
+    meanRom > 0 && deviation != null && Number.isFinite(deviation)
+      ? Math.round((deviation / meanRom) * 1000) / 10
+      : null;
+
+  return {
+    repCount: reps.length,
+    reps: scaleFreeReps,
+    concentricSeconds: meanConcentric,
+    eccentricSeconds: meanEccentric,
+    velocityLossPercent: metrics.velocityLossPercent ?? null,
+    barPathDriftPercentOfRom,
+  };
 }

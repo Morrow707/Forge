@@ -6437,7 +6437,13 @@ export const captureDeviceInfoSchema = z.object({
 // dialog already has in hand (the raw per-frame Vision output, the calibration result) --
 // nothing new captured natively, just packaged and persisted instead of discarded.
 export const trackingDiagnosticsSchema = z.object({
-  outcome: z.enum(["tracked", "empty_calibration_failed", "empty_no_clean_read", "empty_implausible_scale"]),
+  outcome: z.enum([
+    "tracked",
+    "empty_calibration_failed",
+    "empty_no_clean_read",
+    "empty_implausible_scale",
+    "scale_free_only",
+  ]),
   // The exact toast message shown to the athlete in the moment (see saveEmptyAndWarn) -- null
   // when outcome is "tracked".
   message: z.string().optional().nullable(),

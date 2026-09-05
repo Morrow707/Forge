@@ -29,8 +29,22 @@ type CaptureDeviceInfo = {
 // Mirrors client/src/lib/tracking-diagnostics.ts's TrackingDiagnostics -- kept in sync by hand,
 // same pattern CaptureDeviceInfo above already uses.
 type TrackingDiagnostics = {
-  outcome: "tracked" | "empty_calibration_failed" | "empty_no_clean_read" | "empty_implausible_scale";
+  outcome:
+    | "tracked"
+    | "empty_calibration_failed"
+    | "empty_no_clean_read"
+    | "empty_implausible_scale"
+    | "scale_free_only";
   message?: string | null;
+  // Present only on "scale_free_only": the reps and ratios that survived without a real-world
+  // scale. Everything in here is a count, a duration or a ratio.
+  scaleFree?: {
+    repCount: number;
+    concentricSeconds: number;
+    eccentricSeconds: number | null;
+    velocityLossPercent: number | null;
+    barPathDriftPercentOfRom: number | null;
+  } | null;
   recording?: {
     frameCount: number;
     trackedFrameCount: number;
@@ -491,11 +505,20 @@ function computeFlags(r: TrackedSetRow): string[] {
     d?.outcome === "empty_no_clean_read";
   const loggedReps = r.reps && !withheldDeliberately ? parseInt(r.reps, 10) : null;
   if (loggedReps && loggedReps > 0) {
-    const trackedReps = Array.isArray(r.repBreakdown)
+    // "scale_free_only" is NOT in withheldDeliberately above, deliberately. That outcome did
+    // find and count reps -- it only withheld the measurements that needed a real-world scale --
+    // so the count is worth checking against what the athlete logged, the same as any tracked
+    // set. It just does not live in repBreakdown, which stays empty because the per-rep velocity
+    // fields there are non-null and there is no honest velocity to put in them.
+    const trackedReps = Array.isArray(r.repBreakdown) && r.repBreakdown.length > 0
       ? r.repBreakdown.length
-      : Array.isArray(r.jumpBreakdown)
-        ? r.jumpBreakdown.length
-        : null;
+      : d?.scaleFree?.repCount != null
+        ? d.scaleFree.repCount
+        : Array.isArray(r.jumpBreakdown)
+          ? r.jumpBreakdown.length
+          : Array.isArray(r.repBreakdown)
+            ? r.repBreakdown.length
+            : null;
     if (trackedReps != null && trackedReps < loggedReps) {
       flags.push(`Logged ${loggedReps} reps but tracking only found ${trackedReps}`);
     }

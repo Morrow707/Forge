@@ -12,10 +12,34 @@ export type TrackingOutcome =
   // implausibleRangeOfMotion in bar-tracking.ts. Distinct from empty_calibration_failed:
   // there, nothing calibrated; here, something did and was wrong, which is the more
   // dangerous case because it is the one that used to publish confident nonsense.
-  | "empty_implausible_scale";
+  | "empty_implausible_scale"
+  // Not empty at all: no real-world scale could be established, so the metres, the metres per
+  // second and the watts are withheld, but the times and ratios that never needed a scale are
+  // saved. Distinct from empty_calibration_failed, which is the same cause with nothing kept.
+  | "scale_free_only";
+
+export type ScaleFreeSummary = {
+  repCount: number;
+  concentricSeconds: number;
+  eccentricSeconds: number | null;
+  velocityLossPercent: number | null;
+  barPathDriftPercentOfRom: number | null;
+  reps: {
+    repNumber: number;
+    concentricSeconds: number;
+    eccentricSeconds: number | null;
+    timeToPeakVelocitySeconds: number;
+    relativePeakVelocity: number;
+    depthDeg?: number | null;
+  }[];
+};
 
 export type TrackingDiagnostics = {
   outcome: TrackingOutcome;
+  // Present only on a "scale_free_only" capture. Lives here rather than in repBreakdown because
+  // that type's velocity fields are non-null and read by every chart downstream; widening them
+  // to carry a null for this one case would push the question onto all of them.
+  scaleFree?: ScaleFreeSummary | null;
   message: string | null;
   recording: {
     frameCount: number;
@@ -164,6 +188,8 @@ function summarizeObjectDetection(
 export function buildTrackingDiagnostics(args: {
   outcome: TrackingOutcome;
   message?: string | null;
+  /** Only ever set alongside outcome "scale_free_only". */
+  scaleFree?: ScaleFreeSummary | null;
   rawFrames: NativePoseFrame[];
   // Which CoreML class (if any) was actually requested for this clip -- see
   // summarizeObjectDetection's own checkSize for why coreMlSizeCheck only means something for
@@ -194,6 +220,7 @@ export function buildTrackingDiagnostics(args: {
 }): TrackingDiagnostics {
   return {
     outcome: args.outcome,
+    scaleFree: args.scaleFree ?? null,
     message: args.message ?? null,
     recording: args.recording ?? null,
     bodyPose: summarizeBodyPose(args.rawFrames),

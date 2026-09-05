@@ -1068,3 +1068,17 @@ export function filmGuidanceForExercise(
   if (!name) return null;
   return FILM_GUIDANCE_NORMALIZED.get(normalizeName(name)) ?? null;
 }
+
+/** True when this lift's bar deliberately does not travel a straight vertical line.
+ *
+ * Bar-path deviation measures how far the bar strayed from a straight line, and peak velocity is
+ * read off that same trace. Both assume the straight line is the target. On a correct clean or
+ * snatch it is not: the bar loops back around the knees and in under the athlete, and a lifter
+ * doing it properly scores WORSE on deviation than one hauling it up in a straight line badly.
+ * Reporting those two numbers on these lifts is not imprecise, it is inverted.
+ *
+ * The other metrics are unaffected -- range of motion, timing, velocity loss and rep count all
+ * mean what they usually mean. Only the two that assume a straight path are withheld. */
+export function barPathAssumptionInvalid(name: string | null | undefined): boolean {
+  return romBucketForExercise(name) === "olympic";
+}

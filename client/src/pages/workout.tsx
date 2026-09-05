@@ -338,7 +338,12 @@ type CaptureDeviceInfo = {
 // Same shape as tracking-diagnostics.ts's TrackingDiagnostics -- see buildTrackingDiagnostics
 // for how it's built.
 type TrackingDiagnostics = {
-  outcome: "tracked" | "empty_calibration_failed" | "empty_no_clean_read" | "empty_implausible_scale";
+  outcome:
+    | "tracked"
+    | "empty_calibration_failed"
+    | "empty_no_clean_read"
+    | "empty_implausible_scale"
+    | "scale_free_only";
   message: string | null;
   recording: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence: number | null };

@@ -6,6 +6,7 @@ import {
   firstMoveForExercise,
   romBucketForExercise,
   filmGuidanceForExercise,
+  barPathAssumptionInvalid,
 } from "./exercise-camera-profile";
 
 describe("postureForExercise", () => {
@@ -276,5 +277,31 @@ describe("filmGuidanceForExercise", () => {
   it("returns null rather than a generic instruction for an unknown lift", () => {
     expect(filmGuidanceForExercise("Some Brand New Lift")).toBeNull();
     expect(filmGuidanceForExercise(null)).toBeNull();
+  });
+});
+
+describe("barPathAssumptionInvalid", () => {
+  // On these the bar loops back around the knees and in under the athlete. A technically correct
+  // rep scores WORSE on straight-line deviation than a bad one hauled up in a straight line, so
+  // the number is inverted rather than merely imprecise.
+  it.each(["Snatch", "Power Clean", "Clean & Jerk", "Hang Clean", "Block Snatch", "Clean Pull"])(
+    "flags %s",
+    (name) => {
+      expect(barPathAssumptionInvalid(name)).toBe(true);
+    },
+  );
+
+  // A jerk or press drives the bar straight up, so the assumption holds even though the lift is
+  // Olympic-adjacent.
+  it.each(["Back Squat", "Bench Press", "Deadlift", "Overhead Press", "Pendlay Row"])(
+    "leaves %s alone",
+    (name) => {
+      expect(barPathAssumptionInvalid(name)).toBe(false);
+    },
+  );
+
+  it("says nothing about an unknown lift", () => {
+    expect(barPathAssumptionInvalid("Some Brand New Lift")).toBe(false);
+    expect(barPathAssumptionInvalid(null)).toBe(false);
   });
 });

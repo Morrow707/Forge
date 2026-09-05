@@ -1881,7 +1881,7 @@ export function BarTrackerDialog({
     metrics = fuseSideVelocity(metrics, sideVelocitySamplesRef.current, loadKg);
     metrics.formFaults = detectFormFaults(
       framesRef.current,
-      metrics.barPathDeviationCm,
+      metrics.barPathDeviationCm ?? 0,
       "lift",
       movementType,
       equipment,
