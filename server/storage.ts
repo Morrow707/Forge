@@ -123,6 +123,8 @@ import {
   type UserSession,
   type InsertUser,
   MAX_PINNED_ATHLETES,
+  mediaRemovalRequests,
+  type MediaRemovalRequest,
 } from "@shared/schema";
 import {
   derivePrivacyTier,
@@ -20202,6 +20204,18 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // claimed. Any prior unclaimed invite for this athlete is cleared first --
   // same "delete then insert" shape as createPasswordResetToken -- so a
   // mistyped email doesn't leave a dead row sitting around forever.
+  // The address the guardian invite was last sent to, so an athlete can ask
+  // for it again without being able to redirect it somewhere new -- a resend
+  // that let the minor choose the recipient would defeat the point of having
+  // a guardian at all.
+  async getLastGuardianInviteEmail(athleteId: number): Promise<string | null> {
+    const invite = await db.query.guardianInvites.findFirst({
+      where: eq(guardianInvites.athleteId, athleteId),
+      orderBy: desc(guardianInvites.createdAt),
+    });
+    return invite?.email ?? null;
+  },
+
   async createGuardianInvite(
     athleteId: number,
     email: string,
@@ -20380,6 +20394,173 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return updated;
   },
 
+  // Every video belonging to one athlete, in the same (source, id) shape
+  // deleteAdminVideo takes. Built by widening the retention job's own
+  // UNION rather than writing a third way to enumerate videos, so a new
+  // video-bearing table has one place to be added, not three.
+  async getVideosForAthlete(athleteId: number): Promise<
+    { source: "set" | "skill" | "comment"; id: number; label: string; date: string; videoUrl: string }[]
+  > {
+    const result = await db.execute<{
+      source: "set" | "skill" | "comment";
+      id: number;
+      label: string;
+      date: string;
+      video_url: string;
+    }>(sql`
+      SELECT v.source, v.id, v.label, v.reference_time::date::text AS date, v.video_url
+      FROM (
+        SELECT 'set' AS source, wse.id AS id, wl.athlete_id AS athlete_id,
+          coalesce(e.name, 'Exercise') AS label,
+          wse.form_check_video_url AS video_url,
+          coalesce(wl.completed_at, wl.date::timestamp) AS reference_time
+        FROM workout_set_entries wse
+        JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+        JOIN workout_logs wl ON wl.id = wle.workout_log_id
+        LEFT JOIN exercises e ON e.id = wle.exercise_id
+        WHERE wse.form_check_video_url IS NOT NULL
+
+        UNION ALL
+
+        SELECT 'skill', ssl.id, ssl.athlete_id,
+          coalesce(sx.name, 'Skill drill'), ssl.video_url, ssl.created_at
+        FROM skill_session_logs ssl
+        LEFT JOIN skill_program_exercises spe ON spe.id = ssl.skill_program_exercise_id
+        LEFT JOIN skill_exercises sx ON sx.id = spe.skill_exercise_id
+        WHERE ssl.video_url IS NOT NULL
+      ) v
+      WHERE v.athlete_id = ${athleteId}
+      ORDER BY v.reference_time DESC
+    `);
+    return result.rows.map((r) => ({
+      source: r.source,
+      id: r.id,
+      label: r.label,
+      date: r.date,
+      videoUrl: r.video_url,
+    }));
+  },
+
+  // ---------- Guardian media-removal requests ----------
+  // A guardian asks; nothing is removed here. See mediaRemovalRequests'
+  // own schema comment for why the two are separate.
+  async createMediaRemovalRequest(input: {
+    athleteId: number;
+    guardianId: number;
+    source: "set" | "skill" | "comment";
+    sourceId: number;
+    label: string;
+    reason?: string | null;
+  }): Promise<{ ok: true; request: MediaRemovalRequest } | { ok: false; error: string }> {
+    // The partial unique index makes a duplicate open request a constraint
+    // violation rather than a second row. Checking first turns that into a
+    // sentence the parent can act on instead of a 500.
+    const existing = await db.query.mediaRemovalRequests.findFirst({
+      where: and(
+        eq(mediaRemovalRequests.source, input.source),
+        eq(mediaRemovalRequests.sourceId, input.sourceId),
+        eq(mediaRemovalRequests.status, "open"),
+      ),
+    });
+    if (existing) {
+      return { ok: false, error: "You've already asked us to remove this video. We're on it." };
+    }
+    const [request] = await db
+      .insert(mediaRemovalRequests)
+      .values({
+        athleteId: input.athleteId,
+        guardianId: input.guardianId,
+        source: input.source,
+        sourceId: input.sourceId,
+        label: input.label,
+        reason: input.reason ?? null,
+      })
+      .returning();
+    return { ok: true, request };
+  },
+
+  async getMediaRemovalRequestsForAthlete(athleteId: number): Promise<MediaRemovalRequest[]> {
+    return db.query.mediaRemovalRequests.findMany({
+      where: eq(mediaRemovalRequests.athleteId, athleteId),
+      orderBy: desc(mediaRemovalRequests.createdAt),
+    });
+  },
+
+  // Open requests first and oldest-first within that, because this is a
+  // queue somebody works through, not a log they browse.
+  async getOpenMediaRemovalRequests(): Promise<
+    (MediaRemovalRequest & { athleteName: string; guardianName: string })[]
+  > {
+    const athlete = alias(users, "removal_athlete");
+    const guardian = alias(users, "removal_guardian");
+    const rows = await db
+      .select({
+        request: mediaRemovalRequests,
+        athleteName: athlete.name,
+        guardianName: guardian.name,
+      })
+      .from(mediaRemovalRequests)
+      .innerJoin(athlete, eq(mediaRemovalRequests.athleteId, athlete.id))
+      .innerJoin(guardian, eq(mediaRemovalRequests.guardianId, guardian.id))
+      .where(eq(mediaRemovalRequests.status, "open"))
+      .orderBy(mediaRemovalRequests.createdAt);
+    return rows.map((r) => ({ ...r.request, athleteName: r.athleteName, guardianName: r.guardianName }));
+  },
+
+  // Approving actually deletes, through the one deletion path the retention
+  // job already uses. A request marked approved with the video still there
+  // would be the worst of both worlds: a parent told yes and a file still
+  // sitting on disk.
+  async resolveMediaRemovalRequest(
+    requestId: number,
+    resolvedBy: number,
+    status: "approved" | "denied",
+    resolutionNote?: string | null,
+  ): Promise<{ ok: true; deleted: boolean } | { ok: false; error: string }> {
+    const request = await db.query.mediaRemovalRequests.findFirst({
+      where: eq(mediaRemovalRequests.id, requestId),
+    });
+    if (!request) return { ok: false, error: "Not found." };
+    if (request.status !== "open") return { ok: false, error: "This request was already answered." };
+
+    let deleted = false;
+    if (status === "approved") {
+      // deleteAdminVideo reports deleted:false when the row's video
+      // reference is already null -- an already-purged video (retention
+      // sweep, storage cap) is a legitimate approve, not a failure, so the
+      // request still resolves and the caller learns nothing was left.
+      const result = await this.deleteAdminVideo(
+        request.source as "set" | "skill" | "comment",
+        request.sourceId,
+      );
+      deleted = result.deleted;
+    }
+    await db
+      .update(mediaRemovalRequests)
+      .set({
+        status,
+        resolvedAt: new Date(),
+        resolvedBy,
+        resolutionNote: resolutionNote ?? null,
+      })
+      .where(eq(mediaRemovalRequests.id, requestId));
+    return { ok: true, deleted };
+  },
+
+  // "Is this athlete locked out until a parent finishes signing up?" -- the
+  // read behind the app-wide minor gate in routes.ts. Same three-way answer
+  // as assertMinorHasActiveGuardian and deliberately the same shape, so the
+  // gate and the assignment check can never disagree about who is a minor:
+  // no date of birth means unknown and is never treated as a minor, an adult
+  // is never blocked, and a known minor is blocked exactly until a link
+  // exists.
+  async isAthleteBlockedPendingGuardian(athleteId: number): Promise<boolean> {
+    const athlete = await this.getUser(athleteId);
+    if (!athlete?.dateOfBirth) return false;
+    if (derivePrivacyTier(athlete.dateOfBirth) === "tier3_adult_18plus") return false;
+    return (await this.getGuardianLinkForAthlete(athleteId)) === null;
+  },
+
   async getGuardianLinkForAthlete(athleteId: number) {
     const link = await db.query.guardianLinks.findFirst({ where: eq(guardianLinks.athleteId, athleteId) });
     return link ?? null;
@@ -20402,6 +20583,22 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
 
     if (requesterRole === "guardian") {
       if (link.guardianId !== requesterId) return { ok: false, error: "Not found." };
+      // A guardian used to be able to give up access unconditionally, which
+      // was harmless only because nothing depended on the link. Now the link
+      // is what lets a minor use the app at all, and guardianLinks is unique
+      // per athlete, so there is no second guardian to fall back to: one tap
+      // would lock a child out of their own account with no way back in that
+      // either of them controls. A parent who genuinely needs to hand over
+      // guardianship goes through support, where a person can attach the new
+      // guardian in the same breath.
+      const athlete = await this.getUser(link.athleteId);
+      if (athlete?.dateOfBirth && derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus") {
+        return {
+          ok: false,
+          error:
+            "This athlete is under 18 and needs a guardian on their account to use Forge. Contact us to transfer guardianship to someone else.",
+        };
+      }
     } else {
       if (link.athleteId !== requesterId) return { ok: false, error: "Not found." };
       const athlete = await this.getUser(link.athleteId);

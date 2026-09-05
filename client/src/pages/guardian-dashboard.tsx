@@ -35,6 +35,32 @@ type CalendarEntry = {
   completed: boolean;
 };
 
+type AthleteVideo = {
+  source: "set" | "skill" | "comment";
+  id: number;
+  label: string;
+  date: string;
+  videoUrl: string;
+};
+
+type RemovalRequest = {
+  id: number;
+  source: string;
+  sourceId: number;
+  label: string;
+  reason: string | null;
+  status: "open" | "approved" | "denied";
+  createdAt: string;
+  resolutionNote: string | null;
+};
+
+type ProgressSummary = {
+  totalWorkoutsCompleted: number;
+  workoutsThisMonth: number;
+  last7DaysCompleted: number;
+  recentPRs: { exerciseName: string; weight: number | null; reps: number | null; date: string }[];
+};
+
 function rangeLast14Days() {
   const end = new Date();
   const start = new Date();
@@ -55,8 +81,6 @@ function rangeLast14Days() {
 export default function GuardianDashboardPage() {
   const { user, logoutMutation } = useAuth();
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<Partial<GuardianAthlete>>({});
   const [activeId, setActiveId] = useState<number | null>(null);
 
   const { data: athletes, isLoading: athletesLoading } = useQuery<GuardianAthlete[]>({
@@ -79,19 +103,38 @@ export default function GuardianDashboardPage() {
     enabled: activeId != null,
   });
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("PATCH", `/api/guardian/athletes/${activeId}/profile`, form);
-      return (await res.json()) as GuardianAthlete;
+  const { data: progress } = useQuery<ProgressSummary>({
+    queryKey: ["/api/guardian/athletes", activeId, "progress"],
+    queryFn: () => getJson(`/api/guardian/athletes/${activeId}/progress`),
+    enabled: activeId != null,
+  });
+
+  const { data: videos } = useQuery<AthleteVideo[]>({
+    queryKey: ["/api/guardian/athletes", activeId, "videos"],
+    queryFn: () => getJson(`/api/guardian/athletes/${activeId}/videos`),
+    enabled: activeId != null,
+  });
+
+  const { data: removalRequests } = useQuery<RemovalRequest[]>({
+    queryKey: ["/api/guardian/athletes", activeId, "removal-requests"],
+    queryFn: () => getJson(`/api/guardian/athletes/${activeId}/removal-requests`),
+    enabled: activeId != null,
+  });
+
+  // The only thing a guardian can start that changes the athlete's record,
+  // and it is a request -- an admin decides, and only an admin deletes.
+  const requestRemoval = useMutation({
+    mutationFn: async (video: AthleteVideo) => {
+      await apiRequest("POST", `/api/guardian/athletes/${activeId}/removal-requests`, {
+        source: video.source,
+        sourceId: video.id,
+      });
     },
-    onSuccess: (updated) => {
-      qc.setQueryData<GuardianAthlete[] | undefined>(["/api/guardian/athletes"], (prev) =>
-        prev?.map((a) => (a.id === updated.id ? updated : a)),
-      );
-      toast.success("Saved");
-      setEditing(false);
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/guardian/athletes", activeId, "removal-requests"] });
+      toast.success("We've passed that on. You'll see it below until it's answered.");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save"),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that request"),
   });
 
   const trackingMutation = useMutation({
@@ -112,21 +155,8 @@ export default function GuardianDashboardPage() {
     onError: (err: ApiError) => toast.error(err.message || "Could not update"),
   });
 
-  function startEditing() {
-    if (!athlete) return;
-    setForm({
-      name: athlete.name,
-      sport: athlete.sport,
-      position: athlete.position,
-      heightIn: athlete.heightIn,
-      bodyWeightLbs: athlete.bodyWeightLbs,
-    });
-    setEditing(true);
-  }
-
   function switchAthlete(id: number) {
     setActiveId(id);
-    setEditing(false);
   }
 
   const recent = (entries ?? []).filter((e) => !e.isRestDay).slice().reverse();
@@ -174,85 +204,8 @@ export default function GuardianDashboardPage() {
                         {athlete.position ? ` · ${athlete.position}` : ""}
                       </CardDescription>
                     </div>
-                    {!editing && (
-                      <Button variant="outline" size="sm" onClick={startEditing}>
-                        Edit
-                      </Button>
-                    )}
                   </CardHeader>
                   <CardContent>
-                    {editing ? (
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="g-name">Name</Label>
-                          <Input
-                            id="g-name"
-                            value={form.name ?? ""}
-                            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="g-sport">Sport</Label>
-                            <Input
-                              id="g-sport"
-                              value={form.sport ?? ""}
-                              onChange={(e) => setForm((f) => ({ ...f, sport: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="g-position">Position</Label>
-                            <Input
-                              id="g-position"
-                              value={form.position ?? ""}
-                              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="g-height">Height (in)</Label>
-                            <Input
-                              id="g-height"
-                              type="number"
-                              value={form.heightIn ?? ""}
-                              onChange={(e) =>
-                                setForm((f) => ({
-                                  ...f,
-                                  heightIn: e.target.value ? Number(e.target.value) : null,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="g-weight">Weight (lbs)</Label>
-                            <Input
-                              id="g-weight"
-                              type="number"
-                              value={form.bodyWeightLbs ?? ""}
-                              onChange={(e) =>
-                                setForm((f) => ({
-                                  ...f,
-                                  bodyWeightLbs: e.target.value ? Number(e.target.value) : null,
-                                }))
-                              }
-                            />
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-2 pt-1">
-                          <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
-                            Cancel
-                          </Button>
-                          <Button
-                            size="sm"
-                            disabled={saveMutation.isPending}
-                            onClick={() => saveMutation.mutate()}
-                          >
-                            {saveMutation.isPending ? "Saving…" : "Save"}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
                       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <dt className="text-muted-foreground">Height</dt>
                         <dd>{athlete.heightIn ? `${athlete.heightIn} in` : "—"}</dd>
@@ -261,7 +214,6 @@ export default function GuardianDashboardPage() {
                         <dt className="text-muted-foreground">Season phase</dt>
                         <dd>{athlete.seasonPhase?.replace(/_/g, " ") ?? "—"}</dd>
                       </dl>
-                    )}
                   </CardContent>
                 </Card>
 
@@ -333,6 +285,143 @@ export default function GuardianDashboardPage() {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Videos, and the one request a guardian can make about them.
+                    Listing them is what makes the request specific: a parent
+                    picks the clip rather than describing it. */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Training</CardTitle>
+                    <CardDescription>How much {athlete.name} is actually doing.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <dl className="grid grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <dt className="text-muted-foreground">All time</dt>
+                        <dd className="font-display text-xl font-bold">
+                          {progress?.totalWorkoutsCompleted ?? "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">This month</dt>
+                        <dd className="font-display text-xl font-bold">
+                          {progress?.workoutsThisMonth ?? "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Last 7 days</dt>
+                        <dd className="font-display text-xl font-bold">
+                          {progress?.last7DaysCompleted ?? "—"}
+                        </dd>
+                      </div>
+                    </dl>
+                    {(progress?.recentPRs ?? []).length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Recent personal records
+                        </p>
+                        <ul className="space-y-1">
+                          {(progress?.recentPRs ?? []).slice(0, 5).map((pr, i) => (
+                            <li key={i} className="flex justify-between gap-3 text-sm">
+                              <span className="truncate">{pr.exerciseName}</span>
+                              <span className="shrink-0 text-muted-foreground">
+                                {pr.weight ? `${pr.weight} lbs` : ""}
+                                {pr.reps ? ` x ${pr.reps}` : ""}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Videos</CardTitle>
+                    <CardDescription>
+                      Every video on {athlete.name}'s record. You can ask us to take one down --
+                      we'll review it and remove it. You can't delete it yourself, and neither can
+                      anyone else on the account without us seeing the request.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {!videos ? (
+                      <p className="text-sm text-muted-foreground">Loading…</p>
+                    ) : videos.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No videos have been recorded for {athlete.name}.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {videos.map((v) => {
+                          const pending = (removalRequests ?? []).some(
+                            (r) =>
+                              r.status === "open" && r.source === v.source && r.sourceId === v.id,
+                          );
+                          return (
+                            <li
+                              key={`${v.source}-${v.id}`}
+                              className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">{v.label}</p>
+                                <p className="text-xs text-muted-foreground">{v.date}</p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0"
+                                disabled={pending || requestRemoval.isPending}
+                                onClick={() => requestRemoval.mutate(v)}
+                              >
+                                {pending ? "Requested" : "Request removal"}
+                              </Button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {(removalRequests ?? []).length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Your removal requests</CardTitle>
+                      <CardDescription>What you've asked for, and what came of it.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {(removalRequests ?? []).map((r) => (
+                          <li
+                            key={r.id}
+                            className="rounded-md border border-border px-3 py-2 text-sm"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="truncate font-medium">{r.label}</span>
+                              <Badge
+                                variant={r.status === "approved" ? "default" : "outline"}
+                                className="shrink-0"
+                              >
+                                {r.status === "open"
+                                  ? "Waiting on us"
+                                  : r.status === "approved"
+                                    ? "Removed"
+                                    : "Not removed"}
+                              </Badge>
+                            </div>
+                            {r.resolutionNote && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {r.resolutionNote}
+                              </p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
               </>
             )}
           </>

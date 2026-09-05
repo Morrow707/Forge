@@ -63,6 +63,8 @@ import {
   applyCorrectivesToDaysSchema,
   updatePreferencesSchema,
   updateProfileSchema,
+  createMediaRemovalRequestSchema,
+  resolveMediaRemovalRequestSchema,
   updateNotificationPrefsSchema,
   updatePushCategoryPrefsSchema,
   updateHealthStatusSchema,
@@ -836,6 +838,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       storage.touchSessionLastSeen(sessionRecordId).catch((err) => console.error("touchSessionLastSeen failed:", err));
     }
     next();
+  });
+
+  // ---------------- The minor gate ----------------
+  // A minor athlete cannot use the app until a parent or guardian has
+  // finished setting up their own linked account. Before this, the only
+  // guardian enforcement anywhere fired at assignment creation -- it stopped
+  // new work being pushed onto an unguarded minor and stopped nothing the
+  // minor did. They could log in, log sets on anything already assigned, log
+  // food, record camera video, submit wellness check-ins and appear on
+  // leaderboards, indefinitely, with no parent ever opening the invite.
+  //
+  // Mounted here, once, ahead of every route below rather than added to each
+  // one. A gate that has to be remembered on 300-odd routes is a gate that
+  // will be missed on the next one, which is exactly how five athlete AI
+  // routes ended up ungated.
+  //
+  // Fails OPEN on an unknown date of birth, deliberately and consistently
+  // with assertMinorHasActiveGuardian: an athlete with no dateOfBirth is
+  // "tier unknown", and guessing would lock out every account predating that
+  // column. Both signup paths require a date of birth today, so this only
+  // leaves accounts created before it existed.
+  const GUARDIAN_GATE_ALLOWED_PREFIXES = [
+    // Everything needed to sign in, see who you are, sign out, verify an
+    // email, or supply a missing date of birth.
+    "/api/auth/",
+    // How the blocked athlete sees their own status, and nudges the parent.
+    "/api/account/guardian-link",
+    "/api/account/guardian-invite/resend",
+    // Never trap someone in an account they cannot leave.
+    "/api/account/delete",
+  ];
+
+  app.use(async (req, res, next) => {
+    try {
+      const user = req.isAuthenticated?.() ? (req.user as any) : null;
+      if (!user || user.role !== "athlete") return next();
+      if (GUARDIAN_GATE_ALLOWED_PREFIXES.some((p) => req.path.startsWith(p))) return next();
+      if (!(await storage.isAthleteBlockedPendingGuardian(user.id))) return next();
+      return res.status(403).json({
+        message:
+          "A parent or guardian has to finish setting up their linked account before you can use Forge. We emailed them when you signed up -- ask them to open that link, or send it again from your account page.",
+        code: "guardian_link_required",
+      });
+    } catch (err) {
+      // A failure to answer "is this athlete blocked" must not fail open --
+      // that is the one direction this check is not allowed to be wrong in.
+      console.error("guardian gate check failed:", err);
+      return res.status(503).json({ message: "Couldn't verify your account right now. Try again." });
+    }
   });
 
   // Apple's Shared Web Credentials verification -- fetched by iOS itself
@@ -8624,18 +8675,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(entries);
   });
 
-  app.patch("/api/guardian/athletes/:athleteId/profile", requireRole("guardian"), async (req, res) => {
-    const user = currentUser(req);
-    const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
-    if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
-    const parsed = updateProfileSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const updated = await storage.updateUserProfile(athlete.id, parsed.data);
-    const { passwordHash, ...publicAthlete } = updated;
-    res.json(publicAthlete);
-  });
+  // There used to be a PATCH .../profile here, letting a guardian edit their
+  // linked athlete's whole profile through the same schema the athlete uses
+  // -- name, age, height, weight, sport, position, and every testing and max
+  // number including bench, squat and deadlift. A parent could silently
+  // rewrite their child's maxes, which is the number the coach programs
+  // from. A guardian account reads; it does not edit the athlete's record.
+  // The two writes a guardian still has are deliberate and are not edits to
+  // that record: turning camera tracking off (below), which is prospective
+  // and is the parental control the whole feature exists for, and asking for
+  // a video to be taken down, which is a request somebody else answers.
 
   // The one write a "read-mostly" guardian account makes beyond their own
   // profile edits above -- stopping future camera-tracking collection for
@@ -8661,6 +8710,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updated);
     },
   );
+
+  // ---------------- Guardian: reading the athlete's record ----------------
+  // A parent is entitled to see what is happening to their child, which in
+  // practice means nearly everything the athlete sees. Before this, a
+  // guardian could see a list of their athletes and a workout calendar and
+  // nothing else -- not a lift, not a personal record, not a video, not a
+  // meal, not an injury. The thing a parent opens the app to check was the
+  // thing they could not reach.
+  //
+  // Every route below is authorization-checked the same way: resolve the
+  // athlete through getAthleteForGuardianScoped first, and a link that isn't
+  // theirs reads as 404, exactly as a coach hitting somebody else's roster
+  // athlete does. They are all GETs. There is no guardian write here on
+  // purpose.
+  function guardianRead(
+    path: string,
+    handler: (athleteId: number, req: any, res: any) => Promise<void>,
+  ) {
+    app.get(`/api/guardian/athletes/:athleteId${path}`, requireRole("guardian"), async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      if (!Number.isInteger(athleteId)) {
+        return res.status(404).json({ message: "No athlete linked to this account." });
+      }
+      const athlete = await storage.getAthleteForGuardianScoped(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+      await handler(athlete.id, req, res);
+    });
+  }
+
+  guardianRead("/progress", async (athleteId, _req, res) => {
+    const summary = await storage.getAthleteProgressSummary(athleteId);
+    const streak = await storage.getStreakForAthlete(athleteId);
+    res.json({ ...summary, ...streak });
+  });
+
+  guardianRead("/goals", async (athleteId, req, res) => {
+    res.json(await storage.getGoalsForAthlete(athleteId, req.query.history === "true"));
+  });
+
+  guardianRead("/wellness/history", async (athleteId, _req, res) => {
+    res.json(await storage.getWellnessHistoryForAthlete(athleteId));
+  });
+
+  guardianRead("/injury-history", async (athleteId, _req, res) => {
+    res.json(await storage.getInjuryHistoryForAthlete(athleteId));
+  });
+
+  guardianRead("/nutrition", async (athleteId, _req, res) => {
+    res.json((await storage.getNutritionTargetsForAthlete(athleteId)) ?? null);
+  });
+
+  guardianRead("/food-log", async (athleteId, req, res) => {
+    const date = typeof req.query.date === "string" ? req.query.date : todayIso();
+    res.json(await storage.getFoodLogForDate(athleteId, date));
+  });
+
+  // The list a removal request is made against, so the parent picks a real
+  // video rather than describing one.
+  guardianRead("/videos", async (athleteId, _req, res) => {
+    res.json(await storage.getVideosForAthlete(athleteId));
+  });
+
+  // ---------------- Guardian: asking for a video to come down ----------------
+  // The one thing a guardian can start that changes the athlete's record,
+  // and they cannot finish it. See mediaRemovalRequests' schema comment.
+  guardianRead("/removal-requests", async (athleteId, _req, res) => {
+    res.json(await storage.getMediaRemovalRequestsForAthlete(athleteId));
+  });
+
+  app.post(
+    "/api/guardian/athletes/:athleteId/removal-requests",
+    requireRole("guardian"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
+      if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+      const parsed = createMediaRemovalRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      // Resolve the target against this athlete's own videos rather than
+      // trusting the (source, id) pair off the wire -- otherwise a guardian
+      // could file a request against any video on the platform, and an
+      // admin working the queue would approve a deletion of somebody else's
+      // child's footage.
+      const videos = await storage.getVideosForAthlete(athlete.id);
+      const target = videos.find(
+        (v) => v.source === parsed.data.source && v.id === parsed.data.sourceId,
+      );
+      if (!target) return res.status(404).json({ message: "That video isn't on this athlete's record." });
+      const result = await storage.createMediaRemovalRequest({
+        athleteId: athlete.id,
+        guardianId: user.id,
+        source: parsed.data.source,
+        sourceId: parsed.data.sourceId,
+        label: `${target.label} (${target.date})`,
+        reason: parsed.data.reason,
+      });
+      if (!result.ok) return res.status(409).json({ message: result.error });
+      res.status(201).json(result.request);
+    },
+  );
+
+  // ---------------- Admin: working the removal queue ----------------
+  app.get("/api/admin/removal-requests", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.getOpenMediaRemovalRequests());
+  });
+
+  app.patch("/api/admin/removal-requests/:id", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = resolveMediaRemovalRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.resolveMediaRemovalRequest(
+      Number(req.params.id),
+      user.id,
+      parsed.data.status,
+      parsed.data.resolutionNote,
+    );
+    if (!result.ok) return res.status(400).json({ message: result.error });
+    res.json({ ok: true, deleted: result.deleted });
+  });
 
   // Shared by both sides of the link -- a guardian can always give up their
   // own access; an athlete can only remove it once storage.removeGuardianLink

@@ -830,6 +830,77 @@ export const claimGuardianInviteSchema = z.object({
 });
 export type ClaimGuardianInviteInput = z.infer<typeof claimGuardianInviteSchema>;
 
+// A guardian's request that a specific piece of their linked athlete's
+// media be taken down. Deliberately a REQUEST, not a delete: a guardian
+// account can never remove anything itself. The distinction is the whole
+// point of the table -- the parent is entitled to say "take that video of
+// my child down" and be answered, and is not entitled to reach into their
+// child's training record and erase it, which is a coach's and the
+// athlete's own history as much as it is a video.
+//
+// Rows are never deleted and never rewritten once resolved -- same
+// append-and-mark posture as consentRecords, for the same reason: the
+// record that a parent asked, when, and what was done about it is exactly
+// what anyone would need to produce later.
+export const mediaRemovalRequestStatusEnum = pgEnum("media_removal_request_status", [
+  "open",
+  "approved",
+  "denied",
+]);
+
+export const mediaRemovalRequests = pgTable(
+  "media_removal_requests",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    guardianId: integer("guardian_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Which video, in the same (source, id) shape storage.deleteAdminVideo
+    // already takes, so approving a request reuses the one deletion path
+    // that is already exercised by the retention job rather than inventing
+    // a second way to remove a video.
+    source: text("source").notNull(), // "set" | "skill" | "comment"
+    sourceId: integer("source_id").notNull(),
+    // Snapshotted at request time so the queue still reads sensibly after
+    // the video is gone -- an approved request whose label resolved live
+    // would render as a blank row the moment it was actioned.
+    label: text("label").notNull(),
+    reason: text("reason"),
+    status: mediaRemovalRequestStatusEnum("status").notNull().default("open"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+    resolvedBy: integer("resolved_by").references(() => users.id, { onDelete: "set null" }),
+    resolutionNote: text("resolution_note"),
+  },
+  (table) => ({
+    athleteIdx: index("media_removal_requests_athlete_idx").on(table.athleteId),
+    guardianIdx: index("media_removal_requests_guardian_idx").on(table.guardianId),
+    // The admin queue reads open requests oldest-first and nothing else.
+    statusIdx: index("media_removal_requests_status_idx").on(table.status, table.createdAt),
+    // One open request per video -- a parent tapping twice should not
+    // produce two rows an admin has to action separately.
+    openTargetIdx: uniqueIndex("media_removal_requests_open_target_idx")
+      .on(table.source, table.sourceId)
+      .where(sql`status = 'open'`),
+  }),
+);
+
+export const createMediaRemovalRequestSchema = z.object({
+  source: z.enum(["set", "skill", "comment"]),
+  sourceId: z.number().int().positive(),
+  reason: z.string().trim().max(500).optional().nullable(),
+});
+
+export const resolveMediaRemovalRequestSchema = z.object({
+  status: z.enum(["approved", "denied"]),
+  resolutionNote: z.string().trim().max(500).optional().nullable(),
+});
+
+export type MediaRemovalRequest = typeof mediaRemovalRequests.$inferSelect;
+
 export const teams = pgTable(
   "teams",
   {
@@ -6774,6 +6845,11 @@ export type PublicUser = Omit<
   // /api/auth/me. Always [] for a primary/non-staff coach, and absent
   // entirely for an athlete/admin.
   hiddenSections?: CoachSection[];
+  // Athletes only. True while this athlete is a known minor with no guardian
+  // account linked, which is exactly when the guardian gate in routes.ts
+  // refuses everything they try. The client uses it to show them why rather
+  // than a screen of controls that all fail.
+  guardianLinkRequired?: boolean;
 };
 
 export const updateHealthStatusSchema = z.object({

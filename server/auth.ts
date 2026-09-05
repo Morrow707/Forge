@@ -219,6 +219,13 @@ function toPublicUser(user: any): PublicUser {
 // requirePrimaryCoach guard in routes.ts.
 async function toPublicUserWithSections(user: any): Promise<PublicUser> {
   const publicUser = toPublicUser(user);
+  if (user.role === "athlete") {
+    // What the client needs to render the blocked screen instead of an app
+    // full of controls that all answer 403 -- see the guardian gate in
+    // routes.ts, which is the thing actually enforcing this. This flag is a
+    // convenience for the UI and is never the enforcement.
+    publicUser.guardianLinkRequired = await storage.isAthleteBlockedPendingGuardian(user.id);
+  }
   if (user.role === "coach") {
     (publicUser as any).hiddenSections = await storage.getHiddenSectionsForCoach(user.id);
     publicUser.staffTitle = await storage.getStaffTitleForCoach(user.id);
@@ -814,6 +821,42 @@ export function setupAuth(app: Express) {
   // hold up the signup response. No-ops for an adult; guardianEmail is
   // already required (and validated) for a minor by the time this is
   // called, so an absent email here only ever happens for an adult.
+  // A minor blocked by the guardian gate (see routes.ts) needs some way to
+  // nudge the parent whose inbox the invite is sitting in, otherwise the
+  // block is a dead end and the account is abandoned. The athlete cannot
+  // choose the address: it is re-sent to whatever the invite already went
+  // to, so this is a nudge, not a way to nominate a friend as your guardian.
+  app.post(
+    "/api/account/guardian-invite/resend",
+    requireAuth,
+    resendVerificationLimiter,
+    async (req, res) => {
+      const user = req.user as any;
+      if (user.role !== "athlete") {
+        return res.status(403).json({ message: "Only an athlete can resend a guardian invite." });
+      }
+      const existingLink = await storage.getGuardianLinkForAthlete(user.id);
+      if (existingLink) {
+        return res.status(400).json({ message: "A guardian is already linked to this account." });
+      }
+      const email = await storage.getLastGuardianInviteEmail(user.id);
+      if (!email) {
+        return res.status(400).json({
+          message: "We don't have a guardian's email on file for this account. Contact us and we'll sort it out.",
+        });
+      }
+      const fullUser = await storage.getUser(user.id);
+      if (!fullUser?.dateOfBirth) {
+        return res.status(400).json({ message: "Add your date of birth first." });
+      }
+      issueGuardianInviteIfNeeded(req, fullUser, email, derivePrivacyTier(fullUser.dateOfBirth));
+      // Deliberately not echoing the address back -- the athlete already
+      // knows who their parent is, and this response is reachable by anyone
+      // who gets into the account.
+      res.json({ ok: true });
+    },
+  );
+
   function issueGuardianInviteIfNeeded(
     req: any,
     athlete: { id: number; name: string },

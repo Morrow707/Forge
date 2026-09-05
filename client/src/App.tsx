@@ -24,6 +24,7 @@ import SignupPage from "@/pages/signup";
 import PricingPage from "@/pages/pricing";
 import ClaimPage from "@/pages/claim";
 import GuardianClaimPage from "@/pages/guardian-claim";
+import GuardianPendingPage from "@/pages/guardian-pending";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import VerifyEmailPage from "@/pages/verify-email";
@@ -85,6 +86,7 @@ const AthleteClassDetail = lazy(withLoadTimeout(() => import("@/pages/athlete/cl
 const AdminDashboard = lazy(withLoadTimeout(() => import("@/pages/admin/dashboard")));
 const AdminExercises = lazy(withLoadTimeout(() => import("@/pages/admin/exercises")));
 const AdminCoachExercises = lazy(withLoadTimeout(() => import("@/pages/admin/coach-exercises")));
+const AdminRemovalRequests = lazy(withLoadTimeout(() => import("@/pages/admin/removal-requests")));
 const AdminExerciseDetail = lazy(withLoadTimeout(() => import("@/pages/admin/exercise-detail")));
 const AdminSkills = lazy(withLoadTimeout(() => import("@/pages/admin/skills")));
 const AdminSkillDetail = lazy(withLoadTimeout(() => import("@/pages/admin/skill-detail")));
@@ -167,6 +169,14 @@ function ProtectedRoute({
   if (!user) return <Redirect to="/login" />;
   if (user.role !== role) {
     return <Redirect to={homeFor(user.role)} />;
+  }
+  // A minor athlete with no guardian linked gets one screen and no app. The
+  // server refuses every route regardless (see the guardian gate in
+  // server/routes.ts); doing it here too is what turns a wall of 403s into a
+  // sentence explaining what they're waiting for. One place rather than per
+  // page, for the same reason the server check is one middleware.
+  if (user.role === "athlete" && user.guardianLinkRequired) {
+    return <GuardianPendingPage />;
   }
   return <Component />;
 }
@@ -409,6 +419,9 @@ function Router() {
         </Route>
         <Route path="/admin/coach-exercises">
           <ProtectedRoute role="admin" component={AdminCoachExercises} />
+        </Route>
+        <Route path="/admin/removal-requests">
+          <ProtectedRoute role="admin" component={AdminRemovalRequests} />
         </Route>
         <Route path="/admin/exercises/:id">
           <ProtectedRoute role="admin" component={AdminExerciseDetail} />

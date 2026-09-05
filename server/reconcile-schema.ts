@@ -2536,6 +2536,41 @@ WHERE "reps_count" IS NULL
 
 `;
 
+// Guardian media-removal requests -- a parent asks, an admin actions it.
+// See mediaRemovalRequests' own comment in shared/schema.ts for why this is
+// a request queue rather than a delete the guardian performs.
+const SQL_PART_3 = `
+DO $$ BEGIN
+  CREATE TYPE "media_removal_request_status" AS ENUM ('open', 'approved', 'denied');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "media_removal_requests" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "guardian_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "source" text NOT NULL,
+  "source_id" integer NOT NULL,
+  "label" text NOT NULL,
+  "reason" text,
+  "status" "media_removal_request_status" NOT NULL DEFAULT 'open',
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "resolved_at" timestamp,
+  "resolved_by" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "resolution_note" text
+);
+
+CREATE INDEX IF NOT EXISTS "media_removal_requests_athlete_idx"
+  ON "media_removal_requests" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "media_removal_requests_guardian_idx"
+  ON "media_removal_requests" ("guardian_id");
+CREATE INDEX IF NOT EXISTS "media_removal_requests_status_idx"
+  ON "media_removal_requests" ("status", "created_at");
+-- Partial unique index: one OPEN request per video, while still allowing a
+-- second request after an earlier one was denied.
+CREATE UNIQUE INDEX IF NOT EXISTS "media_removal_requests_open_target_idx"
+  ON "media_removal_requests" ("source", "source_id") WHERE "status" = 'open';
+`;
+
 async function main() {
   console.log("Reconciling schema (idempotent, additive-only)...");
   // Two separate calls, two separate implicit transactions -- see
@@ -2543,6 +2578,7 @@ async function main() {
   // database.
   await pool.query(SQL_PART_1);
   await pool.query(SQL_PART_2);
+  await pool.query(SQL_PART_3);
   console.log("Schema reconciliation complete.");
   await pool.end();
 }
