@@ -572,13 +572,20 @@ async function hasAthletePaidForAiAccess(
 ): Promise<boolean> {
   if (testingUnlockAllPaywalls) return true;
   if (BILLING_LIVE) {
-    // "strengthAi" needs any paid tier; "skillsAi" specifically needs Pro
-    // (see PRICING in billing.ts -- Skills/FMS-style features are a Pro-
-    // tier feature, Strength AI is included in Base). Trialing counts as
-    // paid -- the whole point of the trial is full Pro access.
+    // "strengthAi" needs any paid tier; "skillsAi" specifically needs Pro --
+    // Skills/FMS-style features are a Pro-tier feature, Strength AI is
+    // included in Base.
+    //
+    // A trial is full Pro access, which is the whole point of a trial and
+    // what the landing page promises in those words. That has to be said
+    // here rather than assumed from the tier, because
+    // storage.createTrialSubscription writes tier "base" with status
+    // "trialing" -- so reading tier alone silently denied every trialing
+    // athlete the Skills features their trial is meant to sell them.
     const sub = await storage.getSubscriptionForUser(athleteId);
     if (!sub || sub.accountType !== "free_agent") return false;
     if (!["trialing", "active", "past_due"].includes(sub.status)) return false;
+    if (sub.status === "trialing") return true;
     return entitlement === "strengthAi" ? true : sub.tier === "pro";
   }
   return COMPED_FREE_AGENT_ENTITLEMENTS[email]?.has(entitlement) ?? false;
@@ -674,7 +681,12 @@ async function hasCoachesCornerAccess(user: { id: number; role: string; email: s
   if (BILLING_LIVE) {
     const sub = await storage.getSubscriptionForUser(user.id);
     if (!sub || sub.accountType !== "coach") return false;
-    return sub.tier === "pro" && ["trialing", "active", "past_due"].includes(sub.status);
+    if (!["trialing", "active", "past_due"].includes(sub.status)) return false;
+    // Same trial-tier trap as hasAthletePaidForAiAccess above: a trial is
+    // written as tier "base", so gating on tier alone locks a trialing
+    // coach out of the one thing a trial exists to show them.
+    if (sub.status === "trialing") return true;
+    return sub.tier === "pro";
   }
   return COMPED_COACHES_CORNER_COACHES.has(user.email);
 }

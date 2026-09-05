@@ -12,6 +12,8 @@ import {
   ORG_PER_ATHLETE_CENTS,
   BILLING_ADD_ONS,
   BILLING_ADD_ON_ORDER,
+  COACHES_CORNER_MONTHLY_PRICE_CENTS,
+  COACHES_CORNER_FREE_AT_ATHLETE_COUNT,
 } from "@shared/billing-tiers";
 import {
   FREE_AGENT_TIERS,
@@ -21,6 +23,7 @@ import {
   SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS,
 } from "@shared/free-agent-tiers";
 import { VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
+import { FORGE_CLASS_LESSON_DEFAULT_PRICE_CENTS } from "@shared/class-pricing";
 
 export type PricingCatalogItem = {
   key: string;
@@ -64,7 +67,7 @@ export const PRICING_CATALOG: PricingCatalogItem[] = [
     key: `fa_addon_${id}`,
     category: "Free Agent Sport Add-ons",
     label: FREE_AGENT_ADD_ONS[id].label,
-    description: `${FREE_AGENT_ADD_ONS[id].description} (not built yet -- pricing only).`,
+    description: FREE_AGENT_ADD_ONS[id].description,
     defaultCents: FREE_AGENT_ADD_ONS[id].monthlyPriceCents,
   })),
   {
@@ -73,6 +76,21 @@ export const PRICING_CATALOG: PricingCatalogItem[] = [
     label: "Extra video storage add-on",
     description: `Raises the per-exercise/per-drill video cap to ${VIDEO_STORAGE_ADD_ON.favoritedCap} favorited / ${VIDEO_STORAGE_ADD_ON.totalCap} total. Works for a coached athlete or a Free Agent.`,
     defaultCents: VIDEO_STORAGE_ADD_ON.monthlyPriceCents,
+  },
+  {
+    key: "coaches_corner",
+    category: "Coaches Corner",
+    label: "Coaches Corner access",
+    description: `Per coach account, sold on its own rather than bundled into a plan. Free for rosters of ${COACHES_CORNER_FREE_AT_ATHLETE_COUNT}+ athletes. Access is still gated on subscription tier in routes.ts -- pricing it here is the first half of that change, not the whole of it.`,
+    defaultCents: COACHES_CORNER_MONTHLY_PRICE_CENTS,
+  },
+  {
+    key: "forge_class_lesson_default",
+    category: "Classes",
+    label: "Forge Class lesson (default price)",
+    description:
+      "What one lesson of a Forge-official Class is worth to a Free Agent, per lesson, one time -- the default an admin sets classLessons.priceCents to. There is no purchase route yet, so a priced lesson is still enrollable for free; see shared/class-pricing.ts.",
+    defaultCents: FORGE_CLASS_LESSON_DEFAULT_PRICE_CENTS,
   },
   {
     key: "skill_sport_unlock",

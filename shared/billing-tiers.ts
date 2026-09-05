@@ -191,3 +191,31 @@ export const BILLING_ADD_ON_ORDER: AddOnId[] = [
 export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
+
+// ---------------- Coaches Corner ----------------
+// The Coaches Corner (coach-education tracks -- see the academy routes in
+// server/routes.ts) had a gate, an entitlement check and a hardcoded comp
+// list, and no price anywhere. It was reachable only by being on tier
+// "pro", a tier whose only price lived in a dead const in server/billing.ts
+// that nothing read. So the honest description of the product was "cannot
+// be bought."
+//
+// It is priced here as a standalone monthly add-on on the coach account,
+// deliberately NOT as a perk of a coach plan tier. Two reasons. A coach who
+// wants the Corner shouldn't have to move plans to get it, and a coach who
+// doesn't want it shouldn't be carrying it in a tier price. And the org
+// plan above has no tiers to hang it off in the first place -- the model is
+// a flat base fee plus a flat per-athlete rate, with bands that are a
+// presentation of that formula, not products with different feature sets.
+export const COACHES_CORNER_MONTHLY_PRICE_CENTS = 1999;
+
+// Rosters at or above this size get the Corner at no charge. At the flat
+// per-athlete rate above, a 100-athlete org is already paying
+// $10 + 100 x $3.50 = $360/mo, so another $19.99 is noise on their invoice
+// and friction on the sale.
+//
+// NOT yet wired into hasCoachesCornerAccess in server/routes.ts -- that
+// still gates on tier "pro" plus a hardcoded comp list, and changing who
+// can reach a feature is a separate change from giving the feature a price.
+// This is the number that change should read when it happens.
+export const COACHES_CORNER_FREE_AT_ATHLETE_COUNT = 100;

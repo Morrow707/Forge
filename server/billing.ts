@@ -177,28 +177,24 @@ export type PlanTier = "base" | "pro";
 // null seatCap means "no roster" (a Free Agent).
 export type CoachSeatCap = 15 | 50 | 100 | 250;
 
-// Target pricing shown on the landing page and used to create Stripe
-// Prices once a real account exists -- cents, since Stripe (and money in
-// general) shouldn't be represented as floats. iOS prices are higher than
-// the web/Stripe price for the same tier, the standard "offset Apple's
-// ~30% commission" pattern -- see server/apple-iap.ts for the App Store
-// side of this. Off-season hibernation is intentionally NOT priced here:
-// it's a free status (see subscriptionStatusEnum's "hibernating" value),
-// not a paid add-on -- an earlier draft of this pricing had a paid
-// hibernation tier and it was deliberately dropped as a retention risk
-// (charging someone to merely view their own past data).
-export const PRICING = {
-  free_agent: {
-    base: { web_cents: 2999, ios_cents: 3999 },
-    pro: { web_cents: 3999, ios_cents: 4999 },
-  },
-  coach: {
-    15: { base_cents: 4999, pro_cents: 7999 },
-    50: { base_cents: 9999, pro_cents: 14999 },
-    100: { base_cents: 14999, pro_cents: 24999 },
-    250: { base_cents: 29999, pro_cents: 49999 },
-  },
-} as const;
+// Off-season hibernation is intentionally NOT priced anywhere: it's a free
+// status (see subscriptionStatusEnum's "hibernating" value), not a paid
+// add-on -- an earlier draft of this pricing had a paid hibernation tier
+// and it was deliberately dropped as a retention risk (charging someone to
+// merely view their own past data).
+//
+// There used to be a PRICING const here: a whole second price list for
+// Free Agent tiers and four coach seat bands, with a web-vs-iOS split.
+// Nothing ever read it. The real numbers live in shared/billing-tiers.ts
+// (org base + per-athlete), shared/free-agent-tiers.ts and
+// shared/video-retention.ts, which is what /pricing renders, what
+// server/pricing-catalog.ts enumerates for the admin editor, and what the
+// entitlement functions below resolve against. Deleted rather than kept
+// "for reference" because a plausible-looking price list with no readers is
+// how the landing page ended up advertising $29.99 for a $9.99 tier. There
+// is also no web-vs-iOS price offset in the real model -- an Apple
+// subscription Product's own configured price IS the price (see
+// appleProductIdForFreeAgentTier's comment).
 
 /** Looks up (and creates on first use) this account's subscription row --
  * every user gets exactly one, defaulting to a 14-day trial. Purely a data
@@ -220,8 +216,8 @@ export async function getOrCreateSubscription(
 }
 
 /** Scaffolding for a real Stripe Checkout redirect -- unusable until
- * STRIPE_SECRET_KEY and real Stripe Price IDs exist for each tier (see
- * PRICING above; this function doesn't create Prices, a real launch would
+ * STRIPE_SECRET_KEY and real Stripe Price IDs exist for each tier (this
+ * function doesn't create Prices, a real launch would
  * set those up once in the Stripe dashboard and reference the ids here). */
 export async function createCheckoutSession(
   userId: number,

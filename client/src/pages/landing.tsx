@@ -21,6 +21,8 @@ import {
   DollarSign,
 } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
+import { bandForAthleteCount, formatCents } from "@shared/billing-tiers";
+import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
 
 /** A screenshot dressed up as a little browser window -- same treatment on
  * every feature screenshot so the marketing page reads as one coherent
@@ -124,37 +126,41 @@ const AUDIENCES = [
   },
 ];
 
-const FREE_AGENT_TIERS = [
-  {
-    name: "Base",
-    webPrice: "$29.99",
-    iosPrice: "$39.99",
+// Derived from the shared pricing modules, never re-typed here. This page
+// used to declare its own FREE_AGENT_TIERS ("Base $29.99 / Pro $39.99") and
+// its own COACH_SEAT_TIERS (four seat bands with Base/Pro columns), neither
+// of which matched what /pricing renders one click deeper from the same
+// shared source -- different tier names and roughly 3x the price for the
+// same product. The pricing section happened to be hidden behind
+// PRICING_SECTION_LIVE, so nobody ever saw the two pages disagree, which is
+// exactly why it survived. Deriving removes the possibility.
+const FREE_AGENT_CARDS = FREE_AGENT_TIER_ORDER.map((id) => {
+  const tier = FREE_AGENT_TIERS[id];
+  return {
+    name: tier.label,
+    price: formatCents(tier.monthlyPriceCents),
     features: [
-      "Camera-based bar velocity tracking",
-      "Sprint & jump tracking",
-      "Form-check video logging",
       "AI program builder",
+      ...(tier.hasAiChat ? ["AI chat coach"] : []),
+      "Camera bar-velocity, sprint & jump tracking",
+      ...(tier.hasVideoFormCheck
+        ? ["AI form-check on your lifts", "Form-check video logging"]
+        : []),
+      ...(tier.athleteProfileCap
+        ? [`Up to ${tier.athleteProfileCap} athletes on one household plan`]
+        : []),
     ],
-  },
-  {
-    name: "Pro",
-    webPrice: "$39.99",
-    iosPrice: "$49.99",
-    features: [
-      "Everything in Base",
-      "Apple Health sync & recovery trends",
-      "Digital goniometer",
-      "Nutrition AI Q&A",
-    ],
-  },
-];
+  };
+});
 
-const COACH_SEAT_TIERS = [
-  { seats: "Up to 15", base: "$49.99", pro: "$79.99" },
-  { seats: "Up to 50", base: "$99.99", pro: "$149.99" },
-  { seats: "Up to 100", base: "$149.99", pro: "$249.99" },
-  { seats: "Up to 250", base: "$299.99", pro: "$499.99" },
-];
+// The real org model is a flat base fee plus a flat per-athlete rate with no
+// volume discount and no feature tiers; the 25-athlete bands are a
+// presentation of that formula. These four roster sizes are just sample
+// points on it, priced by the same function /pricing uses.
+const COACH_SAMPLE_ROSTERS = [15, 50, 100, 250].map((n) => ({
+  seats: `Up to ${n}`,
+  price: formatCents(bandForAthleteCount(n).monthlyPriceCents),
+}));
 
 // Off by default -- the app is still in testing, so the pricing section
 // stays out of the public landing page even though it's fully built (same
@@ -454,7 +460,7 @@ export default function LandingPage() {
             <p className="mt-4 text-muted-foreground">
               One price, shown up front, for exactly what's included -- whether you're training
               on your own or running a whole program. Every plan starts with a 14-day free trial
-              of Pro, no credit card required.
+              with everything unlocked, no credit card required.
             </p>
           </div>
 
@@ -468,18 +474,15 @@ export default function LandingPage() {
                 </h3>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">Training on your own.</p>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                {FREE_AGENT_TIERS.map((t) => (
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {FREE_AGENT_CARDS.map((t) => (
                   <div key={t.name} className="rounded-lg border border-border p-5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-primary">
                       {t.name}
                     </p>
                     <p className="mt-1 font-display text-3xl font-extrabold">
-                      {t.webPrice}
+                      {t.price}
                       <span className="text-sm font-normal text-muted-foreground">/mo</span>
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {t.iosPrice}/mo via the iOS App
                     </p>
                     <ul className="mt-4 space-y-2">
                       {t.features.map((f) => (
@@ -510,24 +513,23 @@ export default function LandingPage() {
                   <thead>
                     <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="pb-2 font-semibold">Roster</th>
-                      <th className="pb-2 font-semibold">Base</th>
-                      <th className="pb-2 font-semibold">Pro</th>
+                      <th className="pb-2 font-semibold">Price</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {COACH_SEAT_TIERS.map((row) => (
+                    {COACH_SAMPLE_ROSTERS.map((row) => (
                       <tr key={row.seats} className="border-b border-border last:border-0">
                         <td className="py-3 text-muted-foreground">{row.seats}</td>
-                        <td className="py-3 font-display font-bold">{row.base}<span className="text-xs font-normal text-muted-foreground">/mo</span></td>
-                        <td className="py-3 font-display font-bold">{row.pro}<span className="text-xs font-normal text-muted-foreground">/mo</span></td>
+                        <td className="py-3 font-display font-bold">{row.price}<span className="text-xs font-normal text-muted-foreground">/mo</span></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className="mt-4 text-xs text-muted-foreground">
-                Base covers the AI program builder and camera tracking for your whole roster; Pro
-                adds Health sync, recovery trends, and the full analytics suite.
+                Every roster size gets the same thing: the AI program builder, camera tracking,
+                Health sync, recovery trends, and the full analytics suite. The rate per athlete
+                never changes, so the price only moves when your roster does.
               </p>
             </div>
           </div>
@@ -544,8 +546,9 @@ export default function LandingPage() {
 
           <p className="mx-auto mt-6 max-w-3xl text-center text-xs text-muted-foreground">
             Pricing reflects our launch plan and isn't live for billing yet -- signing up today
-            is free either way. No add-on fees, no surprise charges, no fine print: this is the
-            whole price.
+            is free either way. Optional add-ons (branding, extra video storage, sport
+            specialists) are listed in full on the pricing page -- nothing is charged that
+            isn't shown there first.
           </p>
         </div>
       </section>

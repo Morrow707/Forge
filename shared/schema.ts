@@ -2287,8 +2287,9 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "active",
   "past_due",
   "canceled",
-  // Free, not a paid add-on (see server/billing.ts's PRICING table comment
-  // for why the original off-season-hibernation-fee idea got dropped) --
+  // Free, not a paid add-on (see the comment above getOrCreateSubscription
+  // in server/billing.ts for why the original off-season-hibernation-fee
+  // idea got dropped) --
   // read-only preservation of a coach's or Free Agent's existing history
   // (dashboards, PR videos, past programs) with new logging paused. Either
   // side can enter/exit this manually; nothing about it involves Stripe.
