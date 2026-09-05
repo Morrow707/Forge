@@ -5,6 +5,7 @@ import {
   calibrationRefusalReason,
   firstMoveForExercise,
   romBucketForExercise,
+  filmGuidanceForExercise,
 } from "./exercise-camera-profile";
 
 describe("postureForExercise", () => {
@@ -239,5 +240,41 @@ describe("filmable lifts the manual does not cover", () => {
     for (const name of ["Trap Bar Squat", "Tall Clean", "Tall Snatch"]) {
       expect(firstMoveForExercise(name)).not.toBeNull();
     }
+  });
+});
+
+describe("filmGuidanceForExercise", () => {
+  it("carries the manual's own words for a lift it covers", () => {
+    const squat = filmGuidanceForExercise("Back Squat");
+    expect(squat?.view).toContain("side");
+    expect(squat?.inFrame).toContain("plates");
+    expect(squat?.oneRep).toContain("lockout");
+  });
+
+  // A generic "square to the side" would be actively wrong for these.
+  it("keeps the front-view lifts on a front view", () => {
+    expect(filmGuidanceForExercise("Cable Fly")?.view).toContain("FRONT");
+    expect(filmGuidanceForExercise("Arnold Press")?.view).toContain("FRONT");
+  });
+
+  it("covers every video-eligible barbell lift, including the ones the manual skipped", () => {
+    for (const name of ["Power Snatch", "Block Clean", "Hang Power Clean", "Push Jerk", "Tall Snatch", "Trap Bar Squat", "Muscle Clean", "Pause Clean", "Snatch Balance", "Jerk Balance"]) {
+      const g = filmGuidanceForExercise(name);
+      expect(g, name).not.toBeNull();
+      expect(g!.oneRep.length).toBeGreaterThan(20);
+    }
+  });
+
+  // Bar-path deviation and peak velocity both assume a straight vertical line, which a correct
+  // clean or snatch deliberately is not.
+  it("warns on every Olympic lift that its bar path is not a straight line", () => {
+    for (const name of ["Power Snatch", "Block Snatch", "Hang Power Clean", "Tall Clean", "Clean High Pull"]) {
+      expect(filmGuidanceForExercise(name)!.oneRep, name).toContain("does NOT travel a straight line");
+    }
+  });
+
+  it("returns null rather than a generic instruction for an unknown lift", () => {
+    expect(filmGuidanceForExercise("Some Brand New Lift")).toBeNull();
+    expect(filmGuidanceForExercise(null)).toBeNull();
   });
 });

@@ -59,6 +59,7 @@ import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
 import {
   postureForExercise,
   heightCalibrationUnreliable,
+  filmGuidanceForExercise,
   calibrationRefusalReason,
   firstMoveForExercise,
   romBucketForExercise,
@@ -329,6 +330,7 @@ export function AvBarTrackerDialog({
   // with no further detail for however long analysis+upload takes.
   onUploadProgress?: (setNumber: number, percent: number) => void;
 }) {
+  const filmGuidance = filmGuidanceForExercise(exerciseName);
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -1016,6 +1018,20 @@ export function AvBarTrackerDialog({
                     Cancel
                   </Button>
                 )}
+              </div>
+            )}
+
+            {/* Shown before recording, not after. Camera angle decides which axis is even
+                measurable (docs/camera-tracking-notes.md), so an athlete filming a squat from the
+                front has not taken a slightly worse video -- they have taken one where bar drift,
+                the fault that matters most on that lift, points straight at the lens and cannot
+                be seen at all. Telling them afterwards costs them the set. */}
+            {!recording && !analyzing && !saving && filmGuidance && (
+              <div className="absolute inset-x-3 top-3 rounded-md bg-black/70 px-3 py-2 text-xs text-white">
+                <p className="font-semibold uppercase tracking-wide text-white/60">Where to film from</p>
+                <p className="mt-0.5">{filmGuidance.view}</p>
+                <p className="mt-1.5 font-semibold uppercase tracking-wide text-white/60">Keep in frame</p>
+                <p className="mt-0.5">{filmGuidance.inFrame}</p>
               </div>
             )}
 
