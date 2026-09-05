@@ -277,6 +277,38 @@ app.use((req, res, next) => {
   const start = Date.now();
   const reqPath = req.path;
   let capturedJsonResponse: Record<string, any> | undefined;
+// Response bodies are logged in full below, which is genuinely useful for debugging and was
+// quietly writing credentials to disk. POST /api/auth/mfa/setup returns the raw TOTP seed and an
+// otpauth URI containing it -- short enough to fit inside the 200-character truncation, so a
+// coach's authenticator secret landed in the application log intact, enough for anyone with log
+// access to enrol their own device. A pending MFA token and a 30-day native bearer token go the
+// same way; the native one survives today only because it usually falls past the truncation,
+// which is luck rather than protection.
+//
+// Redacts by key name at the top level, which is where all of these live. Deliberately not a
+// deep walk: the log line is truncated to 200 characters anyway, and a recursive scan on every
+// single API response is a cost paid forever to protect against a shape that does not exist.
+const SENSITIVE_LOG_KEYS = new Set([
+  "secret",
+  "otpauthUri",
+  "mfaToken",
+  "nativeToken",
+  "token",
+  "passwordHash",
+  "backupCodes",
+]);
+
+function redactForLog(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  let cloned: Record<string, unknown> | null = null;
+  for (const key of Object.keys(body as Record<string, unknown>)) {
+    if (!SENSITIVE_LOG_KEYS.has(key)) continue;
+    if (!cloned) cloned = { ...(body as Record<string, unknown>) };
+    cloned[key] = "[redacted]";
+  }
+  return cloned ?? body;
+}
+
 
   const originalResJson = res.json.bind(res);
   res.json = ((body: any) => {
@@ -289,7 +321,7 @@ app.use((req, res, next) => {
     if (reqPath.startsWith("/api")) {
       let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        logLine += ` :: ${JSON.stringify(redactForLog(capturedJsonResponse))}`;
       }
       if (logLine.length > 200) {
         logLine = logLine.slice(0, 199) + "…";
@@ -334,8 +366,17 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-    res.status(status).json({ message });
+    // A 4xx message is written for the person reading it -- "Email already in use", "Invalid
+    // invite code" -- and passing it through is the point. A 5xx message is not: it is whatever
+    // the failing library said, and it went straight to the client. Losing a race on the signup
+    // duplicate-email check handed the athlete `duplicate key value violates unique constraint
+    // "users_email_idx"`, and any other database failure leaked schema detail the same way.
+    // The real message still reaches the logs and Sentry below.
+    const clientMessage =
+      status >= 500 || status < 400
+        ? "Something went wrong on our end. Please try again."
+        : err.message || "Request failed";
+    res.status(status).json({ message: clientMessage });
     console.error(err);
   });
 

@@ -2644,16 +2644,29 @@ export const storage = {
   // silently swallow a race-condition duplicate (the unique index is the
   // real backstop; a duplicate here throws and the route surfaces it).
   async updateUserEmail(userId: number, newEmail: string) {
+    // emailVerified goes back to false, and any verification link already in flight is deleted.
+    //
+    // Leaving it true meant the admin user list reported "Email verified: Yes" for an address
+    // nobody had ever proven control of, and the resend endpoint short-circuits on that flag so
+    // the person could never trigger a real one. The stale token is the sharper edge: someone who
+    // signs up with a typo'd address, has the link land in a stranger's inbox, then corrects the
+    // address, had that stranger's click still certify the corrected address for the rest of the
+    // token's 24 hours. Nothing gates on emailVerified today, which is exactly why this is worth
+    // fixing now rather than the day something does.
     const [row] = await db
       .update(users)
-      .set({ email: newEmail.toLowerCase() })
+      .set({ email: newEmail.toLowerCase(), emailVerified: false })
       .where(eq(users.id, userId))
       .returning({ id: users.id, email: users.email });
+    await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.userId, userId));
     return row ?? null;
   },
 
   async updateUserPasswordHash(userId: number, passwordHash: string) {
     await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+    // Same reasoning as changeOwnPassword above: a password change invalidates any reset link
+    // already in flight for that account.
+    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
   },
 
   async updatePersonalTheme(
@@ -3086,6 +3099,15 @@ export const storage = {
     }
     const passwordHash = await hashPassword(newPassword);
     await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+    // Any outstanding reset link dies with the old password.
+    //
+    // Without this, changing your password left a previously-emailed reset token valid for the
+    // rest of its hour. Someone who had seen that email -- a shared computer, a forwarded
+    // thread, a mail client left open -- could still use it AFTER the victim had done the exactly
+    // correct thing, set a password of their own choosing, and the revoke-all-sessions step that
+    // follows a reset would then log the real owner out. Remediation that leaves the attacker's
+    // route open is worse than no remediation, because the victim believes they are safe.
+    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
     return { ok: true };
   },
 

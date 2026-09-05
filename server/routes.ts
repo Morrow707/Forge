@@ -8319,20 +8319,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
-  app.patch("/api/account/password", requireAuth, async (req, res) => {
-    const user = currentUser(req);
-    const parsed = updateAccountPasswordSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const fullUser = await storage.getUser(user.id);
-    if (!fullUser || !(await comparePasswords(parsed.data.currentPassword, fullUser.passwordHash))) {
-      return res.status(401).json({ message: "Current password is incorrect" });
-    }
-    const newHash = await hashPassword(parsed.data.newPassword);
-    await storage.updateUserPasswordHash(user.id, newHash);
-    res.status(204).end();
-  });
+  // Removed: a second, weaker way to change a password.
+  //
+  // This route verified the current password and wrote the new hash, and did nothing else. No
+  // rate limiter, no session revocation, and no "your password was changed" email -- so an
+  // attacker holding a stolen session who had also learned the password could change it with the
+  // victim's other devices left logged in and no notification sent, and the attacker's own
+  // session surviving too. Used honestly by the real owner it was just as bad: changing your
+  // password to evict a device did not evict it.
+  //
+  // POST /api/account/change-password in server/auth.ts does all of that correctly and is what
+  // the app has always called (see change-password-dialog.tsx), so this was unreachable from the
+  // product and reachable by anyone with a session and a HTTP client. Deleted rather than
+  // hardened: two routes doing the same job is how they drift apart in the first place.
 
   // Any staff member's own personal touch, not gated to the primary the
   // way org branding is -- see personalAccentColor's comment on the users

@@ -625,8 +625,19 @@ export function setupAuth(app: Express) {
         });
         sendVerificationEmail(req, user);
         issueGuardianInviteIfNeeded(req, user, guardianEmail, tier);
-        const { nativeToken } = await trackNewSession(req, user.id);
-        res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
+        // try/catch for the same reason completeLogin has one: req.login's callback is not
+        // promise-aware, so a rejection in here reaches no error middleware at all. There is
+        // also no global unhandledRejection handler in this process (see rest-timer-push.ts's
+        // own note) and Node's default is to throw on an unhandled one -- so a brief database
+        // problem in either call below did not return an error to the person signing up, it took
+        // the whole server down along with every other request in flight. The account is already
+        // committed by this point, which is why this reports the failure rather than undoing it.
+        try {
+          const { nativeToken } = await trackNewSession(req, user.id);
+          res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
+        } catch (sessionErr) {
+          next(sessionErr);
+        }
       });
     } catch (err) {
       next(err);
@@ -701,8 +712,14 @@ export function setupAuth(app: Express) {
         });
         sendVerificationEmail(req, user);
         issueGuardianInviteIfNeeded(req, user, parsed.data.guardianEmail, tier);
-        const { nativeToken } = await trackNewSession(req, user.id);
-        res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
+        // Same try/catch as the signup route above, for the same reason -- an unhandled
+        // rejection in a req.login callback crashes the process rather than erroring the request.
+        try {
+          const { nativeToken } = await trackNewSession(req, user.id);
+          res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
+        } catch (sessionErr) {
+          next(sessionErr);
+        }
       });
     } catch (err) {
       next(err);
@@ -738,8 +755,14 @@ export function setupAuth(app: Express) {
       const { user } = result;
       req.login(user, async (err) => {
         if (err) return next(err);
-        const { nativeToken } = await trackNewSession(req, user.id);
-        res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
+        // Same try/catch as the two signup routes above, for the same reason -- an unhandled
+        // rejection in a req.login callback crashes the process rather than erroring the request.
+        try {
+          const { nativeToken } = await trackNewSession(req, user.id);
+          res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
+        } catch (sessionErr) {
+          next(sessionErr);
+        }
       });
     } catch (err) {
       next(err);
