@@ -3,6 +3,9 @@ import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 // Pure, and kept that way so it can be unit-tested with no DOM -- see its own comment.
 import { dropHeavyFields } from "@/lib/log-payload-trim";
+import { belongsToCurrentUser, getQueueOwner } from "@/lib/queue-owner";
+import { Network } from "@capacitor/network";
+import { App } from "@capacitor/app";
 
 // Lets the athlete workout page keep working -- viewing and logging -- in a
 // gym with no signal, the single most common complaint about apps like
@@ -50,9 +53,46 @@ export type PendingLog = {
   // Bumped on every failed sync attempt (network failure or a server
   // rejection alike) -- see flushPendingLogs' own comment for why this
   // exists and why it's never a reason to drop the entry outright.
-  failureCount?: number;
-  notifiedStale?: boolean;
+  // Which account queued this. See queue-owner.ts -- localStorage is per
+  // device, not per account, and this queue outlives a logout.
+  ownerId?: number | null;
 };
+
+// How many times syncing a given DAY has failed, and whether the athlete has
+// been told. Keyed by dayKey and kept outside the queue entry on purpose.
+// It used to live on the entry, and the entry is deliberately churned: when
+// the workout page has that day open it claims the queued entry, takes it,
+// and re-queues a fresh one (see takePendingLog). Every one of those cycles
+// reset the count to zero, so an athlete who keeps opening the day that will
+// not sync -- the exact person the warning is for -- never reached the
+// threshold and was never told.
+const FAILURES_KEY = "forge:pending-log-failures";
+type DayFailure = { count: number; notified: boolean };
+
+function readFailures(): Record<string, DayFailure> {
+  try {
+    const raw = localStorage.getItem(FAILURES_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, DayFailure>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeFailures(map: Record<string, DayFailure>) {
+  try {
+    localStorage.setItem(FAILURES_KEY, JSON.stringify(map));
+  } catch {
+    // Full or unavailable. A lost failure count costs a warning, never data,
+    // and the queue itself has its own eviction ladder for a full store.
+  }
+}
+
+function clearDayFailure(dayKey: string) {
+  const map = readFailures();
+  if (!(dayKey in map)) return;
+  delete map[dayKey];
+  writeFailures(map);
+}
 
 function readQueue(): PendingLog[] {
   try {
@@ -145,6 +185,7 @@ export function queueLog(dayKey: string, url: string, payload: unknown): Pending
     url,
     payload,
     queuedAt: new Date().toISOString(),
+    ownerId: getQueueOwner(),
   };
   const others = readQueue().filter((p) => p.dayKey !== dayKey);
 
@@ -219,17 +260,41 @@ export function takePendingLog(dayKey: string): PendingLog | null {
 
 const STALE_FAILURE_THRESHOLD = 5;
 
+// This flush now fires from four places (startup, "online", a Capacitor
+// network-status change, and app resume -- see startOfflineLogSync), and a
+// Wi-Fi reconnect trips at least two of them within milliseconds of each
+// other. Without this, two runs each read the queue, each POST the same
+// entry, and each write back a failure count computed from a snapshot the
+// other has already invalidated. One at a time; a second caller returns
+// immediately and the in-flight run is already doing its work.
+let flushInFlight = false;
+
 export async function flushPendingLogs() {
+  if (flushInFlight) return;
+  flushInFlight = true;
+  try {
+    await runFlush();
+  } finally {
+    flushInFlight = false;
+  }
+}
+
+async function runFlush() {
   const pending = readQueue();
   if (pending.length === 0) return;
   let syncedAny = false;
   for (const entry of pending) {
+    // Queued by a different account on this device -- leave it alone. It is
+    // their workout and it flushes when they sign back in. See
+    // queue-owner.ts for why this is not simply cleared at logout.
+    if (!belongsToCurrentUser(entry.ownerId)) continue;
     // Left for the owning page's own queue to resolve -- see
     // claimDayKeyForFlush's own comment.
     if (claimedDayKeys.has(entry.dayKey)) continue;
     try {
       await apiRequest("POST", entry.url, entry.payload);
       writeQueue(readQueue().filter((p) => p.id !== entry.id));
+      clearDayFailure(entry.dayKey);
       syncedAny = true;
     } catch (err) {
       // CAM-8: a permanent rejection is not a network failure and must not
@@ -246,6 +311,7 @@ export async function flushPendingLogs() {
       const permanentlyRejected = isPermanentUploadRejection(status);
       if (permanentlyRejected) {
         writeQueue(readQueue().filter((p) => p.id !== entry.id));
+        clearDayFailure(entry.dayKey);
         toast.error(
           "A workout you logged offline was rejected by the server and can't be synced -- open that day and re-enter it.",
           { duration: 20000 },
@@ -264,15 +330,18 @@ export async function flushPendingLogs() {
       // may have claimed and taken this exact entry while this request was
       // in flight.
       const queue = readQueue();
-      const current = queue.find((p) => p.id === entry.id);
-      if (!current) continue;
-      const failureCount = (current.failureCount ?? 0) + 1;
-      const shouldNotify = failureCount === STALE_FAILURE_THRESHOLD && !current.notifiedStale;
-      writeQueue(
-        queue.map((p) =>
-          p.id === entry.id ? { ...p, failureCount, notifiedStale: p.notifiedStale || shouldNotify } : p,
-        ),
-      );
+      if (!queue.some((p) => p.id === entry.id)) continue;
+      const failures = readFailures();
+      const previous = failures[entry.dayKey] ?? { count: 0, notified: false };
+      const count = previous.count + 1;
+      // >= rather than ==: an exact match is one lost increment away from
+      // never warning at all, and the whole point of the counter is that
+      // the athlete finds out.
+      const shouldNotify = count >= STALE_FAILURE_THRESHOLD && !previous.notified;
+      writeFailures({
+        ...failures,
+        [entry.dayKey]: { count, notified: previous.notified || shouldNotify },
+      });
       if (shouldNotify) {
         toast.error(
           "A workout log saved while you were offline still hasn't synced -- check that day and re-enter it if it's missing.",
@@ -287,8 +356,29 @@ export async function flushPendingLogs() {
   }
 }
 
-/** Call once at app startup. */
+/** Call once at app startup.
+ *
+ * Four triggers, matching startOfflineVideoSync -- which had all of these
+ * while this queue had only "online" plus the one flush at cold start. The
+ * asymmetry was backwards: a queued video can be re-recorded, a queued
+ * workout cannot, so the more valuable payload had the weaker sync.
+ *
+ * App resume is the one that actually mattered. On iOS the app stays
+ * resident, so an athlete who logs a session in a gym with no signal and
+ * opens the app again at home on Wi-Fi never crosses an offline-to-online
+ * boundary with a listener running -- the OS reconnected while the app was
+ * backgrounded. Their sets sat in localStorage until something forced an
+ * "online" event or they killed and relaunched the app. Same reasoning the
+ * video store already wrote down for itself.
+ */
 export function startOfflineLogSync() {
   flushPendingLogs();
   window.addEventListener("online", flushPendingLogs);
+  // Native only, and deliberately not gated on Capacitor.isNativePlatform():
+  // both plugins are no-ops on web, where "online" and the startup flush
+  // already cover everything a tab can do.
+  Network.addListener("networkStatusChange", (status) => {
+    if (status.connectionType !== "none") void flushPendingLogs();
+  });
+  App.addListener("resume", () => void flushPendingLogs());
 }

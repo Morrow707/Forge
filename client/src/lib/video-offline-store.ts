@@ -1,4 +1,5 @@
 import { isPermanentUploadRejection } from "@/lib/upload-rejection";
+import { belongsToCurrentUser, getQueueOwner } from "@/lib/queue-owner";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Network } from "@capacitor/network";
@@ -80,6 +81,12 @@ type PendingVideoUpload = {
   queuedAt: string;
   label: string;
   reattach?: VideoReattachTarget;
+  // Which account recorded this. See queue-owner.ts. Without it, a clip
+  // queued by one athlete uploaded under the next athlete's session on a
+  // shared device: the upload succeeded, the file was recorded as theirs,
+  // only the attach failed (that one is scoped), and the first athlete's
+  // video surfaced in the second athlete's Video Bank.
+  ownerId?: number | null;
 };
 
 function readManifest(): PendingVideoUpload[] {
@@ -101,7 +108,10 @@ function writeManifest(entries: PendingVideoUpload[]) {
 
 /** Read-only view of what's still queued -- for the Video Bank page. */
 export function listPendingVideos(): PendingVideoUpload[] {
-  return readManifest();
+  // The Video Bank shows what is still waiting to upload. Another athlete's
+  // queued clip is not this athlete's business, and offering them an
+  // "Upload now" button for it is how it ended up in their account.
+  return readManifest().filter((e) => belongsToCurrentUser(e.ownerId));
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -204,6 +214,7 @@ export async function persistVideoForUpload(
     queuedAt: new Date().toISOString(),
     label: context.label,
     reattach: context.reattach,
+    ownerId: getQueueOwner(),
   };
   writeManifest([...readManifest(), entry]);
   return id;
@@ -315,6 +326,9 @@ async function uploadPendingEntry(entry: PendingVideoUpload): Promise<void> {
 export async function uploadPendingVideoNow(id: string): Promise<void> {
   const entry = readManifest().find((e) => e.id === id);
   if (!entry) return;
+  // Not this account's clip -- the Video Bank never lists it (see
+  // listPendingVideos), so reaching here means a stale view.
+  if (!belongsToCurrentUser(entry.ownerId)) return;
   await uploadPendingEntry(entry);
 }
 
@@ -328,9 +342,28 @@ export async function uploadPendingVideoNow(id: string): Promise<void> {
  * vanishes with no explanation is worse than one that fails loudly enough
  * to ask them to re-record it. Anything else (still offline, transient
  * failure) leaves the entry queued for the next flush. */
+// Three triggers fire this, and a Wi-Fi reconnect trips at least two of
+// them ("online" and networkStatusChange) within milliseconds. Each run read
+// the manifest, found the same clip, and uploaded it -- the entry is only
+// cleared after the upload returns -- so a single reconnect could upload the
+// same video twice, against a storage cap the athlete pays for.
+let videoFlushInFlight = false;
+
 export async function flushPendingVideos() {
+  if (videoFlushInFlight) return;
+  videoFlushInFlight = true;
+  try {
+    await runVideoFlush();
+  } finally {
+    videoFlushInFlight = false;
+  }
+}
+
+async function runVideoFlush() {
   if (!isVideoOfflinePersistenceSupported() || !(await isOnWifi())) return;
   for (const entry of readManifest()) {
+    // Recorded by a different account on this device. Waits for them.
+    if (!belongsToCurrentUser(entry.ownerId)) continue;
     try {
       await uploadPendingEntry(entry);
       toast.success(

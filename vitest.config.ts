@@ -11,6 +11,11 @@ export default defineConfig({
   resolve: {
     alias: {
       "@shared": path.resolve(import.meta.dirname, "shared"),
+      // Mirrors vite.config.ts so a client module can be unit-tested by the
+      // same specifier it imports itself with -- vi.mock has to name the
+      // exact specifier the module under test uses, so without this the
+      // offline queues could only be tested by rewriting their imports.
+      "@": path.resolve(import.meta.dirname, "client", "src"),
     },
   },
   test: {

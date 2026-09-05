@@ -7,6 +7,7 @@ import { logDebug } from "@/lib/debug-console";
 import { flushPendingLogs } from "@/lib/offline-queue";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
+import { setQueueOwner } from "@/lib/queue-owner";
 
 type SignupPayload = {
   email: string;
@@ -153,6 +154,11 @@ function useLogoutMutation() {
     onSuccess: () => {
       logDebug("AUTH", "logout succeeded, clearing nativeToken + query cache");
       setNativeToken(null);
+      // Offline queues live in localStorage and outlive this logout. They
+      // are deliberately NOT cleared -- that is somebody's unsynced workout
+      // -- but nothing queued by this account may flush under the next one.
+      // See queue-owner.ts.
+      setQueueOwner(null);
       qc.setQueryData(["/api/auth/me"], null);
       qc.clear();
     },
@@ -206,6 +212,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isLoading) return;
     logDebug("AUTH", isError ? "auth/me check errored" : `auth/me resolved: ${user ? `logged in as ${user.role}` : "logged out"}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, isError, user]);
+
+  // Who the offline queues may flush for right now. Set from the resolved
+  // session rather than at login, so it is also correct on a cold start with
+  // an existing session -- which is exactly when the startup flush runs.
+  // isError is left alone deliberately: a failed check is not a logout, and
+  // clearing the owner there would strand a queue over one network blip.
+  useEffect(() => {
+    if (isLoading || isError) return;
+    setQueueOwner(user?.id ?? null);
   }, [isLoading, isError, user]);
 
   // Report this device's own time zone, read straight off the OS via Intl.
