@@ -9,9 +9,8 @@ export default function AthleteSkillPrograms() {
         apiBase="/api/athlete"
         routeBase="/athlete/skill-programs"
         title="My Skill Programs"
-        emptyStateText="Nothing here yet -- hit New Skill Program and the AI will ask what you're trying to build, then build it with you."
+        emptyStateText="Nothing here yet -- hit New Skill Program to build one."
         showAssign={false}
-        aiFirstCreate
         showSelfAssign
         libraryTabs={
           <LibraryTabs

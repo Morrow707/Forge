@@ -353,25 +353,46 @@ export function AppShell({
     queryKey: ["/api/athlete/coaches"],
     enabled: user?.role === "athlete",
   });
-  const isFreeAgent = user?.role === "athlete" && !!coaches && coaches.length === 0;
+  // While the coaches query is in flight `coaches` is undefined, which used to resolve this to
+  // false and render the COACHED athlete's navigation -- so a free agent watched Library, AI Chat,
+  // Sport Coaches and Upgrade pop into existence a beat after the page painted. Undefined means
+  // "not known yet", not "has a coach", so the free-agent items are held back only once the answer
+  // actually says they have one.
+  const isFreeAgent = user?.role === "athlete" && coaches !== undefined && coaches.length === 0;
+  const coachStatusKnown = user?.role !== "athlete" || coaches !== undefined;
 
   const nav = (
     user?.role === "coach"
       ? coachNav.filter((item) => !hiddenNavSections.has(item.href))
       : user?.role === "admin"
         ? adminNav
-        : isFreeAgent
-          // A Free Agent has no team, so Team Board (a coach's roster-wide
-          // chat) has nobody on the other end -- same "would just 403/be
-          // empty" reasoning as the coached-athlete filter below.
-          ? athleteNav.filter((item) => item.href !== "/athlete/team-board")
-          : athleteNav.filter(
+        : !coachStatusKnown
+          // Coach status not resolved yet. Both branches below are wrong at this moment, and the
+          // old code silently took the coached one -- so a Free Agent watched Library, AI Chat,
+          // Sport Coaches and Upgrade appear a beat after the page painted, while a coached
+          // athlete could tap one of them in that window and land somewhere they have no access
+          // to. Neither item set is shown until the answer is actually known: the four that
+          // differ are held back, so a nav entry never points somewhere the athlete cannot go.
+          ? athleteNav.filter(
               (item) =>
                 item.href !== "/athlete/programs" &&
                 item.href !== "/athlete/chat" &&
                 item.href !== "/athlete/coaches" &&
-                item.href !== "/athlete/upgrade",
+                item.href !== "/athlete/upgrade" &&
+                item.href !== "/athlete/team-board",
             )
+          : isFreeAgent
+            // A Free Agent has no team, so Team Board (a coach's roster-wide
+            // chat) has nobody on the other end -- same "would just 403/be
+            // empty" reasoning as the coached-athlete filter below.
+            ? athleteNav.filter((item) => item.href !== "/athlete/team-board")
+            : athleteNav.filter(
+                (item) =>
+                  item.href !== "/athlete/programs" &&
+                  item.href !== "/athlete/chat" &&
+                  item.href !== "/athlete/coaches" &&
+                  item.href !== "/athlete/upgrade",
+              )
   ).filter((item) => !disabledNavHrefs.has(item.href));
   const primaryNav = nav.filter((item) => !item.overflow);
   const overflowNav = nav.filter((item) => item.overflow);

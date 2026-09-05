@@ -89,6 +89,21 @@ export default function MovementScreensPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           <div className="h-32 animate-pulse rounded-md bg-surface sm:col-span-2 lg:col-span-3" />
+        ) : batteries.length === 0 ? (
+          // There was no zero-length branch at all here, so an unseeded battery library rendered
+          // the page title over a completely blank body -- no text, no button, nothing to
+          // indicate whether it was broken or simply empty.
+          <Card className="sm:col-span-2 lg:col-span-3">
+            <CardContent className="flex flex-col items-center gap-2 py-16 text-center">
+              <p className="text-muted-foreground">
+                No movement screens available yet.
+              </p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Forge's screening batteries load here once they're published. Nothing to do in the
+                meantime.
+              </p>
+            </CardContent>
+          </Card>
         ) : (
           batteries.map((b) => (
             <Card key={b.id}>

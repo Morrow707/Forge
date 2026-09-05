@@ -2506,7 +2506,15 @@ function AthletePickerField({
         </SelectTrigger>
         <SelectContent>
           {filtered.length === 0 && (
-            <p className="px-2 py-1.5 text-sm text-muted-foreground">No athletes match</p>
+            // Two different situations, and one message for both read as a bug on a brand-new
+            // account. A coach with an empty roster opened Analytics, was told to pick an
+            // athlete, opened the picker, and read "No athletes match" -- copy written for a
+            // failed search, with no hint that the answer is to invite someone first.
+            <p className="px-2 py-1.5 text-sm text-muted-foreground">
+              {roster.length === 0
+                ? "No athletes yet -- invite one from Roster and their history shows up here."
+                : "No athletes match"}
+            </p>
           )}
           {filtered.map((a) => (
             <SelectItem key={a.id} value={String(a.id)}>

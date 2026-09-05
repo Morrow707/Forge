@@ -15,9 +15,13 @@ const RECOVERY_HISTORY_DAYS = 90;
  * the difference is entirely in what NutritionPanel/FoodLogPanel let you
  * touch: a coached athlete gets a read-only view of the targets their
  * coach set (see coach/nutrition.tsx) plus their own food log, a Free
- * Agent additionally edits their own targets and gets the free AI Q&A
- * box (never behind requirePaidAiAccess -- see routes.ts). Logging food
- * is always editable either way; that's never an AI capability. */
+ * Agent additionally edits their own targets and gets the AI Q&A box.
+ *
+ * That box IS behind requirePaidAiAccess (routes.ts, POST
+ * /api/athlete/nutrition/ask) -- this comment used to claim the opposite, which
+ * is how it came to be presented as free and then answered with a red error
+ * toast. It now answers with the server's own "paid upgrade" message. Logging
+ * food is always editable either way; that's never an AI capability. */
 export default function AthleteNutrition() {
   const { user } = useAuth();
 

@@ -8746,9 +8746,10 @@ Hard rules, no exceptions:
     dateOverrides?: Record<string, string>,
     durationWeeks = 1,
   ) {
-    // Same gate as createAssignment -- see assertMinorHasActiveGuardian.
+    // Same gate as createAssignment -- see assertMinorHasActiveGuardian, including why the
+    // requester id is passed.
     for (const a of athletes) {
-      await this.assertMinorHasActiveGuardian(a.athleteId);
+      await this.assertMinorHasActiveGuardian(a.athleteId, coachId);
     }
 
     const created = athletes.length
@@ -14535,8 +14536,11 @@ ${entriesText}`;
     // onto them. Checked for every athlete in the batch before any insert
     // happens, so a batch assignment either fully succeeds or fails closed
     // with a clear reason rather than silently skipping some athletes.
+    // coachId is the requester. An athlete self-assigning passes their own id here, so this is
+    // what lets assertMinorHasActiveGuardian address them in the second person rather than
+    // reading their own name back at them.
     for (const a of athletes) {
-      await this.assertMinorHasActiveGuardian(a.athleteId);
+      await this.assertMinorHasActiveGuardian(a.athleteId, coachId);
     }
 
     // Re-assigning a program an athlete already has (or has finished) is
@@ -20425,14 +20429,21 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // this codebase -- it would otherwise silently block every pre-existing
   // account that predates dateOfBirth collection. Adults are never gated
   // here, regardless of whether a guardian link exists.
-  async assertMinorHasActiveGuardian(athleteId: number): Promise<void> {
+  // requestedBy: who is actually asking. The message was written for a coach assigning to someone
+  // else, and a minor Free Agent self-assigning their own program read their own name back at
+  // them in the third person -- "Sam Reid needs an active guardian account linked before anything
+  // new can be assigned to them" -- with no explanation of what to do about it. They are also the
+  // one person who cannot fix it themselves, so the second-person version says who can.
+  async assertMinorHasActiveGuardian(athleteId: number, requestedBy?: number): Promise<void> {
     const athlete = await this.getUser(athleteId);
     if (!athlete?.dateOfBirth) return;
     if (derivePrivacyTier(athlete.dateOfBirth) === "tier3_adult_18plus") return;
     const link = await this.getGuardianLinkForAthlete(athleteId);
     if (link) return;
     throw new ForbiddenReferenceError(
-      `${athlete.name} needs an active guardian account linked before anything new can be assigned to them.`,
+      requestedBy === athleteId
+        ? "A parent or guardian has to finish setting up their linked account before you can schedule anything. We emailed them when you signed up -- ask them to open that link, or resend it from your profile."
+        : `${athlete.name} needs an active guardian account linked before anything new can be assigned to them.`,
     );
   },
 

@@ -7511,16 +7511,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/athlete/programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getProgramsByCoach(user.id);
+    // getVisibleProgramsForCoach, not getProgramsByCoach, and it fixes two things at once.
+    //
+    // The signup welcome dialog and the dashboard card both promise a free agent can "start from
+    // a Forge template". getProgramsByCoach returns only programs the athlete owns, so that
+    // promise had no surface at all -- a brand-new athlete followed it to a Library that was
+    // empty by construction. This is the same union the coach side has always used: your own
+    // programs plus every Forge-official one.
+    //
+    // It also returns the shape the shared list component actually renders. ProgramListPage reads
+    // weekCount, dayCount and assignedAthleteCount; getProgramsByCoach returns none of them, so
+    // an athlete's own program card read "undefined wk - undefined days".
+    const list = await storage.getVisibleProgramsForCoach(user.id);
     res.json(list);
   });
 
   app.get("/api/athlete/programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
-    const program = await assertCoachOwnsProgram(user.id, id);
+    // Readable set, not owned set: a Forge-official program has to be fetchable for the athlete
+    // to duplicate it, since duplication reads the detail and re-posts it as a new program of
+    // their own. Ownership is reported honestly rather than hardcoded -- a Forge template is not
+    // theirs and is not editable in place, which is exactly what makes "duplicate" the right
+    // action on it.
+    const program = await storage.getProgramFull(id);
     if (!program) return res.status(404).json({ message: "Program not found" });
-    res.json({ ...program, isForgeOfficial: false, ownerLabel: "YOU", editable: true });
+    const { ownerIds } = await storage.getCoachAndAdminOwnerIds(user.id);
+    if (!ownerIds.includes(program.coachId)) {
+      return res.status(404).json({ message: "Program not found" });
+    }
+    const isOwn = program.coachId === user.id;
+    res.json({
+      ...program,
+      isForgeOfficial: !isOwn,
+      ownerLabel: isOwn ? "YOU" : "FORGE",
+      editable: isOwn,
+    });
   });
 
   app.post("/api/athlete/programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {

@@ -25,7 +25,22 @@ export function FreeAgentGate({
     queryKey: ["/api/athlete/coaches"],
   });
 
-  if (isLoading) return null;
+  // A skeleton inside the shell, not `return null`.
+  //
+  // Returning null rendered nothing at all -- no nav, no header, a completely white screen --
+  // until /api/athlete/coaches resolved, on Library, AI Chat, Sport Coaches, Upgrade and both
+  // program builders. On a cold start or a slow connection that is a blank page where the app
+  // should be, and it is the only loading path in the app that does this; everything else shows
+  // a skeleton or a spinner.
+  if (isLoading) {
+    return (
+      <AppShell title={title}>
+        <div className="flex items-center justify-center py-24">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
+        </div>
+      </AppShell>
+    );
+  }
 
   if (coaches && coaches.length > 0) {
     return (

@@ -9,9 +9,8 @@ export default function AthletePrograms() {
         apiBase="/api/athlete"
         routeBase="/athlete/programs"
         title="My Programs"
-        emptyStateText="Nothing here yet -- hit New Program and the AI will ask what you're trying to achieve, then build it with you."
+        emptyStateText="Start from a Forge template below, or hit New Program to build your own from scratch."
         showAssign={false}
-        aiFirstCreate
         showSelfAssign
         libraryTabs={
           <LibraryTabs

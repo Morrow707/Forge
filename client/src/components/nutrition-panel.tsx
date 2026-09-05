@@ -188,7 +188,13 @@ export function NutritionPanel({
     onSuccess: (result) => {
       setAnswer(result.answer);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't get an answer"),
+    // A 402 here is a permanent, expected state for a Free Agent who hasn't paid, not a failure
+    // -- the same distinction the AI chat panels already make. A red error toast reads as "the
+    // app broke"; the server's own message explains what it actually is.
+    onError: (err: ApiError) =>
+      err.status === 402
+        ? toast.info(err.message || "This one's a paid upgrade, coming soon.")
+        : toast.error(err.message || "Couldn't get an answer"),
   });
 
   if (isLoading) {

@@ -980,6 +980,19 @@ export default function CoachRoster() {
               New Team
             </Button>
           </div>
+          {teams.length === 0 && (
+            // The Roster tab beside this one has a real empty state; this had none, so "Teams (0)"
+            // opened onto a single button floating in whitespace.
+            <Card className="mb-4">
+              <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+                <p className="text-muted-foreground">No teams yet.</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Teams group athletes for scheduling and the leaderboard, and each one gets its
+                  own join code. Athletes on your roster don't need one.
+                </p>
+              </CardContent>
+            </Card>
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {teams.map((team) => {
               const teamHurtCount = team.members.filter(

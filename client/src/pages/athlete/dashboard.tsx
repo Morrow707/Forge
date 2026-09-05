@@ -334,6 +334,25 @@ export default function AthleteDashboard() {
             </CardContent>
           </Card>
         )}
+
+        {/* The coached athlete's equivalent, which did not exist. Their dashboard was stat tiles
+            reading zero and three "Nothing scheduled" rows, with no explanation anywhere that
+            their coach simply hasn't assigned anything yet -- and their navigation drops Library
+            and the AI tabs, so there was nothing to click either. Shown only once the coaches
+            query has actually answered, so it never flashes at a Free Agent. */}
+        {!coachesLoading && coaches.length > 0 && upcoming.length === 0 && (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+              <p className="max-w-sm text-muted-foreground">
+                Nothing's been assigned to you yet. Your coach programs your training, and it'll
+                show up here and on your calendar as soon as they do.
+              </p>
+              <p className="max-w-sm text-xs text-muted-foreground">
+                In the meantime you can still log food, body metrics and how you're feeling.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
       </div>
     </AppShell>

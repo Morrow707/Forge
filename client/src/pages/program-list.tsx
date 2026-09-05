@@ -107,6 +107,19 @@ export function ProgramListPage({
    * actually starts the conversation. Used instead of showAiAssist for a
    * Free Agent, who isn't expected to design a program from a blank editor
    * -- there's exactly one path in, and it's AI-first. */
+  /** Coach-side only, deliberately.
+   *
+   * This opens a questionnaire, compiles the answers into a prompt, creates an EMPTY program,
+   * stashes the prompt, and navigates to the builder -- where the builder reads the prompt and
+   * DELETES it before handing it to the AI panel. On the athlete side that panel is behind a paid
+   * gate that no free agent has passed, so it answered with "this is a paid upgrade, coming soon".
+   * The athlete had answered four questions about their goals, lost the answers, and was standing
+   * in a program with zero days. It was the worst first-run path in the product, and it was the
+   * one the signup welcome dialog pointed them at.
+   *
+   * The athlete pages now open the ordinary create dialog instead. Restore this there only
+   * alongside a real entitlement check -- the client currently has no way to know whether AI
+   * access exists except by calling the endpoint and getting a 402. */
   aiFirstCreate?: boolean;
 }) {
   const qc = useQueryClient();
