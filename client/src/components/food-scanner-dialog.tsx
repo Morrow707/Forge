@@ -21,6 +21,7 @@ import {
   disableTorch,
 } from "@/lib/native-camera";
 import { capturePhotoFromVideo, downscalePhotoFile, type CapturedPhoto } from "@/lib/photo-capture";
+import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -119,6 +120,12 @@ export function FoodScannerDialog({
   date: string;
 }) {
   const qc = useQueryClient();
+  // Reading a plate is a vision call, and every AI call an athlete can make
+  // is Free Agent only. Barcode scan, database search and manual entry are
+  // untouched, so a coached athlete still logs every meal they eat -- they
+  // just don't get the photo shortcut. Undefined reads as "no" so the
+  // option never appears and then vanishes mid-load.
+  const canAnalyzePhoto = useIsFreeAgent() === true;
   const [mode, setMode] = useState<Mode>("scan");
   const [source, setSource] = useState<Source>("barcode");
   const [candidate, setCandidate] = useState<FoodCandidate>(emptyManual());
@@ -528,18 +535,20 @@ export function FoodScannerDialog({
             <p className="text-center text-xs text-muted-foreground">
               Hold a barcode steady in the frame
             </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                setPhotoError(null);
-                setMode("photo");
-              }}
-            >
-              <ImagePlus className="h-4 w-4" />
-              No barcode? Snap a photo of the meal
-            </Button>
+            {canAnalyzePhoto && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setPhotoError(null);
+                  setMode("photo");
+                }}
+              >
+                <ImagePlus className="h-4 w-4" />
+                No barcode? Snap a photo of the meal
+              </Button>
+            )}
             <div className="flex gap-2">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setMode("search")}>
                 <Search className="h-4 w-4" />

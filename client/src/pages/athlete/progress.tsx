@@ -50,6 +50,7 @@ import { DigestBanner } from "@/components/digest-banner";
 import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
 import { ExerciseTrendDialog } from "@/components/exercise-trend-dialog";
+import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
@@ -92,11 +93,7 @@ export default function AthleteProgress() {
   const [sharingPrIndex, setSharingPrIndex] = useState<number | null>(null);
   const [trendExercise, setTrendExercise] = useState<{ id: number; name: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const { data: coaches } = useQuery<{ id: number }[]>({
-    queryKey: ["/api/athlete/coaches"],
-    enabled: user?.role === "athlete",
-  });
-  const isFreeAgent = !!coaches && coaches.length === 0;
+  const isFreeAgent = useIsFreeAgent() === true;
 
   async function handleSharePr(
     pr: {

@@ -107,6 +107,7 @@ import { ExerciseSheetTutorial } from "@/components/exercise-sheet-tutorial";
 import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
 import { WellnessGate } from "@/components/wellness-gate";
 import { CaraTimer } from "@/components/cara-timer";
+import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 
 type ExerciseInfo = {
   id: number;
@@ -921,6 +922,7 @@ export function WorkoutPage({
   showReadinessBanner?: boolean;
   programsApiBase?: string;
 }) {
+  const isFreeAgent = useIsFreeAgent();
   const { assignmentId, programDayId, date } = useParams<{
     assignmentId: string;
     programDayId: string;
@@ -1846,9 +1848,15 @@ export function WorkoutPage({
   // real coach, even if the athlete separately has other self-built
   // programs -- the two aren't mutually exclusive on the same account.
   const hasCoachForThisProgram = showComments && !data.isSelfAssigned;
+  // Whether the person looking at this page may use an AI control here. On
+  // the athlete's own page that means Free Agent, account-level, matching
+  // what requireFreeAgent actually checks on the server. Every other caller
+  // of this page (an admin's own training) is not an athlete account at all
+  // and its AI routes were never gated, so it keeps what it had.
+  const athleteAiAllowed = apiBase === "/api/athlete" ? isFreeAgent === true : true;
   const videoCheckMode: "comment" | "ai" | "off" = hasCoachForThisProgram
     ? "comment"
-    : data.programAiAuthored
+    : data.programAiAuthored && athleteAiAllowed
       ? "ai"
       : "off";
   // Exercise substitution is its own always-free feature (see
@@ -1856,7 +1864,15 @@ export function WorkoutPage({
   // -- it doesn't need the program to be AI-authored the way videoCheckMode
   // does, just that there's no coach in the loop for this specific day, so
   // it's the athlete's own call to make.
-  const canSubstituteExercise = !hasCoachForThisProgram;
+  // Account-level, not per-program. hasCoachForThisProgram above answers
+  // "is a coach in the loop for THIS day", which is the right question for
+  // whether a form video becomes a comment thread. It is the wrong question
+  // for an AI control: the server asks whether this athlete has any coach
+  // at all, so a coached athlete opening their own self-assigned program
+  // used to be offered the swap button and the AI video check, and get a
+  // 403 from both. isFreeAgent is undefined until the answer arrives, and
+  // undefined must read as "no" here so nothing flickers into view.
+  const canSubstituteExercise = athleteAiAllowed && !hasCoachForThisProgram;
 
   // Closing the exercise that's currently open -- tapping its own name/
   // chevron again, or opening a different one -- mirrors the old "Done --

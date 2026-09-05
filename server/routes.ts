@@ -6500,11 +6500,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Photo-based meal logging -- the one AI-driven path in food logging (see
   // foodLogEntries' schema comment): no barcode/database entry exists for a
   // home-cooked or restaurant plate, so this is a real vision call rather
-  // than a lookup. Same "every athlete, coached or Free Agent" access as the
-  // rest of food logging -- not gated behind requireFreeAgent/
-  // requireFreeAgentAiChat, since this doesn't compete with a coach's guidance
-  // any more than typing in a food name does.
-  app.post("/api/athlete/food/analyze-photo", requireRole("athlete"), async (req, res) => {
+  // than a lookup.
+  //
+  // Free Agents only, like every other AI call an athlete can make. This
+  // route used to argue its way out of that on the grounds that reading a
+  // plate isn't coaching, which is true and turned out not to be the
+  // deciding question: it is an uncapped vision call, two images at a time,
+  // that any athlete on a paid roster could fire as often as they liked
+  // against a flat per-athlete rate that never priced inference. The rest
+  // of food logging -- barcode scan, database search, manual entry -- stays
+  // open to every athlete, so a coached athlete can still log every meal
+  // they eat. What they lose is having the AI read the plate for them.
+  app.post("/api/athlete/food/analyze-photo", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const schema = z.object({
       images: z
         .array(z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }))

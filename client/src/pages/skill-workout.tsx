@@ -39,6 +39,7 @@ import { mechanicsModeFor, mechanicsActionLabelFor } from "@shared/skill-camera-
 import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
+import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 
 type SkillSet = {
   setNumber: number;
@@ -105,9 +106,16 @@ export default function SkillWorkoutPage() {
   });
 
   const hasCoach = day ? day.isSelfAssigned === false : false;
+  // isSelfAssigned answers "is a coach in the loop for this day", which is
+  // right for routing a video to a comment thread and wrong for offering an
+  // AI control: /api/athlete/skill-programs/:id/form-check refuses anyone
+  // with a coach at all, so a coached athlete on their own self-assigned
+  // skill program was offered "Record & Get AI Feedback" and got a 403.
+  // Undefined reads as "no" so the option never flickers in.
+  const isFreeAgent = useIsFreeAgent();
   const videoCheckMode: "comment" | "ai" | "off" = hasCoach
     ? "comment"
-    : day?.programAiAuthored
+    : day?.programAiAuthored && isFreeAgent === true
       ? "ai"
       : "off";
 

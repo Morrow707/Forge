@@ -35,6 +35,7 @@ describe("athlete AI is Free Agent only", () => {
     "/api/athlete/skill-programs/:id/chat",
     "/api/athlete/skill-programs/:id/form-check",
     "/api/athlete/assignments/:assignmentId/days/:programDayId/modified-workout",
+    "/api/athlete/food/analyze-photo",
   ];
   for (const path of refuses) {
     it(`${path} is behind requireFreeAgent`, () => {
@@ -59,10 +60,15 @@ describe("athlete AI is Free Agent only", () => {
     expect(declaration("/api/coach/roster/:athleteId/goals")).not.toContain("requireFreeAgent");
   });
 
-  it("keeps meal photo analysis open to every athlete", () => {
-    // Deliberate and worth stating: this is food logging data entry, not
-    // coaching. It is also a real per-call vision cost with no cap, so it
-    // is the one to revisit if AI spend needs cutting further.
-    expect(declaration("/api/athlete/food/analyze-photo")).not.toContain("requireFreeAgent");
+  it("leaves the non-AI half of food logging open to every athlete", () => {
+    // Only reading the plate is gated. Barcode scan, database search and
+    // manual entry are not AI and a coached athlete still logs every meal.
+    for (const path of [
+      "/api/athlete/food-log",
+      "/api/athlete/food/lookup-barcode",
+      "/api/athlete/food/search",
+    ]) {
+      expect(declaration(path)).not.toContain("requireFreeAgent");
+    }
   });
 });
