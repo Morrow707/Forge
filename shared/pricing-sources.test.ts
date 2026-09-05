@@ -6,6 +6,7 @@ import {
   formatCents,
   COACHES_CORNER_MONTHLY_PRICE_CENTS,
   COACHES_CORNER_FREE_AT_ATHLETE_COUNT,
+  coachesCornerCompedForRoster,
 } from "./billing-tiers";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "./free-agent-tiers";
 import { FORGE_CLASS_LESSON_DEFAULT_PRICE_CENTS } from "./class-pricing";
@@ -88,5 +89,35 @@ describe("pricing catalog completeness", () => {
       expect(entry.defaultCents).toBeGreaterThan(0);
       expect(formatCents(entry.defaultCents)).toMatch(/^\$\d+\.\d\d$/);
     }
+  });
+});
+
+describe("Coaches Corner comp threshold", () => {
+  it("comps at the threshold and above, not below it", () => {
+    const n = COACHES_CORNER_FREE_AT_ATHLETE_COUNT;
+    expect(coachesCornerCompedForRoster(n - 1)).toBe(false);
+    expect(coachesCornerCompedForRoster(n)).toBe(true);
+    expect(coachesCornerCompedForRoster(n + 1)).toBe(true);
+  });
+
+  it("does not comp an empty or brand-new roster", () => {
+    expect(coachesCornerCompedForRoster(0)).toBe(false);
+    expect(coachesCornerCompedForRoster(1)).toBe(false);
+  });
+
+  it("checks the comp before the billing branch, not inside it", () => {
+    // The comp decides access for the largest customers. If it only ran
+    // under BILLING_LIVE it would never have executed once before the day
+    // it starts deciding revenue, so the ordering is the point of the test.
+    const routes = readFileSync(join(__dirname, "..", "server", "routes.ts"), "utf8");
+    const fn = routes.slice(routes.indexOf("async function hasCoachesCornerAccess"));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    expect(body.indexOf("coachesCornerCompedForRoster")).toBeGreaterThan(-1);
+    expect(body.indexOf("coachesCornerCompedForRoster")).toBeLessThan(body.indexOf("BILLING_LIVE"));
+  });
+
+  it("no longer leaves large orgs depending on the hardcoded comp list", () => {
+    const routes = readFileSync(join(__dirname, "..", "server", "routes.ts"), "utf8");
+    expect(routes).toContain("getRosterSeatCountForCoach(user.id)");
   });
 });

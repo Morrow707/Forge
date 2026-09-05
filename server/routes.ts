@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
+import { coachesCornerCompedForRoster } from "@shared/billing-tiers";
 import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
@@ -652,32 +653,45 @@ async function requireFreeAgentAddOn(req: any, res: any, next: any) {
 // is the only way to ever actually reach a "purchased" lesson end to end.
 const COMPED_FREE_AGENT_LESSON_BUYER = "freeagent@forge.app";
 
-// Same demo/testing exception as the two stubs above -- no real billing
-// exists yet, so a comped coach here is the only way (besides being an
-// admin) to reach the unlocked Coaches Corner experience end to end.
+// Same demo/testing exception as the two stubs above -- a comped coach here
+// is a way (besides being an admin, or running a roster big enough to be
+// comped for real) to reach the unlocked Coaches Corner experience end to
+// end on a small test account.
 const COMPED_COACHES_CORNER_COACHES = new Set(["coach@forge.app"]);
 
-// Coaches Corner (coach education) paywall -- no real billing exists yet
-// (see the two stubs above), so this is intentionally admin-only for now,
-// plus whichever coaches are explicitly comped above -- every other regular
-// coach sees the locked teaser catalog until this is wired to real billing.
-// Admins bypass since they're the ones curating the content. Every route
-// below reads through this, never a role check of its own.
+// Coaches Corner (coach education) paywall. Every route below reads through
+// this, never a role check of its own. Admins bypass since they're the ones
+// curating the content.
 //
-// Once BILLING_LIVE, this stops being a standalone "unlock" purchase and
-// becomes a Pro-tier perk instead -- same pattern hasAthletePaidForAiAccess
-// already uses for a Free Agent's skillsAi entitlement (gated on
-// sub.tier === "pro", not a separate one-time charge). That's a deliberate
-// simplification, not an oversight: it reuses the subscriptions table's
-// existing accountType/tier/status fields with no new schema or payment
-// flow, rather than building a whole separate one-time-purchase Stripe
-// integration for a single add-on. A coach's own /api/coach/academy/unlock
-// button already only shows when this returns false, so a Pro coach just
-// sees every track unlocked automatically once they have a real
-// subscription -- no explicit "purchase" step needed on their end.
+// Three ways in, checked in this order.
+//
+// A big enough roster is comped, and that is checked BEFORE the billing
+// branch rather than inside it, deliberately. The comp says this org never
+// pays for the Corner; that is true whether or not billing is switched on,
+// and putting it inside the BILLING_LIVE branch would mean the one rule
+// that decides access for the largest customers has never executed even
+// once before the day it starts deciding revenue. The threshold and the
+// comparison live in shared/billing-tiers.ts
+// (COACHES_CORNER_FREE_AT_ATHLETE_COUNT): at the flat per-athlete rate, an
+// org that size is already paying around $360/mo, so another $19.99 is
+// noise on their invoice and friction on the sale.
+//
+// Otherwise, once BILLING_LIVE, a paid subscription. The Corner is priced
+// as a standalone add-on (COACHES_CORNER_MONTHLY_PRICE_CENTS) rather than
+// a plan perk, but there is nowhere yet to record that someone bought it --
+// users.billingAddOns only accepts the org personalization add-on ids, and
+// widening it is a schema change, not a paywall change. So this still reads
+// the subscription tier, which is a stand-in for the add-on and is marked
+// as one here so nobody reads it as the intended end state.
+//
+// Otherwise the small-account testing comp above.
 async function hasCoachesCornerAccess(user: { id: number; role: string; email: string }): Promise<boolean> {
   if (testingUnlockAllPaywalls) return true;
   if (user.role === "admin") return true;
+  if (user.role === "coach") {
+    const rosterSize = await storage.getRosterSeatCountForCoach(user.id);
+    if (coachesCornerCompedForRoster(rosterSize)) return true;
+  }
   if (BILLING_LIVE) {
     const sub = await storage.getSubscriptionForUser(user.id);
     if (!sub || sub.accountType !== "coach") return false;
@@ -686,6 +700,8 @@ async function hasCoachesCornerAccess(user: { id: number; role: string; email: s
     // written as tier "base", so gating on tier alone locks a trialing
     // coach out of the one thing a trial exists to show them.
     if (sub.status === "trialing") return true;
+    // Stand-in for "has bought the Coaches Corner add-on" -- see this
+    // function's comment. Replace with the add-on check, not another tier.
     return sub.tier === "pro";
   }
   return COMPED_COACHES_CORNER_COACHES.has(user.email);
@@ -1657,15 +1673,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // There's no standalone "purchase" for Coaches Corner once BILLING_LIVE --
-  // see hasCoachesCornerAccess's own comment for why it's a Pro-tier perk
-  // instead of a separate one-time charge. A Pro coach never actually hits
-  // this route (the client only shows the "Unlock" button when
-  // hasCoachesCornerAccess already said no), so this stays a dead end
-  // either way: pre-billing it's the same "not live yet" stub every other
-  // paywall stub uses, post-billing it points a non-Pro coach at the real
-  // fix (upgrade) instead of a message that would otherwise claim this can
-  // never be purchased even once it actually can.
+  // The Corner is priced as a standalone monthly add-on, but nothing can
+  // record the purchase yet -- see hasCoachesCornerAccess's own comment. A
+  // coach who already has access never hits this route (the client only
+  // shows the "Unlock" button when hasCoachesCornerAccess said no), so this
+  // stays a dead end either way: pre-billing it's the same "not live yet"
+  // stub every other paywall stub uses, post-billing it points the coach at
+  // the real fix instead of a message claiming this can never be purchased
+  // even once it actually can.
   app.post("/api/coach/academy/unlock", requireRole("coach"), async (_req, res) => {
     if (testingUnlockAllPaywalls) return res.status(204).end();
     if (BILLING_LIVE) {

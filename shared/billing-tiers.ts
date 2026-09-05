@@ -214,8 +214,15 @@ export const COACHES_CORNER_MONTHLY_PRICE_CENTS = 1999;
 // $10 + 100 x $3.50 = $360/mo, so another $19.99 is noise on their invoice
 // and friction on the sale.
 //
-// NOT yet wired into hasCoachesCornerAccess in server/routes.ts -- that
-// still gates on tier "pro" plus a hardcoded comp list, and changing who
-// can reach a feature is a separate change from giving the feature a price.
-// This is the number that change should read when it happens.
 export const COACHES_CORNER_FREE_AT_ATHLETE_COUNT = 100;
+
+/** Whether an org of this roster size gets the Corner at no charge. Read by
+ * hasCoachesCornerAccess in server/routes.ts. Split out as a pure function
+ * so the threshold can be tested without a database, and so the comparison
+ * lives next to the number rather than being re-derived at the call site.
+ *
+ * Deliberately >= rather than >: the comp is stated to customers as "free
+ * at 100+ athletes", so the org that has exactly 100 is inside it. */
+export function coachesCornerCompedForRoster(athleteCount: number): boolean {
+  return athleteCount >= COACHES_CORNER_FREE_AT_ATHLETE_COUNT;
+}
