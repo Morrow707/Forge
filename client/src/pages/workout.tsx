@@ -2115,7 +2115,10 @@ export function WorkoutPage({
           <div className="space-y-3">
             {pages.length > 0 && <ExerciseSheetTutorial />}
             {showReadinessBanner && <ReadinessBanner date={date} />}
-            {apiBase === "/api/athlete" && (
+            {/* Same rule as canSubstituteExercise below: the AI rewriting a
+                day is a Free Agent feature, so an athlete on a roster never
+                sees the offer (the route refuses it too). */}
+            {apiBase === "/api/athlete" && canSubstituteExercise && (
               <ModifiedWorkoutBanner
                 apiBase={apiBase}
                 assignmentId={assignmentId}

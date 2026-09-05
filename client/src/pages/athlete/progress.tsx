@@ -355,6 +355,7 @@ export default function AthleteProgress() {
                 goalsUrl="/api/athlete/goals"
                 exercisesUrl="/api/athlete/exercises-with-history"
                 skillExercisesUrl="/api/athlete/skill-exercises-with-history"
+                canSuggest={isFreeAgent}
               />
             </CardContent>
           </Card>

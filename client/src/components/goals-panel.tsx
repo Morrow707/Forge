@@ -50,11 +50,18 @@ export function GoalsPanel({
   exercisesUrl,
   skillExercisesUrl,
   canCreate = true,
+  canSuggest = true,
 }: {
   goalsUrl: string;
   exercisesUrl: string;
   skillExercisesUrl?: string;
   canCreate?: boolean;
+  /** Whether to offer the AI "Suggest a target" button. Defaults true,
+   * which is right for every coach-side use of this panel. The athlete's
+   * own progress page passes false once they have a coach: the server
+   * refuses that call for a coached athlete (setting a target is coaching),
+   * so showing the button would only produce a 403. */
+  canSuggest?: boolean;
 }) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -374,22 +381,24 @@ export function GoalsPanel({
                 </div>
               </div>
 
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={
-                  suggestMutation.isPending ||
-                  (type === "exercise" ? !exerciseId : !testingMetric)
-                }
-                onClick={() => {
-                  setSuggestion(null);
-                  suggestMutation.mutate();
-                }}
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                {suggestMutation.isPending ? "Thinking..." : "Suggest a target"}
-              </Button>
+              {canSuggest && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    suggestMutation.isPending ||
+                    (type === "exercise" ? !exerciseId : !testingMetric)
+                  }
+                  onClick={() => {
+                    setSuggestion(null);
+                    suggestMutation.mutate();
+                  }}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {suggestMutation.isPending ? "Thinking..." : "Suggest a target"}
+                </Button>
+              )}
 
               {suggestion && (
                 <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-sm">

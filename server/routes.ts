@@ -493,6 +493,16 @@ async function getEntitlementsForCoach(coachId: number): Promise<Entitlements> {
 // stale bookmark/tab open from before they joined a coach can't keep using
 // it. This is also exactly where a future paywall plugs in (isFreeAgent &&
 // hasPaid) without touching any of the routes that call it.
+/** True once this athlete is on anybody's roster. The read half of
+ * requireFreeAgent below, for the two AI endpoints the client fires on its
+ * own (readiness, weekly digest) where a 403 would be a rendered error
+ * rather than an answer -- those return null instead, which both already
+ * do when AI isn't configured, so the client needs no new branch. */
+async function athleteHasCoach(athleteId: number): Promise<boolean> {
+  const coaches = await storage.getCoachesForAthlete(athleteId);
+  return coaches.length > 0;
+}
+
 async function requireFreeAgent(req: any, res: any, next: any) {
   const user = currentUser(req);
   const coaches = await storage.getCoachesForAthlete(user.id);
@@ -6690,7 +6700,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
-  app.post("/api/athlete/goals/suggest", requireRole("athlete"), async (req, res) => {
+  // An AI target suggestion is coaching advice, so it belongs to the coach
+  // when there is one -- see requireFreeAgent's own comment. The identical
+  // panel on the coach's roster view (/api/coach/roster/:athleteId/goals)
+  // is untouched: the coach asking the AI for a target for their athlete is
+  // exactly who this is for.
+  app.post("/api/athlete/goals/suggest", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const parsed = suggestGoalTargetSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -6841,6 +6856,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // date or AI isn't configured; the client just renders nothing either way.
   app.get("/api/athlete/readiness", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
+    // Free Agents only. This is the AI reading an athlete's wellness and
+    // telling them how to train today, which is their coach's job when they
+    // have one -- and unlike every other AI endpoint it fires on page load
+    // with no action from the athlete, so on a coached roster it was the
+    // largest unpriced inference cost on the platform: one generation per
+    // athlete per day, roster-wide, forever. Returns null rather than 403
+    // because the client already renders nothing for null.
+    if (await athleteHasCoach(user.id)) return res.json(null);
     const date = typeof req.query.date === "string" ? req.query.date : todayIso();
     const briefing = await storage.getOrCreateReadinessBriefing(user.id, date);
     res.json(briefing ? { briefing: briefing.briefing } : null);
@@ -6852,6 +6875,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // (and notifies) once per athlete per week.
   app.get("/api/athlete/digest", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
+    // Free Agents only, same reasoning as /api/athlete/readiness above --
+    // a coached athlete's weekly summary comes from their coach, who has
+    // their own AI digest of the whole roster. Also fires unprompted, once
+    // per athlete per week.
+    if (await athleteHasCoach(user.id)) return res.json(null);
     const { digest, isNew } = await storage.getOrCreateAthleteDigest(user.id);
     if (isNew && digest) {
       await notifyUser(
@@ -7221,14 +7249,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ---------------- Athlete: restricted/modified workout auto-generation ----------------
   // Swaps every exercise in one day that would aggravate today's flagged
-  // pain into a safe alternative, in one AI-driven shot -- deliberately
-  // free like swap-exercise, since this is a safety feature, not a paid
-  // tier. Writes to assignment_exercise_overrides (this occurrence only),
+  // pain into a safe alternative, in one AI-driven shot. Free Agents only,
+  // same as swap-exercise -- this comment used to claim it was "free like
+  // swap-exercise", which was wrong in both directions: swap-exercise has
+  // always been behind requireFreeAgent, and this route had no gate at all.
+  // A coached athlete's session is their coach's to change; an AI silently
+  // rewriting the prescribed day is a worse outcome than an unpriced one.
+  // The safety case is real and is served by the pain flags themselves,
+  // which still surface to the athlete and to their coach.
+  // Writes to assignment_exercise_overrides (this occurrence only),
   // never program_exercises, so no other athlete on a shared program is
   // affected.
   app.post(
     "/api/athlete/assignments/:assignmentId/days/:programDayId/modified-workout",
     requireRole("athlete"),
+    requireFreeAgent,
     async (req, res) => {
       const user = currentUser(req);
       const assignmentId = Number(req.params.assignmentId);
