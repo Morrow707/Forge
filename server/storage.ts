@@ -240,6 +240,7 @@ import {
 import { PRICING_CATALOG, type PricingCatalogItem } from "./pricing-catalog";
 import {
   eq,
+  ne,
   and,
   or,
   inArray,
@@ -10876,6 +10877,49 @@ Hard rules, no exceptions:
   // exercise details to another, and the admin only ever sees a count, not
   // which coaches. Runs after every create/rename so the queue stays live;
   // cheap full-table scan, fine at this app's scale.
+  // Every exercise authored by a coach rather than by Forge, newest first, for the admin
+  // review page.
+  //
+  // "Coach-authored" is users.role !== 'admin' on the owning row: there is no isCustom column,
+  // and the admin's own library IS the Forge library (see withOwnership's isForgeOfficial).
+  //
+  // Deliberately returns the whole set rather than a page of it. The similarity pass that runs
+  // over this compares every row against every other and against the Forge library, so a page
+  // would only ever find duplicates within itself and would call the same pair a duplicate on
+  // one page and unique on the next.
+  async getCoachAuthoredExercises() {
+    const rows = await db
+      .select({
+        id: exercises.id,
+        name: exercises.name,
+        category: exercises.category,
+        equipment: exercises.equipment,
+        movementType: exercises.movementType,
+        muscleGroup: exercises.muscleGroup,
+        videoEligible: exercises.videoEligible,
+        createdAt: exercises.createdAt,
+        coachId: exercises.coachId,
+        coachName: users.name,
+      })
+      .from(exercises)
+      .innerJoin(users, eq(exercises.coachId, users.id))
+      .where(ne(users.role, "admin"))
+      .orderBy(desc(exercises.createdAt), desc(exercises.id));
+    return rows;
+  },
+
+  // The Forge library's own names, for the "did a coach re-create something we already have?"
+  // half of the review page. Names only -- the comparison is on the name and nothing else, and
+  // this list is read on every load of that page.
+  async getForgeLibraryExerciseNames() {
+    return await db
+      .select({ id: exercises.id, name: exercises.name })
+      .from(exercises)
+      .innerJoin(users, eq(exercises.coachId, users.id))
+      .where(eq(users.role, "admin"))
+      .orderBy(exercises.name);
+  },
+
   async detectTrendingExercises() {
     // Grouped and counted by Postgres rather than in Node. This is awaited
     // inline by createExercise and by updateExercise on every rename, so it

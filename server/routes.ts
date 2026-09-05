@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import { findSimilar } from "@shared/exercise-similarity";
 import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
@@ -1019,13 +1020,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).end();
   });
 
+  // A coach's own exercises and skill drills can never be filmed.
+  //
+  // videoEligible is nullable and null reads as ELIGIBLE (see the column's own comment in
+  // shared/schema.ts). That is the right posture for the seeded Forge library, where the seed
+  // backfill switches off everything outside the canonical list and an admin flipping one back
+  // on is never silently undone. It is the wrong posture for user-generated rows: coaches create
+  // exercises freely, so left as null every one of them arrives filmable, and video storage cost
+  // scales with how many DISTINCT exercises carry video rather than with library size. A few
+  // thousand coach-authored rows would each open their own retention bucket.
+  //
+  // Forced to false rather than stripped -- stripping leaves null, which is the permissive value.
+  // Applied on update as well as create so a coach cannot flip their own row back on through the
+  // API; the edit form never renders the control for them, but the route accepted the field.
+  // An admin can still enable a specific one from the Forge library side, which is the review
+  // path /admin/coach-exercises exists to feed.
+  function withVideoIneligible<T extends Record<string, unknown>>(data: T): T {
+    return { ...data, videoEligible: false };
+  }
+
   app.post("/api/coach/exercises", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const parsed = insertExerciseSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const exercise = await storage.createExercise(user.id, parsed.data);
+    const exercise = await storage.createExercise(user.id, withVideoIneligible(parsed.data));
     res.status(201).json(exercise);
   });
 
@@ -1038,7 +1058,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const updated = await storage.updateExercise(id, parsed.data);
+    const updated = await storage.updateExercise(id, withVideoIneligible(parsed.data));
     res.json(updated);
   });
 
@@ -1094,7 +1114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const skillExercise = await storage.createSkillExercise(user.id, parsed.data);
+    const skillExercise = await storage.createSkillExercise(user.id, withVideoIneligible(parsed.data));
     res.status(201).json(skillExercise);
   });
 
@@ -1118,7 +1138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const updated = await storage.updateSkillExercise(id, parsed.data);
+    const updated = await storage.updateSkillExercise(id, withVideoIneligible(parsed.data));
     res.json(updated);
   });
 
@@ -2011,6 +2031,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // with multiple coaches with no one nominating anything (see
   // storage.detectTrendingExercises), and coaches flagging a problem with
   // an existing Forge exercise.
+
+  // What coaches are building, and how much of it we already have.
+  //
+  // The existing /admin/review queue answers a narrower question: which NAME did two or more
+  // coaches independently type identically. That is a good signal for promoting something into
+  // the Forge library, and a poor one for seeing the shape of what coaches actually create --
+  // it never shows a one-off, and it misses every re-wording, which is most of them. Coaches do
+  // not retype "Bench Press", they type "Flat BB Bench Press".
+  //
+  // So this returns the whole coach-authored set with two similarity passes attached:
+  // duplicatesOfLibrary is the important one (a coach re-created something Forge already has,
+  // so the fix is to point them at it), and duplicatesOfEachOther is the promotion signal the
+  // trending queue gives, widened to catch rewordings.
+  app.get("/api/admin/coach-exercises", requireRole("admin"), async (_req, res) => {
+    const [authored, library] = await Promise.all([
+      storage.getCoachAuthoredExercises(),
+      storage.getForgeLibraryExerciseNames(),
+    ]);
+    const enriched = authored.map((ex) => ({
+      ...ex,
+      matchesLibrary: findSimilar({ id: ex.id, name: ex.name }, library, 3).map((m) => ({
+        id: m.item.id,
+        name: m.item.name,
+        score: Math.round(m.score * 100) / 100,
+      })),
+      matchesOtherCoaches: findSimilar(
+        { id: ex.id, name: ex.name },
+        authored.map((a) => ({ id: a.id, name: a.name, coachName: a.coachName })),
+        3,
+      ).map((m) => ({
+        id: m.item.id,
+        name: m.item.name,
+        coachName: m.item.coachName,
+        score: Math.round(m.score * 100) / 100,
+      })),
+    }));
+    res.json({
+      exercises: enriched,
+      counts: {
+        total: enriched.length,
+        duplicatesOfLibrary: enriched.filter((e) => e.matchesLibrary.length > 0).length,
+        duplicatesOfEachOther: enriched.filter((e) => e.matchesOtherCoaches.length > 0).length,
+        filmable: enriched.filter((e) => e.videoEligible !== false).length,
+      },
+    });
+  });
 
   app.get("/api/admin/submissions", requireRole("admin"), async (req, res) => {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "100"), 10) || 100, 1), 500);
