@@ -14,7 +14,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { isAvPreviewPlatform, type PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import { calibrateFromFrames, scaleWorldLandmarks } from "@/lib/pose-tracking";
 import {
   analyzeMechanics,
@@ -184,10 +184,14 @@ export function AvMechanicsTrackerDialog({
     // comment for the full reasoning. rawFrames/nativeRawFrames are positionally aligned (both
     // derived from the same result.rawFrames via a plain, non-filtering .map()).
     const frames: MechanicsFrame[] = rawFrames.map((f, i) => {
-      const body3DLm = visionBody3DToWorldLandmarks(nativeRawFrames[i]);
       return {
         t: f.t,
-        worldLandmarks: body3DLm ?? (scaleFactor != null ? scaleWorldLandmarks(f.worldLandmarks, scaleFactor) : f.worldLandmarks),
+      // Deliberately NOT `body3DLm ?? ...` any more. The 3D bridge returns metres relative to the
+      // hip, the 2D one returns absolute image space, and the native plugin only produces 3D on
+      // every third frame -- so mixing them per frame put a sawtooth into the trace at a third of
+      // the frame rate. See visionBody3DToWorldLandmarks' own comment for the full reasoning and
+      // for what recovering the depth properly would take.
+        worldLandmarks: scaleFactor != null ? scaleWorldLandmarks(f.worldLandmarks, scaleFactor) : f.worldLandmarks,
       };
     });
 

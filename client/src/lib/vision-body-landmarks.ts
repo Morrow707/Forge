@@ -126,6 +126,31 @@ export function visionJointsToWorldLandmarks(frame: NativePoseFrame): Landmark[]
 // Returns null (not an all-empty landmarks array) when nothing here actually mapped confidently
 // -- an empty-but-non-null array would look "real" to a naive truthy check at a call site and
 // suppress the 2D fallback exactly when it's still needed.
+// SAFE FOR ANGLES AND RATIOS WITHIN ONE FRAME. NOT SAFE FOR ANYTHING COMPARED ACROSS FRAMES.
+//
+// These landmarks are metres relative to the skeleton's ROOT JOINT -- the centre of the hip --
+// per Apple's own convention for VNHumanBodyPose3DObservation (see the .position comment in
+// AvBodyTrackingPlugin.swift). visionJointsToWorldLandmarks above returns something completely
+// different: absolute image-space pixels with the vertical axis negated, which a caller then
+// multiplies into metres.
+//
+// Every trace-building caller used to pick between the two PER FRAME (`body3D ?? 2D`), and the
+// native plugin runs the 3D request on a stride of 3, so on iOS 17 roughly every third frame of
+// a trace was expressed in a moving, hip-anchored frame while its neighbours were absolute. On a
+// squat that is close to the worst case: the bar rides the shoulders, which ride the hips, so
+// the wrist barely moves relative to the hip while its absolute height changes by half a metre.
+// The trace picked up a sawtooth at a third of the frame rate with an amplitude near the
+// athlete's own hip height, and the implausible-velocity filter then threw those frames out and
+// counted each one as a tracking glitch.
+//
+// The original comment at those call sites addressed the UNITS ("already real-world meters, so
+// it bypasses the athlete-height scale") and was right about that. The origin is the part that
+// was missed, and no amount of sign correction fixes it.
+//
+// Recovering the depth properly means re-basing these onto the hip's own absolute position from
+// the 2D bridge on the same frame. That is worth doing and is not done here: Vision's 3D vertical
+// sign has to be confirmed against a real device capture first, and guessing it would replace a
+// visible sawtooth with a quiet inversion.
 export function visionBody3DToWorldLandmarks(frame: NativePoseFrame): Landmark[] | null {
   if (!frame.body3DJoints || frame.body3DJoints.length === 0) return null;
   const landmarks = emptyLandmarks();

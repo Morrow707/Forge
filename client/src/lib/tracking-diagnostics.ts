@@ -88,6 +88,15 @@ export type TrackingDiagnostics = {
   };
   calibration: {
     scaleFactor: number | null;
+    // Where the real-world scale actually came from. "height" is the athlete's own stature, the
+    // long-standing path; "plate" is a reference object measured in frame; "both" means the two
+    // resolved independently and were averaged.
+    //
+    // Recorded because plate-derived scale is new and unvalidated. Its supporting training data
+    // is a handful of instances from three photos, so the first numbers it produces need to be
+    // attributable to it rather than blended anonymously into everything else -- that is exactly
+    // what the replay harness needs to tell a good plate read from a bad one.
+    scaleSource?: "height" | "plate" | "both" | null;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
@@ -212,6 +221,7 @@ export function buildTrackingDiagnostics(args: {
   } | null;
   calibration?: {
     scaleFactor: number | null;
+    scaleSource?: "height" | "plate" | "both" | null;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;

@@ -14,7 +14,6 @@ import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
 import {
   visionJointsToWorldLandmarks,
-  visionBody3DToWorldLandmarks,
   visionImplementToPoint,
   visionRefineGripSeed,
   type ImplementPoint,
@@ -330,8 +329,12 @@ export function AvMedballTrackerDialog({
       const t = f.timestamp * 1000;
       // Phase B: real depth when this frame has it -- see av-bar-tracker-dialog.tsx's own
       // identical comment for the full reasoning.
-      const body3DLm = visionBody3DToWorldLandmarks(f);
-      const worldLm = body3DLm ?? scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
+      // Deliberately NOT `body3DLm ?? ...` any more. The 3D bridge returns metres relative to the
+      // hip, the 2D one returns absolute image space, and the native plugin only produces 3D on
+      // every third frame -- so mixing them per frame put a sawtooth into the trace at a third of
+      // the frame rate. See visionBody3DToWorldLandmarks' own comment for the full reasoning and
+      // for what recovering the depth properly would take.
+      const worldLm = scaleWorldLandmarks(visionJointsToWorldLandmarks(f), scaleFactor);
       frames.push({ t, worldLandmarks: worldLm });
 
       const scalePoint = (raw: ImplementPoint | null) =>

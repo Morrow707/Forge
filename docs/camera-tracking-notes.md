@@ -615,3 +615,77 @@ Not fixed here, in the order they are worth taking:
 5. **The plate detector class is unreachable.** No call site can request it, though the training
    notes suggest it is one of the healthier classes in the shipped model -- healthier than the
    barbell and dumbbell classes the app does wire up.
+
+## Three fixes from the audit's open list (2026-09-05)
+
+### The two pose bridges really were in different coordinate spaces
+
+I hedged on this in the notes above, saying it needed a device capture before anyone touched it.
+That was half right and I should have gone and read it. Whether the spaces differ is settled by
+reading; only how OFTEN the 3D path fires needs a device, and if the spaces differ the fix is
+needed either way.
+
+They differ, and the code says so itself. `visionJointsToWorldLandmarks` returns absolute
+image-space pixels with the vertical axis negated. `visionBody3DToWorldLandmarks` returns metres
+relative to the skeleton's root joint, the centre of the hip, per Apple's own convention -- the
+native plugin's comment on `.position` states it outright. Every trace-building dialog picked
+between them per frame with `body3D ?? 2D`, and the plugin runs the 3D request on a stride of 3.
+
+A squat is close to the worst case: the bar rides the shoulders, which ride the hips, so in a
+hip-anchored frame the wrist barely moves while its absolute height changes by half a metre. The
+trace picked up a sawtooth at a third of the frame rate with an amplitude near the athlete's own
+hip height. The implausible-velocity filter would then have discarded those frames and counted
+each one as a tracking glitch.
+
+The original comment at those call sites addressed the units and was right about them. The origin
+is what was missed, and no sign correction fixes it. Six trace-building dialogs now use the
+absolute 2D path consistently. Two single-frame posture captures still prefer 3D, correctly: a
+hip-relative frame is fine for an angle or a ratio measured within one frame, and invalid only
+for anything compared across frames. That rule now lives in the bridge's own comment.
+
+Recovering the depth properly means re-basing the 3D landmarks onto the hip's absolute position
+from the 2D bridge on the same frame. Worth doing, not done here: Vision's 3D vertical sign has
+to be confirmed against a real capture first, and guessing it would replace a visible sawtooth
+with a quiet inversion.
+
+### Pixels per metre, and a correction to the audit
+
+The reported finding was that `shoulderPixelsPerMeter` mixes axes and corrupts every vertical
+distance the implement tracker contributes. That is wrong, and worth writing down so nobody
+"fixes" working code. Normalized landmarks are normalized per axis, so multiplying x by width and
+y by height recovers true pixels; the internal call site passes the real working dimensions and
+is correct.
+
+One caller was not. The web-detector seeding passed 1x1, asking for normalized-units-per-metre,
+and its comment argued the scale works out the same either way. It does not: one x-unit spans the
+frame's width and one y-unit its height. Shoulders are near-horizontal in every lift, so the
+measured scale was effectively x-units-per-metre, and using it on the detection box's VERTICAL
+offset understated that offset by the aspect ratio -- about 44% short on portrait video, on the
+axis the bar actually travels. It now asks for true pixels per metre and converts both offsets in
+true pixels.
+
+### The plate detector is switched on for the lifts that have no scale
+
+`plateScaleFromFrames` was fully built and had never once run, because nothing ever set the
+tracking mode to "plate". The reference plate's measured diameter, the larger-axis rule for a
+foreshortened plate, the averaging against a height-derived scale -- all of it was already there
+waiting for a caller.
+
+Any lift whose posture rules out height calibration now asks for the plate class. Those are
+exactly the lifts with no scale at all, a barbell lift done lying down has loaded plates square
+in frame, and the equipment classes cost nothing to give up: the shipped model regressed barbell
+to about 0.02 and dumbbell to about 0.14 confidence, both far under the gate, while the plate
+class came through that same retrain intact.
+
+A plate box is a scale reference, not a second opinion on where the grip is, so it is deliberately
+excluded from the position corroboration. That path rewards a detection near the fused point and
+penalises a confident one further than half a metre away, and on a bench press the inner plate
+legitimately sits about that far from the hands -- it would have docked confidence on every frame
+for the plate being exactly where a plate belongs.
+
+Held loosely, and instrumented to stay that way. The scale's source -- height, plate, or both
+averaged -- is now recorded in the capture diagnostics, so the first numbers a plate produces are
+attributable rather than blended anonymously into everything else. The plate class's supporting
+data is eleven instances from three photos and the training script rebuilds from scratch each
+time, so this needs measuring through the replay harness before a plate-derived scale is treated
+as settled. It is a candidate for real bench numbers, not a promise of them.

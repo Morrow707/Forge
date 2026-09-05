@@ -1395,8 +1395,24 @@ export function BarTrackerDialog({
         // width" math ImplementTracker's own fresh-acquisition path uses,
         // without duplicating that scale-lookup logic here.
         if (webDetectorTargetLabel && normalizedWrist) {
-          const normPerMeter = shoulderPixelsPerMeter(landmarks, worldLandmarks, 1, 1);
-          if (normPerMeter) {
+          // Real frame dimensions, not 1x1.
+          //
+          // Passing 1,1 asked for "normalized units per metre", and the comment above argued the
+          // scale works out the same either way. It does not, because normalized x and y are
+          // normalized by different physical lengths: one x-unit spans the frame's width, one
+          // y-unit spans its height. On portrait 720x1280 a y-unit is 1.78x longer than an
+          // x-unit. Shoulders are near-horizontal in every lift, so the measured scale was
+          // effectively x-units-per-metre, and using it on the box's VERTICAL offset understated
+          // that offset by the aspect ratio -- about 44% short on portrait video, on the axis the
+          // bar actually travels along.
+          //
+          // Asking for true pixels per metre and converting both offsets into true pixels is
+          // what the tracker's own internal call site already does, and it is dimensionally
+          // coherent for both axes.
+          const frameW = video.videoWidth || 1;
+          const frameH = video.videoHeight || 1;
+          const pxPerMeter = shoulderPixelsPerMeter(landmarks, worldLandmarks, frameW, frameH);
+          if (pxPerMeter) {
             const seedWristNormX = normalizedWrist.x;
             const seedWristNormY = normalizedWrist.y;
             const seedWristWorldX = worldPoint.x;
@@ -1411,8 +1427,8 @@ export function BarTrackerDialog({
                 const centerNormX = (result.box.x0 + result.box.x1) / 2;
                 const centerNormY = (result.box.y0 + result.box.y1) / 2;
                 lastWebDetectionRef.current = {
-                  x: seedWristWorldX + (centerNormX - seedWristNormX) / normPerMeter,
-                  y: seedWristWorldY + (centerNormY - seedWristNormY) / normPerMeter,
+                  x: seedWristWorldX + ((centerNormX - seedWristNormX) * frameW) / pxPerMeter,
+                  y: seedWristWorldY + ((centerNormY - seedWristNormY) * frameH) / pxPerMeter,
                   confidence: result.confidence,
                 };
               })

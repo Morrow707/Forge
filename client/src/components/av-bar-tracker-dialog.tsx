@@ -14,7 +14,6 @@ import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
 import {
   visionJointsToWorldLandmarks,
-  visionBody3DToWorldLandmarks,
   visionImplementToPoint,
   visionCoreMlBoxToPoint,
   visionRefineGripSeed,
@@ -402,9 +401,28 @@ export function AvBarTrackerDialog({
   // it being wired back in through a real fix -- tracking both classes in one analysis pass,
   // which the native detector already gets both classes' detections for and just discards one of
   // -- once that's built and verified, rather than forcing the choice per movement pattern.
-  const coreMlTrackingMode: string | undefined = equipment
-    ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment]
-    : undefined;
+  // Ask for the PLATE class on any lift whose posture rules out height calibration.
+  //
+  // plateScaleFromFrames has been fully built this whole time and has never once run, because
+  // nothing ever set this to "plate". Everything else is in place: the reference plate's real
+  // measured diameter, the larger-axis rule for a foreshortened plate, the averaging against a
+  // height-derived scale when both resolve.
+  //
+  // Three reasons this is the right class to ask for on these lifts specifically. They are the
+  // lifts with no scale at all, so a reference object is the only route to real centimetres and
+  // watts. A barbell lift performed lying down has loaded plates square in frame. And the
+  // equipment classes cost nothing to give up here: the shipped model regressed barbell to about
+  // 0.02 and dumbbell to about 0.14 confidence, both far under the gate, while the plate class
+  // came through that same retrain intact.
+  //
+  // Held loosely on purpose. The plate class's supporting data is eleven instances from three
+  // photos and the training script rebuilds from scratch each time, so this is worth measuring
+  // through the replay harness before anyone treats a plate-derived scale as settled.
+  const coreMlTrackingMode: string | undefined = heightCalibrationUnreliable(exerciseName, movementType)
+    ? "plate"
+    : equipment
+      ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment]
+      : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -658,6 +676,17 @@ export function AvBarTrackerDialog({
         ? (heightScaleFactor + plateScale.scale) / 2
         : (plateScale?.scale ?? heightScaleFactor);
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
+    // Which mechanism actually produced the scale, recorded alongside it. Plate-derived scale is
+    // new and its training data is thin, so a number built on one has to be identifiable as such
+    // rather than indistinguishable from a height-derived one.
+    const scaleSource: "height" | "plate" | "both" | null =
+      heightScaleFactor != null && plateScale != null
+        ? "both"
+        : plateScale != null
+          ? "plate"
+          : heightScaleFactor != null
+            ? "height"
+            : null;
 
     // No scale used to end the take here, with nothing saved but the video. It no longer does.
     //
@@ -743,7 +772,13 @@ export function AvBarTrackerDialog({
                 y: (wristConf * wristWorld.y + barConf * (implement ? implement.y : 0)) / total,
                 confidence: total / 2,
               },
-              coreMlPoint,
+              // A plate box is a SCALE reference, not a second opinion on where the grip is.
+              // Corroboration rewards a detection close to the fused point and penalises a
+              // confident one further than half a metre away -- and on a bench press the inner
+              // plate legitimately sits about that far from the hands, so feeding it in here
+              // would dock confidence on every frame for the plate being exactly where a plate
+              // belongs. plateScaleFromFrames reads the same boxes separately for scale.
+              coreMlTrackingMode === "plate" ? null : coreMlPoint,
             )
           : null;
       if (fused && !isPlausibleVelocity(prevFused, { ...fused, t })) {
@@ -766,8 +801,12 @@ export function AvBarTrackerDialog({
       // Falls back to the existing 2D-derived-plus-calibration path frame by frame, not once
       // for the whole clip, since body3D availability can vary frame to frame even on a
       // 17+ device (a low-confidence 3D read on one frame, a good one on the next).
-      const body3DLm = visionBody3DToWorldLandmarks(f);
-      const worldLm = body3DLm ?? scaleWorldLandmarks(visionJointsToWorldLandmarks(f), effectiveScale);
+      // Deliberately NOT `body3DLm ?? ...` any more. The 3D bridge returns metres relative to the
+      // hip, the 2D one returns absolute image space, and the native plugin only produces 3D on
+      // every third frame -- so mixing them per frame put a sawtooth into the trace at a third of
+      // the frame rate. See visionBody3DToWorldLandmarks' own comment for the full reasoning and
+      // for what recovering the depth properly would take.
+      const worldLm = scaleWorldLandmarks(visionJointsToWorldLandmarks(f), effectiveScale);
       frames.push({ t, landmarks: [], worldLandmarks: worldLm });
 
       const sign = worldVerticalSign(worldLm);
@@ -868,7 +907,7 @@ export function AvBarTrackerDialog({
             rawFrames,
             trackingMode: coreMlTrackingMode,
             recording: recordingStats,
-            calibration: { scaleFactor: null, ...calibrationFrames },
+            calibration: { scaleFactor: null, scaleSource, ...calibrationFrames },
           }),
           uploadPromise,
           forSetNumber,
@@ -886,7 +925,7 @@ export function AvBarTrackerDialog({
           rawFrames,
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
-          calibration: { scaleFactor: null, ...calibrationFrames },
+          calibration: { scaleFactor: null, scaleSource, ...calibrationFrames },
         }),
         uploadPromise,
         forSetNumber,
@@ -918,7 +957,7 @@ export function AvBarTrackerDialog({
           rawFrames,
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
-          calibration: { scaleFactor, ...calibrationFrames },
+          calibration: { scaleFactor, scaleSource, ...calibrationFrames },
         }),
         uploadPromise,
         forSetNumber,
@@ -952,7 +991,7 @@ export function AvBarTrackerDialog({
           rawFrames,
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
-          calibration: { scaleFactor, ...calibrationFrames },
+          calibration: { scaleFactor, scaleSource, ...calibrationFrames },
         }),
         uploadPromise,
         forSetNumber,
@@ -1078,7 +1117,7 @@ export function AvBarTrackerDialog({
       rawFrames,
       trackingMode: coreMlTrackingMode,
       recording: recordingStats,
-      calibration: { scaleFactor, ...calibrationFrames },
+      calibration: { scaleFactor, scaleSource, ...calibrationFrames },
     });
 
     // readerStatus exists specifically to tell "the athlete's take was genuinely short" apart
