@@ -209,3 +209,35 @@ describe("the movementType backstop", () => {
     },
   );
 });
+
+describe("filmable lifts the manual does not cover", () => {
+  // Only 35 of the 54 currently video-eligible exercises appear in the execution manual, and 16
+  // of the 19 missing ones are Olympic lifts.
+  it("corrects the power hang variants, which had the same inversion as their siblings", () => {
+    expect(firstMoveForExercise("Hang Power Clean")).toBe("eccentric");
+    expect(firstMoveForExercise("Hang Power Snatch")).toBe("eccentric");
+    // The two the manual does cover, for comparison.
+    expect(firstMoveForExercise("Hang Clean")).toBe("eccentric");
+    expect(firstMoveForExercise("Hang Snatch")).toBe("eccentric");
+  });
+
+  it("dips first on every jerk", () => {
+    expect(firstMoveForExercise("Push Jerk")).toBe("eccentric");
+    expect(firstMoveForExercise("Jerk Balance")).toBe("eccentric");
+    expect(firstMoveForExercise("Snatch Balance")).toBe("eccentric");
+  });
+
+  it("pulls first when the bar starts at rest on the floor or on blocks", () => {
+    for (const name of ["Block Clean", "Block Snatch", "Power Snatch", "Pause Clean", "Muscle Clean", "Muscle Snatch", "Clean High Pull", "Snatch-Grip High Pull"]) {
+      expect(firstMoveForExercise(name)).toBe("concentric");
+    }
+  });
+
+  it("covers every video-eligible barbell lift", () => {
+    // Anything filmable and missing here falls back to the movementType taxonomy, which is what
+    // got the hang variants backwards in the first place.
+    for (const name of ["Trap Bar Squat", "Tall Clean", "Tall Snatch"]) {
+      expect(firstMoveForExercise(name)).not.toBeNull();
+    }
+  });
+});

@@ -285,8 +285,41 @@ const FIRST_MOVE_BY_NAME = new Map<string, FirstMove>([
   ["Walking Lunge", "eccentric"],
   ["Zottman Curl", "concentric"],]);
 
+// Filmable lifts the manual does not cover. Every one of these is video-eligible today (see
+// CANONICAL_VIDEO_ELIGIBLE_NAMES in server/seed.ts), and 16 of the 19 are Olympic lifts, so the
+// gap sat squarely on the lifts a weightlifter actually films. These are not new judgements:
+// each one applies the rule the manual already states for its own sibling. A hang variant dips
+// to the hang before it pulls (Hang Clean and Hang Snatch, both in the manual). A jerk dips
+// before it drives (Push Press and Split Jerk, both in the manual). A lift that starts with the
+// bar at rest on the floor or on blocks has nothing to lower first (Power Clean and Snatch).
+//
+// Two of them were actively wrong rather than merely absent: Hang Power Clean and Hang Power
+// Snatch are typed Pull, so the taxonomy hinted "concentric" -- the exact inversion already
+// fixed for Hang Clean and Hang Snatch.
+const FIRST_MOVE_UNMANUALLED: [string, FirstMove][] = [
+  ["Hang Power Clean", "eccentric"],
+  ["Hang Power Snatch", "eccentric"],
+  ["Push Jerk", "eccentric"],
+  ["Jerk Balance", "eccentric"],
+  ["Snatch Balance", "eccentric"],
+  ["Block Clean", "concentric"],
+  ["Block Snatch", "concentric"],
+  ["Power Snatch", "concentric"],
+  ["Pause Clean", "concentric"],
+  ["Muscle Clean", "concentric"],
+  ["Muscle Snatch", "concentric"],
+  ["Clean High Pull", "concentric"],
+  ["Snatch-Grip High Pull", "concentric"],
+  ["Tall Clean", "concentric"],
+  ["Tall Snatch", "concentric"],
+  ["Trap Bar Squat", "eccentric"],
+];
+
 const FIRST_MOVE_NORMALIZED = new Map<string, FirstMove>(
-  Array.from(FIRST_MOVE_BY_NAME, ([name, move]) => [normalizeName(name), move]),
+  [...FIRST_MOVE_BY_NAME, ...FIRST_MOVE_UNMANUALLED].map(([name, move]) => [
+    normalizeName(name),
+    move,
+  ]),
 );
 
 /** Which phase of the rep happens first, per the execution manual. Null for anything not in
