@@ -20554,6 +20554,73 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // no date of birth means unknown and is never treated as a minor, an adult
   // is never blocked, and a known minor is blocked exactly until a link
   // exists.
+  // Everyone the minor gate is currently locking out, with enough about the
+  // invite to tell the two real cases apart: a parent who was emailed and
+  // hasn't acted, and an account that never had an invite issued at all (a
+  // signup from before the guardian email was required, or a send that
+  // failed). Those need different responses -- one is a chase, the other is
+  // a repair -- and from the athlete's side they look identical.
+  //
+  // The age arithmetic mirrors derivePrivacyTier and getVideosEligible-
+  // ForRetentionPurge rather than pulling every athlete into Node to filter:
+  // date_of_birth > now - 18 years is a minor, calendar-aware, same as the
+  // month/day comparison that function does.
+  async getAthletesBlockedPendingGuardian(): Promise<
+    {
+      id: number;
+      name: string;
+      email: string;
+      dateOfBirth: string;
+      createdAt: string;
+      inviteEmail: string | null;
+      inviteSentAt: string | null;
+      inviteExpiresAt: string | null;
+      inviteExpired: boolean;
+    }[]
+  > {
+    const result = await db.execute<{
+      id: number;
+      name: string;
+      email: string;
+      date_of_birth: string;
+      created_at: string;
+      invite_email: string | null;
+      invite_sent_at: string | null;
+      invite_expires_at: string | null;
+      invite_expired: boolean | null;
+    }>(sql`
+      SELECT u.id, u.name, u.email, u.date_of_birth, u.created_at,
+        i.email AS invite_email,
+        i.created_at AS invite_sent_at,
+        i.expires_at AS invite_expires_at,
+        (i.expires_at IS NOT NULL AND i.expires_at < now()) AS invite_expired
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT gi.email, gi.created_at, gi.expires_at
+        FROM guardian_invites gi
+        WHERE gi.athlete_id = u.id AND gi.claimed_at IS NULL
+        ORDER BY gi.created_at DESC
+        LIMIT 1
+      ) i ON true
+      WHERE u.role = 'athlete'
+        AND u.date_of_birth IS NOT NULL
+        AND u.date_of_birth > (current_date - interval '18 years')
+        AND NOT EXISTS (SELECT 1 FROM guardian_links gl WHERE gl.athlete_id = u.id)
+      ORDER BY u.created_at
+    `);
+    return result.rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      dateOfBirth: String(r.date_of_birth),
+      createdAt: String(r.created_at),
+      inviteEmail: r.invite_email,
+      inviteSentAt: r.invite_sent_at ? String(r.invite_sent_at) : null,
+      inviteExpiresAt: r.invite_expires_at ? String(r.invite_expires_at) : null,
+      inviteExpired: Boolean(r.invite_expired),
+    }));
+  },
+
   async isAthleteBlockedPendingGuardian(athleteId: number): Promise<boolean> {
     const athlete = await this.getUser(athleteId);
     if (!athlete?.dateOfBirth) return false;

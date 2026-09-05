@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
-import { users, guardianLinks, workoutSetEntries } from "@shared/schema";
+import { users, guardianLinks, guardianInvites, workoutSetEntries } from "@shared/schema";
 import {
   makeAssignedProgram,
   makeAthlete,
@@ -86,6 +86,58 @@ describe("rule 1: the minor gate", () => {
       .values({ athleteId: athlete.id, guardianId: guardian.id })
       .returning();
     expect((await storage.removeGuardianLink(guardian.id, "guardian", link.id)).ok).toBe(true);
+  });
+});
+
+describe("the admin's view of who is blocked", () => {
+  beforeEach(resetDatabase);
+
+  it("lists a blocked minor and leaves everyone else out", async () => {
+    const blocked = await makeAthlete({ dateOfBirth: isoYearsAgo(15), name: "Blocked Kid" });
+    // An adult, and a linked minor -- neither is blocked, so neither belongs
+    // on a page whose whole job is "who needs chasing".
+    await makeAthlete({ dateOfBirth: isoYearsAgo(22) });
+    const linkedMinor = await makeAthlete({ dateOfBirth: isoYearsAgo(15) });
+    const guardian = await makeGuardian();
+    await db.insert(guardianLinks).values({ athleteId: linkedMinor.id, guardianId: guardian.id });
+
+    const rows = await storage.getAthletesBlockedPendingGuardian();
+    expect(rows.map((r) => r.id)).toEqual([blocked.id]);
+    // No invite was ever issued for this one, which is the state that
+    // cannot clear itself.
+    expect(rows[0].inviteSentAt).toBeNull();
+  });
+
+  it("tells a sent invite apart from one that was never sent", async () => {
+    const athlete = await makeAthlete({ dateOfBirth: isoYearsAgo(15) });
+    const invite = await storage.createGuardianInvite(athlete.id, "parent@example.test");
+    expect("token" in invite).toBe(true);
+
+    const rows = await storage.getAthletesBlockedPendingGuardian();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].inviteEmail).toBe("parent@example.test");
+    expect(rows[0].inviteSentAt).not.toBeNull();
+    expect(rows[0].inviteExpired).toBe(false);
+  });
+
+  it("flags an invite whose link has expired", async () => {
+    const athlete = await makeAthlete({ dateOfBirth: isoYearsAgo(15) });
+    await storage.createGuardianInvite(athlete.id, "parent@example.test");
+    await db
+      .update(guardianInvites)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(guardianInvites.athleteId, athlete.id));
+
+    const rows = await storage.getAthletesBlockedPendingGuardian();
+    expect(rows[0].inviteExpired).toBe(true);
+  });
+
+  it("drops an athlete off the list the moment a guardian links", async () => {
+    const athlete = await makeAthlete({ dateOfBirth: isoYearsAgo(15) });
+    expect(await storage.getAthletesBlockedPendingGuardian()).toHaveLength(1);
+    const guardian = await makeGuardian();
+    await db.insert(guardianLinks).values({ athleteId: athlete.id, guardianId: guardian.id });
+    expect(await storage.getAthletesBlockedPendingGuardian()).toHaveLength(0);
   });
 });
 

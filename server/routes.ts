@@ -8815,6 +8815,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // ---------------- Admin: working the removal queue ----------------
+  // Who the minor gate is currently locking out. Worth a page rather than a
+  // query somebody has to remember to run: this is the one enforcement in
+  // the app that can leave a real athlete unable to do anything, through no
+  // fault of their own, waiting on a third party who may never have seen the
+  // email.
+  app.get("/api/admin/blocked-athletes", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.getAthletesBlockedPendingGuardian());
+  });
+
   app.get("/api/admin/removal-requests", requireRole("admin"), async (_req, res) => {
     res.json(await storage.getOpenMediaRemovalRequests());
   });
