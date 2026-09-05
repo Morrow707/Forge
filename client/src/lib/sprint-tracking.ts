@@ -76,6 +76,17 @@ export type SprintResult = {
   // result the athlete can see and choose to retake is strictly better than
   // a capture that never finishes.
   likelyGlitch: boolean;
+  // True when fewer checkpoints were crossed than the drill defines -- the athlete stopped
+  // short, cut a cone, or the reference point was lost on a later leg.
+  //
+  // The arithmetic is still self-consistent when this is set: totalDistanceYards only sums the
+  // legs that were actually detected, so the speed is right for the ground covered. The problem
+  // is what it is CALLED. A 5-10-5 whose two return legs never registered was reported as a
+  // finished 5-10-5 carrying one split, and there is no way to tell that from a real one by
+  // looking at the number. Flagged rather than rejected, same reasoning as likelyGlitch above.
+  incompleteDrill: boolean;
+  crossingsFound: number;
+  crossingsExpected: number;
   // Wall-clock gap, in ms, between the two frames each checkpoint crossing
   // was interpolated between -- one entry per crossing, in crossing order.
   // The crossing instant is only ever known to within this gap, so the
@@ -186,6 +197,7 @@ export function detectSprintCrossings(
   if (totalElapsedSeconds <= 0) return null;
 
   const avgSpeedYardsPerSec = Math.round((totalDistanceYards / totalElapsedSeconds) * 100) / 100;
+  const incompleteDrill = crossingTimes.length < checkpoints.length;
   // Checked against the whole run AND each individual split -- a shuttle or
   // 3-cone drill's overall average can look reasonable while one glitched
   // leg (a checkpoint crossed a frame too early) is individually impossible.
@@ -201,6 +213,9 @@ export function detectSprintCrossings(
     splits,
     avgSpeedYardsPerSec,
     likelyGlitch,
+    incompleteDrill,
+    crossingsFound: crossingTimes.length,
+    crossingsExpected: checkpoints.length,
     crossingFrameGapsMs,
   };
 }

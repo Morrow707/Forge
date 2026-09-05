@@ -133,7 +133,7 @@ export type RepMetrics = {
   // its types; this flag is how a renderer knows not to trust them. See barPathAssumptionInvalid
   // in exercise-camera-profile.ts for why a straight-line assumption inverts on these lifts.
   barPathAssumptionInvalid?: boolean;
-  meanVelocityMps: number;
+  meanVelocityMps: number | null;
   concentricSeconds: number;
   eccentricSeconds: number;
   barPathDeviationCm: number | null;
@@ -185,8 +185,9 @@ export type RepMetrics = {
   // half, reported separately the way VBT tools like Perch do rather than
   // folded into a single figure.
   eccentricMeanVelocityMps: number;
-  // Average per-rep vertical range of motion, in cm.
-  romCm: number;
+  // Average per-rep vertical range of motion, in cm. Null when no real-world scale could be
+  // established, which is a different thing from zero -- see peakVelocityMps above.
+  romCm: number | null;
   // How much mean concentric velocity dropped from the first rep to the
   // last, as a percentage -- the standard within-set fatigue signal in
   // velocity-based training. Mean, not peak: peak is one noisy single-frame
@@ -1564,12 +1565,14 @@ const DEFAULT_MIN_ROM_FRACTION = 0.05;
  * centimetre limit would be wrong at both ends of the height range.
  */
 export function implausibleRangeOfMotion(
-  romCm: number,
+  // Nullable: a take with no real-world scale has no range of motion to judge, and "no answer"
+  // is the correct response rather than a rejection.
+  romCm: number | null,
   heightIn: number | null | undefined,
   movementPattern: string | null | undefined,
 ): string | null {
   if (!heightIn || heightIn <= 0) return null;
-  if (!Number.isFinite(romCm) || romCm <= 0) return null;
+  if (romCm == null || !Number.isFinite(romCm) || romCm <= 0) return null;
   const heightCm = heightIn * 2.54;
   const fraction = movementPattern
     ? (MAX_ROM_FRACTION_OF_HEIGHT[movementPattern] ?? DEFAULT_MAX_ROM_FRACTION)

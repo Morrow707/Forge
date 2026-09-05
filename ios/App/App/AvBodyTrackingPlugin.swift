@@ -1246,6 +1246,23 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             frameIndex += 1
             guard thisFrameIndex % sampleEveryNthFrame == 0 else { continue }
             guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { continue }
+            // Every frame of this loop runs Vision pose estimation, optionally Vision hand
+            // pose, a CoreML object detection and a camera-drift estimate, and each of those
+            // leaves autoreleased temporaries behind. Without a pool inside the loop they all
+            // accumulate until the whole analysis finishes -- thousands of frames' worth of
+            // transient image buffers held at once on a 60-second 1080p60 clip.
+            //
+            // That is the same memory pressure that produced "Cannot Complete Action" and the
+            // media-services reset on a real device, which cut the athlete's music mid-set. The
+            // 4K-to-1080p decode change addressed one contributor; this is the other one, and
+            // it was still here: there was not a single autoreleasepool anywhere in this file.
+            //
+            // Wrapped from AFTER the sampling guards so the `continue` above still targets the
+            // while loop -- a break or continue cannot cross a closure boundary in Swift. Every
+            // `continue` inside the wrapped body belongs to an inner joint loop, so those are
+            // unaffected. The body is deliberately not re-indented, to keep this a two-line
+            // change that can be read against the original.
+            autoreleasepool {
             let timestampSeconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
             if let previous = previousProcessedTimestamp {
                 let gap = timestampSeconds - previous
@@ -1532,6 +1549,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if !body3DJoints.isEmpty { eventData["body3DJoints"] = body3DJoints }
             DispatchQueue.main.async {
                 self.notifyListeners("poseFrame", data: eventData)
+            }
             }
         }
 

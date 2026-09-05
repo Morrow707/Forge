@@ -67,13 +67,35 @@ export async function analyzeVideoPose(
   video.muted = true;
   video.playsInline = true;
 
-  await new Promise<void>((resolve, reject) => {
-    video.addEventListener("loadedmetadata", () => resolve(), { once: true });
-    video.addEventListener("error", () => reject(new Error("Could not load this video for analysis.")), {
-      once: true,
+  // Everything from here down runs inside a try/finally so the element is always released.
+  //
+  // video-frames.ts does this and says why: an abandoned media element keeps a live WebKit media
+  // session, and on iOS that is what stops the athlete's music. This pass never had it, and it is
+  // the heavier of the two -- it holds a remote https source and a WebGL texture path open for
+  // the whole length of the clip, and a coach reviewing a session opens one after another.
+  try {
+    await new Promise<void>((resolve, reject) => {
+      video.addEventListener("loadedmetadata", () => resolve(), { once: true });
+      video.addEventListener("error", () => reject(new Error("Could not load this video for analysis.")), {
+        once: true,
+      });
     });
-  });
 
+    return await analyseLoadedVideo(video, landmarker, onProgress);
+  } finally {
+    // Same teardown, same order, as video-frames.ts: pause first so the session stops, then
+    // drop the source, then load() to make the element actually let go of it.
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  }
+}
+
+async function analyseLoadedVideo(
+  video: HTMLVideoElement,
+  landmarker: Awaited<ReturnType<typeof getOfflinePoseLandmarker>>,
+  onProgress?: (fraction: number) => void,
+): Promise<PoseFrame[]> {
   const duration = await resolveVideoDuration(video);
   if (!Number.isFinite(duration) || duration <= 0) return [];
 

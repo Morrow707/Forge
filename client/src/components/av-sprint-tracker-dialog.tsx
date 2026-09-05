@@ -111,7 +111,19 @@ function buildManualResult(startTime: number, finishTime: number, checkpoints: S
   // No auto-detected crossings at all here -- the two times came off the coach's own eye on
   // the clip, not off two straddling frames -- so there is no frame-gap precision bound to
   // report. crossingTrustScore's manuallyTimed flag is what accounts for this path instead.
-  return { totalElapsedSeconds, totalDistanceYards, splits, avgSpeedYardsPerSec, likelyGlitch, crossingFrameGapsMs: [] };
+  // A hand-timed result covers the whole drill by construction -- the coach marked its start
+  // and its finish on the clip -- so it is never incomplete regardless of what the camera saw.
+  return {
+    totalElapsedSeconds,
+    totalDistanceYards,
+    splits,
+    avgSpeedYardsPerSec,
+    likelyGlitch,
+    incompleteDrill: false,
+    crossingsFound: checkpoints.length,
+    crossingsExpected: checkpoints.length,
+    crossingFrameGapsMs: [],
+  };
 }
 
 /** AVFoundation + Vision sprint/agility timing -- the first real tracker built on the new
@@ -802,6 +814,15 @@ export function AvSprintTrackerDialog({
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 This time looks faster than any human has ever run -- almost certainly a tracking glitch,
                 not a real split. Recommend retaking before saving.
+              </div>
+            )}
+
+            {result.incompleteDrill && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                Only {result.crossingsFound} of this drill's {result.crossingsExpected} checkpoints were
+                crossed, so this time covers part of the run, not all of it. The speed is right for the
+                ground actually measured -- it just isn't the whole drill.
               </div>
             )}
 

@@ -151,9 +151,37 @@ export function summarizeKbSwingSet(rawPoints: TrackedPoint[], heightIn?: number
   }
   const confidences = points.map((p) => p.confidence ?? 1);
 
+  // One rep per CONCENTRIC phase, not per phase.
+  //
+  // segmentPhases splits at every direction reversal, so a swing is two phases: the bell falling
+  // back through the legs and the bell driving up. Counting both reported a clean 10-swing set
+  // as 20 reps. bar-tracking.ts has always classified phases and counted only the concentric
+  // ones; this file pushed one entry per phase and inherited none of it.
+  //
+  // Same heuristic bar-tracking uses, for the same reason: there is no way to know "up" from
+  // "down" in image space without knowing the exercise, but the driving half of a swing is
+  // faster than the fall, and that holds for every kettlebell swing.
+  const phaseMeanSpeeds = phases.map((phase) => {
+    let sum = 0;
+    let n = 0;
+    for (let idx = phase.startIdx; idx <= phase.endIdx; idx++) {
+      const v = speeds[idx];
+      if (Number.isFinite(v)) {
+        sum += v;
+        n++;
+      }
+    }
+    return n > 0 ? sum / n : 0;
+  });
+  const isConcentric = phases.map((_, i) => {
+    const neighbour = phaseMeanSpeeds[i + 1] ?? phaseMeanSpeeds[i - 1];
+    return neighbour == null || phaseMeanSpeeds[i] >= neighbour;
+  });
+
   const repBreakdown: KbSwingRepBreakdown[] = [];
   const allPlausibleSpeeds: number[] = [];
   phases.forEach((phase, i) => {
+    if (!isConcentric[i]) return;
     const confidentSpeeds: number[] = [];
     for (let idx = phase.startIdx; idx <= phase.endIdx; idx++) {
       if (confidences[idx] < MIN_TRACKING_CONFIDENCE) continue;
@@ -180,7 +208,7 @@ export function summarizeKbSwingSet(rawPoints: TrackedPoint[], heightIn?: number
     // for why that isn't a safe assumption to bake in here).
     const heightCm = Math.round((repMaxY - repMinY) * 1000) / 10;
 
-    repBreakdown.push({ repNumber: i + 1, peakSpeedMps: Math.round(repPeak * 100) / 100, heightCm });
+    repBreakdown.push({ repNumber: repBreakdown.length + 1, peakSpeedMps: Math.round(repPeak * 100) / 100, heightCm });
   });
 
   if (repBreakdown.length === 0) return null;

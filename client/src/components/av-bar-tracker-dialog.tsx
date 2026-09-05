@@ -477,6 +477,14 @@ export function AvBarTrackerDialog({
   ) {
     const metrics: RepMetrics = {
       ...EMPTY_REP_METRICS,
+      // Explicitly null, not the zeros EMPTY_REP_METRICS carries. A zero is a different lie from
+      // a blank: a coach reading a bench set would see 0 m/s and 0cm of range rather than an
+      // empty cell, and a chart plots it. These are the fields that genuinely could not be
+      // measured without a scale, so they say so.
+      peakVelocityMps: null,
+      meanVelocityMps: null,
+      barPathDeviationCm: null,
+      romCm: null,
       concentricSeconds: scaleFree.concentricSeconds,
       eccentricSeconds: scaleFree.eccentricSeconds ?? 0,
       velocityLossPercent: scaleFree.velocityLossPercent,

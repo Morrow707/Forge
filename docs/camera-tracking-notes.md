@@ -517,3 +517,101 @@ on 2026-09-05: the athlete taps start and gets to their lift. Nothing may be add
 flow that asks them to pose, stand somewhere specific, or hold still for the camera first. The
 scale reference has to come from the footage itself -- a plate, the bar, grip width -- or not at
 all.
+
+## Full camera-system audit (2026-09-05)
+
+Roughly 13,000 lines across the native capture layer, the six tracker modes, the object
+detector, the skill metrics, the trust scores and the video pipeline. Six confirmed defects
+fixed. Several reported findings did NOT survive verification and are recorded at the bottom,
+because a finding that looks right and is wrong costs more than one nobody raised.
+
+### A transient server error was deleting the athlete's recordings
+
+The worst of them. `flushPendingVideos` treated every `ApiError` as a permanent rejection and
+called `clearPersistedVideo`, which deletes the file from disk and the manifest entry. Upload
+rejects with `ApiError` for every non-2xx, so a 500, 502, 503, 429 or an expired session all
+counted. Film five sets at a gym with no signal, reconnect on the drive home while the server is
+cold-starting, and all five clips are erased with a message telling the athlete to re-record
+footage that no longer exists.
+
+The workout-log queue had the correct classification all along. The video path never got it. Both
+now import one shared `isPermanentUploadRejection`, so they cannot drift apart again: only a 4xx
+is permanent, and 401, 408 and 429 are excluded because all three succeed on a later attempt.
+
+### The analysis loop had no autorelease pool
+
+Not one `autoreleasepool` anywhere in the 2,700-line native plugin, and the per-frame loop runs
+Vision pose estimation, optional hand pose, a CoreML detection and a camera-drift estimate.
+Every autoreleased temporary from all four accumulated until the whole analysis finished --
+thousands of frames' worth held at once on a minute of 1080p60.
+
+That is the same memory pressure behind the "Cannot Complete Action" media-services reset that
+cut the athlete's music mid-session. Dropping 4K to 1080p addressed one contributor; this was the
+other, and it was still there. Wrapped after the sampling guards, since `break` and `continue`
+cannot cross a closure boundary in Swift.
+
+### Hip-shoulder separation could report 354 degrees as elite
+
+The headline X-factor number for a swing. The hip and shoulder angle series are unwrapped
+independently, each anchored to its own first frame, then differenced with `Math.abs` and no wrap
+normalisation. An athlete whose hips read +176 and shoulders -178 has a true separation of four
+degrees, near none at all, and was reported at 354 -- which clears every "not enough separation"
+threshold and reads as world class. The number is the 95th percentile of that series, so a
+wrapped frame is exactly the frame it selects.
+
+### Kettlebell swings were counted twice
+
+`segmentPhases` splits at every direction reversal, so one swing is two phases: the bell falling
+back through the legs and the bell driving up. Bar tracking has always classified phases and
+counted only the concentric ones; the kettlebell module pushed one rep per phase. A clean
+ten-swing set logged about twenty.
+
+### An unfinished drill was reported as a finished one
+
+`detectSprintCrossings` returns a result whenever at least two checkpoints were crossed. A
+5-10-5 whose two return legs never registered came back as a completed drill carrying a single
+split. The arithmetic was self-consistent -- distance only summed the legs actually detected, so
+the speed was right for the ground covered -- but nothing said it was a fraction of the drill.
+It now reports how many checkpoints were crossed against how many the drill defines.
+
+### The scale-free path was saving zeros
+
+Found by re-reading the previous change rather than reported. The scale-free save inherited the
+empty-metrics zeros for velocity, range of motion and drift, so a bench set showed 0 m/s and 0cm
+rather than a blank. Zero is a different lie from absent: a chart plots it and a coach reads it.
+Those fields are now explicitly null, which meant widening four types and teaching the
+range-of-motion check that "no scale" means "no judgment" rather than "impossible".
+
+### Reported but not confirmed
+
+Worth recording so nobody re-investigates them from scratch:
+
+- **A sprint drill terminating after its first leg.** The claim was that the dialog runs crossing
+  detection per frame and finishes on the first non-null result. It does not: detection runs once,
+  after recording stops, over the complete point array. The related real problem was the missing
+  completeness check, fixed above.
+- **Kettlebell speed clamped to the ceiling on garbage input.** Real, but not a kettlebell bug:
+  bar tracking's own `robustPeakSpeed` does the same thing deliberately, and the two agree. It is
+  a shared design decision worth revisiting on its own terms -- reporting the ceiling as though it
+  were a measurement is still questionable -- not a defect in one module.
+
+### Still open, ranked
+
+Not fixed here, in the order they are worth taking:
+
+1. **Mixed coordinate systems between the 2D and 3D pose bridges.** The 2D bridge is image-space
+   with a negated y and a scale factor applied; the 3D bridge is metres in a hip-relative frame
+   with Vision's own y sign. The native plugin runs the 3D request on a stride of 3, so on iOS 17
+   every third frame may be in a different origin from its neighbours. If that is real it would
+   corrupt jump height, kettlebell speed and swing tempo. It needs verifying against a real
+   device capture before anything is changed, because the fix is large and the failure is silent.
+2. **Anisotropic pixels-per-metre in the implement tracker.** Shoulder span is measured with x and
+   y scaled by different frame dimensions, then used to convert vertical offsets. If correct, bar
+   range of motion is off by the frame aspect ratio whenever the object tracker contributes.
+3. **The trust score can report 100 on a capture of someone standing still.** Nothing in it asks
+   whether any rotation actually occurred.
+4. **`armSlot` ignores depth**, so a genuine sidearm filmed from front or behind reads as 86
+   degrees, "overhand", with no angle gate.
+5. **The plate detector class is unreachable.** No call site can request it, though the training
+   notes suggest it is one of the healthier classes in the shipped model -- healthier than the
+   barbell and dumbbell classes the app does wire up.

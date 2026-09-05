@@ -1,3 +1,4 @@
+import { isPermanentUploadRejection } from "@/lib/upload-rejection";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Network } from "@capacitor/network";
@@ -338,15 +339,25 @@ export async function flushPendingVideos() {
           : "A queued video just finished uploading -- check the Video Bank.",
       );
     } catch (err) {
-      if (err instanceof ApiError) {
+      // An ApiError is NOT the same as a permanent rejection, and treating it as one deleted
+      // the athlete's recording. uploadWithProgress rejects with ApiError for every non-2xx --
+      // 500, 502, 503, 429 and 401 included -- so a server cold-start or a deploy while the
+      // phone reconnected on the drive home erased every clip filmed that session, from disk,
+      // unrecoverably, with a message telling the athlete to re-record.
+      //
+      // Same classification offline-queue.ts's flushPendingLogs already uses: only a 4xx the
+      // server will keep rejecting is permanent, and 401 (expired session), 408 and 429 are
+      // explicitly not, because all three succeed on a later attempt.
+      const status = err instanceof ApiError ? err.status : null;
+      if (isPermanentUploadRejection(status)) {
         await clearPersistedVideo(entry.id);
         toast.error(
           `${entry.label}: couldn't be uploaded and was not saved -- you'll need to re-record it.`,
           { duration: 15000 },
         );
       }
-      // Still offline, or the file read itself failed transiently -- leave
-      // it queued and try again on the next flush.
+      // Still offline, the server is having a moment, or the file read itself failed
+      // transiently -- leave it queued and try again on the next flush.
     }
   }
 }

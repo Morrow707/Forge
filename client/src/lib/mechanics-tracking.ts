@@ -192,6 +192,22 @@ export type MechanicsResult = {
 // has no camera to test against).
 const MAX_PLAUSIBLE_WRIST_SPEED_MPS = 20;
 
+// The smallest angle between two directions, always in [0, 180].
+//
+// A plain Math.abs(a - b) was wrong here in a way that produced the most flattering possible
+// number. unwrapDegrees is applied to the hip series and the shoulder series SEPARATELY, each
+// anchored to its own first frame, so the two carry unrelated multiples of 360. Differencing
+// them directly then reports an athlete whose hips read +176 and shoulders -178 -- a true
+// separation of 4 degrees, i.e. almost none -- as 354 degrees of X-factor, which reads as elite
+// and clears every "not enough separation" fault threshold.
+//
+// It is also selected FOR: the headline number is the 95th percentile of this series, so a
+// frame that wraps is exactly the frame the percentile picks.
+function angularDifferenceDeg(a: number, b: number): number {
+  const diff = ((a - b + 180) % 360 + 360) % 360 - 180;
+  return Math.abs(diff);
+}
+
 export function analyzeMechanics(
   frames: MechanicsFrame[],
   mode: MechanicsMode,
@@ -208,7 +224,7 @@ export function analyzeMechanics(
   const separations = hipAngles
     .map((h, i) => {
       const s = shoulderAngles[i];
-      return h != null && s != null ? Math.abs(s - h) : null;
+      return h != null && s != null ? angularDifferenceDeg(s, h) : null;
     })
     .filter((v): v is number => v != null);
   // 95th percentile, not a raw max -- see percentile's own comment in

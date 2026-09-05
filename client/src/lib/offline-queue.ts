@@ -1,3 +1,4 @@
+import { isPermanentUploadRejection } from "@/lib/upload-rejection";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 // Pure, and kept that way so it can be unit-tested with no DOM -- see its own comment.
@@ -242,8 +243,7 @@ export async function flushPendingLogs() {
       // attempt. Drop it and say so plainly, once, while the athlete can
       // still do something about it.
       const status = err instanceof ApiError ? err.status : null;
-      const permanentlyRejected =
-        status != null && status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+      const permanentlyRejected = isPermanentUploadRejection(status);
       if (permanentlyRejected) {
         writeQueue(readQueue().filter((p) => p.id !== entry.id));
         toast.error(
