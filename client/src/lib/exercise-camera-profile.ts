@@ -119,7 +119,27 @@ const POSTURE_PATTERNS: [RegExp, CameraPosture][] = [
   [/\b(?:preacher|concentration)\s+curl\b/i, "seated"],
   [/\bdip\b/i, "supported"],
   [/\bassisted\s+pull-?up\b/i, "supported"],
+  // Floor and quadruped work. A plank, bird dog, bear crawl, ab-wheel rollout, superman hold,
+  // glute-ham raise and neck bridge all put the body somewhere that head-to-ankle means nothing.
+  [/\b(?:plank|superman|bird\s*dog|bear\s*crawl|quadruped|ab\s*wheel|rollout|glute\s*ham\s*raise|neck\s*bridge)\b/i, "lying"],
+  [/\bget-?up\b/i, "lying"],
+  [/\bkneeling\b/i, "supported"],
+  // A pull-up hangs as one straight line and keeps its full length; a hanging leg raise or
+  // windshield wiper folds the body to an L partway through the rep, so the same span means two
+  // different things at two points in the same take.
+  [/\bhanging\b/i, "supported"],
 ];
+
+// Movement types that never yield a trustworthy standing-height read, taken from the library's
+// own taxonomy rather than from the exercise name.
+//
+// This is a backstop, and it exists because the name patterns above are leaky by construction:
+// they are a list of spellings, and the library has 413 exercises with more added over time.
+// Sweeping the whole library turned up a tail the patterns missed -- planks, bird dogs, bear
+// crawls, floor mobility work -- and the honest fix is a categorical rule rather than twenty
+// more spellings. Refusing these costs nothing real: an isometric hold has no rep and no range
+// of motion to report, and neither does a stretch.
+const POSTURE_UNRELIABLE_MOVEMENT_TYPES = new Set(["Isometric", "Mobility"]);
 
 function normalizeName(name: string): string {
   return name.toLowerCase().replace(/[‐-―]/g, "-").replace(/\s+/g, " ").trim();
@@ -144,8 +164,15 @@ export function postureForExercise(name: string | null | undefined): CameraPostu
   return "standing";
 }
 
-/** True when this lift's numbers must NOT be derived from the athlete's height. */
-export function heightCalibrationUnreliable(name: string | null | undefined): boolean {
+/** True when this lift's numbers must NOT be derived from the athlete's height.
+ *
+ * Pass the exercise's movementType where the caller has it -- it catches the floor and hold
+ * work whose NAME gives nothing away. */
+export function heightCalibrationUnreliable(
+  name: string | null | undefined,
+  movementType?: string | null,
+): boolean {
+  if (movementType && POSTURE_UNRELIABLE_MOVEMENT_TYPES.has(movementType)) return true;
   return !postureAllowsHeightCalibration(postureForExercise(name));
 }
 

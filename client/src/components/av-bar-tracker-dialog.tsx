@@ -58,7 +58,7 @@ import {
 import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
 import {
   postureForExercise,
-  postureAllowsHeightCalibration,
+  heightCalibrationUnreliable,
   calibrationRefusalReason,
   firstMoveForExercise,
   romBucketForExercise,
@@ -556,7 +556,10 @@ export function AvBarTrackerDialog({
     // spanning only ~0.77 of their standing height, so the scale came out ~30% large on every
     // seated press, pulldown, row and leg machine, quietly enough to clear every other check.
     const posture = postureForExercise(exerciseName);
-    const canUseHeight = postureAllowsHeightCalibration(posture);
+    // movementType is passed as well as the name: the name patterns are a list of spellings and
+    // the library keeps growing, so the taxonomy backstops the floor and hold work whose name
+    // gives nothing away (a plank, a bird dog, a stretch).
+    const canUseHeight = !heightCalibrationUnreliable(exerciseName, movementType);
     const heightScaleFactor = canUseHeight ? calibrateFromFrames(calibrationInput, heightIn) : null;
     // Plate-based scale (see plateScaleFromFrames' own comment) only ever has something to find
     // when coreMlTrackingMode was "plate" for this clip -- everything else leaves this null and
@@ -575,7 +578,9 @@ export function AvBarTrackerDialog({
       // No "(Video saved for your coach.)" in any of these -- saveEmptyAndWarn appends that
       // itself, and including it produced the message twice on a real device.
       const message = calibrationRefusalReason(posture)
-        ?? (coreMlTrackingMode === "plate"
+        ?? (!canUseHeight
+          ? "This is a hold or a stretch rather than a lift with reps, so there's no range of motion to measure and your height can't be used to set scale. Numbers are withheld rather than guessed."
+          : coreMlTrackingMode === "plate"
           ? "Couldn't calibrate real-world scale for this take -- make sure a bumper plate is clearly visible on the bar at some point in frame (or your height is set and you're visible standing)."
           : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.");
       await saveEmptyAndWarn(

@@ -169,3 +169,43 @@ describe("romBucketForExercise", () => {
     expect(romBucketForExercise("Some Brand New Lift")).toBeNull();
   });
 });
+
+describe("the movementType backstop", () => {
+  // The name patterns are a list of spellings and the library keeps growing. Sweeping all 413
+  // seeded exercises turned up a tail they missed: planks, bird dogs, bear crawls, ab-wheel
+  // rollouts, superman holds and the whole floor-mobility section.
+  it.each(["Plank", "Side Plank", "Weighted Plank", "Superman Hold", "Bird Dog", "Ab Wheel Rollout", "Glute Ham Raise", "Bear Crawl", "Quadruped Thoracic Rotation"])(
+    "refuses %s on its name alone",
+    (name) => {
+      expect(heightCalibrationUnreliable(name)).toBe(true);
+    },
+  );
+
+  it("folds an L-shaped hang differently from a straight one", () => {
+    expect(postureForExercise("Hanging Leg Raise")).toBe("supported");
+    expect(postureForExercise("Hanging Windshield Wiper")).toBe("supported");
+    expect(postureForExercise("Pull-Up")).toBe("hanging");
+  });
+
+  // Refusing an isometric or a stretch costs nothing: neither has a rep or a range of motion.
+  it.each(["Farmer's Hold", "Wall Sit", "Dead Hang", "Plate Pinch Hold"])(
+    "refuses %s once its Isometric movementType is supplied",
+    (name) => {
+      expect(heightCalibrationUnreliable(name)).toBe(false);
+      expect(heightCalibrationUnreliable(name, "Isometric")).toBe(true);
+    },
+  );
+
+  it("refuses floor mobility work via its Mobility movementType", () => {
+    expect(heightCalibrationUnreliable("Child's Pose", "Mobility")).toBe(true);
+    expect(heightCalibrationUnreliable("Pigeon Stretch", "Mobility")).toBe(true);
+  });
+
+  // The backstop must not reach the lifts that carry real numbers today.
+  it.each([["Back Squat", "Squat"], ["Deadlift", "Hinge"], ["Overhead Press", "Press"], ["Pendlay Row", "Pull"]])(
+    "leaves %s measurable with its own movementType",
+    (name, type) => {
+      expect(heightCalibrationUnreliable(name, type)).toBe(false);
+    },
+  );
+});
