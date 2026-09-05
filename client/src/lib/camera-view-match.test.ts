@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { assessSubjectFacing, cameraViewMismatch, type Landmark } from "./pose-tracking";
+import { assessSubjectFacing, cameraViewMismatch } from "./pose-tracking";
+
+import type { Landmark } from "@mediapipe/tasks-vision";
 import { expectedCameraView, filmGuidanceForExercise } from "./exercise-camera-profile";
 
 // Landmark indices used by assessSubjectFacing: shoulders 11/12, hips 23/24.

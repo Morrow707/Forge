@@ -434,3 +434,86 @@ Six new buckets were added, all set generously on purpose. These are anthropomet
 calibrated thresholds. The job is catching a grossly wrong scale, not judging rep quality: a
 false rejection throws away a real set's numbers, which costs more than letting a mildly odd
 number through.
+
+## What no longer needs a scale, and what is now measurable (2026-09-05)
+
+Four changes, in the order they matter.
+
+### Numbers that never needed a scale are no longer thrown away
+
+A lift with no real-world scale used to save its video and withhold everything. That discarded
+more than it had to. Rep count, how long each rep took, how much the bar slowed across the set,
+how long it took to reach top speed, and how far it drifted as a share of its own travel are all
+times or ratios, and metres cancel out of every one of them. Velocity loss in particular is the
+number a velocity-based-training athlete actually trains against, it is a percentage, and it was
+going in the bin alongside the metres it does not need. Bench and every seated lift now return
+that half. Only the metres, the metres per second and the watts are withheld.
+
+Reps are segmented relative to the take's own typical rep instead of against the 20cm floor,
+which means nothing without a scale and does real damage with a wrong one: at a 4x-inflated scale
+an athlete's settling wobble cleared it and 11 real bench reps became 18.
+
+**The trace has to be normalised to a nominal size first**, and finding out why was the useful
+part. The acceleration and velocity filters are stated in metres. Handed a trace in arbitrary
+units they do not merely stop helping: one whose numbers happen to be large reads as a single
+continuous physically-impossible event, so every frame is rejected and the peak collapses to the
+ceiling. The same five reps segmented as four at one scale and eight at another until an
+invariance test caught it. Normalising is safe precisely because everything reported is a
+duration or a ratio, and multiplying every position by a constant changes neither.
+
+There is deliberately no velocity field of any kind in the scale-free output. A number in trace
+units per second would look like a speed, sort like a speed, and get compared against last week's
+speed by an athlete with no way to know the units changed.
+
+### The correct camera angle was being scored as a problem
+
+`assessCameraAlignment` asks whether the athlete is squared up to the lens. That is the right
+question for a front-view lift and the wrong one for a side-view lift, which is nearly all of
+them. A correct side view puts one shoulder behind the other, so the shoulders stop being spread
+across the frame, the check returned "unknown", and the take lost 10 trust points to the note
+"Camera framing couldn't be confirmed". The one camera position almost every barbell lift
+requires was scoring worse than a front view that cannot see bar drift at all.
+
+Footage is now read for which way the athlete is actually facing and judged against the view the
+lift needs. A genuine mismatch warns rather than refuses, because everything vertical is still
+measured correctly from the wrong side; it is the forward-and-back drift that vanishes.
+
+### Bar-path deviation and peak velocity are withheld on Olympic lifts
+
+The bar deliberately loops back around the knees and in under the athlete. A technically correct
+clean scores WORSE on straight-line deviation than a bad one hauled up in a straight line. Those
+two numbers are inverted there, not imprecise, so they are withheld rather than shown with a
+caveat. Range of motion, timing, velocity loss and rep count are unaffected.
+
+### Thresholds can now be measured instead of argued about
+
+Every threshold in this pipeline is a number somebody picked, because measuring one meant
+re-running analysis over real captures and analysis only ever ran once, live, on a phone.
+
+Sets already store their own bar-path trace, and that trace is the input to everything downstream
+of tracking. `client/src/lib/capture-replay.ts` replays it, and `scripts/replay-captures.mjs`
+runs a batch and diffs against a previous run, so a threshold change that fixes one set and
+breaks four is visible instead of invisible. It needs no device, no camera, no video and no
+database -- feed it a JSON array of stored set rows.
+
+It is deliberately not a replay of the TRACKING stage. Turning frames into a trace needs the
+implement trackers, the CoreML detector and Vision, none of which run outside the app, and
+pretending otherwise builds a harness that tests a reimplementation.
+
+**It has already found one thing.** Velocity loss is a ratio and survives losing the scale, but
+the calibrated and scale-free paths segment reps differently -- an absolute centimetre floor
+versus each reversal's size relative to the take's own typical rep. Same rep count, slightly
+different rep boundaries, so the per-rep means the ratio is built from differ. On a synthetic
+five-rep squat that is about 1.7 points on a figure near 10, roughly 16% relative. Worth knowing
+before anyone compares a bench velocity-loss number against a squat one. The tolerance in the
+test is not calibrated; it should be replaced with a measured bound once real captures have been
+through the harness.
+
+## A standing calibration pose is off the table
+
+Do not propose one. Taking a standing reference at the start of a supine set would give real
+centimetres and watts on bench with code that already exists, and it was considered and rejected
+on 2026-09-05: the athlete taps start and gets to their lift. Nothing may be added to the capture
+flow that asks them to pose, stand somewhere specific, or hold still for the camera first. The
+scale reference has to come from the footage itself -- a plate, the bar, grip width -- or not at
+all.
