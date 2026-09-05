@@ -350,3 +350,87 @@ number. The gate is what keeps that refusing.
 scale-invariant. A bar sensor reported 0.26s on footage that already exists. If the
 tracker's own time-to-peak does not match that, no amount of scale work will fix the
 numbers, and that is worth checking before building any of the above.
+
+## Auditing the pipeline against the execution manual (2026-09-05)
+
+The execution manual describes all 109 camera-trackable exercises one physical action at a time,
+from the athlete tapping Start to the athlete tapping Stop. Reading it as a specification and
+diffing it against what the code actually computes for each of the 413 seeded library exercises
+turned up four defects. All four are now fixed. The per-exercise knowledge lives in
+`client/src/lib/exercise-camera-profile.ts`, which is a plain data module with no imports.
+
+### Seated lifts were silently over-scaled by about 30%
+
+This is the one worth remembering. `isKnownSupineMovement` asked whether a lift is done lying
+down, which is the right question for a bench press and the wrong shape of question in general.
+`uprightEnough` is a DIRECTION test: it compares the head-to-ankle segment's vertical component
+against that segment's own length. A seated athlete passes it comfortably, because their head
+really is above their ankles. But their head-to-ankle span is roughly 0.77 of their standing
+height (sitting height is ~0.52 of stature, and a bench adds ~0.25), so dividing real height by
+that span produces a scale factor about 30% too large.
+
+Every centimetre, metre-per-second and watt from a seated cable row, lat pulldown, leg press,
+leg extension, machine press, preacher curl or seated calf raise carried that bias, with nothing
+flagged. It is small enough to sail through `implausibleRangeOfMotion`, and that is exactly what
+made it dangerous: a 4x error announces itself, a 1.3x error looks like a number.
+
+The gate now asks about posture rather than about lying down. `standing` and `hanging` allow
+height calibration; `seated`, `lying` and `supported` refuse it and withhold the numbers with a
+reason specific to the posture.
+
+Treating a strict dead hang as valid is an ASSUMPTION, not a measurement. The manual specifies
+straight arms and a straight body for both pull-up and chin-up, which does span true standing
+height, but an athlete who bends their knees breaks it the same way sitting does. Nobody has
+checked this against real footage. A dip taken with the ankles crossed and an assisted pull-up
+taken kneeling on the platform are both classified `supported` for that reason.
+
+### The whole bench-press family was missing from the refusal list
+
+A board press, pin press, Spoto press, Larsen press, JM press and Tate press are all performed
+lying on a bench, and not one of them contains the word "bench". All six fell through the old
+`/bench\s*press/` pattern and got a confident number. So did the incline dumbbell press,
+chest-supported row, inverted row, reverse hyper, pullovers and the incline and decline flyes.
+
+### The native tracker passed no starting direction at all
+
+`summarizeTrackedSet` takes a `firstPhaseHint` that tells the rep segmenter which phase is the
+concentric. The legacy dialog supplied one from the movementType taxonomy. The native AV path --
+the one that actually runs on the phone, and the one being calibrated against bar-sensor ground
+truth -- passed `undefined`, so every rep's concentric was decided by phase speed alone.
+
+The taxonomy could not have covered it anyway. It has no answer for anything typed Push or
+Press, which is every bench press and every overhead press, and it gets three exercises
+backwards: a hang clean and a hang snatch both dip to the hang before they pull, and a step-up
+drives up before it steps down. The manual answers all 91 bar-path lifts definitively, and that
+table is now consulted first in both paths.
+
+### Two mode-routing bugs, and one exercise deliberately left alone
+
+`Med Ball Chest Pass` and `Med Ball Overhead Throw` are both seeded as category `plyometric`, and
+the category test ran before the med-ball name test -- so two thrown-object exercises were routed
+to jump tracking, which measures ankle displacement. The med-ball check now runs first. `Wall
+Ball` and `Suitcase Carry` matched no pattern at all and fell through to bar-path tracking; both
+now route correctly.
+
+`Russian Twist` is left routed to bar-path on purpose, against the manual's own suggestion. The
+manual notes it should be med ball but also admits the up-down tracker sees almost nothing there,
+and med-ball mode's trajectory logic is gated to genuinely thrown, free-flying objects -- a
+Russian twist holds the ball throughout. Neither mode measures it. It is classified `seated` for
+posture, so it saves the video and withholds numbers rather than inventing them, which is the
+honest outcome until a rotational tracker exists.
+
+### ROM buckets
+
+`expectedPatternFromName` was feeding two consumers at once: the ROM ceiling and the
+pattern-mismatch trust penalty. The mismatch check only means anything across the four patterns
+`guessMovementPattern` can return, so the ROM buckets now come from a separate function. That
+split made two fixes possible. An Arnold press and a landmine press are overhead presses whose
+names end in "Press", so they were getting the horizontal 0.5x ceiling instead of 0.7x -- tight
+enough to reject a real rep. And 48 of the 91 bar-path lifts had no bucket at all and fell to a
+1.3x default that catches almost nothing: a calf raise travels about 0.05 of standing height, so
+a scale several times too large still landed inside the ceiling and reported as ordinary.
+
+Six new buckets were added, all set generously on purpose. These are anthropometric bounds, not
+calibrated thresholds. The job is catching a grossly wrong scale, not judging rep quality: a
+false rejection throws away a real set's numbers, which costs more than letting a mildly odd
+number through.

@@ -30,7 +30,10 @@ const BASEBALL_NAME_PATTERN = /\bbaseball\b/i;
 // but plumbing it through every call site for one pattern wasn't worth
 // it) -- name matching is the same lightweight approach already
 // established for golf/baseball, not a new category of guess.
-const MED_BALL_NAME_PATTERN = /\bmed(?:icine)?[\s-]?ball\b/i;
+// "Wall Ball" is a medicine ball thrown at a target and belongs in this mode, but it never says
+// "med ball" in its name, so it used to fall through to bar-path tracking -- an up-and-down rep
+// tracker pointed at a thrown object.
+const MED_BALL_NAME_PATTERN = /\b(?:med(?:icine)?[\s-]?ball|wall\s*ball)\b/i;
 // "Kettlebell Snatch"/"KB Clean" deliberately do NOT match -- those are vertical-linear,
 // ballistic movements (same category as a barbell clean/snatch), not the arc pattern a swing
 // needs. Only the word "swing" alongside kettlebell/KB should route here -- see
@@ -40,7 +43,9 @@ const KB_SWING_NAME_PATTERN = /\b(?:kettlebell|kb)\s+swing\b/i;
 // Sled push/pull/drag and a farmer's/loaded carry are both "cover a known distance in a
 // straight line" -- the horizontal-linear pattern -- as opposed to an up-down rep like every
 // other tracked mode. See av-horizontal-load-tracker-dialog.tsx's own file comment.
-const HORIZONTAL_LOAD_NAME_PATTERN = /\b(?:sled (?:push|pull|drag)|farmer'?s?\s+(?:carry|walk)|loaded carry)\b/i;
+// A suitcase carry is the same "cover a known distance in a straight line" pattern as a
+// farmer's carry -- one weight instead of two -- and was falling through to bar-path tracking.
+const HORIZONTAL_LOAD_NAME_PATTERN = /\b(?:sled (?:push|pull|drag)|(?:farmer'?s?|suitcase)\s+(?:carry|walk)|loaded carry)\b/i;
 
 /** Coach-facing camera control for one program exercise. Used to be 5
  * separate controls (4 tracking-level buttons -- Off/Path/Full/Jump --
@@ -81,16 +86,20 @@ export function VideoTrackingToggle({
   onChange: (patch: { trackingLevel: TrackingLevel; videoCheckEnabled: boolean }) => void;
 }) {
   const isOn = trackingLevel !== "none";
+  // Med ball is checked BEFORE the plyometric category, not after. "Med Ball Chest Pass" and
+  // "Med Ball Overhead Throw" are both seeded as category plyometric, so the old order sent two
+  // thrown-object exercises to jump tracking -- which measures ankle displacement -- and the
+  // med-ball name check below could never run for them.
   const onLevel: TrackingLevel =
-    category === "plyometric"
+    exerciseName && MED_BALL_NAME_PATTERN.test(exerciseName)
+      ? "med_ball"
+      : category === "plyometric"
       ? "jump"
       : exerciseName && KB_SWING_NAME_PATTERN.test(exerciseName)
         ? "kb_swing"
         : exerciseName && HORIZONTAL_LOAD_NAME_PATTERN.test(exerciseName)
           ? "horizontal_load"
-          : exerciseName && MED_BALL_NAME_PATTERN.test(exerciseName)
-            ? "med_ball"
-            : exerciseName && GOLF_NAME_PATTERN.test(exerciseName)
+          : exerciseName && GOLF_NAME_PATTERN.test(exerciseName)
               ? "golf_swing"
               : exerciseName && BASEBALL_NAME_PATTERN.test(exerciseName)
                 ? "baseball_swing"

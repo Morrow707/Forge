@@ -94,6 +94,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
+import { firstMoveForExercise } from "@/lib/exercise-camera-profile";
 import { playSuccessChime } from "@/lib/audio-cues";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
 import {
@@ -165,6 +166,13 @@ export function expectedPatternFromName(name: string): MovementPattern | null {
 //     this returns null and the phase-speed comparison decides alone, same
 //     as before this existed.
 function inferFirstPhaseHint(movementType: string | null | undefined, exerciseName: string): FirstPhaseHint {
+  // The execution manual's table first, where it has an answer: it is per-exercise rather than
+  // per-taxonomy, so it covers the Push/Press movements this function has to give up on, and it
+  // corrects the three the taxonomy gets backwards -- a hang clean and hang snatch both dip to
+  // the hang before they pull (typed Pull, hinted "concentric" below), and a step-up drives up
+  // before it steps down (typed Squat, hinted "eccentric" below).
+  const fromManual = firstMoveForExercise(exerciseName);
+  if (fromManual) return fromManual;
   if (movementType === "Squat" || movementType === "Lunge") return "eccentric";
   if (movementType === "Pull") return "concentric";
   if (movementType === "Hinge") {

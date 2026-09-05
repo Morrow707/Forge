@@ -35,7 +35,6 @@ import {
   wristConfidence,
   calibrateFromFrames,
   calibrationMethodBreakdown,
-  isKnownSupineMovement,
   scaleWorldLandmarks,
   computeReferenceObjectScale,
   CALIBRATION_REFERENCES,
@@ -57,6 +56,13 @@ import {
   type VelocitySample,
 } from "@/lib/bar-tracking";
 import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
+import {
+  postureForExercise,
+  postureAllowsHeightCalibration,
+  calibrationRefusalReason,
+  firstMoveForExercise,
+  romBucketForExercise,
+} from "@/lib/exercise-camera-profile";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import type { Landmark } from "@mediapipe/tasks-vision";
 
@@ -544,8 +550,14 @@ export function AvBarTrackerDialog({
     // Refusing costs a bench set its numbers until an in-plane reference is built (see
     // docs/camera-tracking-notes.md). Publishing a number that is wrong by anywhere from -85%
     // to +91%, with no indication, costs more.
-    const supineMovement = isKnownSupineMovement(exerciseName);
-    const heightScaleFactor = supineMovement ? null : calibrateFromFrames(calibrationInput, heightIn);
+    // Widened from "is this lift done lying down?" to "is the athlete standing at full length?"
+    // -- see CameraPosture in exercise-camera-profile.ts. The case that was getting through was
+    // seated: a seated athlete passes uprightEnough (which tests DIRECTION, not length) while
+    // spanning only ~0.77 of their standing height, so the scale came out ~30% large on every
+    // seated press, pulldown, row and leg machine, quietly enough to clear every other check.
+    const posture = postureForExercise(exerciseName);
+    const canUseHeight = postureAllowsHeightCalibration(posture);
+    const heightScaleFactor = canUseHeight ? calibrateFromFrames(calibrationInput, heightIn) : null;
     // Plate-based scale (see plateScaleFromFrames' own comment) only ever has something to find
     // when coreMlTrackingMode was "plate" for this clip -- everything else leaves this null and
     // heightScaleFactor decides alone, unchanged from before this existed. When BOTH resolve
@@ -560,13 +572,12 @@ export function AvBarTrackerDialog({
         : (plateScale?.scale ?? heightScaleFactor);
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {
-      const message = supineMovement
-        ? // No "(Video saved for your coach.)" here -- saveEmptyAndWarn appends that itself, and
-          // including it produced the message twice on a real device.
-          "This lift is done lying down, so your height can't be used to work out real-world scale -- that only works for a standing athlete, at any camera angle. Numbers are withheld rather than guessed."
-        : coreMlTrackingMode === "plate"
+      // No "(Video saved for your coach.)" in any of these -- saveEmptyAndWarn appends that
+      // itself, and including it produced the message twice on a real device.
+      const message = calibrationRefusalReason(posture)
+        ?? (coreMlTrackingMode === "plate"
           ? "Couldn't calibrate real-world scale for this take -- make sure a bumper plate is clearly visible on the bar at some point in frame (or your height is set and you're visible standing)."
-          : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";
+          : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.");
       await saveEmptyAndWarn(
         blob,
         message,
@@ -735,7 +746,11 @@ export function AvBarTrackerDialog({
       trace,
       loadKg,
       heightIn,
-      undefined,
+      // Was undefined: this native path -- the one that actually runs on the phone -- passed no
+      // starting direction at all, so every rep's concentric was decided by phase speed alone.
+      // The manual has a definitive answer for all 91 bar-path lifts, including every bench and
+      // overhead press, which the movementType taxonomy could never supply.
+      firstMoveForExercise(exerciseName),
       rejectionEvents,
       positionScaleCorrection ?? 1,
     );
@@ -768,7 +783,10 @@ export function AvBarTrackerDialog({
     const romProblem = implausibleRangeOfMotion(
       metrics.romCm,
       heightIn,
-      expectedPatternFromName(exerciseName),
+      // Not expectedPatternFromName: that one's answers also drive the pattern-mismatch trust
+      // penalty, which only means anything across the four patterns guessMovementPattern can
+      // return. See romBucketForExercise's own comment.
+      romBucketForExercise(exerciseName),
     );
     if (romProblem) {
       const message = `${romProblem} Film this lift square to the side, with the camera level with the bar, and make sure you're fully in frame.`;

@@ -1483,6 +1483,18 @@ const MAX_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
   // Floor to lockout, bounded by the distance from the bar's start height to the hip.
   deadlift: 0.7,
   overhead_press: 0.7,
+  // Buckets below come from exercise-camera-profile.ts's romBucketForExercise -- see its own
+  // comment for why they are deliberately generous. An Olympic lift is the one movement that
+  // legally travels further than the athlete is tall: the bar starts on the floor and finishes
+  // locked out overhead.
+  olympic: 1.35,
+  vertical_pull: 0.55,
+  elbow_flexion_extension: 0.45,
+  // A calf raise moves ~0.05 of standing height. Under the old 1.3x default a scale several
+  // times too large still landed inside the ceiling and reported as an ordinary number.
+  ankle_or_shrug: 0.2,
+  lunge_or_step: 0.55,
+  dip_or_pushup: 0.45,
 };
 
 // Anything not named above (jumps, carries, Olympic lifts, unknown exercises) gets this. A
@@ -1506,6 +1518,12 @@ const MIN_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
   squat: 0.10,
   deadlift: 0.12,
   overhead_press: 0.10,
+  olympic: 0.15,
+  vertical_pull: 0.08,
+  elbow_flexion_extension: 0.04,
+  ankle_or_shrug: 0.01,
+  lunge_or_step: 0.06,
+  dip_or_pushup: 0.05,
 };
 
 const DEFAULT_MIN_ROM_FRACTION = 0.05;
