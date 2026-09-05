@@ -28,6 +28,9 @@ import {
   tiltDegreesFromPoints,
   usesSharedBarEquipment,
   assessCameraAlignment,
+  assessSubjectFacing,
+  cameraViewMismatch,
+  type SubjectFacing,
   guessMovementPattern,
   computeLegDriveAsymmetry,
   chainConsistencyPenalty,
@@ -64,6 +67,7 @@ import {
   heightCalibrationUnreliable,
   filmGuidanceForExercise,
   barPathAssumptionInvalid,
+  expectedCameraView,
   calibrationRefusalReason,
   firstMoveForExercise,
   romBucketForExercise,
@@ -691,6 +695,7 @@ export function AvBarTrackerDialog({
     // available, the closest available proxy to "framing right when the set
     // started."
     let alignmentReason: CameraAlignment["reason"] | null = null;
+    let subjectFacing: SubjectFacing | null = null;
 
     // Weighted fusion of each side's implement reading against that side's
     // real (graduated) wrist confidence -- see this file's header comment
@@ -760,6 +765,9 @@ export function AvBarTrackerDialog({
       const sign = worldVerticalSign(worldLm);
       if (sign != null) verticalSign = sign;
       if (alignmentReason == null) alignmentReason = assessCameraAlignment(worldLm).reason;
+      if (subjectFacing == null || subjectFacing === "unknown") {
+        subjectFacing = assessSubjectFacing(worldLm);
+      }
 
       // Implement points come back in the exact same raw, unscaled Vision
       // convention as a joint (see AvImplementTracker's own comment) --
@@ -944,6 +952,17 @@ export function AvBarTrackerDialog({
       return;
     }
 
+    // Filmed from the wrong side. Not a degradation: the fault that matters most on a bar-path
+    // lift is forward-and-back drift, and from the front that drift points straight at the lens
+    // where a single camera cannot resolve it at all. Surfaced as a warning on the take rather
+    // than a refusal, since everything vertical -- rep count, timing, range of motion -- is still
+    // measured correctly from there.
+    const viewProblem = cameraViewMismatch(
+      subjectFacing ?? "unknown",
+      expectedCameraView(exerciseName),
+    );
+    if (viewProblem) toast.warning(viewProblem, { duration: 8000 });
+
     // On an Olympic lift the bar deliberately does not travel a straight vertical line -- it
     // loops back around the knees and in under the athlete. Bar-path deviation measures distance
     // from a straight line and peak velocity is read off that same trace, so on these lifts a
@@ -1034,7 +1053,15 @@ export function AvBarTrackerDialog({
       trace.map((p) => ({ t: p.t, confidence: p.confidence ?? 0.6 })),
       rejectionEvents,
       patternMismatch,
-      alignmentReason,
+      // A correct side view used to arrive here as "unknown" and cost the take 10 trust points
+      // with the note "Camera framing couldn't be confirmed". assessCameraAlignment asks whether
+      // the athlete is squared up to the lens, which is false by definition when they are side-on
+      // -- so the one camera position nearly every barbell lift requires scored worse than a
+      // front view that cannot see bar drift at all. When the lift wants a side view and the
+      // footage shows a side view, that is confirmed framing, not unconfirmed.
+      expectedCameraView(exerciseName) === "side" && subjectFacing === "side_on"
+        ? "ok"
+        : alignmentReason,
       chainPenalties,
     );
     metrics.captureDeviceInfo = captureDeviceInfo;

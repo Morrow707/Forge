@@ -1082,3 +1082,27 @@ export function filmGuidanceForExercise(
 export function barPathAssumptionInvalid(name: string | null | undefined): boolean {
   return romBucketForExercise(name) === "olympic";
 }
+
+export type ExpectedCameraView = "side" | "front" | "either";
+
+/** Which way the phone should be facing for this lift, derived from its own film guidance.
+ *
+ * Parsed from the guidance text rather than stored as a second field, so the two can never
+ * disagree -- but parsed prose is exactly the sort of thing that breaks quietly, so the test
+ * suite asserts the classification for every entry rather than a sample.
+ *
+ * This exists because the camera-alignment check was scoring the correct answer as a problem.
+ * That check measures whether the athlete's shoulders are spread across the frame, which is true
+ * when they face the camera and false when they are side-on -- so a correct side view, the angle
+ * nearly every barbell lift requires, was landing on "camera framing couldn't be confirmed" and
+ * losing trust, while a front view that hides bar drift entirely scored full marks. */
+export function expectedCameraView(name: string | null | undefined): ExpectedCameraView | null {
+  const guidance = filmGuidanceForExercise(name);
+  if (!guidance) return null;
+  const view = guidance.view;
+  // Checked first: several lifts genuinely work from either, and they all name both.
+  if (/\bfront or side\b/i.test(view) || /\bside or front\b/i.test(view)) return "either";
+  if (/^Directly in front or directly behind\b/.test(view)) return "front";
+  if (/Square to the FRONT/.test(view)) return "front";
+  return "side";
+}

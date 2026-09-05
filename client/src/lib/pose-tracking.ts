@@ -1414,6 +1414,68 @@ export type CameraAlignment = { aligned: boolean; reason: "ok" | "angled" | "axi
 // one shoulder measurably nears the camera while the other falls away.
 // Compared against shoulder WIDTH (x), not an absolute distance, so this
 // self-scales for however far back the athlete happens to be standing.
+// Whether the athlete is side-on, facing the camera, or somewhere between.
+//
+// assessCameraAlignment below asks a narrower question -- "is the athlete squared up to the
+// lens" -- and treats anything else as a fault. That is the right question for a front-view lift
+// and precisely the wrong one for a side-view lift, which is nearly all of them: a correct side
+// view puts one shoulder behind the other, so the shoulders stop being spread across the frame
+// and the check reported "framing couldn't be confirmed" and docked the take. The correct camera
+// position was scoring worse than a front view that cannot see bar drift at all.
+//
+// Measured as shoulder spread against torso length rather than any absolute distance, so it
+// self-scales with how far back the athlete is standing. Facing the lens, biacromial breadth is
+// comfortably wider than the shoulder-to-hip segment; side-on, the shoulders collapse onto each
+// other while the torso keeps its length. Deliberately uses x and y only, no depth: on the 2D
+// Vision path z is always zero, so anything reading it would silently classify every frame the
+// same way.
+export type SubjectFacing = "side_on" | "facing_camera" | "oblique" | "unknown";
+
+const FACING_CAMERA_SHOULDER_RATIO = 0.7;
+const SIDE_ON_SHOULDER_RATIO = 0.35;
+
+export function assessSubjectFacing(worldLandmarks: Landmark[]): SubjectFacing {
+  const lShoulder = worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+  const lHip = worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
+  const rHip = worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
+  if (!visible(lShoulder) || !visible(rShoulder) || !visible(lHip) || !visible(rHip)) {
+    return "unknown";
+  }
+  const shoulderSpread = Math.abs(lShoulder.x - rShoulder.x);
+  const shoulderMidX = (lShoulder.x + rShoulder.x) / 2;
+  const shoulderMidY = (lShoulder.y + rShoulder.y) / 2;
+  const hipMidX = (lHip.x + rHip.x) / 2;
+  const hipMidY = (lHip.y + rHip.y) / 2;
+  const torsoLength = Math.hypot(shoulderMidX - hipMidX, shoulderMidY - hipMidY);
+  if (!(torsoLength > 0)) return "unknown";
+  const ratio = shoulderSpread / torsoLength;
+  if (ratio >= FACING_CAMERA_SHOULDER_RATIO) return "facing_camera";
+  if (ratio <= SIDE_ON_SHOULDER_RATIO) return "side_on";
+  return "oblique";
+}
+
+/** Does what the camera actually saw match what this lift needs?
+ *
+ * Returns null when it matches or cannot be judged, otherwise a short reason naming the problem
+ * in the athlete's terms. The point is that "wrong angle" is not a degradation -- filming a
+ * squat from the front does not make bar drift noisy, it makes it invisible, because the drift
+ * that matters points straight at the lens. */
+export function cameraViewMismatch(
+  facing: SubjectFacing,
+  expected: "side" | "front" | "either" | null,
+): string | null {
+  if (!expected || expected === "either") return null;
+  if (facing === "unknown" || facing === "oblique") return null;
+  if (expected === "side" && facing === "facing_camera") {
+    return "This lift needs a side view. Filmed from the front, the bar's forward-and-back drift points straight at the lens, so it can't be measured at all.";
+  }
+  if (expected === "front" && facing === "side_on") {
+    return "This lift needs a front or back view. From the side, one arm or leg hides the other.";
+  }
+  return null;
+}
+
 export function assessCameraAlignment(worldLandmarks: Landmark[]): CameraAlignment {
   const lShoulder = worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
   const rShoulder = worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
