@@ -8809,33 +8809,79 @@ Hard rules, no exceptions:
         })
         .where(eq(skillPrograms.id, programId));
 
-      // Simplest consistent approach, same as updateProgramStructure: wipe
-      // and rebuild the whole week/day/exercise tree on every save.
-      await tx.delete(skillProgramWeeks).where(eq(skillProgramWeeks.programId, programId));
+      // Reconciled in place, same as updateProgramStructure and for the same
+      // reason: skillSessionLogs, skillDayLogs and skillDayComments all hang
+      // off skillProgramDays with ON DELETE CASCADE, and skillSessionLogs
+      // additionally off skillProgramExercises. Wiping the week tree on every
+      // save therefore destroyed every enrolled athlete's captured skill
+      // sessions and their videos, their day completions, and the comment
+      // threads on them -- for every week, changed or not. Renaming the
+      // program was enough to do it.
+      const existingWeeks = await tx
+        .select()
+        .from(skillProgramWeeks)
+        .where(eq(skillProgramWeeks.programId, programId))
+        .orderBy(skillProgramWeeks.weekNumber);
+      const keptWeekIds = new Set<number>();
 
-      for (const week of structure.weeks) {
-        const [weekRow] = await tx
-          .insert(skillProgramWeeks)
-          .values({
-            programId,
-            weekNumber: week.weekNumber,
-            name: week.name ?? null,
-          })
-          .returning();
-
-        for (const day of week.days) {
-          const [dayRow] = await tx
-            .insert(skillProgramDays)
-            .values({
-              weekId: weekRow.id,
-              dayNumber: day.dayNumber,
-              title: day.title,
-              isRestDay: day.isRestDay,
-            })
+      for (const [weekIdx, week] of structure.weeks.entries()) {
+        const weekValues = {
+          programId,
+          weekNumber: week.weekNumber,
+          name: week.name ?? null,
+        };
+        const priorWeek =
+          (week.id != null ? existingWeeks.find((w) => w.id === week.id) : undefined) ??
+          (week.id == null ? existingWeeks[weekIdx] : undefined);
+        let weekRow;
+        if (priorWeek && !keptWeekIds.has(priorWeek.id)) {
+          [weekRow] = await tx
+            .update(skillProgramWeeks)
+            .set(weekValues)
+            .where(eq(skillProgramWeeks.id, priorWeek.id))
             .returning();
+        } else {
+          [weekRow] = await tx.insert(skillProgramWeeks).values(weekValues).returning();
+        }
+        keptWeekIds.add(weekRow.id);
 
-          for (const ex of day.exercises) {
-            await tx.insert(skillProgramExercises).values({
+        const existingDays = await tx
+          .select()
+          .from(skillProgramDays)
+          .where(eq(skillProgramDays.weekId, weekRow.id))
+          .orderBy(skillProgramDays.dayNumber);
+        const keptDayIds = new Set<number>();
+
+        for (const [dayIdx, day] of week.days.entries()) {
+          const dayValues = {
+            weekId: weekRow.id,
+            dayNumber: day.dayNumber,
+            title: day.title,
+            isRestDay: day.isRestDay,
+          };
+          const priorDay =
+            (day.id != null ? existingDays.find((d) => d.id === day.id) : undefined) ??
+            (day.id == null ? existingDays[dayIdx] : undefined);
+          let dayRow;
+          if (priorDay && !keptDayIds.has(priorDay.id)) {
+            [dayRow] = await tx
+              .update(skillProgramDays)
+              .set(dayValues)
+              .where(eq(skillProgramDays.id, priorDay.id))
+              .returning();
+          } else {
+            [dayRow] = await tx.insert(skillProgramDays).values(dayValues).returning();
+          }
+          keptDayIds.add(dayRow.id);
+
+          const existingExercises = await tx
+            .select()
+            .from(skillProgramExercises)
+            .where(eq(skillProgramExercises.dayId, dayRow.id))
+            .orderBy(skillProgramExercises.orderIndex);
+
+          for (const [exIdx, ex] of day.exercises.entries()) {
+            const exValues = {
               dayId: dayRow.id,
               skillExerciseId: ex.skillExerciseId,
               orderIndex: ex.orderIndex,
@@ -8844,9 +8890,29 @@ Hard rules, no exceptions:
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
               trackingLevel: trackingMap.get(ex) ?? "none",
-            });
+            };
+            const priorExercise = existingExercises[exIdx];
+            if (priorExercise) {
+              await tx
+                .update(skillProgramExercises)
+                .set(exValues)
+                .where(eq(skillProgramExercises.id, priorExercise.id));
+            } else {
+              await tx.insert(skillProgramExercises).values(exValues);
+            }
+          }
+          for (const stale of existingExercises.slice(day.exercises.length)) {
+            await tx.delete(skillProgramExercises).where(eq(skillProgramExercises.id, stale.id));
           }
         }
+
+        for (const staleDay of existingDays.filter((d) => !keptDayIds.has(d.id))) {
+          await tx.delete(skillProgramDays).where(eq(skillProgramDays.id, staleDay.id));
+        }
+      }
+
+      for (const staleWeek of existingWeeks.filter((w) => !keptWeekIds.has(w.id))) {
+        await tx.delete(skillProgramWeeks).where(eq(skillProgramWeeks.id, staleWeek.id));
       }
     });
   },
@@ -12173,13 +12239,27 @@ Respond to the user's latest message by calling ask_question or update_program.`
         })
         .where(eq(programs.id, programId));
 
-      // Simplest consistent approach: wipe and rebuild the structure. Weeks
-      // are deleted before blocks (not the reverse) since program_weeks'
-      // block_id is ON DELETE SET NULL, not cascade -- deleting blocks first
-      // would just null out weeks we're about to delete anyway, but doing it
-      // in this order keeps the intent obvious.
-      await tx.delete(programWeeks).where(eq(programWeeks.programId, programId));
+      // Blocks carry nothing below them, so they are still rebuilt outright;
+      // program_weeks.block_id is ON DELETE SET NULL, so the weeks that
+      // point at them survive and get re-pointed below.
       await tx.delete(programBlocks).where(eq(programBlocks.programId, programId));
+
+      // Weeks, days and exercises are reconciled IN PLACE rather than wiped
+      // and rebuilt. workoutLogs.programDayId is notNull and ON DELETE
+      // CASCADE from programDays, which cascades in turn from programWeeks,
+      // and workoutComments, assignmentCorrectives and
+      // assignmentExerciseOverrides hang off programDays the same way. So
+      // deleting the week tree deleted every enrolled athlete's logged
+      // workouts, their coach's feedback and any per-assignment corrective
+      // -- on every save, for every week, whether or not it changed. Just
+      // renaming the program was enough. The input schemas have carried an
+      // optional id on week, day and exercise all along; nothing read them.
+      const existingWeeks = await tx
+        .select()
+        .from(programWeeks)
+        .where(eq(programWeeks.programId, programId))
+        .orderBy(programWeeks.weekNumber);
+      const keptWeekIds = new Set<number>();
 
       const blockIds: number[] = [];
       for (const [i, block] of structure.blocks.entries()) {
@@ -12196,30 +12276,68 @@ Respond to the user's latest message by calling ask_question or update_program.`
         blockIds.push(blockRow.id);
       }
 
-      for (const week of structure.weeks) {
-        const [weekRow] = await tx
-          .insert(programWeeks)
-          .values({
-            programId,
-            weekNumber: week.weekNumber,
-            name: week.name ?? null,
-            blockId: week.blockIndex != null ? (blockIds[week.blockIndex] ?? null) : null,
-          })
-          .returning();
-
-        for (const day of week.days) {
-          const [dayRow] = await tx
-            .insert(programDays)
-            .values({
-              weekId: weekRow.id,
-              dayNumber: day.dayNumber,
-              title: day.title,
-              isRestDay: day.isRestDay,
-            })
+      for (const [weekIdx, week] of structure.weeks.entries()) {
+        const weekValues = {
+          programId,
+          weekNumber: week.weekNumber,
+          name: week.name ?? null,
+          blockId: week.blockIndex != null ? (blockIds[week.blockIndex] ?? null) : null,
+        };
+        // Match on the caller's id when it sent one, otherwise by position --
+        // the builder does not always round-trip ids (an AI-drafted structure
+        // has none at all), and position is what the coach sees on screen.
+        const priorWeek =
+          (week.id != null ? existingWeeks.find((w) => w.id === week.id) : undefined) ??
+          (week.id == null ? existingWeeks[weekIdx] : undefined);
+        let weekRow;
+        if (priorWeek && !keptWeekIds.has(priorWeek.id)) {
+          [weekRow] = await tx
+            .update(programWeeks)
+            .set(weekValues)
+            .where(eq(programWeeks.id, priorWeek.id))
             .returning();
+        } else {
+          [weekRow] = await tx.insert(programWeeks).values(weekValues).returning();
+        }
+        keptWeekIds.add(weekRow.id);
 
-          for (const ex of day.exercises) {
-            await tx.insert(programExercises).values({
+        const existingDays = await tx
+          .select()
+          .from(programDays)
+          .where(eq(programDays.weekId, weekRow.id))
+          .orderBy(programDays.dayNumber);
+        const keptDayIds = new Set<number>();
+
+        for (const [dayIdx, day] of week.days.entries()) {
+          const dayValues = {
+            weekId: weekRow.id,
+            dayNumber: day.dayNumber,
+            title: day.title,
+            isRestDay: day.isRestDay,
+          };
+          const priorDay =
+            (day.id != null ? existingDays.find((d) => d.id === day.id) : undefined) ??
+            (day.id == null ? existingDays[dayIdx] : undefined);
+          let dayRow;
+          if (priorDay && !keptDayIds.has(priorDay.id)) {
+            [dayRow] = await tx
+              .update(programDays)
+              .set(dayValues)
+              .where(eq(programDays.id, priorDay.id))
+              .returning();
+          } else {
+            [dayRow] = await tx.insert(programDays).values(dayValues).returning();
+          }
+          keptDayIds.add(dayRow.id);
+
+          const existingExercises = await tx
+            .select()
+            .from(programExercises)
+            .where(eq(programExercises.dayId, dayRow.id))
+            .orderBy(programExercises.orderIndex);
+
+          for (const [exIdx, ex] of day.exercises.entries()) {
+            const exValues = {
               dayId: dayRow.id,
               exerciseId: ex.exerciseId,
               orderIndex: ex.orderIndex,
@@ -12231,9 +12349,30 @@ Respond to the user's latest message by calling ask_question or update_program.`
               supersetGroup: ex.supersetGroup ?? null,
               trackingLevel: ex.trackingLevel ?? "none",
               videoCheckEnabled: videoCheckMap.get(ex) ?? false,
-            });
+            };
+            const priorExercise = existingExercises[exIdx];
+            if (priorExercise) {
+              await tx
+                .update(programExercises)
+                .set(exValues)
+                .where(eq(programExercises.id, priorExercise.id));
+            } else {
+              await tx.insert(programExercises).values(exValues);
+            }
+          }
+          // Only the trailing rows the coach actually removed.
+          for (const stale of existingExercises.slice(day.exercises.length)) {
+            await tx.delete(programExercises).where(eq(programExercises.id, stale.id));
           }
         }
+
+        for (const staleDay of existingDays.filter((d) => !keptDayIds.has(d.id))) {
+          await tx.delete(programDays).where(eq(programDays.id, staleDay.id));
+        }
+      }
+
+      for (const staleWeek of existingWeeks.filter((w) => !keptWeekIds.has(w.id))) {
+        await tx.delete(programWeeks).where(eq(programWeeks.id, staleWeek.id));
       }
     });
   },
