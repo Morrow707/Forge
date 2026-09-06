@@ -782,16 +782,25 @@ function parseTargetReps(repsText: string): number | undefined {
 }
 
 // Epley-estimated 1RM from this athlete's own logged history for the
-// exercise, same formula the coach's analytics page uses. Only counts sets
-// logged in the athlete's current weight unit -- mixing lbs and kg maxes
-// would silently produce a nonsense number.
+// exercise, same formula the coach's analytics page uses.
+//
+// Sets logged in the other unit are CONVERTED, not skipped. Skipping them
+// was right about the danger -- adding a kilogram max to a pound one is a
+// nonsense number -- and wrong about the remedy: an athlete who switched
+// units lost their whole history from this estimate, so the number quietly
+// dropped or vanished, and a percentage-of-1RM prescription then had
+// nothing to resolve against and stopped suggesting a weight at all. A set
+// with no unit recorded (a row predating the column) is read as this
+// athlete's current unit, which is the same assumption the rest of the
+// screen makes about an unlabelled number.
 function estimateOneRmFromHistory(history: SetHistoryPoint[], unit: WeightUnit) {
   let best = 0;
   for (const h of history) {
-    if (h.weightMode !== "numeric" || !h.weight || h.weightUnit !== unit) continue;
-    const weight = parseFloat(h.weight);
+    if (h.weightMode !== "numeric" || !h.weight) continue;
+    const rawWeight = parseFloat(h.weight);
     const reps = parseInt(h.reps, 10);
-    if (Number.isNaN(weight) || Number.isNaN(reps) || reps <= 0) continue;
+    if (Number.isNaN(rawWeight) || Number.isNaN(reps) || reps <= 0) continue;
+    const weight = convertWeight(rawWeight, h.weightUnit ?? unit, unit);
     const oneRm = weight * (1 + reps / 30);
     if (oneRm > best) best = oneRm;
   }

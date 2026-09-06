@@ -11,6 +11,9 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { convertWeight } from "@/lib/progression";
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
 
 type ExerciseHistoryPoint = {
   date: string;
@@ -38,13 +41,27 @@ export function ExerciseTrendDialog({
     enabled: exercise != null,
   });
 
+  // One axis needs one unit. This took the unit off whichever point came
+  // first and stamped it on the whole chart while plotting every point's raw
+  // number, so an athlete who switched from pounds to kilograms saw their
+  // line fall off a cliff -- the same lifts, relabelled -- and the axis
+  // named a unit that was wrong for half the data.
+  //
+  // The most recent point decides the unit, because that is what the athlete
+  // is logging in now and what every other number on their screen is already
+  // shown in. Older points are converted onto it.
+  const unit = history[history.length - 1]?.weightUnit ?? history[0]?.weightUnit ?? "lbs";
   const chartData = history.map((p) => ({
     label: format(parseISO(p.date), "MMM d"),
-    weight: p.weight,
-    estimatedOneRm: p.estimatedOneRm,
+    // Rounded like every other weight the app shows -- a converted value is
+    // otherwise 220.46200000000002 in the tooltip.
+    weight: round1(convertWeight(p.weight, p.weightUnit ?? unit, unit)),
+    estimatedOneRm:
+      p.estimatedOneRm != null
+        ? round1(convertWeight(p.estimatedOneRm, p.weightUnit ?? unit, unit))
+        : null,
     isPR: p.isPR,
   }));
-  const unit = history.find((p) => p.weightUnit)?.weightUnit ?? "lbs";
 
   return (
     <Dialog open={exercise != null} onOpenChange={onOpenChange}>

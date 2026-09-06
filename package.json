@@ -15,7 +15,8 @@
     "db:reconcile": "tsx server/reconcile-schema.ts",
     "db:seed": "tsx server/seed.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "db:check-drift": "tsx server/check-schema-drift.ts"
+    "db:check-drift": "tsx server/check-schema-drift.ts",
+    "export:captures": "tsx scripts/export-captures.ts"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

@@ -447,6 +447,13 @@ function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number)
 // surrounding whitespace -- because the point is to change which UNIT the
 // number is in, not which strings count as a number. Null rather than zero
 // when there is nothing numeric to read: a bodyweight set did not lift zero.
+// One scale for comparing two logged lifts. Display keeps the unit the set
+// was logged in; anything that asks "which of these is heavier" has to
+// convert first, or a 100 kg lift loses to a 200 lb one.
+function toComparableLbs(weight: number, unit: "lbs" | "kg" | null | undefined): number {
+  return unit === "kg" ? weight * 2.20462 : weight;
+}
+
 function normalizeSetLoad(input: {
   weightMode: string;
   weight: string | null | undefined;
@@ -1672,9 +1679,8 @@ async function buildPlatformTrends() {
       ? await db
           .select({
             athleteId: workoutLogs.athleteId,
-            weightMode: workoutLogEntries.weightMode,
-            reps: workoutSetEntries.reps,
-            weight: workoutSetEntries.weight,
+            weightLbs: workoutSetEntries.weightLbs,
+            repsCount: workoutSetEntries.repsCount,
             peakVelocityMps: workoutSetEntries.peakVelocityMps,
             peakPowerWatts: workoutSetEntries.peakPowerWatts,
           })
@@ -1689,13 +1695,14 @@ async function buildPlatformTrends() {
   for (const row of setRows) {
     const sportKey = sportKeyByAthlete.get(row.athleteId);
     if (!sportKey || !eligibleSportKeys.has(sportKey)) continue;
-    if (row.weightMode === "numeric" && row.weight && row.reps) {
-      const weight = parseFloat(row.weight);
-      const reps = parseInt(row.reps, 10);
-      if (!Number.isNaN(weight) && !Number.isNaN(reps) && reps > 0) {
-        const estimatedOneRm = weight * (1 + reps / 30);
-        oneRmBySport.set(sportKey, [...(oneRmBySport.get(sportKey) ?? []), estimatedOneRm]);
-      }
+    // Pooled across every athlete on the platform and reported per sport, so
+    // this is the one number nobody can eyeball for plausibility -- and it
+    // was averaging kilogram maxes together with pound ones. The normalized
+    // column is the same one the load series now reads; shared/schema.ts's
+    // comment on it names this aggregate specifically.
+    if (row.weightLbs != null && row.repsCount != null && row.repsCount > 0) {
+      const estimatedOneRm = row.weightLbs * (1 + row.repsCount / 30);
+      oneRmBySport.set(sportKey, [...(oneRmBySport.get(sportKey) ?? []), estimatedOneRm]);
     }
     if (row.peakVelocityMps != null) {
       velocityBySport.set(sportKey, [...(velocityBySport.get(sportKey) ?? []), row.peakVelocityMps]);
@@ -3419,7 +3426,10 @@ export const storage = {
   // history table, rather than one of them writing a shape the other
   // doesn't. Callers decide WHETHER anything changed; this only writes.
   async snapshotTestingResults(row: typeof users.$inferSelect) {
-    const today = new Date().toISOString().slice(0, 10);
+    // Dated in the athlete's own day: this row is a point on their testing
+    // trend chart, and a UTC date puts an evening test on tomorrow. The
+    // athlete's timezone is already on the row being snapshotted.
+    const today = todayInZone(row.timeZone);
     const snapshot = Object.fromEntries(TESTING_FIELDS.map((f) => [f, row[f]])) as Record<
       (typeof TESTING_FIELDS)[number],
       number | null
@@ -5477,7 +5487,13 @@ export const storage = {
     // date that would make the injury look shorter than it really was.
     const [row] = await db
       .update(injuryHistory)
-      .set({ resolved, resolvedOn: resolved ? new Date().toISOString().slice(0, 10) : null })
+      .set({
+        resolved,
+        // The athlete's day -- an injury resolved on their Monday evening
+        // should not read as Tuesday, which is how long it looks like it
+        // lasted.
+        resolvedOn: resolved ? await this.todayForAthlete(athleteId) : null,
+      })
       .where(and(eq(injuryHistory.id, id), eq(injuryHistory.athleteId, athleteId)))
       .returning();
     return row ?? null;
@@ -5493,10 +5509,20 @@ export const storage = {
   // The heaviest weight this athlete has ever logged for an exercise,
   // regardless of rep count -- a simple, transparent "current best" for
   // comparing against a flat weight goal, not a 1RM estimate.
-  async getBestLiftForExercise(athleteId: number, exerciseId: number) {
+  // preferredUnit is what the returned number is expressed in, because the
+  // caller compares it against a goal target the athlete typed in their own
+  // unit. Picking the best on the raw number let a 200 lb lift beat a 100 kg
+  // one that is 20 kg heavier, and then reported whichever number won as
+  // though it were already in the right unit.
+  async getBestLiftForExercise(
+    athleteId: number,
+    exerciseId: number,
+    preferredUnit: "lbs" | "kg" = "lbs",
+  ) {
     const rows = await db
       .select({
         weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
         weightMode: workoutLogEntries.weightMode,
       })
       .from(workoutSetEntries)
@@ -5511,12 +5537,16 @@ export const storage = {
         ),
       );
 
-    let best: number | null = null;
+    let bestLbs: number | null = null;
     for (const r of rows) {
       const w = parseFloat(r.weight ?? "");
-      if (!Number.isNaN(w) && (best === null || w > best)) best = w;
+      if (Number.isNaN(w)) continue;
+      const lbs = toComparableLbs(w, r.weightUnit);
+      if (bestLbs === null || lbs > bestLbs) bestLbs = lbs;
     }
-    return best;
+    if (bestLbs === null) return null;
+    const inPreferred = preferredUnit === "kg" ? bestLbs / 2.20462 : bestLbs;
+    return Math.round(inPreferred * 10) / 10;
   },
 
   // Best (lowest) sprint-timing elapsedSeconds ever captured for a given
@@ -5604,7 +5634,11 @@ export const storage = {
         let exerciseName: string | null = null;
         let skillExerciseName: string | null = null;
         if (g.type === "exercise" && g.exerciseId != null) {
-          currentValue = await this.getBestLiftForExercise(athleteId, g.exerciseId);
+          currentValue = await this.getBestLiftForExercise(
+            athleteId,
+            g.exerciseId,
+            (athlete ? athlete.preferredWeightUnit : null) ?? "lbs",
+          );
           exerciseName = exerciseNameById.get(g.exerciseId) ?? null;
         } else if (g.type === "testing" && g.testingMetric && athlete) {
           const value = (athlete as any)[g.testingMetric];
@@ -5688,16 +5722,23 @@ export const storage = {
       const logs = await this.getRecentWorkoutLogsForAthlete(athleteId, cutoff);
       const { setHistory } = extractPerformanceHistory(logs, input.exerciseId);
 
+      // On one scale, then described to the model in that scale. A trend
+      // built from raw numbers across a unit switch shows a cliff the
+      // athlete never trained, and the suggested target is reasoned from
+      // that shape.
       const bestByDate = new Map<string, number>();
       for (const s of setHistory) {
         const w = parseFloat(s.weight ?? "");
         if (Number.isNaN(w)) continue;
+        const lbs = toComparableLbs(w, s.weightUnit as "lbs" | "kg" | null | undefined);
         const prev = bestByDate.get(s.date);
-        if (prev == null || w > prev) bestByDate.set(s.date, w);
+        if (prev == null || lbs > prev) bestByDate.set(s.date, lbs);
       }
       const points = [...bestByDate.entries()].sort(([a], [b]) => a.localeCompare(b));
       if (points.length === 0) return null;
-      trendDescription = points.map(([date, w]) => `${date}: ${w}`).join(", ");
+      trendDescription = points
+        .map(([date, w]) => `${date}: ${Math.round(w * 10) / 10} lbs`)
+        .join(", ");
     } else {
       const history = await this.getTestingHistoryForAthlete(athleteId);
       const points = history
@@ -14017,10 +14058,20 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
           if (list) list.push(point);
           else dailyLoadsByAthlete.set(r.athleteId, [point]);
         }
-        const today = new Date().toISOString().slice(0, 10);
+        // Per athlete, not one UTC date for everyone -- the same correction
+        // getRosterAcwrSummary needed. This one feeds findings an admin
+        // reads as evidence, so a window off by a day is a wrong claim.
+        const todayByAthlete = await this.todayByAthlete(athleteIds);
         const acwrByAthlete = new Map<number, AcwrPoint[]>();
         for (const athleteId of athleteIds) {
-          acwrByAthlete.set(athleteId, buildAcwrSeries(dailyLoadsByAthlete.get(athleteId) ?? [], today, days));
+          acwrByAthlete.set(
+            athleteId,
+            buildAcwrSeries(
+              dailyLoadsByAthlete.get(athleteId) ?? [],
+              todayByAthlete.get(athleteId) ?? utcToday(),
+              days,
+            ),
+          );
         }
 
         for (const injury of injuries) {
@@ -16980,9 +17031,16 @@ ${catalog}`;
                 // all yields NULL rather than erroring, since subscripting a
                 // NULL match gives NULL -- and MAX ignores NULLs, exactly as
                 // the old loop skipped NaN.
+                // MAX over the normalized column, and no filter on unit.
+                // Filtering by unit meant an athlete who switched from
+                // pounds to kilograms was compared against an empty history
+                // -- their first kilogram set beat nothing and was recorded
+                // as a PR, and so was the next. weight_lbs is written on
+                // this same insert path and backfilled for every older row,
+                // so it answers the comparison for both units at once.
                 const [priorBestRow] = await tx
                   .select({
-                    best: sql<string | null>`MAX((regexp_match(${workoutSetEntries.weight}, '^\\s*([0-9]*\\.?[0-9]+)'))[1]::numeric)`,
+                    best: sql<string | null>`MAX(${workoutSetEntries.weightLbs})`,
                   })
                   .from(workoutSetEntries)
                   .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -16991,7 +17049,6 @@ ${catalog}`;
                     and(
                       eq(workoutLogs.athleteId, athleteId),
                       eq(workoutLogEntries.exerciseId, programExercise.exerciseId),
-                      eq(workoutSetEntries.weightUnit, entryWeightUnit),
                       eq(workoutSetEntries.reps, s.reps),
                       lt(workoutLogs.date, input.date),
                     ),
@@ -17008,7 +17065,11 @@ ${catalog}`;
               const isSameVideo = Boolean(s.formCheckVideoUrl) && prior?.url === s.formCheckVideoUrl;
               const weightNum = s.weight ? parseFloat(s.weight) : NaN;
               const priorBest = priorBestByKey.get(`${entryWeightUnit}-${s.reps ?? ""}`);
-              const isPr = !Number.isNaN(weightNum) && priorBest != null && weightNum > priorBest;
+              // Both sides in pounds -- the stored bests are, and this set
+              // has to be converted to match rather than compared as typed.
+              const weightLbsForPr = toComparableLbs(weightNum, entryWeightUnit);
+              const isPr =
+                !Number.isNaN(weightNum) && priorBest != null && weightLbsForPr > priorBest;
               if (isPr && exerciseNameForPr && s.weight && s.reps) {
                 newPRs.push({ exerciseName: exerciseNameForPr, weight: s.weight, unit: entryWeightUnit, reps: s.reps });
               }
@@ -17461,6 +17522,11 @@ ${catalog}`;
       .filter((r) => r.reps != null)
       .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
 
+    // estimatedOneRm stays in the unit the set was logged in, because the
+    // client renders it beside that unit. The PR comparison cannot: it
+    // compares one set against another, and on raw numbers a 100 kg lift
+    // loses to a 200 lb one that is 9 kg lighter. Same reasoning, and the
+    // same conversion factor, getExerciseLeaderboard already spells out.
     const bestByReps = new Map<string, number>();
     return rows.map((r) => {
       const weight = r.weight ? parseFloat(r.weight) : NaN;
@@ -17470,13 +17536,14 @@ ${catalog}`;
         hasNumeric && !Number.isNaN(reps) && reps > 0
           ? Math.round(weight * (1 + reps / 30) * 10) / 10
           : null;
+      const weightLbs = hasNumeric ? toComparableLbs(weight, r.weightUnit) : NaN;
 
       let isPR = false;
       if (hasNumeric && r.reps) {
         const prevBest = bestByReps.get(r.reps) ?? -Infinity;
-        if (weight > prevBest) {
+        if (weightLbs > prevBest) {
           isPR = true;
-          bestByReps.set(r.reps, weight);
+          bestByReps.set(r.reps, weightLbs);
         }
       }
 
@@ -17746,10 +17813,17 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     for (const r of sorted) {
       const weight = parseFloat(r.weight!);
       if (Number.isNaN(weight)) continue;
-      const key = `${r.exerciseId}-${r.weightUnit}-${r.reps}`;
+      // Keyed by exercise and rep count only, and compared on one scale.
+      // The unit used to be part of the key, which meant switching units
+      // started a fresh ladder from nothing: the first kilogram set an
+      // athlete ever logged beat an empty record and counted as a PR, and
+      // so did the next, and the next. The displayed number and unit below
+      // are unchanged -- this is only about which set wins.
+      const weightLbs = toComparableLbs(weight, r.weightUnit);
+      const key = `${r.exerciseId}-${r.reps}`;
       const prevBest = bestByKey.get(key) ?? -Infinity;
-      if (weight > prevBest) {
-        bestByKey.set(key, weight);
+      if (weightLbs > prevBest) {
+        bestByKey.set(key, weightLbs);
         latestPrByExercise.set(r.exerciseId, {
           exerciseId: r.exerciseId,
           exerciseName: r.exerciseName,
@@ -17965,6 +18039,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .filter((r) => r.weightMode === "numeric" && r.weight && r.reps)
       .sort((a, b) => a.date.localeCompare(b.date) || a.setNumber - b.setNumber);
 
+    // Same PR-comparison correction as the history query above.
     const bestByReps = new Map<string, number>();
     return sorted.map((r) => {
       const weight = parseFloat(r.weight!);
@@ -17973,12 +18048,13 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         !Number.isNaN(weight) && !Number.isNaN(reps) && reps > 0
           ? Math.round(weight * (1 + reps / 30) * 10) / 10
           : null;
+      const weightLbs = toComparableLbs(weight, r.weightUnit);
       let isPR = false;
       if (!Number.isNaN(weight)) {
         const prevBest = bestByReps.get(r.reps!) ?? -Infinity;
-        if (weight > prevBest) {
+        if (weightLbs > prevBest) {
           isPR = true;
-          bestByReps.set(r.reps!, weight);
+          bestByReps.set(r.reps!, weightLbs);
         }
       }
       return {
@@ -18841,7 +18917,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const assignmentIds = owned.map((a) => a.id);
     if (assignmentIds.length === 0) return {};
 
-    const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // The athlete's own day, same correction as the load windows above --
+    // a trailing 28 days drawn from UTC starts a day early or late for
+    // anyone not on it.
+    const sinceDate = shiftIsoDate(await this.todayForAthlete(athleteId), -days);
     const logs = await db.query.workoutLogs.findMany({
       where: and(inArray(workoutLogs.assignmentId, assignmentIds), gte(workoutLogs.date, sinceDate)),
       with: {
@@ -19333,10 +19412,13 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     for (const r of sorted) {
       const weight = parseFloat(r.weight!);
       if (Number.isNaN(weight)) continue;
-      const key = `${r.exerciseId}-${r.weightUnit}-${r.reps}`;
+      // Same correction as getAllPrsForAthlete above -- a unit switch was
+      // inflating this count with a run of PRs against an empty ladder.
+      const weightLbs = toComparableLbs(weight, r.weightUnit);
+      const key = `${r.exerciseId}-${r.reps}`;
       const prevBest = bestByKey.get(key) ?? -Infinity;
-      if (weight > prevBest) {
-        bestByKey.set(key, weight);
+      if (weightLbs > prevBest) {
+        bestByKey.set(key, weightLbs);
         prCount++;
       }
     }
