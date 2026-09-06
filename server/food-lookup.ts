@@ -134,12 +134,48 @@ function flagIfNoNutrientsMatched(
 // this for real needs either allowlisting these two hosts for a dev
 // session, or checking server logs once this runs somewhere with real
 // network access.
-function offMicrosMg(n: Record<string, number | undefined>, key: string): number | null {
-  const raw = n[`${key}_serving`] ?? n[`${key}_100g`];
+// One basis for the whole product, chosen once, rather than per nutrient.
+//
+// Open Food Facts populates _serving and _100g independently, and plenty of
+// products carry _serving for the headline macros and only _100g for the
+// minerals. Falling back per nutrient therefore built a single entry out of
+// both, labelled with the product's serving size: for a 30 g serving the
+// per-100 g figures were more than three times too high, and for a 250 g
+// serving they were well under half what they should be. Silently, and on
+// numbers a coach reads as an athlete's intake.
+//
+// Preferring energy is deliberate -- it is the field OFF populates most
+// reliably, so it is the best single signal for whether this product has
+// real per-serving data at all. When it does not, everything comes from
+// _100g together and the entry is labelled "100 g" so nobody reads it as
+// one serving.
+export function offBasis(n: Record<string, number | undefined>): "serving" | "100g" {
+  return n["energy-kcal_serving"] != null ? "serving" : "100g";
+}
+export function offValue(
+  n: Record<string, number | undefined>,
+  key: string,
+  basis: "serving" | "100g",
+): number | undefined {
+  // Deliberately does NOT fall back to the other basis: a missing nutrient
+  // is "not provided", which the rest of this pipeline already handles, and
+  // that is far better than a number on the wrong scale.
+  return basis === "serving" ? n[`${key}_serving`] : n[`${key}_100g`];
+}
+function offMicrosMg(
+  n: Record<string, number | undefined>,
+  key: string,
+  basis: "serving" | "100g",
+): number | null {
+  const raw = offValue(n, key, basis);
   return raw == null ? null : round(raw * 1000, 1);
 }
-function offMicrosMcg(n: Record<string, number | undefined>, key: string): number | null {
-  const raw = n[`${key}_serving`] ?? n[`${key}_100g`];
+function offMicrosMcg(
+  n: Record<string, number | undefined>,
+  key: string,
+  basis: "serving" | "100g",
+): number | null {
+  const raw = offValue(n, key, basis);
   return raw == null ? null : round(raw, 1);
 }
 
@@ -155,23 +191,27 @@ async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidat
     const p = data.product;
     const n = p.nutriments ?? {};
     const servingSize = p.serving_size ? String(p.serving_size) : null;
+    const basis = offBasis(n);
+    const sodiumRaw = offValue(n, "sodium", basis);
     const candidate: FoodCandidate = {
       description: p.product_name?.trim() || p.generic_name?.trim() || "Unknown product",
       brand: p.brands?.split(",")[0]?.trim() || null,
-      servingDescription: servingSize,
-      caloriesKcal: round(n["energy-kcal_serving"] ?? n["energy-kcal_100g"], 0),
-      proteinG: round(n["proteins_serving"] ?? n["proteins_100g"]),
-      carbsG: round(n["carbohydrates_serving"] ?? n["carbohydrates_100g"]),
-      fatG: round(n["fat_serving"] ?? n["fat_100g"]),
-      fiberG: round(n["fiber_serving"] ?? n["fiber_100g"]),
-      sodiumMg: round((n["sodium_serving"] ?? n["sodium_100g"]) * 1000, 0),
-      calciumMg: offMicrosMg(n, "calcium"),
-      ironMg: offMicrosMg(n, "iron"),
-      vitaminDMcg: offMicrosMcg(n, "vitamin-d"),
-      potassiumMg: offMicrosMg(n, "potassium"),
-      magnesiumMg: offMicrosMg(n, "magnesium"),
-      vitaminB12Mcg: offMicrosMcg(n, "vitamin-b12"),
-      zincMg: offMicrosMg(n, "zinc"),
+      // Says what the numbers are actually for. Labelling a per-100 g entry
+      // with the product's serving size is what made the mismatch invisible.
+      servingDescription: basis === "serving" ? servingSize : "100 g",
+      caloriesKcal: round(offValue(n, "energy-kcal", basis), 0),
+      proteinG: round(offValue(n, "proteins", basis)),
+      carbsG: round(offValue(n, "carbohydrates", basis)),
+      fatG: round(offValue(n, "fat", basis)),
+      fiberG: round(offValue(n, "fiber", basis)),
+      sodiumMg: sodiumRaw == null ? null : round(sodiumRaw * 1000, 0),
+      calciumMg: offMicrosMg(n, "calcium", basis),
+      ironMg: offMicrosMg(n, "iron", basis),
+      vitaminDMcg: offMicrosMcg(n, "vitamin-d", basis),
+      potassiumMg: offMicrosMg(n, "potassium", basis),
+      magnesiumMg: offMicrosMg(n, "magnesium", basis),
+      vitaminB12Mcg: offMicrosMcg(n, "vitamin-b12", basis),
+      zincMg: offMicrosMg(n, "zinc", basis),
       barcode,
     };
     flagImplausibleValues("Open Food Facts", candidate);
