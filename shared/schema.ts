@@ -818,6 +818,19 @@ export const guardianInvites = pgTable(
     expiresAt: timestamp("expires_at").notNull(),
     claimedAt: timestamp("claimed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Whether the email carrying this invite actually left the building.
+    // The send result was previously discarded, which matters more here
+    // than anywhere else in the app: a minor is locked out of Forge
+    // entirely until their guardian opens this link, so an invite that was
+    // never delivered is indistinguishable from a parent who has not got
+    // round to it -- and those need opposite responses, one a repair and
+    // one a chase. Null on a row written before this existed, and on one
+    // whose send has not resolved yet.
+    emailSentAt: timestamp("email_sent_at"),
+    // The provider's own reason, kept short and shown only to an admin
+    // working the blocked-athletes queue. Never surfaced to the athlete:
+    // it says nothing they can act on and can echo provider detail.
+    emailError: text("email_error"),
   },
   (table) => ({
     athleteIdx: index("guardian_invites_athlete_idx").on(table.athleteId),

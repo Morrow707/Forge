@@ -29,13 +29,24 @@ export async function runVideoRetentionSweep() {
       // failure here just means it's retried on tomorrow's sweep instead
       // of the video silently sliding toward deletion unwarned.
       try {
-        await notifyUser(
+        const { delivered } = await notifyUser(
           w.athleteId,
           "video_cap_warning",
           `A ${w.exerciseName} video is about to be removed`,
           `You've got more saved for this ${w.source === "skill" ? "drill" : "exercise"} than your plan keeps -- tap the heart on this one within 7 days to keep it, or it'll be automatically removed to save space.`,
           w.link,
         );
+        // The clock starts on delivery, not on the call returning. This
+        // used to start it either way: notifyUser could not fail, so a
+        // warning that reached no device and no inbox began a seven-day
+        // countdown to deleting a video whose owner was never told. Not
+        // starting it means tomorrow's sweep tries again, which is the
+        // right outcome for a transient failure and an honest one for a
+        // permanent failure.
+        if (!delivered) {
+          console.warn(`Video retention: no channel reached athlete ${w.athleteId}; not starting the grace clock for ${w.source} ${w.id}.`);
+          continue;
+        }
         await storage.markVideoPendingDeletion(w.source, w.id);
         notified++;
       } catch (err) {
@@ -68,13 +79,21 @@ export async function runStaleAccountVideoSweep() {
       // failed notify shouldn't stop the rest, and the grace clock only
       // starts once notifyUser actually succeeds for this one.
       try {
-        await notifyUser(
+        const { delivered } = await notifyUser(
           w.athleteId,
           "stale_account_video_warning",
           `A ${w.itemName} video is about to be removed`,
           `Your account hasn't been active in a while, so your saved videos are being cleared out to free up space -- log in within 7 days if you'd like to keep this one, or it'll be automatically removed.`,
           w.link,
         );
+        // Same rule as the cap sweep above, and it bites harder here: this
+        // job targets accounts nobody has opened in a year, so the in-app
+        // notification is the least likely of the three channels to be
+        // seen and the only one that always "succeeds".
+        if (!delivered) {
+          console.warn(`Stale-account video sweep: no channel reached athlete ${w.athleteId}; not starting the grace clock for ${w.source} ${w.id}.`);
+          continue;
+        }
         await storage.markStaleAccountVideoPendingDeletion(w.source, w.id);
         notified++;
       } catch (err) {

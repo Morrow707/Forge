@@ -15,6 +15,7 @@ import { buildNewDeviceLoginEmail } from "./new-device-login-email";
 import { buildPasswordChangedEmail } from "./password-changed-email";
 import { buildVerifyEmailEmail } from "./verify-email-email";
 import { buildGuardianInviteEmail } from "./guardian-invite-email";
+import { reportJobFailure } from "./job-errors";
 import { apiLimiter } from "./rate-limiters";
 import { totpOtpauthUri } from "./mfa";
 import { isNativeAppRequest, normalizeIp, resolveLocation, shouldTouchLastSeen, type SessionKind } from "./session-tracking";
@@ -871,11 +872,29 @@ export function setupAuth(app: Express) {
         const origin = process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
         const claimLink = `${origin}/guardian/claim?token=${invite.token}`;
         const parentalNotice = await storage.getLegalDocument("parental_notice");
-        return sendEmail({
+        const result = await sendEmail({
           to: guardianEmail,
           subject: `You've been listed as ${athlete.name}'s guardian on Forge`,
           html: buildGuardianInviteEmail(athlete.name, claimLink, parentalNotice?.content ?? ""),
         });
+        // sendEmail reports a refusal by returning, not by throwing, so the
+        // .catch below never saw one -- an unconfigured key, a provider
+        // rejection, or the sandbox from-address (which 403s every
+        // recipient but the account owner) all landed here as an ordinary
+        // resolved promise. Recording the outcome is what lets an admin
+        // tell an undelivered invite apart from an ignored one, which is
+        // the difference between fixing an address and chasing a parent.
+        // The athlete is locked out of the app either way until it lands.
+        await storage.recordGuardianInviteDelivery(
+          invite.inviteId,
+          result.sent ? { sent: true } : { sent: false, error: result.error ?? "unknown" },
+        );
+        if (!result.sent) {
+          reportJobFailure("guardian-invite-email", new Error(`Guardian invite email failed: ${result.error ?? "unknown"}`), {
+            athleteId: athlete.id,
+            inviteId: invite.inviteId,
+          });
+        }
       })
       .catch((err) => console.error("issueGuardianInviteIfNeeded failed:", err));
   }

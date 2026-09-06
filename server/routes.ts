@@ -4,6 +4,7 @@ import { coachesCornerCompedForRoster } from "@shared/billing-tiers";
 import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
+import fsPromises from "fs/promises";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { setupAuth, requireAuth, requireRole } from "./auth";
@@ -453,7 +454,7 @@ function currentUser(req: any) {
 // the thing being announced (a post, an assignment) has already been
 // saved. Same per-recipient isolation the background job files use for
 // their own notify loops.
-async function notifyEach<T>(items: T[], deliver: (item: T) => Promise<void>): Promise<void> {
+async function notifyEach<T>(items: T[], deliver: (item: T) => Promise<unknown>): Promise<void> {
   await Promise.all(
     items.map(async (item) => {
       try {
@@ -1641,7 +1642,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/classes/lesson-media/attachment", requireRole(["coach", "admin"]), (req, res) => {
+  app.post("/api/classes/lesson-media/attachment", requireRole(["coach", "admin"]), requireDiskSpace, (req, res) => {
     uploadLessonAttachment.single("file")(req, res, (err: unknown) => {
       if (err) {
         const message = err instanceof Error ? err.message : "Upload failed";
@@ -1655,7 +1656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/classes/lesson-media/image", requireRole(["coach", "admin"]), (req, res) => {
+  app.post("/api/classes/lesson-media/image", requireRole(["coach", "admin"]), requireDiskSpace, (req, res) => {
     uploadLessonImage.single("image")(req, res, (err: unknown) => {
       if (err) {
         const message = err instanceof Error ? err.message : "Upload failed";
@@ -4820,7 +4821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
-  app.post("/api/coach/branding/logo", requireRole("coach"), requirePrimaryCoach, (req, res) => {
+  app.post("/api/coach/branding/logo", requireRole("coach"), requirePrimaryCoach, requireDiskSpace, (req, res) => {
     uploadTeamLogo.single("logo")(req, res, async (err: unknown) => {
       if (err) {
         const message = err instanceof Error ? err.message : "Upload failed";
@@ -6098,19 +6099,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // produces a PNG data URL, decoded and written to disk here -- the
   // resulting /uploads/annotations/... URL is then posted as imageUrl on a
   // normal comment via the route above.
-  app.post("/api/coach/annotations", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/annotations", requireRole("coach"), requireDiskSpace, async (req, res) => {
     const user = currentUser(req);
     const parsed = createAnnotationSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const base64 = parsed.data.dataUrl.slice(parsed.data.dataUrl.indexOf(",") + 1);
+    // Checked on the encoded string, before decoding it. The cap was
+    // previously applied to the decoded buffer, so the route's real limit
+    // was the 25MB JSON body parser in index.ts: a caller could have 25MB
+    // of base64 read, parsed and decoded into memory before anything
+    // rejected it. Base64 is 4 bytes per 3, so this is the same 5MB
+    // ceiling, enforced before the allocation rather than after it.
+    if (base64.length > Math.ceil((MAX_ANNOTATION_BYTES * 4) / 3)) {
+      return res.status(400).json({ message: "Annotation image is too large" });
+    }
     const buffer = Buffer.from(base64, "base64");
     if (buffer.length > MAX_ANNOTATION_BYTES) {
       return res.status(400).json({ message: "Annotation image is too large" });
     }
     const filename = `${crypto.randomUUID()}.png`;
-    fs.writeFileSync(path.join(ANNOTATIONS_DIR, filename), buffer);
+    // Async, unlike the synchronous write this used to do -- up to 5MB
+    // written on the event loop stalled every other request in flight,
+    // including the video uploads this same disk is serving.
+    await fsPromises.writeFile(path.join(ANNOTATIONS_DIR, filename), buffer);
     const url = `/uploads/annotations/${filename}`;
     await storage.recordUploadedFile(url, user.id);
     // Signed like any other JSON response now -- see the matching comment

@@ -1952,6 +1952,14 @@ CREATE TABLE IF NOT EXISTS "guardian_invites" (
 );
 CREATE INDEX IF NOT EXISTS "guardian_invites_athlete_idx" ON "guardian_invites" ("athlete_id");
 
+-- Delivery outcome for the invite email (shared/schema.ts guardianInvites).
+-- Added separately rather than only inside the CREATE TABLE above, which is
+-- a no-op on every database that already has this table -- the same blind
+-- spot check-schema-drift.ts exists to report for foreign keys. Null on
+-- every pre-existing row, which reads correctly as "unknown", not "failed".
+ALTER TABLE "guardian_invites" ADD COLUMN IF NOT EXISTS "email_sent_at" timestamp;
+ALTER TABLE "guardian_invites" ADD COLUMN IF NOT EXISTS "email_error" text;
+
 -- Free-text display title for a staff coach (shared/schema.ts
 -- coachStaff.staffTitle) -- e.g. "Nutritionist" or "Strength Coach" shown
 -- in place of the generic "Coach" label wherever this staff member's name

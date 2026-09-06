@@ -44,20 +44,34 @@ export async function notifyUser(
     bypassPushCategoryPref ||
     !category ||
     user?.pushNotificationCategoryPrefs?.[category] !== false;
+  // Whether anything actually reached a device or an inbox. Callers that
+  // only want the in-app notification can ignore it; the retention jobs
+  // cannot, because they start a seven-day deletion clock on the strength
+  // of having warned someone, and this used to return void -- sendEmail
+  // reports failure by returning rather than throwing, and the push helpers
+  // swallow per-device errors, so notifyUser could not fail no matter what
+  // happened downstream.
+  let pushDelivered = false;
   if (pushAllowed) {
-    await sendPushToUser(userId, { title, body, url: link, badge });
+    pushDelivered = await sendPushToUser(userId, { title, body, url: link, badge });
   }
 
+  let emailDelivered = false;
   if (!skipEmail && user && (user.notifyEmail || bypassEmailPref)) {
     // `body` frequently embeds a coach/athlete's own display name and
     // free-typed comment text (see the workout-comment routes) -- unescaped,
     // either could carry markup that renders as part of a real
     // transactional email sent from Forge's own domain, same risk
     // escapeHtml already guards against in welcome-email.ts/progress-report.ts.
-    await sendEmail({
+    const result = await sendEmail({
       to: user.email,
       subject: title,
       html: `<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;">${escapeHtml(body)}</p><p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#777;">Open Forge to see more.</p>`,
     });
+    emailDelivered = result.sent;
   }
+  // The in-app notification row is deliberately NOT counted as reaching
+  // anyone. It always succeeds, and an athlete who has stopped opening the
+  // app is exactly the population the stale-account sweep is about.
+  return { delivered: pushDelivered || emailDelivered, pushDelivered, emailDelivered };
 }

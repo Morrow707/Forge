@@ -27,20 +27,29 @@ export function getVapidPublicKey() {
 // don't need to know or care which transport(s) actually apply to this
 // user. A subscription/token the push service reports as gone (410 Gone /
 // 404) is removed so it's not retried forever.
+// Reports whether at least one device accepted the payload. Per-device
+// errors are still swallowed -- one dead subscription should never stop the
+// others -- but "every subscription failed" and "there were no
+// subscriptions" are no longer reported the same way as success, because
+// the retention jobs decide whether to start a deletion clock on this.
 export async function sendPushToUser(
   userId: number,
   payload: { title: string; body: string; url?: string; badge?: number },
-) {
-  await Promise.all([sendWebPushToUser(userId, payload), sendApnsToUser(userId, payload)]);
+): Promise<boolean> {
+  const [web, apns] = await Promise.all([
+    sendWebPushToUser(userId, payload),
+    sendApnsToUser(userId, payload),
+  ]);
+  return web || apns;
 }
 
 async function sendWebPushToUser(
   userId: number,
   payload: { title: string; body: string; url?: string },
-) {
-  if (!pushEnabled) return;
+): Promise<boolean> {
+  if (!pushEnabled) return false;
   const subs = await storage.getPushSubscriptionsForUser(userId);
-  await Promise.all(
+  const results = await Promise.all(
     subs.map(async (sub) => {
       try {
         await webpush.sendNotification(
@@ -50,13 +59,16 @@ async function sendWebPushToUser(
           },
           JSON.stringify(payload),
         );
+        return true;
       } catch (err: any) {
         if (err?.statusCode === 404 || err?.statusCode === 410) {
           await storage.removePushSubscription(sub.endpoint);
         } else {
           console.error("Push send failed:", err?.message || err);
         }
+        return false;
       }
     }),
   );
+  return results.some(Boolean);
 }

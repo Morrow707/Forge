@@ -20400,7 +20400,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   async createGuardianInvite(
     athleteId: number,
     email: string,
-  ): Promise<{ token: string } | { error: string }> {
+  ): Promise<{ token: string; inviteId: number } | { error: string }> {
     const existingLink = await db.query.guardianLinks.findFirst({
       where: eq(guardianLinks.athleteId, athleteId),
     });
@@ -20415,13 +20415,33 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     // parent's inbox, not someone actively sitting at the reset-password
     // screen waiting for it.
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await db.insert(guardianInvites).values({
-      athleteId,
-      email,
-      tokenHash: hashResetToken(token),
-      expiresAt,
-    });
-    return { token };
+    const [invite] = await db
+      .insert(guardianInvites)
+      .values({
+        athleteId,
+        email,
+        tokenHash: hashResetToken(token),
+        expiresAt,
+      })
+      .returning({ id: guardianInvites.id });
+    return { token, inviteId: invite.id };
+  },
+
+  // Records what the provider said about the invite email. Called for both
+  // outcomes, because "we tried and it failed" and "we have not tried yet"
+  // are different states and only one of them is somebody's job to fix.
+  async recordGuardianInviteDelivery(
+    inviteId: number,
+    outcome: { sent: true } | { sent: false; error: string },
+  ): Promise<void> {
+    await db
+      .update(guardianInvites)
+      .set(
+        outcome.sent
+          ? { emailSentAt: new Date(), emailError: null }
+          : { emailSentAt: null, emailError: outcome.error.slice(0, 300) },
+      )
+      .where(eq(guardianInvites.id, inviteId));
   },
 
   async getGuardianInvitePreview(
@@ -20790,6 +20810,14 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       inviteSentAt: string | null;
       inviteExpiresAt: string | null;
       inviteExpired: boolean;
+      // What the email actually did. inviteDelivered false with an error
+      // set is the case this page could not previously see: the parent was
+      // never emailed, so chasing the athlete to nudge them achieves
+      // nothing and the address or the mail configuration is what needs
+      // fixing. Null delivered means unknown -- a row from before this was
+      // recorded, or a send still in flight.
+      inviteDelivered: boolean | null;
+      inviteError: string | null;
     }[]
   > {
     const result = await db.execute<{
@@ -20802,15 +20830,23 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       invite_sent_at: string | null;
       invite_expires_at: string | null;
       invite_expired: boolean | null;
+      invite_delivered: boolean | null;
+      invite_error: string | null;
     }>(sql`
       SELECT u.id, u.name, u.email, u.date_of_birth, u.created_at,
         i.email AS invite_email,
         i.created_at AS invite_sent_at,
         i.expires_at AS invite_expires_at,
-        (i.expires_at IS NOT NULL AND i.expires_at < now()) AS invite_expired
+        (i.expires_at IS NOT NULL AND i.expires_at < now()) AS invite_expired,
+        CASE
+          WHEN i.email_sent_at IS NOT NULL THEN true
+          WHEN i.email_error IS NOT NULL THEN false
+          ELSE NULL
+        END AS invite_delivered,
+        i.email_error AS invite_error
       FROM users u
       LEFT JOIN LATERAL (
-        SELECT gi.email, gi.created_at, gi.expires_at
+        SELECT gi.email, gi.created_at, gi.expires_at, gi.email_sent_at, gi.email_error
         FROM guardian_invites gi
         WHERE gi.athlete_id = u.id AND gi.claimed_at IS NULL
         ORDER BY gi.created_at DESC
@@ -20832,6 +20868,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       inviteSentAt: r.invite_sent_at ? String(r.invite_sent_at) : null,
       inviteExpiresAt: r.invite_expires_at ? String(r.invite_expires_at) : null,
       inviteExpired: Boolean(r.invite_expired),
+      inviteDelivered: r.invite_delivered === null ? null : Boolean(r.invite_delivered),
+      inviteError: r.invite_error,
     }));
   },
 

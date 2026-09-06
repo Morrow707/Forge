@@ -101,20 +101,30 @@ function sendOne(
   });
 }
 
+// Same delivery-reporting contract as sendWebPushToUser -- see its comment.
+// A token APNs told us to remove did not receive anything, so it counts as
+// a failure for this purpose even though handling it is the correct
+// outcome.
 export async function sendApnsToUser(
   userId: number,
   payload: { title: string; body: string; url?: string; badge?: number },
-) {
-  if (!apnsEnabled) return;
+): Promise<boolean> {
+  if (!apnsEnabled) return false;
   const tokens = await storage.getApnsTokensForUser(userId);
-  await Promise.all(
+  const results = await Promise.all(
     tokens.map(async (t) => {
       try {
         const { shouldRemove } = await sendOne(t.deviceToken, payload);
-        if (shouldRemove) await storage.removeApnsToken(t.deviceToken);
+        if (shouldRemove) {
+          await storage.removeApnsToken(t.deviceToken);
+          return false;
+        }
+        return true;
       } catch (err) {
         console.error("APNs send failed:", err instanceof Error ? err.message : err);
+        return false;
       }
     }),
   );
+  return results.some(Boolean);
 }
