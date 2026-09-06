@@ -4538,12 +4538,87 @@ export const storage = {
           eq(coachStaff.staffCoachId, staffCoachId),
         ),
       );
+    await this.pruneTeamMembershipsAfterStaffSplit(primaryCoachId, staffCoachId);
+  },
+
+  // Team membership outlives the staff link that justified it. Teams belong
+  // to a coach, but a staff shares its whole roster, so while the link
+  // existed each side's athletes could be added to the other's teams. Only
+  // the coach_staff row was ever deleted, which left a departed coach's
+  // athletes sitting on the org's teams -- visible on its team board, its
+  // leaderboard and its challenges, and with the org's posts visible to
+  // them -- between two accounts that are no longer connected at all.
+  //
+  // Only memberships that the staff link was the sole justification for are
+  // removed. An athlete on both coaches' own rosters independently stays,
+  // because that membership never depended on the link.
+  async pruneTeamMembershipsAfterStaffSplit(primaryCoachId: number, staffCoachId: number) {
+    const remainingCoachIds = await this.getEffectiveCoachIds(primaryCoachId);
+    const [departingRoster, remainingRoster] = await Promise.all([
+      db
+        .select({ athleteId: coachAthletes.athleteId })
+        .from(coachAthletes)
+        .where(eq(coachAthletes.coachId, staffCoachId)),
+      db
+        .select({ athleteId: coachAthletes.athleteId })
+        .from(coachAthletes)
+        .where(inArray(coachAthletes.coachId, remainingCoachIds)),
+    ]);
+    const remainingAthleteIds = new Set(remainingRoster.map((r) => r.athleteId));
+    const departingAthleteIds = new Set(departingRoster.map((r) => r.athleteId));
+
+    // The departing coach's athletes, off the teams that stayed behind.
+    const strandedOnRemainingTeams = [...departingAthleteIds].filter((id) => !remainingAthleteIds.has(id));
+    if (strandedOnRemainingTeams.length > 0) {
+      const remainingTeams = await db
+        .select({ id: teams.id })
+        .from(teams)
+        .where(inArray(teams.coachId, remainingCoachIds));
+      if (remainingTeams.length > 0) {
+        await db
+          .delete(teamMembers)
+          .where(
+            and(
+              inArray(teamMembers.teamId, remainingTeams.map((t) => t.id)),
+              inArray(teamMembers.athleteId, strandedOnRemainingTeams),
+            ),
+          );
+      }
+    }
+
+    // And the mirror: the staff's athletes, off the departing coach's teams.
+    const strandedOnDepartingTeams = [...remainingAthleteIds].filter((id) => !departingAthleteIds.has(id));
+    if (strandedOnDepartingTeams.length > 0) {
+      const departingTeams = await db
+        .select({ id: teams.id })
+        .from(teams)
+        .where(eq(teams.coachId, staffCoachId));
+      if (departingTeams.length > 0) {
+        await db
+          .delete(teamMembers)
+          .where(
+            and(
+              inArray(teamMembers.teamId, departingTeams.map((t) => t.id)),
+              inArray(teamMembers.athleteId, strandedOnDepartingTeams),
+            ),
+          );
+      }
+    }
   },
 
   // A staff member leaves voluntarily -- same delete, keyed the other way
   // round so the caller doesn't need to already know their own primary.
   async leaveCoachStaff(staffCoachId: number) {
+    // Read the primary before the row goes, so the same team-membership
+    // cleanup removeCoachStaff does can run for this direction too.
+    const links = await db
+      .select({ primaryCoachId: coachStaff.primaryCoachId })
+      .from(coachStaff)
+      .where(eq(coachStaff.staffCoachId, staffCoachId));
     await db.delete(coachStaff).where(eq(coachStaff.staffCoachId, staffCoachId));
+    for (const link of links) {
+      await this.pruneTeamMembershipsAfterStaffSplit(link.primaryCoachId, staffCoachId);
+    }
   },
 
   // The primary sets a display label ("Nutritionist", "Strength Coach")
