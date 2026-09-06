@@ -285,6 +285,15 @@ export function FormVideoRecorderDialog({
         filename,
         context,
       ).catch(() => null);
+      // A null here means the recording could not be queued at all (the disk
+      // write failed, or the manifest that tracks it did). Saying it will
+      // upload later would be a promise nothing can keep, so say what
+      // actually happened and leave the dialog open so the athlete still has
+      // the clip and can retry.
+      if (!persistedVideoIdRef.current) {
+        toast.error("Couldn't save this video on your device -- storage may be full.");
+        return;
+      }
       if (!hasWarnedAboutQueueing()) {
         markWarnedAboutQueueing();
         toast.info(

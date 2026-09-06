@@ -98,11 +98,19 @@ function readManifest(): PendingVideoUpload[] {
   }
 }
 
-function writeManifest(entries: PendingVideoUpload[]) {
+// Reports whether the write actually landed. It used to swallow the failure
+// silently, which is fine for a queue that only loses a retry -- but this
+// manifest is the ONLY record that a video file exists on disk. A failed
+// write (quota is the realistic cause, and this manifest grows) left the
+// recording written to the filesystem and referenced by nothing: never
+// uploaded, never listed in the Video Bank, never deleted. See
+// persistVideoForUpload, which now cleans up rather than leaking it.
+function writeManifest(entries: PendingVideoUpload[]): boolean {
   try {
     localStorage.setItem(MANIFEST_KEY, JSON.stringify(entries));
+    return true;
   } catch {
-    // Best-effort, matches offline-queue.ts's own writeQueue.
+    return false;
   }
 }
 
@@ -216,7 +224,18 @@ export async function persistVideoForUpload(
     reattach: context.reattach,
     ownerId: getQueueOwner(),
   };
-  writeManifest([...readManifest(), entry]);
+  if (!writeManifest([...readManifest(), entry])) {
+    // The bytes are already on disk and nothing now points at them, so take
+    // them back off rather than leaving an unreachable file behind, and tell
+    // the caller the video was not queued instead of letting it promise the
+    // athlete an upload that can never happen.
+    try {
+      await Filesystem.deleteFile({ path, directory: VIDEO_DIR });
+    } catch {
+      // Nothing more to try; the throw below is still the honest answer.
+    }
+    throw new Error("Couldn't save this video on your device -- storage may be full.");
+  }
   return id;
 }
 
