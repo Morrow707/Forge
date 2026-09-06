@@ -70,15 +70,30 @@ export function assessOverheadSquat(frames: PoseFrame[]): OverheadSquatAssessmen
   }
 
   const faults: OverheadSquatFault[] = [];
-  const minKneeAngle = kneeAngles.length ? Math.min(...kneeAngles) : 180;
+  // Judged on a percentile, not on the single most extreme frame. Every
+  // threshold here used a raw min/max, so one misdetected frame -- a
+  // landmark jumping for a frame, which is ordinary in a 2D pose read --
+  // was enough to raise a fault, and each fault costs a grade: two spurious
+  // ones took a clean overhead squat from 3 to 1. Requiring roughly a tenth
+  // of the frames to agree keeps a real, sustained compensation (which lasts
+  // many frames at the bottom of the squat) while rejecting a spike. Same
+  // reasoning, and the same p90 shape, bar-tracking.ts already applies to
+  // bar-path drift.
+  const percentile = (values: number[], p: number) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const idx = Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * p)));
+    return sorted[idx];
+  };
+  const minKneeAngle = kneeAngles.length ? percentile(kneeAngles, 0.1) : 180;
   if (minKneeAngle > 100) {
     faults.push({ code: "shallow_depth", label: `Depth: knees only reached ~${Math.round(minKneeAngle)}° -- aim to break parallel` });
   }
-  if (valgusRatios.length && Math.min(...valgusRatios) < 0.75) {
+  if (valgusRatios.length && percentile(valgusRatios, 0.1) < 0.75) {
     faults.push({ code: "knee_valgus", label: "Knees caved inward past the ankles" });
   }
-  if (torsoAngles.length && Math.max(...torsoAngles) > 45) {
-    faults.push({ code: "forward_lean", label: `Excessive forward lean (~${Math.round(Math.max(...torsoAngles))}° from vertical)` });
+  const leanAngle = torsoAngles.length ? percentile(torsoAngles, 0.9) : 0;
+  if (torsoAngles.length && leanAngle > 45) {
+    faults.push({ code: "forward_lean", label: `Excessive forward lean (~${Math.round(leanAngle)}° from vertical)` });
   }
 
   // 0 faults = clean (3), 1 = one compensation (2), 2+ = multiple (1).

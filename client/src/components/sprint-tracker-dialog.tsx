@@ -574,6 +574,11 @@ export function SprintTrackerDialog({
         let videoToUpload: Blob = recordedBlobRef.current;
         if (framesRef.current.length > 0) {
           try {
+            // Split times run from the START LINE; the overlay places badges
+            // on the video's own clock. Without the offset every badge was
+            // drawn early by however long the athlete spent walking up to
+            // the line after hitting record.
+            const startCrossingMs = result.startCrossingT ?? 0;
             let elapsedMs = 0;
             const checkpointMarkers: OverlayRepMarker[] = result.splits.map((split) => {
               elapsedMs += split.elapsedSeconds * 1000;
@@ -584,7 +589,10 @@ export function SprintTrackerDialog({
               // middle crossing as the finish.
               const isFinish = split === result.splits[result.splits.length - 1];
               return {
-                startMs: elapsedMs,
+                // Where it belongs in the video...
+                startMs: startCrossingMs + elapsedMs,
+                // ...while the number shown stays the split time the athlete
+                // actually ran, measured from the start line.
                 label: `${isFinish ? "FINISH" : `CP ${split.toCheckpoint}`} · ${(elapsedMs / 1000).toFixed(2)}s`,
               };
             });

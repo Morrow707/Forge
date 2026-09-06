@@ -119,6 +119,9 @@ function buildManualResult(startTime: number, finishTime: number, checkpoints: S
     splits,
     avgSpeedYardsPerSec,
     likelyGlitch,
+    // The coach marked this start on the clip itself, so it is already on
+    // the video's own clock -- exactly what startCrossingT means.
+    startCrossingT: startTime,
     incompleteDrill: false,
     crossingsFound: checkpoints.length,
     crossingsExpected: checkpoints.length,

@@ -87,6 +87,13 @@ export type SprintResult = {
   incompleteDrill: boolean;
   crossingsFound: number;
   crossingsExpected: number;
+  // When the athlete crossed the START line, on the same clock as
+  // SprintPoint.t -- i.e. measured from the beginning of the recording, not
+  // from the start of the run. Split times are relative to this crossing, so
+  // anything placing them back onto the video (the burnt-in checkpoint
+  // badges) has to add it; without it every badge landed early by however
+  // long the athlete spent walking up to the line after hitting record.
+  startCrossingT: number;
   // Wall-clock gap, in ms, between the two frames each checkpoint crossing
   // was interpolated between -- one entry per crossing, in crossing order.
   // The crossing instant is only ever known to within this gap, so the
@@ -216,6 +223,7 @@ export function detectSprintCrossings(
     incompleteDrill,
     crossingsFound: crossingTimes.length,
     crossingsExpected: checkpoints.length,
+    startCrossingT: crossingTimes[0],
     crossingFrameGapsMs,
   };
 }
