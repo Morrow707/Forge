@@ -74,15 +74,22 @@ describe("the Health permission sheet describes what the app actually asks for",
     });
   }
 
-  it("does not ask to write, and so declares no write purpose", () => {
-    // The plugin calls requestAuthorization with an empty write set, so
-    // HealthKit never needs NSHealthUpdateUsageDescription. The string that
-    // used to sit there said the app does not write anything, which is not
-    // a purpose and reads badly to a reviewer.
+  it("keeps a write purpose string even though the app never writes", () => {
+    // This was removed once and App Store Connect rejected the upload with
+    // error 90683. Apple checks the compiled binary, not what it calls: the
+    // bundled health plugin references HealthKit's write APIs regardless of
+    // this app passing an empty write set, and that alone requires the key.
+    // The verify_build lane does not catch it -- 90683 comes from altool at
+    // upload time, so the archive is green and the upload still fails.
     expect(nativeHealth).toContain("write: []");
-    // The key element, not the substring -- the comment above it in the
-    // plist names the key while explaining why it is gone, and matching
-    // that would make this assertion permanently unsatisfiable.
-    expect(infoPlist).not.toContain("<key>NSHealthUpdateUsageDescription</key>");
+    expect(infoPlist).toContain("<key>NSHealthUpdateUsageDescription</key>");
+    const update = infoPlist.match(
+      /<key>NSHealthUpdateUsageDescription<\/key>\s*<string>([^<]*)<\/string>/,
+    )?.[1];
+    // It has to say something true and user-facing. The app writes nothing,
+    // so saying so IS the honest purpose string; what it must not be is
+    // empty or a placeholder.
+    expect(update?.length ?? 0).toBeGreaterThan(40);
+    expect(update?.toLowerCase()).toContain("never writes");
   });
 });

@@ -99,11 +99,26 @@
 	     sheet, and it named three of the eight. See the Info.plist test in
 	     client/src/lib/health-permissions.test.ts, which fails if the two
 	     drift apart again.
-	     No NSHealthUpdateUsageDescription: the app requests an empty write
-	     scope (Health.requestAuthorization is called with write: []), so it
-	     never asks to write anything and HealthKit never needs the key. The
-	     string that used to be here read "Forge does not currently write
-	     anything to Health", which describes no purpose at all. -->
+	     NSHealthUpdateUsageDescription has to stay even though the app never
+	     writes to Health. It was removed once, on the reasoning that
+	     Health.requestAuthorization is called with write: [] so HealthKit
+	     never asks for write access at runtime. That reasoning was about the
+	     wrong thing: Apple checks the compiled BINARY, not what it calls,
+	     and the bundled Capacitor health plugin references HealthKit's write
+	     APIs whether or not this app passes anything to them. App Store
+	     Connect rejected the upload with error 90683, and its own wording
+	     covers exactly this case -- "If you're using external libraries or
+	     SDKs, they may reference APIs that require a purpose string. While
+	     your app might not use these APIs, a purpose string is still
+	     required."
+	     Note the verify_build lane does NOT catch this: it archives and
+	     signs, and 90683 comes from altool during upload, so a build can be
+	     green and still be rejected on the way to TestFlight.
+	     The string says plainly that nothing is written, since that is the
+	     honest answer to "why does this app need to write my health data"
+	     and the permission is never actually requested. -->
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Forge never writes anything to Apple Health and never asks for permission to. This appears only because a component the app is built with references Health's write functions; Forge reads the metrics described below and writes nothing back.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Forge reads your sleep, resting heart rate, heart rate variability, VO2 max, respiratory rate, and weight from Health to pre-fill your daily check-in, plus your heart rate and workouts around a session to work out your heart rate recovery. Only if you turn on Health sync in Notification Settings.</string>
 </dict>
