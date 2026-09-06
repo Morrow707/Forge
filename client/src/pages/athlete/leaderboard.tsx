@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -269,15 +269,36 @@ function StrengthLeaderboard({ myId }: { myId: number }) {
 
 function SpeedLeaderboard({ myId }: { myId: number }) {
   const [skillExerciseId, setSkillExerciseId] = useState<string>("");
+  // A 10, a 40 and a 60 are three different events, so the board is picked
+  // per distance instead of ranking every sprint for this drill together --
+  // on one mixed list whoever ran the shortest distance always won.
+  const [distanceYards, setDistanceYards] = useState<string>("");
+
+  const { data: distances = [] } = useQuery<number[]>({
+    queryKey: ["/api/athlete/leaderboard/speed-distances", skillExerciseId],
+    queryFn: () => getJson(`/api/athlete/leaderboard/speed-distances?skillExerciseId=${skillExerciseId}`),
+    enabled: !!skillExerciseId,
+  });
+
+  // Default to the shortest distance on offer, and drop a stale pick when the
+  // coach switches to a drill that has no times at it.
+  useEffect(() => {
+    if (distances.length === 0) return;
+    if (!distanceYards || !distances.some((d) => String(d) === distanceYards)) {
+      setDistanceYards(String(distances[0]));
+    }
+  }, [distances, distanceYards]);
+
 
   const { data: exercises } = useQuery<LeaderboardExercise[] | null>({
     queryKey: ["/api/athlete/leaderboard/skill-exercises"],
   });
 
   const { data: entries = [], isLoading } = useQuery<SpeedLeaderboardEntry[]>({
-    queryKey: ["/api/athlete/leaderboard/speed", skillExerciseId],
-    queryFn: () => getJson(`/api/athlete/leaderboard/speed?skillExerciseId=${skillExerciseId}`),
-    enabled: !!skillExerciseId,
+    queryKey: ["/api/athlete/leaderboard/speed", skillExerciseId, distanceYards],
+    queryFn: () =>
+      getJson(`/api/athlete/leaderboard/speed?skillExerciseId=${skillExerciseId}&distanceYards=${distanceYards}`),
+    enabled: !!skillExerciseId && !!distanceYards,
   });
 
   if (exercises === null) return <NoCoachCard />;
@@ -286,26 +307,52 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
 
   return (
     <>
-      <div className="mb-6 max-w-xs space-y-1.5">
-        <label className="label-xs">Drill</label>
-        <Select value={skillExerciseId} onValueChange={setSkillExerciseId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Pick a timed drill" />
-          </SelectTrigger>
-          <SelectContent>
-            {(exercises ?? []).length === 0 ? (
-              <SelectItem value="_none" disabled>
-                No timed drills assigned yet
-              </SelectItem>
-            ) : (
-              (exercises ?? []).map((e) => (
-                <SelectItem key={e.id} value={String(e.id)}>
-                  {e.name}
+      <div className="mb-6 flex flex-wrap gap-4">
+        <div className="max-w-xs flex-1 space-y-1.5">
+          <label className="label-xs">Drill</label>
+          <Select value={skillExerciseId} onValueChange={setSkillExerciseId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Pick a timed drill" />
+            </SelectTrigger>
+            <SelectContent>
+              {(exercises ?? []).length === 0 ? (
+                <SelectItem value="_none" disabled>
+                  No timed drills assigned yet
                 </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
+              ) : (
+                (exercises ?? []).map((e) => (
+                  <SelectItem key={e.id} value={String(e.id)}>
+                    {e.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {skillExerciseId && (
+          <div className="max-w-[10rem] flex-1 space-y-1.5">
+            <label className="label-xs">Distance</label>
+            <Select value={distanceYards} onValueChange={setDistanceYards}>
+              <SelectTrigger>
+                <SelectValue placeholder="Distance" />
+              </SelectTrigger>
+              <SelectContent>
+                {distances.length === 0 ? (
+                  <SelectItem value="_none" disabled>
+                    No timed runs yet
+                  </SelectItem>
+                ) : (
+                  distances.map((d) => (
+                    <SelectItem key={d} value={String(d)}>
+                      {d} yd
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {!skillExerciseId && (

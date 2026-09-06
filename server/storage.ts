@@ -20255,12 +20255,49 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // Capped, coach-facing entry point -- same reasoning as
   // getLeaderboardForExercise above. getFullSpeedLeaderboardForExercise
   // does the actual work.
-  async getSpeedLeaderboardForExercise(coachId: number, skillExerciseId: number) {
-    const full = await this.getFullSpeedLeaderboardForExercise(coachId, skillExerciseId);
+  async getSpeedLeaderboardForExercise(
+    coachId: number,
+    skillExerciseId: number,
+    distanceYards?: number | null,
+  ) {
+    const full = await this.getFullSpeedLeaderboardForExercise(coachId, skillExerciseId, distanceYards);
     return full.slice(0, LEADERBOARD_MAX_ROWS);
   },
 
-  async getFullSpeedLeaderboardForExercise(coachId: number, skillExerciseId: number) {
+  // Which sprint distances this drill actually has times at, for the
+  // distance picker. A 10, a 40 and a 60 are three different events and are
+  // never ranked against each other -- see the filter in
+  // getFullSpeedLeaderboardForExercise below.
+  async getSpeedLeaderboardDistancesForExercise(coachId: number, skillExerciseId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const rows = await db
+      .selectDistinct({ distanceYards: skillSessionLogs.distanceYards })
+      .from(skillSessionLogs)
+      .innerJoin(
+        skillProgramExercises,
+        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
+      )
+      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+      .where(
+        and(
+          eq(skillSessionLogs.trackingLevel, "sprint"),
+          eq(skillProgramExercises.skillExerciseId, skillExerciseId),
+          inArray(skillAssignments.coachId, coachIds),
+          isNotNull(skillSessionLogs.elapsedSeconds),
+          isNotNull(skillSessionLogs.distanceYards),
+        ),
+      );
+    return rows
+      .map((r) => r.distanceYards)
+      .filter((d): d is number => d != null)
+      .sort((a, b) => a - b);
+  },
+
+  async getFullSpeedLeaderboardForExercise(
+    coachId: number,
+    skillExerciseId: number,
+    distanceYards?: number | null,
+  ) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db
       .select({
@@ -20289,6 +20326,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     >();
     for (const r of rows) {
       if (r.elapsedSeconds == null) continue;
+      // A 10-yard time and a 40-yard time are not comparable, and ranking on
+      // elapsed seconds alone put whoever ran the shortest distance on top of
+      // a board that looked like one event. Each distance is its own board.
+      if (distanceYards != null && r.distanceYards !== distanceYards) continue;
       const existing = bestByAthlete.get(r.athleteId);
       if (!existing || r.elapsedSeconds < existing.elapsedSeconds) {
         bestByAthlete.set(r.athleteId, {
@@ -20373,10 +20414,24 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return this.getSpeedLeaderboardExercisesForCoach(coaches[0].id);
   },
 
-  async getSpeedLeaderboardForAthleteView(athleteId: number, skillExerciseId: number) {
+  async getSpeedLeaderboardDistancesForAthlete(athleteId: number, skillExerciseId: number) {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    if (coaches.length === 0) return [];
+    return this.getSpeedLeaderboardDistancesForExercise(coaches[0].id, skillExerciseId);
+  },
+
+  async getSpeedLeaderboardForAthleteView(
+    athleteId: number,
+    skillExerciseId: number,
+    distanceYards?: number | null,
+  ) {
     const coaches = await this.getCoachesForAthlete(athleteId);
     if (coaches.length === 0) return null;
-    const full = await this.getFullSpeedLeaderboardForExercise(coaches[0].id, skillExerciseId);
+    const full = await this.getFullSpeedLeaderboardForExercise(
+      coaches[0].id,
+      skillExerciseId,
+      distanceYards,
+    );
     const top = full.slice(0, LEADERBOARD_MAX_ROWS);
     if (top.some((e) => e.id === athleteId)) return top;
     const own = full.find((e) => e.id === athleteId);

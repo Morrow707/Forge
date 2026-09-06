@@ -6255,14 +6255,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
-  app.get("/api/coach/leaderboard/speed", requireRole("coach"), async (req, res) => {
+  // Which distances this drill has times at. A 10, a 40 and a 60 are three
+  // different events; the board is picked per distance rather than mixing
+  // them into one ranking.
+  app.get("/api/coach/leaderboard/speed-distances", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({ skillExerciseId: z.coerce.number() });
     const parsed = schema.safeParse(req.query);
     if (!parsed.success) {
       return res.status(400).json({ message: "skillExerciseId query param required" });
     }
-    const rows = await storage.getSpeedLeaderboardForExercise(user.id, parsed.data.skillExerciseId);
+    res.json(await storage.getSpeedLeaderboardDistancesForExercise(user.id, parsed.data.skillExerciseId));
+  });
+
+  app.get("/api/coach/leaderboard/speed", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      skillExerciseId: z.coerce.number(),
+      distanceYards: z.coerce.number().optional(),
+    });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "skillExerciseId query param required" });
+    }
+    const rows = await storage.getSpeedLeaderboardForExercise(
+      user.id,
+      parsed.data.skillExerciseId,
+      parsed.data.distanceYards ?? null,
+    );
     res.json(rows);
   });
 
@@ -6296,14 +6316,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
-  app.get("/api/athlete/leaderboard/speed", requireRole("athlete"), async (req, res) => {
+  app.get("/api/athlete/leaderboard/speed-distances", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({ skillExerciseId: z.coerce.number() });
     const parsed = schema.safeParse(req.query);
     if (!parsed.success) {
       return res.status(400).json({ message: "skillExerciseId query param required" });
     }
-    const rows = await storage.getSpeedLeaderboardForAthleteView(user.id, parsed.data.skillExerciseId);
+    res.json(await storage.getSpeedLeaderboardDistancesForAthlete(user.id, parsed.data.skillExerciseId));
+  });
+
+  app.get("/api/athlete/leaderboard/speed", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      skillExerciseId: z.coerce.number(),
+      distanceYards: z.coerce.number().optional(),
+    });
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "skillExerciseId query param required" });
+    }
+    const rows = await storage.getSpeedLeaderboardForAthleteView(
+      user.id,
+      parsed.data.skillExerciseId,
+      parsed.data.distanceYards ?? null,
+    );
     res.json(rows);
   });
 
