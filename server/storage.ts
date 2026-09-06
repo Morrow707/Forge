@@ -18755,10 +18755,15 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // first displayed day gets a real 28-day chronic average, not an
   // artificially short one.
   async getAcwrHistoryForAthlete(athleteId: number, days = 60): Promise<AcwrPoint[]> {
-    const today = new Date().toISOString().slice(0, 10);
-    const sinceDate = new Date(Date.now() - (days + 28) * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
+    // The athlete's own day, not UTC. shared/athlete-day.ts was written for
+    // exactly these windows -- its comment names the acute and chronic
+    // spans -- and this function never used it. For an athlete seven hours
+    // behind UTC, everything logged after five in the evening fell into the
+    // next UTC day, so an evening session landed in tomorrow's bucket and
+    // the seven-day window slid a day out from under it. That ratio is what
+    // raises the injury-risk flag a coach sees on the roster.
+    const today = await this.todayForAthlete(athleteId);
+    const sinceDate = shiftIsoDate(today, -(days + 28));
     const dailyLoads = await this.getDailyLoadSeriesForAthlete(athleteId, sinceDate);
     return buildAcwrSeries(dailyLoads, today, days);
   },
@@ -18811,7 +18816,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       ...v,
     }));
 
-    const today = new Date().toISOString().slice(0, 10);
+    // Same zone correction as getAcwrHistoryForAthlete above, and the same
+    // reason: a week boundary drawn in UTC cuts an evening session into the
+    // wrong week for anyone west of it.
+    const today = await this.todayForAthlete(athleteId);
     return buildWeeklyLoadSeries(dailyLoads, weeks, today);
   },
 
@@ -18908,19 +18916,28 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
 
   async getRosterAcwrSummary(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
-    const today = new Date().toISOString().slice(0, 10);
-    // Matches buildAcwrSeries' own window math exactly: acute = the 7 days
-    // ending today, chronic = the 28 days ending today (both inclusive).
-    const acuteSince = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const chronicSince = new Date(Date.now() - 27 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // A roster is not one timezone. This drew both window edges from UTC
+    // and applied them to every athlete at once, so the same evening
+    // session counted for a teammate in one zone and not for another --
+    // and this is the query behind the roster's injury-risk flag.
+    //
+    // The windows are per athlete now, which means the sums have to be
+    // bucketed per athlete rather than filtered inside one aggregate. Same
+    // shape getRosterLoadTrend below already uses: group per (athlete,
+    // date) in SQL, bucket in Node. A day of margin either side of the UTC
+    // bounds covers every real zone offset, which reaches at most fourteen
+    // hours.
+    const utcNow = utcToday();
+    const fetchSince = shiftIsoDate(utcNow, -29);
+    const fetchUntil = shiftIsoDate(utcNow, 1);
     const loadExpr = this.rosterLoadExprSql();
 
     const rows = await db
       .select({
         athleteId: coachAthletes.athleteId,
         athleteName: users.name,
-        acuteLoad: sql<number>`coalesce(sum(${loadExpr}) filter (where ${workoutLogs.date} >= ${acuteSince}), 0)::real`,
-        chronicTotal: sql<number>`coalesce(sum(${loadExpr}), 0)::real`,
+        date: workoutLogs.date,
+        load: sql<number>`coalesce(sum(${loadExpr}), 0)::real`,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(users.id, coachAthletes.athleteId))
@@ -18930,18 +18947,33 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .where(
         and(
           inArray(coachAthletes.coachId, coachIds),
-          gte(workoutLogs.date, chronicSince),
-          lte(workoutLogs.date, today),
+          gte(workoutLogs.date, fetchSince),
+          lte(workoutLogs.date, fetchUntil),
           eq(workoutLogEntries.weightMode, "numeric"),
           sql`${workoutSetEntries.weight} ~ '^[0-9]+(\\.[0-9]+)?$'`,
         ),
       )
-      .groupBy(coachAthletes.athleteId, users.name);
+      .groupBy(coachAthletes.athleteId, users.name, workoutLogs.date);
 
-    return rows
-      .map((r) => {
-        const { ratio, level } = computeAcwrRisk(r.acuteLoad, r.chronicTotal / 4);
-        return { athleteId: r.athleteId, athleteName: r.athleteName, ratio, level };
+    const athleteIds = [...new Set(rows.map((r) => r.athleteId))];
+    const todayByAthlete = await this.todayByAthlete(athleteIds);
+
+    const totals = new Map<number, { name: string; acute: number; chronic: number }>();
+    for (const row of rows) {
+      const today = todayByAthlete.get(row.athleteId) ?? utcNow;
+      // Unchanged from the window math buildAcwrSeries uses: acute is the 7
+      // days ending today, chronic the 28, both inclusive.
+      if (row.date > today || row.date < shiftIsoDate(today, -27)) continue;
+      const entry = totals.get(row.athleteId) ?? { name: row.athleteName, acute: 0, chronic: 0 };
+      entry.chronic += row.load;
+      if (row.date >= shiftIsoDate(today, -6)) entry.acute += row.load;
+      totals.set(row.athleteId, entry);
+    }
+
+    return [...totals.entries()]
+      .map(([athleteId, t]) => {
+        const { ratio, level } = computeAcwrRisk(t.acute, t.chronic / 4);
+        return { athleteId, athleteName: t.name, ratio, level };
       })
       .sort((a, b) => a.athleteName.localeCompare(b.athleteName));
   },
