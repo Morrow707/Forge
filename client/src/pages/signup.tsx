@@ -31,6 +31,7 @@ import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-sty
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
 import { SPORTS } from "@shared/exercise-taxonomy";
+import { todayIso } from "@/lib/local-date";
 
 /** Debounces a fast-changing value (here, the invite-code input) so a
  * lookup only fires once someone pauses typing, not on every keystroke. */
@@ -259,7 +260,7 @@ export default function SignupPage() {
                   type="date"
                   autoComplete="bday"
                   required
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={todayIso()}
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
                 />

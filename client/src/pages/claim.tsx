@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SPORTS } from "@shared/exercise-taxonomy";
+import { todayIso } from "@/lib/local-date";
 
 type ProvisionalPreview = {
   name: string;
@@ -142,7 +143,7 @@ export default function ClaimPage() {
                   id="claim-dob"
                   type="date"
                   required
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={todayIso()}
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
                   autoComplete="bday"

@@ -22,6 +22,7 @@ import { PhotoUploadField, type PhotoImportStep } from "@/components/photo-uploa
 import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { todayIso } from "@/lib/local-date";
 
 type RosterEntry = { id: number; name: string };
 
@@ -67,7 +68,7 @@ export function InjuryIntakeImportDialog({
       return res.json() as Promise<{ rows: Row[] }>;
     },
     onSuccess: (data) => {
-      setRows(data.rows.map((r) => ({ ...r, occurredOn: r.occurredOn ?? new Date().toISOString().slice(0, 10) })));
+      setRows(data.rows.map((r) => ({ ...r, occurredOn: r.occurredOn ?? todayIso() })));
       setStep("review");
     },
     onError: (err: ApiError) => {

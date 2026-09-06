@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { todayIso } from "@/lib/local-date";
 
 type RosterEntry = { id: number; name: string; email: string };
 
@@ -36,12 +37,12 @@ export function EnrollInClassDialog({
 }) {
   const qc = useQueryClient();
   const [athleteIds, setAthleteIds] = useState<Set<number>>(new Set());
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => todayIso());
 
   useEffect(() => {
     if (open) {
       setAthleteIds(new Set());
-      setStartDate(new Date().toISOString().slice(0, 10));
+      setStartDate(todayIso());
     }
   }, [open]);
 

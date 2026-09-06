@@ -40,6 +40,7 @@ import {
   Camera,
 } from "lucide-react";
 import { ProgramPhotoImportDialog } from "@/components/program-photo-import-dialog";
+import { todayIso } from "@/lib/local-date";
 
 const NEW_PROGRAM_GOALS = [
   "Strength",
@@ -146,7 +147,7 @@ export function ProgramListPage({
   const [aiAthleteId, setAiAthleteId] = useState<number | null>(null);
   const [selfAssignProgramId, setSelfAssignProgramId] = useState<number | null>(null);
   const [selfAssignDate, setSelfAssignDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
+    todayIso(),
   );
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [qGoal, setQGoal] = useState("");
@@ -415,7 +416,7 @@ export function ProgramListPage({
                     variant="secondary"
                     className="w-full"
                     onClick={() => {
-                      setSelfAssignDate(new Date().toISOString().slice(0, 10));
+                      setSelfAssignDate(todayIso());
                       setSelfAssignProgramId(p.id);
                     }}
                   >

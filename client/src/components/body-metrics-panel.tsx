@@ -22,6 +22,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { todayIso } from "@/lib/local-date";
 
 type BodyMetric = {
   id: number;
@@ -47,7 +48,7 @@ export function BodyMetricsPanel({
     queryFn: () => getJson(fetchUrl),
   });
 
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayIso());
   const [weight, setWeight] = useState("");
   const [weightUnit, setWeightUnit] = useState<"lbs" | "kg">("lbs");
   const [bodyFatPercent, setBodyFatPercent] = useState("");
@@ -100,7 +101,7 @@ export function BodyMetricsPanel({
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            max={new Date().toISOString().slice(0, 10)}
+            max={todayIso()}
             className="w-full min-w-0"
           />
         </div>

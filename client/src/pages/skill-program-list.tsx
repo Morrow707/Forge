@@ -20,6 +20,7 @@ import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Plus, Target, Trash2, Users, CalendarRange, Send, Copy, CalendarPlus } from "lucide-react";
+import { todayIso } from "@/lib/local-date";
 
 type SkillProgramSummary = {
   id: number;
@@ -83,7 +84,7 @@ export function SkillProgramListPage({
   const [deleteTarget, setDeleteTarget] = useState<SkillProgramSummary | null>(null);
   const [selfAssignProgramId, setSelfAssignProgramId] = useState<number | null>(null);
   const [selfAssignDate, setSelfAssignDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
+    todayIso(),
   );
 
   const createMutation = useMutation({
@@ -277,7 +278,7 @@ export function SkillProgramListPage({
                     variant="secondary"
                     className="w-full"
                     onClick={() => {
-                      setSelfAssignDate(new Date().toISOString().slice(0, 10));
+                      setSelfAssignDate(todayIso());
                       setSelfAssignProgramId(p.id);
                     }}
                   >

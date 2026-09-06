@@ -14,6 +14,7 @@ import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { format, addDays, parseISO } from "date-fns";
+import { todayIso } from "@/lib/local-date";
 
 const MICRO_FIELDS = [
   ["calciumMg", "Calcium", "mg"],
@@ -139,7 +140,7 @@ export function FoodLogPanel({
   targets: Targets;
 }) {
   const qc = useQueryClient();
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayIso());
   const [scannerOpen, setScannerOpen] = useState(false);
   // Sticky once true -- mounts the lazy dialog (and fetches its chunk) the
   // first time it's actually opened, then leaves it mounted so closing and
@@ -183,7 +184,7 @@ export function FoodLogPanel({
     vitaminB12Mcg: 0,
     zincMg: 0,
   };
-  const isToday = date === new Date().toISOString().slice(0, 10);
+  const isToday = date === todayIso();
   // Secondary to the macros above -- only worth a row (and only shown
   // collapsed) when there's actually something to compare: a target set for
   // it, or some of it logged today.

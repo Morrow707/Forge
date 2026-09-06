@@ -76,6 +76,7 @@ import {
   type PeriodizationPhase,
 } from "@shared/schema";
 import { WEEKDAY_OPTIONS } from "@/lib/weekdays";
+import { todayIso } from "@/lib/local-date";
 
 type RosterEntry = { id: number; name: string; email: string };
 type ScheduleDay = {
@@ -340,7 +341,7 @@ export function ProgramBuilderPage({
   const [hydrated, setHydrated] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [selfAssignOpen, setSelfAssignOpen] = useState(false);
-  const [selfAssignDate, setSelfAssignDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selfAssignDate, setSelfAssignDate] = useState(() => todayIso());
   // 0=Sun..6=Sat -- which weekdays this program's non-rest days land on.
   // Empty means the old "every day in a row from the start date" default.
   const [selfAssignWeekdays, setSelfAssignWeekdays] = useState<number[]>([]);
@@ -634,7 +635,7 @@ export function ProgramBuilderPage({
                       return;
                     }
                   }
-                  setSelfAssignDate(new Date().toISOString().slice(0, 10));
+                  setSelfAssignDate(todayIso());
                   setSelfAssignWeekdays([]);
                   setSelfAssignScheduleOpen(false);
                   setSelfAssignOpen(true);

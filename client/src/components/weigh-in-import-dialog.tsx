@@ -21,6 +21,7 @@ import { PhotoUploadField, type PhotoImportStep } from "@/components/photo-uploa
 import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { todayIso } from "@/lib/local-date";
 
 type RosterEntry = { id: number; name: string };
 
@@ -48,13 +49,13 @@ export function WeighInImportDialog({
   const [step, setStep] = useState<PhotoImportStep>("capture");
   const [images, setImages] = useState<CapturedPhoto[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayIso());
 
   function reset() {
     setStep("capture");
     setImages([]);
     setRows([]);
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(todayIso());
   }
 
   const analyzeMutation = useMutation({

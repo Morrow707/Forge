@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { Stethoscope, Plus, Trash2, Clock, CalendarCog, ChevronDown, Repeat } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 import { WEEKDAY_OPTIONS } from "@/lib/weekdays";
+import { todayIso } from "@/lib/local-date";
 
 const DURATION_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
@@ -77,7 +78,7 @@ export function AssignProgramDialog({
   const [selectedProgramId, setSelectedProgramId] = useState<string>(
     programId ? String(programId) : "",
   );
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => todayIso());
   const [durationWeeks, setDurationWeeks] = useState(1);
   const [correctivesQueue, setCorrectivesQueue] = useState<CorrectivesQueueItem[] | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -92,7 +93,7 @@ export function AssignProgramDialog({
     if (open) {
       setAssignAthletes(new Map(initialAthleteIds.map((id) => [id, true])));
       setSelectedProgramId(programId ? String(programId) : "");
-      setStartDate(new Date().toISOString().slice(0, 10));
+      setStartDate(todayIso());
       setDurationWeeks(1);
       setScheduleOpen(false);
       setDateOverrides(new Map());

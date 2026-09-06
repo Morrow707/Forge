@@ -19,6 +19,7 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { GraduationCap, ListOrdered, ArrowRight, Search, Trophy, Lock, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { todayIso } from "@/lib/local-date";
 
 type EnrolledClass = {
   classId: number;
@@ -76,7 +77,7 @@ export default function AthleteClasses() {
 
   const enrolledIds = new Set(myClasses.map((c) => c.classId));
   const [enrollTarget, setEnrollTarget] = useState<BrowsableClass | null>(null);
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => todayIso());
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<ClassSort>("unlocked");
@@ -289,7 +290,7 @@ export default function AthleteClasses() {
                         className="w-full"
                         disabled={!c.prerequisiteSatisfied}
                         onClick={() => {
-                          setStartDate(new Date().toISOString().slice(0, 10));
+                          setStartDate(todayIso());
                           setEnrollTarget(c);
                         }}
                       >

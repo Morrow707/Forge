@@ -8,6 +8,7 @@ import { Target, MoonStar, Dumbbell, Stethoscope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
+import { todayIso } from "@/lib/local-date";
 
 type BriefingExercise = { name: string; sets: number; reps: string; weight: string | null };
 type BriefingEntry = {
@@ -25,10 +26,6 @@ type AthleteBriefing = {
   acwr: { ratio: number | null; level: AcwrRiskLevel } | null;
   entries: BriefingEntry[];
 };
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /** The coach calendar's "Today" tab -- a dense, per-athlete daily briefing
  * (what they're training, correctives, injury/health status, readiness,

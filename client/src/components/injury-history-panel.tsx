@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Plus, Trash2, HeartPulse } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { todayIso } from "@/lib/local-date";
 
 type InjuryEntry = {
   id: number;
@@ -46,7 +47,7 @@ export function InjuryHistoryPanel({
 
   const [adding, setAdding] = useState(false);
   const [bodyPartLabelChoice, setBodyPartLabelChoice] = useState("");
-  const [occurredOn, setOccurredOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [occurredOn, setOccurredOn] = useState(() => todayIso());
   const [description, setDescription] = useState("");
 
   const addMutation = useMutation({
@@ -65,7 +66,7 @@ export function InjuryHistoryPanel({
       setAdding(false);
       setBodyPartLabelChoice("");
       setDescription("");
-      setOccurredOn(new Date().toISOString().slice(0, 10));
+      setOccurredOn(todayIso());
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't log that"),
   });
@@ -184,7 +185,7 @@ export function InjuryHistoryPanel({
               type="date"
               value={occurredOn}
               onChange={(e) => setOccurredOn(e.target.value)}
-              max={new Date().toISOString().slice(0, 10)}
+              max={todayIso()}
             />
           </div>
           <div className="space-y-1.5">

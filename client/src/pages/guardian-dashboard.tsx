@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ForgeMark } from "@/components/forge-mark";
 import { LogOut, CheckCircle2, Circle, Video, VideoOff } from "lucide-react";
+import { localIsoDate } from "@/lib/local-date";
 
 type GuardianAthlete = {
   id: number;
@@ -65,7 +66,7 @@ function rangeLast14Days() {
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - 13);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const fmt = (d: Date) => localIsoDate(d);
   return { start: fmt(start), end: fmt(end) };
 }
 

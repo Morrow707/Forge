@@ -22,6 +22,7 @@ import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Repeat } from "lucide-react";
+import { todayIso } from "@/lib/local-date";
 
 const DURATION_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
@@ -51,14 +52,14 @@ export function AssignSkillProgramDialog({
   const [selectedProgramId, setSelectedProgramId] = useState<string>(
     programId ? String(programId) : "",
   );
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => todayIso());
   const [durationWeeks, setDurationWeeks] = useState(1);
 
   useEffect(() => {
     if (open) {
       setAssignAthleteIds(new Set());
       setSelectedProgramId(programId ? String(programId) : "");
-      setStartDate(new Date().toISOString().slice(0, 10));
+      setStartDate(todayIso());
       setDurationWeeks(1);
     }
   }, [open, programId]);

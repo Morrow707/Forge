@@ -51,6 +51,7 @@ import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
 import { ExerciseTrendDialog } from "@/components/exercise-trend-dialog";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
+import { todayIso } from "@/lib/local-date";
 
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
@@ -162,7 +163,7 @@ export default function AthleteProgress() {
     queryFn: () => getJson(`/api/athlete/wellness/history?limit=${RECOVERY_HISTORY_DAYS}`),
   });
 
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayIso());
   const [weight, setWeight] = useState("");
   const [weightUnit, setWeightUnit] = useState<"lbs" | "kg">(user?.preferredWeightUnit ?? "lbs");
   const [bodyFatPercent, setBodyFatPercent] = useState("");
@@ -459,7 +460,7 @@ export default function AthleteProgress() {
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    max={new Date().toISOString().slice(0, 10)}
+                    max={todayIso()}
                     className="w-full max-w-[200px] min-w-0"
                   />
                 </div>

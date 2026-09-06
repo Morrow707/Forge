@@ -16,6 +16,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import type { PublicUser } from "@shared/schema";
+import { todayIso } from "@/lib/local-date";
 
 /** Shown only for an account old enough to predate dateOfBirth as a signup
  * field at all -- see shared/privacy-tiers.ts's "unknown" tier comment.
@@ -77,7 +78,7 @@ export function DateOfBirthBanner() {
               type="date"
               value={dateOfBirth}
               onChange={(e) => setDateOfBirth(e.target.value)}
-              max={new Date().toISOString().slice(0, 10)}
+              max={todayIso()}
             />
           </div>
           <DialogFooter>

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
 import { Apple, ChevronRight, ScanLine } from "lucide-react";
+import { todayIso } from "@/lib/local-date";
 
 // Same reasoning as food-log-panel.tsx's own lazy import: barcode scanning
 // (@zxing/browser) and the photo-analysis path it drags in are only needed
@@ -90,7 +91,7 @@ function MacroRing({
  * something," everything else -- history, editing entries, micros -- still
  * needs the full page, hence "Full log" staying right here too). */
 export function NutritionQuickSummary() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerEverOpened, setScannerEverOpened] = useState(false);
 
