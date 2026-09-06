@@ -1,3 +1,6 @@
+require "fileutils"
+require "shellwords"
+
 default_platform(:ios)
 
 # This lane assumes it's being run with `ios/` as the working directory
@@ -109,9 +112,57 @@ platform :ios do
     delete_keychain(name: keychain_name)
   end
 
-  desc "Archive and sign only, no TestFlight upload -- verifies native (Swift/Xcode project) changes actually compile on a real toolchain without spending any of Apple's rate-limited TestFlight upload quota (build_app itself is never rate-limited, only upload_to_testflight is). Use this to check native changes before batching them into an actual beta upload."
+  # Asks App Store Connect whether it would ACCEPT this binary, without
+  # uploading it.
+  #
+  # Added because verify_build passing is not the same as an upload
+  # succeeding, and that gap shipped a real failure: removing
+  # NSHealthUpdateUsageDescription archived and signed cleanly, verify_build
+  # went green, and the beta upload was then rejected with error 90683
+  # ("Missing purpose string in Info.plist"). Everything that rejection
+  # checks -- purpose strings, entitlements, bundle structure, SDK version --
+  # is checked by altool at upload time and by nothing before it. So
+  # verify_build now runs the same check itself.
+  #
+  # --validate-app is a distinct operation from --upload-app: it creates no
+  # build record and consumes none of the TestFlight upload quota that
+  # verify_build exists to protect.
+  #
+  # altool with an API key does not take a key path -- it looks for
+  # AuthKey_<KEYID>.p8 in a few fixed directories -- so the key the workflow
+  # decoded has to be copied into one of them, and removed afterward.
+  private_lane :validate_against_app_store do
+    key_id = ENV.fetch("APP_STORE_CONNECT_KEY_ID")
+    issuer_id = ENV.fetch("APP_STORE_CONNECT_ISSUER_ID")
+    source_key = ENV.fetch("APP_STORE_CONNECT_API_KEY_PATH")
+    ipa_path = lane_context[SharedValues::IPA_OUTPUT_PATH]
+    UI.user_error!("No IPA to validate -- build_app did not produce one.") if ipa_path.nil?
+
+    key_dir = File.expand_path("~/.appstoreconnect/private_keys")
+    key_dest = File.join(key_dir, "AuthKey_#{key_id}.p8")
+    FileUtils.mkdir_p(key_dir)
+    FileUtils.cp(source_key, key_dest)
+
+    begin
+      sh(
+        "xcrun altool --validate-app " \
+        "-f #{ipa_path.shellescape} -t ios " \
+        "--apiKey #{key_id.shellescape} --apiIssuer #{issuer_id.shellescape}",
+      )
+    ensure
+      # Never leave a signing key sitting outside RUNNER_TEMP, which is the
+      # only thing the workflow's own cleanup step knows to delete.
+      FileUtils.rm_f(key_dest)
+    end
+  end
+
+  desc "Archive, sign, and ask App Store Connect whether it would accept the binary -- no upload, so it spends none of Apple's rate-limited TestFlight quota. Catches the whole class of rejection (missing purpose strings, entitlement mismatches, bundle problems) that only surfaced at upload time before. Use it on any native or Info.plist change before spending a beta upload."
   lane :verify_build do
     keychain_name = build_only
-    delete_keychain(name: keychain_name)
+    begin
+      validate_against_app_store
+    ensure
+      delete_keychain(name: keychain_name)
+    end
   end
 end

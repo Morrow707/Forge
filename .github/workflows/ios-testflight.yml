@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       lane:
-        description: "beta uploads to TestFlight (counts against Apple's rate-limited upload quota). verify_build only archives + signs on a real Xcode toolchain -- use it to check native (Swift/Xcode project) changes compile before spending an upload on them."
+        description: "beta uploads to TestFlight (counts against Apple's rate-limited upload quota). verify_build archives, signs, AND asks App Store Connect whether it would accept the binary, without uploading -- use it on any native or Info.plist change before spending an upload."
         required: false
         default: beta
         type: choice

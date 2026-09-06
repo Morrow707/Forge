@@ -44,10 +44,18 @@ matching `capacitor.config.ts`'s `appId`, if left unset):
 | `IOS_BUNDLE_ID` | The app's bundle identifier, only if it ever changes from the default. |
 
 Running it: Actions tab -> "iOS TestFlight" -> Run workflow. Choose
-`verify_build` first -- it archives and signs on a real Xcode toolchain
-without touching Apple's rate-limited TestFlight upload quota, so it's the
-safe way to confirm signing actually works. Once that's clean, run `beta`
-to upload for real.
+`verify_build` first -- it archives and signs on a real Xcode toolchain and
+then asks App Store Connect whether it would accept the resulting binary,
+all without touching Apple's rate-limited upload quota. Once that's clean,
+run `beta` to upload for real.
+
+The validation step is there because archiving cleanly does not mean the
+upload will be accepted. On 2026-09-06 an Info.plist change archived fine,
+passed verify_build, and was then rejected at upload with error 90683
+(missing purpose string). Everything altool checks -- purpose strings,
+entitlements, bundle structure, SDK version -- was checked by nothing until
+the upload itself. `--validate-app` is a separate operation from
+`--upload-app`: it creates no build record and consumes none of the quota.
 
 ## Android -- Play Console
 

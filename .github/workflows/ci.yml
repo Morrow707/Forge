@@ -141,7 +141,16 @@ jobs:
       - name: Trigger Render deploy
         run: |
           if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL isn't set yet -- see this job's own comment in ci.yml for the two Render/GitHub setup steps. Skipping, not failing."
+            # A GitHub Actions warning annotation, not a plain echo. This
+            # used to print a line into a step nobody opens and exit 0, so
+            # the run went green and looked exactly like a successful
+            # deploy -- which is the worst possible presentation of "the
+            # gate this job exists to be is not connected". A warning shows
+            # on the run summary without failing the build, since whether
+            # to wire this up is a decision, not a bug.
+            echo "::warning title=Deploy gate not connected::RENDER_DEPLOY_HOOK_URL is not set, so this job deployed NOTHING. If Render Auto-Deploy is still on, every push is going straight to production without waiting for this workflow, and a red CI run does not stop it. See this job's comment in ci.yml for the two setup steps."
+            echo "RENDER_DEPLOY_HOOK_URL isn't set -- deployed nothing. See the warning on this run's summary."
             exit 0
           fi
           curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          echo "Render deploy triggered."
