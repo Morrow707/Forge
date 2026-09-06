@@ -28,3 +28,34 @@ updates:
     directory: "/android"
     schedule:
       interval: "weekly"
+    ignore:
+      # Gradle 9 cannot build this app, and the blocker is not in our build
+      # files. Proven rather than assumed: PR #85 bumped the wrapper to 9.7.1
+      # on a throwaway branch, and the Android Build workflow failed in 31
+      # seconds during configuration --
+      #
+      #   Plugin 'com.android.internal.library' relies on
+      #   'org.gradle.api.problems.internal.InternalProblems', a Gradle
+      #   internal API that was removed in Gradle 9.6.0.
+      #
+      # That is the documented Android Gradle Plugin 8.x / Gradle 9.6+
+      # incompatibility. The same code at 8.14.3 passed on the same runner,
+      # so the toolchain is healthy and only the wrapper version is at fault.
+      #
+      # Without this, every new 9.x release reopens a pull request that fails
+      # for exactly this reason, and each one costs a notification and a CI
+      # run to re-establish something already known.
+      #
+      # Scoped to majors on the wrapper alone: minor and patch updates to it,
+      # and every other Gradle dependency in android/, keep flowing normally.
+      # REMOVE THIS once AGP ships a release supporting Gradle 9.6+ -- at that
+      # point the bump is wanted, and nothing else here has to change.
+      #
+      # The name is "gradle-wrapper", not "gradle". Confirmed against PR #85
+      # itself rather than guessed: its branch is
+      # dependabot/gradle/android/gradle-wrapper-9.7.1 and its compatibility
+      # badge reads dependency-name=gradle-wrapper&package-manager=gradle.
+      # A wrong name here would not error -- it would match nothing and this
+      # whole block would quietly do nothing at all.
+      - dependency-name: "gradle-wrapper"
+        update-types: ["version-update:semver-major"]
