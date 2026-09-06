@@ -18232,8 +18232,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         INNER JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
         INNER JOIN workout_logs wl ON wle.workout_log_id = wl.id
         INNER JOIN assignments a ON wl.assignment_id = a.id
-        INNER JOIN program_exercises pe ON wle.program_exercise_id = pe.id
-        INNER JOIN exercises e ON pe.exercise_id = e.id
+        -- Exercise identity from the submission-time snapshot, not a live
+        -- join through program_exercises -- see workout_log_entries
+        -- .exercise_id's own schema comment, and the backfill in
+        -- reconcile-schema.ts that made switching this read safe. The old
+        -- join dropped every set whose program_exercise_id a program-day
+        -- edit had nulled, so a coach editing a day quietly erased their
+        -- athletes' PR history from this card, and it read identity through
+        -- a row that can be reassigned to a different exercise, which
+        -- misattributed the PR rather than merely losing it.
+        INNER JOIN exercises e ON wle.exercise_id = e.id
         WHERE a.athlete_id IN ${athleteIds}
           AND wle.weight_mode = 'numeric'
           AND wse.weight IS NOT NULL AND wse.weight <> ''

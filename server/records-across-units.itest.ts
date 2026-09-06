@@ -113,3 +113,34 @@ describe("records compare across a unit switch", () => {
     expect(prs[0]?.weight).toBe(100);
   });
 });
+
+// The coach-facing roster PR card used to resolve exercise identity by
+// joining program_exercises through workout_log_entries.program_exercise_id.
+// That FK is nullable and a program-day edit nulls it, so an inner join
+// silently dropped the athlete's whole PR history from the card. It also
+// read identity through a row that can be reassigned to a different
+// exercise, which misattributed a PR rather than merely losing it.
+describe("the roster PR card reads the submission-time exercise snapshot", () => {
+  beforeEach(resetDatabase);
+
+  it("still shows a PR for a set with no surviving program-exercise link", async () => {
+    const ctx = await setup();
+    await logSet({
+      ...ctx,
+      coachId: ctx.coach.id,
+      athleteId: ctx.athlete.id,
+      exerciseId: ctx.exercise.id,
+      date: "2026-08-01",
+      reps: 5,
+      weight: 225,
+      unit: "lbs",
+    });
+
+    const byAthlete = await storage.getRecentPrsForRosterBulk([ctx.athlete.id]);
+    const prs = byAthlete.get(ctx.athlete.id) ?? [];
+    expect(prs.length).toBe(1);
+    expect(prs[0].exerciseId).toBe(ctx.exercise.id);
+    expect(prs[0].weight).toBe(225);
+    expect(prs[0].unit).toBe("lbs");
+  });
+});
