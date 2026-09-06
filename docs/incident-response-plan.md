@@ -205,6 +205,67 @@ Within a week of closing any Medium-or-above incident:
   recurring — write it down and actually schedule it, not just note it.
 - Update this document if the response process itself needs to change.
 
+## 9. Recovery from data loss
+
+Sections 5 and 6 cover containment and investigation -- rotating a leaked
+credential, invalidating sessions, working out what was reached. They do not
+cover getting the data back, which is the other half of an incident and was
+missing from this plan entirely until 2026-09-06.
+
+**Two stores. A database backup covers one of them.**
+
+| Store | What is in it | Defined in |
+|---|---|---|
+| `forge-db` (Postgres) | Every account, program, workout log, and the URL of every video | `render.yaml` -> `databases` |
+| `forge-uploads` (10GB disk) | The video and annotation FILES themselves | `render.yaml` -> `disk` |
+
+Restoring the database alone leaves every athlete's video bank pointing at
+files that are not there. The two have to be restored together.
+
+**Nothing in this repo deletes recoverably.** `deleteUploadedFile` in
+`server/uploaded-files.ts` is `fs.unlink` -- no trash, no soft delete, no
+tombstone. The data-retention job (`server/data-retention-job.ts`) removes
+minors' videos permanently on a schedule, and the storage-cap sweep does the
+same when an athlete exceeds their video allowance. Both are working as
+designed. Neither is reversible without a backup.
+
+### Taking a backup
+
+    DATABASE_URL=postgres://... ./scripts/backup.sh /path/to/output /path/to/uploads
+
+Run it from somewhere that is not the production host. A backup written to the
+disk it is backing up shares that disk's failure and is a copy, not a backup.
+The script refuses to call a dump a backup unless it can read table data back
+out of it.
+
+### Restoring
+
+    ./scripts/restore.sh <dump-file> <target-database-url>
+
+It refuses to restore over a database that already has tables unless you pass
+`--i-know-this-destroys-the-target`, because a restore script that can clobber
+production on a mistyped argument is a worse risk than the missing backups it
+was written to fix. Then untar the uploads archive into the service's uploads
+mount.
+
+### This procedure has actually been run
+
+Not just written down. On 2026-09-06, against a real Postgres 16 with the full
+schema and seed data: 118 tables, 9 users, 413 exercises. Backed up, the
+database dropped outright, then restored from the dump.
+
+Everything came back: 118 tables, 9 users, 413 exercises, plus 169 foreign
+keys, 309 indexes and 45 enum types -- the structure a data-only dump loses
+silently. `npm run db:check-drift` was then run against the restored database
+and reported no drift, which is the app's own definition of a schema it can
+run on. The uploads archive round-tripped with file contents intact.
+
+What that does NOT prove is the part only the Render dashboard can answer:
+whether Render's own managed backups of `forge-db` exist, are running, and
+are restorable, and whether the uploads disk is snapshotted at all. A backup
+nobody has restored from is a hypothesis. Confirm both, and restore one into
+a scratch database once, before relying on either.
+
 ## Appendix: known gaps this plan currently has to work around
 
 Honest, as of this writing — update as these get built:
@@ -218,3 +279,11 @@ Honest, as of this writing — update as these get built:
 - **No automated anomaly/new-device login detection.** Detection today is
   reactive (a report, a Dependabot alert), not proactive (no "new login
   from an unrecognized location" notice to the user).
+- **Render's own backups are unverified.** Section 9 gives a backup/restore
+  procedure that has been run end to end against this schema, but nothing has
+  ever been restored from Render's managed backups of `forge-db`, and whether
+  the `forge-uploads` disk is snapshotted at all is unconfirmed. Until someone
+  restores one, the recovery story for a real production loss is untested.
+- **No scheduled off-host backup.** `scripts/backup.sh` exists and works;
+  nothing runs it automatically, and there is no off-host destination
+  configured for its output.
