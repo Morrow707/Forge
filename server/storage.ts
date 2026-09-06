@@ -9330,13 +9330,58 @@ Hard rules, no exceptions:
             where: eq(skillProgramWeeks.programId, existing.skillProgramId),
           });
           if (week) {
-            await tx.delete(skillProgramDays).where(eq(skillProgramDays.weekId, week.id));
-            const [day] = await tx
-              .insert(skillProgramDays)
-              .values({ weekId: week.id, dayNumber: 1, title: lesson.title, isRestDay: false })
-              .returning();
-            for (const ex of lesson.exercises) {
-              await tx.insert(skillProgramExercises).values({
+            // Reconciled in place, NOT wiped and rebuilt.
+            //
+            // This used to delete the lesson's day and re-insert it on every
+            // save, for every lesson in the payload -- including lessons the
+            // coach had not touched. skillSessionLogs.skillProgramDayId and
+            // .skillProgramExerciseId are both ON DELETE CASCADE, so that
+            // delete took with it every skill session an enrolled athlete had
+            // ever captured against the lesson: their sprint times, mechanics
+            // numbers, fault data, and the rows pointing at their saved clips,
+            // leaving the video files orphaned on disk. The class builder
+            // autosaves a few seconds after the last keystroke, so editing a
+            // lesson TITLE was enough to destroy every athlete's history for
+            // the whole class. seed.ts already documents this cascade and
+            // routes around it; this function never did.
+            //
+            // Rows are matched by position, which is what orderIndex already
+            // means here. An exercise the coach genuinely removed is still
+            // deleted -- that is the intended behaviour and it still cascades
+            // -- but a save that changes nothing about the drill list now
+            // touches no athlete data at all.
+            const existingDay = await tx.query.skillProgramDays.findFirst({
+              where: eq(skillProgramDays.weekId, week.id),
+            });
+            const day =
+              existingDay ??
+              (
+                await tx
+                  .insert(skillProgramDays)
+                  .values({ weekId: week.id, dayNumber: 1, title: lesson.title, isRestDay: false })
+                  .returning()
+              )[0];
+            if (existingDay && existingDay.title !== lesson.title) {
+              await tx
+                .update(skillProgramDays)
+                .set({ title: lesson.title })
+                .where(eq(skillProgramDays.id, day.id));
+            }
+            // Any OTHER day rows under this week are leftovers from the old
+            // wipe-and-rebuild shape; they hold no logs worth keeping that
+            // the surviving day does not, and leaving them would double the
+            // lesson on the calendar.
+            await tx
+              .delete(skillProgramDays)
+              .where(and(eq(skillProgramDays.weekId, week.id), ne(skillProgramDays.id, day.id)));
+
+            const existingExercises = await tx
+              .select()
+              .from(skillProgramExercises)
+              .where(eq(skillProgramExercises.dayId, day.id))
+              .orderBy(asc(skillProgramExercises.orderIndex), asc(skillProgramExercises.id));
+            for (const [i, ex] of lesson.exercises.entries()) {
+              const values = {
                 dayId: day.id,
                 skillExerciseId: ex.skillExerciseId,
                 orderIndex: ex.orderIndex,
@@ -9345,7 +9390,19 @@ Hard rules, no exceptions:
                 restSeconds: ex.restSeconds ?? null,
                 notes: ex.notes ?? null,
                 trackingLevel: trackingMap.get(ex) ?? "none",
-              });
+              };
+              const slot = existingExercises[i];
+              if (slot) {
+                await tx
+                  .update(skillProgramExercises)
+                  .set(values)
+                  .where(eq(skillProgramExercises.id, slot.id));
+              } else {
+                await tx.insert(skillProgramExercises).values(values);
+              }
+            }
+            for (const stale of existingExercises.slice(lesson.exercises.length)) {
+              await tx.delete(skillProgramExercises).where(eq(skillProgramExercises.id, stale.id));
             }
           }
         } else {
