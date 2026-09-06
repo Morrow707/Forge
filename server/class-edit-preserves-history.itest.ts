@@ -11,7 +11,7 @@ import {
   skillProgramWeeks,
   skillSessionLogs,
 } from "@shared/schema";
-import { makeAthlete, makeCoach, resetDatabase } from "./test-support/fixtures";
+import { makeAthlete, makeCoach, makeUploadedFile, resetDatabase, uploadedFileExists } from "./test-support/fixtures";
 
 // Editing a class must never touch what an enrolled athlete has already
 // captured. The lesson's hidden skill-program day used to be deleted and
@@ -169,5 +169,33 @@ describe("swapping a drill in a lesson does not relabel captured sessions", () =
       .where(eq(skillProgramExercises.dayId, captured.day.id));
     const linked = rows.find((r) => r.id === after[0].skillProgramExerciseId);
     expect(linked?.skillExerciseId).toBe(a.id);
+  });
+});
+
+// Removing a lesson deletes its skill program, which cascades down to every
+// enrolled athlete's captured sessions. The rows went; the video files did
+// not, so the app reported the footage as gone while the bytes stayed in the
+// uploads volume forever. That is athlete video, often a minor's.
+describe("removing a lesson takes its media off disk", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("deletes the video file behind a removed lesson's captured session", async () => {
+    const { coach, a, classId, captured } = await setup();
+    const videoUrl = await makeUploadedFile(`removed-lesson-${Date.now()}.mp4`);
+    await db
+      .update(skillSessionLogs)
+      .set({ videoUrl })
+      .where(eq(skillSessionLogs.id, captured.log.id));
+    expect(await uploadedFileExists(videoUrl)).toBe(true);
+
+    // Save the class with no lessons at all -- the coach removed it.
+    await storage.updateClassStructure(classId, { name: "Hitting", lessons: [] } as any);
+
+    expect((await db.select().from(skillSessionLogs).where(eq(skillSessionLogs.id, captured.log.id))).length).toBe(0);
+    expect(await uploadedFileExists(videoUrl)).toBe(false);
+    expect(a.id).toBeGreaterThan(0);
+    expect(coach.id).toBeGreaterThan(0);
   });
 });

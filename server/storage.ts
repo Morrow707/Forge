@@ -9375,6 +9375,14 @@ Hard rules, no exceptions:
     const trackingMap = await this.resolveSkillTrackingLevel(
       structure.lessons.flatMap((l) => l.exercises),
     );
+    // Media belonging to lessons the coach removes in this save. Collected
+    // inside the transaction, deleted from disk after it commits -- removing
+    // a lesson cascades its skill program down through days to
+    // skillSessionLogs and skillDayComments, and nothing was removing the
+    // files those rows pointed at. The rows vanished, so the app reported
+    // the footage as gone, while the bytes stayed in the uploads volume
+    // indefinitely. That is athlete video, often a minor's.
+    const orphanedMedia: (string | null)[] = [];
     await db.transaction(async (tx) => {
       const cls = await tx.query.classes.findFirst({ where: eq(classes.id, classId) });
       if (!cls) throw new Error("Class not found");
@@ -9616,11 +9624,30 @@ Hard rules, no exceptions:
       // (cascades its progress rows) and its now-orphaned skill program.
       for (const existing of existingLessons) {
         if (!keptIds.has(existing.id)) {
+          const [sessionMedia, commentMedia] = await Promise.all([
+            tx
+              .select({ url: skillSessionLogs.videoUrl, annotation: skillSessionLogs.coachAnnotationUrl })
+              .from(skillSessionLogs)
+              .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+              .where(eq(skillAssignments.skillProgramId, existing.skillProgramId)),
+            tx
+              .select({ url: skillDayComments.videoUrl, image: skillDayComments.imageUrl })
+              .from(skillDayComments)
+              .innerJoin(skillAssignments, eq(skillDayComments.skillAssignmentId, skillAssignments.id))
+              .where(eq(skillAssignments.skillProgramId, existing.skillProgramId)),
+          ]);
+          for (const m of sessionMedia) orphanedMedia.push(m.url, m.annotation);
+          for (const m of commentMedia) orphanedMedia.push(m.url, m.image);
+
           await tx.delete(classLessons).where(eq(classLessons.id, existing.id));
           await tx.delete(skillPrograms).where(eq(skillPrograms.id, existing.skillProgramId));
         }
       }
     });
+
+    // After the commit: the rows are gone either way, so a failure here
+    // leaves a file behind rather than a dangling reference.
+    await Promise.all(orphanedMedia.filter((u): u is string => !!u).map((u) => deleteUploadedFile(u)));
   },
 
   // Quick publish/unpublish toggle that doesn't require the full lesson
@@ -9654,10 +9681,33 @@ Hard rules, no exceptions:
       return { deleted: false, enrolledCount };
     }
     const lessons = await db.query.classLessons.findMany({ where: eq(classLessons.classId, classId) });
+    // The enrolment check above means there is usually nothing captured here,
+    // but an athlete who filmed a session and later un-enrolled leaves logs
+    // behind with a zero enrolment count. Same rule as the lesson-removal
+    // path: the bytes go with the rows.
+    const programIds = lessons.map((l) => l.skillProgramId);
+    const orphanedMedia: (string | null)[] = [];
+    if (programIds.length > 0) {
+      const [sessionMedia, commentMedia] = await Promise.all([
+        db
+          .select({ url: skillSessionLogs.videoUrl, annotation: skillSessionLogs.coachAnnotationUrl })
+          .from(skillSessionLogs)
+          .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+          .where(inArray(skillAssignments.skillProgramId, programIds)),
+        db
+          .select({ url: skillDayComments.videoUrl, image: skillDayComments.imageUrl })
+          .from(skillDayComments)
+          .innerJoin(skillAssignments, eq(skillDayComments.skillAssignmentId, skillAssignments.id))
+          .where(inArray(skillAssignments.skillProgramId, programIds)),
+      ]);
+      for (const m of sessionMedia) orphanedMedia.push(m.url, m.annotation);
+      for (const m of commentMedia) orphanedMedia.push(m.url, m.image);
+    }
     await db.delete(classes).where(eq(classes.id, classId));
     for (const lesson of lessons) {
       await db.delete(skillPrograms).where(eq(skillPrograms.id, lesson.skillProgramId));
     }
+    await Promise.all(orphanedMedia.filter((u): u is string => !!u).map((u) => deleteUploadedFile(u)));
     return { deleted: true, enrolledCount: 0 };
   },
 
@@ -17465,6 +17515,25 @@ ${catalog}`;
           // several sets sharing a rep count would otherwise re-run the
           // identical prior-best lookup.
           const priorBestByKey = new Map<string, number | null>();
+          // The heaviest set THIS entry contains at each (unit, rep count),
+          // and which set number carries it. priorBestByKey only looks at
+          // dates strictly before today, so on its own every set of an
+          // ascending ladder at one rep count -- 185x5, 195x5, 205x5 --
+          // cleared the same historical number and all three were stamped as
+          // personal records: three celebrations for the athlete and three
+          // entries on the Team PR Wall and in the weekly digest for one
+          // achievement. A ladder produces exactly one record, its top set.
+          // Ties resolve to the earliest set number so a repeated top set
+          // does not produce two.
+          const entryTopByKey = new Map<string, { lbs: number; setNumber: number }>();
+          for (const s of entry.sets) {
+            if (!s.weight || !s.reps) continue;
+            const lbs = toComparableLbs(parseFloat(s.weight), entryWeightUnit);
+            if (Number.isNaN(lbs)) continue;
+            const k = `${entryWeightUnit}-${s.reps}`;
+            const cur = entryTopByKey.get(k);
+            if (!cur || lbs > cur.lbs) entryTopByKey.set(k, { lbs, setNumber: s.setNumber });
+          }
           let exerciseNameForPr: string | null = null;
           if (entry.weightMode === "numeric" && entry.programExerciseId != null) {
             const [programExercise] = await tx
@@ -17544,10 +17613,17 @@ ${catalog}`;
               // representation gap.
               const PR_EPSILON_LBS = 0.001;
               const weightLbsForPr = toComparableLbs(weightNum, entryWeightUnit);
+              const prKey = `${entryWeightUnit}-${s.reps ?? ""}`;
+              const entryTop = entryTopByKey.get(prKey);
+              // Beats the athlete's history AND is this entry's own top set
+              // at that rep count -- the lighter rungs of the ladder that led
+              // up to it are not each a record.
               const isPr =
                 !Number.isNaN(weightNum) &&
                 priorBest != null &&
-                weightLbsForPr > priorBest + PR_EPSILON_LBS;
+                weightLbsForPr > priorBest + PR_EPSILON_LBS &&
+                entryTop != null &&
+                entryTop.setNumber === s.setNumber;
               if (isPr && exerciseNameForPr && s.weight && s.reps) {
                 newPRs.push({ exerciseName: exerciseNameForPr, weight: s.weight, unit: entryWeightUnit, reps: s.reps });
               }

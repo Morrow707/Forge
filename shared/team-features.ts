@@ -51,7 +51,11 @@ export const COACH_FEATURE_FIELDS: {
     key: "leaderboard",
     label: "Leaderboard",
     description: "The roster-wide strength leaderboard.",
-    navHrefs: ["/coach/leaderboard"],
+    // Both sides, like nutrition and teamBoard above. Listing only the coach
+    // route meant turning the Leaderboard off hid it from the coach who
+    // turned it off and left it fully visible to every one of their
+    // athletes -- the opposite of what the toggle says it does.
+    navHrefs: ["/coach/leaderboard", "/athlete/leaderboard"],
   },
   {
     key: "teamBoard",
