@@ -52,10 +52,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -65,7 +65,7 @@ jobs:
       # repo starts with (ios-testflight.yml, android-release.yml).
       - name: Set up Node.js
         if: matrix.language == 'swift' || matrix.language == 'java-kotlin'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -100,7 +100,7 @@ jobs:
       # targets 21.
       - name: Set up Java
         if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
@@ -159,6 +159,6 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
