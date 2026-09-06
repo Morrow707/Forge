@@ -15773,61 +15773,130 @@ ${entriesText}`;
       entriesByAthlete.set(e.athleteId, list);
     }
 
-    return Promise.all(
-      roster.map(async (athlete) => {
-        const athleteEntries = entriesByAthlete.get(athlete.id) ?? [];
-        const enrichedEntries = await Promise.all(
-          athleteEntries.map(async (e) => {
-            if (e.isRestDay) {
-              return { ...e, exercises: [], correctives: [] as string[] };
-            }
-            if (e.kind === "skill") {
-              const day = await db.query.skillProgramDays.findFirst({
-                where: eq(skillProgramDays.id, e.programDayId),
-                with: { exercises: { orderBy: asc(skillProgramExercises.orderIndex), with: { skillExercise: true } } },
-              });
-              return {
-                ...e,
-                exercises: (day?.exercises ?? []).map((se) => ({
-                  name: se.skillExercise.name,
-                  sets: se.sets,
-                  reps: se.reps,
-                  weight: null as string | null,
-                })),
-                correctives: [] as string[],
-              };
-            }
-            const [day, correctives] = await Promise.all([
-              this.getProgramDayForCoachView(coachId, e.programDayId),
-              this.getCorrectivesForAssignmentDay(e.assignmentId, e.programDayId),
-            ]);
-            return {
-              ...e,
-              exercises: (day?.exercises ?? []).map((pe) => ({
-                name: pe.exercise.name,
-                sets: pe.sets,
-                reps: pe.reps,
-                weight: pe.weight,
-              })),
-              correctives: correctives.map((c) => c.exercise.name),
-            };
-          }),
-        );
+    // Everything below used to be fetched per athlete, inside a nested
+    // Promise.all: a program-day lookup and a correctives lookup for each
+    // calendar entry, plus a skill-day lookup for each skill entry. Measured
+    // with scripts/perf-roster.ts, that is four queries per athlete on top
+    // of sixteen fixed -- 116 queries for a 25-athlete roster, 416 for 100,
+    // 1,216 for 300. Perfectly linear in the number the org is billed by,
+    // for a page a coach opens every morning.
+    //
+    // Concurrency made it worse rather than better: those queries all fired
+    // at once against a pool capped at 20 connections (server/db.ts), so a
+    // large roster spent most of its time queued behind itself, and did it
+    // while holding connections other requests needed.
+    //
+    // Now three queries regardless of roster size. The ids are collected
+    // first and each set is fetched once; a program day shared by several
+    // athletes -- the normal case for a team on one program -- is fetched
+    // once rather than once per athlete.
+    const programDayIds = new Set<number>();
+    const skillDayIds = new Set<number>();
+    const correctiveKeys = new Set<string>();
+    for (const e of entries) {
+      if (e.athleteId == null || e.isRestDay) continue;
+      if (e.kind === "skill") {
+        skillDayIds.add(e.programDayId);
+      } else {
+        programDayIds.add(e.programDayId);
+        correctiveKeys.add(`${e.assignmentId}:${e.programDayId}`);
+      }
+    }
 
-        const wellness = wellnessByAthlete.get(athlete.id);
-        const readiness = wellness ? computeReadiness(wellness) : null;
-        const acwr = acwrByAthlete.get(athlete.id);
+    const [programDayRows, skillDayRows, correctiveRows] = await Promise.all([
+      programDayIds.size
+        ? db.query.programDays.findMany({
+            where: inArray(programDays.id, [...programDayIds]),
+            with: {
+              exercises: { orderBy: asc(programExercises.orderIndex), with: { exercise: true } },
+            },
+          })
+        : Promise.resolve([]),
+      skillDayIds.size
+        ? db.query.skillProgramDays.findMany({
+            where: inArray(skillProgramDays.id, [...skillDayIds]),
+            with: {
+              exercises: {
+                orderBy: asc(skillProgramExercises.orderIndex),
+                with: { skillExercise: true },
+              },
+            },
+          })
+        : Promise.resolve([]),
+      // One query for every (assignment, day) pair on the board, filtered by
+      // day and narrowed per pair in memory below -- assignmentCorrectives
+      // is keyed by both, and a composite IN over pairs buys nothing here
+      // when the day set is already this small.
+      programDayIds.size
+        ? db.query.assignmentCorrectives.findMany({
+            where: inArray(assignmentCorrectives.programDayId, [...programDayIds]),
+            orderBy: asc(assignmentCorrectives.orderIndex),
+            with: { exercise: true },
+          })
+        : Promise.resolve([]),
+    ]);
 
+    const programDayById = new Map(programDayRows.map((d) => [d.id, d]));
+    const skillDayById = new Map(skillDayRows.map((d) => [d.id, d]));
+    const correctivesByKey = new Map<string, typeof correctiveRows>();
+    for (const c of correctiveRows) {
+      const key = `${c.assignmentId}:${c.programDayId}`;
+      if (!correctiveKeys.has(key)) continue;
+      correctivesByKey.set(key, [...(correctivesByKey.get(key) ?? []), c]);
+    }
+
+    // No ownership check per day any more, and none is needed: every entry
+    // here came from getCalendarForCoach, which is already scoped to this
+    // coach's own roster and assignments. getProgramDayForCoachView's own
+    // check existed for callers that take a day id straight off a request,
+    // which this never did.
+    return roster.map((athlete) => {
+      const athleteEntries = entriesByAthlete.get(athlete.id) ?? [];
+      const enrichedEntries = athleteEntries.map((e) => {
+        if (e.isRestDay) {
+          return { ...e, exercises: [], correctives: [] as string[] };
+        }
+        if (e.kind === "skill") {
+          const day = skillDayById.get(e.programDayId);
+          return {
+            ...e,
+            exercises: (day?.exercises ?? []).map((se) => ({
+              name: se.skillExercise.name,
+              sets: se.sets,
+              reps: se.reps,
+              weight: null as string | null,
+            })),
+            correctives: [] as string[],
+          };
+        }
+        const day = programDayById.get(e.programDayId);
         return {
-          athleteId: athlete.id,
-          athleteName: athlete.name,
-          healthStatus: athlete.healthStatus,
-          readiness,
-          acwr: acwr && acwr.ratio != null ? { ratio: acwr.ratio, level: acwr.level } : null,
-          entries: enrichedEntries,
+          ...e,
+          exercises: (day?.exercises ?? []).map((pe) => ({
+            name: pe.exercise.name,
+            sets: pe.sets,
+            reps: pe.reps,
+            weight: pe.weight,
+          })),
+          correctives: (correctivesByKey.get(`${e.assignmentId}:${e.programDayId}`) ?? []).map(
+            (c) => c.exercise.name,
+          ),
         };
-      }),
-    );
+      });
+
+      const wellness = wellnessByAthlete.get(athlete.id);
+      const readiness = wellness ? computeReadiness(wellness) : null;
+      const acwr = acwrByAthlete.get(athlete.id);
+
+      return {
+        athleteId: athlete.id,
+        athleteName: athlete.name,
+        healthStatus: athlete.healthStatus,
+        readiness,
+        acwr: acwr && acwr.ratio != null ? { ratio: acwr.ratio, level: acwr.level } : null,
+        entries: enrichedEntries,
+      };
+    });
   },
 
   // Simple RPE-based autoregulation: turn how hard the last set felt into a
