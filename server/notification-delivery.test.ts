@@ -43,8 +43,13 @@ describe("both push transports report whether anything landed", () => {
 });
 
 describe("the retention grace clock starts only on delivery", () => {
-  it("gates both sweeps on the delivered flag", () => {
-    expect(videoJob.match(/const \{ delivered \} = await notifyUser\(/g)?.length).toBe(2);
+  it("gates both sweeps on delivery AND on whether a channel was even tried", () => {
+    expect(videoJob.match(/const \{ delivered, attempted \} = await notifyUser\(/g)?.length).toBe(2);
+    // Holding the clock on !delivered alone disabled the sweep outright
+    // wherever no channel is configured, and re-warned the same video every
+    // night forever, because the in-app row is written before any send is
+    // attempted. Only a channel that was tried and failed is worth retrying.
+    expect(videoJob.match(/if \(!delivered && attempted\) \{/g)?.length).toBe(2);
   });
 
   it("skips the item instead of aborting the whole sweep", () => {

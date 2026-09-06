@@ -1100,6 +1100,19 @@ export function summarizeTrackedSet(
   // no concentric data at all (e.g. every phase got filtered as phantom)
   // rather than computing deviation over nothing.
   const concentricPhases = phaseStats.filter((phase, i) => isConcentric[i] && !isPhantomPhase(phase));
+  // The set-level numbers below are built from these, not from the raw
+  // direction-filtered arrays. repBreakdown and the bar-path drift already
+  // dropped phantom phases -- a tracking spike or a partial movement the rep
+  // detector rejected -- but peak/mean velocity, concentric and eccentric
+  // time and both power figures were still computed over them. A phantom
+  // therefore never appeared as a rep yet still set the set's peak velocity
+  // and dragged its means, so the summary disagreed with the rep list under
+  // it. Falls back to the unfiltered phases when filtering would leave
+  // nothing, the same stance every other filter in this file takes.
+  const realConcentric = concentric.filter((phase) => !isPhantomPhase(phase));
+  const realEccentric = eccentric.filter((phase) => !isPhantomPhase(phase));
+  const setConcentric = realConcentric.length > 0 ? realConcentric : concentric;
+  const setEccentric = realEccentric.length > 0 ? realEccentric : eccentric;
   const activePoints: TrackedPoint[] = [];
   for (const phase of concentricPhases) {
     for (let idx = phase.startIdx; idx <= phase.endIdx; idx++) activePoints.push(points[idx]);
@@ -1129,23 +1142,23 @@ export function summarizeTrackedSet(
   const barPathTrace = buildPathTrace(points, { x: points[0].x, y: points[0].y });
 
   return {
-    peakVelocityMps: Math.round((Math.max(...concentric.map((c) => c.peak), 0)) * 100) / 100,
+    peakVelocityMps: Math.round((Math.max(...setConcentric.map((c) => c.peak), 0)) * 100) / 100,
     meanVelocityMps:
       Math.round(
-        (concentric.reduce((a, c) => a + c.mean, 0) / (concentric.length || 1)) * 100,
+        (setConcentric.reduce((a, c) => a + c.mean, 0) / (setConcentric.length || 1)) * 100,
       ) / 100,
     concentricSeconds:
       Math.round(
-        (concentric.reduce((a, c) => a + c.duration, 0) / (concentric.length || 1)) * 100,
+        (setConcentric.reduce((a, c) => a + c.duration, 0) / (setConcentric.length || 1)) * 100,
       ) / 100,
     eccentricSeconds:
-      eccentric.length > 0
-        ? Math.round((eccentric.reduce((a, c) => a + c.duration, 0) / eccentric.length) * 100) /
+      setEccentric.length > 0
+        ? Math.round((setEccentric.reduce((a, c) => a + c.duration, 0) / setEccentric.length) * 100) /
           100
         : 0,
     eccentricMeanVelocityMps:
-      eccentric.length > 0
-        ? Math.round((eccentric.reduce((a, c) => a + c.mean, 0) / eccentric.length) * 100) / 100
+      setEccentric.length > 0
+        ? Math.round((setEccentric.reduce((a, c) => a + c.mean, 0) / setEccentric.length) * 100) / 100
         : 0,
     barPathDeviationCm: Math.round(barPathDeviationCm * 10) / 10,
     barPathTrace,
@@ -1153,14 +1166,14 @@ export function summarizeTrackedSet(
     formFaults: [],
     peakPowerWatts:
       loadKg && loadKg > 0
-        ? Math.round(loadKg * GRAVITY_MPS2 * Math.max(...concentric.map((c) => c.peak), 0))
+        ? Math.round(loadKg * GRAVITY_MPS2 * Math.max(...setConcentric.map((c) => c.peak), 0))
         : null,
     meanPowerWatts:
       loadKg && loadKg > 0
         ? Math.round(
             loadKg *
               GRAVITY_MPS2 *
-              (concentric.reduce((a, c) => a + c.mean, 0) / (concentric.length || 1)),
+              (setConcentric.reduce((a, c) => a + c.mean, 0) / (setConcentric.length || 1)),
           )
         : null,
     romCm:
@@ -1318,12 +1331,17 @@ export function fuseSideVelocity(
     meanVelocityMps,
     peakPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * peakVelocityMps) : null,
     meanPowerWatts: loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * meanVelocityMps) : null,
+    // Mean, matching velocityLossPercent's own field comment and the
+    // primary path in summarizeLift. This fused path recomputed it from
+    // PEAK, which is one noisy single-frame sample: a tracking spike on the
+    // first or last rep moved the reported fatigue by tens of percent, and
+    // the same set analysed through the two paths disagreed.
     velocityLossPercent:
-      fusedRepBreakdown.length > 1 && fusedRepBreakdown[0].peakVelocityMps > 0
+      fusedRepBreakdown.length > 1 && fusedRepBreakdown[0].meanVelocityMps > 0
         ? Math.round(
-            ((fusedRepBreakdown[0].peakVelocityMps -
-              fusedRepBreakdown[fusedRepBreakdown.length - 1].peakVelocityMps) /
-              fusedRepBreakdown[0].peakVelocityMps) *
+            ((fusedRepBreakdown[0].meanVelocityMps -
+              fusedRepBreakdown[fusedRepBreakdown.length - 1].meanVelocityMps) /
+              fusedRepBreakdown[0].meanVelocityMps) *
               1000,
           ) / 10
         : null,
