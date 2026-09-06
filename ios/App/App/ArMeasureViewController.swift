@@ -259,12 +259,22 @@ final class ArMeasureViewController: UIViewController, ARSCNViewDelegate {
         clearPoints()
     }
 
+    // Both handlers read onDone into a local BEFORE dismissing, and the
+    // completion closure calls that local rather than reaching back through
+    // self. Going through `[weak self]` meant the callback was skipped
+    // entirely if this controller was released during the dismissal
+    // animation -- which is exactly when a presented controller is released.
+    // The Capacitor call on the other end of onDone is a promise, so
+    // skipping it does not lose a measurement quietly, it leaves the coach's
+    // measure button awaiting something that will never arrive.
     @objc private func cancelTapped() {
-        dismiss(animated: true) { [weak self] in self?.onDone(nil) }
+        let done = onDone
+        dismiss(animated: true) { done(nil) }
     }
 
     @objc private func doneTapped() {
+        let done = onDone
         let result = lastMeasurementMeters
-        dismiss(animated: true) { [weak self] in self?.onDone(result) }
+        dismiss(animated: true) { done(result) }
     }
 }

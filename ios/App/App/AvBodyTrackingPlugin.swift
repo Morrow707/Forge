@@ -101,6 +101,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     private var currentInput: AVCaptureDeviceInput?
     private var movieOutput: AVCaptureMovieFileOutput?
     private var recordingCall: CAPPluginCall?
+    // Set when stop() tears the session down with a recording still finalizing. The delegate
+    // below deletes the resulting file instead of leaving it on disk with nobody to claim it.
+    private var discardFinishedRecording = false
     private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
 
     // Session configuration/startRunning happens off the main thread -- startRunning() in
@@ -282,6 +285,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 DispatchQueue.main.async {
                     self.logDiag("permission result: \(granted ? "granted" : "denied")")
                     guard granted else {
+                        // Rotation was already opened above, before the permission answer
+                        // existed. Hand it back on the way out: stop() is what normally
+                        // restores portrait, and a start() that never produced a session is
+                        // a start() the JS side has no reason to call stop() after -- which
+                        // left the whole app sideways behind a denied-permission message.
+                        self.applyInterfaceOrientationLock(landscape: false)
                         self.notifyListeners("sessionError", data: ["message": "Camera access denied"])
                         call.reject("Camera access denied -- enable it in Settings > Forge > Camera")
                         return
@@ -292,10 +301,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         case .denied, .restricted:
             logDiag("FAILED: camera permission previously denied/restricted")
             let message = "Camera access denied -- enable it in Settings > Forge > Camera"
+            // Same restore as the notDetermined branch above.
+            applyInterfaceOrientationLock(landscape: false)
             notifyListeners("sessionError", data: ["message": message])
             call.reject(message)
         @unknown default:
             logDiag("FAILED: unknown authorization status")
+            applyInterfaceOrientationLock(landscape: false)
             call.reject("Unknown camera authorization status")
         }
     }
@@ -307,6 +319,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             self.logDiag("device model=\(device.model) systemVersion=\(device.systemVersion)")
             guard let webView = self.bridge?.webView, let container = webView.superview else {
                 self.logDiag("FAILED: bridge webView/superview not available")
+                // Same restore as start()'s permission branches -- every path that leaves
+                // without a running session has to hand the rotation back, or the app stays
+                // sideways with no camera behind it.
+                self.applyInterfaceOrientationLock(landscape: false)
                 call.reject("Bridge WebView is not available")
                 return
             }
@@ -317,6 +333,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             let lensPreference = call.getString("lens") ?? "wide"
             guard let captureDevice = self.pickCaptureDevice(preferring: lensPreference) else {
                 self.logDiag("FAILED: no capture device available")
+                self.applyInterfaceOrientationLock(landscape: false)
                 call.reject("No camera device available")
                 return
             }
@@ -356,6 +373,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 guard session.canAddInput(input) else {
                     self.logDiag("FAILED: cannot add camera input")
                     session.commitConfiguration()
+                    self.applyInterfaceOrientationLock(landscape: false)
                     call.reject("Cannot add camera input")
                     return
                 }
@@ -364,6 +382,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             } catch {
                 self.logDiag("FAILED: AVCaptureDeviceInput error: \(error.localizedDescription)")
                 session.commitConfiguration()
+                self.applyInterfaceOrientationLock(landscape: false)
                 call.reject("Failed to open camera: \(error.localizedDescription)")
                 return
             }
@@ -442,7 +461,23 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if let movieOutput = self.movieOutput, movieOutput.isRecording {
                 movieOutput.stopRecording()
             }
-            self.recordingCall = nil
+            // A stopRecording() call still waiting on the file-finalized delegate has to be
+            // settled here, not dropped. Clearing it left the JS promise unresolved forever:
+            // the delegate fires later, finds no call to answer, and returns -- and stop()
+            // runs on EVERY dialog close, including cancel and error paths, so closing the
+            // dialog in the second between tapping stop and the container being written left
+            // the capture UI awaiting a promise nothing would ever settle.
+            //
+            // Rejected rather than resolved: the dialog is going away, so the clip is not
+            // wanted, and handing back a path nobody asked for would be worse than saying so.
+            if let pending = self.recordingCall {
+                pending.reject("Recording cancelled")
+                self.recordingCall = nil
+                // Nothing is going to read this file now, and the JS side's usual
+                // read-then-deleteRecording handshake is what normally removes it -- see
+                // deleteRecording's own comment on how fast 1080p at 120fps fills a device.
+                self.discardFinishedRecording = true
+            }
             if let session = self.session {
                 NotificationCenter.default.removeObserver(self, name: .AVCaptureSessionRuntimeError, object: session)
                 Self.sessionQueue.async {
@@ -869,7 +904,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             UIApplication.shared.endBackgroundTask(backgroundTaskID)
             backgroundTaskID = .invalid
         }
-        guard let call = recordingCall else { return }
+        guard let call = recordingCall else {
+            if discardFinishedRecording {
+                discardFinishedRecording = false
+                try? FileManager.default.removeItem(at: outputFileURL)
+                // Released from the in-use set too, the same way deleteRecording does it --
+                // a path left marked active would keep purgeStaleRecordings skipping it
+                // forever if the delete above ever failed.
+                Self.markPathInactive(outputFileURL.path)
+                logDiag("discarded recording finalized after stop: \(outputFileURL.lastPathComponent)")
+            }
+            return
+        }
         recordingCall = nil
         if let error = error {
             logDiag("recording finished with error: \(error.localizedDescription)")
