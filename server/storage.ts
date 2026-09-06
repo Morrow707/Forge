@@ -1765,9 +1765,8 @@ async function buildPlatformTrends() {
           .select({
             athleteId: workoutLogs.athleteId,
             date: workoutLogs.date,
-            weightMode: workoutLogEntries.weightMode,
-            reps: workoutSetEntries.reps,
-            weight: workoutSetEntries.weight,
+            weightLbs: workoutSetEntries.weightLbs,
+            repsCount: workoutSetEntries.repsCount,
           })
           .from(workoutSetEntries)
           .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -1776,12 +1775,14 @@ async function buildPlatformTrends() {
       : [];
   const loadByAthleteAndDate = new Map<number, Map<string, number>>();
   for (const row of loadRows) {
-    if (row.weightMode !== "numeric" || !row.weight || !row.reps) continue;
-    const weight = parseFloat(row.weight);
-    const reps = parseInt(row.reps, 10);
-    if (Number.isNaN(weight) || Number.isNaN(reps)) continue;
+    // Normalized columns, not the raw text. This pooled every athlete on
+    // the platform into one load figure while adding pounds to kilograms,
+    // which is the worst place to do it -- a research aggregate is exactly
+    // the number nobody can eyeball for plausibility. weightLbs is null
+    // for a non-numeric set, which replaces the weightMode check too.
+    if (row.weightLbs == null || row.repsCount == null) continue;
     const byDate = loadByAthleteAndDate.get(row.athleteId) ?? new Map<string, number>();
-    byDate.set(row.date, (byDate.get(row.date) ?? 0) + reps * weight);
+    byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.repsCount * row.weightLbs);
     loadByAthleteAndDate.set(row.athleteId, byDate);
   }
   const acwrCounts = { green: 0, yellow: 0, red: 0 };
@@ -14004,7 +14005,7 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
               inArray(workoutLogs.athleteId, athleteIds),
               gte(workoutLogs.date, sinceDate),
               eq(workoutLogEntries.weightMode, "numeric"),
-              sql`${workoutSetEntries.weight} ~ '^[0-9]+(\\.[0-9]+)?$'`,
+              isNotNull(workoutSetEntries.weightLbs),
             ),
           )
           .groupBy(workoutLogs.athleteId, workoutLogs.date);
@@ -18695,13 +18696,13 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         const name = entry.programExercise?.exercise.name ?? entry.corrective?.exercise.name;
         if (name) exerciseNames.add(name);
         for (const set of entry.sets) {
-          const reps = set.reps ? parseInt(set.reps, 10) : NaN;
-          if (Number.isNaN(reps)) continue;
-          totalReps += reps;
-          if (entry.weightMode === "numeric" && set.weight) {
-            const w = parseFloat(set.weight);
-            if (!Number.isNaN(w)) totalVolume += reps * w;
-          }
+          // repsCount/weightLbs rather than re-parsing the text -- see
+          // rosterLoadExprSql's comment. The volume shown against a session
+          // added pounds to kilograms whenever a block mixed them, which
+          // the logging screen explicitly allows per exercise.
+          if (set.repsCount == null) continue;
+          totalReps += set.repsCount;
+          if (set.weightLbs != null) totalVolume += set.repsCount * set.weightLbs;
         }
       }
       return {
@@ -18736,12 +18737,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       let dayLoad = 0;
       for (const entry of log.entries) {
         for (const set of entry.sets) {
-          const reps = set.reps ? parseInt(set.reps, 10) : NaN;
-          if (Number.isNaN(reps)) continue;
-          if (entry.weightMode === "numeric" && set.weight) {
-            const w = parseFloat(set.weight);
-            if (!Number.isNaN(w)) dayLoad += reps * w;
-          }
+          // The series this feeds is the acute:chronic ratio behind the
+          // injury-risk flag, so a unit mix here does not just skew a chart
+          // -- it changes a judgement a coach acts on. Normalized columns,
+          // same as every other load path now.
+          if (set.repsCount == null || set.weightLbs == null) continue;
+          dayLoad += set.repsCount * set.weightLbs;
         }
       }
       loadByDate.set(log.date, (loadByDate.get(log.date) ?? 0) + dayLoad);
@@ -18801,12 +18802,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       for (const e of log.entries) {
         for (const set of e.sets) {
           entry.sets += 1;
-          const reps = set.reps ? parseInt(set.reps, 10) : NaN;
-          if (Number.isNaN(reps) || e.weightMode !== "numeric" || !set.weight) continue;
-          const w = parseFloat(set.weight);
-          if (Number.isNaN(w)) continue;
-          entry.numericReps += reps;
-          entry.volume += reps * w;
+          if (set.repsCount == null || set.weightLbs == null) continue;
+          entry.numericReps += set.repsCount;
+          entry.volume += set.repsCount * set.weightLbs;
         }
       }
       byDate.set(log.date, entry);
@@ -18902,16 +18900,28 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // rosterLoadExprSql does the same reps*weight arithmetic as a SQL
   // expression instead, so Postgres's own aggregate engine does the
   // summing and only one row per (athlete[, date]) crosses the wire.
-  // Mirrors the original JS parsing exactly: reps takes its leading digit
-  // run the way parseInt did ("8-10" -> 8; regexp_match returns NULL --
-  // and NULL propagates through the multiply and is ignored by sum() --
-  // for reps with no leading digit, same as the old isNaN(reps) skip);
-  // weight is required to look like a plain number (the old parseFloat/
-  // isNaN guard), enforced by the caller's own WHERE clause since casting
-  // a non-numeric string with ::numeric errors rather than parsing
-  // partially the way parseFloat did.
+  // Reads the normalized columns, not the raw text ones.
+  //
+  // weight_lbs and reps_count already exist for exactly this: they are
+  // written at save time by normalizeSetLoad and backfilled for every
+  // historical row by reconcile-schema.ts, whose own comment says the point
+  // was "to change WHICH unit the number is in". This expression was never
+  // moved onto them, so it multiplied the raw text weight by reps and added
+  // the results across sets whose units differ.
+  //
+  // The unit is per entry by design -- the schema explicitly supports a
+  // superset pairing a dumbbell lift in lbs with a kettlebell lift in kg,
+  // and the logging screen lets each exercise carry its own. So a mixed
+  // block was summing two currencies: a kilogram set counted as roughly 45%
+  // of the load it really was, and an athlete who switched units partway
+  // through a window moved their own acute:chronic ratio without training
+  // any differently. That ratio is what raises a coach's injury-risk flag.
+  //
+  // NULL still means "no numeric load here" (a bodyweight, band or box set,
+  // or a weight that never parsed) and is ignored by sum() exactly as the
+  // old NULL-propagating regexp_match was.
   rosterLoadExprSql() {
-    return sql<number>`(regexp_match(${workoutSetEntries.reps}, '^\\d+'))[1]::numeric * ${workoutSetEntries.weight}::numeric`;
+    return sql<number>`${workoutSetEntries.repsCount}::numeric * ${workoutSetEntries.weightLbs}::numeric`;
   },
 
   async getRosterAcwrSummary(coachId: number) {
@@ -18950,7 +18960,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           gte(workoutLogs.date, fetchSince),
           lte(workoutLogs.date, fetchUntil),
           eq(workoutLogEntries.weightMode, "numeric"),
-          sql`${workoutSetEntries.weight} ~ '^[0-9]+(\\.[0-9]+)?$'`,
+          isNotNull(workoutSetEntries.weightLbs),
         ),
       )
       .groupBy(coachAthletes.athleteId, users.name, workoutLogs.date);
@@ -19012,7 +19022,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           inArray(coachAthletes.coachId, coachIds),
           gte(workoutLogs.date, dates[0]),
           eq(workoutLogEntries.weightMode, "numeric"),
-          sql`${workoutSetEntries.weight} ~ '^[0-9]+(\\.[0-9]+)?$'`,
+          isNotNull(workoutSetEntries.weightLbs),
         ),
       )
       .groupBy(coachAthletes.athleteId, workoutLogs.date);

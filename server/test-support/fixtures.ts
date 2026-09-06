@@ -220,6 +220,12 @@ export async function makeLoggedSetWithVideo(opts: {
       reps: "10",
       weight: "100",
       weightUnit: "lbs",
+      // The real save path fills these through normalizeSetLoad, and every
+      // load aggregation reads them rather than re-parsing the text. A
+      // fixture that leaves them null produces rows no load query counts,
+      // which is not a shape the application can actually create.
+      repsCount: 10,
+      weightLbs: 100,
       formCheckVideoUrl: opts.videoUrl,
       videoFavorited: opts.favorited ?? false,
       videoUploadedAt: new Date(),
