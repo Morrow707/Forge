@@ -10786,14 +10786,37 @@ Hard rules, no exceptions:
         (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
     if (!reachable) throw new Error("This lesson isn't unlocked yet.");
 
+    // A manual unlock clears the payment gate here too, matching
+    // recomputeClassProgress and manuallyUnlockLesson's own contract.
     const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
-    if (paymentRequired && !progress.purchasedAt) throw new Error("Purchase this lesson before adding it to your calendar.");
+    if (paymentRequired && !progress.purchasedAt && !progress.manuallyUnlocked) {
+      throw new Error("Purchase this lesson before adding it to your calendar.");
+    }
+
+    // Today, unless this athlete already has one of this class's lessons on
+    // that date -- overlapping skill assignments collapse to the newest, so
+    // adding a lesson onto an occupied day silently removed the one already
+    // there. Walks forward to the first free day instead.
+    const taken = new Set(
+      (
+        await db
+          .select({ startDate: skillAssignments.startDate })
+          .from(skillAssignments)
+          .innerJoin(
+            classLessonProgress,
+            eq(classLessonProgress.skillAssignmentId, skillAssignments.id),
+          )
+          .where(eq(classLessonProgress.enrollmentId, enrollmentId))
+      ).map((r) => r.startDate),
+    );
+    let startDate = await this.todayForAthlete(enrollment.athleteId);
+    while (taken.has(startDate)) startDate = shiftIsoDate(startDate, 1);
 
     const { created } = await this.createSkillAssignment(
       enrollment.coachId,
       lesson.skillProgramId,
       [{ athleteId: enrollment.athleteId }],
-      formatISO(new Date(), { representation: "date" }),
+      startDate,
     );
     await db
       .update(classLessonProgress)
