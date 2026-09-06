@@ -10117,8 +10117,16 @@ Hard rules, no exceptions:
           (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
       if (!reachable) break;
 
+      // manuallyUnlocked clears the payment gate as well as the unlock rule,
+      // which is what manuallyUnlockLesson's own comment has always promised
+      // ("force a lesson open regardless of its unlock rule or payment
+      // gate"). It only cleared the rule, so on a priced Forge lesson the
+      // coach's unlock set the flag, changed nothing, and reported the
+      // lesson still locked with no reason given -- the athlete stayed stuck
+      // and the coach had no way to free them. The admin escape hatch had to
+      // set purchasedAt alongside it to work at all.
       const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
-      if (paymentRequired && !progress.purchasedAt) break;
+      if (paymentRequired && !progress.purchasedAt && !progress.manuallyUnlocked) break;
 
       // Reachable and paid for, but this lesson has a quiz -- hold here
       // rather than auto-activating; activateClassLesson is the only path
@@ -10280,7 +10288,7 @@ Hard rules, no exceptions:
         const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
         if (!reachable) {
           state = "locked";
-        } else if (paymentRequired && !progress?.purchasedAt) {
+        } else if (paymentRequired && !progress?.purchasedAt && !progress?.manuallyUnlocked) {
           state = "locked_preview";
         } else if (lessonsWithQuiz.has(lesson.id)) {
           state = "ready";
