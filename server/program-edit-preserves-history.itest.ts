@@ -311,3 +311,82 @@ describe("reordering a day keeps each substitution with its own exercise", () =>
     expect(stillSquat?.orderIndex).toBe(1);
   });
 });
+
+// The rule, stated plainly: a pure relocation loses nothing, and replacing
+// one exercise drops that one exercise and nothing else.
+describe("a swap loses nothing; a replacement drops only what was replaced", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  async function dayWithTwo() {
+    const coach = await makeCoach();
+    const athlete = await makeAthlete();
+    const a = await makeExercise(coach.id, { name: "Back Squat" });
+    const b = await makeExercise(coach.id, { name: "Bench Press" });
+    const sub = await makeExercise(coach.id, { name: "Leg Press" });
+    const assigned = await makeAssignedProgram({
+      coachId: coach.id,
+      athleteId: athlete.id,
+      exerciseIds: [a.id, b.id],
+    });
+    const rowA = assigned.programExercises.find((p) => p.exerciseId === a.id)!;
+    const rowB = assigned.programExercises.find((p) => p.exerciseId === b.id)!;
+    // One substitution on each, so we can see exactly which survives.
+    for (const [row, reason] of [
+      [rowA, "knee"],
+      [rowB, "shoulder"],
+    ] as const) {
+      await db.insert(assignmentExerciseOverrides).values({
+        assignmentId: assigned.assignment.id,
+        programDayId: assigned.day.id,
+        programExerciseId: row.id,
+        substituteExerciseId: sub.id,
+        reason,
+      });
+    }
+    return { coach, athlete, a, b, sub, assigned, rowA, rowB };
+  }
+
+  function day(exerciseIds: number[]) {
+    return {
+      title: "Day 1",
+      isRestDay: false,
+      exercises: exerciseIds.map((exerciseId, i) => ({ exerciseId, orderIndex: i, sets: 3, reps: "5" })),
+    };
+  }
+
+  it("A and B trading places loses nothing at all", async () => {
+    const { coach, a, b, assigned, rowA, rowB } = await dayWithTwo();
+    await storage.updateProgramDay(assigned.day.id, day([b.id, a.id]) as any, coach.id);
+
+    const rows = await db.select().from(programExercises).where(eq(programExercises.dayId, assigned.day.id));
+    expect(rows.length).toBe(2);
+    // Same two rows, same ids -- only the order moved.
+    expect(new Set(rows.map((r) => r.id))).toEqual(new Set([rowA.id, rowB.id]));
+    expect(rows.find((r) => r.id === rowB.id)?.orderIndex).toBe(0);
+    expect(rows.find((r) => r.id === rowA.id)?.orderIndex).toBe(1);
+
+    const overrides = await db.select().from(assignmentExerciseOverrides);
+    expect(overrides.length).toBe(2);
+    expect(new Set(overrides.map((o) => o.reason))).toEqual(new Set(["knee", "shoulder"]));
+  });
+
+  it("replacing B keeps A untouched and drops only B", async () => {
+    const { coach, a, assigned, rowA } = await dayWithTwo();
+    const c = await makeExercise(coach.id, { name: "Overhead Press" });
+    await storage.updateProgramDay(assigned.day.id, day([a.id, c.id]) as any, coach.id);
+
+    const rows = await db.select().from(programExercises).where(eq(programExercises.dayId, assigned.day.id));
+    expect(rows.length).toBe(2);
+    // A is the same row it always was.
+    expect(rows.find((r) => r.exerciseId === a.id)?.id).toBe(rowA.id);
+    expect(rows.some((r) => r.exerciseId === c.id)).toBe(true);
+
+    // Only the substitution that belonged to B is gone.
+    const overrides = await db.select().from(assignmentExerciseOverrides);
+    expect(overrides.length).toBe(1);
+    expect(overrides[0].reason).toBe("knee");
+    expect(overrides[0].programExerciseId).toBe(rowA.id);
+  });
+});
