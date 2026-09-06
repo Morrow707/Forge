@@ -154,6 +154,28 @@ const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;
 // an average-height athlete, so that floor costs nothing on real reps
 // while cutting out the sway-driven ones; the height scaling shifts it
 // proportionally for anyone far from average.
+// RSI is a property of ONE rebound: how high that jump went divided by how
+// long that same rep spent on the ground. Pairing the set's best height with
+// the set's average contact time crossed two different reps, and crossed them
+// in the direction that always flatters the athlete -- the best height is by
+// definition at or above every other rep's, while the average contact time is
+// dragged up by the slower reps that did not produce it. Computed per rep and
+// reported as the best, the same way bestJumpHeightCm is a max over reps
+// rather than a blend. The set's average ground contact stays as its own
+// number; it is labelled an average and is honest as one.
+export function bestReactiveStrengthIndex(
+  reps: { jumpHeightCm: number; groundContactSeconds: number | null }[],
+): number | null {
+  const perRep = reps
+    .map((r) =>
+      r.groundContactSeconds != null && r.groundContactSeconds > 0
+        ? r.jumpHeightCm / 100 / r.groundContactSeconds
+        : null,
+    )
+    .filter((v): v is number => v != null);
+  return perRep.length ? Math.round(Math.max(...perRep) * 100) / 100 : null;
+}
+
 export function summarizeJumpSet(
   rawPoints: TrackedPoint[],
   heightIn?: number | null,
@@ -390,10 +412,8 @@ export function summarizeJumpSet(
   const avgGroundContactSeconds = contactTimes.length
     ? Math.round((contactTimes.reduce((a, c) => a + c, 0) / contactTimes.length) * 1000) / 1000
     : null;
-  const reactiveStrengthIndex =
-    avgGroundContactSeconds && avgGroundContactSeconds > 0
-      ? Math.round((bestJumpHeightCm / 100 / avgGroundContactSeconds) * 100) / 100
-      : null;
+  const reactiveStrengthIndex = bestReactiveStrengthIndex(reps);
+
   const boxClearances = reps.map((r) => r.boxClearanceCm).filter((c): c is number => c != null);
   const bestBoxClearanceCm = boxClearances.length ? Math.max(...boxClearances) : null;
 
