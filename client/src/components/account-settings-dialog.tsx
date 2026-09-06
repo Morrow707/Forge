@@ -145,6 +145,13 @@ export function AccountSettingsDialog({
     },
     onSuccess: (data) => {
       const until = new Date(data.trialExpiresAt).toLocaleDateString();
+      // Redeeming writes trialExpiresAt onto the user row, and every
+      // entitlement gate in the app reads that off the CACHED /api/auth/me.
+      // Without this the toast said "full access unlocked" while the app
+      // went on behaving exactly as locked until the next reload -- the
+      // most confusing possible outcome for a coach who just paid or was
+      // comped.
+      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast.success(`Code redeemed -- full access unlocked through ${until}`);
       setRedeemCode("");
     },

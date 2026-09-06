@@ -72,6 +72,18 @@ export default function CoachesCorner() {
       const res = await apiRequest("POST", "/api/coach/academy/unlock", {});
       return res.json();
     },
+    // There was no success path here at all -- only error handling. Unlocking
+    // changes what this page is allowed to show, and nothing told it to look
+    // again, so a successful unlock left the coach staring at the locked view
+    // they had just paid to leave.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/academy/tracks"] });
+      if (selectedTrackId != null) {
+        qc.invalidateQueries({ queryKey: [`/api/coach/academy/tracks/${selectedTrackId}`] });
+      }
+      // Access itself is an entitlement on the user record.
+      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    },
     onError: (err: ApiError) => {
       if (err.status === 402) {
         toast.info(err.message || "Coaches Corner isn't open for purchase yet.");

@@ -372,7 +372,20 @@ export function CoachDayEditDialog({
         { targetProgramDayIds },
       );
     },
-    onSuccess: () => {
+    onSuccess: (_result, targetProgramDayIds) => {
+      // The days this wrote to are not the day this dialog is showing, and
+      // each one has its own cached correctives list. Nothing invalidated
+      // them, so opening a target day afterwards showed it as it was before
+      // the copy -- and a coach who then edited from that stale view would
+      // be working against a day whose real contents they had never seen.
+      for (const dayId of targetProgramDayIds) {
+        qc.invalidateQueries({
+          queryKey: ["/api/coach/assignments", assignmentId, "days", dayId, "correctives"],
+        });
+        qc.invalidateQueries({ queryKey: ["/api/coach/program-days", dayId] });
+      }
+      // The calendar summarises what each day holds, so it moves too.
+      qc.invalidateQueries({ queryKey: ["/api/coach/calendar"] });
       toast.success("Correctives copied to selected days");
       setCopyOpen(false);
       setCopyTargets(new Set());

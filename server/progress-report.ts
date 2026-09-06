@@ -29,11 +29,20 @@ export function buildProgressReportEmail(
     .map((m) => `<tr><td style="padding:4px 12px 4px 0;color:#555;">${m.label}</td><td style="padding:4px 0;font-weight:600;">${athlete[m.key]} ${m.unit}</td></tr>`)
     .join("");
 
+  // Every athlete-supplied value in the two row builders below is escaped.
+  // currentLifts.weight is the one that mattered: it is the raw weight TEXT
+  // column, whatever the athlete typed, and it went into this email
+  // unescaped while exerciseName and reps on the very same line were
+  // escaped -- an oversight rather than a decision. This email is sent from
+  // Forge's own domain to that athlete's coach, which is exactly the risk
+  // escapeHtml was written for (see its comment in email.ts). recentPRs.weight
+  // is a number by the time it reaches here and needs nothing; the units are
+  // typed as plain strings, so they are escaped rather than reasoned about.
   const prRows = summary.recentPRs
     .slice(0, 5)
     .map(
       (pr) =>
-        `<tr><td style="padding:4px 12px 4px 0;color:#555;">${escapeHtml(pr.exerciseName)}</td><td style="padding:4px 0;font-weight:600;">${pr.weight} ${pr.unit} x ${escapeHtml(pr.reps)}</td></tr>`,
+        `<tr><td style="padding:4px 12px 4px 0;color:#555;">${escapeHtml(pr.exerciseName)}</td><td style="padding:4px 0;font-weight:600;">${pr.weight} ${escapeHtml(pr.unit)} x ${escapeHtml(pr.reps)}</td></tr>`,
     )
     .join("");
 
@@ -41,7 +50,7 @@ export function buildProgressReportEmail(
     .slice(0, 10)
     .map(
       (l) =>
-        `<tr><td style="padding:4px 12px 4px 0;color:#555;">${escapeHtml(l.exerciseName)}</td><td style="padding:4px 0;">${l.weight} ${l.unit} x ${escapeHtml(l.reps)}</td></tr>`,
+        `<tr><td style="padding:4px 12px 4px 0;color:#555;">${escapeHtml(l.exerciseName)}</td><td style="padding:4px 0;">${escapeHtml(l.weight)} ${escapeHtml(l.unit)} x ${escapeHtml(l.reps)}</td></tr>`,
     )
     .join("");
 
