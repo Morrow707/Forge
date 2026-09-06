@@ -1369,7 +1369,7 @@ export function computeArmDriveAsymmetry(
 
   // Below this, a side's own data for the window is too sparse or too
   // unconfident to trust as "this arm's real speed" rather than mostly the
-  // wrist landmark alone -- same spirit as MIN_DRIVE_DURATION_SEC's own
+  // wrist landmark alone -- same spirit as MIN_DRIVE_DURATION_MS's own
   // floor in computeLegDriveAsymmetry, just expressed as confidence
   // instead of duration since that's what this source actually carries.
   // Same threshold MIN_TRACKING_CONFIDENCE uses above, for the identical

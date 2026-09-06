@@ -1824,7 +1824,13 @@ export type LegDriveAsymmetry = {
 // A rep's drive phase needs at least this much clean per-side data to trust
 // a rate off it -- a shorter window makes tiny pose-noise jitter look like a
 // huge angular velocity.
-const MIN_DRIVE_DURATION_SEC = 0.15;
+// Milliseconds, like every other timestamp in this pipeline (see
+// detectThrowReps' own comment): both callers build PoseFrame.t from
+// performance.now() deltas or a native frame timestamp in ms, so comparing
+// a raw frame-to-frame delta against a value in seconds both defeated this
+// guard (any window at all cleared 0.15) and made the reported deg/sec
+// rates 1000x too small, which rounded every one of them to 0.
+const MIN_DRIVE_DURATION_MS = 150;
 
 // How much harder one leg drove than the other during each rep's concentric
 // (standing-up) phase, for bilateral lower-body lifts -- reuses the same
@@ -1868,12 +1874,12 @@ export function computeLegDriveAsymmetry(
     }
     if (left.length < 3 || right.length < 3) return null;
 
-    const leftDuration = left[left.length - 1].t - left[0].t;
-    const rightDuration = right[right.length - 1].t - right[0].t;
-    if (leftDuration < MIN_DRIVE_DURATION_SEC || rightDuration < MIN_DRIVE_DURATION_SEC) return null;
+    const leftDurationMs = left[left.length - 1].t - left[0].t;
+    const rightDurationMs = right[right.length - 1].t - right[0].t;
+    if (leftDurationMs < MIN_DRIVE_DURATION_MS || rightDurationMs < MIN_DRIVE_DURATION_MS) return null;
 
-    const leftRate = (left[left.length - 1].angle - left[0].angle) / leftDuration;
-    const rightRate = (right[right.length - 1].angle - right[0].angle) / rightDuration;
+    const leftRate = (left[left.length - 1].angle - left[0].angle) / (leftDurationMs / 1000);
+    const rightRate = (right[right.length - 1].angle - right[0].angle) / (rightDurationMs / 1000);
     // Only a genuine drive (knee opening up) on both sides is comparable --
     // a rate at or below zero means the window missed the concentric phase
     // (pose noise, mistimed rep boundary) rather than a real slow leg.
