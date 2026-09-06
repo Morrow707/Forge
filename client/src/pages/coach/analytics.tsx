@@ -84,6 +84,7 @@ import { ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 import { MuscleHeatMap } from "@/components/muscle-heat-map";
 import { GoalsPanel } from "@/components/goals-panel";
 import { Skeleton } from "@/components/skeleton";
+import { convertWeight } from "@/lib/progression";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TrackedExercise = { id: number; name: string };
@@ -787,6 +788,10 @@ export default function CoachAnalytics() {
     retry: false,
   });
 
+  // The unit the whole chart is drawn in: whatever the most recent point was
+  // logged in, which is what the athlete is using now. Declared before
+  // chartData because every point is converted onto it.
+  const unitForChart = points[points.length - 1]?.weightUnit ?? points[0]?.weightUnit ?? "lbs";
   const chartData = points.map((p) => ({
     ...p,
     label: `${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`,
@@ -808,6 +813,22 @@ export default function CoachAnalytics() {
       p.kbSwingPeakHeightCm != null
         ? Math.round(cmToDisplayUnit(p.kbSwingPeakHeightCm, distanceUnit) * 10) / 10
         : p.kbSwingPeakHeightCm,
+    // Weight and estimated 1RM converted onto ONE unit, the same correction
+    // the athlete's own trend dialog needed. The axis below is labelled with
+    // a single unit taken from the history, while every point was plotted as
+    // the raw number it was typed as -- so an athlete who switched units drew
+    // a cliff in the coach's chart that no training produced, and half the
+    // points sat under a unit label that was wrong for them.
+    weight:
+      p.weight != null && !Number.isNaN(parseFloat(p.weight))
+        ? String(
+            Math.round(convertWeight(parseFloat(p.weight), p.weightUnit ?? unitForChart, unitForChart) * 10) / 10,
+          )
+        : p.weight,
+    estimatedOneRm:
+      p.estimatedOneRm != null
+        ? Math.round(convertWeight(p.estimatedOneRm, p.weightUnit ?? unitForChart, unitForChart) * 10) / 10
+        : p.estimatedOneRm,
   }));
 
   const hasNumericWeight = chartData.some((p) => p.weightMode === "numeric" && p.weight != null);
@@ -897,7 +918,7 @@ export default function CoachAnalytics() {
     (r) => r.legAsymmetryPercent != null || r.armAsymmetryPercent != null,
   );
   const prCount = chartData.filter((p) => p.isPR).length;
-  const unit = chartData.find((p) => p.weightUnit)?.weightUnit ?? "lbs";
+  const unit = unitForChart;
   const selectedExerciseName =
     exercises.find((e) => String(e.id) === exerciseId)?.name ??
     allExercises.find((e) => String(e.id) === exerciseId)?.name;

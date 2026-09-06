@@ -7020,6 +7020,12 @@ export const suggestGoalTargetSchema = z
         "deadliftMaxLbs",
       ])
       .optional(),
+    // The unit the caller will store the suggested target in. The trend the
+    // model reasons over is normalized to pounds (a history spanning a unit
+    // switch is otherwise a cliff that never happened), so without this the
+    // number came back in pounds and was written straight into a goal the
+    // athlete had labelled kg -- a target 2.2x heavier than intended.
+    targetUnit: z.enum(["lbs", "kg"]).optional(),
   })
   .refine((data) => (data.type === "exercise" ? data.exerciseId != null : true), {
     message: "exerciseId is required for exercise goals",

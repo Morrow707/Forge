@@ -790,9 +790,12 @@ function parseTargetReps(repsText: string): number | undefined {
 // units lost their whole history from this estimate, so the number quietly
 // dropped or vanished, and a percentage-of-1RM prescription then had
 // nothing to resolve against and stopped suggesting a weight at all. A set
-// with no unit recorded (a row predating the column) is read as this
-// athlete's current unit, which is the same assumption the rest of the
-// screen makes about an unlabelled number.
+// A set with no unit recorded is read as POUNDS, not as this athlete's
+// current unit. That is what the rest of the system already decided: the
+// migration backfills weight_lbs treating an unlabelled row as pounds, and
+// toComparableLbs on the server does the same. Reading it as "kg" here for a
+// kg athlete would inflate their own history by 2.2x against every server
+// number computed from the same rows.
 function estimateOneRmFromHistory(history: SetHistoryPoint[], unit: WeightUnit) {
   let best = 0;
   for (const h of history) {
@@ -800,7 +803,7 @@ function estimateOneRmFromHistory(history: SetHistoryPoint[], unit: WeightUnit) 
     const rawWeight = parseFloat(h.weight);
     const reps = parseInt(h.reps, 10);
     if (Number.isNaN(rawWeight) || Number.isNaN(reps) || reps <= 0) continue;
-    const weight = convertWeight(rawWeight, h.weightUnit ?? unit, unit);
+    const weight = convertWeight(rawWeight, h.weightUnit ?? "lbs", unit);
     const oneRm = weight * (1 + reps / 30);
     if (oneRm > best) best = oneRm;
   }

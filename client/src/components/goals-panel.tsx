@@ -121,6 +121,9 @@ export function GoalsPanel({
         type,
         exerciseId: type === "exercise" ? Number(exerciseId) : undefined,
         testingMetric: type === "testing" ? testingMetric : undefined,
+        // The unit this dialog will save the target in -- the server reasons
+        // over a pounds-normalized history and converts its answer back.
+        targetUnit,
       });
       return res.json();
     },

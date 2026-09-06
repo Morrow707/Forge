@@ -5634,10 +5634,19 @@ export const storage = {
         let exerciseName: string | null = null;
         let skillExerciseName: string | null = null;
         if (g.type === "exercise" && g.exerciseId != null) {
+          // The goal's OWN unit, not the account preference. Two things were
+          // wrong with reading preferredWeightUnit here. It is compared at
+          // `achieved` below against g.targetValue, which the athlete typed
+          // next to g.targetUnit in the goal dialog -- so converting to any
+          // other unit compares two different scales. And `athlete` is only
+          // loaded when some goal is a TESTING goal, so for an athlete with
+          // only exercise goals it is `false` and the unit silently fell back
+          // to pounds: a 100 kg best came back as 220.5, cleared a 120 kg
+          // target, and stamped achievedAt, which by design never flips back.
           currentValue = await this.getBestLiftForExercise(
             athleteId,
             g.exerciseId,
-            (athlete ? athlete.preferredWeightUnit : null) ?? "lbs",
+            g.targetUnit === "kg" ? "kg" : "lbs",
           );
           exerciseName = exerciseNameById.get(g.exerciseId) ?? null;
         } else if (g.type === "testing" && g.testingMetric && athlete) {
@@ -5705,7 +5714,9 @@ export const storage = {
   // or AI isn't configured; the goal form just doesn't offer a suggestion.
   async suggestGoalTarget(
     athleteId: number,
-    input: { type: "exercise"; exerciseId: number } | { type: "testing"; testingMetric: string },
+    input:
+      | { type: "exercise"; exerciseId: number; targetUnit?: "lbs" | "kg" }
+      | { type: "testing"; testingMetric: string; targetUnit?: "lbs" | "kg" },
   ): Promise<{ targetValue: number; timeframeWeeks: number; rationale: string } | null> {
     let label: string;
     let trendDescription: string;
@@ -5789,7 +5800,18 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       { maxTokens: 400, model: fastModel },
     );
     const parsed = goalSuggestionSchema.safeParse(result);
-    return parsed.success ? parsed.data : null;
+    if (!parsed.success) return null;
+    // The exercise trend above is described to the model in pounds, so its
+    // answer is in pounds. Hand it back in the unit the caller is going to
+    // store it against, or a kg goal gets a target 2.2x too heavy. Testing
+    // metrics carry their own units (inches, seconds) and are never touched.
+    if (input.type === "exercise" && input.targetUnit === "kg") {
+      return {
+        ...parsed.data,
+        targetValue: Math.round((parsed.data.targetValue / 2.20462) * 10) / 10,
+      };
+    }
+    return parsed.data;
   },
 
   // ---------- Wellness check-ins ----------
@@ -17067,9 +17089,22 @@ ${catalog}`;
               const priorBest = priorBestByKey.get(`${entryWeightUnit}-${s.reps ?? ""}`);
               // Both sides in pounds -- the stored bests are, and this set
               // has to be converted to match rather than compared as typed.
+              //
+              // Compared with a tolerance, not with a bare `>`. weight_lbs is
+              // a real (float4) column, so MAX() hands back a value rounded to
+              // ~7 significant digits, while toComparableLbs computes the new
+              // set in double precision. Repeating an identical kilogram lift
+              // therefore produced a "greater" number by a few millionths of a
+              // pound and was recorded as a fresh PR -- every session, with a
+              // celebration toast and a permanent isPr flag. A thousandth of a
+              // pound is far below anything anyone loads and far above the
+              // representation gap.
+              const PR_EPSILON_LBS = 0.001;
               const weightLbsForPr = toComparableLbs(weightNum, entryWeightUnit);
               const isPr =
-                !Number.isNaN(weightNum) && priorBest != null && weightLbsForPr > priorBest;
+                !Number.isNaN(weightNum) &&
+                priorBest != null &&
+                weightLbsForPr > priorBest + PR_EPSILON_LBS;
               if (isPr && exerciseNameForPr && s.weight && s.reps) {
                 newPRs.push({ exerciseName: exerciseNameForPr, weight: s.weight, unit: entryWeightUnit, reps: s.reps });
               }
@@ -17889,7 +17924,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     }>(sql`
       WITH qualifying AS (
         SELECT a.athlete_id, e.id AS exercise_id, e.name AS exercise_name,
-          wse.weight, wse.weight_unit_at_log AS weight_unit, wse.reps, wl.date, wse.set_number, wle.id AS entry_id
+          wse.weight, wse.weight_unit_at_log AS weight_unit, wse.weight_lbs, wse.reps,
+          wl.date, wse.set_number, wle.id AS entry_id
         FROM workout_set_entries wse
         INNER JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
         INNER JOIN workout_logs wl ON wle.workout_log_id = wl.id
@@ -17900,13 +17936,21 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           AND wle.weight_mode = 'numeric'
           AND wse.weight IS NOT NULL AND wse.weight <> ''
           AND wse.reps IS NOT NULL AND wse.reps <> ''
-          AND wse.weight ~ '^[0-9]+(\\.[0-9]+)?$'
+          AND wse.weight_lbs IS NOT NULL
       ),
+      -- Bucketed by (athlete, exercise, reps) and ranked on weight_lbs. The
+      -- unit used to be part of the partition key and the ranking used the
+      -- raw typed number, so this roster/digest view kept exactly the bug
+      -- getAllPrsForAthlete was fixed to remove: switching units started a
+      -- fresh ladder, and every early set in the new unit read as a PR the
+      -- coach was told to celebrate. weight_unit is still SELECTed, because
+      -- the row is displayed in the unit it was logged in -- only the
+      -- comparison changed.
       bucket_bests AS (
-        SELECT DISTINCT ON (athlete_id, exercise_id, weight_unit, reps)
+        SELECT DISTINCT ON (athlete_id, exercise_id, reps)
           athlete_id, exercise_id, exercise_name, weight, weight_unit, reps, date, set_number, entry_id
         FROM qualifying
-        ORDER BY athlete_id, exercise_id, weight_unit, reps, weight::numeric DESC, date ASC, set_number ASC, entry_id ASC
+        ORDER BY athlete_id, exercise_id, reps, weight_lbs DESC, date ASC, set_number ASC, entry_id ASC
       ),
       exercise_bests AS (
         SELECT DISTINCT ON (athlete_id, exercise_id)
@@ -18540,7 +18584,15 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       // Cleared per column, not as a pair: if the clip goes and the coach's
       // drawn-on still does not, keeping the annotation reference is what
       // gets it retried rather than stranded.
-      if (!skillGone && !annotationGone) return { deleted: false, athleteId: row.athleteId };
+      //
+      // Success means every file that WAS there is now gone. deleteUploadedFile
+      // returns true for a null url (nothing to remove), so testing the two
+      // results alone let an absent annotation vouch for a video whose unlink
+      // had failed -- reporting deleted:true over a clip still on disk, which
+      // is what closes a guardian's removal request.
+      if (!(!row.videoUrl || skillGone) || !(!row.coachAnnotationUrl || annotationGone)) {
+        return { deleted: false, athleteId: row.athleteId };
+      }
       await db
         .update(skillSessionLogs)
         .set({
@@ -18581,7 +18633,11 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         deleteUploadedFile(row.videoUrl),
         deleteUploadedFile(row.imageUrl),
       ]);
-      if (!videoGone && !imageGone) return { deleted: false, athleteId: row.athleteId };
+      // Every file that was present must actually be gone -- see the skill
+      // branch above on why the two booleans alone were not enough.
+      if (!(!row.videoUrl || videoGone) || !(!row.imageUrl || imageGone)) {
+        return { deleted: false, athleteId: row.athleteId };
+      }
       await db
         .update(skillDayComments)
         .set({
@@ -18606,7 +18662,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       deleteUploadedFile(row.videoUrl),
       deleteUploadedFile(row.imageUrl),
     ]);
-    if (!commentVideoGone && !commentImageGone) return { deleted: false, athleteId: row.athleteId };
+    if (!(!row.videoUrl || commentVideoGone) || !(!row.imageUrl || commentImageGone)) {
+      return { deleted: false, athleteId: row.athleteId };
+    }
     await db
       .update(workoutComments)
       .set({
@@ -19142,8 +19200,13 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     });
     if (!assignment || assignment.coachId === assignment.athleteId) return null;
 
-    const today = formatISO(new Date(), { representation: "date" });
-    const sinceDate = formatISO(subDays(new Date(), 34), { representation: "date" });
+    // The athlete's own day, matching getAcwrHistoryForAthlete and
+    // getRosterAcwrSummary. This is the path that PUSHES the injury-risk
+    // warning to a coach, and it was the one still drawing its window from
+    // UTC -- so the alert could fire on a ratio the roster and the athlete's
+    // own chart both disagreed with, and the alert row is keyed on this date.
+    const today = await this.todayForAthlete(athleteId);
+    const sinceDate = shiftIsoDate(today, -34);
     const dailyLoads = await this.getDailyLoadSeriesForAthlete(athleteId, sinceDate);
     const series = buildAcwrSeries(dailyLoads, today, 1);
     const { ratio, level } = series[series.length - 1];
