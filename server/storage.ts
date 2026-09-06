@@ -10068,6 +10068,9 @@ Hard rules, no exceptions:
         });
 
     let previousProgress: typeof classLessonProgress.$inferSelect | null = null;
+    // How many lessons this pass has already activated, so each gets its own
+    // day rather than every one landing on the enrolment date at once.
+    let activatedCount = 0;
     for (const lesson of lessons) {
       let progress = await db.query.classLessonProgress.findFirst({
         where: and(
@@ -10103,12 +10106,32 @@ Hard rules, no exceptions:
       // that can set its skillAssignmentId from this point on.
       if (lessonsWithQuiz.has(lesson.id)) break;
 
+      // Two things were wrong with the date this used to pass.
+      //
+      // It was today's server date, so the start date the coach picks when
+      // enrolling an athlete was written to classEnrollments.startDate and
+      // then never read -- a class set to begin next Monday began the moment
+      // it was assigned.
+      //
+      // And every lesson unlocked in one pass got that same date. A quiz-less
+      // class with an "immediate" unlock rule opens all of its lessons at
+      // once, and overlapping skill assignments collapse to the newest one
+      // (see the calendar's own reconciliation), so all but the last lesson
+      // simply vanished from the athlete's calendar.
+      //
+      // Each lesson now starts from the enrolment's own date, one day per
+      // lesson in lesson order. That is the smallest rule that both honours
+      // the coach's date and keeps two lessons off the same day; if a class
+      // wants real spacing between lessons, that is a scheduling decision to
+      // make deliberately rather than a side effect of this loop.
+      const lessonStartDate = shiftIsoDate(enrollment.startDate, activatedCount);
       const { created } = await this.createSkillAssignment(
         enrollment.coachId,
         lesson.skillProgramId,
         [{ athleteId: enrollment.athleteId }],
-        formatISO(new Date(), { representation: "date" }),
+        lessonStartDate,
       );
+      activatedCount++;
       const [updated] = await db
         .update(classLessonProgress)
         .set({ unlockedAt: new Date(), skillAssignmentId: created[0]?.id ?? null })
