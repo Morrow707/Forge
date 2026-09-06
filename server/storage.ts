@@ -4136,7 +4136,26 @@ export const storage = {
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
       .where(inArray(coachAthletes.coachId, coachIds))
       .orderBy(asc(users.name));
-    return rows;
+    // One row per coach-athlete LINK, and a staff has several coaches, so an
+    // athlete both coaches had on their own roster before they formed a staff
+    // came back twice -- listed twice on the roster page and counted twice in
+    // anything built on this list. Deduplicated on the athlete, keeping the
+    // requesting coach's own link where there is one so the group label shown
+    // is theirs rather than a colleague's.
+    const byAthlete = new Map<number, (typeof rows)[number]>();
+    const ownLinks = await db
+      .select({ athleteId: coachAthletes.athleteId, groupId: coachAthletes.groupId })
+      .from(coachAthletes)
+      .where(eq(coachAthletes.coachId, coachId));
+    const ownGroupByAthlete = new Map(ownLinks.map((l) => [l.athleteId, l.groupId]));
+    for (const row of rows) {
+      if (byAthlete.has(row.id)) continue;
+      byAthlete.set(row.id, {
+        ...row,
+        groupId: ownGroupByAthlete.has(row.id) ? (ownGroupByAthlete.get(row.id) ?? null) : row.groupId,
+      });
+    }
+    return Array.from(byAthlete.values());
   },
 
   // Single roster athlete's full profile, scoped to this coach's whole
