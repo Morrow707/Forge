@@ -5739,6 +5739,15 @@ export const workoutLogEntriesRelations = relations(
       fields: [workoutLogEntries.workoutLogId],
       references: [workoutLogs.id],
     }),
+    // The submission-time snapshot, and the relation every historical read
+    // should resolve exercise identity through -- see workoutLogEntries
+    // .exerciseId's own comment above. It existed as a column with no
+    // relation, which is why reads kept reaching for programExercise
+    // instead; that FK is nullable and its row can be reassigned.
+    exercise: one(exercises, {
+      fields: [workoutLogEntries.exerciseId],
+      references: [exercises.id],
+    }),
     programExercise: one(programExercises, {
       fields: [workoutLogEntries.programExerciseId],
       references: [programExercises.id],

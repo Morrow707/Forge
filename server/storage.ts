@@ -332,6 +332,7 @@ type RecentWorkoutLog = {
   entries: {
     weightMode: "numeric" | "bodyweight" | "band" | "box";
     rpe: number | null;
+    exerciseId: number | null;
     programExercise: { exerciseId: number } | null;
     corrective: { exerciseId: number } | null;
     sets: {
@@ -379,7 +380,15 @@ function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number)
 
   outer: for (const log of logs) {
     for (const entry of log.entries) {
-      const entryExerciseId = entry.programExercise?.exerciseId ?? entry.corrective?.exerciseId;
+      // The submission-time snapshot first. Deriving identity from
+      // programExercise alone meant that once a program-day edit nulled that
+      // FK, the entry matched nothing and the athlete lost their "last time
+      // you did this" line and the whole set-history chart for that lift --
+      // the history was still in the database, just unreachable. The old
+      // derivation stays as the fallback for rows logged before the snapshot
+      // column existed and too old for its backfill to recover.
+      const entryExerciseId =
+        entry.exerciseId ?? entry.programExercise?.exerciseId ?? entry.corrective?.exerciseId;
       if (entryExerciseId !== exerciseId || entry.sets.length === 0) continue;
 
       if (!lastPerformance) {
@@ -18437,6 +18446,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         entries: {
           with: {
             sets: { orderBy: asc(workoutSetEntries.setNumber) },
+            exercise: true,
             programExercise: { with: { exercise: true } },
             corrective: { with: { exercise: true } },
           },
@@ -18460,7 +18470,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     for (const log of logs) {
       for (const entry of log.entries) {
         const exerciseName =
-          entry.programExercise?.exercise.name ?? entry.corrective?.exercise.name ?? "Unknown";
+          entry.exercise?.name ?? entry.programExercise?.exercise.name ?? entry.corrective?.exercise.name ?? "Unknown";
         for (const set of entry.sets) {
           rows.push({
             date: log.date,
@@ -19125,6 +19135,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         entries: {
           with: {
             sets: true,
+            exercise: true,
             programExercise: { with: { exercise: true } },
             corrective: { with: { exercise: true } },
           },
@@ -19137,7 +19148,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       let totalVolume = 0;
       const exerciseNames = new Set<string>();
       for (const entry of log.entries) {
-        const name = entry.programExercise?.exercise.name ?? entry.corrective?.exercise.name;
+        const name =
+          entry.exercise?.name ?? entry.programExercise?.exercise.name ?? entry.corrective?.exercise.name;
         if (name) exerciseNames.add(name);
         for (const set of entry.sets) {
           // repsCount/weightLbs rather than re-parsing the text -- see
@@ -19295,6 +19307,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         entries: {
           with: {
             sets: true,
+            exercise: true,
             programExercise: { with: { exercise: true } },
             corrective: { with: { exercise: true } },
           },
@@ -19305,7 +19318,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const tally: Record<string, number> = {};
     for (const log of logs) {
       for (const entry of log.entries) {
-        const exercise = entry.programExercise?.exercise ?? entry.corrective?.exercise;
+        const exercise = entry.exercise ?? entry.programExercise?.exercise ?? entry.corrective?.exercise;
         if (!exercise) continue;
         // Every prescribed set gets a placeholder row the moment an athlete
         // opens the day (see workout.tsx's buildItem/buildLogPayload) --
