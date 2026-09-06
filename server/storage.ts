@@ -14828,25 +14828,60 @@ ${entriesText}`;
         .set({ title: input.title, isRestDay: input.isRestDay })
         .where(eq(programDays.id, dayId));
 
-      await tx.delete(programExercises).where(eq(programExercises.dayId, dayId));
+      // Reconciled in place rather than replaced wholesale.
+      // assignmentExerciseOverrides.programExerciseId is notNull and ON
+      // DELETE CASCADE, and that table holds each athlete's own substitution
+      // for an exercise -- the leg press a coach put in place of a back squat
+      // for someone with a knee injury. Deleting and reinserting the day's
+      // rows silently dropped every one of those, so the next time that
+      // athlete opened the day they were shown the movement the substitution
+      // existed to keep them away from.
+      const existing = await tx
+        .select()
+        .from(programExercises)
+        .where(eq(programExercises.dayId, dayId))
+        .orderBy(programExercises.orderIndex);
 
-      if (input.exercises.length > 0) {
-        await tx.insert(programExercises).values(
-          input.exercises.map((ex, i) => ({
-            dayId,
-            exerciseId: ex.exerciseId,
-            orderIndex: ex.orderIndex ?? i,
-            sets: ex.sets,
-            reps: ex.reps,
-            weight: ex.weight ?? null,
-            restSeconds: ex.restSeconds ?? null,
-            notes: ex.notes ?? null,
-            supersetGroup: ex.supersetGroup ?? null,
-            restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
-            trackingLevel: ex.trackingLevel ?? "none",
-            videoCheckEnabled: videoCheckMap.get(ex) ?? false,
-          })),
-        );
+      for (const [i, ex] of input.exercises.entries()) {
+        const values = {
+          dayId,
+          exerciseId: ex.exerciseId,
+          orderIndex: ex.orderIndex ?? i,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: ex.weight ?? null,
+          restSeconds: ex.restSeconds ?? null,
+          notes: ex.notes ?? null,
+          supersetGroup: ex.supersetGroup ?? null,
+          restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
+          trackingLevel: ex.trackingLevel ?? "none",
+          videoCheckEnabled: videoCheckMap.get(ex) ?? false,
+        };
+        const prior =
+          (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ??
+          (ex.id == null ? existing[i] : undefined);
+        if (prior) {
+          await tx.update(programExercises).set(values).where(eq(programExercises.id, prior.id));
+        } else {
+          await tx.insert(programExercises).values(values);
+        }
+      }
+
+      // Only the rows the coach actually removed. An override pointing at one
+      // of these goes with it, which is correct: the exercise it substituted
+      // for is gone.
+      const keptIds = new Set(
+        input.exercises
+          .map((ex, i) => {
+            const prior =
+              (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ??
+              (ex.id == null ? existing[i] : undefined);
+            return prior?.id;
+          })
+          .filter((id): id is number => id != null),
+      );
+      for (const stale of existing.filter((e) => !keptIds.has(e.id))) {
+        await tx.delete(programExercises).where(eq(programExercises.id, stale.id));
       }
     });
   },

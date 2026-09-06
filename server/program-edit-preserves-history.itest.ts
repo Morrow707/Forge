@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
-import { programDays, programExercises, programWeeks, workoutLogs } from "@shared/schema";
+import {
+  assignmentExerciseOverrides,
+  programDays,
+  programExercises,
+  programWeeks,
+  workoutLogs,
+} from "@shared/schema";
 import { makeAssignedProgram, makeAthlete, makeCoach, makeExercise, resetDatabase } from "./test-support/fixtures";
 
 // A coach editing a program that athletes are already training on must not
@@ -98,5 +104,68 @@ describe("editing a program preserves athlete history", () => {
     expect(rows[0].exerciseId).toBe(other.id);
     const weeks = await db.select().from(programWeeks).where(eq(programWeeks.programId, assigned.program.id));
     expect(weeks.length).toBe(1);
+  });
+});
+
+// assignmentExerciseOverrides is each athlete's own substitution for one
+// exercise on one day -- the leg press a coach put in place of a back squat
+// for someone with a knee injury. It cascades off programExercises, so a
+// day edit that replaced those rows wholesale silently dropped it.
+describe("editing a single day preserves athlete substitutions", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("keeps an athlete's exercise substitution when the day is edited", async () => {
+    const { coach, squat, assigned } = await setup();
+    const legPress = await makeExercise(coach.id, { name: "Leg Press" });
+    const [override] = await db
+      .insert(assignmentExerciseOverrides)
+      .values({
+        assignmentId: assigned.assignment.id,
+        programDayId: assigned.day.id,
+        programExerciseId: assigned.programExercises[0].id,
+        substituteExerciseId: legPress.id,
+        reason: "knee",
+      })
+      .returning();
+
+    await storage.updateProgramDay(
+      assigned.day.id,
+      {
+        title: "Renamed Day",
+        isRestDay: false,
+        exercises: [{ id: assigned.programExercises[0].id, exerciseId: squat.id, orderIndex: 0, sets: 3, reps: "5" }],
+      } as any,
+      coach.id,
+    );
+
+    const after = await db
+      .select()
+      .from(assignmentExerciseOverrides)
+      .where(eq(assignmentExerciseOverrides.id, override.id));
+    expect(after.length).toBe(1);
+    expect(after[0].substituteExerciseId).toBe(legPress.id);
+  });
+
+  it("still drops an override whose exercise the coach actually removed", async () => {
+    const { coach, assigned } = await setup();
+    const legPress = await makeExercise(coach.id, { name: "Leg Press" });
+    await db.insert(assignmentExerciseOverrides).values({
+      assignmentId: assigned.assignment.id,
+      programDayId: assigned.day.id,
+      programExerciseId: assigned.programExercises[0].id,
+      substituteExerciseId: legPress.id,
+      reason: "knee",
+    });
+
+    await storage.updateProgramDay(
+      assigned.day.id,
+      { title: "Day 1", isRestDay: false, exercises: [] } as any,
+      coach.id,
+    );
+
+    expect(await db.select().from(assignmentExerciseOverrides)).toEqual([]);
+    expect(await db.select().from(programExercises).where(eq(programExercises.dayId, assigned.day.id))).toEqual([]);
   });
 });
