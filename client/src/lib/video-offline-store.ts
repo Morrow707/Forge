@@ -382,7 +382,8 @@ async function runVideoFlush() {
       // server will keep rejecting is permanent, and 401 (expired session), 408 and 429 are
       // explicitly not, because all three succeed on a later attempt.
       const status = err instanceof ApiError ? err.status : null;
-      if (isPermanentUploadRejection(status)) {
+      const code = err instanceof ApiError ? err.code : undefined;
+      if (isPermanentUploadRejection(status, code)) {
         await clearPersistedVideo(entry.id);
         toast.error(
           `${entry.label}: couldn't be uploaded and was not saved -- you'll need to re-record it.`,

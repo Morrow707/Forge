@@ -308,7 +308,8 @@ async function runFlush() {
       // attempt. Drop it and say so plainly, once, while the athlete can
       // still do something about it.
       const status = err instanceof ApiError ? err.status : null;
-      const permanentlyRejected = isPermanentUploadRejection(status);
+      const code = err instanceof ApiError ? err.code : undefined;
+      const permanentlyRejected = isPermanentUploadRejection(status, code);
       if (permanentlyRejected) {
         writeQueue(readQueue().filter((p) => p.id !== entry.id));
         clearDayFailure(entry.dayKey);

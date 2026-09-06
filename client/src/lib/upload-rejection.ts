@@ -17,8 +17,20 @@
  *   429 -- rate limited; that is a request to come back, not a refusal.
  *
  * Everything 5xx is the server having a problem, which is the definition of temporary. A null
- * status (no response at all: offline, DNS failure, connection reset) is never permanent. */
-export function isPermanentUploadRejection(status: number | null | undefined): boolean {
+ * status (no response at all: offline, DNS failure, connection reset) is never permanent.
+ *
+ * The `code` argument exists for one case that the status alone gets backwards. The guardian gate
+ * (server/routes.ts) refuses EVERY athlete route with a 403 while a minor has no guardian account
+ * linked, and that 403 stops the moment a parent finishes signing up -- it is a "not yet", not a
+ * "never". Without this, an athlete who was using the app before that gate shipped would have
+ * their queued offline workout deleted, and their queued video deleted off disk, on the first
+ * reconnect after the update -- told it "was rejected by the server and can't be synced" about
+ * work that would have synced perfectly an hour later once their parent opened the email. */
+export function isPermanentUploadRejection(
+  status: number | null | undefined,
+  code?: string | null,
+): boolean {
   if (status == null) return false;
+  if (code === "guardian_link_required") return false;
   return status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
 }

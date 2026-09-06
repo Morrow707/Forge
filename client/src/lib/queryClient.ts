@@ -54,22 +54,32 @@ function authHeaders(): Record<string, string> {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** The machine-readable `code` some routes send alongside `message`.
+   *
+   * Kept because status alone is not enough to decide whether a failure is
+   * worth retrying: the guardian gate refuses every athlete route with a 403
+   * that stops applying the moment a parent finishes signing up, which is the
+   * opposite of what a 403 usually means. See isPermanentUploadRejection. */
+  code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     let message = res.statusText;
+    let code: string | undefined;
     try {
       const data = await res.json();
       if (data?.message) message = data.message;
+      if (typeof data?.code === "string") code = data.code;
     } catch {
       // ignore body parse failure
     }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, code);
   }
 }
 
