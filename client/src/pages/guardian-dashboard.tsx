@@ -36,7 +36,7 @@ type CalendarEntry = {
 };
 
 type AthleteVideo = {
-  source: "set" | "skill" | "comment";
+  source: "set" | "skill" | "comment" | "skillComment";
   id: number;
   label: string;
   date: string;

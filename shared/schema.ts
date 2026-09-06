@@ -862,7 +862,7 @@ export const mediaRemovalRequests = pgTable(
     // already takes, so approving a request reuses the one deletion path
     // that is already exercised by the retention job rather than inventing
     // a second way to remove a video.
-    source: text("source").notNull(), // "set" | "skill" | "comment"
+    source: text("source").notNull(), // "set" | "skill" | "comment" | "skillComment"
     sourceId: integer("source_id").notNull(),
     // Snapshotted at request time so the queue still reads sensibly after
     // the video is gone -- an approved request whose label resolved live
@@ -889,7 +889,7 @@ export const mediaRemovalRequests = pgTable(
 );
 
 export const createMediaRemovalRequestSchema = z.object({
-  source: z.enum(["set", "skill", "comment"]),
+  source: z.enum(["set", "skill", "comment", "skillComment"]),
   sourceId: z.number().int().positive(),
   reason: z.string().trim().max(500).optional().nullable(),
 });

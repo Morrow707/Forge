@@ -31,16 +31,28 @@ export const UPLOADS_ROOT = process.env.STORAGE_PATH || path.join(process.cwd(),
 // already gone -- freeing disk space is a best-effort side effect of
 // clearing a video reference, never something that should fail the
 // request it's attached to.
-export async function deleteUploadedFile(url: string | null | undefined): Promise<void> {
-  if (!url || !url.startsWith("/uploads/")) return;
+//
+// Returns whether the bytes are actually gone, which is NOT the same
+// question as whether this threw. It never throws, and it used to return
+// nothing at all: an EACCES or EIO on the mounted disk was logged and then
+// indistinguishable from success, so every caller went on to null the URL
+// column anyway. That turned a failed delete into a file with no row
+// pointing at it, unreachable by the retention job that would otherwise
+// have retried it tomorrow -- the exact opposite of what a compliance
+// purge of a minor's footage is supposed to guarantee. A missing file
+// still counts as gone (true): there is nothing left to delete, so
+// clearing the reference is correct.
+export async function deleteUploadedFile(url: string | null | undefined): Promise<boolean> {
+  if (!url || !url.startsWith("/uploads/")) return true;
   const resolved = path.join(UPLOADS_ROOT, url.slice("/uploads/".length));
-  if (!resolved.startsWith(UPLOADS_ROOT + path.sep)) return;
+  if (!resolved.startsWith(UPLOADS_ROOT + path.sep)) return true;
   try {
     await fs.unlink(resolved);
+    return true;
   } catch (err: any) {
-    if (err?.code !== "ENOENT") {
-      console.error(`Failed to delete uploaded file at ${url}:`, err);
-    }
+    if (err?.code === "ENOENT") return true;
+    console.error(`Failed to delete uploaded file at ${url}:`, err);
+    return false;
   }
 }
 

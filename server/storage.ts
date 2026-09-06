@@ -2206,7 +2206,7 @@ type OverwatchFlaw = {
 };
 
 type AdminVideoRow = {
-  source: "set" | "skill" | "comment";
+  source: "set" | "skill" | "comment" | "skillComment";
   id: number;
   videoUrl: string;
   secondaryUrl: string | null;
@@ -3057,7 +3057,7 @@ export const storage = {
     }
 
     if (user.role === "athlete") {
-      const [setVideos, skillVideos, commentVideos] = await Promise.all([
+      const [setVideos, skillVideos, commentVideos, skillCommentVideos] = await Promise.all([
         db
           .select({ url: workoutSetEntries.formCheckVideoUrl })
           .from(workoutSetEntries)
@@ -3073,11 +3073,22 @@ export const storage = {
           .from(workoutComments)
           .innerJoin(assignments, eq(workoutComments.assignmentId, assignments.id))
           .where(eq(assignments.athleteId, userId)),
+        // Skill-day comments were missed entirely. They carry the same two
+        // kinds of file a workout comment does, they cascade away with the
+        // user like everything else here, and nothing deleted the files --
+        // so every clip and annotation a coach ever posted on this
+        // athlete's skill days survived their account deletion.
+        db
+          .select({ url: skillDayComments.videoUrl, image: skillDayComments.imageUrl })
+          .from(skillDayComments)
+          .innerJoin(skillAssignments, eq(skillDayComments.skillAssignmentId, skillAssignments.id))
+          .where(eq(skillAssignments.athleteId, userId)),
       ]);
       await Promise.all([
         ...setVideos.map((v) => deleteUploadedFile(v.url)),
         ...skillVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.annotation)]),
         ...commentVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.image)]),
+        ...skillCommentVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.image)]),
       ]);
     } else {
       // A coach or admin DOES have files of their own, contrary to what
@@ -3091,14 +3102,33 @@ export const storage = {
       // (a comment's videoUrl is the commenter's upload; the athlete's set
       // videos live on workoutSetEntries and belong to the athlete's own
       // deletion path above).
-      const authoredComments = await db
-        .select({ url: workoutComments.videoUrl, image: workoutComments.imageUrl })
-        .from(workoutComments)
-        .where(eq(workoutComments.authorId, userId));
-      await Promise.all(
-        authoredComments.flatMap((c) => [deleteUploadedFile(c.url), deleteUploadedFile(c.image)]),
-      );
+      const [authoredComments, authoredSkillComments] = await Promise.all([
+        db
+          .select({ url: workoutComments.videoUrl, image: workoutComments.imageUrl })
+          .from(workoutComments)
+          .where(eq(workoutComments.authorId, userId)),
+        // Same omission as the athlete branch above, on the other side of
+        // the same table: author_id cascades from users here too.
+        db
+          .select({ url: skillDayComments.videoUrl, image: skillDayComments.imageUrl })
+          .from(skillDayComments)
+          .where(eq(skillDayComments.authorId, userId)),
+      ]);
+      await Promise.all([
+        ...authoredComments.flatMap((c) => [deleteUploadedFile(c.url), deleteUploadedFile(c.image)]),
+        ...authoredSkillComments.flatMap((c) => [deleteUploadedFile(c.url), deleteUploadedFile(c.image)]),
+      ]);
     }
+
+    // Screenshots attached to problem reports, for every role. These rows
+    // cascade with the user and the images did not, so a support screenshot
+    // -- which by its nature tends to be a picture of the reporter's own
+    // logged-in screen -- outlived the account that filed it.
+    const reportImages = await db
+      .select({ image: problemReports.imageUrl })
+      .from(problemReports)
+      .where(eq(problemReports.userId, userId));
+    await Promise.all(reportImages.map((r) => deleteUploadedFile(r.image)));
 
     await db.delete(users).where(eq(users.id, userId));
     return { ok: true };
@@ -18392,7 +18422,11 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
         .where(eq(workoutSetEntries.id, id));
       if (!row?.videoUrl) return { deleted: false, athleteId: null };
-      await deleteUploadedFile(row.videoUrl);
+      // Only clear the reference if the bytes actually went away -- see
+      // deleteUploadedFile's own comment. A failed unlink now leaves the row
+      // pointing at the file so tomorrow's sweep finds it again, instead of
+      // orphaning it beyond the reach of the only job that would retry.
+      if (!(await deleteUploadedFile(row.videoUrl))) return { deleted: false, athleteId: row.athleteId };
       await db
         .update(workoutSetEntries)
         .set({
@@ -18422,12 +18456,19 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         .from(skillSessionLogs)
         .where(eq(skillSessionLogs.id, id));
       if (!row?.videoUrl) return { deleted: false, athleteId: null };
-      await Promise.all([deleteUploadedFile(row.videoUrl), deleteUploadedFile(row.coachAnnotationUrl)]);
+      const [skillGone, annotationGone] = await Promise.all([
+        deleteUploadedFile(row.videoUrl),
+        deleteUploadedFile(row.coachAnnotationUrl),
+      ]);
+      // Cleared per column, not as a pair: if the clip goes and the coach's
+      // drawn-on still does not, keeping the annotation reference is what
+      // gets it retried rather than stranded.
+      if (!skillGone && !annotationGone) return { deleted: false, athleteId: row.athleteId };
       await db
         .update(skillSessionLogs)
         .set({
-          videoUrl: null,
-          coachAnnotationUrl: null,
+          ...(skillGone ? { videoUrl: null } : {}),
+          ...(annotationGone ? { coachAnnotationUrl: null } : {}),
           // Exact mirror of the "set" branch above's videoFavorited/
           // pendingDeletionAt reset -- a favorited video CAN still reach
           // here via the compliance-tier job (which doesn't check
@@ -18441,16 +18482,60 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         .where(eq(skillSessionLogs.id, id));
       return { deleted: true, athleteId: row.athleteId };
     }
+    if (source === "skillComment") {
+      // Skill-day comments carry exactly the same two kinds of file a
+      // workout comment does (a clip the coach filmed, a still they drew
+      // on a frame of the athlete's own footage) and were reachable from
+      // no deletion path at all: not this one, not the minor-tier
+      // retention purge, not account deletion, not the guardian's list.
+      // The rows cascade with the user; the files did not, so they sat on
+      // the disk with nothing pointing at them, permanently.
+      const [row] = await db
+        .select({
+          videoUrl: skillDayComments.videoUrl,
+          imageUrl: skillDayComments.imageUrl,
+          athleteId: skillAssignments.athleteId,
+        })
+        .from(skillDayComments)
+        .innerJoin(skillAssignments, eq(skillDayComments.skillAssignmentId, skillAssignments.id))
+        .where(eq(skillDayComments.id, id));
+      if (!row || (!row.videoUrl && !row.imageUrl)) return { deleted: false, athleteId: null };
+      const [videoGone, imageGone] = await Promise.all([
+        deleteUploadedFile(row.videoUrl),
+        deleteUploadedFile(row.imageUrl),
+      ]);
+      if (!videoGone && !imageGone) return { deleted: false, athleteId: row.athleteId };
+      await db
+        .update(skillDayComments)
+        .set({
+          ...(videoGone ? { videoUrl: null } : {}),
+          ...(imageGone ? { imageUrl: null } : {}),
+        })
+        .where(eq(skillDayComments.id, id));
+      return { deleted: true, athleteId: row.athleteId };
+    }
     const [row] = await db
       .select({ videoUrl: workoutComments.videoUrl, imageUrl: workoutComments.imageUrl, athleteId: assignments.athleteId })
       .from(workoutComments)
       .innerJoin(assignments, eq(workoutComments.assignmentId, assignments.id))
       .where(eq(workoutComments.id, id));
-    if (!row?.videoUrl) return { deleted: false, athleteId: null };
-    await Promise.all([deleteUploadedFile(row.videoUrl), deleteUploadedFile(row.imageUrl)]);
+    // Gated on the video alone, this returned "nothing to delete" for a
+    // comment carrying only a drawn-on still of the athlete -- and a
+    // guardian's approved removal request against one reported success
+    // while the image stayed on disk. Either file is athlete media and
+    // either one alone is enough to act on.
+    if (!row || (!row.videoUrl && !row.imageUrl)) return { deleted: false, athleteId: null };
+    const [commentVideoGone, commentImageGone] = await Promise.all([
+      deleteUploadedFile(row.videoUrl),
+      deleteUploadedFile(row.imageUrl),
+    ]);
+    if (!commentVideoGone && !commentImageGone) return { deleted: false, athleteId: row.athleteId };
     await db
       .update(workoutComments)
-      .set({ videoUrl: null, imageUrl: null })
+      .set({
+        ...(commentVideoGone ? { videoUrl: null } : {}),
+        ...(commentImageGone ? { imageUrl: null } : {}),
+      })
       .where(eq(workoutComments.id, id));
     return { deleted: true, athleteId: row.athleteId };
   },
@@ -20494,11 +20579,24 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // deleteAdminVideo takes. Built by widening the retention job's own
   // UNION rather than writing a third way to enumerate videos, so a new
   // video-bearing table has one place to be added, not three.
+  // Every piece of media on this athlete's record that a guardian is
+  // allowed to see and ask to have removed. The two comment sources below
+  // were missing: the return type has always claimed "comment", but the
+  // query only ever unioned set and skill, so a coach's video of somebody's
+  // child in a comment thread was invisible to that child's parent and
+  // there was no way to request it. The POST route resolves a request
+  // target against exactly this list, so widening it is what makes those
+  // removable at all.
+  //
+  // Image-only rows belong here too: a still the coach drew on is a frame
+  // of the athlete's own footage, and the guardian view renders a label and
+  // a date rather than a player, so there is nothing to break by listing
+  // one.
   async getVideosForAthlete(athleteId: number): Promise<
-    { source: "set" | "skill" | "comment"; id: number; label: string; date: string; videoUrl: string }[]
+    { source: "set" | "skill" | "comment" | "skillComment"; id: number; label: string; date: string; videoUrl: string }[]
   > {
     const result = await db.execute<{
-      source: "set" | "skill" | "comment";
+      source: "set" | "skill" | "comment" | "skillComment";
       id: number;
       label: string;
       date: string;
@@ -20524,6 +20622,26 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         LEFT JOIN skill_program_exercises spe ON spe.id = ssl.skill_program_exercise_id
         LEFT JOIN skill_exercises sx ON sx.id = spe.skill_exercise_id
         WHERE ssl.video_url IS NOT NULL
+
+        UNION ALL
+
+        SELECT 'comment', wc.id, a.athlete_id,
+          CASE WHEN wc.video_url IS NOT NULL THEN 'Coach comment video'
+            ELSE 'Coach annotation' END,
+          coalesce(wc.video_url, wc.image_url), wc.created_at
+        FROM workout_comments wc
+        JOIN assignments a ON a.id = wc.assignment_id
+        WHERE wc.video_url IS NOT NULL OR wc.image_url IS NOT NULL
+
+        UNION ALL
+
+        SELECT 'skillComment', sdc.id, sa.athlete_id,
+          CASE WHEN sdc.video_url IS NOT NULL THEN 'Coach skill-day video'
+            ELSE 'Coach skill-day annotation' END,
+          coalesce(sdc.video_url, sdc.image_url), sdc.created_at
+        FROM skill_day_comments sdc
+        JOIN skill_assignments sa ON sa.id = sdc.skill_assignment_id
+        WHERE sdc.video_url IS NOT NULL OR sdc.image_url IS NOT NULL
       ) v
       WHERE v.athlete_id = ${athleteId}
       ORDER BY v.reference_time DESC
@@ -20543,7 +20661,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   async createMediaRemovalRequest(input: {
     athleteId: number;
     guardianId: number;
-    source: "set" | "skill" | "comment";
+    source: "set" | "skill" | "comment" | "skillComment";
     sourceId: number;
     label: string;
     reason?: string | null;
@@ -20626,7 +20744,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       // sweep, storage cap) is a legitimate approve, not a failure, so the
       // request still resolves and the caller learns nothing was left.
       const result = await this.deleteAdminVideo(
-        request.source as "set" | "skill" | "comment",
+        request.source as "set" | "skill" | "comment" | "skillComment",
         request.sourceId,
       );
       deleted = result.deleted;
@@ -20928,7 +21046,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // uses, so there is exactly one place in the codebase that ever deletes a
   // video file.
   async getVideosEligibleForRetentionPurge(): Promise<
-    { source: "set" | "skill"; id: number; tier: PrivacyTier }[]
+    { source: "set" | "skill" | "comment" | "skillComment"; id: number; tier: PrivacyTier }[]
   > {
     // Originally pulled every athlete with a dateOfBirth (~all of them) and
     // every video-having set/skill row into Node to filter in a JS loop --
@@ -20942,7 +21060,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     // mirror derivePrivacyTier exactly: dateOfBirth > now - 13y is tier1,
     // dateOfBirth > now - 18y (and not tier1) is tier2; date arithmetic in
     // Postgres is calendar-aware, same as that function's month/day check.
-    const result = await db.execute<{ source: "set" | "skill"; id: number; tier: PrivacyTier }>(sql`
+    // The two comment sources were absent, which meant the tier windows
+    // applied to an athlete's own captures but never to a coach's video or
+    // drawn-on still OF that athlete posted in a thread. For a Tier 1
+    // twelve-year-old that is footage kept forever, on the one schedule in
+    // this app that exists specifically so it isn't.
+    const result = await db.execute<{
+      source: "set" | "skill" | "comment" | "skillComment";
+      id: number;
+      tier: PrivacyTier;
+    }>(sql`
       SELECT v.source, v.id,
         CASE WHEN u.date_of_birth > (current_date - interval '13 years')
           THEN 'tier1_under13' ELSE 'tier2_teen_13_17' END AS tier
@@ -20959,6 +21086,20 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         SELECT 'skill', ssl.id, ssl.athlete_id, ssl.created_at
         FROM skill_session_logs ssl
         WHERE ssl.video_url IS NOT NULL
+
+        UNION ALL
+
+        SELECT 'comment', wc.id, a.athlete_id, wc.created_at
+        FROM workout_comments wc
+        JOIN assignments a ON a.id = wc.assignment_id
+        WHERE wc.video_url IS NOT NULL OR wc.image_url IS NOT NULL
+
+        UNION ALL
+
+        SELECT 'skillComment', sdc.id, sa.athlete_id, sdc.created_at
+        FROM skill_day_comments sdc
+        JOIN skill_assignments sa ON sa.id = sdc.skill_assignment_id
+        WHERE sdc.video_url IS NOT NULL OR sdc.image_url IS NOT NULL
       ) v
       JOIN users u ON u.id = v.athlete_id AND u.role = 'athlete'
       WHERE u.date_of_birth IS NOT NULL
