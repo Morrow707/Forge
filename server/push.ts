@@ -62,7 +62,7 @@ async function sendWebPushToUser(
         return true;
       } catch (err: any) {
         if (err?.statusCode === 404 || err?.statusCode === 410) {
-          await storage.removePushSubscription(sub.endpoint);
+          await storage.removePushSubscription(sub.userId, sub.endpoint);
         } else {
           console.error("Push send failed:", err?.message || err);
         }

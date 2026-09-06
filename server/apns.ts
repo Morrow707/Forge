@@ -116,7 +116,7 @@ export async function sendApnsToUser(
       try {
         const { shouldRemove } = await sendOne(t.deviceToken, payload);
         if (shouldRemove) {
-          await storage.removeApnsToken(t.deviceToken);
+          await storage.removeApnsToken(t.userId, t.deviceToken);
           return false;
         }
         return true;

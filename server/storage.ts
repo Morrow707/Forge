@@ -15564,6 +15564,14 @@ ${entriesText}`;
   // One row per browser/device; re-subscribing the same endpoint (e.g. the
   // user toggles the setting off and on) just no-ops rather than creating
   // a duplicate.
+  // A push endpoint belongs to a browser, not to an account, and the browser
+  // outlives the sign-in: a shared family laptop, an athlete signing out so a
+  // sibling can sign in, a coach borrowing a device. Returning the existing
+  // row untouched left that endpoint pointing at whoever registered it first,
+  // so the new user got no notifications at all and the previous user's
+  // notifications kept arriving on a device they no longer had -- with the
+  // athlete names, coach messages and guardian alerts they carry. Whoever is
+  // signed in now owns the endpoint.
   async savePushSubscription(
     userId: number,
     endpoint: string,
@@ -15572,7 +15580,17 @@ ${entriesText}`;
     const existing = await db.query.pushSubscriptions.findFirst({
       where: eq(pushSubscriptions.endpoint, endpoint),
     });
-    if (existing) return existing;
+    if (existing) {
+      if (existing.userId === userId && existing.p256dh === keys.p256dh && existing.auth === keys.auth) {
+        return existing;
+      }
+      const [moved] = await db
+        .update(pushSubscriptions)
+        .set({ userId, p256dh: keys.p256dh, auth: keys.auth })
+        .where(eq(pushSubscriptions.id, existing.id))
+        .returning();
+      return moved;
+    }
     const [row] = await db
       .insert(pushSubscriptions)
       .values({ userId, endpoint, p256dh: keys.p256dh, auth: keys.auth })
@@ -15580,8 +15598,13 @@ ${entriesText}`;
     return row;
   },
 
-  async removePushSubscription(endpoint: string) {
-    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  // Scoped to the caller: unsubscribing is "stop sending to my device," and
+  // an endpoint string is not a secret, so an unscoped delete let any signed-in
+  // account silence any other account's notifications.
+  async removePushSubscription(userId: number, endpoint: string) {
+    await db
+      .delete(pushSubscriptions)
+      .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
   },
 
   async getPushSubscriptionsForUser(userId: number) {
@@ -15591,11 +15614,25 @@ ${entriesText}`;
   },
 
   // ---------- APNs device tokens (native app twin of Push subscriptions above) ----------
+  // Same reasoning as savePushSubscription above, and more acute on iOS: the
+  // APNs device token is per app install, so it does NOT change when an
+  // athlete signs out and someone else signs in on the same phone or the
+  // shared team iPad. Keeping the first registration meant the second user
+  // silently received nothing while the first user's pushes kept landing on
+  // a phone that was no longer theirs.
   async saveApnsToken(userId: number, deviceToken: string) {
     const existing = await db.query.apnsDeviceTokens.findFirst({
       where: eq(apnsDeviceTokens.deviceToken, deviceToken),
     });
-    if (existing) return existing;
+    if (existing) {
+      if (existing.userId === userId) return existing;
+      const [moved] = await db
+        .update(apnsDeviceTokens)
+        .set({ userId })
+        .where(eq(apnsDeviceTokens.id, existing.id))
+        .returning();
+      return moved;
+    }
     const [row] = await db
       .insert(apnsDeviceTokens)
       .values({ userId, deviceToken })
@@ -15603,8 +15640,10 @@ ${entriesText}`;
     return row;
   },
 
-  async removeApnsToken(deviceToken: string) {
-    await db.delete(apnsDeviceTokens).where(eq(apnsDeviceTokens.deviceToken, deviceToken));
+  async removeApnsToken(userId: number, deviceToken: string) {
+    await db
+      .delete(apnsDeviceTokens)
+      .where(and(eq(apnsDeviceTokens.userId, userId), eq(apnsDeviceTokens.deviceToken, deviceToken)));
   },
 
   async getApnsTokensForUser(userId: number) {

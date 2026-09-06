@@ -8581,12 +8581,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/push/unsubscribe", requireAuth, async (req, res) => {
+    const user = currentUser(req);
     const schema = z.object({ endpoint: z.string().url() });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    await storage.removePushSubscription(parsed.data.endpoint);
+    await storage.removePushSubscription(user.id, parsed.data.endpoint);
     res.status(204).end();
   });
 
@@ -8618,12 +8619,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/push/unsubscribe-apns", requireAuth, async (req, res) => {
+    const user = currentUser(req);
     const schema = z.object({ deviceToken: z.string().min(1) });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    await storage.removeApnsToken(parsed.data.deviceToken);
+    await storage.removeApnsToken(user.id, parsed.data.deviceToken);
     res.status(204).end();
   });
 
