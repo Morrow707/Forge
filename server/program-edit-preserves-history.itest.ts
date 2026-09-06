@@ -3,10 +3,12 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import {
+  assignmentCorrectives,
   assignmentExerciseOverrides,
   programDays,
   programExercises,
   programWeeks,
+  workoutLogEntries,
   workoutLogs,
 } from "@shared/schema";
 import { makeAssignedProgram, makeAthlete, makeCoach, makeExercise, resetDatabase } from "./test-support/fixtures";
@@ -167,5 +169,73 @@ describe("editing a single day preserves athlete substitutions", () => {
 
     expect(await db.select().from(assignmentExerciseOverrides)).toEqual([]);
     expect(await db.select().from(programExercises).where(eq(programExercises.dayId, assigned.day.id))).toEqual([]);
+  });
+});
+
+// workoutLogEntries.correctiveId cascades from assignmentCorrectives, so
+// replacing a day's correctives deleted the sets the athlete had already
+// logged against them.
+describe("editing correctives preserves what the athlete already logged", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("keeps a logged corrective entry when the coach adjusts the corrective", async () => {
+    const { coach, athlete, assigned, log } = await setup();
+    const banded = await makeExercise(coach.id, { name: "Banded Pull-Apart" });
+    const [corrective] = await db
+      .insert(assignmentCorrectives)
+      .values({
+        assignmentId: assigned.assignment.id,
+        programDayId: assigned.day.id,
+        exerciseId: banded.id,
+        orderIndex: 0,
+        sets: 2,
+        reps: "15",
+      })
+      .returning();
+    const [entry] = await db
+      .insert(workoutLogEntries)
+      .values({ workoutLogId: log.id, exerciseId: banded.id, correctiveId: corrective.id })
+      .returning();
+
+    // The coach bumps the corrective from 2 sets to 3.
+    await storage.updateCorrectivesForAssignmentDay(
+      assigned.assignment.id,
+      assigned.day.id,
+      { correctives: [{ exerciseId: banded.id, orderIndex: 0, sets: 3, reps: "15" }] } as any,
+      coach.id,
+    );
+
+    const after = await db.select().from(workoutLogEntries).where(eq(workoutLogEntries.id, entry.id));
+    expect(after.length).toBe(1);
+    const corr = await db
+      .select()
+      .from(assignmentCorrectives)
+      .where(eq(assignmentCorrectives.id, corrective.id));
+    expect(corr[0].sets).toBe(3);
+    expect(athlete.id).toBeGreaterThan(0);
+  });
+
+  it("still removes a corrective the coach deleted", async () => {
+    const { coach, assigned } = await setup();
+    const banded = await makeExercise(coach.id, { name: "Banded Pull-Apart" });
+    await db.insert(assignmentCorrectives).values({
+      assignmentId: assigned.assignment.id,
+      programDayId: assigned.day.id,
+      exerciseId: banded.id,
+      orderIndex: 0,
+      sets: 2,
+      reps: "15",
+    });
+
+    await storage.updateCorrectivesForAssignmentDay(
+      assigned.assignment.id,
+      assigned.day.id,
+      { correctives: [] } as any,
+      coach.id,
+    );
+
+    expect(await db.select().from(assignmentCorrectives)).toEqual([]);
   });
 });

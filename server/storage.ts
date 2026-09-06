@@ -15006,29 +15006,55 @@ ${entriesText}`;
       input.correctives.map((c) => c.exerciseId),
     );
     return db.transaction(async (tx) => {
-      await tx
-        .delete(assignmentCorrectives)
+      // Reconciled in place, not replaced. workoutLogEntries.correctiveId is
+      // ON DELETE CASCADE from assignmentCorrectives, so deleting the day's
+      // correctives deleted every entry the athlete had already logged
+      // against them, and the workoutSetEntries under those in turn. A coach
+      // nudging a corrective's rep count wiped the work the athlete had
+      // already done on it.
+      //
+      // Matched by position: correctiveInputSchema carries no id, and the
+      // editor sends the day's list in order, so position is the only
+      // identity available and is what the coach sees on screen.
+      const existing = await tx
+        .select()
+        .from(assignmentCorrectives)
         .where(
           and(
             eq(assignmentCorrectives.assignmentId, assignmentId),
             eq(assignmentCorrectives.programDayId, programDayId),
           ),
-        );
+        )
+        .orderBy(assignmentCorrectives.orderIndex);
 
-      if (input.correctives.length > 0) {
-        await tx.insert(assignmentCorrectives).values(
-          input.correctives.map((c, i) => ({
-            assignmentId,
-            programDayId,
-            exerciseId: c.exerciseId,
-            orderIndex: c.orderIndex ?? i,
-            sets: c.sets,
-            reps: c.reps,
-            weight: c.weight ?? null,
-            restSeconds: c.restSeconds ?? null,
-            notes: c.notes ?? null,
-          })),
-        );
+      for (const [i, c] of input.correctives.entries()) {
+        const values = {
+          assignmentId,
+          programDayId,
+          exerciseId: c.exerciseId,
+          orderIndex: c.orderIndex ?? i,
+          sets: c.sets,
+          reps: c.reps,
+          weight: c.weight ?? null,
+          restSeconds: c.restSeconds ?? null,
+          notes: c.notes ?? null,
+        };
+        const prior = existing[i];
+        if (prior) {
+          await tx
+            .update(assignmentCorrectives)
+            .set(values)
+            .where(eq(assignmentCorrectives.id, prior.id));
+        } else {
+          await tx.insert(assignmentCorrectives).values(values);
+        }
+      }
+
+      // Only the trailing correctives the coach actually removed. Losing the
+      // logged entries under one of those is correct -- the corrective they
+      // belonged to is gone.
+      for (const stale of existing.slice(input.correctives.length)) {
+        await tx.delete(assignmentCorrectives).where(eq(assignmentCorrectives.id, stale.id));
       }
     });
   },
