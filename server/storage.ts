@@ -2317,6 +2317,40 @@ Pitching mechanics knowledge base:
 - CRITICAL, non-negotiable safety context: overuse is the single biggest cause of serious arm injury (elbow UCL/"Tommy John," shoulder) in youth pitchers, and the injury risk is real and well-documented, not theoretical. Always be alert to and proactively raise pitch-count and rest: age-appropriate pitch-count limits exist (youth baseball governing bodies like Little League publish them) and mandatory rest days between outings matter as much as mechanics -- if the athlete describes pitching on multiple teams, pitching with inadequate rest between outings, or any arm/shoulder/elbow soreness or pain (even "a little tired," not just sharp pain), be direct: that needs extended rest and an evaluation by a doctor or certified athletic trainer before throwing again, not a mechanics tweak. Do not let a mechanics question distract from an overuse red flag if one comes up in the conversation -- address the safety issue first, explicitly, every time.`,
 };
 
+// Marks skill calendar entries complete from skillDayLogs, the way the
+// exercise entries beside them are already marked from workoutLogs. Every
+// skill entry was hardcoded `completed: false`, so a skill day the athlete
+// had finished never showed as done on any calendar and every "completed"
+// count built on these entries was short.
+async function markSkillEntriesCompleted(
+  entries: { kind: string; assignmentId: number; programDayId: number; date: string; completed: boolean }[],
+) {
+  const skillEntries = entries.filter((e) => e.kind === "skill");
+  if (skillEntries.length === 0) return;
+  const logs = await db
+    .select({
+      skillAssignmentId: skillDayLogs.skillAssignmentId,
+      skillProgramDayId: skillDayLogs.skillProgramDayId,
+      date: skillDayLogs.date,
+      completed: skillDayLogs.completed,
+    })
+    .from(skillDayLogs)
+    .where(
+      inArray(
+        skillDayLogs.skillAssignmentId,
+        Array.from(new Set(skillEntries.map((e) => e.assignmentId))),
+      ),
+    );
+  const done = new Set(
+    logs
+      .filter((l) => l.completed)
+      .map((l) => `${l.skillAssignmentId}:${l.skillProgramDayId}:${l.date}`),
+  );
+  for (const e of skillEntries) {
+    if (done.has(`${e.assignmentId}:${e.programDayId}:${e.date}`)) e.completed = true;
+  }
+}
+
 export const storage = {
   // ---------- Users ----------
   async getUser(id: number) {
@@ -16208,6 +16242,7 @@ ${entriesText}`;
     }
 
     const createdAtByAssignment = new Map(rows.map((a) => [a.id, new Date(a.createdAt)]));
+    await markSkillEntriesCompleted(entries as any);
     return reconcileOverlappingAssignments(
       entries,
       (e) => `${e.athleteId}:${e.date}`,
