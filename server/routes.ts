@@ -1583,7 +1583,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const enrollment = await storage.getClassEnrollmentForAthlete(parsed.data.athleteId, id);
       if (!enrollment) return res.status(404).json({ message: "Athlete not enrolled" });
-      const newlyUnlocked = await storage.manuallyUnlockLesson(enrollment.id, lessonId);
+      const { newlyUnlocked, blockedByPurchase } = await storage.manuallyUnlockLesson(
+        enrollment.id,
+        lessonId,
+      );
+      // A priced lesson is an individual purchase -- the athlete buys it for
+      // themselves and no coach-side unlock covers it. Say so, instead of
+      // returning progress that still shows the lesson locked for no
+      // visible reason.
+      if (blockedByPurchase) {
+        return res.status(400).json({
+          message:
+            "This lesson is an individual purchase. Unlocking clears the pacing rules, but the athlete still needs to buy it from their own account.",
+        });
+      }
       await notifyNewlyUnlockedLessons(newlyUnlocked);
       const progress = await storage.getClassProgressForAthlete(parsed.data.athleteId, id);
       res.json(progress);
@@ -8310,10 +8323,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Deliberately NOT requireFreeAgent. A priced lesson is an individual
+  // purchase: every athlete buys it for themselves, and a coach buying it
+  // grants nothing to their roster. Gating the buy on having no coach meant
+  // a coached athlete was charged for the lesson by the unlock rules and
+  // then had no way to pay -- 403 here, and no coach-side unlock covers a
+  // price -- so they stopped at that chapter permanently. That guard belongs
+  // on the AI features it was written for, not on a purchase.
   app.post(
     "/api/athlete/classes/:id/lessons/:lessonId/purchase",
     requireRole("athlete"),
-    requireFreeAgent,
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);

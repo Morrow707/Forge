@@ -3746,10 +3746,15 @@ export type SendProgramChatMessageInput = z.infer<typeof sendProgramChatMessageS
 // ownership model already used for exercises/programs/skillPrograms: a
 // coach's own Class is private to their roster; an admin's Forge Class is
 // available to any coach to assign AND is the only kind a Free Agent (who
-// has no coach) can ever see or enroll in. Per-lesson pricing (see
-// classLessons.priceCents) only ever applies to a Forge Class sold to a
-// Free Agent -- a coach's own athletes never see a price on their coach's
-// own Class.
+// has no coach) can ever see or enroll in.
+//
+// Per-lesson pricing (see classLessons.priceCents) applies only to a Forge
+// Class, never to a coach's own Class -- but on a Forge Class it applies to
+// EVERY athlete enrolled in it, coached or not. It is an individual
+// purchase: each athlete buys the lesson for themselves, a coach buying it
+// grants nothing to their roster, and no coach-side unlock opens it (see
+// manuallyUnlockLesson). This comment used to say a coach's athletes never
+// see a price on a Forge Class, which the code has never done.
 export const classes = pgTable("classes", {
   id: serial("id").primaryKey(),
   coachId: integer("coach_id")

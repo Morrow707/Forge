@@ -10245,16 +10245,14 @@ Hard rules, no exceptions:
           (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
       if (!reachable) break;
 
-      // manuallyUnlocked clears the payment gate as well as the unlock rule,
-      // which is what manuallyUnlockLesson's own comment has always promised
-      // ("force a lesson open regardless of its unlock rule or payment
-      // gate"). It only cleared the rule, so on a priced Forge lesson the
-      // coach's unlock set the flag, changed nothing, and reported the
-      // lesson still locked with no reason given -- the athlete stayed stuck
-      // and the coach had no way to free them. The admin escape hatch had to
-      // set purchasedAt alongside it to work at all.
+      // A priced lesson is an INDIVIDUAL purchase. Every athlete buys it for
+      // themselves; a coach buying it does not grant it to their roster, and
+      // no coach-side flag can open it. manuallyUnlocked therefore clears the
+      // unlock RULE only -- pacing, prerequisites, quiz gates -- and never
+      // the payment gate. Only a real purchase (or an admin comping one by
+      // writing purchasedAt) opens a paid lesson.
       const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
-      if (paymentRequired && !progress.purchasedAt && !progress.manuallyUnlocked) break;
+      if (paymentRequired && !progress.purchasedAt) break;
 
       // Reachable and paid for, but this lesson has a quiz -- hold here
       // rather than auto-activating; activateClassLesson is the only path
@@ -10416,7 +10414,7 @@ Hard rules, no exceptions:
         const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
         if (!reachable) {
           state = "locked";
-        } else if (paymentRequired && !progress?.purchasedAt && !progress?.manuallyUnlocked) {
+        } else if (paymentRequired && !progress?.purchasedAt) {
           state = "locked_preview";
         } else if (lessonsWithQuiz.has(lesson.id)) {
           state = "ready";
@@ -10473,8 +10471,18 @@ Hard rules, no exceptions:
     return this.recomputeClassProgress(enrollmentId);
   },
 
-  // Coach/admin escape hatch -- force a lesson open regardless of its
-  // unlock rule or payment gate.
+  // Coach/admin escape hatch -- forces a lesson past its UNLOCK RULE
+  // (pacing, prerequisites, the quiz gate), never past its price.
+  //
+  // A priced lesson is an individual purchase: every athlete buys it for
+  // themselves, and a coach buying it does not grant it to their roster. So
+  // no coach-side flag can open one. The comment here used to promise the
+  // opposite ("regardless of its unlock rule or payment gate"), which was
+  // never what the code did.
+  //
+  // Returns blockedByPurchase so the caller can say why nothing opened,
+  // rather than reporting the lesson still locked with no explanation --
+  // which is what a coach saw when they tried this on a paid lesson.
   async manuallyUnlockLesson(enrollmentId: number, classLessonId: number) {
     const progress = await db.query.classLessonProgress.findFirst({
       where: and(
@@ -10482,12 +10490,25 @@ Hard rules, no exceptions:
         eq(classLessonProgress.classLessonId, classLessonId),
       ),
     });
-    if (!progress) return [];
+    if (!progress) return { newlyUnlocked: [], blockedByPurchase: false };
+
+    const lesson = await db.query.classLessons.findFirst({
+      where: eq(classLessons.id, classLessonId),
+    });
+    const cls = lesson
+      ? await db.query.classes.findFirst({ where: eq(classes.id, lesson.classId) })
+      : null;
+    const blockedByPurchase =
+      !!cls?.isForgeOfficial &&
+      lesson?.priceCents != null &&
+      lesson.priceCents > 0 &&
+      !progress.purchasedAt;
+
     await db
       .update(classLessonProgress)
       .set({ manuallyUnlocked: true })
       .where(eq(classLessonProgress.id, progress.id));
-    return this.recomputeClassProgress(enrollmentId);
+    return { newlyUnlocked: await this.recomputeClassProgress(enrollmentId), blockedByPurchase };
   },
 
   // Content + quiz for the athlete's reader UI -- answer options never
@@ -10786,10 +10807,10 @@ Hard rules, no exceptions:
         (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
     if (!reachable) throw new Error("This lesson isn't unlocked yet.");
 
-    // A manual unlock clears the payment gate here too, matching
-    // recomputeClassProgress and manuallyUnlockLesson's own contract.
+    // Individual purchase; a manual unlock never covers it. See
+    // recomputeClassProgress.
     const paymentRequired = cls.isForgeOfficial && lesson.priceCents != null && lesson.priceCents > 0;
-    if (paymentRequired && !progress.purchasedAt && !progress.manuallyUnlocked) {
+    if (paymentRequired && !progress.purchasedAt) {
       throw new Error("Purchase this lesson before adding it to your calendar.");
     }
 

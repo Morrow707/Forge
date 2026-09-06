@@ -5,59 +5,84 @@ import { eq } from "drizzle-orm";
 import { classLessons, skillAssignments, skillExercises } from "@shared/schema";
 import { makeAthlete, makeCoach, resetDatabase } from "./test-support/fixtures";
 
-// manuallyUnlockLesson is documented as forcing a lesson open "regardless of
-// its unlock rule or payment gate". It only cleared the rule, so on a priced
-// Forge lesson a coach's unlock set the flag, changed nothing, and reported
-// the lesson still locked with no reason given.
+// A priced lesson is an INDIVIDUAL purchase. Every athlete buys it for
+// themselves; a coach buying it grants nothing to their roster, and no
+// coach-side unlock opens it. manuallyUnlockLesson clears the unlock RULE
+// only -- pacing, prerequisites, the quiz gate -- and its comment used to
+// claim otherwise.
 
-describe("a coach's manual unlock frees a priced lesson", () => {
+async function pricedClass(coachId: number) {
+  const [drill] = await db
+    .insert(skillExercises)
+    .values({ coachId, name: "Tee", sports: ["baseball"], skillType: "Hitting" })
+    .returning();
+  const cls: any = await storage.createClassWithStructure(
+    coachId,
+    {
+      name: "Paid Hitting",
+      lessons: [
+        {
+          lessonNumber: 1,
+          title: "Lesson 1",
+          unlockRule: "immediate",
+          priceCents: 4999,
+          exercises: [{ skillExerciseId: drill.id, orderIndex: 0, sets: 3, reps: "10", trackingLevel: "none" }],
+          content: [],
+          quizQuestions: [],
+        },
+      ],
+    } as any,
+    true,
+  );
+  return cls;
+}
+
+describe("a priced lesson stays an individual purchase", () => {
   beforeEach(resetDatabase);
 
-  it("activates a priced Forge lesson the athlete never bought", async () => {
+  it("a coach's unlock does not open it, and says so", async () => {
     const coach = await makeCoach();
     const athlete = await makeAthlete();
-    const [drill] = await db
-      .insert(skillExercises)
-      .values({ coachId: coach.id, name: "Tee", sports: ["baseball"], skillType: "Hitting" })
-      .returning();
-
-    // A Forge-official class whose first lesson costs money.
-    const cls: any = await storage.createClassWithStructure(
-      coach.id,
-      {
-        name: "Paid Hitting",
-        lessons: [
-          {
-            lessonNumber: 1,
-            title: "Lesson 1",
-            unlockRule: "immediate",
-            priceCents: 2500,
-            exercises: [
-              { skillExerciseId: drill.id, orderIndex: 0, sets: 3, reps: "10", trackingLevel: "none" },
-            ],
-            content: [],
-            quizQuestions: [],
-          },
-        ],
-      } as any,
-      true,
-    );
-
+    const cls = await pricedClass(coach.id);
     await storage.enrollAthleteInClass(coach.id, cls.id, athlete.id, "2026-09-14");
-    // Nothing activates while it is unpaid.
-    expect((await db.select().from(skillAssignments).where(eq(skillAssignments.athleteId, athlete.id))).length).toBe(0);
 
     const [lesson] = await db.select().from(classLessons).where(eq(classLessons.classId, cls.id));
     const enrollment = await storage.getClassEnrollmentForAthlete(athlete.id, cls.id);
-    await storage.manuallyUnlockLesson(enrollment!.id, lesson.id);
+    const result = await storage.manuallyUnlockLesson(enrollment!.id, lesson.id);
 
-    // The unlock actually frees them.
-    const assigned = await db.select().from(skillAssignments).where(eq(skillAssignments.athleteId, athlete.id));
-    expect(assigned.length).toBe(1);
+    // Nothing was scheduled, and the caller is told why rather than being
+    // handed progress that still shows it locked for no visible reason.
+    expect(result.blockedByPurchase).toBe(true);
+    expect(result.newlyUnlocked).toEqual([]);
+    expect((await db.select().from(skillAssignments).where(eq(skillAssignments.athleteId, athlete.id))).length).toBe(0);
+  });
 
-    // And the athlete's own progress view agrees it is open.
-    const progress: any = await storage.getClassProgressForAthlete(athlete.id, cls.id);
-    const row = (progress?.lessons ?? []).find((l: any) => l.lessonId === lesson.id || l.id === lesson.id);
-    if (row) expect(row.locked ?? row.state === "locked").toBeFalsy();
+  it("the athlete's own purchase does open it", async () => {
+    const coach = await makeCoach();
+    const athlete = await makeAthlete();
+    const cls = await pricedClass(coach.id);
+    await storage.enrollAthleteInClass(coach.id, cls.id, athlete.id, "2026-09-14");
+
+    const [lesson] = await db.select().from(classLessons).where(eq(classLessons.classId, cls.id));
+    const enrollment = await storage.getClassEnrollmentForAthlete(athlete.id, cls.id);
+    await storage.markLessonPurchased(enrollment!.id, lesson.id);
+
+    expect((await db.select().from(skillAssignments).where(eq(skillAssignments.athleteId, athlete.id))).length).toBe(1);
+  });
+
+  it("one athlete's purchase does not open it for another", async () => {
+    const coach = await makeCoach();
+    const buyer = await makeAthlete({ name: "Buyer" });
+    const other = await makeAthlete({ name: "Other" });
+    const cls = await pricedClass(coach.id);
+    await storage.enrollAthleteInClass(coach.id, cls.id, buyer.id, "2026-09-14");
+    await storage.enrollAthleteInClass(coach.id, cls.id, other.id, "2026-09-14");
+
+    const [lesson] = await db.select().from(classLessons).where(eq(classLessons.classId, cls.id));
+    const buyerEnrollment = await storage.getClassEnrollmentForAthlete(buyer.id, cls.id);
+    await storage.markLessonPurchased(buyerEnrollment!.id, lesson.id);
+
+    expect((await db.select().from(skillAssignments).where(eq(skillAssignments.athleteId, buyer.id))).length).toBe(1);
+    expect((await db.select().from(skillAssignments).where(eq(skillAssignments.athleteId, other.id))).length).toBe(0);
   });
 });
