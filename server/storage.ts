@@ -8828,9 +8828,14 @@ Hard rules, no exceptions:
           weekNumber: week.weekNumber,
           name: week.name ?? null,
         };
+        // An id that matches wins; anything else falls back to position.
+        // Falling back rather than treating an unmatched id as "new" matters:
+        // inserting a fresh row and deleting the old one as stale is exactly
+        // the data loss this reconcile exists to prevent, and a client
+        // holding an id from a since-changed read would have triggered it.
         const priorWeek =
           (week.id != null ? existingWeeks.find((w) => w.id === week.id) : undefined) ??
-          (week.id == null ? existingWeeks[weekIdx] : undefined);
+          existingWeeks[weekIdx];
         let weekRow;
         if (priorWeek && !keptWeekIds.has(priorWeek.id)) {
           [weekRow] = await tx
@@ -8859,7 +8864,7 @@ Hard rules, no exceptions:
           };
           const priorDay =
             (day.id != null ? existingDays.find((d) => d.id === day.id) : undefined) ??
-            (day.id == null ? existingDays[dayIdx] : undefined);
+            existingDays[dayIdx];
           let dayRow;
           if (priorDay && !keptDayIds.has(priorDay.id)) {
             [dayRow] = await tx
@@ -12284,9 +12289,14 @@ Respond to the user's latest message by calling ask_question or update_program.`
         // Match on the caller's id when it sent one, otherwise by position --
         // the builder does not always round-trip ids (an AI-drafted structure
         // has none at all), and position is what the coach sees on screen.
+        // An id that matches wins; anything else falls back to position.
+        // Falling back rather than treating an unmatched id as "new" matters:
+        // inserting a fresh row and deleting the old one as stale is exactly
+        // the data loss this reconcile exists to prevent, and a client
+        // holding an id from a since-changed read would have triggered it.
         const priorWeek =
           (week.id != null ? existingWeeks.find((w) => w.id === week.id) : undefined) ??
-          (week.id == null ? existingWeeks[weekIdx] : undefined);
+          existingWeeks[weekIdx];
         let weekRow;
         if (priorWeek && !keptWeekIds.has(priorWeek.id)) {
           [weekRow] = await tx
@@ -12315,7 +12325,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
           };
           const priorDay =
             (day.id != null ? existingDays.find((d) => d.id === day.id) : undefined) ??
-            (day.id == null ? existingDays[dayIdx] : undefined);
+            existingDays[dayIdx];
           let dayRow;
           if (priorDay && !keptDayIds.has(priorDay.id)) {
             [dayRow] = await tx
@@ -14856,8 +14866,7 @@ ${entriesText}`;
           videoCheckEnabled: videoCheckMap.get(ex) ?? false,
         };
         const prior =
-          (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ??
-          (ex.id == null ? existing[i] : undefined);
+          (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ?? existing[i];
         if (prior) {
           await tx.update(programExercises).set(values).where(eq(programExercises.id, prior.id));
         } else {
@@ -14872,8 +14881,7 @@ ${entriesText}`;
         input.exercises
           .map((ex, i) => {
             const prior =
-              (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ??
-              (ex.id == null ? existing[i] : undefined);
+              (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ?? existing[i];
             return prior?.id;
           })
           .filter((id): id is number => id != null),

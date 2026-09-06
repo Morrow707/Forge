@@ -239,3 +239,23 @@ describe("editing correctives preserves what the athlete already logged", () => 
     expect(await db.select().from(assignmentCorrectives)).toEqual([]);
   });
 });
+
+// A client holding an id from a read that has since changed must not cause
+// the reconcile to insert a fresh row and delete the old one as stale --
+// that is precisely the data loss the reconcile exists to prevent.
+describe("a stale id falls back to position rather than replacing the row", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("keeps the logged workout when the payload carries an id that no longer exists", async () => {
+    const { coach, squat, assigned, log } = await setup();
+    await storage.updateProgramStructure(
+      assigned.program.id,
+      structure("Stale Ids", squat.id, { weekId: 999_999, dayId: 999_998 }) as any,
+      coach.id,
+    );
+    expect((await db.select().from(workoutLogs).where(eq(workoutLogs.id, log.id))).length).toBe(1);
+    expect((await db.select().from(programDays).where(eq(programDays.id, assigned.day.id))).length).toBe(1);
+  });
+});
