@@ -2415,15 +2415,19 @@ CREATE INDEX IF NOT EXISTS "archived_health_flags_subject_idx" ON "archived_heal
 --
 -- This column is the snapshot of which exercise a logged entry was actually performed against.
 -- shared/schema.ts's own comment on it says every historical read should resolve exercise
--- identity through it rather than through the live program_exercises join, and roughly fifteen
--- reads still do not -- PR detection, both leaderboards, the ACWR and load queries, the athlete
--- progress summary, form overwatch, coach analytics and the video retention sweep among them.
+-- identity through it rather than through the live program_exercises join.
 --
--- Those reads cannot be switched over while older rows have a NULL here, because switching would
--- trade one silent disappearance for a worse one: today an athlete loses history when their
--- coach edits a program day, and after a naive switch they would lose everything logged before
--- this column existed. This backfill is the prerequisite, and it is deliberately shipped ahead
--- of the read changes so the two can be verified separately.
+-- Those reads could not be switched over while older rows had a NULL here, because switching
+-- would have traded one silent disappearance for a worse one: an athlete lost history when
+-- their coach edited a program day, and after a naive switch they would have lost everything
+-- logged before this column existed. This backfill was the prerequisite, and it was
+-- deliberately shipped ahead of the read changes so the two could be verified separately.
+--
+-- The read changes have since landed: the roster PR card, the readiness bar-speed trend, the
+-- athlete's own performance history and the digest/analytics name lookups all resolve through
+-- the snapshot now, with the old derivation kept only as a fallback for rows too old for this
+-- backfill to recover. This statement stays because it is what makes those reads correct on an
+-- existing database, and because it is a no-op on every run after the first.
 --
 -- Only ever touches rows where exercise_id IS NULL, so it never overwrites a value
 -- submitWorkoutLog already resolved at save time, and re-running it on every deploy is a no-op
