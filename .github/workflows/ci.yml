@@ -54,6 +54,42 @@ jobs:
       - name: Test
         run: npm test
 
+      # Blocking, and deliberately scoped to what actually runs in
+      # production. The full tree currently reports a critical and several
+      # highs, all of them in build tooling (tar via the Capacitor CLI,
+      # sharp, esbuild) -- real, but a different risk with a different
+      # response, and making this step fail on them would mean it gets
+      # ignored or removed. Production runtime is at zero, so this holds a
+      # bar that is currently met rather than one that needs a backlog
+      # cleared first.
+      #
+      # moderate, not high: the two qs advisories this step exists to keep
+      # fixed are both rated moderate, so a `high` bar would have sat there
+      # green while the exact regression it was written for walked past it.
+      # Checked by removing the override and confirming this step fails.
+      #
+      # Note package.json's overrides.qs: express 4 and body-parser both pin
+      # qs to ~6.15.1, and the two live qs advisories (an array-limit bypass
+      # and a DoS, both reachable by anyone who can send a URL) are only
+      # fixed in 6.16.0 -- outside that range. So `npm audit fix` reported a
+      # fix was available, upgraded to 6.15.3, and left the vulnerability in
+      # place, every time. The override is what actually patches it without
+      # an Express 5 migration.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      # Non-blocking counterpart for the build tooling. It runs on a runner
+      # holding distribution certificates and an App Store Connect key, so a
+      # compromised build dependency has a worse blast radius than a
+      # moderate in production -- but a red CI over a transitive dev
+      # advisory nobody can fix today teaches people to ignore red CI.
+      - name: Audit build tooling (warning only)
+        run: |
+          if ! npm audit --audit-level=critical > /tmp/dev-audit.txt 2>&1; then
+            echo "::warning title=Build-tooling vulnerabilities::npm audit reports critical advisories in the dev/build dependency tree. These do not run in production, but they do run in CI alongside the signing certificates and App Store key. See the step log."
+          fi
+          tail -40 /tmp/dev-audit.txt || true
+
       - name: Build (web + server)
         run: npm run build
 
