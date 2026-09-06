@@ -6651,26 +6651,27 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     // baseline from at least two earlier tracked sessions -- a few percent
     // of day-to-day noise, or a single prior data point, isn't a signal
     // worth mentioning.
+    // Keyed on workoutLogEntries.exerciseId -- the snapshot of what the set
+    // was actually logged against, resolved once at submission time -- not on
+    // programExerciseId. That column's own comment says exactly why: this
+    // window is up to 60 days of history, and a program-day edit in that time
+    // can leave the FK null or pointing at a row since reassigned to a
+    // different exercise. Keying on it meant the same lift in two different
+    // program slots (week 1's squat and week 2's squat) never pooled into one
+    // baseline, entries whose FK had been nulled dropped out of the
+    // comparison entirely, and the name resolved by live lookup below could
+    // report the drop against whatever exercise now occupies that slot.
     const velByExercise = new Map<
-      string,
-      {
-        programExerciseId: number | null;
-        correctiveId: number | null;
-        samples: { date: string; peakVelocityMps: number }[];
-      }
+      number,
+      { samples: { date: string; peakVelocityMps: number }[] }
     >();
     for (const log of recentLogs) {
       for (const entry of log.entries) {
-        if (entry.programExerciseId == null && entry.correctiveId == null) continue;
-        const key = entry.programExerciseId != null ? `pe:${entry.programExerciseId}` : `c:${entry.correctiveId}`;
-        let bucket = velByExercise.get(key);
+        if (entry.exerciseId == null) continue;
+        let bucket = velByExercise.get(entry.exerciseId);
         if (!bucket) {
-          bucket = {
-            programExerciseId: entry.programExerciseId ?? null,
-            correctiveId: entry.correctiveId ?? null,
-            samples: [],
-          };
-          velByExercise.set(key, bucket);
+          bucket = { samples: [] };
+          velByExercise.set(entry.exerciseId, bucket);
         }
         for (const s of entry.sets) {
           if (s.peakVelocityMps != null) bucket.samples.push({ date: log.date, peakVelocityMps: s.peakVelocityMps });
@@ -6683,9 +6684,13 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       .sort()
       .at(-1);
     if (mostRecentTrackedDate) {
-      let worstDrop: { exerciseName: string; percentDown: number; recentAvg: number; baselineAvg: number } | null =
-        null;
-      for (const bucket of velByExercise.values()) {
+      let worstDrop: {
+        exerciseId: number;
+        percentDown: number;
+        recentAvg: number;
+        baselineAvg: number;
+      } | null = null;
+      for (const [bucketExerciseId, bucket] of velByExercise.entries()) {
         const recent = bucket.samples.filter((s) => s.date === mostRecentTrackedDate);
         const baseline = bucket.samples.filter((s) => s.date !== mostRecentTrackedDate);
         const baselineDates = new Set(baseline.map((s) => s.date));
@@ -6694,26 +6699,19 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
         const baselineAvg = baseline.reduce((sum, s) => sum + s.peakVelocityMps, 0) / baseline.length;
         const percentDown = Math.round(((baselineAvg - recentAvg) / baselineAvg) * 100);
         if (percentDown >= 10 && (!worstDrop || percentDown > worstDrop.percentDown)) {
-          let exerciseName = "an exercise";
-          if (bucket.programExerciseId != null) {
-            const pe = await db.query.programExercises.findFirst({
-              where: eq(programExercises.id, bucket.programExerciseId),
-              with: { exercise: true },
-            });
-            if (pe) exerciseName = pe.exercise.name;
-          } else if (bucket.correctiveId != null) {
-            const c = await db.query.assignmentCorrectives.findFirst({
-              where: eq(assignmentCorrectives.id, bucket.correctiveId),
-              with: { exercise: true },
-            });
-            if (c) exerciseName = c.exercise.name;
-          }
-          worstDrop = { exerciseName, percentDown, recentAvg, baselineAvg };
+          worstDrop = { exerciseId: bucketExerciseId, percentDown, recentAvg, baselineAvg };
         }
       }
-      velocityTrendText = worstDrop
-        ? `${worstDrop.exerciseName} peak bar speed in their last tracked session was ${worstDrop.percentDown}% below their recent typical (${worstDrop.recentAvg.toFixed(2)} vs ${worstDrop.baselineAvg.toFixed(2)} m/s) -- possible residual fatigue`
-        : "in line with their recent typical";
+      if (worstDrop) {
+        // Named from the exercise the sets were logged against, so the drop
+        // is always attributed to the lift that actually produced it.
+        const exercise = await db.query.exercises.findFirst({
+          where: eq(exercises.id, worstDrop.exerciseId),
+        });
+        velocityTrendText = `${exercise?.name ?? "an exercise"} peak bar speed in their last tracked session was ${worstDrop.percentDown}% below their recent typical (${worstDrop.recentAvg.toFixed(2)} vs ${worstDrop.baselineAvg.toFixed(2)} m/s) -- possible residual fatigue`;
+      } else {
+        velocityTrendText = "in line with their recent typical";
+      }
     }
 
     const { score, level } = computeReadiness(wellness);
