@@ -92,6 +92,8 @@ import { storage } from "./storage";
 import { signMediaUrlsDeep } from "./media-url-signing";
 import { verifyRequestOrigin } from "./csrf-protection";
 import { NATIVE_APP_ORIGINS } from "./native-app-origins";
+import { pool } from "./db";
+import { redactForLog } from "./log-redaction";
 
 const app = express();
 // contentSecurityPolicy is report-only, not enforcing -- see its own
@@ -288,26 +290,8 @@ app.use((req, res, next) => {
 // Redacts by key name at the top level, which is where all of these live. Deliberately not a
 // deep walk: the log line is truncated to 200 characters anyway, and a recursive scan on every
 // single API response is a cost paid forever to protect against a shape that does not exist.
-const SENSITIVE_LOG_KEYS = new Set([
-  "secret",
-  "otpauthUri",
-  "mfaToken",
-  "nativeToken",
-  "token",
-  "passwordHash",
-  "backupCodes",
-]);
-
-function redactForLog(body: unknown): unknown {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
-  let cloned: Record<string, unknown> | null = null;
-  for (const key of Object.keys(body as Record<string, unknown>)) {
-    if (!SENSITIVE_LOG_KEYS.has(key)) continue;
-    if (!cloned) cloned = { ...(body as Record<string, unknown>) };
-    cloned[key] = "[redacted]";
-  }
-  return cloned ?? body;
-}
+// Lives in log-redaction.ts so it can be tested without importing this
+// file, which boots the server on import.
 
 
   const originalResJson = res.json.bind(res);
@@ -320,7 +304,19 @@ function redactForLog(body: unknown): unknown {
     const duration = Date.now() - start;
     if (reqPath.startsWith("/api")) {
       let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      // The body goes to the log in development only. Redaction covers keys
+      // that are secrets; it does not and cannot cover the payload itself,
+      // which on this platform is athlete names, health status, injury
+      // history and a minor's date of birth. Truncating at 200 characters
+      // limits the volume, not the exposure -- the first 200 characters of a
+      // profile response are precisely the identifying part. Sentry is
+      // configured to collect no response bodies at all, and stdout was the
+      // one place that undercut it.
+      //
+      // The method, path, status and duration stay in every environment:
+      // that is what a log line is actually read for, and none of it is
+      // anyone's personal data.
+      if (capturedJsonResponse && app.get("env") === "development") {
         logLine += ` :: ${JSON.stringify(redactForLog(capturedJsonResponse))}`;
       }
       if (logLine.length > 200) {
@@ -347,6 +343,28 @@ app.use((req, res, next) => {
     return originalJson(signMediaUrlsDeep(body));
   }) as typeof res.json;
   next();
+});
+
+// Render's health check pointed at "/", which serves the built single-page
+// app off local disk. That returns 200 with Postgres completely down, so the
+// one signal the platform uses to decide whether this instance is alive
+// could not observe the failure mode that actually takes the app down. This
+// touches the database, so a wedged pool or a dead server fails the check
+// and the instance gets restarted or pulled instead of quietly serving an
+// app shell whose every request 500s.
+//
+// Deliberately unauthenticated and mounted before everything: a health check
+// that needs a session cannot report on a server too broken to make one. It
+// returns no detail beyond up/down for the same reason -- nothing here
+// should tell an anonymous caller anything about the deployment.
+app.get("/healthz", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.status(200).json({ status: "ok" });
+  } catch (err) {
+    console.error("Health check failed:", err);
+    res.status(503).json({ status: "unavailable" });
+  }
 });
 
 (async () => {

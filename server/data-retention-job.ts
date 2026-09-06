@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { scheduleDailyJob } from "./job-lock";
+import { reportJobFailure } from "./job-errors";
 
 // Daily sweep that purges raw video for Tier 1/2 minor athletes once it's
 // past that tier's configured retention window (shared/privacy-tiers.ts) --
@@ -35,12 +36,16 @@ export async function runDataRetentionJob() {
         const result = await storage.deleteAdminVideo(row.source, row.id);
         if (result.deleted) purged += 1;
       } catch (err) {
-        console.error(`Data retention job: failed to purge ${row.source} video ${row.id}:`, err);
+        // Reported individually, not just counted: this is the job that
+        // carries a retention commitment, so a video that keeps failing to
+        // purge needs to reach somebody rather than only lowering a number
+        // in a log line nobody reads.
+        reportJobFailure("data-retention", err, { source: row.source, videoId: row.id });
       }
     }
     console.log(`Data retention job: purged ${purged}/${eligible.length} eligible video(s).`);
   } catch (err) {
-    console.error("Data retention job failed:", err);
+    reportJobFailure("data-retention", err);
   }
 }
 

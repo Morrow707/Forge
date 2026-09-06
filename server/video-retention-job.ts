@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { notifyUser } from "./notify";
 import { scheduleDailyJob } from "./job-lock";
+import { reportJobFailure } from "./job-errors";
 
 // Daily sweep of form-check AND skill-drill videos -- applies to every
 // athlete (coached or Free Agent alike, see shared/video-retention.ts's own
@@ -45,7 +46,7 @@ export async function runVideoRetentionSweep() {
       console.log(`Video retention sweep: warned ${notified}, purged ${purged}.`);
     }
   } catch (err) {
-    console.error("Video retention sweep failed:", err);
+    reportJobFailure("video-retention-cap-sweep", err);
   }
 }
 
@@ -84,7 +85,7 @@ export async function runStaleAccountVideoSweep() {
       console.log(`Stale-account video sweep: warned ${notified}, purged ${purged}.`);
     }
   } catch (err) {
-    console.error("Stale-account video sweep failed:", err);
+    reportJobFailure("stale-account-video-sweep", err);
   }
 }
 

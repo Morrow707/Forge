@@ -16,7 +16,7 @@ services:
     # first.
     buildCommand: npm install --include=dev && npm run build && npm run db:reconcile && npm run db:seed && npm run db:reconcile
     startCommand: npm start
-    healthCheckPath: /
+    healthCheckPath: /healthz
     # Coach/athlete-uploaded form-check and skill videos, plus coach-drawn
     # annotation PNGs, live on disk (see UPLOADS_ROOT in
     # server/uploaded-files.ts, and STORAGE_PATH below) -- without a

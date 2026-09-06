@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { notifyUser } from "./notify";
 import { scheduleDailyJob } from "./job-lock";
+import { reportJobFailure } from "./job-errors";
 
 // The one background job in the app -- everything else here is request-
 // triggered (see the "route layer owns notifyUser" convention throughout
@@ -48,7 +49,7 @@ export async function runReflectionJob() {
       }
     }
   } catch (err) {
-    console.error("Reflection job failed:", err);
+    reportJobFailure("reflection", err);
   }
 }
 

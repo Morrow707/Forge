@@ -620,7 +620,7 @@ export function setupAuth(app: Express) {
         await storage.createTrialSubscription(user.id, role === "coach" ? "coach" : "free_agent");
       }
 
-      req.login(user, async (err) => {
+      loginWithFreshSession(req, user, async (err: any) => {
         if (err) return next(err);
         // Fire-and-forget: sendEmail never throws (see email.ts) and a slow
         // or failed welcome email is never a reason to hold up the response
@@ -710,7 +710,7 @@ export function setupAuth(app: Express) {
           `/coach/roster/${user.id}`,
         );
       }
-      req.login(user, async (err) => {
+      loginWithFreshSession(req, user, async (err: any) => {
         if (err) return next(err);
         sendEmail({
           to: user.email,
@@ -760,7 +760,7 @@ export function setupAuth(app: Express) {
       );
       if ("error" in result) return res.status(400).json({ message: result.error });
       const { user } = result;
-      req.login(user, async (err) => {
+      loginWithFreshSession(req, user, async (err: any) => {
         if (err) return next(err);
         // Same try/catch as the two signup routes above, for the same reason -- an unhandled
         // rejection in a req.login callback crashes the process rather than erroring the request.
@@ -930,8 +930,29 @@ export function setupAuth(app: Express) {
     return {};
   }
 
+  // Every path that establishes a session goes through here rather than
+  // calling req.login directly. Regenerating first gives the authenticated
+  // user a session id the pre-login request never saw, which is the whole
+  // defence against session fixation: without it, an id an attacker planted
+  // in the victim's browser before they logged in stays valid afterward,
+  // now carrying their identity. Passport does not do this for you.
+  //
+  // Order matters twice over. The regenerate has to happen BEFORE req.login
+  // (which writes the user into whatever session is current), and
+  // trackNewSession reads req.sessionID afterward to record the row that
+  // makes "log out this device" work -- so the id it stores is the fresh
+  // one, not the discarded one. Nothing else is ever kept in the session
+  // (sessionRecordId is written later, by trackNewSession itself), so there
+  // is no pre-login state to carry across.
+  function loginWithFreshSession(req: any, user: any, done: (err: any) => void) {
+    req.session.regenerate((regenErr: any) => {
+      if (regenErr) return done(regenErr);
+      req.login(user, done);
+    });
+  }
+
   function completeLogin(req: any, res: any, next: any, user: any) {
-    req.login(user, async (err2: any) => {
+    loginWithFreshSession(req, user, async (err2: any) => {
       if (err2) return next(err2);
       try {
         await storage.touchUserActivity(user.id);
@@ -1052,9 +1073,37 @@ export function setupAuth(app: Express) {
     res.json({ ok: true, revokedCount: result.revokedCount });
   });
 
-  app.post("/api/auth/logout", (req, res, next) => {
+  // Destroying the cookie session used to be the whole of this, which
+  // logged out a browser and nothing else. A native client authenticates
+  // with a bearer token, not a cookie, so there was no cookie session to
+  // destroy and the token stayed valid server-side for the rest of its
+  // 30-day life -- the app cleared it locally, which is the only reason
+  // signing out appeared to work. Anyone holding a copy of that token kept
+  // access to the account after its owner had deliberately signed out, and
+  // the device went on showing as an active session on the security screen.
+  //
+  // Revoking the session record is what actually ends it: isNativeSessionValid
+  // checks revokedAt on every request. Awaited before the response, for the
+  // same reason the reset flow awaits its revoke -- this is the security
+  // effect being asked for, not a courtesy afterward.
+  app.post("/api/auth/logout", async (req, res, next) => {
+    try {
+      const user = req.user as { id: number } | undefined;
+      const sessionRecordId = currentSessionRecordId(req);
+      if (user && sessionRecordId !== null) {
+        const revoked = await storage.revokeSession(user.id, sessionRecordId);
+        if (revoked?.webSessionId) {
+          await pool.query('DELETE FROM "session" WHERE sid = $1', [revoked.webSessionId]);
+        }
+      }
+    } catch (err) {
+      return next(err);
+    }
     req.logout((err) => {
       if (err) return next(err);
+      // A native request has no cookie session of its own; destroy() on the
+      // empty one it was given is harmless, and the clearCookie is a no-op
+      // for a client that never sent one.
       req.session.destroy(() => {
         res.clearCookie("connect.sid");
         res.status(204).end();
