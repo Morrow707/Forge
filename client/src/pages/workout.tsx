@@ -100,7 +100,7 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { MovementProfile, ExercisePageTheme } from "@shared/schema";
-import { parseProgression } from "@/lib/progression";
+import { parseProgression, parsePrescribedWeight, convertWeight } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { ReadinessBanner } from "@/components/readiness-banner";
 import { ExerciseSheetTutorial } from "@/components/exercise-sheet-tutorial";
@@ -767,10 +767,10 @@ function parsePercentOfOneRm(weightText: string | null) {
   return match ? parseFloat(match[1]) : null;
 }
 
-function parseLiteralWeight(weightText: string) {
-  const match = weightText.match(/^(\d+(?:\.\d+)?)/);
-  return match ? parseFloat(match[1]) : null;
-}
+// parsePrescribedWeight (lib/progression.ts) keeps the unit the coach wrote.
+// This used to take the leading number alone, which meant a prescription
+// written in kilograms was rendered below against the athlete's own unit --
+// the same number, a different lift.
 
 // Leading integer out of a prescribed rep scheme ("5" -> 5, "8-10" -> 8,
 // "AMRAP" -> undefined) -- used only to auto-stop the camera tracker once
@@ -2532,12 +2532,24 @@ function ExerciseLogContent({
     estimatedOneRm != null ? Math.round((percentOfOneRm! / 100) * estimatedOneRm) : null;
   // Literal-number progression (e.g. "225 lbs +5 lbs/week") -- only applies
   // when the base isn't a %1RM expression, which is handled above instead.
+  // Converted into the unit this card is actually displaying in. An
+  // unlabelled prescription is left as written, which is what it has always
+  // meant: the reader's own unit.
+  const literalPrescribed =
+    basePercentOfOneRm == null && baseWeightText ? parsePrescribedWeight(baseWeightText) : null;
   const literalBase =
-    basePercentOfOneRm == null && baseWeightText ? parseLiteralWeight(baseWeightText) : null;
+    literalPrescribed != null
+      ? convertWeight(literalPrescribed.value, literalPrescribed.unit, unit)
+      : null;
+  const progressionAmount = progression
+    ? progression.isPercent
+      ? progression.amount
+      : convertWeight(progression.amount, progression.unit, unit)
+    : null;
   const progressionIncrementLabel = progression
     ? progression.isPercent
       ? `${progression.amount}%`
-      : `${progression.amount} ${unit}`
+      : `${Math.round(progressionAmount! * 10) / 10} ${unit}`
     : null;
   const suggestedFromProgression =
     literalBase != null && progression
@@ -2545,7 +2557,7 @@ function ExerciseLogContent({
           (literalBase +
             (progression.isPercent
               ? literalBase * (progression.amount / 100) * weeksElapsed
-              : progression.amount * weeksElapsed)) *
+              : progressionAmount! * weeksElapsed)) *
             10,
         ) / 10
       : null;
