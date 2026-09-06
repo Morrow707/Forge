@@ -9054,6 +9054,25 @@ Hard rules, no exceptions:
   // deliberately minimal (one row per capture, no completion/logging
   // system around it yet).
   async createSkillSessionLog(athleteId: number, input: CreateSkillSessionLogInput) {
+    // The drill has to be one of the day's own. skillProgramExerciseId is
+    // how every read resolves which drill a capture belongs to, and nothing
+    // below constrains it, so a capture naming any row in the table would be
+    // stored against it -- a drill from another day, another program or
+    // another coach -- and then surface in that drill's history and on its
+    // leaderboard. The route checks this too, for a clearer message; this is
+    // the check that holds for every caller.
+    const [onThisDay] = await db
+      .select({ id: skillProgramExercises.id })
+      .from(skillProgramExercises)
+      .where(
+        and(
+          eq(skillProgramExercises.id, input.skillProgramExerciseId),
+          eq(skillProgramExercises.dayId, input.skillProgramDayId),
+        ),
+      );
+    if (!onThisDay) {
+      throw new Error("That drill isn't on this day.");
+    }
     const videoUrl = input.videoUrl ? await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId) : null;
     const values = {
       skillAssignmentId: input.skillAssignmentId,

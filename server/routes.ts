@@ -7263,6 +7263,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.skillProgramDayId,
     );
     if (!detail) return res.status(404).json({ message: "Skill session not found" });
+    // ...and that the drill is actually one of that day's. The check above
+    // only ever covered the assignment and the day, though the comment
+    // claimed otherwise, so a capture could be filed against any
+    // skillProgramExercises row in the table -- a drill from another day,
+    // another program, or another coach entirely. That row is how every
+    // read resolves which drill a session belongs to, so the capture then
+    // surfaced in a stranger's drill history and on their leaderboard.
+    if (!detail.exercises.some((ex) => ex.id === parsed.data.skillProgramExerciseId)) {
+      return res.status(400).json({ message: "That drill isn't on this day." });
+    }
     const log = await storage.createSkillSessionLog(user.id, parsed.data);
 
     // Push a recognized combine-drill sprint capture into the same testing-
