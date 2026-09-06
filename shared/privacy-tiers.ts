@@ -15,16 +15,57 @@
 // placeholder pending that review, not as a legal fact.
 export type PrivacyTier = "tier1_under13" | "tier2_teen_13_17" | "tier3_adult_18plus";
 
-export function derivePrivacyTier(dateOfBirth: string | Date, asOf: Date = new Date()): PrivacyTier {
+/** Age in whole years from a real birthdate.
+ *
+ * Split out of derivePrivacyTier, which already computed it and threw it
+ * away. Anything that needs to KNOW an athlete's age should come here rather
+ * than read users.age -- that column is a self-reported snapshot, is never
+ * written by either signup path, and goes stale as a season passes. See
+ * getAthleteAiContext in server/storage.ts for what reading it instead cost.
+ */
+export function ageFromDateOfBirth(dateOfBirth: string | Date, asOf: Date = new Date()): number {
   const dob = typeof dateOfBirth === "string" ? new Date(dateOfBirth) : dateOfBirth;
   let age = asOf.getUTCFullYear() - dob.getUTCFullYear();
   const monthDiff = asOf.getUTCMonth() - dob.getUTCMonth();
   if (monthDiff < 0 || (monthDiff === 0 && asOf.getUTCDate() < dob.getUTCDate())) {
     age -= 1;
   }
+  return age;
+}
+
+export function derivePrivacyTier(dateOfBirth: string | Date, asOf: Date = new Date()): PrivacyTier {
+  const age = ageFromDateOfBirth(dateOfBirth, asOf);
   if (age < 13) return "tier1_under13";
   if (age < 18) return "tier2_teen_13_17";
   return "tier3_adult_18plus";
+}
+
+/** How an athlete's age should be stated to a coaching AI.
+ *
+ * The programming system prompt gates its age-appropriate training rules on
+ * "any signal the athlete isn't a physically mature adult". That put a
+ * genuinely well-researched set of youth-training constraints -- loading
+ * caution around a growth spurt, technique-before-load progressions, the
+ * weight-cutting warnings -- behind a signal that was usually absent, while
+ * the real birthdate sat one column away in the same row. So the age is
+ * stated from the birthdate, and a known minor is named as one rather than
+ * left for the model to infer from a number.
+ */
+export function ageLineForAi(
+  dateOfBirth: string | Date | null | undefined,
+  fallbackAge: number | null | undefined,
+  asOf: Date = new Date(),
+): string {
+  if (dateOfBirth) {
+    const age = ageFromDateOfBirth(dateOfBirth, asOf);
+    const minor = age < 18;
+    return `${age}${minor ? " -- MINOR: apply the age-appropriate training rules in full, they are not optional for this athlete" : ""}`;
+  }
+  // No birthdate: an account predating that column. The self-reported
+  // snapshot is better than nothing, and "not set" stays honest rather than
+  // guessing an adult.
+  if (fallbackAge != null) return `${fallbackAge} (self-reported, may be out of date)`;
+  return "not set";
 }
 
 // PLACEHOLDER retention windows, in days -- how long a minor's raw
