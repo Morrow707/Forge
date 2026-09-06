@@ -94,9 +94,17 @@
 	<false/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Forge uses Face ID to unlock the app if you enable the optional lock screen in Notification Settings.</string>
+	<!-- Must name every type client/src/lib/native-health.ts actually asks
+	     for. This string is what the athlete reads on the permission
+	     sheet, and it named three of the eight. See the Info.plist test in
+	     client/src/lib/health-permissions.test.ts, which fails if the two
+	     drift apart again.
+	     No NSHealthUpdateUsageDescription: the app requests an empty write
+	     scope (Health.requestAuthorization is called with write: []), so it
+	     never asks to write anything and HealthKit never needs the key. The
+	     string that used to be here read "Forge does not currently write
+	     anything to Health", which describes no purpose at all. -->
 	<key>NSHealthShareUsageDescription</key>
-	<string>Forge reads your sleep, resting heart rate, and heart rate variability from Health to pre-fill your daily check-in if you turn on Health sync in Notification Settings.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>Forge does not currently write anything to Health.</string>
+	<string>Forge reads your sleep, resting heart rate, heart rate variability, VO2 max, respiratory rate, and weight from Health to pre-fill your daily check-in, plus your heart rate and workouts around a session to work out your heart rate recovery. Only if you turn on Health sync in Notification Settings.</string>
 </dict>
 </plist>
