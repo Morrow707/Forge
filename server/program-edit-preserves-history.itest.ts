@@ -390,3 +390,85 @@ describe("a swap loses nothing; a replacement drops only what was replaced", () 
     expect(overrides[0].programExerciseId).toBe(rowA.id);
   });
 });
+
+// Removing a day from the MIDDLE of a week is the case positional matching
+// got wrong: the surviving days shifted up onto the removed day's rows, so
+// an athlete's logged session was re-filed under a different day and the
+// LAST day's logs were the ones deleted. The builder now round-trips the
+// program_days id, and the server matches on it across the whole program.
+describe("removing a middle day moves the right rows", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("deletes the day the coach removed, not the last one", async () => {
+    const coach = await makeCoach();
+    const athlete = await makeAthlete();
+    const squat = await makeExercise(coach.id, { name: "Back Squat" });
+    const assigned = await makeAssignedProgram({
+      coachId: coach.id,
+      athleteId: athlete.id,
+      exerciseIds: [squat.id],
+    });
+
+    // Three days in the week, each with the athlete's own logged session.
+    const [d2] = await db
+      .insert(programDays)
+      .values({ weekId: assigned.week.id, dayNumber: 2, title: "Day 2" })
+      .returning();
+    const [d3] = await db
+      .insert(programDays)
+      .values({ weekId: assigned.week.id, dayNumber: 3, title: "Day 3" })
+      .returning();
+    const logs: Record<string, number> = {};
+    for (const [name, day] of [["d1", assigned.day], ["d2", d2], ["d3", d3]] as const) {
+      const [l] = await db
+        .insert(workoutLogs)
+        .values({
+          assignmentId: assigned.assignment.id,
+          programDayId: day.id,
+          athleteId: athlete.id,
+          date: `2026-01-0${name === "d1" ? 5 : name === "d2" ? 6 : 7}`,
+          completed: true,
+        })
+        .returning();
+      logs[name] = l.id;
+    }
+
+    // The coach removes day 2, sending the surviving days with their ids.
+    await storage.updateProgramStructure(
+      assigned.program.id,
+      {
+        name: "Program",
+        description: null,
+        blocks: [],
+        weeks: [
+          {
+            id: assigned.week.id,
+            weekNumber: 1,
+            name: null,
+            blockIndex: null,
+            days: [
+              { id: assigned.day.id, dayNumber: 1, title: "Day 1", isRestDay: false, exercises: [{ exerciseId: squat.id, orderIndex: 0, sets: 3, reps: "5" }] },
+              { id: d3.id, dayNumber: 2, title: "Day 3", isRestDay: false, exercises: [{ exerciseId: squat.id, orderIndex: 0, sets: 3, reps: "5" }] },
+            ],
+          },
+        ],
+      } as any,
+      coach.id,
+    );
+
+    // Day 1 and day 3 survive, with their own logs still attached to them.
+    const remaining = await db.select().from(programDays).where(eq(programDays.weekId, assigned.week.id));
+    expect(new Set(remaining.map((r) => r.id))).toEqual(new Set([assigned.day.id, d3.id]));
+
+    const l1 = await db.select().from(workoutLogs).where(eq(workoutLogs.id, logs.d1));
+    const l3 = await db.select().from(workoutLogs).where(eq(workoutLogs.id, logs.d3));
+    const l2 = await db.select().from(workoutLogs).where(eq(workoutLogs.id, logs.d2));
+    expect(l1[0]?.programDayId).toBe(assigned.day.id);
+    // Day 3's session must still be day 3's, not shifted onto day 2's row.
+    expect(l3[0]?.programDayId).toBe(d3.id);
+    // Only the removed day's session is gone.
+    expect(l2.length).toBe(0);
+  });
+});

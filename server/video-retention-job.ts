@@ -29,7 +29,7 @@ export async function runVideoRetentionSweep() {
       // failure here just means it's retried on tomorrow's sweep instead
       // of the video silently sliding toward deletion unwarned.
       try {
-        const { delivered } = await notifyUser(
+        const { delivered, attempted } = await notifyUser(
           w.athleteId,
           "video_cap_warning",
           `A ${w.exerciseName} video is about to be removed`,
@@ -43,9 +43,19 @@ export async function runVideoRetentionSweep() {
         // starting it means tomorrow's sweep tries again, which is the
         // right outcome for a transient failure and an honest one for a
         // permanent failure.
-        if (!delivered) {
-          console.warn(`Video retention: no channel reached athlete ${w.athleteId}; not starting the grace clock for ${w.source} ${w.id}.`);
+        // Only hold the clock when a channel was actually tried and failed;
+        // that is worth retrying tomorrow. When none was even available --
+        // no VAPID/APNs keys and no Resend key, or an athlete with no push
+        // subscription and email switched off -- retrying can never
+        // succeed. Holding for that case disabled the cap sweep outright
+        // and, because the in-app row is written before any send is
+        // attempted, re-warned the same video every single night forever.
+        if (!delivered && attempted) {
+          console.warn(`Video retention: every configured channel failed for athlete ${w.athleteId}; not starting the grace clock for ${w.source} ${w.id}.`);
           continue;
+        }
+        if (!delivered) {
+          console.warn(`Video retention: no delivery channel available for athlete ${w.athleteId}; the in-app notification is the only warning for ${w.source} ${w.id}.`);
         }
         await storage.markVideoPendingDeletion(w.source, w.id);
         notified++;
@@ -79,7 +89,7 @@ export async function runStaleAccountVideoSweep() {
       // failed notify shouldn't stop the rest, and the grace clock only
       // starts once notifyUser actually succeeds for this one.
       try {
-        const { delivered } = await notifyUser(
+        const { delivered, attempted } = await notifyUser(
           w.athleteId,
           "stale_account_video_warning",
           `A ${w.itemName} video is about to be removed`,
@@ -90,9 +100,13 @@ export async function runStaleAccountVideoSweep() {
         // job targets accounts nobody has opened in a year, so the in-app
         // notification is the least likely of the three channels to be
         // seen and the only one that always "succeeds".
-        if (!delivered) {
-          console.warn(`Stale-account video sweep: no channel reached athlete ${w.athleteId}; not starting the grace clock for ${w.source} ${w.id}.`);
+        // Same rule as the cap sweep above.
+        if (!delivered && attempted) {
+          console.warn(`Stale-account video sweep: every configured channel failed for athlete ${w.athleteId}; not starting the grace clock for ${w.source} ${w.id}.`);
           continue;
+        }
+        if (!delivered) {
+          console.warn(`Stale-account video sweep: no delivery channel available for athlete ${w.athleteId}; the in-app notification is the only warning for ${w.source} ${w.id}.`);
         }
         await storage.markStaleAccountVideoPendingDeletion(w.source, w.id);
         notified++;

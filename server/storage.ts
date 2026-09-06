@@ -8831,6 +8831,27 @@ Hard rules, no exceptions:
         .orderBy(skillProgramWeeks.weekNumber);
       const keptWeekIds = new Set<number>();
 
+      // Same cross-week day index as updateProgramStructure, for the same
+      // reason: skillSessionLogs, skillDayLogs and skillDayComments hang off
+      // skillProgramDays, so that row's identity is what has to survive a
+      // week being added or removed above it.
+      const daysById = new Map<number, { id: number; weekId: number }>();
+      if (existingWeeks.length > 0) {
+        const allDays = await tx
+          .select()
+          .from(skillProgramDays)
+          .where(inArray(skillProgramDays.weekId, existingWeeks.map((w) => w.id)));
+        for (const d of allDays) daysById.set(d.id, d);
+      }
+      const claimedDayIds = new Set<number>();
+      // Ids the payload explicitly names anywhere. A day sent WITHOUT an id
+      // must never claim a row that some other day claims by id, or the two
+      // fight over the same row and one of them loses its history.
+      const referencedDayIds = new Set<number>();
+      for (const w of structure.weeks) {
+        for (const d of w.days) if (d.id != null) referencedDayIds.add(d.id);
+      }
+
       for (const [weekIdx, week] of structure.weeks.entries()) {
         const weekValues = {
           programId,
@@ -8862,7 +8883,6 @@ Hard rules, no exceptions:
           .from(skillProgramDays)
           .where(eq(skillProgramDays.weekId, weekRow.id))
           .orderBy(skillProgramDays.dayNumber);
-        const keptDayIds = new Set<number>();
 
         for (const [dayIdx, day] of week.days.entries()) {
           const dayValues = {
@@ -8871,11 +8891,22 @@ Hard rules, no exceptions:
             title: day.title,
             isRestDay: day.isRestDay,
           };
-          const priorDay =
-            (day.id != null ? existingDays.find((d) => d.id === day.id) : undefined) ??
-            existingDays[dayIdx];
+          const byId =
+            day.id != null && daysById.has(day.id) && !claimedDayIds.has(day.id)
+              ? daysById.get(day.id)
+              : undefined;
+          // Falls back to position when no id was sent, and also when one
+          // was sent that no longer exists -- a client holding an id from a
+          // stale read must not cause the old row, and the athlete history
+          // on it, to be deleted as unclaimed.
+          const candidate = existingDays[dayIdx];
+          const byPosition =
+            byId == null && candidate && !claimedDayIds.has(candidate.id) && !referencedDayIds.has(candidate.id)
+              ? candidate
+              : undefined;
+          const priorDay = byId ?? byPosition;
           let dayRow;
-          if (priorDay && !keptDayIds.has(priorDay.id)) {
+          if (priorDay) {
             [dayRow] = await tx
               .update(skillProgramDays)
               .set(dayValues)
@@ -8884,7 +8915,7 @@ Hard rules, no exceptions:
           } else {
             [dayRow] = await tx.insert(skillProgramDays).values(dayValues).returning();
           }
-          keptDayIds.add(dayRow.id);
+          claimedDayIds.add(dayRow.id);
 
           const existingExercises = await tx
             .select()
@@ -8936,8 +8967,11 @@ Hard rules, no exceptions:
           }
         }
 
-        for (const staleDay of existingDays.filter((d) => !keptDayIds.has(d.id))) {
-          await tx.delete(skillProgramDays).where(eq(skillProgramDays.id, staleDay.id));
+      }
+
+      for (const staleDayId of daysById.keys()) {
+        if (!claimedDayIds.has(staleDayId)) {
+          await tx.delete(skillProgramDays).where(eq(skillProgramDays.id, staleDayId));
         }
       }
 
@@ -9476,7 +9510,22 @@ Hard rules, no exceptions:
               .from(skillProgramExercises)
               .where(eq(skillProgramExercises.dayId, day.id))
               .orderBy(asc(skillProgramExercises.orderIndex), asc(skillProgramExercises.id));
-            for (const [i, ex] of lesson.exercises.entries()) {
+            // Matched on which DRILL the row is for, not its position --
+            // the same rule updateSkillProgramStructure uses, and left off
+            // here by mistake. skillSessionLogs point at these rows, so
+            // reusing one by position meant a coach replacing drill A with
+            // drill B in slot one silently reattributed every sprint time,
+            // mechanics number and saved clip an enrolled athlete had
+            // captured against A to B.
+            const claimedDrillRows = new Set<number>();
+            const takeDrillRow = (skillExerciseId: number) => {
+              const row = existingExercises.find(
+                (e) => e.skillExerciseId === skillExerciseId && !claimedDrillRows.has(e.id),
+              );
+              if (row) claimedDrillRows.add(row.id);
+              return row;
+            };
+            for (const ex of lesson.exercises) {
               const values = {
                 dayId: day.id,
                 skillExerciseId: ex.skillExerciseId,
@@ -9487,7 +9536,7 @@ Hard rules, no exceptions:
                 notes: ex.notes ?? null,
                 trackingLevel: trackingMap.get(ex) ?? "none",
               };
-              const slot = existingExercises[i];
+              const slot = takeDrillRow(ex.skillExerciseId);
               if (slot) {
                 await tx
                   .update(skillProgramExercises)
@@ -9497,7 +9546,7 @@ Hard rules, no exceptions:
                 await tx.insert(skillProgramExercises).values(values);
               }
             }
-            for (const stale of existingExercises.slice(lesson.exercises.length)) {
+            for (const stale of existingExercises.filter((e) => !claimedDrillRows.has(e.id))) {
               await tx.delete(skillProgramExercises).where(eq(skillProgramExercises.id, stale.id));
             }
           }
@@ -12291,6 +12340,31 @@ Respond to the user's latest message by calling ask_question or update_program.`
         .orderBy(programWeeks.weekNumber);
       const keptWeekIds = new Set<number>();
 
+      // Every day in the program, indexed by id, so a day sent with an id is
+      // matched on identity ACROSS the whole program rather than only inside
+      // whichever week happened to match positionally. Athlete data hangs off
+      // program_days, not off weeks, so this is the row whose identity has to
+      // survive; a day found here simply gets re-parented to the week it now
+      // belongs to. Without it, inserting or removing a week shifted the
+      // per-week lookup and a day's logs were re-filed under a different day.
+      const daysById = new Map<number, { id: number; weekId: number }>();
+      if (existingWeeks.length > 0) {
+        const allDays = await tx
+          .select()
+          .from(programDays)
+          .where(inArray(programDays.weekId, existingWeeks.map((w) => w.id)));
+        for (const d of allDays) daysById.set(d.id, d);
+      }
+      const claimedDayIds = new Set<number>();
+      // Ids the payload explicitly names anywhere. A day sent WITHOUT an id
+      // must never claim a row that some other day claims by id, or the two
+      // fight over the same row and one of them loses its history.
+      const referencedDayIds = new Set<number>();
+      for (const w of structure.weeks) {
+        for (const d of w.days) if (d.id != null) referencedDayIds.add(d.id);
+      }
+
+
       const blockIds: number[] = [];
       for (const [i, block] of structure.blocks.entries()) {
         const [blockRow] = await tx
@@ -12341,7 +12415,6 @@ Respond to the user's latest message by calling ask_question or update_program.`
           .from(programDays)
           .where(eq(programDays.weekId, weekRow.id))
           .orderBy(programDays.dayNumber);
-        const keptDayIds = new Set<number>();
 
         for (const [dayIdx, day] of week.days.entries()) {
           const dayValues = {
@@ -12350,11 +12423,22 @@ Respond to the user's latest message by calling ask_question or update_program.`
             title: day.title,
             isRestDay: day.isRestDay,
           };
-          const priorDay =
-            (day.id != null ? existingDays.find((d) => d.id === day.id) : undefined) ??
-            existingDays[dayIdx];
+          const byId =
+            day.id != null && daysById.has(day.id) && !claimedDayIds.has(day.id)
+              ? daysById.get(day.id)
+              : undefined;
+          // Falls back to position when no id was sent, and also when one
+          // was sent that no longer exists -- a client holding an id from a
+          // stale read must not cause the old row, and the athlete history
+          // on it, to be deleted as unclaimed.
+          const candidate = existingDays[dayIdx];
+          const byPosition =
+            byId == null && candidate && !claimedDayIds.has(candidate.id) && !referencedDayIds.has(candidate.id)
+              ? candidate
+              : undefined;
+          const priorDay = byId ?? byPosition;
           let dayRow;
-          if (priorDay && !keptDayIds.has(priorDay.id)) {
+          if (priorDay) {
             [dayRow] = await tx
               .update(programDays)
               .set(dayValues)
@@ -12363,7 +12447,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
           } else {
             [dayRow] = await tx.insert(programDays).values(dayValues).returning();
           }
-          keptDayIds.add(dayRow.id);
+          claimedDayIds.add(dayRow.id);
 
           const existingExercises = await tx
             .select()
@@ -12414,8 +12498,15 @@ Respond to the user's latest message by calling ask_question or update_program.`
           }
         }
 
-        for (const staleDay of existingDays.filter((d) => !keptDayIds.has(d.id))) {
-          await tx.delete(programDays).where(eq(programDays.id, staleDay.id));
+      }
+
+      // Days the coach genuinely removed -- computed once over the whole
+      // program after every week has been reconciled, because a day can move
+      // between weeks and must not be deleted just for leaving the week it
+      // started in.
+      for (const staleDayId of daysById.keys()) {
+        if (!claimedDayIds.has(staleDayId)) {
+          await tx.delete(programDays).where(eq(programDays.id, staleDayId));
         }
       }
 
@@ -14915,8 +15006,13 @@ ${entriesText}`;
           trackingLevel: ex.trackingLevel ?? "none",
           videoCheckEnabled: videoCheckMap.get(ex) ?? false,
         };
+        // The id lookup honours `claimed` too, so two entries naming the
+        // same row cannot both resolve to it -- that silently turned one
+        // insert into a second update and returned the day one exercise
+        // short of what was submitted.
         const prior =
-          (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ?? takeRow(ex.exerciseId);
+          (ex.id != null ? existing.find((e) => e.id === ex.id && !claimed.has(e.id)) : undefined) ??
+          takeRow(ex.exerciseId);
         if (prior) {
           claimed.add(prior.id);
           await tx.update(programExercises).set(values).where(eq(programExercises.id, prior.id));

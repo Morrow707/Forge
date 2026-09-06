@@ -41,6 +41,10 @@ type LocalExercise = {
 
 type LocalDay = {
   key: string;
+  // The skill_program_days row this came from, sent back on save so the
+  // server matches it by identity rather than position -- athletes'
+  // captured sessions, day completions and comments all hang off that row.
+  serverId?: number;
   title: string;
   isRestDay: boolean;
   exercises: LocalExercise[];
@@ -120,6 +124,7 @@ function stateFromProgram(program: any) {
     for (const d of w.days) {
       days.push({
         key: uid(),
+        serverId: d.id,
         title: d.title,
         isRestDay: d.isRestDay,
         exercises: d.exercises.map((pe: any) => ({
@@ -267,6 +272,7 @@ export function SkillProgramBuilderPage({
           weekNumber: wi + 1,
           name: weekNames[wi] || `Week ${wi + 1}`,
           days: chunk.map((d, di) => ({
+            ...(d.serverId != null ? { id: d.serverId } : {}),
             dayNumber: di + 1,
             title: d.title,
             isRestDay: d.isRestDay,

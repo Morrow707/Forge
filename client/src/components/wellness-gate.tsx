@@ -231,8 +231,13 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
       clearInterval(interval);
       resumeListener.then((l) => l.remove());
     };
+    // healthUserId is in the deps deliberately: this effect and the
+    // interval/resume listeners it installs all close over it, and
+    // syncFromHealth returns early while it is null. If useAuth had not
+    // resolved when the wellness query settled, the whole mount's syncing
+    // was a permanent no-op and Health pre-fill silently never happened.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, isLoading, editable]);
+  }, [data, isLoading, editable, healthUserId]);
 
   const submitMutation = useMutation({
     mutationFn: async () => {

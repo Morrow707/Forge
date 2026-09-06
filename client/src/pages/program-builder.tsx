@@ -136,6 +136,13 @@ type LocalExercise = {
 
 type LocalDay = {
   key: string;
+  // The program_days row this day came from, when it is an existing day
+  // being edited rather than one the coach just added. Sent back on save so
+  // the server can match it by identity instead of by position -- the
+  // athlete's logged workouts, coach comments and correctives all hang off
+  // that row, and matching by position mis-files them the moment a day is
+  // inserted or removed in the middle of the list.
+  serverId?: number;
   title: string;
   isRestDay: boolean;
   exercises: LocalExercise[];
@@ -256,6 +263,7 @@ function stateFromProgram(program: any) {
     for (const d of w.days) {
       days.push({
         key: uid(),
+        serverId: d.id,
         title: d.title,
         isRestDay: d.isRestDay,
         exercises: deriveLinkedToNext(
@@ -494,6 +502,7 @@ export function ProgramBuilderPage({
               ? blocks.findIndex((b) => b.key === weekBlockKeys[wi])
               : null,
           days: chunk.map((d, di) => ({
+            ...(d.serverId != null ? { id: d.serverId } : {}),
             dayNumber: di + 1,
             title: d.title,
             isRestDay: d.isRestDay,

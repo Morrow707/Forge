@@ -1,6 +1,7 @@
 import { storage } from "./storage";
-import { sendPushToUser } from "./push";
-import { sendEmail, escapeHtml } from "./email";
+import { sendPushToUser, pushEnabled } from "./push";
+import { apnsEnabled } from "./apns";
+import { sendEmail, escapeHtml, emailEnabled } from "./email";
 import { categoryForNotificationType } from "@shared/notification-categories";
 
 /** The one place all three notification channels (in-app inbox, push, email)
@@ -51,13 +52,24 @@ export async function notifyUser(
   // reports failure by returning rather than throwing, and the push helpers
   // swallow per-device errors, so notifyUser could not fail no matter what
   // happened downstream.
+  // Whether a channel was even available to try, as opposed to tried and
+  // failed. The two look identical from `delivered` alone, and callers that
+  // gate on it need to tell them apart: a transient push failure is worth
+  // retrying tomorrow, but a deployment with no VAPID/APNs keys and no
+  // Resend key -- or an athlete with no push subscription who has email
+  // switched off -- will never succeed, and retrying forever means the
+  // caller never makes progress.
+  let attempted = false;
+
   let pushDelivered = false;
   if (pushAllowed) {
+    if (pushEnabled || apnsEnabled) attempted = true;
     pushDelivered = await sendPushToUser(userId, { title, body, url: link, badge });
   }
 
   let emailDelivered = false;
   if (!skipEmail && user && (user.notifyEmail || bypassEmailPref)) {
+    if (emailEnabled) attempted = true;
     // `body` frequently embeds a coach/athlete's own display name and
     // free-typed comment text (see the workout-comment routes) -- unescaped,
     // either could carry markup that renders as part of a real
@@ -73,5 +85,5 @@ export async function notifyUser(
   // The in-app notification row is deliberately NOT counted as reaching
   // anyone. It always succeeds, and an athlete who has stopped opening the
   // app is exactly the population the stale-account sweep is about.
-  return { delivered: pushDelivered || emailDelivered, pushDelivered, emailDelivered };
+  return { delivered: pushDelivered || emailDelivered, attempted, pushDelivered, emailDelivered };
 }

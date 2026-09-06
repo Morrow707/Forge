@@ -144,3 +144,30 @@ describe("editing a class preserves athlete history", () => {
     expect(exercises[0].skillExerciseId).toBe(a.id);
   });
 });
+
+// Class lessons matched drill rows by position while the sibling skill-program
+// path matched them by drill identity. Positional reuse meant swapping a drill
+// silently reattributed the athlete's captured sessions to the new drill.
+describe("swapping a drill in a lesson does not relabel captured sessions", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("keeps the session attached to the drill it was captured for", async () => {
+    const { a, b, classId, captured } = await setup();
+    // Drill a is in slot one. Reorder so b leads.
+    await storage.updateClassStructure(
+      classId,
+      structure("Lesson one", [b.id, a.id], captured.lesson.id) as any,
+    );
+
+    const after = await db.select().from(skillSessionLogs).where(eq(skillSessionLogs.id, captured.log.id));
+    expect(after.length).toBe(1);
+    const rows = await db
+      .select()
+      .from(skillProgramExercises)
+      .where(eq(skillProgramExercises.dayId, captured.day.id));
+    const linked = rows.find((r) => r.id === after[0].skillProgramExerciseId);
+    expect(linked?.skillExerciseId).toBe(a.id);
+  });
+});

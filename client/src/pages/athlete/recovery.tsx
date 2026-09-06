@@ -202,10 +202,19 @@ function WorkoutsTab() {
   const { user } = useAuth();
   const supported = user != null && isNativeHealthSupported() && isHealthSyncEnabled(user.id);
 
+  // user.id is in the deps, not just `supported`: on a shared device the
+  // signed-in account can change while `supported` stays true, and without
+  // it this kept showing the previous athlete's Health workouts.
   useEffect(() => {
-    if (!supported) return;
-    fetchRecentWorkouts(user!.id, HISTORY_DAYS).then(setWorkouts);
-  }, [supported]);
+    if (!supported || user == null) return;
+    let cancelled = false;
+    fetchRecentWorkouts(user.id, HISTORY_DAYS).then((w) => {
+      if (!cancelled) setWorkouts(w);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [supported, user?.id]);
 
   if (!supported) {
     return (
