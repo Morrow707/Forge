@@ -259,3 +259,55 @@ describe("a stale id falls back to position rather than replacing the row", () =
     expect((await db.select().from(programDays).where(eq(programDays.id, assigned.day.id))).length).toBe(1);
   });
 });
+
+// Rows are matched on which exercise they are for, not on their slot, so
+// reordering a day carries each athlete's substitution along with the lift
+// it replaced instead of leaving it attached to position one.
+describe("reordering a day keeps each substitution with its own exercise", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("moves the override with the exercise, not the slot", async () => {
+    const coach = await makeCoach();
+    const athlete = await makeAthlete();
+    const squat = await makeExercise(coach.id, { name: "Back Squat" });
+    const bench = await makeExercise(coach.id, { name: "Bench Press" });
+    const legPress = await makeExercise(coach.id, { name: "Leg Press" });
+    const assigned = await makeAssignedProgram({
+      coachId: coach.id,
+      athleteId: athlete.id,
+      exerciseIds: [squat.id, bench.id],
+    });
+    const squatRow = assigned.programExercises.find((p) => p.exerciseId === squat.id)!;
+    await db.insert(assignmentExerciseOverrides).values({
+      assignmentId: assigned.assignment.id,
+      programDayId: assigned.day.id,
+      programExerciseId: squatRow.id,
+      substituteExerciseId: legPress.id,
+      reason: "knee",
+    });
+
+    // Coach swaps the order: bench first, squat second.
+    await storage.updateProgramDay(
+      assigned.day.id,
+      {
+        title: "Day 1",
+        isRestDay: false,
+        exercises: [
+          { exerciseId: bench.id, orderIndex: 0, sets: 3, reps: "5" },
+          { exerciseId: squat.id, orderIndex: 1, sets: 3, reps: "5" },
+        ],
+      } as any,
+      coach.id,
+    );
+
+    const overrides = await db.select().from(assignmentExerciseOverrides);
+    expect(overrides.length).toBe(1);
+    const rows = await db.select().from(programExercises).where(eq(programExercises.dayId, assigned.day.id));
+    const stillSquat = rows.find((r) => r.id === overrides[0].programExerciseId);
+    // The override must still point at the squat row, now in slot two.
+    expect(stillSquat?.exerciseId).toBe(squat.id);
+    expect(stillSquat?.orderIndex).toBe(1);
+  });
+});

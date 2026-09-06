@@ -8891,8 +8891,25 @@ Hard rules, no exceptions:
             .from(skillProgramExercises)
             .where(eq(skillProgramExercises.dayId, dayRow.id))
             .orderBy(skillProgramExercises.orderIndex);
+          // Matched on which DRILL the row is for, not on its position.
+          // skillSessionLogs.skillProgramExerciseId is notNull, so a session
+          // can never come unlinked -- but reusing a row by position means a
+          // coach swapping drill A for drill B in slot one silently relabels
+          // every session the athlete captured against A as B. Matching on
+          // identity keeps a reorder lossless and makes a genuine swap what
+          // it actually is: the old drill removed, with its sessions, and a
+          // new one added. Same drill twice in a day is matched in order of
+          // appearance.
+          const skillClaimed = new Set<number>();
+          const takeSkillRow = (skillExerciseId: number) => {
+            const row = existingExercises.find(
+              (e) => e.skillExerciseId === skillExerciseId && !skillClaimed.has(e.id),
+            );
+            if (row) skillClaimed.add(row.id);
+            return row;
+          };
 
-          for (const [exIdx, ex] of day.exercises.entries()) {
+          for (const ex of day.exercises) {
             const exValues = {
               dayId: dayRow.id,
               skillExerciseId: ex.skillExerciseId,
@@ -8903,7 +8920,7 @@ Hard rules, no exceptions:
               notes: ex.notes ?? null,
               trackingLevel: trackingMap.get(ex) ?? "none",
             };
-            const priorExercise = existingExercises[exIdx];
+            const priorExercise = takeSkillRow(ex.skillExerciseId);
             if (priorExercise) {
               await tx
                 .update(skillProgramExercises)
@@ -8913,7 +8930,8 @@ Hard rules, no exceptions:
               await tx.insert(skillProgramExercises).values(exValues);
             }
           }
-          for (const stale of existingExercises.slice(day.exercises.length)) {
+          // Only rows for a drill the coach genuinely dropped from this day.
+          for (const stale of existingExercises.filter((e) => !skillClaimed.has(e.id))) {
             await tx.delete(skillProgramExercises).where(eq(skillProgramExercises.id, stale.id));
           }
         }
@@ -12352,8 +12370,21 @@ Respond to the user's latest message by calling ask_question or update_program.`
             .from(programExercises)
             .where(eq(programExercises.dayId, dayRow.id))
             .orderBy(programExercises.orderIndex);
+          // Matched on which EXERCISE the row is for, not its position, for
+          // the same reason as the skill side: assignmentExerciseOverrides
+          // hangs off these rows, and an athlete's substitution belongs to
+          // the lift it replaced, not to slot one. Reordering a day now
+          // keeps every override; genuinely swapping an exercise out drops
+          // the override that existed for it, which is correct. Same
+          // exercise twice in a day is matched in order of appearance.
+          const claimed = new Set<number>();
+          const takeRow = (exerciseId: number) => {
+            const row = existingExercises.find((e) => e.exerciseId === exerciseId && !claimed.has(e.id));
+            if (row) claimed.add(row.id);
+            return row;
+          };
 
-          for (const [exIdx, ex] of day.exercises.entries()) {
+          for (const ex of day.exercises) {
             const exValues = {
               dayId: dayRow.id,
               exerciseId: ex.exerciseId,
@@ -12367,7 +12398,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
               trackingLevel: ex.trackingLevel ?? "none",
               videoCheckEnabled: videoCheckMap.get(ex) ?? false,
             };
-            const priorExercise = existingExercises[exIdx];
+            const priorExercise = takeRow(ex.exerciseId);
             if (priorExercise) {
               await tx
                 .update(programExercises)
@@ -12377,8 +12408,8 @@ Respond to the user's latest message by calling ask_question or update_program.`
               await tx.insert(programExercises).values(exValues);
             }
           }
-          // Only the trailing rows the coach actually removed.
-          for (const stale of existingExercises.slice(day.exercises.length)) {
+          // Only rows for an exercise the coach genuinely dropped.
+          for (const stale of existingExercises.filter((e) => !claimed.has(e.id))) {
             await tx.delete(programExercises).where(eq(programExercises.id, stale.id));
           }
         }
@@ -14859,6 +14890,16 @@ ${entriesText}`;
         .where(eq(programExercises.dayId, dayId))
         .orderBy(programExercises.orderIndex);
 
+      // Matched on which exercise the row is for, not its position, so an
+      // athlete's substitution follows the lift it replaced through a
+      // reorder. See updateProgramStructure's own note.
+      const claimed = new Set<number>();
+      const takeRow = (exerciseId: number) => {
+        const row = existing.find((e) => e.exerciseId === exerciseId && !claimed.has(e.id));
+        if (row) claimed.add(row.id);
+        return row;
+      };
+
       for (const [i, ex] of input.exercises.entries()) {
         const values = {
           dayId,
@@ -14875,8 +14916,9 @@ ${entriesText}`;
           videoCheckEnabled: videoCheckMap.get(ex) ?? false,
         };
         const prior =
-          (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ?? existing[i];
+          (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ?? takeRow(ex.exerciseId);
         if (prior) {
+          claimed.add(prior.id);
           await tx.update(programExercises).set(values).where(eq(programExercises.id, prior.id));
         } else {
           await tx.insert(programExercises).values(values);
@@ -14886,16 +14928,10 @@ ${entriesText}`;
       // Only the rows the coach actually removed. An override pointing at one
       // of these goes with it, which is correct: the exercise it substituted
       // for is gone.
-      const keptIds = new Set(
-        input.exercises
-          .map((ex, i) => {
-            const prior =
-              (ex.id != null ? existing.find((e) => e.id === ex.id) : undefined) ?? existing[i];
-            return prior?.id;
-          })
-          .filter((id): id is number => id != null),
-      );
-      for (const stale of existing.filter((e) => !keptIds.has(e.id))) {
+      // Only rows for an exercise the coach genuinely dropped. An override
+      // pointing at one of these goes with it, which is correct: the
+      // exercise it substituted for is gone.
+      for (const stale of existing.filter((e) => !claimed.has(e.id))) {
         await tx.delete(programExercises).where(eq(programExercises.id, stale.id));
       }
     });

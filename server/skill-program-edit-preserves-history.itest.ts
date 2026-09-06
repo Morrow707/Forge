@@ -129,3 +129,32 @@ describe("editing a skill program preserves athlete history", () => {
     expect(rows[0].skillExerciseId).toBe(a.id);
   });
 });
+
+// Drill rows are matched on which drill they are for, not on their slot.
+// skillSessionLogs.skillProgramExerciseId is notNull, so a session can never
+// come unlinked -- but reusing a row by position meant swapping drill A for
+// drill B in slot one silently relabelled every session captured against A
+// as B.
+describe("swapping a drill does not relabel sessions captured against the old one", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("keeps a reordered drill's sessions attached to that drill", async () => {
+    const { coach, a, b, program, week, day, ex, log } = await setup();
+    // ex is the row for drill a, in slot one. Put b first instead.
+    await storage.updateSkillProgramStructure(
+      program.id,
+      structure("Hitting block", [b.id, a.id], { weekId: week.id, dayId: day.id }) as any,
+      coach.id,
+    );
+
+    const after = await db.select().from(skillSessionLogs).where(eq(skillSessionLogs.id, log.id));
+    expect(after.length).toBe(1);
+    const rows = await db.select().from(skillProgramExercises).where(eq(skillProgramExercises.dayId, day.id));
+    const linked = rows.find((r) => r.id === after[0].skillProgramExerciseId);
+    // The session must still be attached to the drill it was captured for.
+    expect(linked?.skillExerciseId).toBe(a.id);
+    expect(linked?.id).toBe(ex.id);
+  });
+});
