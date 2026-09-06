@@ -80,15 +80,49 @@ On any signal that clears "Medium" or above:
 ## 5. Containment — by scenario
 
 ### 5a. Compromised coach/admin account
-1. From the Render Postgres console (or a one-off script using `storage`),
-   force-expire the account's session: the session store is
-   `connect-pg-simple`, keyed in the `session` table — deleting rows where
-   `sess::json->>'passport'` references the user's ID logs them out
-   everywhere immediately. (There's currently no "log out all devices"
-   self-service button — see the security backlog note in this doc's
-   Appendix.)
-2. Reset their password (`storage.hashPassword` + direct DB update, or
-   have them use the forgot-password flow once contained).
+
+**Revoking a session takes TWO actions, not one.** This app has two
+independent ways to be logged in and they are revoked through different
+tables. Doing only the first leaves an attacker signed in on the iOS app for
+up to 30 days.
+
+| How they're logged in | Where it lives | How it's revoked |
+|---|---|---|
+| Web browser (cookie) | `session` table (`connect-pg-simple`) | Delete the row |
+| iOS app (bearer token) | `user_sessions` row, checked on every request | Set `revoked_at` |
+
+An earlier version of this section said deleting `session` rows "logs them
+out everywhere immediately." It does not. The native token is an HMAC that
+carries a `user_sessions` id and is checked against that row's `revoked_at`
+on every request (`attachNativeTokenAuth` in `server/auth.ts`) — it does not
+appear in the `session` table at all, so nothing you do there touches it.
+
+1. Revoke every session on the account, both kinds:
+
+   ```sql
+   -- Native/iOS: this is the one the old instructions missed.
+   UPDATE user_sessions SET revoked_at = now()
+    WHERE user_id = $1 AND revoked_at IS NULL;
+
+   -- Web: connect-pg-simple's own store.
+   DELETE FROM "session"
+    WHERE sess::json->'passport'->>'user' = $1::text;
+   ```
+
+   The app already does both together in `storage.revokeAllOtherSessions`
+   and `storage.revokeSession`, which is what `/api/auth/sessions/revoke-others`
+   calls. Those routes are self-service only (`requireAuth`, and scoped to
+   the caller's own sessions), so they are what you tell a *user* to press;
+   they are not reachable for someone else's compromised account, which is
+   why the SQL above is here. See the Appendix — an admin-facing revoke for
+   another user's account does not exist and is worth building.
+
+2. Reset their password (`hashPassword` from `server/auth-utils.ts` — note
+   it is NOT on `storage`, which an earlier version of this document said —
+   plus a direct DB update, or have them use the forgot-password flow once
+   contained). Changing the password also deletes any outstanding password
+   reset tokens (`storage.updateUserPasswordHash`), so a reset link the
+   attacker may already hold stops working.
 3. If MFA is enabled on the account, that's not enough on its own if the
    attacker had a live session — a live session bypasses MFA entirely
    until it's revoked per step 1.
@@ -270,15 +304,22 @@ a scratch database once, before relying on either.
 
 Honest, as of this writing — update as these get built:
 
-- **No self-service "log out all other devices."** Section 5a's session
-  containment currently requires a direct database action, not a button
-  in the app. Worth building.
+- **No ADMIN-facing session revocation for someone else's account.** The
+  self-service version exists and works correctly — `/api/auth/sessions/revoke-others`
+  and `/api/auth/sessions/:id/revoke` both revoke the native session and
+  delete the web session row together. What is missing is a way for an
+  incident responder to do that to a *compromised* account they cannot log
+  in as, which is exactly the case Section 5a is about, and why that section
+  still hands you SQL. Worth building.
 - **Audit logging covers video access only** (`record_access_audit_logs` —
   see its own schema comment). Broader admin-action logging (who viewed
   which athlete's profile, not just their video) doesn't exist yet.
-- **No automated anomaly/new-device login detection.** Detection today is
-  reactive (a report, a Dependabot alert), not proactive (no "new login
-  from an unrecognized location" notice to the user).
+- **Anomaly detection is partial, not absent.** New-device login notices DO
+  exist: `trackNewSession` compares against the account's known sessions and
+  `server/new-device-login-email.ts` emails the user when it sees an
+  unrecognised one. What is still missing is anything watching for a pattern
+  across accounts — a credential-stuffing spike, an unusual volume of 403s —
+  which is still only visible by reading Render's logs by hand.
 - **Render's own backups are unverified.** Section 9 gives a backup/restore
   procedure that has been run end to end against this schema, but nothing has
   ever been restored from Render's managed backups of `forge-db`, and whether
