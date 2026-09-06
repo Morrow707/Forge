@@ -825,13 +825,31 @@ export function VideoAnalysisDialog({
               selection gets its own line below, so neither one can push the
               other off-screen regardless of how narrow the viewport is. */}
           <div className="flex items-center gap-2">
-            <Button size="icon" variant="ghost" onClick={togglePlay} className="h-8 w-8 shrink-0">
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={playing ? "Pause" : "Play"}
+              onClick={togglePlay}
+              className="h-8 w-8 shrink-0"
+            >
               {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </Button>
-            <Button size="icon" variant="ghost" onClick={() => stepFrame(-1)} className="h-8 w-8 shrink-0">
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Step back one frame"
+              onClick={() => stepFrame(-1)}
+              className="h-8 w-8 shrink-0"
+            >
               <StepBack className="h-4 w-4" />
             </Button>
-            <Button size="icon" variant="ghost" onClick={() => stepFrame(1)} className="h-8 w-8 shrink-0">
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Step forward one frame"
+              onClick={() => stepFrame(1)}
+              className="h-8 w-8 shrink-0"
+            >
               <StepForward className="h-4 w-4" />
             </Button>
             <input

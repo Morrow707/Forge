@@ -327,12 +327,19 @@ export default function AdminAcademyTrackBuilder() {
                       placeholder="min"
                       className="w-20"
                     />
-                    <Button size="icon" variant="ghost" onClick={() => moveLesson(i, -1)} disabled={i === 0}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Move lesson up"
+                      onClick={() => moveLesson(i, -1)}
+                      disabled={i === 0}
+                    >
                       <ChevronUp className="h-4 w-4" />
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
+                      aria-label="Move lesson down"
                       onClick={() => moveLesson(i, 1)}
                       disabled={i === lessons.length - 1}
                     >
@@ -342,6 +349,7 @@ export default function AdminAcademyTrackBuilder() {
                       size="icon"
                       variant="ghost"
                       className="text-destructive"
+                      aria-label="Remove lesson"
                       onClick={() => setLessons((prev) => prev.filter((_, li) => li !== i))}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -392,12 +400,19 @@ export default function AdminAcademyTrackBuilder() {
                       placeholder="Question text"
                       className="flex-1"
                     />
-                    <Button size="icon" variant="ghost" onClick={() => moveQuestion(qi, -1)} disabled={qi === 0}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Move question up"
+                      onClick={() => moveQuestion(qi, -1)}
+                      disabled={qi === 0}
+                    >
                       <ChevronUp className="h-4 w-4" />
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
+                      aria-label="Move question down"
                       onClick={() => moveQuestion(qi, 1)}
                       disabled={qi === questions.length - 1}
                     >
@@ -407,6 +422,7 @@ export default function AdminAcademyTrackBuilder() {
                       size="icon"
                       variant="ghost"
                       className="text-destructive"
+                      aria-label="Remove question"
                       onClick={() => setQuestions((prev) => prev.filter((_, qqi) => qqi !== qi))}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -460,6 +476,7 @@ export default function AdminAcademyTrackBuilder() {
                             size="icon"
                             variant="ghost"
                             className="shrink-0 text-destructive"
+                            aria-label="Remove answer option"
                             onClick={() =>
                               setQuestions((prev) =>
                                 prev.map((qq, qqi) =>

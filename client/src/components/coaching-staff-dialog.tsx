@@ -158,7 +158,13 @@ export function CoachingStaffDialog({
                 <Label>Your staff invite code</Label>
                 <div className="flex items-center gap-2">
                   <Input readOnly value={user?.staffInviteCode ?? ""} className="font-mono" />
-                  <Button type="button" variant="outline" size="icon" onClick={copyCode}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Copy invite code"
+                    onClick={copyCode}
+                  >
                     <Copy className="h-4 w-4" />
                   </Button>
                   <Button

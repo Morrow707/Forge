@@ -530,7 +530,13 @@ export function SetVideoCompareDialog({
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={toggleOverlayPlayback}>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8 shrink-0"
+                    aria-label={isPlaying ? "Pause" : "Play"}
+                    onClick={toggleOverlayPlayback}
+                  >
                     {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                   </Button>
                   <input

@@ -219,7 +219,7 @@ export default function AvPreviewTestPage() {
   return (
     <div className="flex h-screen flex-col bg-background">
       <div className="flex items-center gap-3 border-b border-border p-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+        <Button variant="ghost" size="icon" aria-label="Back" onClick={() => navigate("/")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>

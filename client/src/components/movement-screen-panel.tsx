@@ -362,7 +362,14 @@ function NewScreenDialog({
                           onChange={(e) => setScores((s) => ({ ...s, [`${t.testKey}:left`]: e.target.value }))}
                         />
                         {t.scoreType === "distance_in" && arSupported && (
-                          <Button type="button" size="icon" variant="outline" title="Measure with AR" onClick={() => measureFieldWithAR(`${t.testKey}:left`)}>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            title="Measure with AR"
+                            aria-label="Measure left side with AR"
+                            onClick={() => measureFieldWithAR(`${t.testKey}:left`)}
+                          >
                             <Ruler className="h-3.5 w-3.5" />
                           </Button>
                         )}
@@ -376,7 +383,14 @@ function NewScreenDialog({
                           onChange={(e) => setScores((s) => ({ ...s, [`${t.testKey}:right`]: e.target.value }))}
                         />
                         {t.scoreType === "distance_in" && arSupported && (
-                          <Button type="button" size="icon" variant="outline" title="Measure with AR" onClick={() => measureFieldWithAR(`${t.testKey}:right`)}>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            title="Measure with AR"
+                            aria-label="Measure right side with AR"
+                            onClick={() => measureFieldWithAR(`${t.testKey}:right`)}
+                          >
                             <Ruler className="h-3.5 w-3.5" />
                           </Button>
                         )}
