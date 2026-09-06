@@ -40,6 +40,7 @@ import {
   fetchLatestHealthSnapshot,
   fetchTodaysHeartRateRecovery,
 } from "@/lib/native-health";
+import { useAuth } from "@/hooks/use-auth";
 
 type WellnessCheckin = {
   id: number;
@@ -82,6 +83,10 @@ type WellnessCheckin = {
  * readiness for a day that has passed would quietly rewrite the trend
  * chart, the ACWR windows, and the coach's flagged-today count. */
 export function WellnessGate({ date, editable }: { date: string; editable: boolean }) {
+  // Health sync is remembered per account, not per device -- see
+  // native-health.ts's own comment on why a shared phone made that matter.
+  const { user } = useAuth();
+  const healthUserId = user?.id ?? null;
   const qc = useQueryClient();
   const checkinQueryKey = ["/api/athlete/wellness/today", date] as const;
   const { data, isLoading } = useQuery<WellnessCheckin>({
@@ -154,10 +159,10 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
   }, [sleepHours]);
 
   async function syncFromHealth() {
-    if (!isHealthSyncEnabled()) return;
+    if (healthUserId == null || !isHealthSyncEnabled(healthUserId)) return;
     const [snapshot, hrr] = await Promise.all([
-      fetchLatestHealthSnapshot(),
-      fetchTodaysHeartRateRecovery(),
+      fetchLatestHealthSnapshot(healthUserId),
+      fetchTodaysHeartRateRecovery(healthUserId),
     ]);
     if (
       snapshot.sleepHours != null &&
@@ -185,7 +190,8 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
   async function handleManualSync() {
     setManualSyncing(true);
     try {
-      if (!isHealthSyncEnabled()) await enableHealthSync();
+      if (healthUserId == null) return;
+      if (!isHealthSyncEnabled(healthUserId)) await enableHealthSync(healthUserId);
       await syncFromHealth();
       toast.success("Synced with Apple Health");
     } catch (err) {
@@ -213,7 +219,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
     let cancelled = false;
 
     (async () => {
-      await promptHealthSyncOnce();
+      if (healthUserId != null) await promptHealthSyncOnce(healthUserId);
       if (!cancelled) await syncFromHealth();
     })();
 

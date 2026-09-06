@@ -23,6 +23,7 @@ import {
 } from "recharts";
 import { TrendingUp, TrendingDown, Minus, Dumbbell, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 type WellnessEntry = {
   id: number;
@@ -198,11 +199,12 @@ function MetricTab({ def, entries }: { def: MetricDef; entries: WellnessEntry[] 
 
 function WorkoutsTab() {
   const [workouts, setWorkouts] = useState<HealthWorkoutSummary[] | null>(null);
-  const supported = isNativeHealthSupported() && isHealthSyncEnabled();
+  const { user } = useAuth();
+  const supported = user != null && isNativeHealthSupported() && isHealthSyncEnabled(user.id);
 
   useEffect(() => {
     if (!supported) return;
-    fetchRecentWorkouts(HISTORY_DAYS).then(setWorkouts);
+    fetchRecentWorkouts(user!.id, HISTORY_DAYS).then(setWorkouts);
   }, [supported]);
 
   if (!supported) {

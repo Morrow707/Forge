@@ -13,6 +13,15 @@ import { Health } from "@capgo/capacitor-health";
 // needs its own AndroidManifest permissions and a privacy-policy handler
 // this app doesn't have yet, so exposing the toggle there would offer
 // something that silently does nothing.
+// Both keys below are suffixed with the signed-in athlete's id. The phone's
+// Health store belongs to whoever owns the phone, but the app's sign-in does
+// not: a shared team iPad, a family phone, a sibling borrowing a device.
+// Unscoped, one athlete turning sync on meant the next athlete to sign in on
+// that device had it silently on too, and their wellness check-in came back
+// pre-filled with the FIRST athlete's sleep, resting heart rate and HRV --
+// someone else's health data, presented as their own, and then saved to
+// their record. They were never asked either, since the prompted flag was
+// just as shared.
 const STORAGE_KEY = "forge-health-sync-enabled";
 // Separate from STORAGE_KEY -- tracks whether we've ever put the OS
 // permission sheet in front of the athlete, so WellnessGate can ask
@@ -56,12 +65,16 @@ export function isNativeHealthSupported() {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
 }
 
-export function isHealthSyncEnabled(): boolean {
-  return localStorage.getItem(STORAGE_KEY) === "1";
+function scoped(key: string, userId: number): string {
+  return `${key}:${userId}`;
 }
 
-export function hasPromptedHealthSync(): boolean {
-  return localStorage.getItem(PROMPTED_KEY) === "1";
+export function isHealthSyncEnabled(userId: number): boolean {
+  return localStorage.getItem(scoped(STORAGE_KEY, userId)) === "1";
+}
+
+export function hasPromptedHealthSync(userId: number): boolean {
+  return localStorage.getItem(scoped(PROMPTED_KEY, userId)) === "1";
 }
 
 /** Prompts the native Health permission sheet. Throws with a user-facing
@@ -69,35 +82,35 @@ export function hasPromptedHealthSync(): boolean {
  * subscribeToNativePush()'s shape. Partial grants (e.g. sleep allowed,
  * heart data denied) still turn sync on; fetchLatestHealthSnapshot() just
  * comes back with nulls for whatever wasn't authorized. */
-export async function enableHealthSync(): Promise<void> {
+export async function enableHealthSync(userId: number): Promise<void> {
   if (!isNativeHealthSupported()) {
     throw new Error("Health sync isn't supported on this device.");
   }
   const status = await Health.requestAuthorization({ read: [...READ_TYPES, WORKOUT_READ_TYPE], write: [] });
-  localStorage.setItem(PROMPTED_KEY, "1");
+  localStorage.setItem(scoped(PROMPTED_KEY, userId), "1");
   const authorized = status.readAuthorized ?? [];
   if (!READ_TYPES.some((t) => authorized.includes(t))) {
     throw new Error("Health access was denied. Enable it in iOS Settings to sync.");
   }
-  localStorage.setItem(STORAGE_KEY, "1");
+  localStorage.setItem(scoped(STORAGE_KEY, userId), "1");
 }
 
 /** Same request as enableHealthSync(), but swallows the "denied" case
  * instead of throwing -- for the automatic first-ask in WellnessGate,
  * where a no-thanks should just leave the form blank, not surface an
  * error toast for something the athlete never explicitly clicked. */
-export async function promptHealthSyncOnce(): Promise<void> {
-  if (hasPromptedHealthSync() || !isNativeHealthSupported()) return;
+export async function promptHealthSyncOnce(userId: number): Promise<void> {
+  if (hasPromptedHealthSync(userId) || !isNativeHealthSupported()) return;
   try {
-    await enableHealthSync();
+    await enableHealthSync(userId);
   } catch {
     // Denied -- hasPromptedHealthSync() is already true from inside
     // enableHealthSync(), so this won't ask again.
   }
 }
 
-export function disableHealthSync() {
-  localStorage.removeItem(STORAGE_KEY);
+export function disableHealthSync(userId: number) {
+  localStorage.removeItem(scoped(STORAGE_KEY, userId));
 }
 
 export type HealthSnapshot = {
@@ -122,8 +135,8 @@ const EMPTY_SNAPSHOT: HealthSnapshot = {
  * heart rate/HRV reading, to pre-fill the daily check-in -- an athlete can
  * always type over any of these by hand, so a partial or empty result here
  * never blocks submitting the form. */
-export async function fetchLatestHealthSnapshot(): Promise<HealthSnapshot> {
-  if (!isNativeHealthSupported() || !isHealthSyncEnabled()) return EMPTY_SNAPSHOT;
+export async function fetchLatestHealthSnapshot(userId: number): Promise<HealthSnapshot> {
+  if (!isNativeHealthSupported() || !isHealthSyncEnabled(userId)) return EMPTY_SNAPSHOT;
 
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
@@ -213,8 +226,8 @@ export type HealthWorkoutSummary = {
 /** Recent workouts logged to Health (Apple Watch or a third-party app that
  * writes to it) -- informational only, not folded into readiness scoring.
  * Read-only, same as the rest of this file. */
-export async function fetchRecentWorkouts(days = 14): Promise<HealthWorkoutSummary[]> {
-  if (!isNativeHealthSupported() || !isHealthSyncEnabled()) return [];
+export async function fetchRecentWorkouts(userId: number, days = 14): Promise<HealthWorkoutSummary[]> {
+  if (!isNativeHealthSupported() || !isHealthSyncEnabled(userId)) return [];
 
   const now = new Date();
   const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
@@ -269,10 +282,10 @@ export type HeartRateRecoverySample = {
  * workout qualifies, or if either read comes back empty (a Watch that
  * stopped recording right at "End Workout" is a real, common gap -- this
  * is expected to fill in and get more reliable as more sessions land). */
-export async function fetchTodaysHeartRateRecovery(): Promise<HeartRateRecoverySample | null> {
-  if (!isNativeHealthSupported() || !isHealthSyncEnabled()) return null;
+export async function fetchTodaysHeartRateRecovery(userId: number): Promise<HeartRateRecoverySample | null> {
+  if (!isNativeHealthSupported() || !isHealthSyncEnabled(userId)) return null;
   try {
-    const workouts = await fetchRecentWorkouts(1);
+    const workouts = await fetchRecentWorkouts(userId, 1);
     const todayLabel = new Date().toDateString();
     const candidates = workouts.filter(
       (w) => w.durationMinutes >= MIN_HRR_WORKOUT_MINUTES && new Date(w.endDate).toDateString() === todayLabel,

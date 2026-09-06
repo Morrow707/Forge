@@ -96,7 +96,7 @@ export function NotificationSettingsDialog({
         setBioLockEnabled(isBiometricLockEnabled());
       }
       if (isNativeHealthSupported()) {
-        setHealthSyncEnabledState(isHealthSyncEnabled());
+        setHealthSyncEnabledState(isHealthSyncEnabled(user.id));
       }
     }
   }, [open, user]);
@@ -111,10 +111,10 @@ export function NotificationSettingsDialog({
     setHealthSyncBusy(true);
     try {
       if (next) {
-        await enableHealthSync();
+        await enableHealthSync(user.id);
         toast.success("Apple Health sync enabled -- your check-in will pre-fill when available");
       } else {
-        disableHealthSync();
+        disableHealthSync(user.id);
         toast.success("Apple Health sync turned off");
       }
       setHealthSyncEnabledState(next);
