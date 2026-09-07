@@ -45,6 +45,7 @@ import {
 } from "./billing";
 import { missingPriceEnvVars } from "./stripe-prices";
 import { getHealthSnapshot } from "./health-probes";
+import { RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION } from "@shared/research-consent";
 import {
   buildResearchExportPdf,
   RESEARCH_EXPORT_MIN_CELL,
@@ -4005,6 +4006,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
         athleteId,
         parsed.data.healthStatus,
       );
+      if (!updated) return res.status(404).json({ message: "Athlete not found" });
+      res.json(updated);
+    },
+  );
+
+  // Research-data consent. Three doors into one decision, because who may
+  // answer depends on the athlete's age and there is no parent-facing login
+  // in this app.
+  //
+  // The consent text itself is served rather than hardcoded in the client,
+  // so the words a person reads and the words stored in their consent
+  // record are the same string and cannot drift apart.
+  app.get("/api/research-consent/text", async (_req, res) => {
+    res.json({ text: RESEARCH_CONSENT_TEXT, version: RESEARCH_CONSENT_VERSION });
+  });
+
+  // The athlete's own view and, for an adult, their own decision.
+  app.get("/api/athlete/research-consent", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const status = await storage.getResearchDataConsent(user.id);
+    if (!status) return res.status(404).json({ message: "Not found" });
+    res.json(status);
+  });
+
+  app.put("/api/athlete/research-consent", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z.object({ granted: z.boolean() }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "granted is required" });
+
+    const status = await storage.getResearchDataConsent(user.id);
+    if (!status) return res.status(404).json({ message: "Not found" });
+    // A minor cannot consent for themselves, and cannot withdraw a
+    // guardian's consent either -- the decision belongs to whoever made it.
+    if (status.requiresGuardian) {
+      return res.status(403).json({
+        message: "A parent or guardian makes this decision. Ask them to change it through your coach.",
+      });
+    }
+    const updated = await storage.setResearchDataConsent({
+      athleteId: user.id,
+      granted: parsed.data.granted,
+      grantedByUserId: user.id,
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
+    res.json(updated);
+  });
+
+  // Coach relaying a guardian's answer, same pattern as the tracking opt-out
+  // above. Roster-scoped, so a coach can only answer for their own athletes.
+  app.get(
+    "/api/coach/roster/:athleteId/research-consent",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      res.json(await storage.getResearchDataConsent(athleteId));
+    },
+  );
+
+  app.put(
+    "/api/coach/roster/:athleteId/research-consent",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const parsed = z
+        .object({
+          granted: z.boolean(),
+          // The coach states whose answer they are relaying. Recorded in the
+          // consent trail, because "a coach ticked a box" and "a named
+          // guardian said yes and the coach recorded it" are different
+          // things and only one of them is consent.
+          relayedFrom: z.string().trim().min(1).max(200),
+        })
+        .safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+
+      const updated = await storage.setResearchDataConsent({
+        athleteId,
+        granted: parsed.data.granted,
+        grantedByUserId: user.id,
+        relayedFrom: parsed.data.relayedFrom,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") ?? undefined,
+      });
       if (!updated) return res.status(404).json({ message: "Athlete not found" });
       res.json(updated);
     },

@@ -137,6 +137,7 @@ import {
 } from "@shared/privacy-tiers";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { normalizeInjuryRegion, INJURY_REGIONS, type InjuryRegion } from "@shared/injury-taxonomy";
+import { RESEARCH_CONSENT_TEXT } from "@shared/research-consent";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
   MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
@@ -4514,6 +4515,80 @@ export const storage = {
   // camera-tracking collection -- see users.trackingOptOut's own comment in
   // shared/schema.ts. Same roster-check-then-set shape as
   // updateAthleteHealthStatus just above.
+  /**
+   * Grant or withdraw research consent for one athlete.
+   *
+   * `grantedBy` is who actually made the decision, and it is recorded
+   * separately from whose data it concerns. For an athlete under 18 that is
+   * a guardian or a coach relaying a guardian's answer -- the same relayed
+   * pattern trackingOptOut uses, because there is no parent-facing login in
+   * this app.
+   *
+   * Granting writes a consent record holding the full text shown at the
+   * time. Withdrawing writes one too: a withdrawal is a decision someone
+   * made and dated, and a consent trail that only records the yeses cannot
+   * answer "when did they take it back".
+   */
+  async setResearchDataConsent(input: {
+    athleteId: number;
+    granted: boolean;
+    grantedByUserId: number;
+    // Who the decision actually came from, when a coach is relaying a
+    // guardian's answer. Kept in the stored text rather than a column: it is
+    // part of what was agreed, not a fact about the athlete.
+    relayedFrom?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }) {
+    const [updated] = await db
+      .update(users)
+      .set({
+        researchDataConsent: input.granted,
+        researchDataConsentAt: input.granted ? new Date() : null,
+      })
+      .where(and(eq(users.id, input.athleteId), eq(users.role, "athlete")))
+      .returning({
+        id: users.id,
+        researchDataConsent: users.researchDataConsent,
+        researchDataConsentAt: users.researchDataConsentAt,
+      });
+    if (!updated) return null;
+
+    await this.logConsentRecord({
+      userId: input.athleteId,
+      consentType: "research_data_use",
+      documentText: input.granted
+        ? (input.relayedFrom
+            ? `Relayed by a coach on behalf of: ${input.relayedFrom}\n\n${RESEARCH_CONSENT_TEXT}`
+            : RESEARCH_CONSENT_TEXT)
+        : `WITHDRAWN ${new Date().toISOString()}\n\nConsent previously given under the following text was withdrawn:\n\n${RESEARCH_CONSENT_TEXT}`,
+      givenByUserId: input.grantedByUserId,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    });
+
+    return updated;
+  },
+
+  async getResearchDataConsent(athleteId: number) {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, athleteId),
+      columns: { researchDataConsent: true, researchDataConsentAt: true, dateOfBirth: true },
+    });
+    if (!row) return null;
+    return {
+      granted: row.researchDataConsent,
+      grantedAt: row.researchDataConsentAt,
+      // Whether this athlete may answer for themselves, or whether it has to
+      // come from a guardian. No date of birth on file is treated as a minor:
+      // the safe assumption when the answer is unknown is the one that needs
+      // an adult, not the one that does not.
+      requiresGuardian: row.dateOfBirth
+        ? derivePrivacyTier(row.dateOfBirth) !== "tier3_adult_18plus"
+        : true,
+    };
+  },
+
   async setTrackingOptOut(coachId: number, athleteId: number, trackingOptOut: boolean) {
     const onRoster = await this.getRosterAthleteForCoach(coachId, athleteId);
     if (!onRoster) return null;
@@ -22512,7 +22587,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       | "biometric_waiver"
       | "coach_coppa_consent"
       | "parental_notice_ack"
-      | "institutional_agreement";
+      | "institutional_agreement"
+      | "research_data_use";
     documentText: string;
     givenByUserId?: number;
     ipAddress?: string;
