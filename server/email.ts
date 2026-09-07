@@ -1,3 +1,5 @@
+import { recordSystemFailure, recordSystemSuccess } from "./system-events";
+
 // The HTML email builders (welcome-email.ts, progress-report.ts, etc)
 // interpolate free-text fields a coach or athlete entered themselves --
 // display name, sport/position, exercise names -- directly into HTML
@@ -66,11 +68,18 @@ export async function sendEmail({
     if (!res.ok) {
       const body = await res.text();
       console.error("Resend send failed:", res.status, body);
+      recordSystemFailure("email", `Resend rejected a send with HTTP ${res.status}`, {
+        detail: body.slice(0, 500),
+      });
       return { sent: false, error: "send_failed" };
     }
+    // A success clears the badge: the provider is demonstrably working
+    // again, which is stronger evidence than any timeout would be.
+    recordSystemSuccess("email");
     return { sent: true };
   } catch (err: any) {
     console.error("Resend send failed:", err?.message || err);
+    recordSystemFailure("email", "Could not reach Resend to send email", { detail: err });
     return { sent: false, error: "send_failed" };
   }
 }

@@ -26,7 +26,13 @@ import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { buildCaraComplianceCsv, buildCaraCompliancePdf } from "./cara-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
-import { readUploadedFile, getUploadsDiskFreeBytes, statUploadedFile, UPLOADS_ROOT } from "./uploaded-files";
+import {
+  readUploadedFile,
+  getUploadsDiskFreeBytes,
+  getUploadsDiskUsage,
+  statUploadedFile,
+  UPLOADS_ROOT,
+} from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
@@ -38,6 +44,12 @@ import {
   createLessonCheckout,
 } from "./billing";
 import { missingPriceEnvVars } from "./stripe-prices";
+import {
+  getFailingSources,
+  getActiveSystemEvents,
+  getRecentSystemEvents,
+  clearSystemEvent,
+} from "./system-events";
 import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
 import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
 import { verifyMediaUrl } from "./media-url-signing";
@@ -2575,14 +2587,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // right now -- every boolean here already exists as a module-level export
   // (each integration resolves its own env vars to a boolean on import), so
   // this route only ever exposes those booleans, never a secret value.
+  // Every integration reported as one of three states rather than a bare
+  // boolean, because "a key is configured" and "it is working" are
+  // different questions and only the first one was ever being answered. A
+  // configured key that the provider has since revoked, exhausted, or
+  // started rejecting used to show green forever.
+  //
+  //   "off"     -- no key configured; the feature no-ops by design
+  //   "ok"      -- configured, and nothing has failed inside the window
+  //   "failing" -- configured, and something failed recently
+  //
+  // The `ai`/`email`/... booleans are still returned alongside so nothing
+  // that reads the old shape breaks.
   app.get("/api/admin/system-status", requireRole("admin"), async (_req, res) => {
+    const failing = await getFailingSources();
+
+    const state = (key: string, configured: boolean) => {
+      if (!configured) return { state: "off" as const };
+      const event = failing.get(key);
+      if (!event) return { state: "ok" as const };
+      return {
+        state: event.severity === "warning" ? ("warning" as const) : ("failing" as const),
+        message: event.message,
+        count: event.count,
+        lastSeenAt: event.lastSeenAt,
+      };
+    };
+
+    const disk = await getUploadsDiskUsage();
+    const missingPrices = missingPriceEnvVars();
+    const stripeConfigured =
+      Boolean(process.env.STRIPE_SECRET_KEY) &&
+      Boolean(process.env.STRIPE_WEBHOOK_SECRET) &&
+      missingPrices.length === 0;
+
     res.json({
+      // Original shape, unchanged.
       ai: aiEnabled,
       email: emailEnabled,
       webPush: pushEnabled,
       apns: apnsEnabled,
       usdaFoodLookup: usdaFoodLookupEnabled,
+
+      integrations: {
+        ai: state("ai", aiEnabled),
+        email: state("email", emailEnabled),
+        webPush: state("webPush", pushEnabled),
+        apns: state("apns", apnsEnabled),
+        usdaFoodLookup: state("usdaFoodLookup", usdaFoodLookupEnabled),
+        database: state("database", true),
+        billing: state("billing", stripeConfigured),
+      },
+
+      // Monitoring reporting on itself. With no DSN set, every alert path
+      // out of this app is dark and nothing else would say so.
+      errorReporting: {
+        serverDsnSet: Boolean(process.env.SENTRY_DSN),
+        clientDsnSet: Boolean(process.env.VITE_SENTRY_DSN),
+      },
+
+      // What the operator still owes Stripe, same data as
+      // /api/admin/billing/stripe-readiness, surfaced here so the dashboard
+      // is one request rather than two.
+      billing: {
+        secretKeySet: Boolean(process.env.STRIPE_SECRET_KEY),
+        webhookSecretSet: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
+        missingPriceEnvVars: missingPrices,
+        billingLive: BILLING_LIVE,
+        enforcementEnabled: process.env.BILLING_ENFORCEMENT_ENABLED === "true",
+      },
+
+      // Null when statfs is unavailable (local dev with no mounted disk).
+      storage: disk
+        ? {
+            freeBytes: disk.freeBytes,
+            totalBytes: disk.totalBytes,
+            usedFraction: disk.usedFraction,
+            // 90% is where an upload of a few hundred megabytes starts
+            // being at real risk of not fitting.
+            state: disk.usedFraction >= 0.9 ? "failing" : disk.usedFraction >= 0.75 ? "warning" : "ok",
+          }
+        : null,
+
+      activeEvents: await getActiveSystemEvents(20),
     });
+  });
+
+  // The failure history behind the badges, including already-cleared rows.
+  app.get("/api/admin/system-events", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    res.json(await getRecentSystemEvents(limit));
+  });
+
+  // Dismiss one. Deliberately not a delete: a recurrence sets cleared_at
+  // back to NULL (see recordSystemFailure), so waving something away does
+  // not hide it if it happens again.
+  app.post("/api/admin/system-events/:id/clear", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid event id" });
+    const cleared = await clearSystemEvent(id);
+    if (!cleared) return res.status(404).json({ message: "Event not found or already cleared" });
+    res.json({ ok: true });
   });
 
   // Read view for the audit log itself -- see getRecordAccessAuditLog's own

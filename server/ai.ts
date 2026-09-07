@@ -1,3 +1,5 @@
+import { recordSystemFailure, recordSystemSuccess } from "./system-events";
+
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const defaultModel = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 const API_URL = "https://api.anthropic.com/v1/messages";
@@ -67,6 +69,14 @@ async function callAnthropic(body: Record<string, unknown>): Promise<any | null>
           await new Promise((r) => setTimeout(r, 600));
           continue;
         }
+        // Recorded only once the retry is spent, so a single 500 that the
+        // second attempt recovers from never reddens the badge.
+        recordSystemFailure("ai", `Claude rejected a request with HTTP ${res.status}`, {
+          detail: text.slice(0, 500),
+          // A 429 is quota or rate limiting: worth seeing, but that is the
+          // plan doing its job rather than something broken.
+          severity: res.status === 429 ? "warning" : "error",
+        });
         return null;
       }
       const data = await res.json();
@@ -80,6 +90,7 @@ async function callAnthropic(body: Record<string, unknown>): Promise<any | null>
         console.error("Claude request truncated at max_tokens -- discarding partial result");
         return null;
       }
+      recordSystemSuccess("ai");
       return data;
     } catch (err: any) {
       console.error(`Claude request failed (attempt ${attempt + 1}):`, err?.message || err);
@@ -87,6 +98,7 @@ async function callAnthropic(body: Record<string, unknown>): Promise<any | null>
         await new Promise((r) => setTimeout(r, 600));
         continue;
       }
+      recordSystemFailure("ai", "Could not reach the Claude API", { detail: err });
       return null;
     }
   }

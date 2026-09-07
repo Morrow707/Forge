@@ -2581,6 +2581,33 @@ CREATE INDEX IF NOT EXISTS "media_removal_requests_status_idx"
 -- second request after an earlier one was denied.
 CREATE UNIQUE INDEX IF NOT EXISTS "media_removal_requests_open_target_idx"
   ON "media_removal_requests" ("source", "source_id") WHERE "status" = 'open';
+
+-- System health events (shared/schema.ts systemEvents) -- what the admin
+-- dashboard reads to turn a badge red. Folded by fingerprint so a provider
+-- outage is one row with a count rather than thousands.
+DO $$ BEGIN
+  CREATE TYPE "system_event_severity" AS ENUM ('warning', 'error');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "system_events" (
+  "id" serial PRIMARY KEY,
+  "source" text NOT NULL,
+  "severity" "system_event_severity" NOT NULL,
+  "message" text NOT NULL,
+  "detail" text,
+  "fingerprint" text NOT NULL,
+  "count" integer NOT NULL DEFAULT 1,
+  "first_seen_at" timestamp NOT NULL DEFAULT now(),
+  "last_seen_at" timestamp NOT NULL DEFAULT now(),
+  "cleared_at" timestamp
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "system_events_fingerprint_idx"
+  ON "system_events" ("fingerprint");
+CREATE INDEX IF NOT EXISTS "system_events_recent_idx"
+  ON "system_events" ("last_seen_at");
+CREATE INDEX IF NOT EXISTS "system_events_source_idx"
+  ON "system_events" ("source", "last_seen_at");
 `;
 
 async function main() {

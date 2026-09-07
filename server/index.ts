@@ -94,6 +94,7 @@ import { verifyRequestOrigin } from "./csrf-protection";
 import { NATIVE_APP_ORIGINS } from "./native-app-origins";
 import { pool } from "./db";
 import { redactForLog } from "./log-redaction";
+import { recordSystemFailure } from "./system-events";
 
 const app = express();
 // contentSecurityPolicy is report-only, not enforcing -- see its own
@@ -363,6 +364,10 @@ app.get("/healthz", async (_req, res) => {
     res.status(200).json({ status: "ok" });
   } catch (err) {
     console.error("Health check failed:", err);
+    // Best-effort: this writes to the database that just failed to answer,
+    // so it will usually not land. Kept anyway for the case where the
+    // failure was one bad connection rather than the database being gone.
+    recordSystemFailure("database", "Health check could not reach the database", { detail: err });
     res.status(503).json({ status: "unavailable" });
   }
 });
@@ -396,6 +401,14 @@ app.get("/healthz", async (_req, res) => {
         : err.message || "Request failed";
     res.status(status).json({ message: clientMessage });
     console.error(err);
+    // Only 5xx: a 4xx is the user being told "that email is already in
+    // use", which is the system working, and recording those would bury
+    // the real failures under ordinary validation noise.
+    if (status >= 500) {
+      recordSystemFailure("request", `${_req.method} ${_req.path} returned ${status}`, {
+        detail: err,
+      });
+    }
   });
 
   if (app.get("env") === "development") {

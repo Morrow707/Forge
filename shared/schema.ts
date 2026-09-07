@@ -4775,6 +4775,56 @@ export const recordAccessAuditLogs = pgTable(
 );
 export type RecordAccessAuditLog = typeof recordAccessAuditLogs.$inferSelect;
 
+// ---------- System health events ----------
+// Failures the admin dashboard shows without anyone reading a log stream.
+//
+// Sentry already receives every one of these, but Sentry only helps if its
+// DSN was pasted into the Render dashboard and someone is reading the
+// alerts. This table exists so "is anything broken" has an answer inside
+// Forge itself, on the same page as the green badges, for an operator who
+// is not an on-call engineer with an inbox rule.
+//
+// Rows are folded by `fingerprint` rather than appended: a mail provider
+// rejecting every send for six hours is one row with a count, not six
+// hundred rows that push everything else off the page. firstSeenAt keeps
+// "since when", lastSeenAt drives the recency window the badges read.
+//
+// Deliberately not an audit log. Nothing here is a compliance record, and
+// the retention sweep below is free to drop old rows -- record_access_audit_logs
+// is the table with obligations attached.
+export const systemEventSeverityEnum = pgEnum("system_event_severity", ["warning", "error"]);
+
+export const systemEvents = pgTable(
+  "system_events",
+  {
+    id: serial("id").primaryKey(),
+    // Which badge this belongs to: "ai", "email", "webPush", "apns",
+    // "usdaFoodLookup", "database", "storage", "billing", or a job name.
+    // A source with no badge still shows in the recent-problems list.
+    source: text("source").notNull(),
+    severity: systemEventSeverityEnum("severity").notNull(),
+    // Written for the person reading the dashboard, not the stack trace.
+    message: text("message").notNull(),
+    detail: text("detail"),
+    // Stable identity for folding repeats -- source plus a normalized
+    // message, hashed by the caller.
+    fingerprint: text("fingerprint").notNull(),
+    count: integer("count").notNull().default(1),
+    firstSeenAt: timestamp("first_seen_at").notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+    // Set when an admin dismisses it, or when the same source later
+    // succeeds -- a badge goes back to green on a real success, never on a
+    // timer alone.
+    clearedAt: timestamp("cleared_at"),
+  },
+  (table) => ({
+    fingerprintIdx: uniqueIndex("system_events_fingerprint_idx").on(table.fingerprint),
+    recentIdx: index("system_events_recent_idx").on(table.lastSeenAt),
+    sourceIdx: index("system_events_source_idx").on(table.source, table.lastSeenAt),
+  }),
+);
+export type SystemEvent = typeof systemEvents.$inferSelect;
+
 // ---------- Uploaded file ownership ----------
 // One row per file created by any of the raw upload routes that hand a
 // bare, unsigned /uploads/... path straight back to the client for reuse

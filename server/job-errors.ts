@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import { recordSystemFailure } from "./system-events";
 
 // Scheduled jobs run with nobody watching, which is the whole point of
 // scheduling them and also why their failures were invisible: every catch
@@ -15,6 +16,10 @@ import * as Sentry from "@sentry/node";
 // (the SDK no-ops), so this needs no environment check of its own.
 export function reportJobFailure(jobName: string, err: unknown, context?: Record<string, unknown>) {
   console.error(`${jobName} failed:`, err, context ?? "");
+  // Third destination, added after the same reasoning as Sentry itself went
+  // one step further: the alert only helps if SENTRY_DSN was configured.
+  // This one shows up on the admin dashboard with no setup at all.
+  recordSystemFailure("job", `${jobName} failed`, { detail: err });
   Sentry.captureException(err, {
     tags: { job: jobName },
     ...(context ? { extra: context } : {}),

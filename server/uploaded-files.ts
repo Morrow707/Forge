@@ -89,6 +89,32 @@ export async function getUploadsDiskFreeBytes(): Promise<number | null> {
   }
 }
 
+// Free AND total, for the admin dashboard's storage badge. Kept separate
+// from the function above rather than widening it, because every existing
+// caller of that one wants a single number and none of them should have to
+// destructure to get it.
+//
+// The disk holds every form-check and skill video anyone has ever
+// uploaded, on a fixed 10GB Render volume (render.yaml). When it fills,
+// uploads fail -- and before this badge existed, the first anyone would
+// hear of it was an athlete reporting that saving a lift did nothing.
+export async function getUploadsDiskUsage(): Promise<{
+  freeBytes: number;
+  totalBytes: number;
+  usedFraction: number;
+} | null> {
+  try {
+    const stats = await fs.statfs(UPLOADS_ROOT);
+    const totalBytes = stats.blocks * stats.bsize;
+    const freeBytes = stats.bavail * stats.bsize;
+    if (totalBytes <= 0) return null;
+    return { freeBytes, totalBytes, usedFraction: 1 - freeBytes / totalBytes };
+  } catch (err) {
+    console.error("Disk usage check failed", err);
+    return null;
+  }
+}
+
 // Same null-safe, non-throwing contract as the two above -- reads an
 // uploaded file's bytes for embedding elsewhere (e.g. a coach's brand logo
 // into a PDF export), rather than serving it back over HTTP.
