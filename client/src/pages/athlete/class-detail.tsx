@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Lock, CheckCircle2, PlayCircle, BookOpen, ListChecks, Star, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClassLessonReaderDialog } from "@/components/class-lesson-reader-dialog";
+import { Capacitor } from "@capacitor/core";
 
 type LessonProgress = {
   id: number;
@@ -54,12 +55,30 @@ export default function AthleteClassDetail() {
     setReaderStartAt(startAt);
   }
 
+  // Two payment paths, because Apple requires an in-app digital purchase to
+  // go through StoreKit. On the web this hands off to Stripe Checkout and
+  // the athlete comes back here once they have paid; the webhook is what
+  // actually credits the lesson, so there is nothing to invalidate on this
+  // side of the redirect. In the native app it keeps calling the existing
+  // route, which stays comped-only until an in-app product exists for
+  // lessons -- a Stripe checkout reachable from the app is exactly what
+  // would put a submission at risk, and the server refuses it anyway.
   const purchaseMutation = useMutation({
     mutationFn: async (lessonId: number) => {
+      if (!Capacitor.isNativePlatform()) {
+        const res = await apiRequest("POST", "/api/billing/checkout/class-lesson", {
+          classId: Number(classId),
+          lessonId,
+        });
+        const { url } = await res.json();
+        window.location.href = url;
+        return { redirected: true };
+      }
       const res = await apiRequest("POST", `/api/athlete/classes/${classId}/lessons/${lessonId}/purchase`, {});
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
+      if (result?.redirected) return;
       qc.invalidateQueries({ queryKey: [`/api/athlete/classes/${classId}/progress`] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/my-classes"] });
       toast.success("Lesson unlocked");

@@ -43,6 +43,7 @@ const CoachSkillPrograms = lazy(withLoadTimeout(() => import("@/pages/coach/skil
 const CoachSkillProgramBuilder = lazy(withLoadTimeout(() => import("@/pages/coach/skill-program-builder")));
 const CoachPrograms = lazy(withLoadTimeout(() => import("@/pages/coach/programs")));
 const CoachProgramBuilder = lazy(withLoadTimeout(() => import("@/pages/coach/program-builder")));
+const CoachBilling = lazy(withLoadTimeout(() => import("@/pages/coach/billing")));
 const CoachClasses = lazy(withLoadTimeout(() => import("@/pages/coach/classes")));
 const CoachClassBuilder = lazy(withLoadTimeout(() => import("@/pages/coach/class-builder")));
 const CoachCoachesCorner = lazy(withLoadTimeout(() => import("@/pages/coach/coaches-corner")));
@@ -306,6 +307,9 @@ function Router() {
         </Route>
         <Route path="/coach/movement-screens">
           <ProtectedRoute role="coach" component={CoachMovementScreens} />
+        </Route>
+        <Route path="/coach/billing">
+          <ProtectedRoute role="coach" component={CoachBilling} />
         </Route>
         <Route path="/coach/roster">
           <ProtectedRoute role="coach" component={CoachRoster} />

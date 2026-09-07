@@ -110,6 +110,7 @@ const coachNav: NavItem[] = [
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare, overflow: true },
   { href: "/coach/my", label: "My Training", icon: UserCircle, overflow: true },
+  { href: "/coach/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/coach/about", label: "About", icon: Info, overflow: true },
 ];
 
