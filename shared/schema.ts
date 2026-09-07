@@ -3767,6 +3767,11 @@ export const classes = pgTable("classes", {
   // their filter chips from whatever categories actually exist rather than
   // a hardcoded list.
   category: text("category"),
+  // A relative /uploads/lesson-images/... path (reuses the per-page lesson
+  // image upload) or a full URL. Shown at the top of the class's card on
+  // both "My Classes" and the Free Agent browse catalog -- optional, a card
+  // with none just renders text-only like it always has.
+  coverImageUrl: text("cover_image_url"),
   isForgeOfficial: boolean("is_forge_official").notNull().default(false),
   // Optional -- an athlete can't enroll in this class until they've
   // completed (see classEnrollments.completedAt) the referenced one. Self-
@@ -3834,7 +3839,19 @@ export const classLessons = pgTable(
     // and end-of-chapter quiz -- the actual lesson lecture content, as
     // opposed to `description`'s short teaser shown while still locked. See
     // classLessonQuizQuestions for the quiz that follows this content.
-    content: json("content").$type<{ title?: string; body: string }[]>().notNull().default([]),
+    content: json("content")
+      .$type<
+        {
+          title?: string;
+          body: string;
+          videoUrl?: string | null;
+          imageUrls?: string[];
+          attachmentUrl?: string | null;
+          attachmentName?: string | null;
+        }[]
+      >()
+      .notNull()
+      .default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -4154,6 +4171,7 @@ export const classStructureSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).nullable().optional(),
   category: z.string().trim().max(60).nullable().optional(),
+  coverImageUrl: z.string().trim().min(1).max(500).nullable().optional(),
   prerequisiteClassId: z.number().int().positive().nullable().optional(),
   isDraft: z.boolean().optional(),
   lessons: z.array(classLessonInputSchema).default([]),

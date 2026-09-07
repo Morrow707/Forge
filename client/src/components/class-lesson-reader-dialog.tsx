@@ -49,6 +49,81 @@ type QuizSubmitResult = {
   results: QuizAnswerResult[];
 };
 
+/** YouTube/Vimeo links play inline like an uploaded clip instead of bouncing
+ * to a new tab -- recognizes the handful of real-world URL shapes each site
+ * hands out (watch?v=, youtu.be, /shorts/, an already-embed URL, a plain
+ * vimeo.com/<id>). Anything else (an uploaded file, or a host this doesn't
+ * recognize) returns null and the caller falls back to its existing
+ * behavior -- a native <video> tag for an uploaded file, a click-out link
+ * for anything unrecognized. */
+function getEmbedUrl(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url, window.location.origin);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.replace(/^www\.|^m\./, "");
+  if (host === "youtube.com") {
+    const v = u.searchParams.get("v");
+    if (v) return `https://www.youtube.com/embed/${v}`;
+    const shorts = u.pathname.match(/^\/shorts\/([\w-]+)/);
+    if (shorts) return `https://www.youtube.com/embed/${shorts[1]}`;
+    if (/^\/embed\//.test(u.pathname)) return url;
+    return null;
+  }
+  if (host === "youtu.be") {
+    const id = u.pathname.slice(1);
+    return id ? `https://www.youtube.com/embed/${id}` : null;
+  }
+  if (host === "vimeo.com") {
+    const id = u.pathname.match(/^\/(\d+)/);
+    return id ? `https://player.vimeo.com/video/${id[1]}` : null;
+  }
+  return null;
+}
+
+/** Bold and bullet lists only -- deliberately not a full markdown parser.
+ * Lesson bodies are authored in a plain <Textarea> (see class-builder.tsx),
+ * so the syntax has to stay something a coach can type without a
+ * reference: **bold** inline, and a block of consecutive "- " lines becomes
+ * a bulleted list. Blocks are separated by a blank line, same paragraph
+ * convention the old whitespace-pre-wrap rendering implied. Built as real
+ * React elements (never dangerouslySetInnerHTML) since this reaches every
+ * athlete who opens the lesson, not just its own author. */
+function renderFormattedBody(text: string): React.ReactNode {
+  const blocks = text.split(/\n{2,}/);
+  return blocks.map((block, bi) => {
+    const lines = block.split("\n").filter((l) => l.trim().length > 0);
+    const isList = lines.length > 0 && lines.every((l) => /^\s*-\s+/.test(l));
+    if (isList) {
+      return (
+        <ul key={bi} className="list-disc space-y-1 pl-5">
+          {lines.map((l, li) => (
+            <li key={li}>{renderInline(l.replace(/^\s*-\s+/, ""))}</li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <p key={bi} className="whitespace-pre-wrap">
+        {renderInline(block)}
+      </p>
+    );
+  });
+}
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter((p) => p.length > 0);
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
+      <strong key={i}>{part.slice(2, -2)}</strong>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
+
 /** Friendly, funny, a little whimsical -- picked at random per failed
  * attempt so grinding through retries doesn't feel like reading a stern
  * error message over and over. */
@@ -292,14 +367,15 @@ export function ClassLessonReaderDialog({
                 <p className="text-sm text-muted-foreground">No reading content for this lesson yet.</p>
               ) : (
                 <>
-                  {pages[pageIndex]?.title && (
+  {pages[pageIndex]?.title && (
                     <h3 className="font-display text-base font-bold uppercase tracking-wide">
                       {pages[pageIndex].title}
                     </h3>
                   )}
-                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
-                    {pages[pageIndex]?.body}
-                  </div>
+                  {/* Media leads the page, text follows -- a photo or video is
+                      what a page is "about" at a glance, same as a magazine
+                      spread. It used to sit after the body text, which meant
+                      scrolling past a full paragraph before ever seeing it. */}
                   {!!pages[pageIndex]?.imageUrls?.length && (
                     <div
                       className={cn(
@@ -320,11 +396,8 @@ export function ClassLessonReaderDialog({
                   )}
                   {pages[pageIndex]?.videoUrl &&
                     (pages[pageIndex].videoUrl!.startsWith("/uploads/lesson-videos/") ? (
-                      // A file uploaded straight to Forge (see Batch J's
-                      // /api/classes/lesson-media/video route) -- play it
-                      // right here instead of bouncing to a new tab, unlike
-                      // an external link (YouTube etc.) below, which a
-                      // <video> tag can't play directly.
+                      // A file uploaded straight to Forge -- play it right
+                      // here instead of bouncing to a new tab.
                       <video
                         controls
                         preload="metadata"
@@ -334,6 +407,19 @@ export function ClassLessonReaderDialog({
                       >
                         Your browser doesn't support inline video playback.
                       </video>
+                    ) : getEmbedUrl(pages[pageIndex].videoUrl!) ? (
+                      // A YouTube/Vimeo link -- embed it the same way an
+                      // uploaded clip plays, instead of sending the athlete
+                      // away from the lesson to watch it.
+                      <div className="aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
+                        <iframe
+                          src={getEmbedUrl(pages[pageIndex].videoUrl!)!}
+                          title="Instructional video"
+                          className="h-full w-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
                     ) : (
                       <a
                         href={pages[pageIndex].videoUrl!}
@@ -346,6 +432,9 @@ export function ClassLessonReaderDialog({
                         Watch instructional video
                       </a>
                     ))}
+                  <div className="space-y-3 text-sm leading-relaxed text-foreground/90">
+                    {pages[pageIndex]?.body ? renderFormattedBody(pages[pageIndex].body) : null}
+                  </div>
                   {pages[pageIndex]?.attachmentUrl && (
                     <a
                       href={pages[pageIndex].attachmentUrl!}

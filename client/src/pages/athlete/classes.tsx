@@ -25,6 +25,7 @@ type EnrolledClass = {
   classId: number;
   name: string;
   description: string | null;
+  coverImageUrl: string | null;
   isForgeOfficial: boolean;
   lessonCount: number;
   lessonsStarted: number;
@@ -35,6 +36,7 @@ type BrowsableClass = {
   id: number;
   name: string;
   description: string | null;
+  coverImageUrl: string | null;
   category: string | null;
   lessonCount: number;
   isForgeOfficial: true;
@@ -142,9 +144,12 @@ export default function AthleteClasses() {
             {myClasses.map((c) => (
               <Card
                 key={c.classId}
-                className="flex cursor-pointer flex-col transition-colors hover:border-primary/50"
+                className="flex cursor-pointer flex-col overflow-hidden transition-colors hover:border-primary/50"
                 onClick={() => navigate(`/athlete/classes/${c.classId}`)}
               >
+                {c.coverImageUrl && (
+                  <img src={c.coverImageUrl} alt="" loading="lazy" className="h-32 w-full object-cover" />
+                )}
                 <CardContent className="flex flex-1 flex-col gap-3 p-5">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
@@ -253,7 +258,10 @@ export default function AthleteClasses() {
             )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filteredCatalog.map((c) => (
-                <Card key={c.id} className="flex flex-col">
+                <Card key={c.id} className="flex flex-col overflow-hidden">
+                  {c.coverImageUrl && (
+                    <img src={c.coverImageUrl} alt="" loading="lazy" className="h-32 w-full object-cover" />
+                  )}
                   <CardContent className="flex flex-1 flex-col gap-3 p-5">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>

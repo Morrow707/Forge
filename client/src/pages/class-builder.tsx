@@ -134,6 +134,7 @@ function stateFromClass(cls: any) {
     name: cls.name as string,
     description: (cls.description as string) ?? "",
     category: (cls.category as string | null) ?? "",
+    coverImageUrl: (cls.coverImageUrl as string | null) ?? "",
     prerequisiteClassId: (cls.prerequisiteClassId as number | null) ?? null,
     isDraft: (cls.isDraft as boolean) ?? true,
     lessons: cls.lessons.map((l: any) => ({
@@ -233,12 +234,28 @@ export function ClassBuilderPage({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
+  const [coverImageUrl, setCoverImageUrl] = useState("");
   const [prerequisiteClassId, setPrerequisiteClassId] = useState<number | null>(null);
   const [isDraft, setIsDraft] = useState(true);
   const [lessons, setLessons] = useState<LocalLesson[]>([]);
   const [pickerForLesson, setPickerForLesson] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
+  const coverImageInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadCoverImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("image", file);
+      const res = await apiRequest("POST", "/api/classes/lesson-media/image", form);
+      return res.json() as Promise<{ url: string }>;
+    },
+    onSuccess: (data) => {
+      setCoverImageUrl(data.url);
+      toast.success("Cover image uploaded");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not upload cover image"),
+  });
 
   const { data: otherClasses = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: [`${apiBase}/classes`],
@@ -250,6 +267,7 @@ export function ClassBuilderPage({
       setName(state.name);
       setDescription(state.description);
       setCategory(state.category);
+      setCoverImageUrl(state.coverImageUrl);
       setPrerequisiteClassId(state.prerequisiteClassId);
       setIsDraft(state.isDraft);
       setLessons(state.lessons);
@@ -304,6 +322,7 @@ export function ClassBuilderPage({
       name,
       description,
       category: category.trim() || null,
+      coverImageUrl: coverImageUrl.trim() || null,
       prerequisiteClassId,
       isDraft,
       lessons: lessons.map((l, i) => ({
@@ -585,6 +604,52 @@ export function ClassBuilderPage({
             <div className="space-y-1.5">
               <Label>Class name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Cover image (optional)</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Shown at the top of this class's card on "My Classes" and the browse catalog. A card with
+                none just renders text-only, like it always has.
+              </p>
+              <div className="flex items-center gap-3">
+                {coverImageUrl && (
+                  <img
+                    src={coverImageUrl}
+                    alt=""
+                    className="h-16 w-28 shrink-0 rounded-md border border-border object-cover"
+                  />
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => coverImageInputRef.current?.click()}
+                  disabled={uploadCoverImageMutation.isPending}
+                >
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  {uploadCoverImageMutation.isPending
+                    ? "Uploading…"
+                    : coverImageUrl
+                      ? "Replace image"
+                      : "Upload image"}
+                </Button>
+                {coverImageUrl && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setCoverImageUrl("")}>
+                    Remove
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={coverImageInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadCoverImageMutation.mutate(file);
+                  e.target.value = "";
+                }}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Category (optional)</Label>
@@ -1466,6 +1531,10 @@ function ContentPageRow({
         placeholder="What the athlete reads on this page…"
         className="text-sm"
       />
+      <p className="text-xs text-muted-foreground">
+        Wrap text in **double asterisks** to bold it. A block of lines each starting with "- " becomes a
+        bulleted list. Leave a blank line between paragraphs.
+      </p>
 
       <div className="space-y-1">
         <div className="flex gap-1.5">

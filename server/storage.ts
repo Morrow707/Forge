@@ -9404,6 +9404,7 @@ Hard rules, no exceptions:
       name: cls.name,
       description: cls.description,
       category: cls.category,
+      coverImageUrl: cls.coverImageUrl,
       prerequisiteClassId: cls.prerequisiteClassId,
       isDraft: cls.isDraft,
       isForgeOfficial: cls.isForgeOfficial,
@@ -9445,6 +9446,7 @@ Hard rules, no exceptions:
           name: structure.name,
           description: structure.description ?? null,
           category: structure.category ?? null,
+          coverImageUrl: structure.coverImageUrl ?? null,
           prerequisiteClassId: structure.prerequisiteClassId ?? null,
           // Every freshly created class starts as a draft regardless of
           // what's passed -- "build in private, publish when ready" --
@@ -9548,6 +9550,7 @@ Hard rules, no exceptions:
           name: structure.name,
           description: structure.description ?? null,
           category: structure.category ?? null,
+          coverImageUrl: structure.coverImageUrl ?? null,
           prerequisiteClassId: structure.prerequisiteClassId ?? null,
           // Falls back to the row's current value (not a hardcoded
           // default) if the caller omits it, so an unrelated PUT can never
@@ -9900,6 +9903,7 @@ Hard rules, no exceptions:
       name: c.name,
       description: c.description,
       category: c.category,
+      coverImageUrl: c.coverImageUrl,
       lessonCount: c.lessons.length,
       isForgeOfficial: true as const,
       ownerLabel: "FORGE",
@@ -9934,6 +9938,7 @@ Hard rules, no exceptions:
         classId: enrollment.classId,
         name: enrollment.class.name,
         description: enrollment.class.description,
+        coverImageUrl: enrollment.class.coverImageUrl,
         isForgeOfficial: enrollment.class.isForgeOfficial,
         lessonCount: enrollment.class.lessons.length,
         lessonsStarted: progressRows.filter((p) => p.skillAssignmentId).length,

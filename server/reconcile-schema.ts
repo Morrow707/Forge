@@ -1111,6 +1111,7 @@ CREATE TABLE IF NOT EXISTS "classes" (
 ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "category" text;
 ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "prerequisite_class_id" integer REFERENCES "classes"("id") ON DELETE SET NULL;
 ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "is_draft" boolean NOT NULL DEFAULT false;
+ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "cover_image_url" text;
 
 DO $$ BEGIN
   CREATE TYPE "class_unlock_rule" AS ENUM ('immediate', 'time_elapsed', 'sessions_logged', 'reps_logged', 'manual');
