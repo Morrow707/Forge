@@ -4190,10 +4190,32 @@ export const classAiDraftAnswerSchema = z.object({
   isCorrect: z.boolean(),
   explanation: z.string().trim().min(1).max(1000),
 });
-export const classAiDraftQuestionSchema = z.object({
-  questionText: z.string().trim().min(1).max(1000),
-  answers: z.array(classAiDraftAnswerSchema).min(2).max(6),
-});
+export const classAiDraftQuestionSchema = z
+  .object({
+    questionText: z.string().trim().min(1).max(1000),
+    answers: z.array(classAiDraftAnswerSchema).min(2).max(6),
+  })
+  // The system prompt asks for exactly one correct answer, but a prompt is a
+  // request and this is the check. Both ways of getting it wrong reach an
+  // athlete as a broken lesson rather than an obviously bad draft:
+  //
+  //   zero correct   -- submitClassLessonQuiz scores the submitted answer's
+  //                     own isCorrect flag, so nobody can ever answer this
+  //                     question right. With the 0.8 pass threshold and only
+  //                     2-5 questions per lesson, one such question can make
+  //                     the lesson permanently unpassable, which silently
+  //                     blocks every athlete's progression through the class.
+  //   two correct    -- an athlete picking the "wrong" right answer is marked
+  //                     wrong and shown an explanation saying they were right.
+  //
+  // An admin reviewing the draft in the builder would have to open every
+  // question and count radio buttons to catch either one. Rejecting the whole
+  // draft is the better failure: the admin gets "couldn't organize that, try
+  // again" and re-runs, instead of publishing a class nobody can finish.
+  .refine((q) => q.answers.filter((a) => a.isCorrect).length === 1, {
+    message: "Each quiz question needs exactly one correct answer",
+    path: ["answers"],
+  });
 export const classAiDraftContentPageSchema = z.object({
   title: z.string().trim().max(200).optional(),
   body: z.string().trim().min(1).max(10000),

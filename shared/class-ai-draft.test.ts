@@ -60,3 +60,51 @@ describe("classAiDraftSchema", () => {
     expect(classAiDraftSchema.safeParse(draft).success).toBe(false);
   });
 });
+
+describe("quiz answer key validation", () => {
+  const draftWith = (answers: { answerText: string; isCorrect: boolean; explanation: string }[]) => ({
+    name: "Hitting",
+    lessons: [
+      {
+        title: "Lesson 1",
+        content: [{ body: "Some reading." }],
+        quizQuestions: [{ questionText: "Which link is last?", answers }],
+      },
+    ],
+  });
+
+  it("rejects a question with no correct answer", () => {
+    // submitClassLessonQuiz scores the submitted answer's own isCorrect flag,
+    // so a question nobody can answer right makes the lesson unpassable at the
+    // 0.8 threshold -- every athlete stuck on it, permanently.
+    const result = classAiDraftSchema.safeParse(
+      draftWith([
+        { answerText: "The swing", isCorrect: false, explanation: "No." },
+        { answerText: "Seeing the pitch", isCorrect: false, explanation: "No." },
+      ]),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a question with two correct answers", () => {
+    // An athlete picking the other right answer is marked wrong and then shown
+    // an explanation telling them they were right.
+    const result = classAiDraftSchema.safeParse(
+      draftWith([
+        { answerText: "The swing", isCorrect: true, explanation: "Yes." },
+        { answerText: "The load", isCorrect: true, explanation: "Also yes." },
+      ]),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a question with exactly one correct answer", () => {
+    const result = classAiDraftSchema.safeParse(
+      draftWith([
+        { answerText: "The swing", isCorrect: true, explanation: "It's the last link." },
+        { answerText: "Seeing the pitch", isCorrect: false, explanation: "That's the first." },
+      ]),
+    );
+    expect(result.success).toBe(true);
+  });
+});
