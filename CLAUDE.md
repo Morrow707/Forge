@@ -92,3 +92,44 @@
   footage through it.
 - Only back squat, Pendlay row, bench press and box jump have been tested
   against real lifts. Everything else is unvalidated.
+
+## Athlete data leaving the platform
+
+Added 2026-09-07, after an audit found the admin analytics surfaces were
+not actually de-identified. These are invariants, not preferences -- if a
+change makes one of them false, the change is wrong.
+
+- **Nothing that resolves to a person leaves an analytics surface.** The
+  Query Engine used to return `users.id` on the reasoning that a bare id
+  isn't identifying; `/api/admin/users/:id` turns exactly that id into a
+  name, email and date of birth, so it was. Rows carry a `subjectCode`
+  instead: an HMAC under a salt generated fresh per query, stable within
+  one result and different across two, mapped nowhere. The tracking report
+  shows "Athlete 1", "Athlete 2" for the same reason.
+- **Two suppression floors, deliberately different.** 5 inside Forge
+  (`PLATFORM_TRENDS_MIN_COHORT`, `QUERY_ENGINE_MIN_COHORT`), 10 in anything
+  that leaves (`RESEARCH_EXPORT_MIN_CELL`). Five is reasonable for an
+  operator looking at their own platform; it is thin for a document leaving
+  the organisation, where a reader may hold outside knowledge that narrows
+  a group further. Don't "tidy" these into one constant.
+- **Research consent is opt-IN and separate from `trackingOptOut`.** Those
+  answer different questions: one governs collection for the athlete's own
+  coaching, the other governs inclusion in an extract prepared for an
+  outside party. A minor's answer comes from a guardian, relayed by a coach
+  who must name who they are relaying from. Withdrawal writes its own dated
+  consent record.
+- **The aggregate-data access log write is awaited on purpose.** It used to
+  be fire-and-forget with a comment saying an audit write must never make a
+  query fail. It is now also the query budget counter, and a budget a
+  failed insert can bypass is not a budget. A query that cannot be logged
+  does not run. The comment in `storage.ts` says so; don't revert it back
+  on the strength of the older reasoning.
+- **The query budget exists for differencing, not for load.** 50 per admin
+  per rolling 24 hours. Suppression only ever sees one query at a time, so
+  a sequence of overlapping queries can still isolate an individual by
+  subtraction. The number is a judgement call, not a derivation.
+- **Purging a video never touches its metrics.** Velocity, ROM, jump
+  height, bar path, skeleton frames, trust scores and the PR flag all
+  survive; only the file and two video-specific flags are cleared. That is
+  what makes the retention policy defensible AND keeps the research data
+  intact. Both properties depend on it.

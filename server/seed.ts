@@ -13,8 +13,10 @@ import {
   skillProgramExercises,
   classLessonQuizQuestions,
   classLessonQuizAnswers,
+  injuryHistory,
 } from "@shared/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
+import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT, PARENTAL_NOTICE_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT } from "./seed-data/legal-documents-draft";
 
@@ -6110,6 +6112,30 @@ async function main() {
     }
     if (complexityBackfilled > 0) {
       console.log(`Backfilled movementComplexity on ${complexityBackfilled} existing exercise(s).`);
+    }
+  }
+
+  // One-time backfill of injury_history.body_region for rows written before
+  // that column existed. Cohort queries normalise on read too, so this is
+  // not load-bearing for correctness -- what it buys is a cheaper query and,
+  // more usefully, a region a coach can actually SEE on the record and
+  // correct when the guess is wrong. Only touches null rows, so a corrected
+  // region is never overwritten by a later redeploy.
+  {
+    const unlabelled = await db
+      .select({ id: injuryHistory.id, bodyPart: injuryHistory.bodyPart })
+      .from(injuryHistory)
+      .where(isNull(injuryHistory.bodyRegion));
+    let regionBackfilled = 0;
+    for (const row of unlabelled) {
+      await db
+        .update(injuryHistory)
+        .set({ bodyRegion: normalizeInjuryRegion(row.bodyPart) })
+        .where(eq(injuryHistory.id, row.id));
+      regionBackfilled++;
+    }
+    if (regionBackfilled > 0) {
+      console.log(`Backfilled bodyRegion on ${regionBackfilled} existing injury record(s).`);
     }
   }
 

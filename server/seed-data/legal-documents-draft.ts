@@ -110,7 +110,16 @@ We do not sell personal information. We share information with:
 - Service providers who process data on our behalf to run the Service: our AI provider (Anthropic) for AI-generated features, our email provider (Resend) for account and notification emails, and public food-database lookups (Open Food Facts, USDA FoodData Central) for nutrition logging.
 - Apple and Google, as required to operate push notifications and distribute the app through their platforms.
 - A coach, for their own roster athletes' data, as the core function of the Service.
-- Platform-wide aggregate analytics an admin can view are stripped of name, email, and team before an admin ever sees them.
+- Platform-wide aggregate analytics an admin can view are stripped of name, email, and team before an admin ever sees them. Individual-level rows carry a code that changes between queries and that nothing maps back to an account, so one query's results cannot be joined to another's or resolved to a person.
+- De-identified group statistics with a research organisation, ONLY for athletes whose guardian, or who themselves if 18 or over, has separately and affirmatively agreed to it. This is off by default and is not part of any membership. Declining changes nothing about the Service or what you pay.
+
+  What such a report contains: group figures only, for example the average vertical jump of a named number of athletes in an age and sport band. Any figure describing fewer than ten athletes is withheld rather than shown.
+
+  What it never contains: names, email addresses, dates of birth, addresses, schools, teams, coaches, video, anything you or your coach typed in your own words including injury descriptions, or any date that could place an event on a particular day. Nothing in such a report can be traced back to an individual, and we do not keep a key that would allow it.
+
+  Consent can be withdrawn at any time, and that athlete is left out of everything prepared afterwards. A report already delivered cannot be recalled.
+
+  We do not sell access to information that identifies an individual. Where a research organisation pays for a de-identified dataset, what they receive is the group statistics described above.
 
 8. DATA SECURITY
 We use industry-standard measures (encrypted connections, access controls, audit logging of staff access to individual athlete video/records) to protect your information, but no system is perfectly secure.
@@ -150,7 +159,7 @@ Solely to provide the Service: showing an athlete and their coach tracked perfor
 Raw video for Tier 1 (under 13) accounts is automatically deleted 30 days after capture; for Tier 2 (13-17) accounts, 90 days after capture. These windows are current engineering defaults, not figures set by counsel or required by any specific statute -- see the note below. Numeric metrics computed from that video (bar-path velocity, joint angles, jump height, and similar) are NOT deleted on this schedule; they are retained as ordinary performance history, the same as a hand-recorded stopwatch time would be, until the athlete's account itself is deleted. Adult (Tier 3, 18+) accounts have no automatic video deletion window -- video is retained until the athlete deletes it individually or deletes their account. Deleting an account permanently removes all of that account's stored video immediately, for every tier. [Placeholder -- confirm with counsel that stating these operational windows here satisfies BIPA's requirement for a published retention schedule, whether the 30/90-day figures themselves should change, and whether a maximum age-independent retention ceiling should also be added.]
 
 5. NO SALE, NO UNRELATED DISCLOSURE
-Forge does not sell, lease, trade, or otherwise profit from this data. It is shared only with the athlete's own coach (as the core function of the Service) and with the service providers named in the Privacy Policy's "How We Share Information" section, solely to operate the Service.
+Forge does not sell, lease, trade, or otherwise profit from data that identifies an individual athlete. De-identified group statistics may be provided to a research organisation, including for payment, but only for athletes whose guardian (or who themselves, if 18 or over) has separately agreed to that specific use, and only in the form described in Section 7 of the Privacy Policy: group figures with any group under ten withheld, and no identifiers, video, or free text of any kind. It is shared only with the athlete's own coach (as the core function of the Service) and with the service providers named in the Privacy Policy's "How We Share Information" section, solely to operate the Service.
 
 6. YOUR RIGHTS
 You (or, for a minor, their parent/guardian) may ask what biometric data Forge holds for that athlete, and may request its deletion by deleting the athlete's account, which removes stored video immediately -- tracked numeric metrics already logged as part of training history are retained the same way any other workout record is, unless a specific request for further deletion is made. [Placeholder -- confirm this matches what BIPA and any other applicable state law actually requires before this is treated as a complete rights statement.]

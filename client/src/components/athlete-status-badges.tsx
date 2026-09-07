@@ -7,6 +7,17 @@ import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { READINESS_CLASSNAME } from "@/components/wellness-history-dialog";
 import { ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -237,6 +248,122 @@ export function TrackingOptOutToggle({
         onConfirm={() => mutation.mutate(true)}
         isPending={mutation.isPending}
       />
+    </>
+  );
+}
+
+// Records a guardian's answer about research use for this athlete (see
+// users.researchDataConsent's own comment in shared/schema.ts).
+//
+// Deliberately asymmetric with TrackingOptOutToggle above, and in the
+// opposite direction: there the sensitive step is turning collection OFF,
+// here it is turning sharing ON. Granting goes through a dialog that shows
+// the consent text and requires naming who the answer came from, because a
+// coach ticking a box is not consent -- a named guardian saying yes, and
+// the coach recording it, is. Withdrawing is one click, since making it
+// harder to take back than to give would be exactly backwards.
+export function ResearchConsentControl({
+  athleteId,
+  granted,
+}: {
+  athleteId: number;
+  granted: boolean;
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [relayedFrom, setRelayedFrom] = useState("");
+
+  const { data: consentText } = useQuery<{ text: string }>({
+    queryKey: ["/api/research-consent/text"],
+    // Only fetched when the dialog opens: the text is long and nobody needs
+    // it to render a roster row.
+    enabled: open,
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (input: { granted: boolean; relayedFrom?: string }) => {
+      await apiRequest("PUT", `/api/coach/roster/${athleteId}/research-consent`, {
+        granted: input.granted,
+        relayedFrom: input.relayedFrom ?? "withdrawn",
+      });
+    },
+    onSuccess: (_data, input) => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      qc.invalidateQueries({ queryKey: [`/api/coach/roster/${athleteId}/research-consent`] });
+      toast.success(
+        input.granted
+          ? "Research consent recorded"
+          : "Research consent withdrawn — this athlete is left out of everything prepared from now on",
+      );
+      setOpen(false);
+      setRelayedFrom("");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not update"),
+  });
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (granted) mutation.mutate({ granted: false });
+          else setOpen(true);
+        }}
+        disabled={mutation.isPending}
+        className={cn(
+          "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase leading-none",
+          granted ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
+        )}
+        aria-label={
+          granted
+            ? "Research consent given -- click to withdraw"
+            : "No research consent on file -- click to record a guardian's consent"
+        }
+      >
+        {granted ? "Research: yes" : "Research: no"}
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Record research consent</DialogTitle>
+            <DialogDescription>
+              Only record this if a parent or guardian has actually read the following and agreed.
+            </DialogDescription>
+          </DialogHeader>
+
+          <pre className="whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed">
+            {consentText?.text ?? "Loading…"}
+          </pre>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="relayed-from">Who gave this answer</Label>
+            <Input
+              id="relayed-from"
+              value={relayedFrom}
+              onChange={(e) => setRelayedFrom(e.target.value)}
+              placeholder="e.g. Dana Reyes (mother)"
+            />
+            <p className="text-xs text-muted-foreground">
+              Stored with the consent record. It is what makes this a guardian's decision rather
+              than a coach's.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => mutation.mutate({ granted: true, relayedFrom: relayedFrom.trim() })}
+              disabled={mutation.isPending || relayedFrom.trim().length === 0}
+            >
+              Record consent
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
