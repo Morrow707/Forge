@@ -3769,7 +3769,7 @@ export const storage = {
     coachId: number,
     athleteId: number,
   ): Promise<{ ok: true; athlete: typeof coachAthletes.$inferSelect } | { ok: false; error: string }> {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(${coachId})`);
 
       const coachIds = await this.getEffectiveCoachIds(coachId);
@@ -3785,6 +3785,7 @@ export const storage = {
       const [row] = await tx.insert(coachAthletes).values({ coachId, athleteId }).returning();
       return { ok: true as const, athlete: row };
     });
+    return result;
   },
 
   // Called by every raw upload route that hands a bare, unsigned
@@ -10456,6 +10457,26 @@ Hard rules, no exceptions:
   // Comped path, exactly like COMPED_FREE_AGENT_ENTITLEMENTS in routes.ts --
   // no real billing exists yet, so this is the only way a lesson purchase
   // is ever actually recorded today.
+  // The lesson's own price, read server-side for a checkout. Scoped to the
+  // class as well as the lesson id so a lesson id from another class cannot
+  // be priced against this enrolment.
+  async getClassLessonForPurchase(classId: number, classLessonId: number) {
+    const [row] = await db
+      .select({ id: classLessons.id, title: classLessons.title, priceCents: classLessons.priceCents })
+      .from(classLessons)
+      .innerJoin(classes, eq(classLessons.classId, classes.id))
+      .where(
+        and(
+          eq(classLessons.id, classLessonId),
+          eq(classLessons.classId, classId),
+          // Only a Forge Class ever carries a price -- see the classes
+          // table's own comment.
+          eq(classes.isForgeOfficial, true),
+        ),
+      );
+    return row ?? null;
+  },
+
   async markLessonPurchased(enrollmentId: number, classLessonId: number) {
     const progress = await db.query.classLessonProgress.findFirst({
       where: and(

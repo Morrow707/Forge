@@ -49,7 +49,18 @@ export function setNativeToken(token: string | null | undefined): void {
 
 function authHeaders(): Record<string, string> {
   const token = getNativeToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    // Tells the server this request came from inside the native app.
+    //
+    // Apple requires digital purchases made in the app to go through
+    // StoreKit, not an outside payment page, so the Stripe checkout routes
+    // refuse a request carrying this header (see requireWebCheckout). The
+    // client refuses to render those entry points on native for the same
+    // reason -- this header is the server-side half, so a native build can
+    // never reach web checkout even if a screen were linked by mistake.
+    ...(Capacitor.isNativePlatform() ? { "X-Forge-Platform": Capacitor.getPlatform() } : {}),
+  };
 }
 
 export class ApiError extends Error {

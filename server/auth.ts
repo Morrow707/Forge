@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
+import { syncCoachSeatQuantity } from "./billing";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
 import { sendEmail } from "./email";
@@ -30,6 +31,21 @@ import {
   type PublicUser,
 } from "@shared/schema";
 import { derivePrivacyTier, GUARDIAN_NOTICE_LIVE, type PrivacyTier } from "@shared/privacy-tiers";
+
+/** Moves a coach's Stripe seat count to match their roster after an athlete
+ * joins. The coach pays per athlete, so a frozen count either overcharges a
+ * shrinking roster or gives a growing one free seats.
+ *
+ * Never awaited into a signup or join response, and never allowed to throw
+ * into one: an athlete must not fail to join because Stripe is briefly
+ * unreachable. syncCoachSeatQuantity swallows its own errors, and the next
+ * roster change re-syncs. */
+function syncRosterSeatsWithStripe(coachId: number): Promise<void> {
+  return storage
+    .getRosterSeatCountForCoach(coachId)
+    .then((seats) => syncCoachSeatQuantity(coachId, seats))
+    .catch(() => undefined);
+}
 import { notifyUser } from "./notify";
 
 const PgStore = connectPgSimple(session);
@@ -593,6 +609,7 @@ export function setupAuth(app: Express) {
         // email) without duplicating that logic here.
         const claimed = await storage.claimRosterSeat(coach.id, user.id);
         if (!claimed.ok) coach = null;
+        else void syncRosterSeatsWithStripe(coach.id);
       }
       if (coach) {
         if (team) await storage.addAthleteToTeam(team.id, user.id);
@@ -1336,6 +1353,7 @@ export function setupAuth(app: Express) {
       if (!claimed.ok) {
         return res.status(422).json({ message: claimed.error });
       }
+      void syncRosterSeatsWithStripe(coach.id);
       if (team) await storage.addAthleteToTeam(team.id, user.id);
       res.json({ coachId: coach.id, coachName: coach.name });
     } catch (err) {

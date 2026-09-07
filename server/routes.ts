@@ -31,6 +31,15 @@ import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
 import { BILLING_LIVE } from "./billing";
+import {
+  createBillingPortalSession,
+  createCoachSubscriptionCheckout,
+  createFreeAgentTierCheckout,
+  createLessonCheckout,
+} from "./billing";
+import { missingPriceEnvVars } from "./stripe-prices";
+import { syncCoachSeatQuantity } from "./billing";
+import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
 import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
 import { verifyMediaUrl } from "./media-url-signing";
 import { shouldTouchLastSeen } from "./session-tracking";
@@ -3560,6 +3569,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athleteId = Number(req.params.athleteId);
     if (!Number.isInteger(athleteId)) return res.status(404).json({ message: "Athlete not found" });
     const removed = await storage.removeAthleteFromCoach(user.id, athleteId);
+    // The coach pays per athlete, so the seat line has to follow the roster
+    // rather than stay frozen at whatever it was on the day they subscribed.
+    // Fired after the removal and deliberately not awaited into the response:
+    // a roster edit must not fail because Stripe is briefly unreachable, and
+    // syncCoachSeatQuantity swallows its own errors so the next change
+    // re-syncs. Lives here rather than in storage.ts because billing.ts
+    // already imports storage, and the reverse import would make the two
+    // circular over what is one Stripe call.
+    if (removed) {
+      void storage
+        .getRosterSeatCountForCoach(user.id)
+        .then((seats) => syncCoachSeatQuantity(user.id, seats));
+    }
     if (!removed) return res.status(404).json({ message: "Athlete not found" });
     res.status(204).end();
   });
@@ -8670,6 +8692,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // button at all, not just before letting a tap through. APPLE_IAP_LIVE
   // off (the default -- see server/apple-iap.ts) means nobody, anywhere,
   // ever sees a purchase entry point, regardless of PAYWALLS_DISABLED.
+  // ---------------- Stripe checkout (web only) ----------------
+  //
+  // Apple requires a digital purchase made inside the app to go through
+  // StoreKit, so every route below refuses a request from the native app.
+  // The client hides these entry points on native too (see the Upgrade
+  // page); this is the half that holds even if a screen is linked by
+  // mistake, which is what would put a submission at risk.
+  function requireWebCheckout(req: any, res: any, next: any) {
+    if (req.headers["x-forge-platform"]) {
+      return res.status(403).json({
+        message: "In-app purchases go through the App Store. Open Forge in a browser to pay by card.",
+      });
+    }
+    next();
+  }
+
+  // Where Stripe sends the customer back to. Derived from the request rather
+  // than a hardcoded host so it works in local dev, on Render, and behind a
+  // custom domain without a fourth environment variable to keep in sync.
+  function checkoutReturnUrls(req: any, path: string) {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    return {
+      successUrl: `${origin}${path}?checkout=success`,
+      cancelUrl: `${origin}${path}?checkout=cancelled`,
+    };
+  }
+
+  // What the operator still has to create in Stripe. Admin-only because it
+  // names environment variables; the point is that "billing isn't working"
+  // has an answer that doesn't require reading the code.
+  app.get("/api/admin/billing/stripe-readiness", requireRole("admin"), async (_req, res) => {
+    const missingPrices = missingPriceEnvVars();
+    res.json({
+      secretKeySet: Boolean(process.env.STRIPE_SECRET_KEY),
+      webhookSecretSet: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
+      missingPriceEnvVars: missingPrices,
+      // Deliberately reported, not inferred: enforcement staying off is the
+      // whole reason nothing is being charged yet during the beta.
+      billingLive: BILLING_LIVE,
+      enforcementEnabled: process.env.BILLING_ENFORCEMENT_ENABLED === "true",
+      ready: Boolean(process.env.STRIPE_SECRET_KEY) &&
+        Boolean(process.env.STRIPE_WEBHOOK_SECRET) &&
+        missingPrices.length === 0,
+    });
+  });
+
+  app.post(
+    "/api/billing/checkout/free-agent-tier",
+    requireRole("athlete"),
+    requireWebCheckout,
+    async (req, res) => {
+      const user = currentUser(req);
+      const schema = z.object({ tier: z.enum(["ai_coach", "ai_coach_video", "family"]) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Pick a plan first." });
+      }
+      const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/athlete/upgrade");
+      const result = await createFreeAgentTierCheckout(
+        user.id,
+        user.email,
+        parsed.data.tier as FreeAgentTierId,
+        successUrl,
+        cancelUrl,
+      );
+      if ("error" in result) return res.status(503).json({ message: result.error });
+      res.json(result);
+    },
+  );
+
+  app.post(
+    "/api/billing/checkout/coach",
+    requireRole("coach"),
+    requireWebCheckout,
+    async (req, res) => {
+      const user = currentUser(req);
+      // Seats come from the roster, never from the request body -- a client
+      // choosing its own quantity is a client choosing its own price.
+      const seatCount = await storage.getRosterSeatCountForCoach(user.id);
+      const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/coach");
+      const result = await createCoachSubscriptionCheckout(
+        user.id,
+        user.email,
+        seatCount,
+        successUrl,
+        cancelUrl,
+      );
+      if ("error" in result) return res.status(503).json({ message: result.error });
+      res.json(result);
+    },
+  );
+
+  app.post(
+    "/api/billing/checkout/class-lesson",
+    requireRole("athlete"),
+    requireWebCheckout,
+    async (req, res) => {
+      const user = currentUser(req);
+      const schema = z.object({ classId: z.coerce.number(), lessonId: z.coerce.number() });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Which lesson?" });
+
+      // The price comes from the lesson row, never the request -- and the
+      // enrolment is what scopes the purchase to this athlete alone.
+      const enrollment = await storage.getClassEnrollmentForAthlete(user.id, parsed.data.classId);
+      if (!enrollment) return res.status(404).json({ message: "Not enrolled in this class" });
+      const lesson = await storage.getClassLessonForPurchase(parsed.data.classId, parsed.data.lessonId);
+      if (!lesson) return res.status(404).json({ message: "Lesson not found" });
+      if (!lesson.priceCents || lesson.priceCents <= 0) {
+        return res.status(400).json({ message: "That lesson is included -- nothing to buy." });
+      }
+
+      const { successUrl, cancelUrl } = checkoutReturnUrls(req, `/athlete/classes/${parsed.data.classId}`);
+      const result = await createLessonCheckout(
+        user.id,
+        user.email,
+        {
+          enrollmentId: enrollment.id,
+          lessonId: parsed.data.lessonId,
+          lessonTitle: lesson.title,
+          priceCents: lesson.priceCents,
+        },
+        successUrl,
+        cancelUrl,
+      );
+      if ("error" in result) return res.status(503).json({ message: result.error });
+      res.json(result);
+    },
+  );
+
+  // Stripe's hosted page for changing a card, reading invoices and
+  // cancelling. Any signed-in account that has actually bought something.
+  app.post("/api/billing/portal", requireAuth, requireWebCheckout, async (req, res) => {
+    const user = currentUser(req);
+    const origin = `${req.protocol}://${req.get("host")}`;
+    const result = await createBillingPortalSession(user.id, origin);
+    if ("error" in result) return res.status(503).json({ message: result.error });
+    res.json(result);
+  });
+
   app.get("/api/billing/apple-iap-enabled", requireAuth, async (req, res) => {
     res.json({ enabled: APPLE_IAP_LIVE });
   });

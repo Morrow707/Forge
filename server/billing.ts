@@ -1,5 +1,10 @@
 import Stripe from "stripe";
 import { storage } from "./storage";
+import {
+  coachBasePriceId,
+  coachSeatPriceId,
+  freeAgentPriceId,
+} from "./stripe-prices";
 import { BILLING_TIERS, type AddOnId, type BillingTierId } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON, type VideoRetentionLimits } from "@shared/video-retention";
@@ -215,29 +220,181 @@ export async function getOrCreateSubscription(
   return storage.createTrialSubscription(userId, accountType);
 }
 
-/** Scaffolding for a real Stripe Checkout redirect -- unusable until
- * STRIPE_SECRET_KEY and real Stripe Price IDs exist for each tier (this
- * function doesn't create Prices, a real launch would
- * set those up once in the Stripe dashboard and reference the ids here). */
-export async function createCheckoutSession(
+export type CheckoutResult = { url: string } | { error: string };
+
+/** Shared shape for every checkout below: one Stripe customer per user,
+ * reused across purchases so a coach's subscription and an athlete's lesson
+ * do not each spawn a new customer record. client_reference_id carries the
+ * user id back on the webhook; metadata carries everything else, because a
+ * webhook cannot see the request that started the session. */
+async function baseSessionParams(userId: number, userEmail: string) {
+  const existing = await storage.getSubscriptionForUser(userId);
+  return existing?.stripeCustomerId
+    ? { customer: existing.stripeCustomerId, client_reference_id: String(userId) }
+    : { customer_email: userEmail, client_reference_id: String(userId) };
+}
+
+/** A Free Agent's own monthly tier, bought on the web.
+ *
+ * The iOS app must NOT link here -- Apple requires in-app digital purchases
+ * to go through StoreKit, which apple-iap.ts already implements for exactly
+ * these three tiers. This is the web equivalent, and the route that calls it
+ * refuses a request coming from the native app. */
+export async function createFreeAgentTierCheckout(
   userId: number,
   userEmail: string,
-  priceId: string,
+  tier: FreeAgentTierId,
   successUrl: string,
   cancelUrl: string,
-): Promise<{ url: string } | { error: string }> {
+): Promise<CheckoutResult> {
   const stripe = getStripeClient();
   if (!stripe) return { error: "Billing isn't configured yet." };
+  const priceId = freeAgentPriceId(tier);
+  if (!priceId) return { error: `No Stripe price configured for the ${tier} tier yet.` };
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    customer_email: userEmail,
-    client_reference_id: String(userId),
+    ...(await baseSessionParams(userId, userEmail)),
     line_items: [{ price: priceId, quantity: 1 }],
+    metadata: { kind: "free_agent_tier", userId: String(userId), tier },
+    subscription_data: { metadata: { kind: "free_agent_tier", userId: String(userId), tier } },
     success_url: successUrl,
     cancel_url: cancelUrl,
   });
   if (!session.url) return { error: "Stripe didn't return a checkout URL." };
   return { url: session.url };
+}
+
+/** A coach organisation: the flat account fee plus one per-athlete seat for
+ * every athlete currently on the roster.
+ *
+ * Two line items rather than one blended price, because that is what the
+ * model actually is (ORG_BASE_CENTS + ORG_PER_ATHLETE_CENTS x roster) and
+ * because the seat count has to move as the roster does -- see
+ * syncCoachSeatQuantity, which updates the same line's quantity later.
+ * A roster of zero still buys the base fee; Stripe rejects a zero quantity,
+ * so the seat line is omitted entirely in that case. */
+export async function createCoachSubscriptionCheckout(
+  userId: number,
+  userEmail: string,
+  seatCount: number,
+  successUrl: string,
+  cancelUrl: string,
+): Promise<CheckoutResult> {
+  const stripe = getStripeClient();
+  if (!stripe) return { error: "Billing isn't configured yet." };
+  const basePrice = coachBasePriceId();
+  const seatPrice = coachSeatPriceId();
+  if (!basePrice || !seatPrice) return { error: "No Stripe prices configured for coach plans yet." };
+  const lineItems: { price: string; quantity: number }[] = [{ price: basePrice, quantity: 1 }];
+  if (seatCount > 0) lineItems.push({ price: seatPrice, quantity: seatCount });
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    ...(await baseSessionParams(userId, userEmail)),
+    line_items: lineItems,
+    metadata: { kind: "coach_subscription", userId: String(userId) },
+    subscription_data: { metadata: { kind: "coach_subscription", userId: String(userId) } },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+  if (!session.url) return { error: "Stripe didn't return a checkout URL." };
+  return { url: session.url };
+}
+
+/** A one-off class-lesson purchase.
+ *
+ * Built with inline price_data from the lesson's own priceCents rather than
+ * a pre-made Stripe Price, so pricing a new lesson never means creating a
+ * matching Price and the two can never drift. Mode is "payment", not
+ * "subscription" -- this buys one lesson for one athlete, permanently.
+ *
+ * enrollmentId and lessonId ride in metadata because the webhook has no
+ * other way to know which enrolment to credit, and the enrolment is what
+ * scopes the purchase to a single athlete. */
+export async function createLessonCheckout(
+  userId: number,
+  userEmail: string,
+  input: { enrollmentId: number; lessonId: number; lessonTitle: string; priceCents: number },
+  successUrl: string,
+  cancelUrl: string,
+): Promise<CheckoutResult> {
+  const stripe = getStripeClient();
+  if (!stripe) return { error: "Billing isn't configured yet." };
+  if (!Number.isInteger(input.priceCents) || input.priceCents <= 0) {
+    return { error: "That lesson isn't a paid lesson." };
+  }
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    ...(await baseSessionParams(userId, userEmail)),
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: input.priceCents,
+          product_data: { name: input.lessonTitle },
+        },
+      },
+    ],
+    metadata: {
+      kind: "class_lesson",
+      userId: String(userId),
+      enrollmentId: String(input.enrollmentId),
+      lessonId: String(input.lessonId),
+    },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+  if (!session.url) return { error: "Stripe didn't return a checkout URL." };
+  return { url: session.url };
+}
+
+/** Stripe's own hosted page for changing a card, seeing invoices and
+ * cancelling -- none of which is worth rebuilding, and all of which a real
+ * subscriber needs. Requires an existing customer, so it is only reachable
+ * once something has actually been bought. */
+export async function createBillingPortalSession(
+  userId: number,
+  returnUrl: string,
+): Promise<CheckoutResult> {
+  const stripe = getStripeClient();
+  if (!stripe) return { error: "Billing isn't configured yet." };
+  const sub = await storage.getSubscriptionForUser(userId);
+  if (!sub?.stripeCustomerId) return { error: "No billing account yet -- nothing to manage." };
+  const session = await stripe.billingPortal.sessions.create({
+    customer: sub.stripeCustomerId,
+    return_url: returnUrl,
+  });
+  return { url: session.url };
+}
+
+/** Moves a coach's per-athlete line to match their current roster.
+ *
+ * Called after a roster add/remove. Without it the seat count is frozen at
+ * whatever it was on the day they subscribed, which either overcharges a
+ * shrinking roster or gives a growing one free seats. A no-op when billing
+ * is unconfigured, when the coach has no Stripe subscription, or when the
+ * quantity already matches -- so it is safe to call on every roster change.
+ * Never throws into the caller's path: a roster edit must not fail because
+ * Stripe is briefly unreachable, and the next roster change re-syncs. */
+export async function syncCoachSeatQuantity(userId: number, seatCount: number): Promise<void> {
+  const stripe = getStripeClient();
+  const seatPrice = coachSeatPriceId();
+  if (!stripe || !seatPrice) return;
+  try {
+    const sub = await storage.getSubscriptionForUser(userId);
+    if (!sub?.stripeSubscriptionId) return;
+    const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+    const seatItem = stripeSub.items.data.find((item) => item.price.id === seatPrice);
+    if (!seatItem) return;
+    if (seatItem.quantity === seatCount) return;
+    if (seatCount <= 0) {
+      await stripe.subscriptionItems.del(seatItem.id);
+      return;
+    }
+    await stripe.subscriptionItems.update(seatItem.id, { quantity: seatCount });
+  } catch (err) {
+    console.error("Stripe seat sync failed:", err instanceof Error ? err.message : err);
+  }
 }
 
 /** Verifies the raw webhook body against STRIPE_WEBHOOK_SECRET and returns
@@ -315,13 +472,48 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       // below instead of failing this one event cleanly. Real user ids
       // start at 1, so requiring userId > 0 closes that off directly.
       const userId = session.client_reference_id ? Number(session.client_reference_id) : NaN;
-      if (!Number.isInteger(userId) || userId <= 0 || typeof session.subscription !== "string") break;
+      if (!Number.isInteger(userId) || userId <= 0) break;
+      const kind = session.metadata?.kind;
+      const customerId = typeof session.customer === "string" ? session.customer : null;
+
+      // A one-off lesson purchase has no subscription at all, so it is
+      // handled before the subscription branch rather than being dropped by
+      // it. The enrolment is what scopes the purchase to a single athlete --
+      // see markLessonPurchased and the classes table's own comment on why a
+      // priced lesson is bought per athlete and never shared.
+      if (kind === "class_lesson") {
+        const enrollmentId = Number(session.metadata?.enrollmentId);
+        const lessonId = Number(session.metadata?.lessonId);
+        if (!Number.isInteger(enrollmentId) || !Number.isInteger(lessonId)) break;
+        if (session.payment_status !== "paid") break;
+        await storage.markLessonPurchased(enrollmentId, lessonId);
+        if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
+        await storage.logBillingEvent(
+          userId,
+          event.type,
+          { sessionId: session.id, enrollmentId, lessonId },
+          event.id,
+        );
+        break;
+      }
+
+      if (typeof session.subscription !== "string") break;
       await storage.updateSubscriptionByUserId(userId, {
-        stripeCustomerId: typeof session.customer === "string" ? session.customer : null,
+        stripeCustomerId: customerId,
         stripeSubscriptionId: session.subscription,
         status: "active",
       });
-      await storage.logBillingEvent(userId, event.type, { sessionId: session.id }, event.id);
+      // What they actually bought. Without this the subscription row goes
+      // active carrying whatever tier it was created with, so a Free Agent
+      // who paid for AI Coach + Video would be entitled to the cheapest
+      // tier -- the money arrives and the access does not match it.
+      if (kind === "free_agent_tier") {
+        const tier = session.metadata?.tier;
+        if (tier && tier in FREE_AGENT_TIERS) {
+          await storage.updateFreeAgentBilling(userId, { freeAgentTier: tier as FreeAgentTierId });
+        }
+      }
+      await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind }, event.id);
       break;
     }
     case "customer.subscription.updated": {
