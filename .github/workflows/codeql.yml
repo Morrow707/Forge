@@ -34,10 +34,6 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ${{ matrix.os }}
-    # The macOS-only swift job runs on the weekly schedule only. Every other
-    # language runs on Linux and is unaffected, on every push and pull
-    # request as before.
-    if: ${{ matrix.language != 'swift' || github.event_name == 'schedule' }}
     timeout-minutes: ${{ matrix.language == 'swift' && 60 || 30 }}
     permissions:
       security-events: write
@@ -45,6 +41,11 @@ jobs:
       actions: read
       contents: read
 
+    # Swift is excluded from the matrix except on the weekly schedule, rather
+    # than skipped with a job-level `if`. A job-level condition cannot read
+    # the matrix context at all -- GitHub rejects the whole workflow file, so
+    # every run fails at startup before a single job begins, which is exactly
+    # what the first attempt at this did.
     strategy:
       fail-fast: false
       matrix:
@@ -61,16 +62,17 @@ jobs:
           - language: actions
             build-mode: none
             os: ubuntu-latest
-          # Weekly only -- see the `if` below. This is the only macOS job in
-          # the repo besides the TestFlight build, and every run of it takes
-          # a machine that build needs. What it analyzes is ios/, a
-          # generated Capacitor shell that changes a few times a year, so
-          # per-push analysis was re-checking unchanged Swift at the direct
-          # cost of build latency. If ios/ ever gains real hand-written
-          # Swift, put this back on push.
           - language: swift
             build-mode: manual
             os: macos-latest
+
+        # Weekly only. This is the only macOS job in the repo besides the
+        # TestFlight build, and every run of it takes a machine that build
+        # needs. What it analyzes is ios/, a generated Capacitor shell that
+        # changes a few times a year, so per-push analysis was re-checking
+        # unchanged Swift at the direct cost of build latency. If ios/ ever
+        # gains real hand-written Swift, move this back into `include`.
+        exclude: ${{ github.event_name == 'schedule' && fromJSON('[]') || fromJSON('[{"language":"swift"}]') }}
 
     steps:
       - name: Checkout repository

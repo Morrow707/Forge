@@ -118,9 +118,13 @@ describe("system events", () => {
     recordSystemFailure("ai", "Could not reach the Claude API", {
       severity: "error",
     });
+    // Poll for the error specifically, not merely for the source to appear.
+    // Both writes are fire-and-forget, so the warning routinely lands first
+    // and a poll that stops at "ai is present" reads the warning and fails.
+    // This was flaky rather than wrong: it passed locally and failed in CI.
     const sources = await until(
       () => getFailingSources(),
-      (m) => m.has("ai")
+      (m) => m.get("ai")?.severity === "error"
     );
     expect(sources.get("ai")?.severity).toBe("error");
   });
