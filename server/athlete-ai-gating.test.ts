@@ -60,6 +60,27 @@ describe("athlete AI is Free Agent only", () => {
     expect(declaration("/api/coach/roster/:athleteId/goals")).not.toContain("requireFreeAgent");
   });
 
+  it("gates camera-tracking video uploads behind requireVideoTrackingAccess", () => {
+    // The real cost driver -- recording/saving a clip -- not just the AI
+    // critique of it. A coached athlete still passes (bounded by their
+    // team's video-retention cap instead), but an unpaywalled Free Agent
+    // could otherwise upload unlimited video regardless of AI tier.
+    for (const path of ["/api/athlete/form-video", "/api/athlete/skill-video"]) {
+      expect(declaration(path)).toContain("requireVideoTrackingAccess");
+    }
+  });
+
+  it("requires the video (Pro) entitlement specifically for AI form-check, not just any paid tier", () => {
+    // strengthAi is granted on Base too -- form-check needs Pro, same as
+    // the raw video upload above, or a Base Free Agent could still get the
+    // AI critique without ever paying for video.
+    for (const path of ["/api/athlete/programs/:id/form-check", "/api/athlete/skill-programs/:id/form-check"]) {
+      const d = declaration(path);
+      expect(d).not.toContain('requirePaidAiAccess("strengthAi")');
+    }
+    expect(declaration("/api/athlete/programs/:id/form-check")).toContain('requirePaidAiAccess("video")');
+  });
+
   it("leaves the non-AI half of food logging open to every athlete", () => {
     // Only reading the plate is gated. Barcode scan, database search and
     // manual entry are not AI and a coached athlete still logs every meal.

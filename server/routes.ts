@@ -567,17 +567,21 @@ async function isTrackingOptedOut(athleteId: number): Promise<boolean> {
 const testingUnlockAllPaywalls = process.env.PAYWALLS_DISABLED === "true";
 
 // Strength and Skills are two totally separate paid upgrades for a Free
-// Agent -- paying for one never unlocks the other. Keep this a plain union
-// (not a DB enum) since it's purely a route-gating concept, not stored data.
-type AiEntitlement = "strengthAi" | "skillsAi";
+// Agent -- paying for one never unlocks the other. "video" is the third:
+// camera-tracking video specifically (recording/saving a clip, and the AI
+// form-check that reads it) -- the actual per-athlete cost driver of the
+// three, which is exactly why it's its own entitlement instead of folding
+// into strengthAi. Keep this a plain union (not a DB enum) since it's
+// purely a route-gating concept, not stored data.
+type AiEntitlement = "strengthAi" | "skillsAi" | "video";
 
 // The seeded demo Free Agent account (see server/seed.ts) is the one
 // deliberate exception to the paywalls below -- it's used for demoing/
 // testing the full Free Agent AI experience without real billing existing
-// yet, so it's treated as permanently "paid" for both entitlements. No other
-// account gets this.
+// yet, so it's treated as permanently "paid" for all three entitlements. No
+// other account gets this.
 const COMPED_FREE_AGENT_ENTITLEMENTS: Record<string, Set<AiEntitlement>> = {
-  "freeagent@forge.app": new Set(["strengthAi", "skillsAi"]),
+  "freeagent@forge.app": new Set(["strengthAi", "skillsAi", "video"]),
 };
 
 // The future paywall requireFreeAgent's own comment anticipates: nothing
@@ -594,16 +598,16 @@ async function hasAthletePaidForAiAccess(
 ): Promise<boolean> {
   if (testingUnlockAllPaywalls) return true;
   if (BILLING_LIVE) {
-    // "strengthAi" needs any paid tier; "skillsAi" specifically needs Pro --
-    // Skills/FMS-style features are a Pro-tier feature, Strength AI is
-    // included in Base.
+    // "strengthAi" needs any paid tier; "skillsAi" and "video" specifically
+    // need Pro -- Skills/FMS-style features and camera-tracking video are
+    // both Pro-tier features, Strength AI is included in Base.
     //
     // A trial is full Pro access, which is the whole point of a trial and
     // what the landing page promises in those words. That has to be said
     // here rather than assumed from the tier, because
     // storage.createTrialSubscription writes tier "base" with status
     // "trialing" -- so reading tier alone silently denied every trialing
-    // athlete the Skills features their trial is meant to sell them.
+    // athlete the Skills/video features their trial is meant to sell them.
     const sub = await storage.getSubscriptionForUser(athleteId);
     if (!sub || sub.accountType !== "free_agent") return false;
     if (!["trialing", "active", "past_due"].includes(sub.status)) return false;
@@ -625,17 +629,43 @@ function requirePaidAiAccess(entitlement: AiEntitlement) {
     const user = currentUser(req);
     const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email, entitlement);
     if (!hasPaid) {
+      const message =
+        entitlement === "skillsAi"
+          ? "This is a paid upgrade for Free Agents, coming soon."
+          : entitlement === "video"
+            ? "Camera-tracking video is a paid upgrade for Free Agents, coming soon."
+            : "This AI feature is a paid upgrade for Free Agents, coming soon -- exercise substitution stays free in the meantime.";
       return res.status(402).json({
-        message:
-          entitlement === "skillsAi"
-            ? "This is a paid upgrade for Free Agents, coming soon."
-            : "This AI feature is a paid upgrade for Free Agents, coming soon -- exercise substitution stays free in the meantime.",
+        message,
         freeAgentPaywall: true,
         entitlement,
       });
     }
     next();
   };
+}
+
+// Gates camera-tracking VIDEO specifically -- recording/saving a clip, and
+// the AI form-check that reads it -- distinct from requireFreeAgent (which
+// only checks "do you have a coach"). A coached athlete's video is already
+// bounded by their team's video-retention cap (see
+// shared/video-retention.ts), not a Free Agent AI tier, so this only
+// restricts Free Agents without the "video" (Pro) entitlement; a coached
+// athlete passes through untouched. Unlike requirePaidAiAccess, this is
+// meant to run WITHOUT requireFreeAgent stacked first, since it has to
+// branch on coach status itself rather than assume it.
+async function requireVideoTrackingAccess(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  if (await athleteHasCoach(user.id)) return next();
+  const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email, "video");
+  if (!hasPaid) {
+    return res.status(402).json({
+      message: "Camera-tracking video is a paid upgrade for Free Agents, coming soon.",
+      freeAgentPaywall: true,
+      entitlement: "video",
+    });
+  }
+  next();
 }
 
 // Gates one specific sport-specialist coach (Golf Swing/Hitting/Pitching)
@@ -7366,6 +7396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/athlete/skill-video",
     requireRole("athlete"),
+    requireVideoTrackingAccess,
     requireDiskSpace,
     (req, res) => {
       const user = currentUser(req);
@@ -7584,10 +7615,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Athlete-initiated only: recorded and previewed client-side, uploaded
   // here solely when the athlete taps Save. A discarded clip never reaches
-  // this route at all.
+  // this route at all. requireVideoTrackingAccess is the real cost gate --
+  // a coached athlete's video is already bounded by their team's retention
+  // cap, but an unpaywalled Free Agent could otherwise save and upload
+  // unlimited clips regardless of tier.
   app.post(
     "/api/athlete/form-video",
     requireRole("athlete"),
+    requireVideoTrackingAccess,
     requireDiskSpace,
     (req, res) => {
       const user = currentUser(req);
@@ -7888,7 +7923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/programs/:id/form-check",
     requireRole("athlete"),
     requireFreeAgent,
-    requirePaidAiAccess("strengthAi"),
+    requirePaidAiAccess("video"),
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);
