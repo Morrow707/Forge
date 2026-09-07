@@ -49,6 +49,14 @@ type CallOptions = { maxTokens?: number; model?: string };
 // (bad request, auth, invalid tool schema) means retrying gets the exact
 // same rejection again -- that's a bug, not a blip, so it fails immediately
 // instead of doubling the cost of finding out.
+// A request that fails is recoverable; a request that never returns is not.
+// There was no timeout here at all, so a connection that hung rather than
+// erroring left the Express handler awaiting forever and the athlete or
+// coach watching a spinner that would never resolve -- on a device with
+// perfectly good internet. Two minutes is generous for the largest call in
+// the app (a 8192-token program draft) and still bounded.
+const REQUEST_TIMEOUT_MS = 120_000;
+
 async function callAnthropic(body: Record<string, unknown>): Promise<any | null> {
   for (let attempt = 0; attempt <= 1; attempt++) {
     try {
@@ -60,6 +68,9 @@ async function callAnthropic(body: Record<string, unknown>): Promise<any | null>
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
+        // AbortSignal.timeout throws a TimeoutError, caught below and
+        // treated exactly like a network failure: one retry, then null.
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (!res.ok) {
         const text = await res.text();
@@ -93,12 +104,22 @@ async function callAnthropic(body: Record<string, unknown>): Promise<any | null>
       recordSystemSuccess("ai");
       return data;
     } catch (err: any) {
-      console.error(`Claude request failed (attempt ${attempt + 1}):`, err?.message || err);
+      const timedOut = err?.name === "TimeoutError" || err?.name === "AbortError";
+      console.error(
+        `Claude request ${timedOut ? "timed out" : "failed"} (attempt ${attempt + 1}):`,
+        err?.message || err,
+      );
       if (attempt === 0) {
         await new Promise((r) => setTimeout(r, 600));
         continue;
       }
-      recordSystemFailure("ai", "Could not reach the Claude API", { detail: err });
+      recordSystemFailure(
+        "ai",
+        timedOut
+          ? `Claude did not respond within ${REQUEST_TIMEOUT_MS / 1000}s`
+          : "Could not reach the Claude API",
+        { detail: err },
+      );
       return null;
     }
   }

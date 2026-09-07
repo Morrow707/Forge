@@ -234,7 +234,6 @@ import type { CoachSection } from "@shared/coach-sections";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import type { RosterGroup } from "@shared/roster-groups";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
-import { fetchUrlSafely, UnsafeUrlError } from "./safe-fetch";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
 import { isGatedUploadPath } from "./media-url-signing";
 import {
@@ -13928,13 +13927,12 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
 
   // Same propose-then-review design as updateAiKnowledgeFromChat, but the AI
   // produces structured threshold fields (propose_movement_profile) instead
-  // of a freeform document, and can optionally be pointed at a URL (fetched
-  // server-side via fetchUrlSafely (./safe-fetch) -- see that file for the
-  // SSRF guards (DNS-resolved + IP-pinned, private ranges blocked) -- in
-  // addition to, or instead of, typed text. The fetched page text is only
-  // ever used for this one turn's prompt, never persisted -- what gets
-  // stored is the admin's own message and the AI's summary of what it
-  // learned, same as any other turn.
+  // of a freeform document.
+  //
+  // This used to accept a URL and fetch it server-side. It no longer does --
+  // no AI path in the app reaches the internet; the input.url branch below
+  // explains what to do instead. Typed text and attached photos are the way
+  // material gets in.
   async updateMovementKnowledgeFromChat(
     adminId: number,
     movementType: string,
@@ -13969,13 +13967,17 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
     }
 
-    let sourceText = "";
+    // No AI path in this app opens a URL any more -- see the note where
+    // Forge AI's fetch_url tool used to be, in chatWithForgeAi below. An
+    // admin who pastes a link gets told why and what to do instead, rather
+    // than a silently ignored field.
+    const sourceText = "";
     if (input.url) {
-      try {
-        sourceText = await fetchUrlSafely(input.url);
-      } catch (err) {
-        return fail(err instanceof UnsafeUrlError ? err.message : "Couldn't fetch that URL.");
-      }
+      return fail(
+        "I can't open links -- Forge's AI doesn't reach the internet, so everything it knows is " +
+          "what's been deliberately taught or uploaded here. Paste the relevant text instead, or " +
+          "attach a photo of the page.",
+      );
     }
 
     const [currentProfile, history] = await Promise.all([
@@ -14999,16 +15001,19 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       },
     };
 
-    const fetchUrlTool = {
-      name: "fetch_url",
-      description:
-        "Fetches the readable text content of a URL the admin pasted (an article, a study, a blog post). Call this when the admin's message contains a link they want you to read -- the fetched text is returned to you so you can then discuss it or propose_entry from it. Not for images -- the admin attaches those directly.",
-      input_schema: {
-        type: "object",
-        properties: { url: { type: "string", description: "The exact URL to fetch." } },
-        required: ["url"],
-      },
-    };
+    // fetch_url used to live here, letting Forge AI pull an arbitrary URL the
+    // admin pasted. Removed deliberately: no AI path in this app reaches the
+    // open web any more. Explicit product decision (Scott, 2026-09-07): "for
+    // the internet i don't want it ... ai needs to stay in house, all ai, no
+    // outside branch." Two things follow from it. The knowledge base is
+    // whatever has been deliberately taught or ingested, never whatever a
+    // page happened to say on the day it was read -- and a pasted link can no
+    // longer make the server issue a request to an address of the pasting
+    // user's choosing. Source material now enters through upload (a PDF, or
+    // photographed pages), which keeps it on our own disk.
+    //
+    // Anthropic's API is the one remaining outbound call, and it cannot be
+    // removed without self-hosting a model; see server/ai.ts.
 
     const system = `You are Forge AI, this platform's central coaching knowledge assistant -- a knowledgeable strength-and-conditioning, nutrition, and coaching assistant the admin genuinely converses with, not a narrow intake form. Discussing an idea, explaining research, or just talking shop is a completely normal, first-class outcome of a turn -- proposing a taught entry is one thing you can do, not the whole point of the conversation.
 
@@ -15017,29 +15022,17 @@ When the admin DOES teach something concrete, use propose_entry. A few things to
 - Maturity: mark anything newly introduced (a study, a pamphlet, an idea being tried for the first time) as "experimental" rather than "established" unless the admin frames it as settled practice. Established rules get applied as hard guidance; experimental ones get offered as options.
 - Contradiction check: before proposing, compare against the existing taught entries listed below. If the new teaching genuinely conflicts with an existing entry (not just narrows it), don't silently overwrite it -- use discuss to name the conflict, quote the existing entry, and ask the admin why this is different or whether it should replace the old one. Only propose_entry once you have that answer, and put it in changeReason.
 - Corrections: if the admin says an existing entry was simply wrong (not just superseded by something more specific), set updatesEntryId + isCorrection: true.
-- Links: if the admin pastes a URL, call fetch_url first to actually read it -- never propose_entry off a URL you haven't fetched, and never guess at what a page says from its address alone.
+- Links: you cannot open URLs, and you must never guess at what a page says from its address. If the admin pastes a link, say plainly that you can't read it and ask them to paste the relevant text, upload the document, or attach a photo of it.
 
 Existing taught entries (id, scope, maturity, content):
 ${entriesText}`;
 
     const historyText = history.map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`).join("\n");
-    const userPrompt = `Conversation so far:\n${historyText}\n\nRespond to the admin's latest message by calling discuss, propose_entry, or fetch_url.`;
+    const userPrompt = `Conversation so far:\n${historyText}\n\nRespond to the admin's latest message by calling discuss or propose_entry.`;
 
-    let lastFetchedUrl: string | null = null;
-    const result = await askClaudeWithTools(system, userPrompt, [discussTool, proposeEntryTool, fetchUrlTool], {
+    const result = await askClaudeWithTools(system, userPrompt, [discussTool, proposeEntryTool], {
       maxTokens: 4096,
       images: image ? [image] : undefined,
-      toolExecutors: {
-        fetch_url: async (input: { url: string }) => {
-          try {
-            lastFetchedUrl = input.url;
-            return await fetchUrlSafely(input.url);
-          } catch (err) {
-            const detail = err instanceof UnsafeUrlError ? err.message : err instanceof Error ? err.message : String(err);
-            return `Error: ${detail}`;
-          }
-        },
-      },
     });
     if (!result) return fail("Sorry, I couldn't process that just now -- try again in a bit.");
 
@@ -15067,11 +15060,14 @@ ${entriesText}`;
       })
       .returning();
 
-    const sourceType: "image" | "url" | "chat" = image ? "image" : lastFetchedUrl ? "url" : "chat";
+    // "url" is still a valid sourceType on existing rows taught back when
+    // fetch_url existed, so the column keeps it; nothing new can be created
+    // with it any more.
+    const sourceType: "image" | "url" | "chat" = image ? "image" : "chat";
     return {
       adminMessage,
       assistantMessage,
-      proposal: { ...parsed.data, sourceType, sourceExcerpt: lastFetchedUrl },
+      proposal: { ...parsed.data, sourceType, sourceExcerpt: null },
     };
   },
 
