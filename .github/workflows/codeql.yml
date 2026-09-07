@@ -19,10 +19,25 @@ on:
   schedule:
     - cron: "27 6 * * 3"
 
+# The swift job below runs on a macOS runner, and GitHub's macOS pool is
+# far scarcer than its Linux one. Every job queued here competes with the
+# TestFlight build for the same machines: on 2026-09-07 an upload waited
+# 23 minutes, then a second one waited 36, while ten Dependabot pull
+# requests each held a macOS CodeQL job. Cancelling superseded runs is the
+# cheapest fix -- an analysis of a commit that is no longer the branch head
+# tells nobody anything, and it was holding a runner to do it.
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ${{ matrix.os }}
+    # The macOS-only swift job runs on the weekly schedule only. Every other
+    # language runs on Linux and is unaffected, on every push and pull
+    # request as before.
+    if: ${{ matrix.language != 'swift' || github.event_name == 'schedule' }}
     timeout-minutes: ${{ matrix.language == 'swift' && 60 || 30 }}
     permissions:
       security-events: write
@@ -46,6 +61,13 @@ jobs:
           - language: actions
             build-mode: none
             os: ubuntu-latest
+          # Weekly only -- see the `if` below. This is the only macOS job in
+          # the repo besides the TestFlight build, and every run of it takes
+          # a machine that build needs. What it analyzes is ios/, a
+          # generated Capacitor shell that changes a few times a year, so
+          # per-push analysis was re-checking unchanged Swift at the direct
+          # cost of build latency. If ios/ ever gains real hand-written
+          # Swift, put this back on push.
           - language: swift
             build-mode: manual
             os: macos-latest

@@ -18,6 +18,14 @@ on:
           - beta
           - verify_build
 
+# A superseded build has no value and holds a macOS runner while it proves
+# it. Grouped by lane so a verify_build pre-flight and a real beta upload
+# never cancel each other -- only a newer run of the SAME lane supersedes an
+# older one.
+concurrency:
+  group: ios-testflight-${{ github.event.inputs.lane }}
+  cancel-in-progress: true
+
 jobs:
   build-and-upload:
     # macOS is the only runner image with Xcode -- this is the one piece of
