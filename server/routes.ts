@@ -2082,6 +2082,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const schema = z
       .object({
         documentText: z.string().trim().min(1).max(60000).optional(),
+        // Ingested domains this course may also draw on. Omitted means the
+        // pasted material is the only source, which is the default.
+        retrievalDomains: z.array(z.string().trim().min(1)).max(10).optional(),
         images: z
           .array(z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }))
           .max(6)
@@ -2094,7 +2097,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const draft = await storage.generateClassDraftFromDocument(parsed.data.documentText, parsed.data.images);
+    const draft = await storage.generateClassDraftFromDocument(
+      parsed.data.documentText,
+      parsed.data.images,
+      parsed.data.retrievalDomains,
+    );
     if (!draft) {
       return res.status(422).json({
         message: "Couldn't organize that into a class -- try pasting more text or a clearer photo.",

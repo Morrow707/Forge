@@ -68,6 +68,120 @@ function DraftBadge() {
   );
 }
 
+
+/** The research-sharing review packet.
+ *
+ * The data-collection audit changed what the platform says it does with
+ * athlete data: extracts can now leave the organisation as a PDF. Two of the
+ * documents below were rewritten to describe that accurately, and neither has
+ * been read by a lawyer. This card exists so that fact is on the same page as
+ * the documents themselves rather than living only in a commit message --
+ * whoever sends these to counsel needs the list of what changed and the
+ * questions the build could not answer for itself.
+ *
+ * The consent counts are here for the same reason: "how many athletes have
+ * actually opted in" is the first thing a reviewer asks, and it is a number,
+ * not a document. */
+function ResearchDataReviewCard() {
+  const { data } = useQuery<{ totalAthletes: number; consentedAthletes: number }>({
+    queryKey: ["/api/admin/research-consent"],
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          Research Data Sharing -- Review Packet
+          <DraftBadge />
+        </CardTitle>
+        <CardDescription>
+          What the platform now does with athlete data when an extract leaves the organisation,
+          the documents that describe it, and the questions counsel has to answer before an
+          extract is actually sent to anyone.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
+          <ShieldAlert className="h-4 w-4 shrink-0" />
+          No extract should be sent outside the organisation until a lawyer has read the two
+          rewritten documents below. The technical controls are built and tested; whether they
+          are sufficient for the jurisdictions Forge operates in is not a question the code can
+          answer.
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-md border p-3">
+            <p className="text-xs text-muted-foreground">Athletes on the platform</p>
+            <p className="text-2xl font-semibold tabular-nums">{data?.totalAthletes ?? "--"}</p>
+          </div>
+          <div className="rounded-md border p-3">
+            <p className="text-xs text-muted-foreground">Consented to research use</p>
+            <p className="text-2xl font-semibold tabular-nums">{data?.consentedAthletes ?? "--"}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Opt-in only. Everyone else is excluded from every extract.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            What changed
+          </p>
+          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            <li>
+              <span className="text-foreground">Privacy Policy S7</span> and the{" "}
+              <span className="text-foreground">Biometric Data Waiver</span> were rewritten to
+              describe research sharing as it actually works. Both are drafts below.
+            </li>
+            <li>
+              A separate, opt-in <span className="text-foreground">research consent</span> was
+              added, distinct from tracking opt-out. A minor's answer comes from a guardian and
+              the record names who relayed it. Withdrawal writes its own dated record.
+            </li>
+            <li>
+              Extracts are group numbers only. No name, email, date of birth or user id leaves
+              the platform; rows carry a per-query pseudonym that maps nowhere.
+            </li>
+            <li>
+              Cells below <span className="text-foreground">10 athletes</span> are suppressed in
+              anything that leaves; the in-app floor stays at 5. Admin cohort queries are capped
+              at 50 per day so a group cannot be narrowed to one person by subtraction.
+            </li>
+          </ul>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Questions for counsel
+          </p>
+          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            <li>
+              Is guardian consent relayed through a coach sufficient, or does the guardian have
+              to sign it themselves?
+            </li>
+            <li>
+              Is a suppression floor of 10 defensible for a document leaving the organisation,
+              given a recipient may hold outside knowledge that narrows a group further?
+            </li>
+            <li>
+              Does a withdrawal have to reach extracts already sent, and if so, what does the
+              recipient agreement have to say?
+            </li>
+            <li>
+              Do biometric-data statutes treat velocity, bar path and skeleton keypoints as
+              biometric identifiers, and does that change once they are de-identified?
+            </li>
+          </ul>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          The extract itself, and the log of every one produced, is on the Dataset Extracts page.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 /** Every legal document on the platform, and everything built for legal
  * review, in one place -- previously split across two confusingly similar
  * pages ("Legal Agreement" and "Documents") that both turned out to just be
@@ -106,6 +220,8 @@ export default function AdminDocuments() {
             </p>
           </CardContent>
         </Card>
+
+        <ResearchDataReviewCard />
 
         <Card>
           <CardHeader>

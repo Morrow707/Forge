@@ -140,7 +140,11 @@ import {
 } from "@shared/privacy-tiers";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { normalizeInjuryRegion, INJURY_REGIONS, type InjuryRegion } from "@shared/injury-taxonomy";
-import { findSimilarPassages } from "./knowledge-retrieval";
+import {
+  findSimilarPassages,
+  searchKnowledgePassages,
+  renderPassagesForPrompt,
+} from "./knowledge-retrieval";
 import { RESEARCH_CONSENT_TEXT } from "@shared/research-consent";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
@@ -9739,6 +9743,13 @@ Hard rules, no exceptions:
   async generateClassDraftFromDocument(
     documentText: string | undefined,
     images: { mediaType: "image/jpeg" | "image/png"; data: string }[] | undefined,
+    // Which ingested domains this course may draw on, beyond the material
+    // pasted in. This is how the class AI builds a nutrition course from the
+    // nutrition knowledge base: a query parameter, not a special case. Empty
+    // means the pasted material is the only source, which stays the default
+    // -- a course is grounded in what the admin handed it unless they say
+    // otherwise.
+    retrievalDomains?: string[],
   ): Promise<ClassAiDraft | null> {
     const system: SystemPrompt =
       "You turn a coach's raw teaching material -- an article, a set of notes, scanned pages of a " +
@@ -9816,9 +9827,30 @@ Hard rules, no exceptions:
       },
     };
 
-    const instruction = documentText
-      ? `Here is the source material:\n\n${documentText}`
-      : "Organize the lesson material shown in the attached photo(s).";
+    // Retrieved material is added to the source, not substituted for it, and
+    // the grounding rule still holds: everything in the course must come from
+    // material actually provided. Retrieval widens what "provided" means; it
+    // does not license the model's own general knowledge.
+    const retrieved =
+      retrievalDomains && retrievalDomains.length > 0
+        ? await searchKnowledgePassages({
+            query: documentText?.slice(0, 300) || "course material",
+            domains: retrievalDomains,
+            limit: 10,
+          })
+        : [];
+    const retrievedBlock = renderPassagesForPrompt(retrieved);
+
+    const instruction = [
+      documentText
+        ? `Here is the source material:\n\n${documentText}`
+        : "Organize the lesson material shown in the attached photo(s).",
+      retrievedBlock
+        ? `\n\nAdditional reference material from this platform's knowledge base. You may build ` +
+          `lessons from this as well, and you must cite the source and page for anything you take ` +
+          `from it:\n\n${retrievedBlock}`
+        : "",
+    ].join("");
 
     const raw =
       images && images.length > 0
@@ -12422,6 +12454,23 @@ Hard rules, no exceptions:
       this.buildForgeAiContext(draftAthleteProfile ?? undefined, "program_draft"),
     ]);
     if (visibleExercises.length === 0) return null;
+
+    // Reference material from ingested books, retrieved on the coach's own
+    // words plus whatever the athlete's profile makes relevant. Deliberately
+    // ranked BELOW the taught guidance above -- see renderPassagesForPrompt
+    // for why that ordering has to be stated rather than implied.
+    const retrievalQuery = [
+      prompt,
+      draftAthleteProfile?.sport,
+      draftAthleteProfile?.position,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const referencePassages = await searchKnowledgePassages({
+      query: retrievalQuery,
+      domains: ["strength", "rehab", "sport"],
+      limit: 8,
+    });
     const validIds = visibleExercises.map((e) => e.id);
     const catalog = visibleExercises
       .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.movementComplexity ? `, ${e.movementComplexity}` : ""}${e.bodyRegion ? `, ${e.bodyRegion}` : ""}${e.plane ? `, ${e.plane}` : ""}${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
@@ -12523,6 +12572,7 @@ ${COMBINATION_EXERCISE_TRAINING_PRINCIPLES}`;
         ? `Forge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}`
         : null,
       forgeAiContext || null,
+      renderPassagesForPrompt(referencePassages) || null,
     ]
       .filter(Boolean)
       .join("\n\n");
