@@ -47,6 +47,23 @@ updates:
       # builder's drag-and-drop has not been ported to.
       - dependency-name: "@dnd-kit/sortable"
         update-types: ["version-update:semver-major"]
+      # vite 8 and @vitejs/plugin-react 6 block each other, and neither can
+      # move alone -- which is why each one's PR fails npm ci and takes the
+      # CodeQL run down with it, twice per release. plugin-react 6 peers on
+      # vite ^8; plugin-react 4 (what we have) peers on vite <=7. Proven
+      # rather than assumed: vite 8 was merged to main on 2026-09-07, broke
+      # the iOS build at npm ci, and was reverted in e3d7d11.
+      #
+      # Taking the pair together is a real project, not a version bump:
+      # plugin-react 6 is the Rolldown rewrite and pulls in three new peer
+      # dependencies of its own (oxc-transform-react, @rolldown/plugin-babel,
+      # babel-plugin-react-compiler), all of which land in the bundle that
+      # gets compiled into the app binary. REMOVE BOTH ENTRIES TOGETHER when
+      # someone takes that on; removing one alone just recreates the loop.
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
 
   # ios-testflight.yml/android-release.yml/ci.yml themselves -- an action
   # pinned to an old major version is a real supply-chain surface too.
