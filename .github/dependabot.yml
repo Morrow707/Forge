@@ -15,6 +15,38 @@ updates:
       radix-ui:
         patterns:
           - "@radix-ui/*"
+    ignore:
+      # Five majors that cannot be taken yet, each blocked by a package that
+      # depends on the current version. Closing the PRs is not enough: the
+      # next release reopens each one, and every reopen costs a notification
+      # plus a CI run on a macOS-runner-constrained account. On 2026-09-07
+      # five of these were open simultaneously and their check runs were
+      # consuming the concurrency allowance while a TestFlight upload sat
+      # queued for 23 minutes.
+      #
+      # Scoped to majors only -- minor and patch updates to all five keep
+      # flowing, and a security advisory still opens a PR regardless of an
+      # ignore rule. REMOVE an entry once its blocker below is resolved.
+      #
+      # tailwindcss 4: tailwindcss-animate has no Tailwind 4 release.
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      # zod 4: drizzle-zod pins zod 3.
+      - dependency-name: "zod"
+        update-types: ["version-update:semver-major"]
+      # express 5: express-async-errors and express-rate-limit both expect 4.
+      - dependency-name: "express"
+        update-types: ["version-update:semver-major"]
+      # react-dom 19: paired with @types/react-dom, and the rest of the tree
+      # (including react itself) is still on 18.
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      # @dnd-kit/sortable 10 needs @dnd-kit/core 10, which the program
+      # builder's drag-and-drop has not been ported to.
+      - dependency-name: "@dnd-kit/sortable"
+        update-types: ["version-update:semver-major"]
 
   # ios-testflight.yml/android-release.yml/ci.yml themselves -- an action
   # pinned to an old major version is a real supply-chain surface too.
