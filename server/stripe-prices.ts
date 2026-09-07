@@ -23,16 +23,15 @@ export function freeAgentPriceId(tier: FreeAgentTierId): string | null {
   return process.env[freeAgentPriceEnvVar(tier)]?.trim() || null;
 }
 
-/** The coach organisation's flat monthly account fee (ORG_BASE_CENTS). */
+/** The coach organisation's flat monthly account fee (ORG_BASE_CENTS).
+ *
+ * The only coach price there is. ORG_PER_ATHLETE_CENTS is an internal
+ * unit-cost figure, not something billed per head, so there is no seat
+ * Price to create or keep in sync. */
 export const COACH_BASE_PRICE_ENV = "STRIPE_PRICE_COACH_BASE";
-/** Per-athlete monthly seat (ORG_PER_ATHLETE_CENTS), billed by quantity. */
-export const COACH_SEAT_PRICE_ENV = "STRIPE_PRICE_COACH_SEAT";
 
 export function coachBasePriceId(): string | null {
   return process.env[COACH_BASE_PRICE_ENV]?.trim() || null;
-}
-export function coachSeatPriceId(): string | null {
-  return process.env[COACH_SEAT_PRICE_ENV]?.trim() || null;
 }
 
 /** Everything the operator still has to create in Stripe, by env var name --
@@ -43,6 +42,5 @@ export function missingPriceEnvVars(): string[] {
     if (!freeAgentPriceId(tier)) missing.push(freeAgentPriceEnvVar(tier));
   }
   if (!coachBasePriceId()) missing.push(COACH_BASE_PRICE_ENV);
-  if (!coachSeatPriceId()) missing.push(COACH_SEAT_PRICE_ENV);
   return missing;
 }

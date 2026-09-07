@@ -1,10 +1,6 @@
 import Stripe from "stripe";
 import { storage } from "./storage";
-import {
-  coachBasePriceId,
-  coachSeatPriceId,
-  freeAgentPriceId,
-} from "./stripe-prices";
+import { coachBasePriceId, freeAgentPriceId } from "./stripe-prices";
 import { BILLING_TIERS, type AddOnId, type BillingTierId } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON, type VideoRetentionLimits } from "@shared/video-retention";
@@ -264,33 +260,30 @@ export async function createFreeAgentTierCheckout(
   return { url: session.url };
 }
 
-/** A coach organisation: the flat account fee plus one per-athlete seat for
- * every athlete currently on the roster.
+/** A coach organisation: the flat account fee, and nothing per athlete.
  *
- * Two line items rather than one blended price, because that is what the
- * model actually is (ORG_BASE_CENTS + ORG_PER_ATHLETE_CENTS x roster) and
- * because the seat count has to move as the roster does -- see
- * syncCoachSeatQuantity, which updates the same line's quantity later.
- * A roster of zero still buys the base fee; Stripe rejects a zero quantity,
- * so the seat line is omitted entirely in that case. */
+ * ORG_PER_ATHLETE_CENTS is deliberately NOT billed here. That number is an
+ * internal unit-cost figure -- what one athlete is modelled to cost Forge in
+ * storage -- and it is used to sanity-check margin, not to charge per head.
+ * Billing it as a Stripe seat line turned a cost metric into a price, which
+ * is not the model. A coach pays one flat fee whatever their roster size.
+ *
+ * There is consequently nothing to keep in sync with the roster: no seat
+ * quantity exists on the subscription for a roster change to move. */
 export async function createCoachSubscriptionCheckout(
   userId: number,
   userEmail: string,
-  seatCount: number,
   successUrl: string,
   cancelUrl: string,
 ): Promise<CheckoutResult> {
   const stripe = getStripeClient();
   if (!stripe) return { error: "Billing isn't configured yet." };
   const basePrice = coachBasePriceId();
-  const seatPrice = coachSeatPriceId();
-  if (!basePrice || !seatPrice) return { error: "No Stripe prices configured for coach plans yet." };
-  const lineItems: { price: string; quantity: number }[] = [{ price: basePrice, quantity: 1 }];
-  if (seatCount > 0) lineItems.push({ price: seatPrice, quantity: seatCount });
+  if (!basePrice) return { error: "No Stripe price configured for coach plans yet." };
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     ...(await baseSessionParams(userId, userEmail)),
-    line_items: lineItems,
+    line_items: [{ price: basePrice, quantity: 1 }],
     metadata: { kind: "coach_subscription", userId: String(userId) },
     subscription_data: { metadata: { kind: "coach_subscription", userId: String(userId) } },
     success_url: successUrl,
@@ -367,35 +360,7 @@ export async function createBillingPortalSession(
   return { url: session.url };
 }
 
-/** Moves a coach's per-athlete line to match their current roster.
- *
- * Called after a roster add/remove. Without it the seat count is frozen at
- * whatever it was on the day they subscribed, which either overcharges a
- * shrinking roster or gives a growing one free seats. A no-op when billing
- * is unconfigured, when the coach has no Stripe subscription, or when the
- * quantity already matches -- so it is safe to call on every roster change.
- * Never throws into the caller's path: a roster edit must not fail because
- * Stripe is briefly unreachable, and the next roster change re-syncs. */
-export async function syncCoachSeatQuantity(userId: number, seatCount: number): Promise<void> {
-  const stripe = getStripeClient();
-  const seatPrice = coachSeatPriceId();
-  if (!stripe || !seatPrice) return;
-  try {
-    const sub = await storage.getSubscriptionForUser(userId);
-    if (!sub?.stripeSubscriptionId) return;
-    const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
-    const seatItem = stripeSub.items.data.find((item) => item.price.id === seatPrice);
-    if (!seatItem) return;
-    if (seatItem.quantity === seatCount) return;
-    if (seatCount <= 0) {
-      await stripe.subscriptionItems.del(seatItem.id);
-      return;
-    }
-    await stripe.subscriptionItems.update(seatItem.id, { quantity: seatCount });
-  } catch (err) {
-    console.error("Stripe seat sync failed:", err instanceof Error ? err.message : err);
-  }
-}
+
 
 /** Verifies the raw webhook body against STRIPE_WEBHOOK_SECRET and returns
  * the parsed event, or null if billing isn't configured/the signature is

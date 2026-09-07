@@ -16,18 +16,18 @@ describe("Stripe price configuration", () => {
   it("reports every price that still has to be created", () => {
     for (const tier of FREE_AGENT_TIER_ORDER) delete process.env[freeAgentPriceEnvVar(tier)];
     delete process.env.STRIPE_PRICE_COACH_BASE;
-    delete process.env.STRIPE_PRICE_COACH_SEAT;
     const missing = missingPriceEnvVars();
     expect(missing).toContain("STRIPE_PRICE_FREE_AGENT_AI_COACH");
     expect(missing).toContain("STRIPE_PRICE_COACH_BASE");
-    expect(missing).toContain("STRIPE_PRICE_COACH_SEAT");
-    expect(missing.length).toBe(FREE_AGENT_TIER_ORDER.length + 2);
+    // No per-athlete seat Price exists: the per-athlete figure is an
+    // internal cost metric, not a price billed per head.
+    expect(missing).not.toContain("STRIPE_PRICE_COACH_SEAT");
+    expect(missing.length).toBe(FREE_AGENT_TIER_ORDER.length + 1);
   });
 
   it("goes quiet once every price is set", () => {
     for (const tier of FREE_AGENT_TIER_ORDER) process.env[freeAgentPriceEnvVar(tier)] = `price_${tier}`;
     process.env.STRIPE_PRICE_COACH_BASE = "price_base";
-    process.env.STRIPE_PRICE_COACH_SEAT = "price_seat";
     expect(missingPriceEnvVars()).toEqual([]);
     expect(freeAgentPriceId("ai_coach")).toBe("price_ai_coach");
   });
@@ -70,12 +70,14 @@ describe("web checkout never runs inside the native app", () => {
 });
 
 describe("prices and quantities come from the server, never the request", () => {
-  it("reads the coach seat count from the roster", () => {
+  it("charges the coach one flat fee with nothing per athlete", () => {
     const idx = routes.indexOf('"/api/billing/checkout/coach"');
     const route = routes.slice(idx, idx + 900);
-    expect(route).toContain("getRosterSeatCountForCoach");
-    // A quantity taken from the body would be a client choosing its price.
-    expect(route).not.toMatch(/seatCount:\s*z\./);
+    // No roster-derived quantity, and nothing a client could supply.
+    expect(route).not.toContain("getRosterSeatCountForCoach");
+    expect(route).not.toMatch(/seatCount/);
+    expect(billing).toContain("line_items: [{ price: basePrice, quantity: 1 }]");
+    expect(billing).not.toContain("coachSeatPriceId");
   });
 
   it("reads the lesson price from the lesson row", () => {

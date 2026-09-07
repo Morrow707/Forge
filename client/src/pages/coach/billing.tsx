@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { CreditCard, Users } from "lucide-react";
-import { ORG_BASE_CENTS, ORG_PER_ATHLETE_CENTS, formatCents } from "@shared/billing-tiers";
+import { ORG_BASE_CENTS, formatCents } from "@shared/billing-tiers";
 
 type RosterAthlete = { id: number };
 
@@ -31,8 +31,7 @@ export default function CoachBilling() {
     queryKey: ["/api/coach/roster"],
     queryFn: () => getJson("/api/coach/roster"),
   });
-  const seats = roster.length;
-  const monthlyCents = ORG_BASE_CENTS + seats * ORG_PER_ATHLETE_CENTS;
+  const monthlyCents = ORG_BASE_CENTS;
 
   async function subscribe() {
     setStarting(true);
@@ -70,8 +69,6 @@ export default function CoachBilling() {
             </p>
           </div>
 
-          {/* The arithmetic, not just the total -- a coach seeing a number
-              they cannot derive is a support ticket. */}
           <div className="space-y-1 border-t border-border pt-4 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Account</span>
@@ -80,15 +77,15 @@ export default function CoachBilling() {
             <div className="flex justify-between">
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <Users className="h-3.5 w-3.5" />
-                {seats} {seats === 1 ? "athlete" : "athletes"} x {formatCents(ORG_PER_ATHLETE_CENTS)}
+                {roster.length} {roster.length === 1 ? "athlete" : "athletes"}
               </span>
-              <span>{formatCents(seats * ORG_PER_ATHLETE_CENTS)}</span>
+              <span className="text-muted-foreground">Included</span>
             </div>
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Your seat count follows your roster. Adding or removing an athlete updates it
-            automatically, and Stripe prorates the difference.
+            One flat fee, whatever your roster size. Adding or removing an athlete doesn't change
+            what you pay.
           </p>
 
           {isNative ? (

@@ -38,7 +38,6 @@ import {
   createLessonCheckout,
 } from "./billing";
 import { missingPriceEnvVars } from "./stripe-prices";
-import { syncCoachSeatQuantity } from "./billing";
 import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
 import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
 import { verifyMediaUrl } from "./media-url-signing";
@@ -3569,19 +3568,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athleteId = Number(req.params.athleteId);
     if (!Number.isInteger(athleteId)) return res.status(404).json({ message: "Athlete not found" });
     const removed = await storage.removeAthleteFromCoach(user.id, athleteId);
-    // The coach pays per athlete, so the seat line has to follow the roster
-    // rather than stay frozen at whatever it was on the day they subscribed.
-    // Fired after the removal and deliberately not awaited into the response:
-    // a roster edit must not fail because Stripe is briefly unreachable, and
-    // syncCoachSeatQuantity swallows its own errors so the next change
-    // re-syncs. Lives here rather than in storage.ts because billing.ts
-    // already imports storage, and the reverse import would make the two
-    // circular over what is one Stripe call.
-    if (removed) {
-      void storage
-        .getRosterSeatCountForCoach(user.id)
-        .then((seats) => syncCoachSeatQuantity(user.id, seats));
-    }
     if (!removed) return res.status(404).json({ message: "Athlete not found" });
     res.status(204).end();
   });
@@ -8768,14 +8754,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
-      // Seats come from the roster, never from the request body -- a client
-      // choosing its own quantity is a client choosing its own price.
-      const seatCount = await storage.getRosterSeatCountForCoach(user.id);
+      // One flat account fee, whatever the roster size. Nothing per athlete
+      // is charged -- see createCoachSubscriptionCheckout on why the
+      // per-athlete figure is a cost metric rather than a price.
       const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/coach");
       const result = await createCoachSubscriptionCheckout(
         user.id,
         user.email,
-        seatCount,
         successUrl,
         cancelUrl,
       );
