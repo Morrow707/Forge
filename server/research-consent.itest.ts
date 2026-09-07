@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { storage } from "./storage";
 import { db } from "./db";
-import { consentRecords } from "@shared/schema";
+import { consentRecords, guardianLinks } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { makeAthlete, makeCoach, resetDatabase } from "./test-support/fixtures";
 
@@ -149,5 +149,40 @@ describe("research consent at signup", () => {
     const minor = await makeAthlete({ dateOfBirth: minorDob });
     const status = await storage.getResearchDataConsent(minor.id);
     expect(status?.requiresGuardian).toBe(true);
+  });
+});
+
+describe("guardian access is a link, not a role", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("lets an athlete account hold a guardian link to someone else", async () => {
+    // A parent who trains on Forge as a Free Agent keeps that one account and
+    // gains a free guardian view, rather than needing a second email.
+    const parent = await makeAthlete({ dateOfBirth: adultDob, name: "Parent" });
+    const child = await makeAthlete({ dateOfBirth: minorDob, name: "Child" });
+    await db.insert(guardianLinks).values({ athleteId: child.id, guardianId: parent.id });
+
+    const linked = await storage.getAthletesForGuardian(parent.id);
+    expect(linked).toHaveLength(1);
+    expect(linked[0].id).toBe(child.id);
+  });
+
+  it("scopes a guardian to only their own linked athletes", async () => {
+    const parent = await makeAthlete({ dateOfBirth: adultDob });
+    const child = await makeAthlete({ dateOfBirth: minorDob });
+    const stranger = await makeAthlete({ dateOfBirth: minorDob });
+    await db.insert(guardianLinks).values({ athleteId: child.id, guardianId: parent.id });
+
+    expect(await storage.getAthleteForGuardianScoped(parent.id, child.id)).not.toBeNull();
+    // Someone else's child is a 404, not a 403 -- a guardian should not learn
+    // that an account exists by asking about it.
+    expect(await storage.getAthleteForGuardianScoped(parent.id, stranger.id)).toBeFalsy();
+  });
+
+  it("gives no guardian access to an account with no links", async () => {
+    const loner = await makeAthlete({ dateOfBirth: adultDob });
+    expect(await storage.getAthletesForGuardian(loner.id)).toHaveLength(0);
   });
 });

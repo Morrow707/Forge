@@ -170,7 +170,12 @@ function ProtectedRoute({
   // means "not logged in." See useAuth's isError comment.
   if (isError) return <ConnectionProblem />;
   if (!user) return <Redirect to="/login" />;
-  if (user.role !== role) {
+  // Guardian pages are reachable by anyone holding a guardian link, not only
+  // by an account whose role is "guardian" -- a parent who trains here as a
+  // Free Agent keeps one account and switches into their child's view. Every
+  // other role check is unchanged.
+  const allowed = role === "guardian" ? user.role === "guardian" || user.hasGuardianLinks : user.role === role;
+  if (!allowed) {
     return <Redirect to={homeFor(user.role)} />;
   }
   // A minor athlete with no guardian linked gets one screen and no app. The

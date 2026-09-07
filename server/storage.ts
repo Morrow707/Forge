@@ -22143,11 +22143,29 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
 
     const existingUser = await this.getUserByEmail(invite.email);
     if (existingUser) {
-      if (existingUser.role !== "guardian") {
-        return { error: "An account with this email already exists -- log in instead." as const };
+      // An existing account of any role can take on a guardian link, because
+      // guardianship is a relationship rather than an identity -- a parent
+      // who already trains on Forge as a Free Agent keeps that account and
+      // gains a free guardian view of their child, rather than needing a
+      // second email. requireGuardianAccess gates on the link, not the role.
+      //
+      // Two things it can never be:
+      if (existingUser.id === invite.athleteId) {
+        // Nobody is their own guardian. An account cannot supervise itself,
+        // and a link like this would make every "is this athlete supervised"
+        // check answer yes for someone with no adult involved at all.
+        return { error: "An account cannot be its own guardian." as const };
+      }
+      if (!existingUser.dateOfBirth || derivePrivacyTier(existingUser.dateOfBirth) !== "tier3_adult_18plus") {
+        // A guardian has to be an adult. Anyone old enough to be a guardian
+        // does not need one themselves, so this is one check rather than
+        // two, and a missing date of birth fails it: the safe assumption
+        // when age is unknown is the one that does not hand a minor
+        // authority over another minor's data.
+        return { error: "A guardian account must belong to an adult." as const };
       }
       if (!(await comparePasswords(password, existingUser.passwordHash))) {
-        return { error: "Incorrect password for the existing guardian account." as const };
+        return { error: "Incorrect password for the existing account." as const };
       }
       await db.transaction(async (tx) => {
         await tx.insert(guardianLinks).values({ athleteId: invite.athleteId, guardianId: existingUser.id });

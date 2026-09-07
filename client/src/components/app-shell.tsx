@@ -397,8 +397,19 @@ export function AppShell({
                   item.href !== "/athlete/upgrade",
               )
   ).filter((item) => !disabledNavHrefs.has(item.href));
-  const primaryNav = nav.filter((item) => !item.overflow);
-  const overflowNav = nav.filter((item) => item.overflow);
+
+  // The view switch. Anyone holding a guardian link gets an entry into their
+  // child's guardian view, whatever their own role is -- a parent training
+  // here as a Free Agent, a coach who is a parent of an athlete on another
+  // roster. An account whose role IS guardian already lands there and needs
+  // no switcher.
+  const navWithGuardian =
+    user?.hasGuardianLinks && user.role !== "guardian"
+      ? [...nav, { href: "/guardian", label: "My Athlete", icon: ShieldCheck, overflow: true }]
+      : nav;
+
+  const primaryNav = navWithGuardian.filter((item) => !item.overflow);
+  const overflowNav = navWithGuardian.filter((item) => item.overflow);
 
   const teamBoardUnreadUrl =
     user?.role === "coach"

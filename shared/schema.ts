@@ -7249,6 +7249,11 @@ export type PublicUser = Omit<
   // refuses everything they try. The client uses it to show them why rather
   // than a screen of controls that all fail.
   guardianLinkRequired?: boolean;
+  // True when this account has at least one guardian link, whatever its role
+  // -- guardianship is a relationship, so a Free Agent parent or a coach who
+  // is also a parent both get the guardian view. UI convenience only;
+  // requireGuardianAccess on the server is the enforcement.
+  hasGuardianLinks?: boolean;
 };
 
 export const updateHealthStatusSchema = z.object({

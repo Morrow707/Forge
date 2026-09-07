@@ -46,6 +46,7 @@ import {
 import { missingPriceEnvVars } from "./stripe-prices";
 import { getHealthSnapshot } from "./health-probes";
 import { RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION } from "@shared/research-consent";
+import { requireGuardianAccess } from "./auth";
 import { extractPdf, splitIntoPassages, hashBytes } from "./pdf-extract";
 import { recordSystemFailure } from "./system-events";
 import {
@@ -9480,7 +9481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // -- a mismatch reads as 404, same as a coach hitting a roster athlete that
   // isn't theirs.
 
-  app.get("/api/guardian/athletes", requireRole("guardian"), async (req, res) => {
+  app.get("/api/guardian/athletes", requireGuardianAccess, async (req, res) => {
     const user = currentUser(req);
     const athletes = await storage.getAthletesForGuardian(user.id);
     res.json(athletes);
@@ -9489,7 +9490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Same calendar an athlete/coach sees -- workouts, completion status,
   // whatever videos/exercises are attached -- just scoped to one of this
   // guardian's linked athletes instead of "self."
-  app.get("/api/guardian/athletes/:athleteId/calendar", requireRole("guardian"), async (req, res) => {
+  app.get("/api/guardian/athletes/:athleteId/calendar", requireGuardianAccess, async (req, res) => {
     const user = currentUser(req);
     const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
     if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
@@ -9521,7 +9522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // coach-relayed version needs -- this *is* the parent's own action.
   app.patch(
     "/api/guardian/athletes/:athleteId/tracking-opt-out",
-    requireRole("guardian"),
+    requireGuardianAccess,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = setTrackingOptOutSchema.safeParse(req.body);
@@ -9555,7 +9556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     path: string,
     handler: (athleteId: number, req: any, res: any) => Promise<void>,
   ) {
-    app.get(`/api/guardian/athletes/:athleteId${path}`, requireRole("guardian"), async (req, res) => {
+    app.get(`/api/guardian/athletes/:athleteId${path}`, requireGuardianAccess, async (req, res) => {
       const user = currentUser(req);
       const athleteId = Number(req.params.athleteId);
       if (!Number.isInteger(athleteId)) {
@@ -9609,7 +9610,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post(
     "/api/guardian/athletes/:athleteId/removal-requests",
-    requireRole("guardian"),
+    requireGuardianAccess,
     async (req, res) => {
       const user = currentUser(req);
       const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));

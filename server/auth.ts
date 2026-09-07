@@ -227,6 +227,12 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
     // convenience for the UI and is never the enforcement.
     publicUser.guardianLinkRequired = await storage.isAthleteBlockedPendingGuardian(user.id);
   }
+  // Not gated on role, deliberately. Guardianship is a relationship, so any
+  // account can hold links -- a parent training as a Free Agent, a coach who
+  // is a parent of someone on another roster. This tells the client whether
+  // to offer the guardian view; requireGuardianAccess is the enforcement.
+  (publicUser as any).hasGuardianLinks =
+    (await storage.getAthletesForGuardian(user.id)).length > 0;
   if (user.role === "coach") {
     (publicUser as any).hiddenSections = await storage.getHiddenSectionsForCoach(user.id);
     publicUser.staffTitle = await storage.getStaffTitleForCoach(user.id);
@@ -1369,6 +1375,36 @@ export const requireAuth: RequestHandler = (req, res, next) => {
 };
 
 type Role = "coach" | "athlete" | "admin" | "guardian";
+
+/**
+ * Guardian access, driven by the LINK rather than the role.
+ *
+ * Guardianship is a relationship, and it already lives in guardian_links.
+ * The role column was pretending it was an identity, and that had two
+ * consequences nobody wanted: a parent who bought their own Free Agent
+ * account became an athlete and lost guardian view entirely, and a coach
+ * who happens to be a parent of an athlete on someone else's roster could
+ * not be a guardian at all.
+ *
+ * So this asks "does this account have any guardian link" instead of "is
+ * this account of type guardian". Per-athlete authorization is unchanged
+ * and still goes through getAthleteForGuardianScoped, which has always been
+ * link-based -- this only replaces the outer gate.
+ *
+ * Role "guardian" still exists and still means an account created solely to
+ * be a guardian. It is now one way to have links, not the only way.
+ */
+export const requireGuardianAccess: RequestHandler = async (req, res, next) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  const { storage } = await import("./storage");
+  const linked = await storage.getAthletesForGuardian((req.user as any).id);
+  if (linked.length === 0) {
+    return res.status(403).json({ message: "No athlete is linked to this account." });
+  }
+  next();
+};
 
 export const requireRole =
   (role: Role | Role[]): RequestHandler =>
