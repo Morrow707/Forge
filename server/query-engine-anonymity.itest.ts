@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { storage } from "./storage";
 import { makeAthlete, makeCoach, resetDatabase } from "./test-support/fixtures";
+import { pool } from "./db";
 
 /**
  * The Admin Query Engine returns individual-level rows, so the properties
@@ -100,5 +101,65 @@ describe("query engine anonymity", () => {
       sport: ["Football"],
     } as any);
     expect(rows).toHaveLength(5);
+  });
+});
+
+describe("query budget", () => {
+  let adminId: number;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    const admin = await makeCoach({ role: "admin", name: "Admin" });
+    adminId = admin.id;
+    for (let i = 0; i < 5; i++) {
+      await makeAthlete({ sport: "Football", age: 17 });
+    }
+  });
+
+  const filters = { lookbackDays: 30, sport: ["Football"] } as any;
+
+  it("allows ordinary use and refuses once the daily budget is spent", async () => {
+    // The budget exists for differencing, which needs many probes at one
+    // narrow group. Answering a real question takes a handful, so the limit
+    // sits well above normal use and only bites on the unusual case.
+    for (let i = 0; i < 50; i++) {
+      await storage.queryAthletesAdvanced(adminId, filters);
+    }
+    await expect(storage.queryAthletesAdvanced(adminId, filters)).rejects.toThrow(
+      /query budget reached/i,
+    );
+  });
+
+  it("tells the admin when capacity returns rather than just refusing", async () => {
+    for (let i = 0; i < 50; i++) {
+      await storage.queryAthletesAdvanced(adminId, filters);
+    }
+    // Captured rather than asserted inside a catch: a bare throw in the try
+    // block lands in its own catch and the assertions never run.
+    const err = await storage
+      .queryAthletesAdvanced(adminId, filters)
+      .then(() => null)
+      .catch((e) => e);
+    expect(err).not.toBeNull();
+    expect(err.name).toBe("CohortQueryBudgetExceeded");
+    expect(err.budget.limit).toBe(50);
+    expect(err.budget.retryAfterMinutes).toBeGreaterThan(0);
+  });
+
+  it("budgets each admin separately", async () => {
+    const other = await makeCoach({ role: "admin", name: "Other Admin" });
+    for (let i = 0; i < 50; i++) {
+      await storage.queryAthletesAdvanced(adminId, filters);
+    }
+    // One admin exhausting their budget must not lock out everyone else.
+    await expect(storage.queryAthletesAdvanced(other.id, filters)).resolves.toHaveLength(5);
+  });
+
+  it("does not count queries that have aged out of the window", async () => {
+    for (let i = 0; i < 50; i++) {
+      await storage.queryAthletesAdvanced(adminId, filters);
+    }
+    await pool.query("UPDATE aggregate_data_access_log SET viewed_at = now() - interval '25 hours'");
+    await expect(storage.queryAthletesAdvanced(adminId, filters)).resolves.toHaveLength(5);
   });
 });

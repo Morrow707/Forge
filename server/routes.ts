@@ -11,7 +11,7 @@ import { setupAuth, requireAuth, requireRole } from "./auth";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
-import { storage } from "./storage";
+import { storage, CohortQueryBudgetExceeded } from "./storage";
 import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
 import { PRICING_CATALOG_KEYS } from "./pricing-catalog";
 import { buildIcsFeed } from "./ics";
@@ -2425,7 +2425,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: "A non-empty search text is required." });
     }
-    const result = await storage.runCohortQuery(parsed.data.text);
+    let result;
+    try {
+      result = await storage.runCohortQuery(req.user!.id, parsed.data.text);
+    } catch (err) {
+      if (err instanceof CohortQueryBudgetExceeded) {
+        return res.status(429).json({ message: err.message, budget: err.budget });
+      }
+      throw err;
+    }
     if (!result) {
       return res.status(422).json({ message: "Couldn't understand that as a data query -- try naming an age range, sport, position, or metric directly." });
     }
@@ -2460,7 +2468,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // The research population, not the platform one: only athletes who
     // affirmatively agreed to research use are in an extract that leaves.
-    const result = await storage.runResearchCohortQuery(parsed.data.text);
+    let result;
+    try {
+      result = await storage.runResearchCohortQuery(req.user!.id, parsed.data.text);
+    } catch (err) {
+      if (err instanceof CohortQueryBudgetExceeded) {
+        return res.status(429).json({ message: err.message, budget: err.budget });
+      }
+      throw err;
+    }
     if (!result) {
       return res.status(422).json({
         message: "Couldn't understand that as a data query -- try naming an age range, sport, position, or metric directly.",
@@ -3252,7 +3268,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = adminAthleteQueryFiltersSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid filters", issues: parsed.error.issues });
     const user = currentUser(req);
-    const rows = await storage.queryAthletesAdvanced(user.id, parsed.data);
+    let rows;
+    try {
+      rows = await storage.queryAthletesAdvanced(user.id, parsed.data);
+    } catch (err) {
+      if (err instanceof CohortQueryBudgetExceeded) {
+        return res.status(429).json({ message: err.message, budget: err.budget });
+      }
+      throw err;
+    }
     if (req.query.format === "csv") {
       const header = Object.keys(rows[0] ?? { athleteId: 0 });
       const lines = [header.join(",")];
@@ -3279,7 +3303,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(422).json({ message: "Couldn't understand that search -- try the filter panel instead." });
     }
     const user = currentUser(req);
-    const rows = await storage.queryAthletesAdvanced(user.id, filters);
+    let rows;
+    try {
+      rows = await storage.queryAthletesAdvanced(user.id, filters);
+    } catch (err) {
+      if (err instanceof CohortQueryBudgetExceeded) {
+        return res.status(429).json({ message: err.message, budget: err.budget });
+      }
+      throw err;
+    }
     res.json({ filters, rows });
   });
 

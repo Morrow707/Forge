@@ -321,6 +321,83 @@ const QUERY_ENGINE_MAX_ROWS = 10_000;
 // cannot be played off against each other for different answers.
 const QUERY_ENGINE_MIN_COHORT = 5;
 
+/**
+ * How many platform-wide athlete queries one admin may run in a rolling day.
+ *
+ * The suppression floor above only ever sees one query at a time, and that
+ * is the gap this closes. Ask for 17-year-old football athletes and get a
+ * mean from 50 people; add one filter and get the mean from 49; subtract,
+ * and you have recovered the 50th athlete's exact value. Both queries passed
+ * the floor individually. Differencing like that needs many probes, so a
+ * budget is what makes it impractical -- there is no per-query check that
+ * can catch it, because no single query is the problem.
+ *
+ * 50 is set well above ordinary use. Answering a real question takes a
+ * handful of queries; reconstructing an individual takes dozens aimed at the
+ * same narrow group. An operator who hits this was either doing something
+ * unusual or something they should be asked about, and both are worth a
+ * stop.
+ *
+ * The window is rolling rather than calendar-daily, so the budget cannot be
+ * doubled by waiting for midnight.
+ */
+const COHORT_QUERY_BUDGET_PER_DAY = 50;
+const COHORT_QUERY_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export class CohortQueryBudgetExceeded extends Error {
+  constructor(readonly budget: { used: number; limit: number; retryAfterMinutes: number }) {
+    super(
+      `Platform-data query budget reached (${budget.used}/${budget.limit} in the last 24 hours). ` +
+        `More capacity in about ${budget.retryAfterMinutes} minute(s).`,
+    );
+    this.name = "CohortQueryBudgetExceeded";
+  }
+}
+
+export type QueryBudgetResult =
+  | { allowed: true; used: number; limit: number }
+  | { allowed: false; used: number; limit: number; retryAfterMinutes: number };
+
+/**
+ * Records one platform-data query against an admin's budget, or refuses.
+ *
+ * The write is awaited, unlike the fire-and-forget audit write it shares a
+ * table with: a budget that can be bypassed by a failed insert is not a
+ * budget. If the log cannot be written, the query does not run.
+ */
+async function consumeCohortQueryBudget(adminId: number): Promise<QueryBudgetResult> {
+  const since = new Date(Date.now() - COHORT_QUERY_BUDGET_WINDOW_MS);
+  const [row] = await db
+    .select({ used: count() })
+    .from(aggregateDataAccessLog)
+    .where(and(eq(aggregateDataAccessLog.adminId, adminId), gte(aggregateDataAccessLog.viewedAt, since)));
+  const used = row?.used ?? 0;
+
+  if (used >= COHORT_QUERY_BUDGET_PER_DAY) {
+    // When the budget frees up is when the oldest query in the window ages
+    // out, not an arbitrary hour -- so the answer to "when can I run this"
+    // is a real time rather than "try later".
+    const [oldest] = await db
+      .select({ viewedAt: aggregateDataAccessLog.viewedAt })
+      .from(aggregateDataAccessLog)
+      .where(and(eq(aggregateDataAccessLog.adminId, adminId), gte(aggregateDataAccessLog.viewedAt, since)))
+      .orderBy(asc(aggregateDataAccessLog.viewedAt))
+      .limit(1);
+    const freesAt = oldest
+      ? oldest.viewedAt.getTime() + COHORT_QUERY_BUDGET_WINDOW_MS
+      : Date.now() + COHORT_QUERY_BUDGET_WINDOW_MS;
+    return {
+      allowed: false,
+      used,
+      limit: COHORT_QUERY_BUDGET_PER_DAY,
+      retryAfterMinutes: Math.max(1, Math.ceil((freesAt - Date.now()) / 60_000)),
+    };
+  }
+
+  await db.insert(aggregateDataAccessLog).values({ adminId });
+  return { allowed: true, used: used + 1, limit: COHORT_QUERY_BUDGET_PER_DAY };
+}
+
 // Cap on the strength/speed leaderboards -- see getLeaderboardForExercise's
 // own comment. A 25k-athlete roster returned every athlete who'd ever
 // logged the exercise (up to 5,001 rows on a real 5,001-enrollment class)
@@ -5665,16 +5742,12 @@ export const storage = {
     }[];
     total: number;
   }> {
-    // Deliberately not awaited -- an audit write must never make an admin's
-    // own query fail or wait. But the failure is logged rather than
-    // swallowed: this table is the ONLY accountability mechanism on
-    // platform-wide athlete data (nothing else restricts who may run these
-    // queries), so a write that silently never lands means the access
-    // happened and left no trace, which is the one outcome the log exists
-    // to prevent.
-    db.insert(aggregateDataAccessLog)
-      .values({ adminId })
-      .catch((err) => console.error("Failed to write aggregate-data access log:", err));
+    // Awaited, and it can refuse. This used to be a fire-and-forget audit
+    // write on the reasoning that logging must never make a query fail; the
+    // same row is now also the budget counter, and a budget that a failed
+    // insert can bypass is not a budget. The caller surfaces the refusal.
+    const budget = await consumeCohortQueryBudget(adminId);
+    if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);
     const [rows, [{ count: total }]] = await Promise.all([
       db
         .select({
@@ -14493,16 +14566,14 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
     limit = 200,
     offset = 0,
   ): Promise<{ rows: AggregateAthleteRow[]; total: number }> {
-    // Deliberately not awaited -- an audit write must never make an admin's
-    // own query fail or wait. But the failure is logged rather than
-    // swallowed: this table is the ONLY accountability mechanism on
-    // platform-wide athlete data (nothing else restricts who may run these
-    // queries), so a write that silently never lands means the access
-    // happened and left no trace, which is the one outcome the log exists
-    // to prevent.
-    db.insert(aggregateDataAccessLog)
-      .values({ adminId })
-      .catch((err) => console.error("Failed to write aggregate-data access log:", err));
+    // Awaited, and it can refuse. This was a fire-and-forget audit write on
+    // the reasoning that logging must never make a query fail; that reasoning
+    // no longer holds. The same row
+    // is now the budget counter as well as the audit record, and a budget a
+    // failed insert can bypass is not a budget, so this is awaited and can
+    // refuse. The caller turns the refusal into a 429.
+    const budget = await consumeCohortQueryBudget(adminId);
+    if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);
     const [rows, [{ count: total }]] = await Promise.all([
       this.queryAggregateAthleteData({ limit, offset }),
       // Same predicate the rows themselves use. Counting every athlete here
@@ -14599,16 +14670,13 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       caraCapUsagePercent: number | null;
     })[]
   > {
-    // Deliberately not awaited -- an audit write must never make an admin's
-    // own query fail or wait. But the failure is logged rather than
-    // swallowed: this table is the ONLY accountability mechanism on
-    // platform-wide athlete data (nothing else restricts who may run these
-    // queries), so a write that silently never lands means the access
-    // happened and left no trace, which is the one outcome the log exists
-    // to prevent.
-    db.insert(aggregateDataAccessLog)
-      .values({ adminId })
-      .catch((err) => console.error("Failed to write aggregate-data access log:", err));
+    // Awaited, and it can refuse. This was a fire-and-forget audit write on
+    // the reasoning that logging must never make a query fail. The same row
+    // is now the budget counter as well as the audit record, and a budget a
+    // failed insert can bypass is not a budget, so it is awaited now. The
+    // caller turns the refusal into a 429.
+    const budget = await consumeCohortQueryBudget(adminId);
+    if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);
 
     const cutoff = new Date(Date.now() - filters.lookbackDays * 24 * 60 * 60 * 1000)
       .toISOString()
@@ -20957,7 +21025,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * a genuinely rare cohort from a common one almost nobody has consented
    * to, and would read the second as the first.
    */
-  async runResearchCohortQuery(text: string) {
+  async runResearchCohortQuery(adminId: number, text: string) {
+    const budget = await consumeCohortQueryBudget(adminId);
+    if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);
     const filters = await parseCohortQueryText(text);
     if (!filters) return null;
     const [all, consented] = await Promise.all([
@@ -21022,7 +21092,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return { totalAthletes: total?.count ?? 0, consentedAthletes: consented?.count ?? 0 };
   },
 
-  async runCohortQuery(text: string) {
+  async runCohortQuery(adminId: number, text: string) {
+    const budget = await consumeCohortQueryBudget(adminId);
+    if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);
     const filters = await parseCohortQueryText(text);
     if (!filters) return null;
     const query = await queryTrackedCohort(filters);
