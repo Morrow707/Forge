@@ -19,13 +19,20 @@ on:
   schedule:
     - cron: "27 6 * * 3"
 
-# The swift job below runs on a macOS runner, and GitHub's macOS pool is
-# far scarcer than its Linux one. Every job queued here competes with the
-# TestFlight build for the same machines: on 2026-09-07 an upload waited
-# 23 minutes, then a second one waited 36, while ten Dependabot pull
-# requests each held a macOS CodeQL job. Cancelling superseded runs is the
-# cheapest fix -- an analysis of a commit that is no longer the branch head
-# tells nobody anything, and it was holding a runner to do it.
+# The swift job below runs on a macOS runner, and GitHub's macOS pool is far
+# scarcer than its Linux one, so every run of it competes with the TestFlight
+# build for the same machines. Cancelling superseded runs is the part of that
+# problem this file can fix safely: analysing a commit that is no longer the
+# branch head tells nobody anything, and it was holding a runner to do it.
+#
+# Two attempts to also skip swift outside the weekly schedule were reverted
+# on 2026-09-07, and both failed the same way: GitHub rejected the workflow
+# file outright, so every run died at startup before a single job began, with
+# no logs to say why. A job-level `if` cannot read the matrix context, and an
+# expression in `strategy.matrix.exclude` is not accepted either. Any future
+# attempt needs a separate job with its own plain `if`, verified on a branch
+# before it reaches main -- a broken workflow file takes ALL analysis down,
+# not just the job being changed.
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -41,11 +48,6 @@ jobs:
       actions: read
       contents: read
 
-    # Swift is excluded from the matrix except on the weekly schedule, rather
-    # than skipped with a job-level `if`. A job-level condition cannot read
-    # the matrix context at all -- GitHub rejects the whole workflow file, so
-    # every run fails at startup before a single job begins, which is exactly
-    # what the first attempt at this did.
     strategy:
       fail-fast: false
       matrix:
@@ -65,14 +67,6 @@ jobs:
           - language: swift
             build-mode: manual
             os: macos-latest
-
-        # Weekly only. This is the only macOS job in the repo besides the
-        # TestFlight build, and every run of it takes a machine that build
-        # needs. What it analyzes is ios/, a generated Capacitor shell that
-        # changes a few times a year, so per-push analysis was re-checking
-        # unchanged Swift at the direct cost of build latency. If ios/ ever
-        # gains real hand-written Swift, move this back into `include`.
-        exclude: ${{ github.event_name == 'schedule' && fromJSON('[]') || fromJSON('[{"language":"swift"}]') }}
 
     steps:
       - name: Checkout repository

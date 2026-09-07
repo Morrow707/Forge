@@ -46,6 +46,11 @@ import {
 import { missingPriceEnvVars } from "./stripe-prices";
 import { getHealthSnapshot } from "./health-probes";
 import {
+  buildResearchExportPdf,
+  RESEARCH_EXPORT_MIN_CELL,
+  type ResearchMetricSummary,
+} from "./research-export";
+import {
   getFailingSources,
   getActiveSystemEvents,
   getRecentSystemEvents,
@@ -871,6 +876,22 @@ async function notifyNewlyUnlockedLessons(
       `/athlete/classes/${lesson.classId}`,
     );
   }
+}
+
+// One cohort metric result rendered for the export. `suppressed` results
+// carry no values at all, and the export's own threshold is higher than the
+// in-app one, so n is passed through and the renderer decides.
+function toMetricSummary(r: any): ResearchMetricSummary {
+  return {
+    metric: r.label ?? r.key,
+    unit: r.unit || null,
+    n: r.n ?? 0,
+    mean: r.mean ?? null,
+    p25: r.p25 ?? null,
+    p75: r.p75 ?? null,
+    min: r.min ?? null,
+    max: r.max ?? null,
+  };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2409,6 +2430,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(422).json({ message: "Couldn't understand that as a data query -- try naming an age range, sport, position, or metric directly." });
     }
     res.json(result);
+  });
+
+  // The dataset document Forge would hand to an outside party. Same cohort
+  // engine as the query above, rendered through research-export.ts, which
+  // applies a HIGHER suppression floor than the in-app one and prints the
+  // anonymity guarantees, the suppression rule and the real limitations on
+  // the page -- a recipient cannot see this code, so the document has to
+  // explain itself.
+  //
+  // Deliberately a POST rather than a GET with query params: the request
+  // body carries the cohort description the operator wrote, and a URL that
+  // fully describes a dataset extract is a URL that ends up in a browser
+  // history, a proxy log and a shared link.
+  app.post("/api/admin/research-export.pdf", requireRole("admin"), async (req, res) => {
+    if (!aiEnabled) {
+      return res.status(503).json({ message: "AI parsing isn't configured on this server." });
+    }
+    const parsed = z
+      .object({
+        text: z.string().trim().min(1).max(500),
+        notes: z.array(z.string().trim().min(1).max(300)).max(10).optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "A non-empty cohort description is required." });
+    }
+
+    const result = await storage.runCohortQuery(parsed.data.text);
+    if (!result) {
+      return res.status(422).json({
+        message: "Couldn't understand that as a data query -- try naming an age range, sport, position, or metric directly.",
+      });
+    }
+
+    const filterLines: { label: string; value: string }[] = [];
+    const f = result.filters;
+    if (f.ageMin != null || f.ageMax != null) {
+      filterLines.push({
+        label: "Age",
+        value: f.ageMin != null && f.ageMax != null ? `${f.ageMin}-${f.ageMax}` : f.ageMin != null ? `${f.ageMin}+` : `up to ${f.ageMax}`,
+      });
+    }
+    if (f.genders?.length) filterLines.push({ label: "Gender", value: f.genders.join(", ") });
+    if (f.sports?.length) filterLines.push({ label: "Sport", value: f.sports.join(", ") });
+    if (f.positions?.length) filterLines.push({ label: "Position", value: f.positions.join(", ") });
+    if (f.exerciseNames?.length) filterLines.push({ label: "Exercise", value: f.exerciseNames.join(", ") });
+    if (f.injuryRegions?.length) {
+      filterLines.push({ label: "Injury region", value: f.injuryRegions.join(", ") });
+    }
+    if (filterLines.length === 0) filterLines.push({ label: "Filters", value: "none (whole platform)" });
+
+    const groups =
+      result.crosstab && result.crosstab.length > 0
+        ? result.crosstab.map((g: any) => ({
+            groupLabel: g.group,
+            n: g.cohortSize ?? result.cohortSize,
+            metrics: (g.results ?? []).map(toMetricSummary),
+          }))
+        : [
+            {
+              groupLabel: "All athletes in cohort",
+              n: result.cohortSize,
+              metrics: result.results.map(toMetricSummary),
+            },
+          ];
+
+    const pdf = await buildResearchExportPdf({
+      generatedAt: new Date(),
+      cohortDescription: parsed.data.text,
+      filters: filterLines,
+      // The extract describes whatever is on file; there is no per-event
+      // date in the output, so the window is reported as the platform's
+      // data span rather than implying a narrower observation period.
+      windowStart: "all data on file",
+      windowEnd: new Date().toISOString().slice(0, 10),
+      totalAthletes: result.cohortSize,
+      totalSuppressed: result.cohortSize < RESEARCH_EXPORT_MIN_CELL,
+      groups,
+      injuries: result.injuries
+        ? result.injuries.map((i) => ({
+            region: i.region,
+            athletesAffected: i.athletesAffected,
+            injuryCount: i.injuryCount,
+          }))
+        : null,
+      notes: parsed.data.notes ?? [],
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="forge-dataset-extract.pdf"');
+    res.send(pdf);
   });
 
   // ---------------- Admin: billing/pricing assignment ----------------

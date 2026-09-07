@@ -135,6 +135,7 @@ import {
   type PrivacyTier,
 } from "@shared/privacy-tiers";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { normalizeInjuryRegion, INJURY_REGIONS, type InjuryRegion } from "@shared/injury-taxonomy";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
   MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
@@ -1889,6 +1890,15 @@ export type CohortQueryFilters = {
   exerciseNames?: string[];
   metrics: string[];
   groupBy?: "sport" | "position" | "ageBracket" | "gender" | null;
+  // Restrict the cohort to athletes with at least one recorded injury in
+  // these regions, and report injury counts alongside the metrics. Regions
+  // are the closed vocabulary in shared/injury-taxonomy, normalised from
+  // the free text someone typed -- grouping on the raw column would split
+  // one injury across every spelling of it.
+  injuryRegions?: InjuryRegion[];
+  // Include the injury breakdown even when not filtering by region, which
+  // is what an injury-rate question actually needs.
+  includeInjuries?: boolean;
 };
 
 function summarizeCohort(values: number[]) {
@@ -1916,6 +1926,67 @@ function cohortGroupLabel(
   if (dim === "gender") return a.gender ? GENDER_LABEL[a.gender] : "Not set";
   if (dim === "position") return a.position?.trim() || "Not set";
   return normalizeSport(a.sport)?.label ?? "Not set";
+}
+
+/**
+ * Per-region injury counts for a set of athletes, with the same suppression
+ * floor every other cohort statistic uses.
+ *
+ * Two counts rather than one, because they answer different questions and
+ * conflating them is the classic way an injury table misleads. An athlete
+ * who tore the same hamstring twice is one affected athlete and two
+ * injuries: a prevalence question wants the first number, an incidence
+ * question the second.
+ *
+ * Regions with nobody in them are dropped, but a region with people in it
+ * is always reported -- suppressed if the group is small, never silently
+ * removed, so the table's rows do not themselves leak which regions had
+ * one or two cases.
+ */
+async function summarizeInjuriesForCohort(
+  athleteIds: number[],
+): Promise<{ region: InjuryRegion; athletesAffected: number; injuryCount: number; suppressed: boolean }[]> {
+  if (athleteIds.length === 0) return [];
+  const rows = await db
+    .select({ athleteId: injuryHistory.athleteId, bodyPart: injuryHistory.bodyPart })
+    .from(injuryHistory)
+    .where(inArray(injuryHistory.athleteId, athleteIds));
+
+  const byRegion = new Map<InjuryRegion, { athletes: Set<number>; injuries: number }>();
+  for (const row of rows) {
+    const region = normalizeInjuryRegion(row.bodyPart);
+    const entry = byRegion.get(region) ?? { athletes: new Set<number>(), injuries: 0 };
+    entry.athletes.add(row.athleteId);
+    entry.injuries += 1;
+    byRegion.set(region, entry);
+  }
+
+  return [...byRegion.entries()]
+    .map(([region, entry]) => ({
+      region,
+      athletesAffected: entry.athletes.size,
+      injuryCount: entry.injuries,
+      suppressed: entry.athletes.size < PLATFORM_TRENDS_MIN_COHORT,
+    }))
+    .sort((a, b) => b.athletesAffected - a.athletesAffected);
+}
+
+/** Athletes with at least one recorded injury in any of `regions`. */
+async function athletesWithInjuryInRegions(
+  athleteIds: number[],
+  regions: InjuryRegion[],
+): Promise<Set<number>> {
+  if (athleteIds.length === 0 || regions.length === 0) return new Set();
+  const rows = await db
+    .select({ athleteId: injuryHistory.athleteId, bodyPart: injuryHistory.bodyPart })
+    .from(injuryHistory)
+    .where(inArray(injuryHistory.athleteId, athleteIds));
+  const wanted = new Set(regions);
+  const matched = new Set<number>();
+  for (const row of rows) {
+    if (wanted.has(normalizeInjuryRegion(row.bodyPart))) matched.add(row.athleteId);
+  }
+  return matched;
 }
 
 // The real aggregation engine -- everything above buildPlatformTrends'
@@ -1957,8 +2028,20 @@ async function queryTrackedCohort(filters: CohortQueryFilters) {
     if (positionSet && !positionSet.has((a.position ?? "").toLowerCase())) return false;
     return true;
   });
-  const cohortIds = new Set(cohort.map((a) => a.id));
-  const athleteById = new Map(cohort.map((a) => [a.id, a]));
+  let cohortRows = cohort;
+  if (filters.injuryRegions?.length) {
+    const matched = await athletesWithInjuryInRegions(
+      cohort.map((a) => a.id),
+      filters.injuryRegions,
+    );
+    cohortRows = cohort.filter((a) => matched.has(a.id));
+  }
+  const injuries =
+    filters.includeInjuries || filters.injuryRegions?.length
+      ? await summarizeInjuriesForCohort(cohortRows.map((a) => a.id))
+      : null;
+  const cohortIds = new Set(cohortRows.map((a) => a.id));
+  const athleteById = new Map(cohortRows.map((a) => [a.id, a]));
 
   const requestedMetrics = filters.metrics
     .map((k) => COHORT_METRIC_BY_KEY.get(k))
@@ -2039,10 +2122,14 @@ async function queryTrackedCohort(filters: CohortQueryFilters) {
   }
 
   return {
-    cohortSize: cohort.length,
+    // cohortRows, not cohort: with an injury-region filter applied, the
+    // cohort IS the injured subset, and reporting the pre-filter count
+    // would silently inflate every denominator a reader computes.
+    cohortSize: cohortRows.length,
     minCohortSize: PLATFORM_TRENDS_MIN_COHORT,
     results,
     crosstab,
+    injuries,
   };
 }
 
@@ -2099,6 +2186,17 @@ const cohortQueryTool = {
         enum: ["sport", "position", "ageBracket", "gender"],
         description: "Only set if the admin asked for a breakdown/comparison across a dimension (e.g. 'by sport', 'compare positions'). Omit for a single overall number.",
       },
+      injuryRegions: {
+        type: "array",
+        items: { type: "string", enum: INJURY_REGIONS.map((r) => r.key) },
+        description:
+          "Body regions the admin restricted the cohort to (e.g. 'athletes with hamstring injuries' -> [\"hamstring\"], 'ACL' -> [\"knee\"], 'concussion' -> [\"head\"]). Omit unless the admin asked specifically about athletes who HAVE an injury.",
+      },
+      includeInjuries: {
+        type: "boolean",
+        description:
+          "True when the admin asked about injuries at all -- rates, counts, 'how many got hurt', 'most common injury' -- even if they did not name a region. Adds an injury breakdown to the answer without narrowing the cohort.",
+      },
     },
     required: ["metrics"],
   },
@@ -2115,6 +2213,8 @@ ${metricList}
 Exercises that actually have camera-tracking data on file (use these exact names for exerciseNames, never invent one):
 ${exerciseNames.join(", ") || "(none tracked yet)"}
 
+Injuries: set injuryRegions only when the admin restricted the cohort to athletes who HAVE an injury ("football athletes with hamstring injuries"). Set includeInjuries when they asked about injuries at all, including rates and "what gets hurt most", without naming a region. Map clinical terms onto the region a reader would group them under: ACL/meniscus -> knee, Tommy John -> elbow, concussion -> head, plantar fasciitis -> foot.
+
 Only extract what the admin actually said -- do not infer an age range, gender, sport, or position that wasn't stated. If the admin names one specific lift (e.g. "back squat"), extract ONLY that lift's exerciseNames -- never add a second exercise (like Bench Press) they didn't mention, even if the metric (bar velocity) is shared across lifts.`;
 
   const parsed = await askClaudeStructured<{
@@ -2126,6 +2226,8 @@ Only extract what the admin actually said -- do not infer an age range, gender, 
     exerciseNames?: string[];
     metrics?: string[];
     groupBy?: "sport" | "position" | "ageBracket" | "gender";
+    injuryRegions?: string[];
+    includeInjuries?: boolean;
   }>(system, text, cohortQueryTool, { maxTokens: 512 });
 
   if (!parsed) return null;
@@ -2139,6 +2241,14 @@ Only extract what the admin actually said -- do not infer an age range, gender, 
     exerciseNames: parsed.exerciseNames,
     metrics: validMetrics.length > 0 ? validMetrics : ["peakVelocityMps"],
     groupBy: parsed.groupBy ?? null,
+    // Filtered against the vocabulary rather than trusted: the enum in the
+    // tool schema is a request, and an unrecognised region would otherwise
+    // silently match nothing and return an empty cohort that reads like a
+    // real finding of zero.
+    injuryRegions: parsed.injuryRegions?.filter((r): r is InjuryRegion =>
+      INJURY_REGIONS.some((known) => known.key === r),
+    ),
+    includeInjuries: parsed.includeInjuries === true,
   };
   return filters;
 }
