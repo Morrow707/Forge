@@ -2710,6 +2710,43 @@ CREATE TABLE IF NOT EXISTS "knowledge_passages" (
 
 CREATE INDEX IF NOT EXISTS "knowledge_passages_source_idx"
   ON "knowledge_passages" ("source_id", "ordinal");
+
+-- Full-text search over passages. A generated column rather than a trigger:
+-- Postgres keeps it in step with the text automatically, so a passage can
+-- never be searchable as something it no longer says.
+ALTER TABLE "knowledge_passages"
+  ADD COLUMN IF NOT EXISTS "search_vector" tsvector
+  GENERATED ALWAYS AS (to_tsvector('english', "text")) STORED;
+
+CREATE INDEX IF NOT EXISTS "knowledge_passages_search_idx"
+  ON "knowledge_passages" USING GIN ("search_vector");
+
+-- Conflicts found between two passages, or between a passage and a taught
+-- entry (shared/schema.ts knowledgeConflicts).
+DO $$ BEGIN
+  CREATE TYPE "knowledge_conflict_status" AS ENUM (
+    'open', 'prefer_new', 'prefer_existing', 'scoped', 'dismissed'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "knowledge_conflicts" (
+  "id" serial PRIMARY KEY,
+  "passage_id" integer NOT NULL REFERENCES "knowledge_passages"("id") ON DELETE CASCADE,
+  "other_passage_id" integer REFERENCES "knowledge_passages"("id") ON DELETE CASCADE,
+  "summary" text NOT NULL,
+  "status" "knowledge_conflict_status" NOT NULL DEFAULT 'open',
+  "resolution_reason" text,
+  "scope_json" text,
+  "fingerprint" text NOT NULL,
+  "resolved_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "resolved_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "knowledge_conflicts_fingerprint_idx"
+  ON "knowledge_conflicts" ("fingerprint");
+CREATE INDEX IF NOT EXISTS "knowledge_conflicts_status_idx"
+  ON "knowledge_conflicts" ("status", "created_at");
 `;
 
 async function main() {

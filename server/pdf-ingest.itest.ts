@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { storage } from "./storage";
 import { extractPdf, splitIntoPassages } from "./pdf-extract";
+import { searchKnowledgePassages, findSimilarPassages } from "./knowledge-retrieval";
 import { makeCoach, resetDatabase } from "./test-support/fixtures";
 
 /**
@@ -158,5 +159,153 @@ describe("PDF ingestion", () => {
       passages: [],
     });
     expect(source.status).toBe("needs_vision");
+  });
+});
+
+describe("knowledge retrieval", () => {
+  let adminId: number;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    const admin = await makeCoach({ role: "admin", name: "Admin" });
+    adminId = admin.id;
+  });
+
+  async function ingest(title: string, domains: string[], pages: string[]) {
+    const pdf = makePdf(pages);
+    const extracted = await extractPdf(pdf);
+    return storage.createKnowledgeSource({
+      uploadedByUserId: adminId,
+      title,
+      citation: `${title}, 2026`,
+      filePath: null,
+      fileHash: extracted.fileHash,
+      pageCount: extracted.pageCount,
+      domains,
+      passages: splitIntoPassages(extracted.pages),
+    });
+  }
+
+  it("finds a passage by its terms and can cite where it came from", async () => {
+    await ingest("Strength Manual", ["strength"], [
+      "Eccentric hamstring loading during terminal swing is the mechanism behind most sprint " +
+        "related strains. ".repeat(20),
+    ]);
+    const hits = await searchKnowledgePassages({ query: "hamstring strain", domains: ["strength"] });
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0].text).toContain("hamstring");
+    // Without a citation a retrieved claim has no source a coach can check.
+    expect(hits[0].citation).toBe("Strength Manual, 2026");
+    expect(hits[0].pageNumber).toBe(1);
+  });
+
+  it("keeps the domains apart so one assistant cannot read another's material", async () => {
+    await ingest("Nutrition Manual", ["nutrition"], [
+      "Carbohydrate availability around training sessions drives recovery. ".repeat(25),
+    ]);
+    await ingest("Bar Speed Manual", ["strength"], [
+      "Velocity loss thresholds set the stopping point for a strength set. ".repeat(25),
+    ]);
+
+    const nutrition = await searchKnowledgePassages({ query: "velocity loss", domains: ["nutrition"] });
+    expect(nutrition).toHaveLength(0);
+
+    const strength = await searchKnowledgePassages({ query: "velocity loss", domains: ["strength"] });
+    expect(strength.length).toBeGreaterThan(0);
+  });
+
+  it("reads across domains when a caller asks for both", async () => {
+    // The class AI building a nutrition course reads the nutrition domain
+    // deliberately; that is a query parameter, not a special case.
+    await ingest("Nutrition Manual", ["nutrition"], [
+      "Carbohydrate availability around training sessions drives recovery. ".repeat(25),
+    ]);
+    const hits = await searchKnowledgePassages({
+      query: "carbohydrate recovery",
+      domains: ["class", "nutrition"],
+    });
+    expect(hits.length).toBeGreaterThan(0);
+  });
+
+  it("returns nothing rather than raising on a malformed query", async () => {
+    await ingest("Manual", ["strength"], ["Something about training load. ".repeat(30)]);
+    await expect(
+      searchKnowledgePassages({ query: '"unclosed quote AND', domains: ["strength"] }),
+    ).resolves.toBeInstanceOf(Array);
+  });
+
+  it("does not offer a source's own passages as its contradiction candidates", async () => {
+    // A book restating its own point across two pages is not a contradiction,
+    // and treating it as one would bury every real conflict.
+    const source = await ingest("Repetitive Manual", ["strength"], [
+      "Hamstring strains are managed with progressive eccentric loading. ".repeat(30),
+      "Hamstring strains are managed with progressive eccentric loading. ".repeat(30),
+    ]);
+    const passages = await storage.getKnowledgePassages(source.id);
+    const similar = await findSimilarPassages({
+      passageId: passages[0].id,
+      text: passages[0].text,
+      domains: ["strength"],
+    });
+    expect(similar).toHaveLength(0);
+  });
+
+  it("finds a near-identical passage in a different source", async () => {
+    // Near-identical content, but not byte-identical -- two books can make
+    // the same point without being the same file, and the hash dedupe would
+    // (correctly) refuse the second if they were.
+    await ingest("Book A", ["strength"], [
+      "Return to play requires symmetrical eccentric hamstring strength within ten percent. ".repeat(20),
+    ]);
+    const b = await ingest("Book B", ["strength"], [
+      "Return to play requires symmetrical eccentric hamstring strength within ten percent, " +
+        "measured on a dynamometer. ".repeat(18),
+    ]);
+    const passages = await storage.getKnowledgePassages(b.id);
+    const similar = await findSimilarPassages({
+      passageId: passages[0].id,
+      text: passages[0].text,
+      domains: ["strength"],
+    });
+    expect(similar.length).toBeGreaterThan(0);
+    expect(similar[0].sourceTitle).toBe("Book A");
+  });
+
+  it("raises a conflict once and remembers the ruling", async () => {
+    const a = await ingest("Book A", ["strength"], ["Rest three minutes between heavy sets. ".repeat(25)]);
+    const b = await ingest("Book B", ["strength"], ["Rest ninety seconds between heavy sets. ".repeat(25)]);
+    const [pa] = await storage.getKnowledgePassages(a.id);
+    const [pb] = await storage.getKnowledgePassages(b.id);
+
+    const first = await storage.recordKnowledgeConflict({
+      passageId: pb.id,
+      otherPassageId: pa.id,
+      summary: "One says three minutes, the other ninety seconds.",
+    });
+    expect(first).not.toBeNull();
+
+    // Same pair in the other order is the same disagreement, not a new one.
+    const again = await storage.recordKnowledgeConflict({
+      passageId: pa.id,
+      otherPassageId: pb.id,
+      summary: "duplicate",
+    });
+    expect(again).toBeNull();
+
+    const open = await storage.listKnowledgeConflicts("open");
+    expect(open).toHaveLength(1);
+    expect(open[0].passage?.text).toContain("Rest");
+
+    await storage.resolveKnowledgeConflict({
+      id: open[0].id,
+      adminId,
+      status: "scoped",
+      reason: "Baseball athletes train for velocity, so the shorter rest applies there.",
+      scope: { sports: ["Baseball"] },
+    });
+    expect(await storage.listKnowledgeConflicts("open")).toHaveLength(0);
+    const all = await storage.listKnowledgeConflicts("all");
+    expect(all[0].status).toBe("scoped");
+    expect(JSON.parse(all[0].scopeJson!)).toEqual({ sports: ["Baseball"] });
   });
 });

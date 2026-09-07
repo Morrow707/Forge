@@ -58,6 +58,7 @@ import {
   researchExports,
   knowledgeSources,
   knowledgePassages,
+  knowledgeConflicts,
   caraSessions,
   athleteTrophies,
   acwrRiskAlerts,
@@ -139,6 +140,7 @@ import {
 } from "@shared/privacy-tiers";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { normalizeInjuryRegion, INJURY_REGIONS, type InjuryRegion } from "@shared/injury-taxonomy";
+import { findSimilarPassages } from "./knowledge-retrieval";
 import { RESEARCH_CONSENT_TEXT } from "@shared/research-consent";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
@@ -21158,6 +21160,173 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       }
       return source;
     });
+  },
+
+  /**
+   * Raise a conflict between two passages, or update the one already raised.
+   *
+   * Folded by fingerprint so the same disagreement is surfaced once. A pair
+   * an admin already dismissed stays dismissed: being asked the same question
+   * on every ingest is how a review queue becomes something people stop
+   * reading.
+   */
+  async recordKnowledgeConflict(input: {
+    passageId: number;
+    otherPassageId: number;
+    summary: string;
+  }) {
+    // Order-independent, so A-vs-B and B-vs-A are one conflict rather than
+    // two facing each other.
+    const [a, b] = [input.passageId, input.otherPassageId].sort((x, y) => x - y);
+    const fingerprint = `${a}:${b}`;
+    const [row] = await db
+      .insert(knowledgeConflicts)
+      .values({ passageId: input.passageId, otherPassageId: input.otherPassageId, summary: input.summary, fingerprint })
+      .onConflictDoNothing({ target: knowledgeConflicts.fingerprint })
+      .returning();
+    return row ?? null;
+  },
+
+  /**
+   * Look for contradictions between one source's passages and everything
+   * already ingested.
+   *
+   * Run on demand rather than automatically on every upload, and that is a
+   * cost decision stated plainly: a 400-page book is a couple of thousand
+   * passages, and asking the model about each one's neighbours is a couple of
+   * thousand calls. Checking only passages that HAVE a close neighbour cuts
+   * most of that, but not enough to make it a silent background cost on every
+   * upload.
+   *
+   * Only pairs the model actually calls a conflict are recorded. Two passages
+   * covering the same ground while agreeing is the common case, and recording
+   * those would bury the real disagreements.
+   */
+  async detectKnowledgeConflicts(sourceId: number, options?: { maxPassages?: number }) {
+    if (!aiEnabled) return { checked: 0, found: 0, skipped: "AI is not configured" as const };
+    const source = await db.query.knowledgeSources.findFirst({ where: eq(knowledgeSources.id, sourceId) });
+    if (!source) return { checked: 0, found: 0, skipped: "Source not found" as const };
+
+    const passages = await db
+      .select({ id: knowledgePassages.id, text: knowledgePassages.text })
+      .from(knowledgePassages)
+      .where(eq(knowledgePassages.sourceId, sourceId))
+      .orderBy(asc(knowledgePassages.ordinal))
+      .limit(options?.maxPassages ?? 400);
+
+    let checked = 0;
+    let found = 0;
+
+    for (const passage of passages) {
+      const neighbours = await findSimilarPassages({
+        passageId: passage.id,
+        text: passage.text,
+        domains: source.domains,
+        limit: 3,
+      });
+      // Nothing close enough to disagree with. Most passages land here, and
+      // that is what keeps this affordable.
+      if (neighbours.length === 0) continue;
+      checked += 1;
+
+      const verdict = await askClaudeStructured<{ conflicts: boolean; summary?: string; otherIndex?: number }>(
+        "You compare two pieces of coaching guidance and say whether they genuinely CONTRADICT each other. " +
+          "Contradiction means following one would mean not following the other: different rep ranges for the " +
+          "same purpose, opposite advice about the same exercise, incompatible return-to-play criteria. " +
+          "Two passages covering the same topic and agreeing, or one being more specific than the other, is " +
+          "NOT a contradiction -- a specific rule narrowing a general one is how good coaching material works. " +
+          "Be conservative: a queue full of things that are not really conflicts is a queue nobody reads.",
+        `New passage:\n${passage.text}\n\n` +
+          neighbours.map((n, i) => `Existing passage ${i}:\n${n.text}`).join("\n\n"),
+        {
+          name: "report_conflict",
+          description: "Say whether the new passage contradicts any of the existing ones.",
+          input_schema: {
+            type: "object",
+            properties: {
+              conflicts: { type: "boolean", description: "True only for a genuine contradiction." },
+              otherIndex: { type: "number", description: "Which existing passage it contradicts, by index." },
+              summary: {
+                type: "string",
+                description:
+                  "One or two sentences an admin can rule on: what each source says and where they part company.",
+              },
+            },
+            required: ["conflicts"],
+          },
+        },
+        { maxTokens: 400 },
+      );
+
+      if (!verdict?.conflicts || !verdict.summary) continue;
+      const other = neighbours[verdict.otherIndex ?? 0] ?? neighbours[0];
+      const recorded = await this.recordKnowledgeConflict({
+        passageId: passage.id,
+        otherPassageId: other.passageId,
+        summary: verdict.summary,
+      });
+      if (recorded) found += 1;
+    }
+
+    return { checked, found, skipped: null };
+  },
+
+  async listKnowledgeConflicts(status: "open" | "all" = "open", limit = 50) {
+    const rows = await db
+      .select()
+      .from(knowledgeConflicts)
+      .where(status === "open" ? eq(knowledgeConflicts.status, "open") : sql`true`)
+      .orderBy(desc(knowledgeConflicts.createdAt))
+      .limit(limit);
+
+    // The passages themselves, so the admin rules on the actual words rather
+    // than on a summary of them.
+    const ids = [...new Set(rows.flatMap((r) => [r.passageId, r.otherPassageId].filter((v): v is number => v != null)))];
+    if (ids.length === 0) return rows.map((r) => ({ ...r, passage: null, otherPassage: null }));
+    const passages = await db
+      .select({
+        id: knowledgePassages.id,
+        text: knowledgePassages.text,
+        pageNumber: knowledgePassages.pageNumber,
+        sourceTitle: knowledgeSources.title,
+        citation: knowledgeSources.citation,
+      })
+      .from(knowledgePassages)
+      .innerJoin(knowledgeSources, eq(knowledgeSources.id, knowledgePassages.sourceId))
+      .where(inArray(knowledgePassages.id, ids));
+    const byId = new Map(passages.map((p) => [p.id, p]));
+    return rows.map((r) => ({
+      ...r,
+      passage: byId.get(r.passageId) ?? null,
+      otherPassage: r.otherPassageId != null ? (byId.get(r.otherPassageId) ?? null) : null,
+    }));
+  },
+
+  /**
+   * An admin's ruling. `scoped` is the one that matters most: both passages
+   * stay, and the conditions say when the newer one wins -- which is how
+   * "for baseball athletes, velocity work outranks the textbook here" gets
+   * stored as something retrieval can apply rather than as a note.
+   */
+  async resolveKnowledgeConflict(input: {
+    id: number;
+    adminId: number;
+    status: "prefer_new" | "prefer_existing" | "scoped" | "dismissed";
+    reason?: string | null;
+    scope?: Record<string, string[]> | null;
+  }) {
+    const [row] = await db
+      .update(knowledgeConflicts)
+      .set({
+        status: input.status,
+        resolutionReason: input.reason ?? null,
+        scopeJson: input.scope ? JSON.stringify(input.scope) : null,
+        resolvedByUserId: input.adminId,
+        resolvedAt: new Date(),
+      })
+      .where(eq(knowledgeConflicts.id, input.id))
+      .returning();
+    return row ?? null;
   },
 
   async getKnowledgeSourceByHash(fileHash: string) {

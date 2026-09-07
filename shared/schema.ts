@@ -5137,6 +5137,61 @@ export const knowledgePassages = pgTable(
 );
 export type KnowledgePassage = typeof knowledgePassages.$inferSelect;
 
+// ---------- Knowledge conflicts ----------
+// Two pieces of ingested guidance that disagree, held for an admin to rule
+// on rather than resolved automatically.
+//
+// The whole point is that nothing silently picks a winner. A textbook and a
+// newer sport-specific source can both be right, in different circumstances,
+// and the resolution that matters most is neither "prefer this one" nor
+// "prefer that one" but "the new one wins FOR BASEBALL ATHLETES and the book
+// holds everywhere else". That is `scoped`, and it is stored as structured
+// conditions rather than a note, because a sentence in prose cannot be
+// applied mechanically at retrieval time or audited later.
+export const knowledgeConflictStatusEnum = pgEnum("knowledge_conflict_status", [
+  "open",
+  "prefer_new",
+  "prefer_existing",
+  "scoped",
+  // Not actually a conflict. Remembered so the same pair is never raised
+  // again -- an admin asked once should not be asked every ingest.
+  "dismissed",
+]);
+
+export const knowledgeConflicts = pgTable(
+  "knowledge_conflicts",
+  {
+    id: serial("id").primaryKey(),
+    passageId: integer("passage_id")
+      .notNull()
+      .references(() => knowledgePassages.id, { onDelete: "cascade" }),
+    otherPassageId: integer("other_passage_id").references(() => knowledgePassages.id, {
+      onDelete: "cascade",
+    }),
+    // Written for the admin who has to rule on it, in plain language.
+    summary: text("summary").notNull(),
+    status: knowledgeConflictStatusEnum("status").notNull().default("open"),
+    // The admin's own words for why. Surfaced with the winning passage so a
+    // coach asking "why this?" gets the actual reasoning.
+    resolutionReason: text("resolution_reason"),
+    // For a scoped resolution: the conditions under which the new source
+    // wins, as JSON ({"sports":["Baseball"]}).
+    scopeJson: text("scope_json"),
+    // Stable identity for the pair, so the same disagreement is raised once.
+    fingerprint: text("fingerprint").notNull(),
+    resolvedByUserId: integer("resolved_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    resolvedAt: timestamp("resolved_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    fingerprintIdx: uniqueIndex("knowledge_conflicts_fingerprint_idx").on(table.fingerprint),
+    statusIdx: index("knowledge_conflicts_status_idx").on(table.status, table.createdAt),
+  }),
+);
+export type KnowledgeConflict = typeof knowledgeConflicts.$inferSelect;
+
 // ---------- Uploaded file ownership ----------
 // One row per file created by any of the raw upload routes that hand a
 // bare, unsigned /uploads/... path straight back to the client for reuse

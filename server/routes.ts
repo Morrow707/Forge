@@ -48,6 +48,7 @@ import { getHealthSnapshot } from "./health-probes";
 import { RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION } from "@shared/research-consent";
 import { requireGuardianAccess } from "./auth";
 import { extractPdf, splitIntoPassages, hashBytes } from "./pdf-extract";
+import { searchKnowledgePassages } from "./knowledge-retrieval";
 import { recordSystemFailure } from "./system-events";
 import {
   buildResearchExportPdf,
@@ -4017,6 +4018,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updated);
     },
   );
+
+  // Search the ingested passages. Domain-scoped, so the same store serves
+  // every assistant without any of them seeing the others' material by
+  // accident -- see knowledge-retrieval.ts for why this is full-text search
+  // rather than embeddings.
+  app.post("/api/admin/knowledge-search", requireRole("admin"), async (req, res) => {
+    const parsed = z
+      .object({
+        query: z.string().trim().min(1).max(300),
+        domains: z.array(z.string().trim().min(1)).min(1).max(10),
+        limit: z.number().int().min(1).max(50).optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    res.json(await searchKnowledgePassages(parsed.data));
+  });
+
+  // On demand rather than automatic on upload -- checking every passage in a
+  // 400-page book against its neighbours is a couple of thousand model calls,
+  // and that belongs behind a button with a known cost rather than hidden in
+  // an upload.
+  app.post("/api/admin/knowledge-sources/:id/detect-conflicts", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const result = await storage.detectKnowledgeConflicts(id);
+    if (result.skipped) return res.status(422).json({ message: result.skipped });
+    res.json(result);
+  });
+
+  app.get("/api/admin/knowledge-conflicts", requireRole("admin"), async (req, res) => {
+    const status = req.query.status === "all" ? "all" : "open";
+    res.json(await storage.listKnowledgeConflicts(status));
+  });
+
+  // The admin's ruling. "scoped" is the one that matters: both passages stay
+  // and the conditions say when the newer one wins.
+  app.post("/api/admin/knowledge-conflicts/:id/resolve", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const parsed = z
+      .object({
+        status: z.enum(["prefer_new", "prefer_existing", "scoped", "dismissed"]),
+        reason: z.string().trim().max(1000).optional(),
+        scope: z.record(z.array(z.string().trim().min(1)).max(20)).optional(),
+      })
+      .superRefine((v, ctx) => {
+        // A scoped ruling with no conditions is just "prefer new" wearing a
+        // different label, and would apply everywhere rather than where the
+        // admin meant.
+        if (v.status === "scoped" && (!v.scope || Object.keys(v.scope).length === 0)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "A scoped resolution needs at least one condition, e.g. sports: Baseball.",
+          });
+        }
+        if (v.status === "scoped" && !v.reason?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Say why, in your own words -- it is shown to a coach who asks about this guidance.",
+          });
+        }
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+
+    const row = await storage.resolveKnowledgeConflict({
+      id,
+      adminId: req.user!.id,
+      status: parsed.data.status,
+      reason: parsed.data.reason ?? null,
+      scope: parsed.data.scope ?? null,
+    });
+    if (!row) return res.status(404).json({ message: "Conflict not found" });
+    res.json(row);
+  });
 
   // ---------------- Admin: knowledge source uploads ----------------
   // A PDF an admin uploads to teach the AI. Extraction is local: nothing
