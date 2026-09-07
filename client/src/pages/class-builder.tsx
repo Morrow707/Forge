@@ -250,6 +250,73 @@ const UNLOCK_RULE_OPTIONS: { value: UnlockRule; label: string; unit: string | nu
  * gated by the unlock rule shown on it (evaluated against the PREVIOUS
  * lesson's activity) and, for a Forge Class, an optional per-lesson price.
  * Lesson 1 always unlocks immediately -- its rule controls are hidden. */
+// Offline safety net for the autosave below.
+//
+// The debounced server autosave and the pagehide flush both cover the
+// common "closed the tab mid-edit" case well, but both of them are network
+// calls, and both fail silently with no connection: the autosave sets its
+// state to "error" and the flush is a fetch with an empty catch. An admin
+// editing a class on a plane, or in a gym with no signal, could type for an
+// hour and lose all of it -- the same failure the athlete workout page
+// already guards against with its own local queue, and the program and
+// skill builders with their own local drafts. This is that same pattern,
+// third instance.
+//
+// Local-only, never a substitute for the server copy: it is written on
+// every edit, cleared the moment a server save succeeds, and only offered
+// back if it is newer than what the server returned.
+type ClassDraftState = {
+  name: string;
+  description: string;
+  category: string;
+  coverImageUrl: string;
+  prerequisiteClassId: number | null;
+  isDraft: boolean;
+  lessons: LocalLesson[];
+};
+
+type ClassDraft = {
+  // The builder's own local state, not the PUT payload. Storing the payload
+  // would mean writing and maintaining an exact inverse of buildPayload to
+  // read it back; local state restores with a plain setState, which is both
+  // simpler and what the program and skill builders already do.
+  state: ClassDraftState;
+  savedAt: number;
+};
+
+function classDraftStorageKey(apiBase: string, classId: number) {
+  return `forge:class-draft:${apiBase}:${classId}`;
+}
+
+function loadClassDraft(apiBase: string, classId: number): ClassDraft | null {
+  try {
+    const raw = localStorage.getItem(classDraftStorageKey(apiBase, classId));
+    return raw ? (JSON.parse(raw) as ClassDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveClassDraft(apiBase: string, classId: number, state: ClassDraftState) {
+  try {
+    localStorage.setItem(
+      classDraftStorageKey(apiBase, classId),
+      JSON.stringify({ state, savedAt: Date.now() } satisfies ClassDraft),
+    );
+  } catch {
+    // Storage full or unavailable (private browsing) -- a safety net that
+    // cannot be written is not worth an error toast on every keystroke.
+  }
+}
+
+function clearClassDraft(apiBase: string, classId: number) {
+  try {
+    localStorage.removeItem(classDraftStorageKey(apiBase, classId));
+  } catch {
+    // best-effort
+  }
+}
+
 export function ClassBuilderPage({
   apiBase,
   routeBase,
@@ -321,7 +388,43 @@ export function ClassBuilderPage({
       setIsDraft(state.isDraft);
       setLessons(state.lessons);
       setHydrated(true);
+
+      // A local mirror surviving here means the last session's edits never
+      // reached the server -- no connection, a crash, a force-quit. Offered
+      // rather than applied: the admin may well have made those edits on
+      // another device since, and silently overwriting the server's version
+      // with a stale local one would be its own kind of data loss.
+      const draft = loadClassDraft(apiBase, classId);
+      if (draft) {
+        toast("Unsaved changes from your last session are still on this device.", {
+          duration: 30000,
+          action: {
+            label: "Restore",
+            onClick: () => {
+              const restored = draft.state;
+              if (!restored || !Array.isArray(restored.lessons)) {
+                toast.error("Those changes could not be read back.");
+                clearClassDraft(apiBase, classId);
+                return;
+              }
+              setName(restored.name);
+              setDescription(restored.description);
+              setCategory(restored.category);
+              setCoverImageUrl(restored.coverImageUrl);
+              setPrerequisiteClassId(restored.prerequisiteClassId);
+              setIsDraft(restored.isDraft);
+              setLessons(restored.lessons);
+              toast.success("Restored. Save the class to keep them.");
+            },
+          },
+          cancel: {
+            label: "Discard",
+            onClick: () => clearClassDraft(apiBase, classId),
+          },
+        });
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cls, hydrated]);
 
   function updateLesson(lessonKey: string, updater: (lesson: LocalLesson) => LocalLesson) {
@@ -450,6 +553,7 @@ export function ClassBuilderPage({
       setDescription(state.description);
       setLessons(state.lessons);
       setAutosaveState("idle");
+      clearClassDraft(apiBase, classId);
       toast.success("Class saved");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save class"),
@@ -470,6 +574,24 @@ export function ClassBuilderPage({
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const payloadRef = useRef(buildPayload());
   payloadRef.current = buildPayload();
+
+  // Mirror every edit to localStorage. Deliberately not debounced: this is a
+  // synchronous write of a few KB, and the whole point is to survive the
+  // cases the debounced network save cannot -- a crash, a force-quit, or no
+  // connection at all.
+  useEffect(() => {
+    if (!hydrated || !editable) return;
+    saveClassDraft(apiBase, classId, {
+      name,
+      description,
+      category,
+      coverImageUrl,
+      prerequisiteClassId,
+      isDraft,
+      lessons,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, editable, name, description, category, coverImageUrl, prerequisiteClassId, isDraft, lessons]);
   // The pagehide/visibilitychange effect below only ever runs its setup
   // once (right after hydration, since [hydrated, editable] rarely change
   // again) -- a bare `findQuizValidationError` reference inside it would
@@ -505,8 +627,14 @@ export function ClassBuilderPage({
         const res = await apiRequest("PUT", `${apiBase}/classes/${classId}`, payloadRef.current);
         await res.json();
         lastSavedRef.current = JSON.stringify(payloadRef.current);
+        // The server now holds this state, so the local mirror has nothing
+        // left to rescue.
+        clearClassDraft(apiBase, classId);
         setAutosaveState("idle");
       } catch {
+        // The local mirror written above is what makes this survivable:
+        // the edits are still on this device and will be offered back on
+        // the next load.
         setAutosaveState("error");
       }
     }, 3000);
