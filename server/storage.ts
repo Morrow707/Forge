@@ -56,6 +56,8 @@ import {
   wellnessCheckins,
   injuryHistory,
   researchExports,
+  knowledgeSources,
+  knowledgePassages,
   caraSessions,
   athleteTrophies,
   acwrRiskAlerts,
@@ -21100,6 +21102,110 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * a genuinely rare cohort from a common one almost nobody has consented
    * to, and would read the second as the first.
    */
+  // ---------- Knowledge sources ----------
+
+  /**
+   * Ingest an already-extracted document. Extraction happens before this is
+   * called so the caller can refuse a scanned file, or one already on file,
+   * without having written anything.
+   *
+   * The passages go in one transaction with the source: a source row with no
+   * passages is a document that claims to be ingested and answers nothing,
+   * which is worse than a failed upload because it looks fine in the list.
+   */
+  async createKnowledgeSource(input: {
+    uploadedByUserId: number;
+    title: string;
+    citation?: string | null;
+    filePath: string | null;
+    fileHash: string;
+    pageCount: number;
+    domains: string[];
+    passages: { pageNumber: number; endPageNumber: number; text: string; fromVision?: boolean }[];
+  }) {
+    return db.transaction(async (tx) => {
+      const [source] = await tx
+        .insert(knowledgeSources)
+        .values({
+          uploadedByUserId: input.uploadedByUserId,
+          title: input.title,
+          citation: input.citation ?? null,
+          filePath: input.filePath,
+          fileHash: input.fileHash,
+          pageCount: input.pageCount,
+          domains: input.domains,
+          status: input.passages.length > 0 ? "ready" : "needs_vision",
+        })
+        .returning();
+
+      if (input.passages.length > 0) {
+        // Chunked: a 400-page book runs to a couple of thousand passages,
+        // and one INSERT with that many parameter sets exceeds what the
+        // driver will bind.
+        const BATCH = 200;
+        for (let i = 0; i < input.passages.length; i += BATCH) {
+          await tx.insert(knowledgePassages).values(
+            input.passages.slice(i, i + BATCH).map((p, j) => ({
+              sourceId: source.id,
+              ordinal: i + j,
+              pageNumber: p.pageNumber,
+              endPageNumber: p.endPageNumber,
+              text: p.text,
+              fromVision: p.fromVision ?? false,
+            })),
+          );
+        }
+      }
+      return source;
+    });
+  },
+
+  async getKnowledgeSourceByHash(fileHash: string) {
+    return db.query.knowledgeSources.findFirst({ where: eq(knowledgeSources.fileHash, fileHash) });
+  },
+
+  async listKnowledgeSources() {
+    const rows = await db
+      .select({
+        id: knowledgeSources.id,
+        title: knowledgeSources.title,
+        citation: knowledgeSources.citation,
+        pageCount: knowledgeSources.pageCount,
+        status: knowledgeSources.status,
+        statusDetail: knowledgeSources.statusDetail,
+        domains: knowledgeSources.domains,
+        createdAt: knowledgeSources.createdAt,
+        passageCount: sql<number>`(SELECT count(*)::int FROM ${knowledgePassages} WHERE ${knowledgePassages.sourceId} = ${knowledgeSources.id})`,
+      })
+      .from(knowledgeSources)
+      .orderBy(desc(knowledgeSources.createdAt));
+    return rows;
+  },
+
+  /**
+   * Delete a source and everything extracted from it. The passages go by
+   * cascade; the file on disk has to be removed here, because nothing else
+   * would ever come back for it.
+   */
+  async deleteKnowledgeSource(id: number) {
+    const source = await db.query.knowledgeSources.findFirst({ where: eq(knowledgeSources.id, id) });
+    if (!source) return false;
+    if (source.filePath) await deleteUploadedFile(source.filePath);
+    await db.delete(knowledgeSources).where(eq(knowledgeSources.id, id));
+    return true;
+  },
+
+  /** Passages from a source, in document order. */
+  async getKnowledgePassages(sourceId: number, limit = 200, offset = 0) {
+    return db
+      .select()
+      .from(knowledgePassages)
+      .where(eq(knowledgePassages.sourceId, sourceId))
+      .orderBy(asc(knowledgePassages.ordinal))
+      .limit(limit)
+      .offset(offset);
+  },
+
   async runResearchCohortQuery(adminId: number, text: string) {
     const budget = await consumeCohortQueryBudget(adminId);
     if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);

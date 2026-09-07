@@ -2671,6 +2671,45 @@ CREATE INDEX IF NOT EXISTS "research_exports_admin_idx"
   ON "research_exports" ("admin_id", "created_at");
 CREATE INDEX IF NOT EXISTS "research_exports_created_idx"
   ON "research_exports" ("created_at");
+
+-- Knowledge source documents and their extracted passages
+-- (shared/schema.ts knowledgeSources / knowledgePassages).
+DO $$ BEGIN
+  CREATE TYPE "knowledge_source_status" AS ENUM ('extracting', 'ready', 'failed', 'needs_vision');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "knowledge_sources" (
+  "id" serial PRIMARY KEY,
+  "uploaded_by_user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "title" text NOT NULL,
+  "citation" text,
+  "file_path" text,
+  "file_hash" text NOT NULL,
+  "page_count" integer,
+  "status" "knowledge_source_status" NOT NULL DEFAULT 'extracting',
+  "status_detail" text,
+  "domains" text[] NOT NULL DEFAULT '{}',
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "knowledge_sources_hash_idx"
+  ON "knowledge_sources" ("file_hash");
+CREATE INDEX IF NOT EXISTS "knowledge_sources_uploader_idx"
+  ON "knowledge_sources" ("uploaded_by_user_id");
+
+CREATE TABLE IF NOT EXISTS "knowledge_passages" (
+  "id" serial PRIMARY KEY,
+  "source_id" integer NOT NULL REFERENCES "knowledge_sources"("id") ON DELETE CASCADE,
+  "ordinal" integer NOT NULL,
+  "page_number" integer NOT NULL,
+  "end_page_number" integer NOT NULL,
+  "text" text NOT NULL,
+  "from_vision" boolean NOT NULL DEFAULT false,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "knowledge_passages_source_idx"
+  ON "knowledge_passages" ("source_id", "ordinal");
 `;
 
 async function main() {

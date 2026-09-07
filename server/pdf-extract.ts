@@ -1,0 +1,182 @@
+import { createHash } from "node:crypto";
+
+/**
+ * Turning an uploaded PDF into passages the knowledge base can hold.
+ *
+ * Page numbers are carried through everything here, and that is the point
+ * rather than a nicety: a passage that cannot say "CSCS volume 4, page 412"
+ * is a claim with no source, and the whole reason for ingesting a book
+ * rather than pasting summaries of it is that a coach can check what the AI
+ * leaned on.
+ *
+ * Nothing in this file reaches the network. Extraction is local, which is
+ * what makes an uploaded book stay in house.
+ */
+
+export type ExtractedPage = { pageNumber: number; text: string };
+
+export type ExtractedDocument = {
+  pageCount: number;
+  pages: ExtractedPage[];
+  /** sha256 of the file bytes, for refusing the same upload twice. */
+  fileHash: string;
+  /**
+   * True when the file yielded almost no text, which in practice means
+   * scanned or photographed pages: the words are images, and a text
+   * extractor sees nothing. Reported rather than silently ingesting 400
+   * blank pages.
+   */
+  looksScanned: boolean;
+  /** Characters of real text recovered, for the estimate shown to the admin. */
+  characterCount: number;
+};
+
+// Below this many characters per page averaged across the document, there is
+// nothing worth ingesting. A text PDF runs to thousands of characters a
+// page; a scanned one yields a handful of stray marks, or zero.
+const SCANNED_CHARS_PER_PAGE = 100;
+
+export function hashBytes(bytes: Uint8Array | Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+export async function extractPdf(bytes: Buffer): Promise<ExtractedDocument> {
+  // Imported lazily and from the legacy build: pdfjs ships an ESM-first
+  // modern build that assumes browser globals, and loading it at module
+  // scope would drag the whole library into every process that imports this
+  // file, including the unit suite.
+  const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
+  const fileHash = hashBytes(bytes);
+  const doc = await pdfjs.getDocument({
+    data: new Uint8Array(bytes),
+    // No network fetches for fonts or anything else -- an ingest that
+    // reached out would defeat the point of keeping the source in house.
+    useSystemFonts: true,
+    disableFontFace: true,
+    isEvalSupported: false,
+  }).promise;
+
+  const pages: ExtractedPage[] = [];
+  let characterCount = 0;
+  for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+    const page = await doc.getPage(pageNumber);
+    const content = await page.getTextContent();
+    // pdfjs emits one item per positioned run, so a sentence arrives in
+    // pieces. hasEOL marks a real line break; everything else is joined
+    // directly, because inserting spaces between runs would break words
+    // that were only split for kerning.
+    const text = content.items
+      .map((item: any) => (item.str ?? "") + (item.hasEOL ? "\n" : ""))
+      .join("")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    characterCount += text.length;
+    pages.push({ pageNumber, text });
+    // Frees the page's operator list; a 400-page book held entirely in
+    // memory is otherwise a real cost on a 512MB instance.
+    page.cleanup();
+  }
+  await doc.destroy();
+
+  return {
+    pageCount: doc.numPages,
+    pages,
+    fileHash,
+    looksScanned: doc.numPages > 0 && characterCount / doc.numPages < SCANNED_CHARS_PER_PAGE,
+    characterCount,
+  };
+}
+
+export type Passage = {
+  /** Where this passage starts, for the citation. */
+  pageNumber: number;
+  /** The last page it touches, when a passage spans a page break. */
+  endPageNumber: number;
+  text: string;
+};
+
+// Roughly 1200 characters, which is a few paragraphs: long enough to carry a
+// complete idea, short enough that a retrieved passage is mostly relevant
+// rather than mostly padding. The overlap exists because the boundary is
+// arbitrary and an idea that straddles it would otherwise be split in half
+// and matched by neither piece.
+const TARGET_CHARS = 1200;
+const OVERLAP_CHARS = 200;
+
+/**
+ * Splits extracted pages into overlapping passages, carrying page numbers.
+ *
+ * Deliberately splits on paragraph and sentence boundaries rather than at a
+ * fixed offset. A passage cut mid-sentence reads as nonsense when it is
+ * quoted back to an admin in a contradiction prompt, and the point of
+ * verbatim retrieval is that the quoted text is readable.
+ */
+export function splitIntoPassages(pages: ExtractedPage[]): Passage[] {
+  const passages: Passage[] = [];
+
+  // Pages are concatenated first, with a marker of where each begins, so a
+  // paragraph running across a page break stays one passage instead of being
+  // torn at the boundary.
+  let combined = "";
+  const pageStarts: { offset: number; pageNumber: number }[] = [];
+  for (const page of pages) {
+    if (!page.text) continue;
+    pageStarts.push({ offset: combined.length, pageNumber: page.pageNumber });
+    combined += (combined ? "\n\n" : "") + page.text;
+  }
+  if (!combined) return [];
+
+  const pageAt = (offset: number): number => {
+    let current = pageStarts[0]?.pageNumber ?? 1;
+    for (const start of pageStarts) {
+      if (start.offset <= offset) current = start.pageNumber;
+      else break;
+    }
+    return current;
+  };
+
+  let cursor = 0;
+  while (cursor < combined.length) {
+    let end = Math.min(cursor + TARGET_CHARS, combined.length);
+    if (end < combined.length) {
+      // Prefer a paragraph break, then a sentence end, then a space, in a
+      // window near the target rather than anywhere in the passage -- a
+      // "clean" break 400 characters early produces uselessly short chunks.
+      const window = combined.slice(cursor, end);
+      const searchFrom = Math.floor(TARGET_CHARS * 0.6);
+      const paragraph = window.lastIndexOf("\n\n");
+      const sentence = Math.max(
+        window.lastIndexOf(". "),
+        window.lastIndexOf(".\n"),
+        window.lastIndexOf("? "),
+        window.lastIndexOf("! "),
+      );
+      const space = window.lastIndexOf(" ");
+      const chosen =
+        paragraph >= searchFrom
+          ? paragraph + 2
+          : sentence >= searchFrom
+            ? sentence + 1
+            : space >= searchFrom
+              ? space
+              : window.length;
+      end = cursor + chosen;
+    }
+
+    const text = combined.slice(cursor, end).trim();
+    if (text) {
+      passages.push({
+        pageNumber: pageAt(cursor),
+        endPageNumber: pageAt(Math.max(cursor, end - 1)),
+        text,
+      });
+    }
+
+    if (end >= combined.length) break;
+    cursor = Math.max(end - OVERLAP_CHARS, cursor + 1);
+  }
+
+  return passages;
+}

@@ -46,6 +46,8 @@ import {
 import { missingPriceEnvVars } from "./stripe-prices";
 import { getHealthSnapshot } from "./health-probes";
 import { RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION } from "@shared/research-consent";
+import { extractPdf, splitIntoPassages, hashBytes } from "./pdf-extract";
+import { recordSystemFailure } from "./system-events";
 import {
   buildResearchExportPdf,
   RESEARCH_EXPORT_MIN_CELL,
@@ -269,6 +271,10 @@ const uploadFormVideo = multer({
 // "save for coach" on the mechanics or sprint tracker's review screen (see
 // MechanicsTrackerDialog/SprintTrackerDialog); a session the athlete never
 // opts into never uploads video at all.
+// Uploaded teaching material (a PDF of a book or handout). Its own directory
+// for the same "never share a bucket" isolation the video paths follow.
+const KNOWLEDGE_SOURCES_DIR = path.join(UPLOADS_ROOT, "knowledge-sources");
+
 const SKILL_VIDEOS_DIR = path.join(UPLOADS_ROOT, "skill-videos");
 fs.mkdirSync(SKILL_VIDEOS_DIR, { recursive: true });
 
@@ -4010,6 +4016,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updated);
     },
   );
+
+  // ---------------- Admin: knowledge source uploads ----------------
+  // A PDF an admin uploads to teach the AI. Extraction is local: nothing
+  // here reaches the network, which is what keeps an uploaded book in house.
+  //
+  // 60MB because a scanned textbook is genuinely that big, and this is the
+  // one upload where the file is a book rather than a phone video. It is a
+  // multipart upload, not JSON: base64 in a body would inflate the same file
+  // by a third and push it past the 25mb express.json limit.
+  const knowledgeUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 60 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype !== "application/pdf") {
+        return cb(new Error("Upload a PDF."));
+      }
+      cb(null, true);
+    },
+  });
+
+  app.post(
+    "/api/admin/knowledge-sources",
+    requireRole("admin"),
+    knowledgeUpload.single("file"),
+    async (req, res) => {
+      if (!req.file) return res.status(400).json({ message: "A PDF file is required." });
+      const parsed = z
+        .object({
+          title: z.string().trim().min(1).max(200),
+          citation: z.string().trim().max(300).optional(),
+          domains: z.string().optional(),
+        })
+        .safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const domains = (parsed.data.domains ?? "")
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean);
+      if (domains.length === 0) {
+        return res.status(400).json({ message: "Choose at least one area this source applies to." });
+      }
+
+      // Hashed and checked before extraction: re-uploading the same book
+      // would double every passage AND manufacture a contradiction between
+      // the document and itself.
+      const fileHash = hashBytes(req.file.buffer);
+      const existing = await storage.getKnowledgeSourceByHash(fileHash);
+      if (existing) {
+        return res.status(409).json({
+          message: `That exact file is already ingested as "${existing.title}".`,
+          existingId: existing.id,
+        });
+      }
+
+      let extracted;
+      try {
+        extracted = await extractPdf(req.file.buffer);
+      } catch (err) {
+        recordSystemFailure("storage", "Could not read an uploaded PDF", { detail: err });
+        return res.status(422).json({ message: "That PDF could not be read. It may be corrupt or password-protected." });
+      }
+
+      if (extracted.looksScanned) {
+        // Not an error, and deliberately not a silent ingest of blank pages.
+        // The pages can still be read visually; that is offered rather than
+        // this being reported as a failure.
+        return res.status(422).json({
+          message:
+            "This PDF has almost no readable text. It looks like scanned or photographed pages, so the words are images. " +
+            "Nothing was ingested. You can run it through OCR first, or attach the pages as photos so Claude can read them.",
+          looksScanned: true,
+          pageCount: extracted.pageCount,
+        });
+      }
+
+      const passages = splitIntoPassages(extracted.pages);
+
+      // Written only once extraction has succeeded and the file is known not
+      // to be a duplicate -- a rejected upload should leave nothing behind on
+      // the disk that holds every athlete's video.
+      await fs.promises.mkdir(KNOWLEDGE_SOURCES_DIR, { recursive: true });
+      const filename = `${crypto.randomUUID()}.pdf`;
+      await fs.promises.writeFile(path.join(KNOWLEDGE_SOURCES_DIR, filename), req.file.buffer);
+      const stored = `/uploads/knowledge-sources/${filename}`;
+
+      const source = await storage.createKnowledgeSource({
+        uploadedByUserId: req.user!.id,
+        title: parsed.data.title,
+        citation: parsed.data.citation ?? null,
+        filePath: stored,
+        fileHash,
+        pageCount: extracted.pageCount,
+        domains,
+        passages,
+      });
+
+      res.status(201).json({ ...source, passageCount: passages.length });
+    },
+  );
+
+  app.get("/api/admin/knowledge-sources", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listKnowledgeSources());
+  });
+
+  app.get("/api/admin/knowledge-sources/:id/passages", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    res.json(await storage.getKnowledgePassages(id, limit, offset));
+  });
+
+  // The one clean undo: a bad ingest, or a licence that lapsed, takes every
+  // passage and the stored file with it.
+  app.delete("/api/admin/knowledge-sources/:id", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const removed = await storage.deleteKnowledgeSource(id);
+    if (!removed) return res.status(404).json({ message: "Source not found" });
+    res.json({ ok: true });
+  });
 
   // Research-data consent. Three doors into one decision, because who may
   // answer depends on the athlete's age and there is no parent-facing login

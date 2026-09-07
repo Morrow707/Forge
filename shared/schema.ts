@@ -5056,6 +5056,87 @@ export const researchExports = pgTable(
 );
 export type ResearchExport = typeof researchExports.$inferSelect;
 
+// ---------- Knowledge source documents ----------
+// A PDF or set of photographed pages an admin uploaded to teach the AI,
+// plus the passages extracted from it.
+//
+// Two tables rather than one because they answer different questions. The
+// document is what an admin manages: uploaded it, can see what it is, can
+// delete it and take every passage with it. The passages are what retrieval
+// searches, and they are worthless without the page number that lets a
+// coach check the claim against the actual book.
+//
+// The file itself stays on the mounted disk beside uploaded video, not in
+// the database -- a 50MB book in a row is a 50MB row -- and the extracted
+// text is kept so re-chunking later never needs the admin to upload again.
+export const knowledgeSourceStatusEnum = pgEnum("knowledge_source_status", [
+  "extracting",
+  "ready",
+  "failed",
+  // Text extraction found nothing, which in practice means scanned pages.
+  // A state rather than an error: the pages can still be read visually, and
+  // the admin is offered that rather than told it failed.
+  "needs_vision",
+]);
+
+export const knowledgeSources = pgTable(
+  "knowledge_sources",
+  {
+    id: serial("id").primaryKey(),
+    uploadedByUserId: integer("uploaded_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    // Free text: "CSCS Volume 4", "Coach Rivera's hitting pamphlet".
+    citation: text("citation"),
+    filePath: text("file_path"),
+    // sha256 of the bytes. Unique, so the same book cannot be ingested
+    // twice -- doubling every passage would also manufacture a contradiction
+    // between a document and itself.
+    fileHash: text("file_hash").notNull(),
+    pageCount: integer("page_count"),
+    status: knowledgeSourceStatusEnum("status").notNull().default("extracting"),
+    statusDetail: text("status_detail"),
+    // Which AI domains may retrieve from this source. Same closed list the
+    // assistants use; a source can serve several.
+    domains: text("domains").array().notNull().default([]),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    hashIdx: uniqueIndex("knowledge_sources_hash_idx").on(table.fileHash),
+    uploaderIdx: index("knowledge_sources_uploader_idx").on(table.uploadedByUserId),
+  }),
+);
+export type KnowledgeSource = typeof knowledgeSources.$inferSelect;
+
+export const knowledgePassages = pgTable(
+  "knowledge_passages",
+  {
+    id: serial("id").primaryKey(),
+    sourceId: integer("source_id")
+      .notNull()
+      // Deleting a source takes its passages with it. That is the one clean
+      // undo for a bad ingest or a licence that lapsed.
+      .references(() => knowledgeSources.id, { onDelete: "cascade" }),
+    // Position in the document, so passages can be read back in order.
+    ordinal: integer("ordinal").notNull(),
+    pageNumber: integer("page_number").notNull(),
+    endPageNumber: integer("end_page_number").notNull(),
+    text: text("text").notNull(),
+    // True when this text came from reading an image rather than extracting
+    // it. Vision transcription is very good and not perfect, especially with
+    // numbers, and a misread "3-5 sets" would otherwise surface later as a
+    // fake contradiction against a correctly-read source. Marking it lets
+    // the contradiction queue say "check the photo" instead.
+    fromVision: boolean("from_vision").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    sourceIdx: index("knowledge_passages_source_idx").on(table.sourceId, table.ordinal),
+  }),
+);
+export type KnowledgePassage = typeof knowledgePassages.$inferSelect;
+
 // ---------- Uploaded file ownership ----------
 // One row per file created by any of the raw upload routes that hand a
 // bare, unsigned /uploads/... path straight back to the client for reuse
