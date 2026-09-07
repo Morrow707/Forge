@@ -551,7 +551,8 @@ function computeFlags(r: TrackedSetRow): string[] {
 
 export type TrackingReportEntry = {
   date: string;
-  athleteName: string;
+  // Stable within one report, meaningless outside it -- see buildEntries.
+  athleteLabel: string;
   exerciseName: string;
   setNumber: number;
   reps: string | null;
@@ -613,12 +614,26 @@ function computeOverallConfidence(r: TrackedSetRow): number | null {
 // Shared assembly step both formatTrackingReport (plain text) and the JSON entries route build
 // on -- one pass over the rows, so the two views of this same data can't drift apart.
 function buildEntries(rows: TrackedSetRow[]): TrackingReportEntry[] {
+  // "Athlete 1", "Athlete 2", ... numbered in the order they first appear in
+  // this report. Two sets by the same person share a label, which is all the
+  // diagnostic needs; the labels mean nothing outside this one response and
+  // nothing maps them back to a user. Numbering by appearance rather than by
+  // id also keeps the id itself from leaking through the ordering.
+  const labelByAthlete = new Map<number, string>();
+  const labelFor = (athleteId: number) => {
+    const existing = labelByAthlete.get(athleteId);
+    if (existing) return existing;
+    const label = `Athlete ${labelByAthlete.size + 1}`;
+    labelByAthlete.set(athleteId, label);
+    return label;
+  };
+
   return rows.map((r) => {
     // Guaranteed non-null -- see formatCaptureDeviceInfo's own comment.
     const mode = r.trackingLevel!;
     return {
       date: r.date,
-      athleteName: r.athleteName,
+      athleteLabel: labelFor(r.athleteId),
       exerciseName: r.exerciseName,
       setNumber: r.setNumber,
       reps: r.reps,
@@ -654,7 +669,7 @@ export function formatTrackingReport(rows: TrackedSetRow[]): string {
   const flaggedCount = entries.filter((e) => e.flags.length > 0).length;
 
   for (const e of entries) {
-    const header = `${e.flags.length > 0 ? "⚠ " : ""}${e.date}  ${e.athleteName} -- ${e.exerciseName} (set ${
+    const header = `${e.flags.length > 0 ? "⚠ " : ""}${e.date}  ${e.athleteLabel} -- ${e.exerciseName} (set ${
       e.setNumber
     }${e.reps ? `, ${e.reps} reps` : ""}${
       e.weight ? `, ${e.weight}${e.weightUnit ? ` ${e.weightUnit}` : ""}` : ""

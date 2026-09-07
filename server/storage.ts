@@ -134,7 +134,7 @@ import {
   TIER2_VIDEO_RETENTION_DAYS,
   type PrivacyTier,
 } from "@shared/privacy-tiers";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
   MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
@@ -310,6 +310,14 @@ const CLASS_QUIZ_STUCK_THRESHOLD = 3;
 // platform (485k athletes at real seed scale) and returned a 335MB response
 // in 34s, one row costing ~12 correlated subqueries.
 const QUERY_ENGINE_MAX_ROWS = 10_000;
+
+// A result set smaller than this is returned empty rather than in full.
+// Without it, an admin could narrow filters until exactly one athlete
+// matched and read that athlete's complete performance and health row --
+// which is a targeted lookup wearing the clothes of an aggregate query.
+// Matches PLATFORM_TRENDS_MIN_COHORT so the two admin analytics surfaces
+// cannot be played off against each other for different answers.
+const QUERY_ENGINE_MIN_COHORT = 5;
 
 // Cap on the strength/speed leaderboards -- see getLeaderboardForExercise's
 // own comment. A 25k-athlete roster returned every athlete who'd ever
@@ -14409,12 +14417,28 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
 
   // The Admin Query Engine's one entry point -- extends the redaction rule
   // above (no name/email/team) across every performance/health category,
-  // not just profile/testing. Returns an opaque athleteId per row, which
-  // queryAggregateAthleteData deliberately never did: without SOME stable
-  // handle, a filtered result can't actually be acted on (flagged, opened,
-  // followed up on) by the admin who ran the query -- a bare id isn't
-  // personally identifying on its own, but it IS a real step beyond what
-  // exists today, so it's called out here rather than folded in silently.
+  // not just profile/testing.
+  //
+  // This used to return the raw users.id per row, reasoning that a bare id
+  // is not personally identifying on its own. That reasoning was wrong in
+  // this codebase specifically, because /api/admin/users/:id takes exactly
+  // that id and returns the whole user row -- name, email, date of birth.
+  // Any admin holding a "de-identified" result set could re-identify every
+  // row in one request, which made the redaction of name/email/team
+  // decorative. The Privacy Policy draft promises platform analytics are
+  // stripped of name, email and team before an admin sees them; with the id
+  // present that promise was not true.
+  //
+  // Rows now carry a subjectCode instead: an HMAC of the athlete id under a
+  // salt generated fresh for THIS query. Within one result set it is stable,
+  // so rows can be grouped and counted; across two queries the same athlete
+  // gets different codes, so results cannot be joined into a growing profile;
+  // and nothing anywhere maps a code back to a user, so there is no
+  // re-identification route at all rather than merely an inconvenient one.
+  // The cost is that a result can no longer be acted on per-athlete, which
+  // is the deliberate trade: this is a research and analytics surface, and
+  // per-athlete follow-up belongs on the coach's roster where the athlete's
+  // own coach can see who they are.
   // Every "recent" condition is a correlated subquery bounded by
   // filters.lookbackDays (default 30) except injury/movement-screen status,
   // which read as current state rather than a repeated-measures window --
@@ -14424,8 +14448,8 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
   // independent of lookbackDays, since the cap it's compared against is
   // itself weekly.
   async queryAthletesAdvanced(adminId: number, filters: AdminAthleteQueryFilters): Promise<
-    (AggregateAthleteRow & {
-      athleteId: number;
+    (Omit<AggregateAthleteRow, never> & {
+      subjectCode: string;
       latestSoreness: number | null;
       latestStress: number | null;
       latestSleepHours: number | null;
@@ -14592,7 +14616,13 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       )`);
     }
 
-    return db
+    // Fresh per query: two runs of the same filters produce different codes
+    // for the same athlete, so result sets cannot be joined together.
+    const subjectSalt = randomBytes(32);
+    const codeFor = (id: number) =>
+      createHmac("sha256", subjectSalt).update(String(id)).digest("hex").slice(0, 16);
+
+    const rows = await db
       .select({
         athleteId: users.id,
         age: users.age,
@@ -14635,6 +14665,15 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       // 335MB response before this cap existed. Revisit with real
       // limit/offset once this actually has a UI to drive it.
       .limit(QUERY_ENGINE_MAX_ROWS);
+
+    // Suppression is applied to the whole result set, not per column: these
+    // are individual-level rows, so a set of four is four identifiable
+    // people no matter which columns are populated. Returning nothing is
+    // the honest answer to "tell me about this group" when the group is too
+    // small to be a group.
+    if (rows.length < QUERY_ENGINE_MIN_COHORT) return [];
+
+    return rows.map(({ athleteId, ...rest }) => ({ ...rest, subjectCode: codeFor(athleteId) }));
   },
 
   // ---------- Admin saved views ----------
@@ -18476,7 +18515,13 @@ ${catalog}`;
     return db
       .select({
         date: workoutLogs.date,
-        athleteName: users.name,
+        // Deliberately the id, never users.name -- buildEntries turns this
+        // into a per-report pseudonym. This report is a capture-quality
+        // diagnostic: it needs to show that several sets belong to the same
+        // athlete, and never needs to say which athlete. It used to print
+        // the name, giving every admin a cross-coach feed of who lifted
+        // what, when, on which phone.
+        athleteId: users.id,
         exerciseName: exercises.name,
         movementType: exercises.movementType,
         trackingLevel: programExercises.trackingLevel,

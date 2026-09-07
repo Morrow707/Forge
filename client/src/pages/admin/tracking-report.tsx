@@ -13,7 +13,7 @@ import { RefreshCw, FileText, Copy, ChevronDown, ChevronUp, BookOpen, AlertTrian
 type ReportField = { label: string; value: string };
 type TrackingReportEntry = {
   date: string;
-  athleteName: string;
+  athleteLabel: string;
   exerciseName: string;
   setNumber: number;
   reps: string | null;
@@ -48,7 +48,7 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
           <div>
             <p className="text-xs text-muted-foreground">{entry.date}</p>
             <p className="text-sm font-semibold">
-              {entry.athleteName} <span className="text-muted-foreground">--</span> {entry.exerciseName}
+              {entry.athleteLabel} <span className="text-muted-foreground">--</span> {entry.exerciseName}
             </p>
             <p className="text-xs text-muted-foreground">
               Set {entry.setNumber}
