@@ -44,6 +44,7 @@ import {
   createLessonCheckout,
 } from "./billing";
 import { missingPriceEnvVars } from "./stripe-prices";
+import { getHealthSnapshot } from "./health-probes";
 import {
   getFailingSources,
   getActiveSystemEvents,
@@ -2614,7 +2615,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
     };
 
-    const disk = await getUploadsDiskUsage();
+    const health = await getHealthSnapshot();
+    const disk = health.storage;
     const missingPrices = missingPriceEnvVars();
     const stripeConfigured =
       Boolean(process.env.STRIPE_SECRET_KEY) &&
@@ -2629,15 +2631,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       apns: apnsEnabled,
       usdaFoodLookup: usdaFoodLookupEnabled,
 
+      // Live state from health-probes.ts -- a real probe where one is free
+      // (database, disk), measured delivery rates for push and email, and
+      // recorded failures for everything else. `state()` still covers
+      // billing, which has no runtime signal of its own beyond its config.
       integrations: {
-        ai: state("ai", aiEnabled),
-        email: state("email", emailEnabled),
-        webPush: state("webPush", pushEnabled),
-        apns: state("apns", apnsEnabled),
-        usdaFoodLookup: state("usdaFoodLookup", usdaFoodLookupEnabled),
-        database: state("database", true),
+        ...health.integrations,
         billing: state("billing", stripeConfigured),
       },
+
+      // Per-channel delivery over the last 24 hours, behind the push and
+      // email badges.
+      delivery: health.delivery,
+
+      // Last run and outcome for each scheduled sweep, plus whether one is
+      // overdue -- the case a run history alone cannot show, since a job
+      // that never started leaves no row at all.
+      jobs: health.jobs,
 
       // Monitoring reporting on itself. With no DSN set, every alert path
       // out of this app is dark and nothing else would say so.
@@ -2658,19 +2668,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
 
       // Null when statfs is unavailable (local dev with no mounted disk).
-      storage: disk
-        ? {
-            freeBytes: disk.freeBytes,
-            totalBytes: disk.totalBytes,
-            usedFraction: disk.usedFraction,
-            // 90% is where an upload of a few hundred megabytes starts
-            // being at real risk of not fitting.
-            state: disk.usedFraction >= 0.9 ? "failing" : disk.usedFraction >= 0.75 ? "warning" : "ok",
-          }
-        : null,
+      storage: disk,
 
       activeEvents: await getActiveSystemEvents(20),
     });
+  });
+
+  // Full run history for one job, for when the dashboard's "last run" is
+  // not enough -- e.g. establishing when a nightly purge last actually
+  // deleted anything.
+  app.get("/api/admin/job-runs", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const jobName = typeof req.query.job === "string" ? req.query.job : null;
+    const { pool } = await import("./db");
+    const { rows } = await pool.query(
+      jobName
+        ? `SELECT job_name, outcome, started_at, duration_ms, detail, error FROM job_runs
+           WHERE job_name = $2 ORDER BY started_at DESC LIMIT $1`
+        : `SELECT job_name, outcome, started_at, duration_ms, detail, error FROM job_runs
+           ORDER BY started_at DESC LIMIT $1`,
+      jobName ? [limit, jobName] : [limit],
+    );
+    res.json(rows);
   });
 
   // The failure history behind the badges, including already-cleared rows.

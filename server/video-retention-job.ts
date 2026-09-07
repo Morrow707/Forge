@@ -17,7 +17,7 @@ import { reportJobFailure } from "./job-errors";
 // shared/schema.ts's workoutSetEntries.videoFavorited / skillSessionLogs.
 // videoFavorited for why each is a separate field from its track's own
 // coach-facing flag.
-export async function runVideoRetentionSweep() {
+export async function runVideoRetentionSweep(): Promise<Record<string, number>> {
   try {
     const { warned, purged } = await storage.sweepVideoRetentionCap();
     let notified = 0;
@@ -66,8 +66,10 @@ export async function runVideoRetentionSweep() {
     if (notified > 0 || purged > 0) {
       console.log(`Video retention sweep: warned ${notified}, purged ${purged}.`);
     }
+    return { warned: notified, purged };
   } catch (err) {
     reportJobFailure("video-retention-cap-sweep", err);
+    return { warned: 0, purged: 0 };
   }
 }
 
@@ -80,7 +82,7 @@ export async function runVideoRetentionSweep() {
 // active account that got flagged in error self-corrects on its next real
 // login, well before the grace window elapses. See
 // storage.sweepStaleAccountVideos's own comment for the exact mechanics.
-export async function runStaleAccountVideoSweep() {
+export async function runStaleAccountVideoSweep(): Promise<Record<string, number>> {
   try {
     const { warned, purged } = await storage.sweepStaleAccountVideos();
     let notified = 0;
@@ -117,8 +119,10 @@ export async function runStaleAccountVideoSweep() {
     if (notified > 0 || purged > 0) {
       console.log(`Stale-account video sweep: warned ${notified}, purged ${purged}.`);
     }
+    return { warned: notified, purged };
   } catch (err) {
     reportJobFailure("stale-account-video-sweep", err);
+    return { warned: 0, purged: 0 };
   }
 }
 

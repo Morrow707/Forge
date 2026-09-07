@@ -71,7 +71,22 @@ type SystemStatus = {
     enforcementEnabled: boolean;
   };
   storage: { freeBytes: number; totalBytes: number; usedFraction: number; state: IntegrationState } | null;
+  delivery: {
+    push: { attempted: number; delivered: number; rate: number | null };
+    email: { attempted: number; delivered: number; rate: number | null };
+  };
+  jobs: JobHealth[];
   activeEvents: SystemEvent[];
+};
+type JobHealth = {
+  jobName: string;
+  hourUtc: number;
+  lastRunAt: string | null;
+  lastOutcome: "ran" | "failed" | "skipped_locked" | "skipped_unavailable" | null;
+  lastDetail: Record<string, number> | null;
+  lastError: string | null;
+  durationMs: number | null;
+  overdue: boolean;
 };
 
 export default function AdminDashboard() {
@@ -104,6 +119,7 @@ export default function AdminDashboard() {
     refetchOnWindowFocus: true,
   });
   const activeEvents = systemStatus?.activeEvents ?? [];
+  const jobs = systemStatus?.jobs ?? [];
   const queryClient = useQueryClient();
   const clearEvent = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/admin/system-events/${id}/clear`),
@@ -302,6 +318,31 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
+        {/* The nightly sweeps. Two of these permanently delete minor
+            athletes' footage on a compliance schedule, so "did it run" is a
+            question with a policy answer behind it -- and until now the only
+            record was a log line. Always rendered, unlike the problems card:
+            the whole value here is being able to confirm the boring case. */}
+        <Card className={cn("md:col-span-2", jobs.some((j) => j.overdue) && "border-destructive/50")}>
+          <CardHeader>
+            <CardTitle>Nightly jobs</CardTitle>
+            <CardDescription>
+              Each sweep's last run. Overdue means its scheduled hour passed with no run recorded --
+              the failure a run history alone cannot show, since a job that never starts leaves no
+              trace.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {jobs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No scheduled jobs have registered yet. They register as the server boots.
+              </p>
+            ) : (
+              jobs.map((job) => <JobRow key={job.jobName} job={job} />)
+            )}
+          </CardContent>
+        </Card>
+
         {/* Rendered only when something is actually wrong. An always-present
             "no problems" panel becomes furniture people stop reading, and the
             whole point here is that the card's presence is itself the signal. */}
@@ -412,6 +453,81 @@ function StatTile({
     </Card>
   );
   return href ? <Link href={href}>{card}</Link> : card;
+}
+
+// The integration badges say "Live"/"Not set up", which reads wrong for a
+// job -- a sweep is not live, it either ran or it did not.
+const JOB_BADGE: Record<string, string> = {
+  ran: "Ran",
+  failed: "Failed",
+  skipped_locked: "Skipped",
+  skipped_unavailable: "Skipped",
+  none: "No runs",
+};
+
+function JobRow({ job }: { job: JobHealth }) {
+  // Overdue outranks the last outcome: a job whose last run succeeded a
+  // week ago is a problem no matter how well that run went.
+  const state: IntegrationState = job.overdue
+    ? "failing"
+    : job.lastOutcome === "failed" || job.lastOutcome === "skipped_unavailable"
+      ? "failing"
+      : job.lastOutcome === null
+        ? "off"
+        : "ok";
+  const presentation = STATUS_PRESENTATION[state];
+  const Icon = presentation.icon;
+
+  const outcomeText = () => {
+    if (!job.lastRunAt) return "Never run on this deployment";
+    const when = format(new Date(job.lastRunAt), "MMM d, h:mm a");
+    switch (job.lastOutcome) {
+      case "ran": {
+        // The counts the job used to only print. Showing them is what
+        // separates "it ran" from "it ran and did something".
+        const counts = job.lastDetail
+          ? Object.entries(job.lastDetail)
+              .map(([key, value]) => `${value} ${key}`)
+              .join(", ")
+          : null;
+        return `Ran ${when}${counts ? ` -- ${counts}` : ""}`;
+      }
+      case "failed":
+        return `Failed ${when}${job.lastError ? ` -- ${job.lastError}` : ""}`;
+      case "skipped_locked":
+        return `Skipped ${when} -- another instance was running it`;
+      case "skipped_unavailable":
+        return `Skipped ${when} -- could not reach the database`;
+      default:
+        return `Last seen ${when}`;
+    }
+  };
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-1 rounded-md border px-3 py-2",
+        state === "failing" ? "border-destructive/50" : "border-border",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <Icon className={cn("h-4 w-4 shrink-0", presentation.iconClass)} />
+        <span className="text-sm">{job.jobName}</span>
+        <span className="text-xs text-muted-foreground">
+          daily at {String(job.hourUtc).padStart(2, "0")}:00 UTC
+        </span>
+        <span
+          className={cn(
+            "ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase leading-none",
+            job.overdue ? "bg-destructive/15 text-destructive" : presentation.badgeClass,
+          )}
+        >
+          {job.overdue ? "Overdue" : JOB_BADGE[job.lastOutcome ?? "none"]}
+        </span>
+      </div>
+      <p className="pl-6 text-xs text-muted-foreground">{outcomeText()}</p>
+    </div>
+  );
 }
 
 function formatGb(bytes: number): string {

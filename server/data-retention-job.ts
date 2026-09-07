@@ -10,7 +10,7 @@ import { reportJobFailure } from "./job-errors";
 // video-management page already uses; every numeric metric derived from
 // that video (velocity, ROM, form faults, etc.) is a separate column and is
 // never touched here.
-export async function runDataRetentionJob() {
+export async function runDataRetentionJob(): Promise<Record<string, number>> {
   try {
     const eligible = await storage.getVideosEligibleForRetentionPurge();
     // Logged even at zero -- this job deletes minor athletes' video data on
@@ -19,7 +19,7 @@ export async function runDataRetentionJob() {
     // without some periodic evidence it actually executed.
     if (eligible.length === 0) {
       console.log("Data retention job: no eligible videos.");
-      return;
+      return { eligible: 0, purged: 0 };
     }
     let purged = 0;
     for (const row of eligible) {
@@ -44,8 +44,10 @@ export async function runDataRetentionJob() {
       }
     }
     console.log(`Data retention job: purged ${purged}/${eligible.length} eligible video(s).`);
+    return { eligible: eligible.length, purged };
   } catch (err) {
     reportJobFailure("data-retention", err);
+    return { eligible: 0, purged: 0 };
   }
 }
 

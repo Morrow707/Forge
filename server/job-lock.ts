@@ -57,7 +57,57 @@ export function jobLockKey(jobName: string): string {
  * logs) can tell "ran", "another instance had it", and "the database was
  * unreachable" apart from each other.
  */
-export async function runWithJobLock(jobName: string, fn: () => Promise<void>): Promise<JobOutcome> {
+// What a job counted, for the dashboard. A sweep returns whatever it
+// tallied ({ purged: 3, warned: 1 }); returning nothing is fine and means
+// the run is recorded with no detail.
+export type JobSummary = Record<string, number> | void;
+
+// Every scheduled job registers its hour here as it is scheduled, so the
+// admin dashboard can work out that a job is OVERDUE. That is the case a
+// run history alone cannot show: a job that never started writes no row,
+// so its absence is only meaningful against the schedule it was supposed
+// to keep.
+const scheduleRegistry = new Map<string, number>();
+
+export function getJobSchedule(): { jobName: string; hourUtc: number }[] {
+  return [...scheduleRegistry.entries()]
+    .map(([jobName, hourUtc]) => ({ jobName, hourUtc }))
+    .sort((a, b) => a.hourUtc - b.hourUtc);
+}
+
+// Recording is best-effort and never allowed to change a job's outcome: a
+// sweep that ran correctly must not be reported as failed because the
+// bookkeeping insert afterwards did not land.
+async function recordJobRun(
+  jobName: string,
+  outcome: JobOutcome,
+  startedAt: number,
+  summary?: JobSummary,
+  err?: unknown,
+): Promise<void> {
+  try {
+    const { pool } = await import("./db");
+    await pool.query(
+      `INSERT INTO job_runs (job_name, outcome, started_at, finished_at, duration_ms, detail, error)
+       VALUES ($1, $2, $3, now(), $4, $5, $6)`,
+      [
+        jobName,
+        outcome,
+        new Date(startedAt),
+        Date.now() - startedAt,
+        summary && Object.keys(summary).length > 0 ? JSON.stringify(summary) : null,
+        err === undefined ? null : err instanceof Error ? err.message : String(err),
+      ],
+    );
+  } catch (recordErr) {
+    console.error(`[job:${jobName}] could not record the run:`, recordErr);
+  }
+}
+
+export async function runWithJobLock(
+  jobName: string,
+  fn: () => Promise<JobSummary>,
+): Promise<JobOutcome> {
   const key = jobLockKey(jobName);
   const startedAt = Date.now();
 
@@ -71,6 +121,9 @@ export async function runWithJobLock(jobName: string, fn: () => Promise<void>): 
     client = await pool.connect();
   } catch (err) {
     console.error(`[job:${jobName}] skipped -- could not get a database connection:`, err);
+    // Deliberately not recorded: the record would go to the database that
+    // just refused a connection. The dashboard catches this case as an
+    // overdue job instead, which is the only way it can be caught.
     return "skipped_unavailable";
   }
 
@@ -83,6 +136,7 @@ export async function runWithJobLock(jobName: string, fn: () => Promise<void>): 
       // Deliberately does NOT fall through to running the job unlocked --
       // an unlocked purge is the exact thing this module exists to prevent.
       console.error(`[job:${jobName}] skipped -- failed to take the advisory lock:`, err);
+      await recordJobRun(jobName, "skipped_unavailable", startedAt, undefined, err);
       return "skipped_unavailable";
     }
 
@@ -90,19 +144,22 @@ export async function runWithJobLock(jobName: string, fn: () => Promise<void>): 
       // Expected and benign during a rolling deploy: the other instance is
       // running this same sweep right now.
       console.log(`[job:${jobName}] skipped -- another instance holds the lock.`);
+      await recordJobRun(jobName, "skipped_locked", startedAt);
       return "skipped_locked";
     }
 
     console.log(`[job:${jobName}] start (${new Date(startedAt).toISOString()}).`);
     try {
-      await fn();
+      const summary = await fn();
       console.log(`[job:${jobName}] finished ok in ${Date.now() - startedAt}ms.`);
+      await recordJobRun(jobName, "ran", startedAt, summary);
       return "ran";
     } catch (err) {
       // The jobs already swallow their own errors internally; this is the
       // backstop that keeps an unexpected throw from being silent, and
       // keeps it from skipping the unlock below.
       console.error(`[job:${jobName}] failed after ${Date.now() - startedAt}ms:`, err);
+      await recordJobRun(jobName, "failed", startedAt, undefined, err);
       return "failed";
     }
   } finally {
@@ -146,7 +203,12 @@ export function msUntilNextUtcHour(hourUtc: number, now: Date = new Date()): num
  * (a schema change, tracked separately); the advisory lock plus a fixed
  * slot is what's achievable without one, and it errs toward skipping.
  */
-export function scheduleDailyJob(jobName: string, hourUtc: number, fn: () => Promise<void>): void {
+export function scheduleDailyJob(
+  jobName: string,
+  hourUtc: number,
+  fn: () => Promise<JobSummary>,
+): void {
+  scheduleRegistry.set(jobName, hourUtc);
   const tick = () => {
     void runWithJobLock(jobName, fn);
   };
@@ -158,4 +220,31 @@ export function scheduleDailyJob(jobName: string, hourUtc: number, fn: () => Pro
     tick();
     setInterval(tick, DAY_MS);
   }, delay);
+}
+
+/**
+ * A job is overdue once more than a day and a bit has passed since its last
+ * recorded run, counted from its scheduled hour.
+ *
+ * The grace period is deliberate. A daily job that ran at 09:00 yesterday
+ * is not late at 09:01 today -- the sweep itself takes time, the process
+ * may have just restarted, and a badge that flickers red every morning is
+ * a badge people learn to ignore. Two hours past the scheduled hour is
+ * late enough to mean something.
+ *
+ * A job with no recorded run at all is judged from process start rather
+ * than reported overdue immediately: a fresh deploy has legitimately never
+ * run any of them yet.
+ */
+const GRACE_MS = 2 * 60 * 60 * 1000;
+const processStartedAt = Date.now();
+
+export function isOverdue(hourUtc: number, lastRunAt: Date | null, now: number): boolean {
+  const reference = lastRunAt ? lastRunAt.getTime() : processStartedAt;
+  // When the next scheduled firing after `reference` was due.
+  const next = new Date(reference);
+  next.setUTCHours(hourUtc, 0, 0, 0);
+  let dueAt = next.getTime();
+  while (dueAt <= reference) dueAt += DAY_MS;
+  return now > dueAt + GRACE_MS;
 }

@@ -2608,6 +2608,41 @@ CREATE INDEX IF NOT EXISTS "system_events_recent_idx"
   ON "system_events" ("last_seen_at");
 CREATE INDEX IF NOT EXISTS "system_events_source_idx"
   ON "system_events" ("source", "last_seen_at");
+
+-- Scheduled job runs (shared/schema.ts jobRuns) -- one row per attempt of
+-- each nightly sweep, so "did the retention purge run last night" has an
+-- answer that outlives the log stream.
+DO $$ BEGIN
+  CREATE TYPE "job_run_outcome" AS ENUM ('ran', 'failed', 'skipped_locked', 'skipped_unavailable');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "job_runs" (
+  "id" serial PRIMARY KEY,
+  "job_name" text NOT NULL,
+  "outcome" "job_run_outcome" NOT NULL,
+  "started_at" timestamp NOT NULL,
+  "finished_at" timestamp NOT NULL DEFAULT now(),
+  "duration_ms" integer NOT NULL,
+  "detail" text,
+  "error" text
+);
+
+CREATE INDEX IF NOT EXISTS "job_runs_job_idx" ON "job_runs" ("job_name", "started_at");
+CREATE INDEX IF NOT EXISTS "job_runs_started_idx" ON "job_runs" ("started_at");
+
+-- Notification delivery counters (shared/schema.ts notificationDeliveryDaily).
+-- Daily ratios per channel, not a per-send log: this answers "is push
+-- working" without keeping a delivery record against every minor's account.
+CREATE TABLE IF NOT EXISTS "notification_delivery_daily" (
+  "id" serial PRIMARY KEY,
+  "channel" text NOT NULL,
+  "day" date NOT NULL,
+  "attempted" integer NOT NULL DEFAULT 0,
+  "delivered" integer NOT NULL DEFAULT 0
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "notification_delivery_daily_channel_day_idx"
+  ON "notification_delivery_daily" ("channel", "day");
 `;
 
 async function main() {

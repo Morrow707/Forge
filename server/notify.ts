@@ -3,6 +3,7 @@ import { sendPushToUser, pushEnabled } from "./push";
 import { apnsEnabled } from "./apns";
 import { sendEmail, escapeHtml, emailEnabled } from "./email";
 import { categoryForNotificationType } from "@shared/notification-categories";
+import { recordDeliveryAttempt } from "./health-probes";
 
 /** The one place all three notification channels (in-app inbox, push, email)
  * fan out from, so every targeted event -- a comment reply, a team
@@ -60,16 +61,27 @@ export async function notifyUser(
   // switched off -- will never succeed, and retrying forever means the
   // caller never makes progress.
   let attempted = false;
+  let pushCounted = false;
+  let emailCounted = false;
 
   let pushDelivered = false;
   if (pushAllowed) {
-    if (pushEnabled || apnsEnabled) attempted = true;
+    if (pushEnabled || apnsEnabled) {
+      attempted = true;
+      // Counted only when a channel was actually available to try, so an
+      // unconfigured deployment never looks like a failing one.
+      pushCounted = true;
+    }
     pushDelivered = await sendPushToUser(userId, { title, body, url: link, badge });
+    if (pushCounted) recordDeliveryAttempt("push", pushDelivered);
   }
 
   let emailDelivered = false;
   if (!skipEmail && user && (user.notifyEmail || bypassEmailPref)) {
-    if (emailEnabled) attempted = true;
+    if (emailEnabled) {
+      attempted = true;
+      emailCounted = true;
+    }
     // `body` frequently embeds a coach/athlete's own display name and
     // free-typed comment text (see the workout-comment routes) -- unescaped,
     // either could carry markup that renders as part of a real
@@ -81,6 +93,7 @@ export async function notifyUser(
       html: `<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;">${escapeHtml(body)}</p><p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#777;">Open Forge to see more.</p>`,
     });
     emailDelivered = result.sent;
+    if (emailCounted) recordDeliveryAttempt("email", emailDelivered);
   }
   // The in-app notification row is deliberately NOT counted as reaching
   // anyone. It always succeeds, and an athlete who has stopped opening the

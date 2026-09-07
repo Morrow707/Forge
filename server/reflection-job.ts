@@ -16,11 +16,12 @@ import { reportJobFailure } from "./job-errors";
 // "informational" findings (e.g. a real roster segment with nothing
 // established taught for it) land in-app only -- worth surfacing, not worth
 // interrupting anyone over.
-export async function runReflectionJob() {
+export async function runReflectionJob(): Promise<Record<string, number>> {
   try {
     const findings = await storage.generateReflectionFindings();
-    if (findings.length === 0) return;
+    if (findings.length === 0) return { findings: 0, notified: 0 };
     const admins = await storage.getAdmins();
+    let notified = 0;
     for (const finding of findings) {
       for (const admin of admins) {
         // Each admin's delivery is independent -- generateReflectionFindings
@@ -43,13 +44,16 @@ export async function runReflectionJob() {
               "/admin/forge-ai",
             );
           }
+          notified += 1;
         } catch (err) {
           console.error(`Reflection job: failed to notify admin ${admin.id} of finding ${finding.id}:`, err);
         }
       }
     }
+    return { findings: findings.length, notified };
   } catch (err) {
     reportJobFailure("reflection", err);
+    return { findings: 0, notified: 0 };
   }
 }
 

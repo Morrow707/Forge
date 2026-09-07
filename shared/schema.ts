@@ -4825,6 +4825,85 @@ export const systemEvents = pgTable(
 );
 export type SystemEvent = typeof systemEvents.$inferSelect;
 
+// ---------- Scheduled job runs ----------
+// One row per attempt of each nightly sweep (see job-lock.ts). Before this,
+// a job's entire record of having happened was a console.log line, which
+// meant "did the video retention purge run last night" had no answer at all
+// once the log stream had rolled over.
+//
+// The failure this exists to make visible is specifically a SILENT one. The
+// jobs fail closed on purpose -- a sweep that cannot take its advisory lock
+// or reach the database declines to run rather than risk a double purge --
+// and a decline leaves no trace anywhere. That is the right behaviour and
+// the wrong amount of evidence: two of these jobs permanently delete minor
+// athletes' footage on a compliance-driven schedule, so a job quietly not
+// running for a month is a policy problem, not just an ops one.
+//
+// `outcome` mirrors JobOutcome in job-lock.ts. `detail` holds the counts
+// the job used to only print (purged, warned, eligible), so the dashboard
+// can show that a run did something rather than merely that it happened.
+export const jobRunOutcomeEnum = pgEnum("job_run_outcome", [
+  "ran",
+  "failed",
+  "skipped_locked",
+  "skipped_unavailable",
+]);
+
+export const jobRuns = pgTable(
+  "job_runs",
+  {
+    id: serial("id").primaryKey(),
+    jobName: text("job_name").notNull(),
+    outcome: jobRunOutcomeEnum("outcome").notNull(),
+    startedAt: timestamp("started_at").notNull(),
+    finishedAt: timestamp("finished_at").notNull().defaultNow(),
+    durationMs: integer("duration_ms").notNull(),
+    // Whatever the job counted, as JSON text -- deliberately not a column
+    // per metric, since each sweep counts different things and a new job
+    // should not need a migration to report what it did.
+    detail: text("detail"),
+    error: text("error"),
+  },
+  (table) => ({
+    jobIdx: index("job_runs_job_idx").on(table.jobName, table.startedAt),
+    startedIdx: index("job_runs_started_idx").on(table.startedAt),
+  }),
+);
+export type JobRun = typeof jobRuns.$inferSelect;
+
+// ---------- Notification delivery counters ----------
+// Daily attempted/delivered tallies per channel, so the dashboard can say
+// "push has failed for every athlete since 2am" instead of only "a VAPID
+// key is configured".
+//
+// Bucketed by day rather than one row per notification: this is a health
+// signal, not an audit trail, and an append-per-send table would grow
+// without bound to answer a question that only needs a ratio. Nothing here
+// identifies a user -- deliberately, since the population being counted is
+// mostly minors and a per-recipient delivery log is a privacy liability
+// that buys nothing the ratio does not already give.
+export const notificationDeliveryDaily = pgTable(
+  "notification_delivery_daily",
+  {
+    id: serial("id").primaryKey(),
+    // "push" or "email".
+    channel: text("channel").notNull(),
+    day: date("day").notNull(),
+    // Attempted counts only sends where the channel was actually available
+    // to try; a deployment with no keys configured records nothing at all,
+    // so an unconfigured channel never looks like a failing one.
+    attempted: integer("attempted").notNull().default(0),
+    delivered: integer("delivered").notNull().default(0),
+  },
+  (table) => ({
+    channelDayIdx: uniqueIndex("notification_delivery_daily_channel_day_idx").on(
+      table.channel,
+      table.day,
+    ),
+  }),
+);
+export type NotificationDeliveryDaily = typeof notificationDeliveryDaily.$inferSelect;
+
 // ---------- Uploaded file ownership ----------
 // One row per file created by any of the raw upload routes that hand a
 // bare, unsigned /uploads/... path straight back to the client for reuse
