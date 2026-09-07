@@ -47,6 +47,7 @@ import { missingPriceEnvVars } from "./stripe-prices";
 import { getHealthSnapshot } from "./health-probes";
 import { RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION } from "@shared/research-consent";
 import { requireGuardianAccess } from "./auth";
+import { transcribeScannedPdf } from "./pdf-vision";
 import { extractPdf, splitIntoPassages, hashBytes } from "./pdf-extract";
 import { searchKnowledgePassages } from "./knowledge-retrieval";
 import { recordSystemFailure } from "./system-events";
@@ -4164,20 +4165,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(422).json({ message: "That PDF could not be read. It may be corrupt or password-protected." });
       }
 
-      if (extracted.looksScanned) {
-        // Not an error, and deliberately not a silent ingest of blank pages.
-        // The pages can still be read visually; that is offered rather than
-        // this being reported as a failure.
-        return res.status(422).json({
-          message:
-            "This PDF has almost no readable text. It looks like scanned or photographed pages, so the words are images. " +
-            "Nothing was ingested. You can run it through OCR first, or attach the pages as photos so Claude can read them.",
-          looksScanned: true,
-          pageCount: extracted.pageCount,
-        });
-      }
-
-      const passages = splitIntoPassages(extracted.pages);
+      // A scan is not a failure and is no longer a dead end. The file is
+      // stored and the source is created with no passages and a
+      // needs_vision status; the admin then starts a transcription pass,
+      // which is a separate request because it runs for minutes to hours.
+      const passages = extracted.looksScanned ? [] : splitIntoPassages(extracted.pages);
 
       // Written only once extraction has succeeded and the file is known not
       // to be a duplicate -- a rejected upload should leave nothing behind on
@@ -4198,9 +4190,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
         passages,
       });
 
-      res.status(201).json({ ...source, passageCount: passages.length });
+      res.status(201).json({
+        ...source,
+        passageCount: passages.length,
+        looksScanned: extracted.looksScanned,
+        message: extracted.looksScanned
+          ? "This PDF has almost no readable text, so its pages are images rather than text. " +
+            "Nothing has been ingested yet. Start a transcription pass to have Claude read the pages."
+          : undefined,
+      });
     },
   );
+
+  /**
+   * Starts a vision transcription pass over a scanned source.
+   *
+   * Returns immediately and runs in the background. A 400-page book is 400
+   * model calls; holding the request open for that would time out at every
+   * proxy between the admin and this process, and the admin would be left
+   * unable to tell a slow run from a dead one. Progress lands on the source
+   * row instead, which the list already polls.
+   *
+   * Guarded by the status: a source already transcribing does not get a
+   * second pass started on top of the first, which would double every
+   * passage it produces.
+   */
+  app.post("/api/admin/knowledge-sources/:id/transcribe", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const source = await storage.getKnowledgeSource(id);
+    if (!source) return res.status(404).json({ message: "Source not found" });
+    if (source.status === "transcribing") {
+      return res.status(409).json({ message: "A transcription pass is already running on this source." });
+    }
+    if (!source.filePath) {
+      return res.status(422).json({ message: "The original file for this source is no longer on disk." });
+    }
+
+    const diskPath = path.join(UPLOADS_ROOT, source.filePath.replace(/^\/uploads\//, ""));
+    let bytes: Buffer;
+    try {
+      bytes = await fs.promises.readFile(diskPath);
+    } catch {
+      return res.status(422).json({ message: "The original file for this source could not be read." });
+    }
+
+    await storage.setKnowledgeSourceStatus(id, "transcribing", "Starting...");
+    res.status(202).json({ ok: true, pageCount: source.pageCount });
+
+    // Deliberately not awaited: the response has already gone. Every failure
+    // path below ends by writing a terminal status, because a source left at
+    // "transcribing" forever is indistinguishable to the admin from one still
+    // working.
+    void (async () => {
+      try {
+        const { pages, attempted, failed } = await transcribeScannedPdf(bytes, {
+          onProgress: (p) => {
+            void storage.setKnowledgeSourceStatus(
+              id,
+              "transcribing",
+              `Read ${p.pagesDone} of ${p.pageCount} page(s).`,
+            );
+          },
+        });
+        const transcribed = splitIntoPassages(pages).map((p) => ({ ...p, fromVision: true }));
+        await storage.appendKnowledgePassages(id, transcribed);
+        await storage.setKnowledgeSourceStatus(
+          id,
+          transcribed.length > 0 ? "ready" : "needs_vision",
+          transcribed.length > 0
+            ? `Transcribed ${attempted - failed} of ${attempted} page(s) into ${transcribed.length} passage(s).` +
+                (failed > 0 ? ` ${failed} page(s) could not be read.` : "")
+            : "No text could be read from any page.",
+        );
+      } catch (err) {
+        recordSystemFailure("ai", "A knowledge source transcription pass failed", { detail: err });
+        await storage.setKnowledgeSourceStatus(
+          id,
+          "needs_vision",
+          "The transcription pass failed. It can be started again.",
+        );
+      }
+    })();
+  });
 
   app.get("/api/admin/knowledge-sources", requireRole("admin"), async (_req, res) => {
     res.json(await storage.listKnowledgeSources());

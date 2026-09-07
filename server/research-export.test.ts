@@ -33,7 +33,12 @@ function extractPdfText(pdf: Buffer): string {
     } catch {
       // Font programs and other non-Flate objects.
     }
-    index = pdf.indexOf(marker, end);
+    // Past the whole "endstream" keyword, not just past its start. The word
+    // "endstream" contains "stream", so advancing to `end` alone made the
+    // next search land inside it and pair up the wrong delimiters, which
+    // silently dropped every other page. The extract grew to two pages
+    // before anything noticed.
+    index = pdf.indexOf(marker, end + "endstream".length);
   }
   // pdfkit emits text as hex strings inside TJ arrays, split wherever it
   // applies kerning, so "Anonymity" can arrive as several fragments. Decode
@@ -141,7 +146,7 @@ describe("research export PDF", () => {
     expect(text).toContain("Anonymity");
     expect(text).toContain("Suppression rule");
     expect(text).toContain("Method and limitations");
-    expect(text).toContain("anonymous rather than pseudonymous");
+    expect(text).toContain("no per-athlete records at all");
   });
 
   it("carries no row-level or identity wording at all", async () => {

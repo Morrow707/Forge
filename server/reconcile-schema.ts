@@ -2675,7 +2675,7 @@ CREATE INDEX IF NOT EXISTS "research_exports_created_idx"
 -- Knowledge source documents and their extracted passages
 -- (shared/schema.ts knowledgeSources / knowledgePassages).
 DO $$ BEGIN
-  CREATE TYPE "knowledge_source_status" AS ENUM ('extracting', 'ready', 'failed', 'needs_vision');
+  CREATE TYPE "knowledge_source_status" AS ENUM ('extracting', 'ready', 'failed', 'needs_vision', 'transcribing');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS "knowledge_sources" (
@@ -2747,6 +2747,78 @@ CREATE UNIQUE INDEX IF NOT EXISTS "knowledge_conflicts_fingerprint_idx"
   ON "knowledge_conflicts" ("fingerprint");
 CREATE INDEX IF NOT EXISTS "knowledge_conflicts_status_idx"
   ON "knowledge_conflicts" ("status", "created_at");
+
+-- The research mirror: the anonymous population an extract is built from.
+-- No foreign key to users anywhere in these three tables, on purpose. The
+-- link runs the other way, from users.research_subject_id, so an account
+-- deletion cannot cascade into the mirror and a subject row cannot be
+-- resolved by joining from this side.
+-- Added after the enum's first deploy, so it needs its own ADD VALUE rather
+-- than only appearing in the CREATE TYPE above.
+ALTER TYPE "knowledge_source_status" ADD VALUE IF NOT EXISTS 'transcribing';
+
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "research_subject_id" uuid;
+
+CREATE TABLE IF NOT EXISTS "research_subjects" (
+  "subject_id" uuid PRIMARY KEY,
+  "age" integer,
+  "gender" text,
+  "sport" text,
+  "position" text,
+  "height_in" integer,
+  "body_weight_lbs" real,
+  "season_phase" text,
+  "forty_yard_dash" real,
+  "vertical_jump_in" real,
+  "broad_jump_in" real,
+  "pro_agility_seconds" real,
+  "bench_max_lbs" real,
+  "squat_max_lbs" real,
+  "deadlift_max_lbs" real,
+  "is_minor" boolean NOT NULL DEFAULT false,
+  "account_created_week" date,
+  "synced_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "research_subjects_sport_idx"
+  ON "research_subjects" ("sport");
+CREATE INDEX IF NOT EXISTS "research_subjects_gender_age_idx"
+  ON "research_subjects" ("gender", "age");
+
+CREATE TABLE IF NOT EXISTS "research_subject_sets" (
+  "id" serial PRIMARY KEY,
+  "subject_id" uuid NOT NULL,
+  "week" date NOT NULL,
+  "exercise_name" text,
+  "peak_velocity_mps" real,
+  "mean_velocity_mps" real,
+  "rom_cm" real,
+  "peak_power_watts" real,
+  "jump_height_cm" real,
+  "kb_swing_peak_speed_mps" real,
+  "med_ball_peak_speed_mps" real,
+  "horizontal_load_avg_speed_yards_per_sec" real,
+  "trust_score_pct" integer
+);
+
+CREATE INDEX IF NOT EXISTS "research_subject_sets_subject_idx"
+  ON "research_subject_sets" ("subject_id", "week");
+CREATE INDEX IF NOT EXISTS "research_subject_sets_exercise_idx"
+  ON "research_subject_sets" ("exercise_name");
+
+CREATE TABLE IF NOT EXISTS "research_subject_injuries" (
+  "id" serial PRIMARY KEY,
+  "subject_id" uuid NOT NULL,
+  "region" text NOT NULL,
+  "side" text,
+  "resolved" boolean,
+  "week" date
+);
+
+CREATE INDEX IF NOT EXISTS "research_subject_injuries_subject_idx"
+  ON "research_subject_injuries" ("subject_id");
+CREATE INDEX IF NOT EXISTS "research_subject_injuries_region_idx"
+  ON "research_subject_injuries" ("region");
 `;
 
 async function main() {

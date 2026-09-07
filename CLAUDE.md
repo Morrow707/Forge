@@ -106,6 +106,22 @@ change makes one of them false, the change is wrong.
   instead: an HMAC under a salt generated fresh per query, stable within
   one result and different across two, mapped nowhere. The tracking report
   shows "Athlete 1", "Athlete 2" for the same reason.
+- **Extracts are built from the research mirror, never from live rows.**
+  `server/research-mirror.ts` writes consenting athletes into
+  `research_subjects` and its two child tables ahead of time, with the
+  identifying columns absent rather than stripped on the way out, and
+  `queryResearchCohort` in `storage.ts` reads only those. That function is
+  a near-duplicate of `queryTrackedCohort` on purpose -- merging them
+  behind a flag would put the export path one SELECT away from live
+  athlete rows. `users.researchSubjectId` is the one pointer, and it has
+  to exist: without it a withdrawal could not remove anyone from the
+  mirror. So the honest claim is anonymous at the export boundary,
+  pseudonymous inside Forge, and the PDF says exactly that.
+- **The admin side is anonymous; the coach side is not.** A coach sees
+  their own athletes by name because that is what coaching is. Everything
+  on an admin analytics surface, and everything that leaves, is group
+  numbers over the mirror. Do not "improve" an admin screen by resolving a
+  code back to a person.
 - **Two suppression floors, deliberately different.** 5 inside Forge
   (`PLATFORM_TRENDS_MIN_COHORT`, `QUERY_ENGINE_MIN_COHORT`), 10 in anything
   that leaves (`RESEARCH_EXPORT_MIN_CELL`). Five is reasonable for an

@@ -334,6 +334,13 @@ export const users = pgTable(
     // athlete alone, same relayed pattern trackingOptOut uses.
     researchDataConsent: boolean("research_data_consent").notNull().default(false),
     researchDataConsentAt: timestamp("research_data_consent_at"),
+    // This account's row in the research mirror, or null if it has none.
+    // A random uuid, never derived from the user id. See the researchSubjects
+    // comment for why this one-way pointer exists and what it does and does
+    // not claim: it is what makes a refresh and a withdrawal possible, and
+    // it is the reason the mirror is described as anonymous at the export
+    // boundary rather than anonymous everywhere.
+    researchSubjectId: uuid("research_subject_id"),
     // The athlete's own IANA time zone (e.g. "America/Los_Angeles"),
     // reported by their browser or app rather than asked for, and used to
     // work out what "today" means for them.
@@ -5077,6 +5084,11 @@ export const knowledgeSourceStatusEnum = pgEnum("knowledge_source_status", [
   // A state rather than an error: the pages can still be read visually, and
   // the admin is offered that rather than told it failed.
   "needs_vision",
+  // A vision transcription pass is running over the pages right now. Its own
+  // state because it is long -- a 400-page scan is 400 model calls -- and an
+  // admin watching the list needs to see progress rather than a source that
+  // sits at "needs_vision" for an hour and then changes without explanation.
+  "transcribing",
 ]);
 
 export const knowledgeSources = pgTable(
@@ -5725,6 +5737,143 @@ export const archivedHealthFlags = pgTable(
     subjectIdx: index("archived_health_flags_subject_idx").on(table.subjectId, table.week),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Research mirror.
+//
+// The population a dataset extract is built from. Not the live users table
+// de-identified on the way out -- an anonymous store, written ahead of time,
+// that the export pipeline reads instead.
+//
+// WHY THIS EXISTS AT ALL
+//
+// The first build ran the cohort query against `users` and stripped the
+// identifying columns as the rows came back. Every number that reached the
+// PDF was already a group statistic, so the output was the same either way.
+// The difference is what the code is holding while it works. A pipeline
+// that selects live athlete rows is one changed SELECT, one added debug
+// log, or one new join away from carrying a name into a document that
+// leaves the organisation, and no amount of care at the last step makes
+// that structurally impossible. Reading from a store that never had a name
+// in it does.
+//
+// So: nothing in the export path touches `users`. It reads these tables,
+// which cannot produce an identity because they do not contain one.
+//
+// WHAT LINKS BACK, AND WHY THAT IS NOT A DODGE
+//
+// This is a mirror, not the archive above, and the difference matters.
+// archivedAthletes is written once when an account is deleted and is
+// genuinely unlinkable: no column anywhere points at it, and that is
+// possible because deletion is terminal -- nothing ever has to find those
+// rows again.
+//
+// A research subject is not terminal. The athlete keeps training, so the
+// mirror has to be refreshed, and the athlete may withdraw consent, so the
+// mirror has to be erasable. Both require Forge to be able to find one
+// subject from one account. That is `users.researchSubjectId`: a random
+// uuid, never derived from the user id, stored on the live row.
+//
+// State it plainly rather than overclaiming. Inside Forge, with database
+// access to the users table, this is pseudonymous -- and it has to be, or a
+// withdrawal could not be honoured. Everywhere the export pipeline runs,
+// and everywhere data leaves, it is anonymous: the subject id appears in no
+// extract, resolves to nothing on its own, and the code that builds an
+// extract never issues a query that could resolve it.
+//
+// The archive's five copying rules apply here unchanged: no coach, team or
+// class link; no free text; dates coarsened to the week; no video and no
+// raw traces; no identity columns. Enum-valued fields land as plain text
+// for the same forward-compatibility reason.
+//
+// Withdrawal deletes the subject row and its children, then clears the
+// column. After that the account is not in the mirror and a later extract
+// cannot include it. Extracts already delivered are outside what any of
+// this can reach; that is one of the questions on the legal review page.
+// ---------------------------------------------------------------------------
+
+export const researchSubjects = pgTable(
+  "research_subjects",
+  {
+    subjectId: uuid("subject_id").primaryKey(),
+    age: integer("age"),
+    gender: text("gender"),
+    sport: text("sport"),
+    position: text("position"),
+    heightIn: integer("height_in"),
+    bodyWeightLbs: real("body_weight_lbs"),
+    seasonPhase: text("season_phase"),
+    fortyYardDash: real("forty_yard_dash"),
+    verticalJumpIn: real("vertical_jump_in"),
+    broadJumpIn: real("broad_jump_in"),
+    proAgilitySeconds: real("pro_agility_seconds"),
+    benchMaxLbs: real("bench_max_lbs"),
+    squatMaxLbs: real("squat_max_lbs"),
+    deadliftMaxLbs: real("deadlift_max_lbs"),
+    // Whether the athlete is a minor, as a boolean rather than a birth
+    // date. An extract may legitimately need to report that a cohort
+    // contains minors; it never needs the birthday that says which minor.
+    isMinor: boolean("is_minor").notNull().default(false),
+    accountCreatedWeek: date("account_created_week"),
+    // When this row last caught up with the live account. Not the athlete's
+    // training history -- a fact about the mirror, used to decide what to
+    // refresh and to tell a reader how current an extract is.
+    syncedAt: timestamp("synced_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    sportIdx: index("research_subjects_sport_idx").on(table.sport),
+    genderAgeIdx: index("research_subjects_gender_age_idx").on(table.gender, table.age),
+  }),
+);
+
+export const researchSubjectSets = pgTable(
+  "research_subject_sets",
+  {
+    id: serial("id").primaryKey(),
+    subjectId: uuid("subject_id").notNull(),
+    week: date("week").notNull(),
+    // The exercise's name, not its id -- same reasoning as
+    // archivedTrackedSets.exerciseName.
+    exerciseName: text("exercise_name"),
+    peakVelocityMps: real("peak_velocity_mps"),
+    meanVelocityMps: real("mean_velocity_mps"),
+    romCm: real("rom_cm"),
+    peakPowerWatts: real("peak_power_watts"),
+    jumpHeightCm: real("jump_height_cm"),
+    kbSwingPeakSpeedMps: real("kb_swing_peak_speed_mps"),
+    medBallPeakSpeedMps: real("med_ball_peak_speed_mps"),
+    horizontalLoadAvgSpeedYardsPerSec: real("horizontal_load_avg_speed_yards_per_sec"),
+    trustScorePct: integer("trust_score_pct"),
+  },
+  (table) => ({
+    subjectIdx: index("research_subject_sets_subject_idx").on(table.subjectId, table.week),
+    exerciseIdx: index("research_subject_sets_exercise_idx").on(table.exerciseName),
+  }),
+);
+
+export const researchSubjectInjuries = pgTable(
+  "research_subject_injuries",
+  {
+    id: serial("id").primaryKey(),
+    subjectId: uuid("subject_id").notNull(),
+    // Already normalized to a region from the closed INJURY_REGIONS
+    // vocabulary at mirror time, so no free-text body part ever lands here
+    // and no export-time normalization can reintroduce one.
+    region: text("region").notNull(),
+    side: text("side"),
+    resolved: boolean("resolved"),
+    // Week the injury was recorded, coarsened like every other date here.
+    week: date("week"),
+  },
+  (table) => ({
+    subjectIdx: index("research_subject_injuries_subject_idx").on(table.subjectId),
+    regionIdx: index("research_subject_injuries_region_idx").on(table.region),
+  }),
+);
+
+export type ResearchSubject = typeof researchSubjects.$inferSelect;
+export type ResearchSubjectSet = typeof researchSubjectSets.$inferSelect;
+export type ResearchSubjectInjury = typeof researchSubjectInjuries.$inferSelect;
 
 export type ArchivedAthlete = typeof archivedAthletes.$inferSelect;
 

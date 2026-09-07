@@ -11,7 +11,7 @@ import { apiRequest, getJson, resolveApiUrl, getNativeToken, ApiError } from "@/
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Upload, Trash2, Search, AlertTriangle, BookOpen } from "lucide-react";
+import { Upload, Trash2, Search, AlertTriangle, BookOpen, ScanText } from "lucide-react";
 
 // The assistants a source can serve. A source can carry several: an energy
 // availability chapter is honestly both nutrition and strength, and forcing
@@ -30,7 +30,7 @@ type Source = {
   title: string;
   citation: string | null;
   pageCount: number | null;
-  status: "extracting" | "ready" | "failed" | "needs_vision";
+  status: "extracting" | "ready" | "failed" | "needs_vision" | "transcribing";
   statusDetail: string | null;
   domains: string[];
   passageCount: number;
@@ -64,6 +64,11 @@ export default function AdminKnowledgeBase() {
   const { data: sources = [] } = useQuery<Source[]>({
     queryKey: ["/api/admin/knowledge-sources"],
     queryFn: () => getJson("/api/admin/knowledge-sources"),
+    // A transcription pass writes its progress to the source row, so the
+    // list has to re-read to show it moving. Polled only while something is
+    // actually running -- an idle knowledge base should not poll at all.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((s) => s.status === "transcribing") ? 5000 : false,
   });
 
   const { data: conflicts = [] } = useQuery<Conflict[]>({
@@ -102,12 +107,16 @@ export default function AdminKnowledgeBase() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // The scanned-PDF case is an offer, not a failure, so it gets a
-        // longer-lived message than an ordinary error toast.
-        toast.error(body.message || "Upload failed", { duration: body.looksScanned ? 15000 : 6000 });
+        toast.error(body.message || "Upload failed");
         return;
       }
-      toast.success(`Ingested ${body.passageCount} passage(s) from ${body.pageCount} pages.`);
+      if (body.looksScanned) {
+        // Not a failure. The file is stored and the source exists; it is
+        // waiting on a transcription pass the admin starts from the list.
+        toast.info(body.message, { duration: 15000 });
+      } else {
+        toast.success(`Ingested ${body.passageCount} passage(s) from ${body.pageCount} pages.`);
+      }
       setTitle("");
       setCitation("");
       setFile(null);
@@ -127,6 +136,19 @@ export default function AdminKnowledgeBase() {
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-conflicts"] });
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete"),
+  });
+
+  const transcribe = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/admin/knowledge-sources/${id}/transcribe`),
+    onSuccess: () => {
+      toast.info(
+        "Reading the pages. This runs in the background and takes a while for a long book; " +
+          "progress shows on the source below.",
+        { duration: 10000 },
+      );
+      qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not start transcription"),
   });
 
   const detect = useMutation({
@@ -306,7 +328,9 @@ export default function AdminKnowledgeBase() {
                   key={s.id}
                   className={cn(
                     "flex items-start gap-3 rounded-md border px-3 py-2",
-                    s.status === "needs_vision" ? "border-amber-500/50" : "border-border",
+                    s.status === "needs_vision" || s.status === "transcribing"
+                      ? "border-amber-500/50"
+                      : "border-border",
                   )}
                 >
                   <div className="min-w-0 flex-1">
@@ -318,15 +342,35 @@ export default function AdminKnowledgeBase() {
                     </p>
                     {s.status === "needs_vision" && (
                       <p className="text-xs text-amber-500">
-                        No readable text was found. The pages need to be read visually.
+                        {s.statusDetail ??
+                          "No readable text was found. These pages are images, so Claude has to read them."}
                       </p>
                     )}
+                    {s.status === "transcribing" && (
+                      <p className="text-xs text-amber-500">
+                        Reading the pages. {s.statusDetail ?? ""}
+                      </p>
+                    )}
+                    {s.status === "ready" && s.statusDetail && (
+                      <p className="text-xs text-muted-foreground">{s.statusDetail}</p>
+                    )}
                   </div>
+                  {s.status === "needs_vision" && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => transcribe.mutate(s.id)}
+                      disabled={transcribe.isPending}
+                    >
+                      <ScanText className="mr-1.5 h-4 w-4" />
+                      Read the pages
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => detect.mutate(s.id)}
-                    disabled={detect.isPending}
+                    disabled={detect.isPending || s.status !== "ready"}
                   >
                     Check for conflicts
                   </Button>

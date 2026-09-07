@@ -104,6 +104,9 @@ import {
   familyGroups,
   movementKnowledgeMessages,
   movementProfiles,
+  researchSubjects,
+  researchSubjectSets,
+  researchSubjectInjuries,
   archivedAthletes,
   archivedTestingResults,
   archivedWellness,
@@ -139,6 +142,7 @@ import {
   type PrivacyTier,
 } from "@shared/privacy-tiers";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
 import { normalizeInjuryRegion, INJURY_REGIONS, type InjuryRegion } from "@shared/injury-taxonomy";
 import {
   findSimilarPassages,
@@ -2232,6 +2236,167 @@ async function queryTrackedCohort(
     // cohortRows, not cohort: with an injury-region filter applied, the
     // cohort IS the injured subset, and reporting the pre-filter count
     // would silently inflate every denominator a reader computes.
+    cohortSize: cohortRows.length,
+    minCohortSize: PLATFORM_TRENDS_MIN_COHORT,
+    results,
+    crosstab,
+    injuries,
+  };
+}
+
+/**
+ * The same cohort query, run against the research mirror instead of the live
+ * users table.
+ *
+ * This is the function that builds anything leaving the organisation. It is
+ * a near-duplicate of queryTrackedCohort above and that duplication is
+ * deliberate -- the two differ only in which tables they read, and merging
+ * them behind a flag would mean one SELECT away from an extract built on
+ * live athlete rows. Kept apart, "does the export path touch users?" is
+ * answerable by reading this function, and the answer is no.
+ *
+ * The internal key here is a subject uuid from the mirror, never a user id.
+ * Nothing derived from it reaches the output, which is group statistics
+ * only, exactly as before.
+ */
+async function queryResearchCohort(filters: CohortQueryFilters) {
+  const subjects = await db
+    .select({
+      id: researchSubjects.subjectId,
+      age: researchSubjects.age,
+      gender: researchSubjects.gender,
+      sport: researchSubjects.sport,
+      position: researchSubjects.position,
+      heightIn: researchSubjects.heightIn,
+      bodyWeightLbs: researchSubjects.bodyWeightLbs,
+      fortyYardDash: researchSubjects.fortyYardDash,
+      verticalJumpIn: researchSubjects.verticalJumpIn,
+      broadJumpIn: researchSubjects.broadJumpIn,
+      proAgilitySeconds: researchSubjects.proAgilitySeconds,
+      benchMaxLbs: researchSubjects.benchMaxLbs,
+      squatMaxLbs: researchSubjects.squatMaxLbs,
+      deadliftMaxLbs: researchSubjects.deadliftMaxLbs,
+    })
+    .from(researchSubjects);
+
+  const genderSet = filters.genders?.length ? new Set(filters.genders) : null;
+  const sportSet = filters.sports?.length ? new Set(filters.sports.map((s) => s.toLowerCase())) : null;
+  const positionSet = filters.positions?.length
+    ? new Set(filters.positions.map((p) => p.toLowerCase()))
+    : null;
+  const cohort = subjects.filter((a) => {
+    if (filters.ageMin != null && (a.age == null || a.age < filters.ageMin)) return false;
+    if (filters.ageMax != null && (a.age == null || a.age > filters.ageMax)) return false;
+    if (genderSet && (!a.gender || !genderSet.has(a.gender))) return false;
+    if (sportSet && !sportSet.has((a.sport ?? "").toLowerCase())) return false;
+    if (positionSet && !positionSet.has((a.position ?? "").toLowerCase())) return false;
+    return true;
+  });
+
+  // Injuries arrive pre-normalized: the mirror stores a region from the
+  // closed vocabulary, so unlike the live path there is no free-text body
+  // part to normalize on read and no chance of one slipping through.
+  const injuryRows = await db
+    .select({
+      subjectId: researchSubjectInjuries.subjectId,
+      region: researchSubjectInjuries.region,
+    })
+    .from(researchSubjectInjuries);
+
+  let cohortRows = cohort;
+  if (filters.injuryRegions?.length) {
+    const wanted = new Set<string>(filters.injuryRegions);
+    const matched = new Set(
+      injuryRows.filter((r) => wanted.has(r.region)).map((r) => r.subjectId),
+    );
+    cohortRows = cohort.filter((a) => matched.has(a.id));
+  }
+
+  const cohortIds = new Set(cohortRows.map((a) => a.id));
+  const subjectById = new Map(cohortRows.map((a) => [a.id, a]));
+
+  let injuries:
+    | { region: InjuryRegion; athletesAffected: number; injuryCount: number; suppressed: boolean }[]
+    | null = null;
+  if (filters.includeInjuries || filters.injuryRegions?.length) {
+    const byRegion = new Map<string, { subjects: Set<string>; injuries: number }>();
+    for (const row of injuryRows) {
+      if (!cohortIds.has(row.subjectId)) continue;
+      const entry = byRegion.get(row.region) ?? { subjects: new Set<string>(), injuries: 0 };
+      entry.subjects.add(row.subjectId);
+      entry.injuries += 1;
+      byRegion.set(row.region, entry);
+    }
+    injuries = [...byRegion.entries()]
+      .map(([region, entry]) => ({
+        region: region as InjuryRegion,
+        athletesAffected: entry.subjects.size,
+        injuryCount: entry.injuries,
+        suppressed: entry.subjects.size < PLATFORM_TRENDS_MIN_COHORT,
+      }))
+      .sort((a, b) => b.athletesAffected - a.athletesAffected);
+  }
+
+  const requestedMetrics = filters.metrics
+    .map((k) => COHORT_METRIC_BY_KEY.get(k))
+    .filter((m): m is CohortMetricMeta => m != null);
+  const needsTracked = requestedMetrics.some((m) => m.source === "tracked");
+
+  let setRows: { subjectId: string; exerciseName: string | null }[] = [];
+  if (needsTracked && cohortIds.size > 0) {
+    const rows = await db.select().from(researchSubjectSets);
+    const exerciseSet = filters.exerciseNames?.length
+      ? new Set(filters.exerciseNames.map((e) => e.toLowerCase()))
+      : null;
+    setRows = rows.filter(
+      (r) =>
+        cohortIds.has(r.subjectId) &&
+        (!exerciseSet || exerciseSet.has((r.exerciseName ?? "").toLowerCase())),
+    );
+  }
+
+  const results = requestedMetrics.map((meta) => {
+    const values =
+      meta.source === "profile"
+        ? cohort
+            .map((a) => (a as unknown as Record<string, unknown>)[meta.column])
+            .filter((v): v is number => typeof v === "number")
+        : setRows
+            .map((r) => (r as unknown as Record<string, unknown>)[meta.column])
+            .filter((v): v is number => typeof v === "number");
+    return {
+      key: meta.key,
+      label: meta.label,
+      unit: meta.unit,
+      source: meta.source,
+      ...summarizeCohort(values),
+    };
+  });
+
+  let crosstab:
+    | { label: string; n: number; suppressed: boolean; mean?: number; p25?: number; p75?: number; min?: number; max?: number }[]
+    | null = null;
+  if (filters.groupBy && requestedMetrics.length > 0) {
+    const primary = requestedMetrics[0];
+    const groups = new Map<string, number[]>();
+    const addValue = (subjectId: string, value: unknown) => {
+      if (typeof value !== "number") return;
+      const a = subjectById.get(subjectId);
+      if (!a) return;
+      const label = cohortGroupLabel(filters.groupBy!, a);
+      groups.set(label, [...(groups.get(label) ?? []), value]);
+    };
+    if (primary.source === "profile") {
+      for (const a of cohort) addValue(a.id, (a as unknown as Record<string, unknown>)[primary.column]);
+    } else {
+      for (const r of setRows) addValue(r.subjectId, (r as unknown as Record<string, unknown>)[primary.column]);
+    }
+    crosstab = Array.from(groups.entries())
+      .map(([label, values]) => ({ label, ...summarizeCohort(values) }))
+      .sort((a, b) => b.n - a.n);
+  }
+
+  return {
     cohortSize: cohortRows.length,
     minCohortSize: PLATFORM_TRENDS_MIN_COHORT,
     results,
@@ -4575,6 +4740,22 @@ export const storage = {
       userAgent: input.userAgent,
     });
 
+    // The mirror follows the decision immediately rather than waiting for the
+    // nightly reconcile. A withdrawal that takes up to a day to reach the
+    // population an extract is built from is a withdrawal that can be
+    // overtaken by an extract, and the nightly job is a safety net for rows
+    // that drift, not the mechanism.
+    //
+    // Awaited, and allowed to fail loudly. If the mirror cannot be updated,
+    // the caller should hear about it: a granted consent that never produced
+    // a subject means the athlete is silently missing from research they
+    // agreed to join, and a withdrawal that never removed one is worse.
+    if (input.granted) {
+      await syncResearchSubject(input.athleteId);
+    } else {
+      await removeResearchSubject(input.athleteId);
+    }
+
     return updated;
   },
 
@@ -4605,6 +4786,12 @@ export const storage = {
       .set({ trackingOptOut })
       .where(eq(users.id, athleteId))
       .returning({ id: users.id, trackingOptOut: users.trackingOptOut });
+    // A tracking opt-out takes the athlete out of the research mirror too.
+    // Research consent is a separate opt-in and stays recorded, but an
+    // athlete who has stopped agreeing to collection for their own coaching
+    // is not a candidate for an extract while that is true; re-enabling
+    // tracking puts them back via the nightly reconcile.
+    if (trackingOptOut) await removeResearchSubject(athleteId);
     return updated;
   },
 
@@ -21379,6 +21566,69 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return row ?? null;
   },
 
+  async getKnowledgeSource(id: number) {
+    return db.query.knowledgeSources.findFirst({ where: eq(knowledgeSources.id, id) });
+  },
+
+  /**
+   * Moves a source between states, with the detail line the admin reads.
+   *
+   * statusDetail carries progress during a transcription run ("page 84 of
+   * 412"), so it is written often and deliberately kept to one short string
+   * rather than a structured column: nothing computes on it, a person reads
+   * it.
+   */
+  async setKnowledgeSourceStatus(
+    id: number,
+    status: "extracting" | "ready" | "failed" | "needs_vision" | "transcribing",
+    statusDetail?: string | null,
+  ) {
+    const [row] = await db
+      .update(knowledgeSources)
+      .set({ status, ...(statusDetail === undefined ? {} : { statusDetail }) })
+      .where(eq(knowledgeSources.id, id))
+      .returning();
+    return row ?? null;
+  },
+
+  /**
+   * Adds passages to a source that already exists.
+   *
+   * The vision path needs this because it cannot write its passages in the
+   * same transaction as the source row: transcription takes minutes to
+   * hours, and holding a transaction open across it would pin a connection
+   * and block every migration until it finished.
+   *
+   * Ordinals continue from whatever is already there, so a re-run over the
+   * pages that failed the first time appends rather than renumbering.
+   */
+  async appendKnowledgePassages(
+    sourceId: number,
+    passages: { pageNumber: number; endPageNumber: number; text: string; fromVision?: boolean }[],
+  ) {
+    if (passages.length === 0) return 0;
+    const [existing] = await db
+      .select({ count: count() })
+      .from(knowledgePassages)
+      .where(eq(knowledgePassages.sourceId, sourceId));
+    const base = existing?.count ?? 0;
+
+    const BATCH = 200;
+    for (let i = 0; i < passages.length; i += BATCH) {
+      await db.insert(knowledgePassages).values(
+        passages.slice(i, i + BATCH).map((p, j) => ({
+          sourceId,
+          ordinal: base + i + j,
+          pageNumber: p.pageNumber,
+          endPageNumber: p.endPageNumber,
+          text: p.text,
+          fromVision: p.fromVision ?? false,
+        })),
+      );
+    }
+    return passages.length;
+  },
+
   async getKnowledgeSourceByHash(fileHash: string) {
     return db.query.knowledgeSources.findFirst({ where: eq(knowledgeSources.fileHash, fileHash) });
   },
@@ -21430,9 +21680,20 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);
     const filters = await parseCohortQueryText(text);
     if (!filters) return null;
+    // Two populations, two different tables on purpose.
+    //
+    // `consented` is the extract itself and comes from the research mirror,
+    // which holds no identity at all. `all` is the same filter run over the
+    // live platform population, and it exists only so an admin can see how
+    // much of the platform their consented cohort represents -- a cohort of
+    // 12 drawn from 400 and a cohort of 12 drawn from 14 mean very different
+    // things, and only the second is close to a census of a small group.
+    //
+    // Only a SIZE crosses over from the live query. Nothing else from `all`
+    // reaches the caller, and nothing from it reaches the PDF.
     const [all, consented] = await Promise.all([
       queryTrackedCohort(filters),
-      queryTrackedCohort(filters, { population: "research" }),
+      queryResearchCohort(filters),
     ]);
     return {
       filters,
@@ -22469,6 +22730,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .set({ trackingOptOut })
       .where(eq(users.id, link.athleteId))
       .returning({ id: users.id, trackingOptOut: users.trackingOptOut });
+    // A tracking opt-out takes the athlete out of the research mirror too.
+    // Research consent is a separate opt-in and stays recorded, but an
+    // athlete who has stopped agreeing to collection for their own coaching
+    // is not a candidate for an extract while that is true; re-enabling
+    // tracking puts them back via the nightly reconcile.
+    if (trackingOptOut) await removeResearchSubject(link.athleteId);
     return updated;
   },
 

@@ -137,9 +137,20 @@ export function buildResearchExportPdf(data: ResearchExportData): Promise<Buffer
     // ---- Anonymity ----
     heading("Anonymity");
     body(
-      "Every athlete in this extract is anonymous rather than pseudonymous. The distinction " +
-        "matters: a pseudonymous dataset keeps a key that could re-link records to people, and " +
-        "no such key exists here or anywhere in Forge for this data.",
+      "This extract contains no per-athlete records at all. Every figure below describes a " +
+        "group, so there is no row for a reader to re-link to a person even in principle, and " +
+        "no identifier of any kind -- not a name, not a code, not a sequence number -- appears " +
+        "anywhere in this document.",
+    );
+    doc.moveDown(0.3);
+    body(
+      "The figures were not computed from live athlete accounts. Forge maintains a separate " +
+        "store holding only the consenting population, written ahead of time with the identifying " +
+        "columns absent rather than removed on the way out, and the software that produced this " +
+        "document reads that store and never queries the account records. Within Forge, an " +
+        "account can still be matched to its entry in that store, and it must be: that is what " +
+        "allows an athlete who withdraws consent to be removed from it. Nothing outside Forge " +
+        "can perform that match, and nothing in this document is an input to it.",
     );
     doc.moveDown(0.3);
     bullet("No name, email, date of birth, address, phone number, or account identifier is included.");
