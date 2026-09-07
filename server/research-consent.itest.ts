@@ -116,3 +116,38 @@ describe("research data consent", () => {
     expect(counts.consentedAthletes).toBe(4);
   });
 });
+
+describe("research consent at signup", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("is off when an adult does not tick the box", async () => {
+    // The default has to survive a signup that simply ignores the option.
+    const athlete = await makeAthlete({ dateOfBirth: adultDob });
+    expect((await storage.getResearchDataConsent(athlete.id))?.granted).toBe(false);
+  });
+
+  it("records an adult's consent with the full text when they do", async () => {
+    const athlete = await makeAthlete({ dateOfBirth: adultDob });
+    await storage.setResearchDataConsent({
+      athleteId: athlete.id,
+      granted: true,
+      grantedByUserId: athlete.id,
+    });
+    const status = await storage.getResearchDataConsent(athlete.id);
+    expect(status?.granted).toBe(true);
+    expect(status?.grantedAt).not.toBeNull();
+    expect(status?.requiresGuardian).toBe(false);
+  });
+
+  it("keeps a minor out of the dataset even if their own consent row were set", async () => {
+    // Defence in depth. The signup route ignores the flag for a minor and
+    // the client hides the box, but if a row were ever set some other way,
+    // requiresGuardian is what tells every surface this was not the minor's
+    // decision to make.
+    const minor = await makeAthlete({ dateOfBirth: minorDob });
+    const status = await storage.getResearchDataConsent(minor.id);
+    expect(status?.requiresGuardian).toBe(true);
+  });
+});

@@ -106,6 +106,11 @@ export default function SignupPage() {
   // feature.
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  // Starts unticked and stays optional. Consent that is a condition of
+  // signing up is not consent, and the text itself promises that declining
+  // changes nothing about the app or what you pay -- pre-ticking it, or
+  // gating the button on it, would make that promise untrue.
+  const [researchConsent, setResearchConsent] = useState(false);
 
   // Public, unauthenticated -- has to be, since there's no account yet to
   // authenticate as. Shown inline (not behind a "view terms" link most
@@ -145,6 +150,7 @@ export default function SignupPage() {
       heightIn: role === "athlete" && heightIn ? Number(heightIn) : undefined,
       bodyWeightLbs: role === "athlete" && bodyWeightLbs ? Number(bodyWeightLbs) : undefined,
       agreedToTerms: true,
+      researchDataConsent: researchConsent,
     });
   }
 
@@ -394,6 +400,43 @@ export default function SignupPage() {
                   />
                   I've read and agree to the terms above.
                 </label>
+              </div>
+
+              {/* Separate from the terms box above, deliberately. Bundling
+                  the two would make research use a condition of having an
+                  account, which is exactly what the consent text promises it
+                  is not. A minor sees an explanation instead of a checkbox:
+                  a sixteen-year-old ticking a box is not a guardian's
+                  decision, and the server ignores it for a minor anyway. */}
+              <div className="space-y-2 rounded-md border border-border p-3">
+                <Label className="text-sm">Research (optional)</Label>
+                {isMinorAthlete ? (
+                  <p className="text-xs text-muted-foreground">
+                    Forge is sometimes asked to share group statistics with researchers studying
+                    training and injury. Because you're under 18, a parent or guardian decides
+                    this, not you. Nothing is shared unless they say yes, and your training works
+                    exactly the same either way.
+                  </p>
+                ) : (
+                  <>
+                    <label className="flex items-start gap-2 text-sm">
+                      <Checkbox
+                        checked={researchConsent}
+                        onCheckedChange={(c) => setResearchConsent(c === true)}
+                        className="mt-0.5"
+                      />
+                      My training data may be used, in group form only, for research on training
+                      and injury.
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Group numbers only, and never any group smaller than ten people. Your name,
+                      email, birthday, team, coach, videos and anything you type are never shared,
+                      and nothing shared can be traced back to you. This is optional: saying no
+                      changes nothing about your training or what you pay, and you can change your
+                      mind at any time.
+                    </p>
+                  </>
+                )}
               </div>
               <Button
                 type="submit"

@@ -484,6 +484,7 @@ export function setupAuth(app: Express) {
         position,
         heightIn,
         bodyWeightLbs,
+        researchDataConsent,
       } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
@@ -580,6 +581,22 @@ export function setupAuth(app: Express) {
         ipAddress: req.ip,
         userAgent: req.get("user-agent") ?? undefined,
       });
+
+      // Research consent, only if they actually ticked it AND they are old
+      // enough to answer for themselves. The client hides the box for a
+      // minor, but the check belongs here: a hidden field is a client
+      // convenience, not a rule, and a minor ticking it in a crafted request
+      // would otherwise be recorded as valid consent. For a minor the
+      // question goes to a guardian instead, through the coach-relayed flow.
+      if (researchDataConsent === true && tier === "tier3_adult_18plus") {
+        await storage.setResearchDataConsent({
+          athleteId: user.id,
+          granted: true,
+          grantedByUserId: user.id,
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent") ?? undefined,
+        });
+      }
 
       if (coach) {
         // claimRosterSeat (not a bare linkAthleteToCoach) closes the seat-

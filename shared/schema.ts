@@ -6184,6 +6184,16 @@ export const signupSchema = z.object({
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
+  // Optional, and z.boolean() rather than z.literal(true) precisely because
+  // refusing has to be a real option. Consent bundled into the same
+  // must-tick box as the terms is not consent -- it is a condition of using
+  // the app, which is the thing the consent text promises it is not.
+  //
+  // The server does not trust this on its own: it is only honoured for an
+  // adult signup. A sixteen-year-old ticking a box is not a guardian's
+  // decision, and for a minor this is ignored and the question is put to a
+  // guardian instead.
+  researchDataConsent: z.boolean().optional(),
 });
 
 export const loginSchema = z.object({

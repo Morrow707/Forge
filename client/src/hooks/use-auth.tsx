@@ -23,6 +23,10 @@ type SignupPayload = {
   heightIn?: number;
   bodyWeightLbs?: number;
   agreedToTerms: true;
+  // Optional and unticked by default -- see the signup page's own comment
+  // for why this is a separate box from the terms, and why the server
+  // ignores it for a minor.
+  researchDataConsent?: boolean;
 };
 
 type LoginPayload = { email: string; password: string };
