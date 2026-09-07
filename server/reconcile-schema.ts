@@ -2644,6 +2644,33 @@ CREATE TABLE IF NOT EXISTS "notification_delivery_daily" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "notification_delivery_daily_channel_day_idx"
   ON "notification_delivery_daily" ("channel", "day");
+
+-- Research data consent (opt-IN, distinct from tracking_opt_out) and the
+-- canonical injury region resolved at write time.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "research_data_consent" boolean NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "research_data_consent_at" timestamp;
+ALTER TABLE "injury_history" ADD COLUMN IF NOT EXISTS "body_region" text;
+
+DO $$ BEGIN
+  ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'research_data_use';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+
+-- One row per dataset extract generated (shared/schema.ts researchExports).
+CREATE TABLE IF NOT EXISTS "research_exports" (
+  "id" serial PRIMARY KEY,
+  "admin_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "cohort_description" text NOT NULL,
+  "filters_json" text NOT NULL,
+  "cohort_size" integer NOT NULL,
+  "consented_count" integer NOT NULL,
+  "recipient" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "research_exports_admin_idx"
+  ON "research_exports" ("admin_id", "created_at");
+CREATE INDEX IF NOT EXISTS "research_exports_created_idx"
+  ON "research_exports" ("created_at");
 `;
 
 async function main() {

@@ -2451,18 +2451,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .object({
         text: z.string().trim().min(1).max(500),
         notes: z.array(z.string().trim().min(1).max(300)).max(10).optional(),
+        recipient: z.string().trim().min(1).max(200).optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "A non-empty cohort description is required." });
     }
 
-    const result = await storage.runCohortQuery(parsed.data.text);
+    // The research population, not the platform one: only athletes who
+    // affirmatively agreed to research use are in an extract that leaves.
+    const result = await storage.runResearchCohortQuery(parsed.data.text);
     if (!result) {
       return res.status(422).json({
         message: "Couldn't understand that as a data query -- try naming an age range, sport, position, or metric directly.",
       });
     }
+
+    // Refusing outright rather than rendering a document of suppressed
+    // cells: an extract nobody consented to is not a thin result, it is the
+    // wrong thing to have produced, and the operator needs to know which of
+    // the two it is. matchedBeforeConsent tells them whether the cohort is
+    // rare or merely unconsented.
+    if (result.consentedCount < RESEARCH_EXPORT_MIN_CELL) {
+      return res.status(409).json({
+        message:
+          `Only ${result.consentedCount} athlete(s) in this cohort have agreed to research use, ` +
+          `below the ${RESEARCH_EXPORT_MIN_CELL} needed to report anything. ` +
+          `${result.matchedBeforeConsent} matched the filters overall.`,
+        consentedCount: result.consentedCount,
+        matchedBeforeConsent: result.matchedBeforeConsent,
+      });
+    }
+
+    // Written before the PDF is produced, so a generated document always has
+    // a record behind it even if the response never reaches the browser.
+    await storage.logResearchExport({
+      adminId: req.user!.id,
+      cohortDescription: parsed.data.text,
+      filters: result.filters,
+      cohortSize: result.matchedBeforeConsent,
+      consentedCount: result.consentedCount,
+      recipient: parsed.data.recipient ?? null,
+    });
 
     const filterLines: { label: string; value: string }[] = [];
     const f = result.filters;
@@ -2480,6 +2510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       filterLines.push({ label: "Injury region", value: f.injuryRegions.join(", ") });
     }
     if (filterLines.length === 0) filterLines.push({ label: "Filters", value: "none (whole platform)" });
+    filterLines.push({ label: "Population", value: "athletes who consented to research use" });
 
     const groups =
       result.crosstab && result.crosstab.length > 0
@@ -2505,8 +2536,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // data span rather than implying a narrower observation period.
       windowStart: "all data on file",
       windowEnd: new Date().toISOString().slice(0, 10),
-      totalAthletes: result.cohortSize,
-      totalSuppressed: result.cohortSize < RESEARCH_EXPORT_MIN_CELL,
+      totalAthletes: result.consentedCount,
+      totalSuppressed: result.consentedCount < RESEARCH_EXPORT_MIN_CELL,
       groups,
       injuries: result.injuries
         ? result.injuries.map((i) => ({
@@ -2521,6 +2552,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", 'attachment; filename="forge-dataset-extract.pdf"');
     res.send(pdf);
+  });
+
+  // Every extract ever generated. The answer to "what did we send them",
+  // which a PDF sitting in someone's inbox cannot provide.
+  app.get("/api/admin/research-exports", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    res.json(await storage.listResearchExports(limit));
+  });
+
+  // How much of the platform has agreed to research use -- the number that
+  // decides whether any extract is possible at all.
+  app.get("/api/admin/research-consent", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.getResearchConsentCounts());
   });
 
   // ---------------- Admin: billing/pricing assignment ----------------

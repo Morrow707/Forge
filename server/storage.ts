@@ -55,6 +55,7 @@ import {
   goals,
   wellnessCheckins,
   injuryHistory,
+  researchExports,
   caraSessions,
   athleteTrophies,
   acwrRiskAlerts,
@@ -1971,6 +1972,23 @@ async function summarizeInjuriesForCohort(
     .sort((a, b) => b.athletesAffected - a.athletesAffected);
 }
 
+/**
+ * The population a dataset extract may be built from: opted-in athletes
+ * only, and opt-IN rather than opt-out.
+ *
+ * Deliberately separate from platformDatasetAthlete(), which governs what
+ * an admin may see inside Forge. Those are different questions -- wanting
+ * a coach to analyse your squat is not agreeing to be in someone's study --
+ * and collapsing them into one flag would answer the second question with
+ * the first one's answer.
+ */
+const researchDatasetAthlete = () =>
+  and(
+    eq(users.role, "athlete"),
+    eq(users.trackingOptOut, false),
+    eq(users.researchDataConsent, true),
+  );
+
 /** Athletes with at least one recorded injury in any of `regions`. */
 async function athletesWithInjuryInRegions(
   athleteIds: number[],
@@ -1996,7 +2014,10 @@ async function athletesWithInjuryInRegions(
 // group under PLATFORM_TRENDS_MIN_COHORT is suppressed (count shown,
 // values withheld) rather than shown small -- same floor, same reasoning,
 // as buildPlatformTrends' own comment.
-async function queryTrackedCohort(filters: CohortQueryFilters) {
+async function queryTrackedCohort(
+  filters: CohortQueryFilters,
+  options?: { population?: "platform" | "research" },
+) {
   const athletes = await db
     .select({
       id: users.id,
@@ -2015,7 +2036,7 @@ async function queryTrackedCohort(filters: CohortQueryFilters) {
       deadliftMaxLbs: users.deadliftMaxLbs,
     })
     .from(users)
-    .where(platformDatasetAthlete());
+    .where(options?.population === "research" ? researchDatasetAthlete() : platformDatasetAthlete());
 
   const genderSet = filters.genders?.length ? new Set(filters.genders) : null;
   const sportSet = filters.sports?.length ? new Set(filters.sports.map((s) => s.toLowerCase())) : null;
@@ -5702,7 +5723,10 @@ export const storage = {
   async addInjuryHistoryEntry(athleteId: number, data: SubmitInjuryInput) {
     const [row] = await db
       .insert(injuryHistory)
-      .values({ athleteId, ...data })
+      // bodyPart is stored exactly as typed; bodyRegion is the canonical
+      // region resolved from it. Both, not one: the person's own wording is
+      // what they read back, and the region is what a cohort groups on.
+      .values({ athleteId, ...data, bodyRegion: normalizeInjuryRegion(data.bodyPart) })
       .returning();
     return row;
   },
@@ -20923,6 +20947,81 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // list rather than left to the model to guess), then runs the same
   // anonymized aggregation buildPlatformTrends uses, generalized to
   // whatever cohort/metric combination the text actually asked for.
+  /**
+   * The cohort behind a dataset extract: the same engine as runCohortQuery,
+   * but restricted to athletes who affirmatively consented to research use.
+   *
+   * Returns both counts on purpose. `consentedCount` is what the extract
+   * describes; `cohortSize` is how many athletes matched the filters before
+   * consent was applied. An operator who cannot see both has no way to tell
+   * a genuinely rare cohort from a common one almost nobody has consented
+   * to, and would read the second as the first.
+   */
+  async runResearchCohortQuery(text: string) {
+    const filters = await parseCohortQueryText(text);
+    if (!filters) return null;
+    const [all, consented] = await Promise.all([
+      queryTrackedCohort(filters),
+      queryTrackedCohort(filters, { population: "research" }),
+    ]);
+    return {
+      filters,
+      ...consented,
+      matchedBeforeConsent: all.cohortSize,
+      consentedCount: consented.cohortSize,
+    };
+  },
+
+  /** Record an extract before its PDF is handed over. */
+  async logResearchExport(input: {
+    adminId: number;
+    cohortDescription: string;
+    filters: unknown;
+    cohortSize: number;
+    consentedCount: number;
+    recipient?: string | null;
+  }) {
+    const [row] = await db
+      .insert(researchExports)
+      .values({
+        adminId: input.adminId,
+        cohortDescription: input.cohortDescription,
+        filtersJson: JSON.stringify(input.filters),
+        cohortSize: input.cohortSize,
+        consentedCount: input.consentedCount,
+        recipient: input.recipient ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  async listResearchExports(limit = 100) {
+    return db
+      .select({
+        id: researchExports.id,
+        adminName: users.name,
+        cohortDescription: researchExports.cohortDescription,
+        filtersJson: researchExports.filtersJson,
+        cohortSize: researchExports.cohortSize,
+        consentedCount: researchExports.consentedCount,
+        recipient: researchExports.recipient,
+        createdAt: researchExports.createdAt,
+      })
+      .from(researchExports)
+      .innerJoin(users, eq(users.id, researchExports.adminId))
+      .orderBy(desc(researchExports.createdAt))
+      .limit(limit);
+  },
+
+  /** How many athletes have agreed to research use, for the consent panel. */
+  async getResearchConsentCounts() {
+    const [[total], [consented]] = await Promise.all([
+      db.select({ count: count() }).from(users).where(eq(users.role, "athlete")),
+      db.select({ count: count() }).from(users).where(researchDatasetAthlete()),
+    ]);
+    return { totalAthletes: total?.count ?? 0, consentedAthletes: consented?.count ?? 0 };
+  },
+
   async runCohortQuery(text: string) {
     const filters = await parseCohortQueryText(text);
     if (!filters) return null;

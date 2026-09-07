@@ -311,6 +311,29 @@ export const users = pgTable(
     // tracked video or tracking metrics (see requireTrackingNotOptedOut in
     // routes.ts), not just hidden client-side.
     trackingOptOut: boolean("tracking_opt_out").notNull().default(false),
+    // Separate and stricter than trackingOptOut above, and deliberately
+    // opt-IN rather than opt-out: no athlete is included in a dataset that
+    // leaves Forge unless someone affirmatively agreed to it.
+    //
+    // trackingOptOut governs collection inside the platform, for the
+    // athlete's own coaching. This governs whether their data may be
+    // included in a de-identified extract prepared for an outside party.
+    // They are different questions and a person can reasonably answer them
+    // differently: wanting a coach to analyse your squat is not the same as
+    // agreeing to be in a study.
+    //
+    // Default false means an extract built today includes nobody, which is
+    // the correct and intended starting state. Consent is recorded in
+    // consent_records with the exact text shown at the time; this column is
+    // the fast current-state read that queries filter on. Withdrawing sets
+    // it back to false and takes effect on the next extract -- it cannot
+    // reach into a PDF already sent, which is stated in the consent text
+    // rather than left implied.
+    //
+    // For an athlete under 18 this is set by a guardian, never by the
+    // athlete alone, same relayed pattern trackingOptOut uses.
+    researchDataConsent: boolean("research_data_consent").notNull().default(false),
+    researchDataConsentAt: timestamp("research_data_consent_at"),
     // The athlete's own IANA time zone (e.g. "America/Los_Angeles"),
     // reported by their browser or app rather than asked for, and used to
     // work out what "today" means for them.
@@ -3229,6 +3252,17 @@ export const injuryHistory = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     bodyPart: text("body_part").notNull(),
+    // The canonical region from shared/injury-taxonomy, resolved when the
+    // row is written. bodyPart stays exactly as the person typed it -- it is
+    // what the athlete and their coach read back, and normalising it in
+    // place would quietly rewrite someone's own words.
+    //
+    // Cohort queries normalise on read as well, because rows written before
+    // this column existed have it null, and because a normaliser that
+    // improves later should improve old rows too. This column is what makes
+    // the common query cheap and, more usefully, what lets a coach SEE the
+    // region that was inferred and correct it when the guess is wrong.
+    bodyRegion: text("body_region"),
     occurredOn: date("occurred_on").notNull(),
     description: text("description"),
     resolved: boolean("resolved").notNull().default(false),
@@ -4764,6 +4798,10 @@ export const consentTypeEnum = pgEnum("consent_type", [
   "coach_coppa_consent",
   "parental_notice_ack",
   "institutional_agreement",
+  // Agreement that this athlete's de-identified data may be included in a
+  // dataset extract prepared for an outside party. Distinct from the
+  // biometric waiver, which covers collection, not onward use.
+  "research_data_use",
 ]);
 
 export const consentRecords = pgTable(
@@ -4976,6 +5014,47 @@ export const notificationDeliveryDaily = pgTable(
   }),
 );
 export type NotificationDeliveryDaily = typeof notificationDeliveryDaily.$inferSelect;
+
+// ---------- Research export log ----------
+// One row per dataset extract generated, written before the PDF is sent.
+//
+// This answers a question that only ever gets asked under pressure: "what
+// exactly did we send them, and when?" A PDF in someone's inbox is not a
+// record Forge can search, and a year later the cohort description will be
+// the only thing that explains what a given file contains.
+//
+// It is also the honest substitute for a query budget. Suppression stops
+// any single extract from describing too few people, but a series of
+// overlapping extracts can still be differenced against each other. Nothing
+// here prevents that; what it does is make it visible afterwards, which is
+// worth more than nothing and is the accountability an operator can
+// actually act on.
+export const researchExports = pgTable(
+  "research_exports",
+  {
+    id: serial("id").primaryKey(),
+    adminId: integer("admin_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The operator's own words, as typed.
+    cohortDescription: text("cohort_description").notNull(),
+    // The parsed filters, as JSON text, so a later reader can reproduce the
+    // extract rather than guess at what "17 year old football" resolved to.
+    filtersJson: text("filters_json").notNull(),
+    cohortSize: integer("cohort_size").notNull(),
+    // How many athletes in that cohort had given research consent, which is
+    // the number the extract was actually built from.
+    consentedCount: integer("consented_count").notNull(),
+    // Who it was prepared for, when the operator says.
+    recipient: text("recipient"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    adminIdx: index("research_exports_admin_idx").on(table.adminId, table.createdAt),
+    createdIdx: index("research_exports_created_idx").on(table.createdAt),
+  }),
+);
+export type ResearchExport = typeof researchExports.$inferSelect;
 
 // ---------- Uploaded file ownership ----------
 // One row per file created by any of the raw upload routes that hand a
