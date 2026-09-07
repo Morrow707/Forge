@@ -4178,6 +4178,39 @@ export const classStructureSchema = z.object({
 });
 
 export type ClassStructureInput = z.infer<typeof classStructureSchema>;
+
+// The shape Claude's forced tool call is validated against in
+// storage.generateClassDraftFromDocument -- deliberately looser/simpler
+// than classStructureSchema above (no ids, no unlockRule/pricing/exercises
+// -- an admin adds those by hand afterward in the builder). Bounds here are
+// safety caps on cost/output size, not the target counts; the system
+// prompt asks for a narrower, more sensible range within them.
+export const classAiDraftAnswerSchema = z.object({
+  answerText: z.string().trim().min(1).max(500),
+  isCorrect: z.boolean(),
+  explanation: z.string().trim().min(1).max(1000),
+});
+export const classAiDraftQuestionSchema = z.object({
+  questionText: z.string().trim().min(1).max(1000),
+  answers: z.array(classAiDraftAnswerSchema).min(2).max(6),
+});
+export const classAiDraftContentPageSchema = z.object({
+  title: z.string().trim().max(200).optional(),
+  body: z.string().trim().min(1).max(10000),
+});
+export const classAiDraftLessonSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2000).optional(),
+  content: z.array(classAiDraftContentPageSchema).min(1).max(10),
+  quizQuestions: z.array(classAiDraftQuestionSchema).max(8),
+});
+export const classAiDraftSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2000).optional(),
+  category: z.string().trim().max(60).optional(),
+  lessons: z.array(classAiDraftLessonSchema).min(1).max(20),
+});
+export type ClassAiDraft = z.infer<typeof classAiDraftSchema>;
 export type ClassLessonInput = z.infer<typeof classLessonInputSchema>;
 
 export const enrollInClassSchema = z.object({

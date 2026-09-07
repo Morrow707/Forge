@@ -18,10 +18,25 @@ import {
 import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
+import { PhotoUploadField } from "@/components/photo-upload-field";
+import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, GraduationCap, Trash2, Users, ListOrdered, UserPlus, Search, Eye, EyeOff, Unlock } from "lucide-react";
+import {
+  Plus,
+  GraduationCap,
+  Trash2,
+  Users,
+  ListOrdered,
+  UserPlus,
+  Search,
+  Eye,
+  EyeOff,
+  Unlock,
+  Sparkles,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ClassAiDraft } from "@shared/schema";
 
 type ClassSummary = {
   id: number;
@@ -50,15 +65,18 @@ type RosterEntry = { id: number; name: string; email: string };
 
 /** Classes list -- coach ("your Classes + Forge Classes to enroll your
  * roster into") and admin ("your Forge Classes only") share this, same as
- * every other Library list page. No AI-assist path here (unlike Programs/
- * Skill Programs) -- a Class's per-lesson unlock rules and pricing are
- * deliberately hand-authored, not something an AI drafts. */
+ * every other Library list page. Per-lesson unlock rules and pricing stay
+ * hand-authored either way, but admin gets one AI-assist path a coach
+ * doesn't: generate a full draft (lessons, reading pages, quiz) from a
+ * pasted document or photos of pages, then review/edit it in the normal
+ * builder before it's ever published -- see showAiDraft below. */
 export function ClassListPage({
   apiBase,
   routeBase,
   title,
   emptyStateText,
   showEnroll = true,
+  showAiDraft = false,
   libraryTabs,
 }: {
   apiBase: string;
@@ -68,6 +86,9 @@ export function ClassListPage({
   /** Hidden for admin -- a Forge Class isn't enrolled straight from here,
    * a coach enrolls their own roster into it from their own Classes list. */
   showEnroll?: boolean;
+  /** Admin only -- a coach's own Class is their own material already,
+   * nothing to auto-organize from a document. */
+  showAiDraft?: boolean;
   libraryTabs?: ReactNode;
 }) {
   const qc = useQueryClient();
@@ -83,6 +104,9 @@ export function ClassListPage({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiText, setAiText] = useState("");
+  const [aiImages, setAiImages] = useState<CapturedPhoto[]>([]);
   const [enrollClassId, setEnrollClassId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ClassSummary | null>(null);
   const [search, setSearch] = useState("");
@@ -132,6 +156,57 @@ export function ClassListPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not create class"),
   });
 
+  // Two real requests in one mutation on purpose -- generate, then
+  // immediately create the class from the result. Nothing about that is
+  // risky to do unprompted: createClassWithStructure always forces
+  // isDraft true regardless of what's sent, so the class is invisible to
+  // everyone but this admin until they explicitly publish it, same as any
+  // other newly created class. The normal builder IS the review step.
+  const generateDraftMutation = useMutation({
+    mutationFn: async () => {
+      const draftRes = await apiRequest("POST", `${apiBase}/classes/ai-draft`, {
+        documentText: aiText.trim() || undefined,
+        images: aiImages.length > 0 ? aiImages : undefined,
+      });
+      const draft = (await draftRes.json()) as ClassAiDraft;
+      const payload = {
+        name: draft.name,
+        description: draft.description ?? null,
+        category: draft.category ?? null,
+        lessons: draft.lessons.map((l, i) => ({
+          lessonNumber: i + 1,
+          title: l.title,
+          description: l.description ?? null,
+          unlockRule: "immediate",
+          content: l.content,
+          quizQuestions: l.quizQuestions.map((q, qi) => ({
+            orderIndex: qi,
+            questionText: q.questionText,
+            answers: q.answers.map((a, ai) => ({
+              orderIndex: ai,
+              answerText: a.answerText,
+              isCorrect: a.isCorrect,
+              explanation: a.explanation,
+            })),
+          })),
+        })),
+      };
+      const classRes = await apiRequest("POST", `${apiBase}/classes`, payload);
+      return { cls: await classRes.json(), lessonCount: draft.lessons.length };
+    },
+    onSuccess: ({ cls, lessonCount }) => {
+      qc.invalidateQueries({ queryKey: [`${apiBase}/classes`] });
+      toast.success(
+        `Generated ${lessonCount} lesson${lessonCount === 1 ? "" : "s"} — review before publishing`,
+      );
+      setAiDialogOpen(false);
+      setAiText("");
+      setAiImages([]);
+      navigate(`${routeBase}/${cls.id}`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not generate a class from that material"),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest("DELETE", `${apiBase}/classes/${id}`);
@@ -161,10 +236,18 @@ export function ClassListPage({
       title={title}
       subheader={libraryTabs}
       actions={
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          New Class
-        </Button>
+        <div className="flex items-center gap-2">
+          {showAiDraft && (
+            <Button variant="outline" onClick={() => setAiDialogOpen(true)}>
+              <Sparkles className="h-4 w-4" />
+              Generate with AI
+            </Button>
+          )}
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            New Class
+          </Button>
+        </div>
       }
     >
       {!isLoading && classes.length === 0 && (
@@ -172,10 +255,18 @@ export function ClassListPage({
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <GraduationCap className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">{emptyStateText}</p>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="h-4 w-4" />
-              New Class
-            </Button>
+            <div className="flex items-center gap-2">
+              {showAiDraft && (
+                <Button variant="outline" onClick={() => setAiDialogOpen(true)}>
+                  <Sparkles className="h-4 w-4" />
+                  Generate with AI
+                </Button>
+              )}
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="h-4 w-4" />
+                New Class
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -377,6 +468,62 @@ export function ClassListPage({
           </form>
         </DialogContent>
       </Dialog>
+
+      {showAiDraft && (
+        <Dialog open={aiDialogOpen} onOpenChange={(open) => !generateDraftMutation.isPending && setAiDialogOpen(open)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Generate a Class with AI</DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                generateDraftMutation.mutate();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="ai-doc-text">Paste the source material</Label>
+                <Textarea
+                  id="ai-doc-text"
+                  value={aiText}
+                  onChange={(e) => setAiText(e.target.value)}
+                  rows={8}
+                  placeholder="Paste an article, your notes, or a full document -- an existing chapter structure carries straight through into lessons."
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Or attach photos of pages</Label>
+                <PhotoUploadField images={aiImages} onChange={setAiImages} maxImages={6} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Claude organizes this into lessons, reading pages, and a quiz per lesson -- every fact and
+                every quiz answer comes only from what's provided here, nothing invented. Created as a draft,
+                invisible to everyone else, so you can review and edit everything before publishing.
+              </p>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAiDialogOpen(false)}
+                  disabled={generateDraftMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    generateDraftMutation.isPending || (!aiText.trim() && aiImages.length === 0)
+                  }
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {generateDraftMutation.isPending ? "Generating…" : "Generate"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {showEnroll && (
         <EnrollInClassDialog

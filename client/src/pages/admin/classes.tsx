@@ -8,6 +8,7 @@ export default function AdminClasses() {
       title="Forge Classes"
       emptyStateText="No Forge Classes yet. Build a self-guided curriculum any coach can assign, or a Free Agent can buy into lesson by lesson."
       showEnroll={false}
+      showAiDraft
     />
   );
 }

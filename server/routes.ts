@@ -2043,6 +2043,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ...cls, isForgeOfficial: true, ownerLabel: "FORGE", editable: true });
   });
 
+  // AI Class Builder -- admin only, and deliberately not exposed to coaches:
+  // a coach's own Class is their own material, nothing to auto-organize.
+  // Returns a draft structure; nothing is created here. The admin reviews it
+  // in the normal builder (via the client's Create & Build flow) before it
+  // ever becomes a real class row.
+  app.post("/api/admin/classes/ai-draft", requireRole("admin"), async (req, res) => {
+    const schema = z
+      .object({
+        documentText: z.string().trim().min(1).max(60000).optional(),
+        images: z
+          .array(z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }))
+          .max(6)
+          .optional(),
+      })
+      .refine((v) => !!v.documentText?.trim() || (v.images && v.images.length > 0), {
+        message: "Paste some text or attach at least one photo",
+      });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const draft = await storage.generateClassDraftFromDocument(parsed.data.documentText, parsed.data.images);
+    if (!draft) {
+      return res.status(422).json({
+        message: "Couldn't organize that into a class -- try pasting more text or a clearer photo.",
+      });
+    }
+    res.json(draft);
+  });
+
   app.post("/api/admin/classes", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const parsed = classStructureSchema.safeParse(req.body);

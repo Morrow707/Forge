@@ -193,6 +193,7 @@ import type {
   ApplyMovementProfileProposalInput,
   UpdateFoodLogEntryInput,
   ClassStructureInput,
+  ClassAiDraft,
   ClassCoachSettingsInput,
   AcademyTrackStructureInput,
   AcademyQuizQuestionInput,
@@ -204,6 +205,8 @@ import type {
   LegalDocument,
 } from "@shared/schema";
 import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
+import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
+import { classAiDraftSchema } from "@shared/schema";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
 import type { VideoRetentionLimits } from "@shared/video-retention";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
@@ -296,8 +299,8 @@ const LEG_DRIVE_ASYMMETRY_FLAG_THRESHOLD = 15;
 // A Class lesson quiz gates real progress (unlike Coaches Corner's ungraded
 // self-check), so it needs an actual pass bar -- 80% mirrors a typical
 // classroom passing grade, with unlimited retries making it forgiving
-// rather than punitive.
-const CLASS_QUIZ_PASS_THRESHOLD = 0.8;
+// rather than punitive. Shared with the reader's preview mode -- see
+// shared/class-quiz.ts's own comment.
 // Consecutive fails (with no pass in between) before the owning coach gets
 // a one-time "this athlete is stuck" nudge -- see quizFailCount/
 // coachNotifiedStuckAt on classLessonProgress.
@@ -9424,6 +9427,118 @@ Hard rules, no exceptions:
         };
       }),
     };
+  },
+
+  // Turns a pasted document (and/or photos of pages) into a draft class
+  // structure -- lessons, reading pages, and a comprehension quiz per
+  // lesson -- ready to hand straight to createClassWithStructure. The one
+  // rule that matters more than any other: every fact and every quiz
+  // answer has to come from the material actually provided, never from
+  // Claude's own general knowledge of the subject. A hitting class built
+  // around a proprietary framework (its own named pillars, its own
+  // terminology) needs a quiz that tests THAT framework, not generic
+  // advice that happens to sound similar -- the system prompt says so
+  // explicitly, and the source text is the only thing in context, so
+  // there is nothing else for it to draw from. See docs on
+  // shared/class-quiz.ts's neighborhood for why this matters more here
+  // than almost anywhere else in the app: a wrong quiz question doesn't
+  // just answer badly, it actively teaches something false.
+  async generateClassDraftFromDocument(
+    documentText: string | undefined,
+    images: { mediaType: "image/jpeg" | "image/png"; data: string }[] | undefined,
+  ): Promise<ClassAiDraft | null> {
+    const system: SystemPrompt =
+      "You turn a coach's raw teaching material -- an article, a set of notes, scanned pages of a " +
+      "book or handout -- into a structured Forge Class: an ordered sequence of lessons, each with " +
+      "reading pages and an end-of-chapter comprehension quiz. Two rules matter more than anything " +
+      "else. First, every fact, term, and quiz answer must come directly from the material you were " +
+      "given -- never introduce outside knowledge, even if you're confident it's true, and even if " +
+      "the material uses proprietary terminology you don't recognize from elsewhere. Second, follow " +
+      "the source's own structure: if it's already divided into chapters or sections, one lesson per " +
+      "section is usually right; if it's a single flowing article, split it wherever a natural " +
+      "topic change happens. Each lesson should have 2-6 reading pages (split a long section into " +
+      "multiple shorter pages rather than one wall of text) and 2-5 quiz questions whose correct " +
+      "answer is explicitly stated in that lesson's own pages -- fewer questions is fine if the " +
+      "material doesn't support more; never pad with a question the text doesn't actually answer. " +
+      "Every quiz answer needs a one-sentence explanation, and every question needs exactly one " +
+      "correct answer among 3-4 options. If the material is too thin or unclear to organize " +
+      "confidently, say so by returning a single lesson with a short description explaining what's " +
+      "missing rather than inventing structure that isn't there.";
+
+    const tool = {
+      name: "propose_class_draft",
+      description: "Propose a structured Forge Class (lessons, reading pages, quiz) from the provided material.",
+      input_schema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "A concise class name." },
+          description: { type: "string", description: "1-2 sentence summary of what the class teaches." },
+          category: { type: "string", description: "A short category label, e.g. Hitting, Pitching, Strength." },
+          lessons: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                description: { type: "string", description: "1 sentence teaser shown before the lesson unlocks." },
+                content: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: { type: "string" },
+                      body: { type: "string" },
+                    },
+                    required: ["body"],
+                  },
+                },
+                quizQuestions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      questionText: { type: "string" },
+                      answers: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            answerText: { type: "string" },
+                            isCorrect: { type: "boolean" },
+                            explanation: { type: "string" },
+                          },
+                          required: ["answerText", "isCorrect", "explanation"],
+                        },
+                      },
+                    },
+                    required: ["questionText", "answers"],
+                  },
+                },
+              },
+              required: ["title", "content", "quizQuestions"],
+            },
+          },
+        },
+        required: ["name", "lessons"],
+      },
+    };
+
+    const instruction = documentText
+      ? `Here is the source material:\n\n${documentText}`
+      : "Organize the lesson material shown in the attached photo(s).";
+
+    const raw =
+      images && images.length > 0
+        ? await askClaudeVisionStructured(system, instruction, images, tool, { maxTokens: 16000 })
+        : await askClaudeStructured(system, instruction, tool, { maxTokens: 16000 });
+    if (!raw) return null;
+
+    const parsed = classAiDraftSchema.safeParse(raw);
+    if (!parsed.success) {
+      console.error("AI class draft failed validation:", parsed.error.issues[0]?.message);
+      return null;
+    }
+    return parsed.data;
   },
 
   async createClassWithStructure(

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { SkillPickerDialog } from "@/components/skill-picker-dialog";
 import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
+import { ClassLessonReaderDialog, type LessonContent } from "@/components/class-lesson-reader-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError, getJson, resolveApiUrl, getNativeToken } from "@/lib/queryClient";
@@ -118,6 +119,52 @@ function makeLesson(n: number): LocalLesson {
     exercises: [],
     content: [],
     quizQuestions: [],
+  };
+}
+
+/** Feeds the Class Builder's own in-memory, possibly-unsaved lesson state
+ * straight into the athlete-facing reader for a live preview -- no save,
+ * no server round-trip, no separate "test" copy of the lesson to fall out
+ * of sync with what's actually being edited. Content pages are mapped with
+ * the exact same rules buildPayload() uses for the real save (blank pages
+ * dropped, blank fields become undefined) so a preview never shows
+ * something Save wouldn't actually produce. Quiz question/answer ids are
+ * synthetic (unsaved local rows have none yet) -- fine, since a preview
+ * never submits anywhere that would need the real one. */
+function localLessonToPreviewContent(lesson: LocalLesson): LessonContent {
+  let nextId = 1;
+  return {
+    id: lesson.id ?? -1,
+    title: lesson.title,
+    content: lesson.content
+      .filter((p) => p.body.trim())
+      .map((p) => ({
+        title: p.title.trim() || undefined,
+        body: p.body,
+        videoUrl: p.videoUrl.trim() || undefined,
+        imageUrls: p.imageUrlsText
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        attachmentUrl: p.attachmentUrl.trim() || undefined,
+        attachmentName: p.attachmentName.trim() || undefined,
+      })),
+    quizQuestions: lesson.quizQuestions
+      .filter((q) => q.questionText.trim())
+      .map((q, qi) => ({
+        id: q.id ?? nextId++,
+        orderIndex: qi,
+        questionText: q.questionText,
+        answers: q.answers
+          .filter((a) => a.answerText.trim())
+          .map((a, ai) => ({
+            id: a.id ?? nextId++,
+            orderIndex: ai,
+            answerText: a.answerText,
+            isCorrect: a.isCorrect,
+            explanation: a.explanation,
+          })),
+      })),
   };
 }
 
@@ -241,6 +288,8 @@ export function ClassBuilderPage({
   const [pickerForLesson, setPickerForLesson] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
+  const [previewLessonKey, setPreviewLessonKey] = useState<string | null>(null);
+  const previewLesson = lessons.find((l) => l.key === previewLessonKey) ?? null;
   const coverImageInputRef = useRef<HTMLInputElement>(null);
 
   const uploadCoverImageMutation = useMutation({
@@ -715,6 +764,7 @@ export function ClassBuilderPage({
                 onMoveDown={() => moveLesson(i, 1)}
                 canMoveUp={i > 0}
                 canMoveDown={i < lessons.length - 1}
+                onPreview={() => setPreviewLessonKey(lesson.key)}
               />
             ))}
           </div>
@@ -761,6 +811,22 @@ export function ClassBuilderPage({
           roster={roster}
           classId={classId}
           apiBase={apiBase}
+        />
+      )}
+
+      {previewLesson && (
+        <ClassLessonReaderDialog
+          open={previewLessonKey !== null}
+          onOpenChange={(open) => !open && setPreviewLessonKey(null)}
+          classId={classId}
+          lesson={{
+            id: previewLesson.id ?? -1,
+            lessonNumber: lessons.findIndex((l) => l.key === previewLesson.key) + 1,
+            title: previewLesson.title,
+            contentCompletedAt: null,
+            quizPassedAt: null,
+          }}
+          previewContent={localLessonToPreviewContent(previewLesson)}
         />
       )}
     </AppShell>
@@ -1104,6 +1170,7 @@ function LessonCard({
   onMoveDown,
   canMoveUp,
   canMoveDown,
+  onPreview,
 }: {
   lesson: LocalLesson;
   lessonNumber: number;
@@ -1116,6 +1183,7 @@ function LessonCard({
   onMoveDown: () => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  onPreview: () => void;
 }) {
   const ruleMeta = UNLOCK_RULE_OPTIONS.find((r) => r.value === lesson.unlockRule);
 
@@ -1146,14 +1214,24 @@ function LessonCard({
               </button>
             </div>
           </div>
-          <button
-            type="button"
-            aria-label={`Remove Lesson ${lessonNumber}`}
-            onClick={onRemove}
-            className="text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onPreview}
+              className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Preview
+            </button>
+            <button
+              type="button"
+              aria-label={`Remove Lesson ${lessonNumber}`}
+              onClick={onRemove}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <Input

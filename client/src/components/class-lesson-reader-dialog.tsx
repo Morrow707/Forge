@@ -19,8 +19,9 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 
-type ContentPage = {
+export type ContentPage = {
   title?: string;
   body: string;
   videoUrl?: string | null;
@@ -28,9 +29,25 @@ type ContentPage = {
   attachmentUrl?: string | null;
   attachmentName?: string | null;
 };
-type QuizAnswerOption = { id: number; orderIndex: number; answerText: string };
-type QuizQuestion = { id: number; orderIndex: number; questionText: string; answers: QuizAnswerOption[] };
-type LessonContent = { id: number; title: string; content: ContentPage[]; quizQuestions: QuizQuestion[] };
+// isCorrect/explanation are absent on the real athlete fetch (the server
+// strips them -- see storage.getClassLessonContent -- so the network
+// response can't be used to cheat) and present only when an admin/coach
+// preview hands this component its own already-known answer key directly,
+// with no server round-trip at all. Optional here so one type serves both.
+export type QuizAnswerOption = {
+  id: number;
+  orderIndex: number;
+  answerText: string;
+  isCorrect?: boolean;
+  explanation?: string;
+};
+export type QuizQuestion = {
+  id: number;
+  orderIndex: number;
+  questionText: string;
+  answers: QuizAnswerOption[];
+};
+export type LessonContent = { id: number; title: string; content: ContentPage[]; quizQuestions: QuizQuestion[] };
 
 type QuizAnswerResult = {
   questionId: number;
@@ -152,6 +169,7 @@ export function ClassLessonReaderDialog({
   lesson,
   startAt = "reading",
   alreadyActive = false,
+  previewContent,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -173,13 +191,26 @@ export function ClassLessonReaderDialog({
    * finishing either one here just closes the dialog instead of running
    * the Add-to-Calendar gate again. */
   alreadyActive?: boolean;
+  /** Admin/coach preview mode -- when set, this content (straight from the
+   * Class Builder's own local form state, saved or not) is used directly
+   * instead of fetching the athlete route, and every mutation below grades
+   * or advances locally instead of touching the server: nothing about a
+   * preview should write real progress, and previewing an unsaved edit
+   * can't hit a route for a lesson that was never saved in the first
+   * place. Answers carry isCorrect/explanation here (the athlete fetch
+   * never does), which is exactly what lets quiz grading happen without a
+   * round trip. */
+  previewContent?: LessonContent;
 }) {
+  const isPreview = previewContent != null;
   const qc = useQueryClient();
-  const { data: lessonContent, isLoading } = useQuery<LessonContent>({
+  const { data: fetchedContent, isLoading } = useQuery<LessonContent>({
     queryKey: [`/api/athlete/classes/${classId}/lessons/${lesson.id}/content`],
     queryFn: () => getJson(`/api/athlete/classes/${classId}/lessons/${lesson.id}/content`),
-    enabled: open,
+    enabled: open && !isPreview,
   });
+  const lessonContent = isPreview ? previewContent : fetchedContent;
+  const contentLoading = isPreview ? false : isLoading;
 
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -213,6 +244,7 @@ export function ClassLessonReaderDialog({
 
   const completeContentMutation = useMutation({
     mutationFn: async () => {
+      if (isPreview) return null;
       const res = await apiRequest(
         "POST",
         `/api/athlete/classes/${classId}/lessons/${lesson.id}/content/complete`,
@@ -221,7 +253,7 @@ export function ClassLessonReaderDialog({
       return res.json();
     },
     onSuccess: () => {
-      invalidateProgress();
+      if (!isPreview) invalidateProgress();
       if (questions.length > 0) {
         setPhase("quiz");
       } else if (alreadyActive) {
@@ -235,6 +267,42 @@ export function ClassLessonReaderDialog({
 
   const submitQuizMutation = useMutation({
     mutationFn: async () => {
+      if (isPreview) {
+        // Graded locally against the answer key previewContent already
+        // carries -- same pass bar (CLASS_QUIZ_PASS_THRESHOLD) the real
+        // submit route uses, so a preview genuinely tells you whether a
+        // real athlete would pass, not just whether the dialog advances.
+        let correctCount = 0;
+        const results: QuizAnswerResult[] = questions.map((q) => {
+          const submittedAnswerId = selectedAnswers[q.id] ?? null;
+          const submitted = q.answers.find((a) => a.id === submittedAnswerId) ?? null;
+          const isCorrect = submitted?.isCorrect ?? false;
+          if (isCorrect) correctCount++;
+          return {
+            questionId: q.id,
+            questionText: q.questionText,
+            submittedAnswerId,
+            isCorrect,
+            answers: q.answers.map((a) => ({
+              id: a.id,
+              answerText: a.answerText,
+              isCorrect: !!a.isCorrect,
+              explanation: a.explanation ?? "",
+            })),
+          };
+        });
+        const score = questions.length > 0 ? correctCount / questions.length : 0;
+        const result: QuizSubmitResult = {
+          score,
+          correctCount,
+          totalQuestions: questions.length,
+          passed: score >= CLASS_QUIZ_PASS_THRESHOLD,
+          perfect: correctCount === questions.length,
+          passThreshold: CLASS_QUIZ_PASS_THRESHOLD,
+          results,
+        };
+        return result;
+      }
       const answers = Object.entries(selectedAnswers).map(([questionId, answerId]) => ({
         questionId: Number(questionId),
         answerId,
@@ -249,13 +317,14 @@ export function ClassLessonReaderDialog({
     onSuccess: (result) => {
       setQuizResult(result);
       if (!result.passed) setFailLine(randomFailLine());
-      if (result.passed) invalidateProgress();
+      if (result.passed && !isPreview) invalidateProgress();
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not submit quiz"),
   });
 
   const activateMutation = useMutation({
     mutationFn: async () => {
+      if (isPreview) return null;
       const res = await apiRequest(
         "POST",
         `/api/athlete/classes/${classId}/lessons/${lesson.id}/activate`,
@@ -264,8 +333,12 @@ export function ClassLessonReaderDialog({
       return res.json();
     },
     onSuccess: () => {
-      invalidateProgress();
-      toast.success("Added to your calendar");
+      if (isPreview) {
+        toast.info("This is just a preview -- nothing was saved or added to a calendar.");
+      } else {
+        invalidateProgress();
+        toast.success("Added to your calendar");
+      }
       onOpenChange(false);
     },
     onError: (err: ApiError) =>
@@ -340,6 +413,11 @@ export function ClassLessonReaderDialog({
                   Lesson {lesson.lessonNumber}
                 </Badge>
                 <span className="truncate">{lesson.title}</span>
+                {isPreview && (
+                  <Badge className="shrink-0 gap-1 bg-primary/15 text-primary hover:bg-primary/15">
+                    Preview
+                  </Badge>
+                )}
               </DialogTitle>
             </div>
           </DialogHeader>
@@ -359,9 +437,9 @@ export function ClassLessonReaderDialog({
           onTouchEnd={handleTouchEnd}
           className="flex-1 overflow-y-auto p-4 sm:p-6"
         >
-          {isLoading && <div className="h-40 animate-pulse rounded-lg bg-surface" />}
+          {contentLoading && <div className="h-40 animate-pulse rounded-lg bg-surface" />}
 
-          {!isLoading && phase === "reading" && (
+          {!contentLoading && phase === "reading" && (
             <div className="mx-auto max-w-2xl space-y-3">
               {pages.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No reading content for this lesson yet.</p>
@@ -452,7 +530,7 @@ export function ClassLessonReaderDialog({
             </div>
           )}
 
-          {!isLoading && phase === "quiz" && !quizResult && (
+          {!contentLoading && phase === "quiz" && !quizResult && (
             <div className="mx-auto max-w-2xl space-y-5">
               {questions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">This lesson's quiz isn't ready yet.</p>
@@ -498,7 +576,7 @@ export function ClassLessonReaderDialog({
             </div>
           )}
 
-          {!isLoading && phase === "quiz" && quizResult && (
+          {!contentLoading && phase === "quiz" && quizResult && (
             <div className="mx-auto max-w-2xl space-y-5">
               <div
                 className={cn(
@@ -557,12 +635,14 @@ export function ClassLessonReaderDialog({
             </div>
           )}
 
-          {!isLoading && phase === "ready" && (
+          {!contentLoading && phase === "ready" && (
             <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 py-10 text-center">
               <CheckCircle2 className="h-10 w-10 text-success" />
               <p className="font-semibold">Content read and quiz passed.</p>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Add this lesson's drills to your calendar to start training it.
+                {isPreview
+                  ? "That's the full lesson -- a real athlete would add its drills to their calendar here."
+                  : "Add this lesson's drills to your calendar to start training it."}
               </p>
             </div>
           )}
@@ -680,7 +760,7 @@ export function ClassLessonReaderDialog({
                 disabled={activateMutation.isPending}
               >
                 <CalendarPlus className="h-5 w-5" />
-                {activateMutation.isPending ? "Adding…" : "Add to Calendar"}
+                {activateMutation.isPending ? "Adding…" : isPreview ? "Close Preview" : "Add to Calendar"}
               </Button>
             )}
           </div>
