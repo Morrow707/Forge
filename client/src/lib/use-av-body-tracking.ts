@@ -104,6 +104,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     let cancelled = false;
     let rafId: number | null = null;
     let started = false;
+    let observer: ResizeObserver | null = null;
     let waitFrames = 0;
     const MAX_WAIT_FRAMES = 180;
 
@@ -162,12 +163,29 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
         });
       window.addEventListener("resize", onResize);
       window.addEventListener("orientationchange", onOrientationChange);
+
+      // The rect above is whatever the container measured the instant it first had a non-zero
+      // box, and the dialog this lives in animates open with a scale transform --
+      // getBoundingClientRect reports the TRANSFORMED box, so the first honest-looking
+      // measurement is routinely smaller than the final one. Nothing corrected it afterwards:
+      // "resize" does not fire when an element finishes its own animation, so the native preview
+      // layer kept the mid-animation frame for the life of the dialog and sat letterboxed inside
+      // a full-screen viewfinder with black around it.
+      //
+      // A ResizeObserver is the mechanism that actually matches the problem: it fires on the
+      // container's own box changing for any reason, animation included, so the preview settles
+      // onto the final rect however long the transition takes.
+      if (typeof ResizeObserver !== "undefined" && containerRef.current) {
+        observer = new ResizeObserver(onResize);
+        observer.observe(containerRef.current);
+      }
     }
 
     tryStart();
     return () => {
       cancelled = true;
       if (rafId != null) cancelAnimationFrame(rafId);
+      observer?.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onOrientationChange);
       if (started) {

@@ -35,6 +35,16 @@ function benchSet(tiltDeg: number, romM = 0.36) {
 
 const ANGLES = [0, 30, 60, 75, 85];
 
+/** The same set with a slow wander added -- the athlete settling, the tracker easing on and off
+ *  the bar over half a minute. This is the shape that made a real take come back with FEWER reps
+ *  than plain image-vertical would have found: the drift outgrows the reps, so an axis chosen by
+ *  total spread locks onto the wander and flattens the reps it was meant to recover. */
+function benchSetWithDrift(tiltDeg: number, driftM = 0.5) {
+  const points = benchSet(tiltDeg);
+  const last = points.length - 1;
+  return points.map((p, i) => ({ ...p, x: p.x + (driftM * i) / last }));
+}
+
 describe("a set measures the same from any angle", () => {
   // The point of the movement-axis frame: what the numbers say must not depend on where the
   // phone was standing. Each of these is checked against the square side view, the one camera
@@ -127,5 +137,29 @@ describe("dominantAxisFrame", () => {
     for (let i = 0; i < points.length; i++) {
       expect(along[i]).toBeCloseTo(points[i].y, 6);
     }
+  });
+});
+
+describe("a slow wander does not become the movement axis", () => {
+  it("still finds the reps when drift is bigger than the reps themselves", () => {
+    // Half a metre of wander against 36cm of press, at an angle where the press is nearly
+    // edge-on. Chosen by total spread, the axis would be the wander.
+    const drifting = summarizeTrackedSet(benchSetWithDrift(75), 61)!;
+    expect(drifting.repBreakdown.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("keeps reporting the real range of motion through the drift", () => {
+    const drifting = summarizeTrackedSet(benchSetWithDrift(75), 61)!;
+    expect(drifting.repBreakdown[2].romCm).toBeGreaterThan(30);
+    expect(drifting.repBreakdown[2].romCm).toBeLessThan(42);
+  });
+
+  it("picks the same axis with and without the wander", () => {
+    const clean = dominantAxisFrame(benchSet(75).map((p) => ({ x: p.x, y: p.y })));
+    const drifting = dominantAxisFrame(benchSetWithDrift(75).map((p) => ({ x: p.x, y: p.y })));
+    const cleanRange = Math.max(...clean.along) - Math.min(...clean.along);
+    const driftingSwing =
+      Math.max(...drifting.along.slice(0, 200)) - Math.min(...drifting.along.slice(0, 200));
+    expect(driftingSwing).toBeCloseTo(cleanRange, 1);
   });
 });

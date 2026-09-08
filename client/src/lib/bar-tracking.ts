@@ -1870,13 +1870,42 @@ export function dominantAxisFrame(points: { x: number; y: number }[]): {
   const meanX = points.reduce((a, p) => a + p.x, 0) / points.length;
   const meanY = points.reduce((a, p) => a + p.y, 0) / points.length;
 
-  // Covariance of the centred trace. Symmetric, so three numbers describe it.
+  // THE AXIS COMES FROM THE REPS, NOT FROM THE WHOLE TRACE.
+  //
+  // Taking the principal component of the raw trace asks "which way did this trace spread the
+  // most", and over half a minute the answer can easily be a slow drift -- the athlete settling
+  // on the bench, the tracker easing off the bar and back on -- rather than the reps. Where the
+  // reps are small in frame and the drift is not, the axis then locks onto the drift, and
+  // projecting onto it does the opposite of what it is for: it amplifies the wander and flattens
+  // the very reversals segmentation needs. That is a way to find FEWER reps than plain image-y,
+  // which is worse than not trying.
+  //
+  // Detrending first removes it. Each point has a centred moving average subtracted, over a
+  // window long enough to span a rep or two, so anything slower than a rep contributes nothing
+  // to the covariance and the axis is chosen by the oscillation alone. The projection itself is
+  // still applied to the ORIGINAL points -- the detrended copy exists only to pick a direction.
+  const window = Math.max(3, Math.min(Math.floor(points.length / 4), 121));
+  const half = Math.floor(window / 2);
+  const detrended = points.map((p, i) => {
+    const from = Math.max(0, i - half);
+    const to = Math.min(points.length - 1, i + half);
+    let sx = 0;
+    let sy = 0;
+    for (let j = from; j <= to; j++) {
+      sx += points[j].x;
+      sy += points[j].y;
+    }
+    const n = to - from + 1;
+    return { x: p.x - sx / n, y: p.y - sy / n };
+  });
+
+  // Covariance of the detrended trace. Symmetric, so three numbers describe it.
   let sxx = 0;
   let syy = 0;
   let sxy = 0;
-  for (const p of points) {
-    const dx = p.x - meanX;
-    const dy = p.y - meanY;
+  for (const p of detrended) {
+    const dx = p.x;
+    const dy = p.y;
     sxx += dx * dx;
     syy += dy * dy;
     sxy += dx * dy;
