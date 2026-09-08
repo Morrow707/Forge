@@ -4197,6 +4197,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         passages,
       });
 
+      // Contradiction detection now runs on its own after a text ingest,
+      // rather than waiting for somebody to know to press a button on the
+      // source. A disagreement between two books is exactly the thing an
+      // admin cannot find by reading, and a queue nobody knows to fill is a
+      // queue nobody reads.
+      //
+      // Not awaited: it is many model calls over a whole book and the upload
+      // response should not wait for it. Admin-only, like the queue itself --
+      // no coach or athlete ever sees a conflict.
+      if (passages.length > 0) {
+        void storage
+          .detectKnowledgeConflicts(source.id)
+          .catch((err) => recordSystemFailure("ai", "Conflict detection failed after an ingest", { detail: err }));
+      }
+
       res.status(201).json({
         ...source,
         passageCount: passages.length,
@@ -4358,6 +4373,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.setTranscriptionCheckpoint(id, throughPage);
           },
         });
+
+        // Same automatic check after a transcription pass, for the same
+        // reason. Started only once the whole pass is done, so it is not
+        // comparing against a half-ingested book.
+        if (written > 0) {
+          void storage
+            .detectKnowledgeConflicts(id)
+            .catch((err) =>
+              recordSystemFailure("ai", "Conflict detection failed after a transcription", { detail: err }),
+            );
+        }
 
         await storage.setKnowledgeSourceStatus(
           id,
