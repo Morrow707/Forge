@@ -1,4 +1,5 @@
 import { recordAiUsage } from "./ai-usage";
+import type { AiProvider, NeutralRequest, NeutralResponse } from "./ai-provider";
 import { recordSystemFailure, recordSystemSuccess } from "./system-events";
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -378,3 +379,72 @@ export async function askClaudeWithTools<T = any>(
   }
   return null;
 }
+
+
+/**
+ * This file, viewed through the neutral seam.
+ *
+ * The seam existed as types nothing implemented, which made it decorative --
+ * a boundary that has never had anything on both sides of it is a boundary
+ * nobody has checked is possible to honour. Implementing it here proves the
+ * shape actually fits the one provider in use, which is the only way to know
+ * a second one could slot in.
+ *
+ * It deliberately does NOT become the path every call site takes. Rewriting
+ * thirty-five call sites onto an interface with one implementation buys
+ * nothing today and risks a regression in every AI feature at once. The
+ * value is that the contract is now real and compiled; migrating callers is
+ * a separate job, done when there is a second provider to migrate them for.
+ */
+export const anthropicProvider: AiProvider = {
+  name: "anthropic",
+  defaultModel,
+  fastModel,
+  supportsVision: true,
+
+  async send(request: NeutralRequest): Promise<NeutralResponse | null> {
+    const data = await callAnthropic(
+      {
+        model: request.model || defaultModel,
+        max_tokens: request.maxTokens,
+        system: buildSystemField(request.system),
+        messages: request.messages.map((m) => ({
+          role: m.role,
+          content:
+            m.images && m.images.length > 0
+              ? [
+                  ...m.images.map((img) => ({
+                    type: "image",
+                    source: { type: "base64", media_type: img.mediaType, data: img.data },
+                  })),
+                  ...(m.text ? [{ type: "text", text: m.text }] : []),
+                ]
+              : (m.text ?? ""),
+        })),
+        ...(request.tools ? { tools: request.tools, tool_choice: { type: "auto" } } : {}),
+      },
+      request.feature,
+    );
+    if (!data) return null;
+
+    const toolUse = data.content?.find((b: any) => b.type === "tool_use");
+    const textBlock = data.content?.find((b: any) => b.type === "text")?.text;
+    const usage = data.usage ?? {};
+
+    return {
+      text: typeof textBlock === "string" ? textBlock : null,
+      toolCall: toolUse ? { name: toolUse.name, input: toolUse.input } : null,
+      usage: {
+        inputTokens: Number(usage.input_tokens ?? 0),
+        outputTokens: Number(usage.output_tokens ?? 0),
+        cacheReadTokens: Number(usage.cache_read_input_tokens ?? 0),
+        cacheWriteTokens: Number(usage.cache_creation_input_tokens ?? 0),
+      },
+      model: String(data.model ?? request.model ?? defaultModel),
+      // callAnthropic already discards a truncated response, so anything
+      // reaching here is complete. Reported rather than assumed, because a
+      // future provider implementation must not quietly drop the signal.
+      truncated: data.stop_reason === "max_tokens",
+    };
+  },
+};

@@ -7701,7 +7701,21 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
     // kind of claim rather than a weaker one.
     const normContext = await normsForAthlete(athlete);
     const normBlock = normContext
-      ? renderNormsForPrompt(normContext.key, normContext.norms, normContext.widenedFrom)
+      ? renderNormsForPrompt(normContext.key, normContext.norms, normContext.widenedFrom, {
+          // The athlete's own numbers, so each line says where they sit
+          // rather than leaving the model to estimate it from five
+          // percentiles. Metric names match PROFILE_METRICS in
+          // server/cohort-norms.ts.
+          height: athlete.heightIn,
+          "body weight": athlete.bodyWeightLbs,
+          "40-yard dash": athlete.fortyYardDash,
+          "vertical jump": athlete.verticalJumpIn,
+          "broad jump": athlete.broadJumpIn,
+          "pro agility": athlete.proAgilitySeconds,
+          "bench max": athlete.benchMaxLbs,
+          "squat max": athlete.squatMaxLbs,
+          "deadlift max": athlete.deadliftMaxLbs,
+        })
       : "";
 
     const weaknessReference = await referenceBlock(
@@ -16470,7 +16484,22 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     const roster = await this.getRosterForCoach(coachId).catch(() => []);
     const out: { athleteId: number; athleteName: string; region: string; flags: number; isMinor: boolean }[] = [];
 
-    for (const athlete of roster as { id: number; name: string; dateOfBirth?: string | null }[]) {
+    // Dates of birth read separately, because getRosterForCoach does not
+    // select one. The first build read `athlete.dateOfBirth` off those rows,
+    // got undefined every time, and fell through to the "unknown age means
+    // treat as a minor" branch -- so EVERY adult was escalated at the
+    // minor's lower threshold and labelled "under 18" on the coach's screen.
+    // A safe default is only safe when it is not the answer for everybody.
+    const dobById = new Map<number, string | null>();
+    if (roster.length > 0) {
+      const rows = await db
+        .select({ id: users.id, dateOfBirth: users.dateOfBirth })
+        .from(users)
+        .where(inArray(users.id, (roster as { id: number }[]).map((a) => a.id)));
+      for (const row of rows) dobById.set(row.id, row.dateOfBirth ?? null);
+    }
+
+    for (const athlete of roster as { id: number; name: string }[]) {
       const history = await this.getWellnessHistoryForAthlete(athlete.id, 14).catch(() => []);
       const counts = new Map<string, number>();
       for (const checkin of history as { bodyPainMap?: string[] | null }[]) {
@@ -16478,9 +16507,12 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
           counts.set(part, (counts.get(part) ?? 0) + 1);
         }
       }
-      const isMinor = athlete.dateOfBirth
-        ? derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus"
-        : true;
+      const dateOfBirth = dobById.get(athlete.id) ?? null;
+      const isMinor = dateOfBirth
+        ? derivePrivacyTier(dateOfBirth) !== "tier3_adult_18plus"
+        : // Still the safe default for a genuinely unknown age, which is now
+          // rare rather than universal.
+          true;
       const threshold = isMinor ? 2 : 3;
       for (const [region, flags] of counts) {
         if (flags < threshold) continue;

@@ -79,6 +79,33 @@ describe("cohort norms", () => {
     expect(text).toContain("position and sport");
   });
 
+  it("bands the athlete's own value on each line rather than leaving raw percentiles", () => {
+    // Handing a model five percentiles and the athlete's number invites it to
+    // do the comparison itself, which is how a value becomes "well above
+    // average" with nothing behind it.
+    const text = renderNormsForPrompt(
+      { sport: "Football", position: null, ageBand: "16-17", gender: "male" },
+      [norm],
+      [],
+      { "vertical jump": 34 },
+    );
+    expect(text).toContain("This athlete: 34");
+    expect(text).toContain("top quarter");
+  });
+
+  it("reads a faster time as better, not worse", () => {
+    // A 4.4 forty is the value a naive comparison calls bottom 10%. Getting
+    // this backwards tells a fast athlete they are slow.
+    const forty = { metric: "40-yard dash", unit: "s", n: 200, p10: 4.6, p25: 4.8, p50: 5.0, p75: 5.2, p90: 5.4 };
+    const text = renderNormsForPrompt(
+      { sport: null, position: null, ageBand: null, gender: null },
+      [forty],
+      [],
+      { "40-yard dash": 4.5 },
+    );
+    expect(text).toContain("top 10%");
+  });
+
   it("renders nothing at all when there are no norms", () => {
     expect(renderNormsForPrompt({ sport: null, position: null, ageBand: null, gender: null }, [])).toBe("");
   });

@@ -311,12 +311,7 @@ export default function AdminKnowledgeBase() {
               ))}
             </div>
             {searchHits?.map((hit: any) => (
-              <div key={hit.passageId} className="rounded-md border border-border px-3 py-2">
-                <p className="text-xs font-bold text-muted-foreground">
-                  {hit.citation || hit.sourceTitle}, p. {hit.pageNumber}
-                </p>
-                <p className="mt-1 text-sm">{hit.text.slice(0, 400)}…</p>
-              </div>
+              <SearchHit key={hit.passageId} hit={hit} />
             ))}
             {searchHits && searchHits.length === 0 && (
               <p className="text-sm text-muted-foreground">
@@ -715,5 +710,93 @@ function TranscribeDialog({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * One search result, correctable in place.
+ *
+ * The edit lives here rather than on a separate screen because this is the
+ * only place an admin actually reads a passage. A transcription that misread
+ * a load is spotted while searching for that load, and the fix has to be one
+ * click away from the moment of noticing -- otherwise it becomes a note that
+ * never gets actioned.
+ *
+ * Correcting also clears the "transcribed from an image" flag, because a
+ * person has now read it against the page. That flag is what makes the
+ * assistant tell readers to verify the numbers, and leaving it on a passage
+ * somebody has checked trains people to ignore the warning.
+ */
+function SearchHit({ hit }: { hit: any }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState<string>(hit.text ?? "");
+
+  const save = useMutation({
+    mutationFn: () =>
+      apiRequest("PATCH", `/api/admin/knowledge-passages/${hit.passageId}`, {
+        text: text.trim(),
+        fromVision: false,
+      }),
+    onSuccess: () => {
+      toast.success("Passage corrected. It is re-indexed straight away.");
+      setEditing(false);
+      qc.invalidateQueries({ queryKey: ["knowledge-search"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+  });
+
+  return (
+    <div className="rounded-md border border-border px-3 py-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="text-xs font-bold text-muted-foreground">
+          {hit.citation || hit.sourceTitle}, p. {hit.pageNumber}
+          {hit.fromVision && (
+            <span className="ml-2 font-normal text-amber-500">read from an image</span>
+          )}
+        </p>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            Correct this
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="mt-2 space-y-2">
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={8}
+            className="text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            Fixes the passage in place and re-indexes it. Use this for a misread number or a chunk
+            that split mid-table -- to remove content, delete the source.
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending || !text.trim()}>
+              {save.isPending ? "Saving..." : "Save correction"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setText(hit.text ?? "");
+                setEditing(false);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-1 text-sm">{String(hit.text ?? "").slice(0, 400)}…</p>
+      )}
+    </div>
   );
 }

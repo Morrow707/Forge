@@ -98,6 +98,15 @@ export function cohortLabel(key: CohortKey): string {
  * not support that precision and a figure like "43rd percentile" invites a
  * confidence the data has not earned.
  */
+/**
+ * Metrics where a SMALLER number is the better result.
+ *
+ * Named explicitly rather than inferred, because getting it wrong tells a
+ * fast athlete they are slow -- and a 4.4 second forty is exactly the value
+ * a naive comparison calls "bottom 10%".
+ */
+export const LOWER_IS_BETTER = new Set(["40-yard dash", "pro agility"]);
+
 export function percentileBand(value: number, norm: Norm, higherIsBetter = true): string {
   const below = [
     { at: norm.p10, label: "bottom 10%" },
@@ -139,13 +148,24 @@ export function renderNormsForPrompt(
   key: CohortKey,
   norms: Norm[],
   widenedFrom?: NormDimension[],
+  /**
+   * This athlete's own values, so each line can say where they actually sit.
+   *
+   * Without it the model is handed five raw percentiles and left to do the
+   * comparison itself, which is how "28 inches" becomes "well above average"
+   * with nothing behind it. With it, the band is computed here from the real
+   * distribution and the model is quoting rather than estimating.
+   */
+  athleteValues?: Record<string, number | null | undefined>,
 ): string {
   if (norms.length === 0) return "";
 
-  const lines = norms.map(
-    (n) =>
-      `- ${n.metric} (${n.unit}), n=${n.n}: 10th ${n.p10}, 25th ${n.p25}, median ${n.p50}, 75th ${n.p75}, 90th ${n.p90}`,
-  );
+  const lines = norms.map((n) => {
+    const base = `- ${n.metric} (${n.unit}), n=${n.n}: 10th ${n.p10}, 25th ${n.p25}, median ${n.p50}, 75th ${n.p75}, 90th ${n.p90}`;
+    const value = athleteValues?.[n.metric];
+    if (typeof value !== "number") return base;
+    return `${base}. This athlete: ${value} -- ${percentileBand(value, n, LOWER_IS_BETTER.has(n.metric) ? false : true)}`;
+  });
 
   return [
     `Reference distributions for ${cohortLabel(key)}, computed from athletes on this platform.`,
