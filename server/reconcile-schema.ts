@@ -2842,6 +2842,9 @@ CREATE INDEX IF NOT EXISTS "ai_usage_daily_day_idx"
 
 -- Transcription checkpointing, so a redeploy mid-run resumes instead of
 -- re-reading and re-paying for every page before the failure.
+-- Free text, read by a person. What Forge may do with this source.
+ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "licence_note" text;
+
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribed_through_page" integer;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_from_page" integer;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_to_page" integer;

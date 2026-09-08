@@ -5160,6 +5160,18 @@ export const knowledgeSources = pgTable(
     // Which AI domains may retrieve from this source. Same closed list the
     // assistants use; a source can serve several.
     domains: text("domains").array().notNull().default([]),
+    // What Forge is allowed to do with this source, in the uploader's own
+    // words -- "purchased copy, internal use only", "licensed for
+    // redistribution", "public domain".
+    //
+    // Free text rather than an enum on purpose: the real answers are the
+    // terms of a specific licence, and a dropdown would force a librarian's
+    // judgement into four boxes that do not fit it. Nothing computes on this
+    // field; a person reads it. What it is for is the moment somebody asks
+    // whether a passage from a copyrighted textbook may be quoted to a
+    // paying customer's coach, or included in something sold to an outside
+    // party -- a question with no answer at all today.
+    licenceNote: text("licence_note"),
     // How far a vision transcription pass has got, as a page number.
     //
     // Written after every batch of pages, so a restart, a redeploy or a

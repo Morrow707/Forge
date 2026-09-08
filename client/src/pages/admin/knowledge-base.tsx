@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, getJson, resolveApiUrl, getNativeToken, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { KNOWLEDGE_DOMAINS } from "@shared/knowledge-domains";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Upload, Trash2, Search, AlertTriangle, BookOpen, ScanText } from "lucide-react";
@@ -16,14 +17,6 @@ import { Upload, Trash2, Search, AlertTriangle, BookOpen, ScanText } from "lucid
 // The assistants a source can serve. A source can carry several: an energy
 // availability chapter is honestly both nutrition and strength, and forcing
 // one tag would hide it from whichever assistant lost the coin toss.
-const DOMAINS = [
-  { key: "strength", label: "Strength & conditioning" },
-  { key: "nutrition", label: "Nutrition" },
-  { key: "rehab", label: "Rehab & return to play" },
-  { key: "sport", label: "Sport specific" },
-  { key: "movement", label: "Movement & camera" },
-  { key: "class", label: "Class & lesson design" },
-];
 
 type Source = {
   id: number;
@@ -32,6 +25,8 @@ type Source = {
   pageCount: number | null;
   status: "extracting" | "ready" | "failed" | "needs_vision" | "transcribing";
   statusDetail: string | null;
+  licenceNote: string | null;
+  transcribedThroughPage: number | null;
   domains: string[];
   passageCount: number;
   createdAt: string;
@@ -55,11 +50,13 @@ export default function AdminKnowledgeBase() {
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
   const [citation, setCitation] = useState("");
+  const [licenceNote, setLicenceNote] = useState("");
   const [domains, setDomains] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [searchDomains, setSearchDomains] = useState<string[]>(["strength"]);
+  const [transcribeTarget, setTranscribeTarget] = useState<Source | null>(null);
 
   const { data: sources = [] } = useQuery<Source[]>({
     queryKey: ["/api/admin/knowledge-sources"],
@@ -96,6 +93,7 @@ export default function AdminKnowledgeBase() {
       form.append("file", file);
       form.append("title", title.trim());
       if (citation.trim()) form.append("citation", citation.trim());
+      if (licenceNote.trim()) form.append("licenceNote", licenceNote.trim());
       form.append("domains", domains.join(","));
 
       const token = getNativeToken();
@@ -119,6 +117,7 @@ export default function AdminKnowledgeBase() {
       }
       setTitle("");
       setCitation("");
+      setLicenceNote("");
       setFile(null);
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
     } catch {
@@ -139,7 +138,12 @@ export default function AdminKnowledgeBase() {
   });
 
   const transcribe = useMutation({
-    mutationFn: (id: number) => apiRequest("POST", `/api/admin/knowledge-sources/${id}/transcribe`),
+    mutationFn: (input: { id: number; fromPage?: number; toPage?: number; restart?: boolean }) =>
+      apiRequest("POST", `/api/admin/knowledge-sources/${input.id}/transcribe`, {
+        fromPage: input.fromPage,
+        toPage: input.toPage,
+        restart: input.restart,
+      }),
     onSuccess: () => {
       toast.info(
         "Reading the pages. This runs in the background and takes a while for a long book; " +
@@ -201,7 +205,7 @@ export default function AdminKnowledgeBase() {
             <div className="space-y-1.5">
               <Label>Which assistants may use it</Label>
               <div className="grid grid-cols-2 gap-2">
-                {DOMAINS.map((d) => (
+                {KNOWLEDGE_DOMAINS.map((d) => (
                   <label key={d.key} className="flex items-center gap-2 text-sm">
                     <Checkbox
                       checked={domains.includes(d.key)}
@@ -215,6 +219,20 @@ export default function AdminKnowledgeBase() {
                   </label>
                 ))}
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="kb-licence">What may Forge do with this? (optional)</Label>
+              <Input
+                id="kb-licence"
+                value={licenceNote}
+                onChange={(e) => setLicenceNote(e.target.value)}
+                placeholder="e.g. purchased copy, internal use only"
+              />
+              <p className="text-xs text-muted-foreground">
+                Nothing computes on this. It is here for the day somebody asks whether a passage
+                from this source may be quoted to a customer's coach, or included in something
+                sold to an outside party.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="kb-file">PDF</Label>
@@ -278,7 +296,7 @@ export default function AdminKnowledgeBase() {
               </Button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {DOMAINS.map((d) => (
+              {KNOWLEDGE_DOMAINS.map((d) => (
                 <label key={d.key} className="flex items-center gap-1.5 text-xs">
                   <Checkbox
                     checked={searchDomains.includes(d.key)}
@@ -307,6 +325,8 @@ export default function AdminKnowledgeBase() {
             )}
           </CardContent>
         </Card>
+
+        <CoverageCard />
 
         <Card>
           <CardHeader>
@@ -359,7 +379,7 @@ export default function AdminKnowledgeBase() {
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => transcribe.mutate(s.id)}
+                      onClick={() => setTranscribeTarget(s)}
                       disabled={transcribe.isPending}
                     >
                       <ScanText className="mr-1.5 h-4 w-4" />
@@ -387,6 +407,15 @@ export default function AdminKnowledgeBase() {
             )}
           </CardContent>
         </Card>
+
+        <TranscribeDialog
+          source={transcribeTarget}
+          onClose={() => setTranscribeTarget(null)}
+          onStart={(input) => {
+            transcribe.mutate({ id: transcribeTarget!.id, ...input });
+            setTranscribeTarget(null);
+          }}
+        />
       </div>
     </AppShell>
   );
@@ -480,5 +509,211 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * What the library actually covers.
+ *
+ * An assistant with an empty shelf answers exactly like one with a good
+ * library -- both produce fluent text, and only one is grounded. This table
+ * is the only place that difference is visible.
+ *
+ * Passages rather than sources, because one pamphlet and one textbook are
+ * both "1 source" and are nothing alike.
+ */
+function CoverageCard() {
+  const { data: coverage = [] } = useQuery<
+    { domain: string; label: string; sources: number; passages: number; fromVision: number }[]
+  >({
+    queryKey: ["/api/admin/knowledge-coverage"],
+    queryFn: () => getJson("/api/admin/knowledge-coverage"),
+  });
+
+  const empty = coverage.filter((c) => c.passages === 0);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Coverage</CardTitle>
+        <CardDescription>
+          Which assistants have something behind them. An assistant with nothing still answers;
+          it just answers from general knowledge with nothing to cite.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs text-muted-foreground">
+                <th className="py-2 pr-4 font-medium">Area</th>
+                <th className="py-2 pr-4 text-right font-medium">Sources</th>
+                <th className="py-2 pr-4 text-right font-medium">Passages</th>
+                <th className="py-2 text-right font-medium">Transcribed</th>
+              </tr>
+            </thead>
+            <tbody className="tabular-nums">
+              {coverage.map((c) => (
+                <tr key={c.domain} className="border-b last:border-0">
+                  <td className="py-2 pr-4">{c.label}</td>
+                  <td className="py-2 pr-4 text-right">{c.sources}</td>
+                  <td
+                    className={cn(
+                      "py-2 pr-4 text-right",
+                      c.passages === 0 && "text-amber-500",
+                    )}
+                  >
+                    {c.passages}
+                  </td>
+                  <td className="py-2 text-right text-muted-foreground">{c.fromVision}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {empty.length > 0 && (
+          <p className="text-xs text-amber-500">
+            Nothing behind {empty.map((c) => c.label).join(", ")}. Those assistants are running
+            on general knowledge alone.
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Transcribed passages were read off a page image rather than extracted as text. Treat
+          their numbers as unverified until somebody has checked them against the page.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Confirms a transcription pass, with what it will cost.
+ *
+ * The estimate is the whole point of this dialog. A 400-page scan is 400
+ * model calls, and without a number in front of them an admin finds out
+ * what it cost from a bill. The page range is here for the same reason:
+ * skipping the index and the reference list is usually the largest single
+ * saving available on a real textbook.
+ */
+function TranscribeDialog({
+  source,
+  onClose,
+  onStart,
+}: {
+  source: Source | null;
+  onClose: () => void;
+  onStart: (input: { fromPage?: number; toPage?: number; restart?: boolean }) => void;
+}) {
+  const [fromPage, setFromPage] = useState("");
+  const [toPage, setToPage] = useState("");
+
+  const resumable = (source?.transcribedThroughPage ?? 0) > 0;
+
+  const { data: estimate } = useQuery<{
+    pages: number;
+    alreadyDone: number;
+    model: string;
+    estimatedUsd: number | null;
+  }>({
+    queryKey: ["transcribe-estimate", source?.id, fromPage, toPage],
+    enabled: !!source,
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (fromPage) params.set("fromPage", fromPage);
+      if (toPage) params.set("toPage", toPage);
+      return getJson(
+        `/api/admin/knowledge-sources/${source!.id}/transcribe-estimate?${params.toString()}`,
+      );
+    },
+  });
+
+  if (!source) return null;
+
+  return (
+    <Card className="border-primary/50">
+      <CardHeader>
+        <CardTitle className="text-base">Read the pages of "{source.title}"</CardTitle>
+        <CardDescription>
+          Claude reads each page as an image and transcribes it. This runs in the background and
+          takes a while for a long book.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="kb-from">First page (optional)</Label>
+            <Input
+              id="kb-from"
+              inputMode="numeric"
+              value={fromPage}
+              onChange={(e) => setFromPage(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="1"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="kb-to">Last page (optional)</Label>
+            <Input
+              id="kb-to"
+              inputMode="numeric"
+              value={toPage}
+              onChange={(e) => setToPage(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder={String(source.pageCount ?? "")}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Skipping the index, the front matter and the reference list is usually the biggest
+          saving on a textbook. Nothing is lost by leaving them out; they answer no questions.
+        </p>
+
+        <div className="rounded-md border p-3">
+          <p className="text-xs text-muted-foreground">Estimated cost</p>
+          <p className="text-2xl font-semibold tabular-nums">
+            {estimate?.estimatedUsd != null ? `$${estimate.estimatedUsd.toFixed(2)}` : "--"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {estimate?.pages ?? 0} page(s) on {estimate?.model ?? "the cheap model"}. An estimate,
+            not a quote: a page's real cost depends on how dense it is.
+          </p>
+        </div>
+
+        {resumable && (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
+            This source already has {source.transcribedThroughPage} page(s) read. Starting again
+            carries on from there rather than paying for them twice.
+          </p>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() =>
+              onStart({
+                fromPage: fromPage ? Number(fromPage) : undefined,
+                toPage: toPage ? Number(toPage) : undefined,
+              })
+            }
+          >
+            {resumable ? "Carry on reading" : "Start reading"}
+          </Button>
+          {resumable && (
+            <Button
+              variant="outline"
+              onClick={() =>
+                onStart({
+                  fromPage: fromPage ? Number(fromPage) : undefined,
+                  toPage: toPage ? Number(toPage) : undefined,
+                  restart: true,
+                })
+              }
+            >
+              Start over (pays again)
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

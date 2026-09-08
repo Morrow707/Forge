@@ -143,7 +143,7 @@ import {
 } from "@shared/privacy-tiers";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
-import { KNOWLEDGE_DOMAIN_KEYS } from "@shared/knowledge-domains";
+import { KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain, knowledgeDomainLabel } from "@shared/knowledge-domains";
 import { normalizeInjuryRegion, INJURY_REGIONS, type InjuryRegion } from "@shared/injury-taxonomy";
 import {
   findSimilarPassages,
@@ -21436,6 +21436,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     uploadedByUserId: number;
     title: string;
     citation?: string | null;
+    licenceNote?: string | null;
     filePath: string | null;
     fileHash: string;
     pageCount: number;
@@ -21455,6 +21456,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           uploadedByUserId: input.uploadedByUserId,
           title: input.title,
           citation: input.citation ?? null,
+          licenceNote: input.licenceNote ?? null,
           filePath: input.filePath,
           fileHash: input.fileHash,
           pageCount: input.pageCount,
@@ -21751,6 +21753,98 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .update(knowledgeSources)
       .set({ transcribeFromPage: fromPage, transcribeToPage: toPage })
       .where(eq(knowledgeSources.id, id));
+  },
+
+  /**
+   * Corrects one passage's text or topics.
+   *
+   * The only remedy for a bad passage used to be deleting the whole source
+   * and re-ingesting it, which on a transcribed book meant paying to read
+   * 400 pages again because one number came out wrong. A transcription that
+   * misread a load, or a chunk that split mid-table, is exactly the kind of
+   * defect a human spots and a machine cannot.
+   *
+   * The search vector is a generated column, so correcting the text
+   * re-indexes it automatically -- an edit that fixed the display and left
+   * the old words searchable would be worse than no edit at all.
+   *
+   * Clearing fromVision is offered because a corrected passage is no longer
+   * an unverified transcription: a person has read it against the page. The
+   * caller decides; this does not assume.
+   */
+  async updateKnowledgePassage(
+    passageId: number,
+    input: { text?: string; topics?: string[]; fromVision?: boolean },
+  ) {
+    const patch: Record<string, unknown> = {};
+    if (input.text !== undefined) {
+      const trimmed = input.text.trim();
+      // An empty passage would match nothing and occupy an ordinal. Deleting
+      // the source is the way to remove content, not blanking a row.
+      if (!trimmed) return null;
+      patch.text = trimmed;
+    }
+    if (input.topics !== undefined) {
+      patch.topics = input.topics.filter(isKnowledgeDomain);
+    }
+    if (input.fromVision !== undefined) patch.fromVision = input.fromVision;
+    if (Object.keys(patch).length === 0) return null;
+
+    const [row] = await db
+      .update(knowledgePassages)
+      .set(patch)
+      .where(eq(knowledgePassages.id, passageId))
+      .returning();
+    return row ?? null;
+  },
+
+  /**
+   * What the library actually covers, per domain.
+   *
+   * An assistant with an empty shelf and one with a good one look identical
+   * from the outside: both answer, and only one is grounded. This is the
+   * page that tells an admin which of their six assistants are running on
+   * nothing.
+   *
+   * Counts passages rather than sources, because one thin pamphlet and one
+   * textbook are both "1 source" and are not remotely the same thing.
+   */
+  async getKnowledgeCoverage() {
+    const rows = await db
+      .select({ topics: knowledgePassages.topics, fromVision: knowledgePassages.fromVision })
+      .from(knowledgePassages);
+
+    const byDomain = new Map<string, { passages: number; fromVision: number }>();
+    for (const key of KNOWLEDGE_DOMAIN_KEYS) byDomain.set(key, { passages: 0, fromVision: 0 });
+    for (const row of rows) {
+      for (const topic of row.topics ?? []) {
+        const entry = byDomain.get(topic);
+        if (!entry) continue;
+        entry.passages += 1;
+        if (row.fromVision) entry.fromVision += 1;
+      }
+    }
+
+    const sources = await db
+      .select({ id: knowledgeSources.id, domains: knowledgeSources.domains })
+      .from(knowledgeSources);
+    const sourceCounts = new Map<string, number>();
+    for (const source of sources) {
+      for (const domain of source.domains ?? []) {
+        sourceCounts.set(domain, (sourceCounts.get(domain) ?? 0) + 1);
+      }
+    }
+
+    return KNOWLEDGE_DOMAIN_KEYS.map((key) => ({
+      domain: key,
+      label: knowledgeDomainLabel(key),
+      sources: sourceCounts.get(key) ?? 0,
+      passages: byDomain.get(key)?.passages ?? 0,
+      // Passages read off a page image rather than extracted as text. Worth
+      // showing per shelf, because a domain served entirely by transcription
+      // is a domain where every number should be treated as unverified.
+      fromVision: byDomain.get(key)?.fromVision ?? 0,
+    }));
   },
 
   async getKnowledgeSourceByHash(fileHash: string) {

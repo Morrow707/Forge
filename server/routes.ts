@@ -4134,6 +4134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .object({
           title: z.string().trim().min(1).max(200),
           citation: z.string().trim().max(300).optional(),
+          licenceNote: z.string().trim().max(500).optional(),
           domains: z.string().optional(),
         })
         .safeParse(req.body);
@@ -4190,6 +4191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         uploadedByUserId: req.user!.id,
         title: parsed.data.title,
         citation: parsed.data.citation ?? null,
+        licenceNote: parsed.data.licenceNote ?? null,
         filePath: stored,
         fileHash,
         pageCount: extracted.pageCount,
@@ -4416,6 +4418,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/knowledge-sources", requireRole("admin"), async (_req, res) => {
     res.json(await storage.listKnowledgeSources());
+  });
+
+  // Which shelves the library actually covers. An assistant with nothing
+  // behind it answers exactly like one with a good library, so this is the
+  // only place an admin can see the difference.
+  app.get("/api/admin/knowledge-coverage", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.getKnowledgeCoverage());
+  });
+
+  // Correcting one passage, rather than deleting a whole book because a
+  // transcription misread a number.
+  app.patch("/api/admin/knowledge-passages/:passageId", requireRole("admin"), async (req, res) => {
+    const passageId = Number(req.params.passageId);
+    if (!Number.isInteger(passageId)) return res.status(400).json({ message: "Invalid id" });
+    const parsed = z
+      .object({
+        text: z.string().trim().min(1).max(20000).optional(),
+        topics: z.array(z.string()).max(6).optional(),
+        fromVision: z.boolean().optional(),
+      })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+
+    const row = await storage.updateKnowledgePassage(passageId, parsed.data);
+    if (!row) return res.status(404).json({ message: "Passage not found, or nothing to change" });
+    res.json(row);
   });
 
   app.get("/api/admin/knowledge-sources/:id/passages", requireRole("admin"), async (req, res) => {

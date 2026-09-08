@@ -105,6 +105,7 @@ const AdminMyWorkout = lazy(withLoadTimeout(() => import("@/pages/admin/my-worko
 const AdminPlatformTrends = lazy(withLoadTimeout(() => import("@/pages/admin/platform-trends")));
 const AdminResearchExports = lazy(withLoadTimeout(() => import("@/pages/admin/research-exports")));
 const AdminKnowledgeBase = lazy(withLoadTimeout(() => import("@/pages/admin/knowledge-base")));
+const AdminAiSpend = lazy(withLoadTimeout(() => import("@/pages/admin/ai-spend")));
 const AdminBilling = lazy(withLoadTimeout(() => import("@/pages/admin/billing")));
 const AdminUsers = lazy(withLoadTimeout(() => import("@/pages/admin/users")));
 const AdminClasses = lazy(withLoadTimeout(() => import("@/pages/admin/classes")));
@@ -491,6 +492,9 @@ function Router() {
         </Route>
         <Route path="/admin/knowledge-base">
           <ProtectedRoute role="admin" component={AdminKnowledgeBase} />
+        </Route>
+        <Route path="/admin/ai-spend">
+          <ProtectedRoute role="admin" component={AdminAiSpend} />
         </Route>
         <Route path="/admin/research-exports">
           <ProtectedRoute role="admin" component={AdminResearchExports} />
