@@ -51,7 +51,7 @@ describe("a set measures the same from any angle", () => {
   it("reports the same peak velocity", () => {
     for (const angle of ANGLES) {
       const metrics = summarizeTrackedSet(benchSet(angle), 61)!;
-      expect(metrics.peakVelocityMps).toBeCloseTo(square.peakVelocityMps, 2);
+      expect(metrics.peakVelocityMps).toBeCloseTo(square.peakVelocityMps!, 2);
     }
   });
 
@@ -68,7 +68,7 @@ describe("a set measures the same from any angle", () => {
     // the truth about this trace.
     for (const angle of ANGLES) {
       const metrics = summarizeTrackedSet(benchSet(angle), 61)!;
-      expect(metrics.barPathDeviationCm).toBeLessThan(1);
+      expect(metrics.barPathDeviationCm!).toBeLessThan(1);
     }
   });
 
