@@ -107,14 +107,25 @@ const SYSTEM = [
 export async function tagPassages(
   passages: Passage[],
   sourceDomains: string[],
+  /**
+   * Called after each group, with how many passages have been filed.
+   *
+   * A textbook is thousands of passages and therefore hundreds of model
+   * calls, which is minutes of work. Without this the caller has nothing to
+   * report and the screen says "Extracting..." for the whole run, which is
+   * indistinguishable from being stuck.
+   */
+  onProgress?: (done: number, total: number) => void,
 ): Promise<TaggedPassage[]> {
   const allowed = sourceDomains.filter(isKnowledgeDomain);
   // Nothing to choose between, or no AI: the source's own domains are the
   // answer, which is what every passage got before this existed.
   if (!aiEnabled || allowed.length === 0 || passages.length === 0) {
+    onProgress?.(passages.length, passages.length);
     return passages.map((p) => ({ ...p, topics: allowed }));
   }
   if (allowed.length === 1) {
+    onProgress?.(passages.length, passages.length);
     // One domain on the book means the tagger has no decision to make, and
     // paying a model to confirm it would be pure waste.
     return passages.map((p) => ({ ...p, topics: allowed }));
@@ -153,6 +164,8 @@ export async function tagPassages(
       // would publish index entries and copyright pages to every assistant.
       byIndex.set(row.index, topics.length > 0 ? [...new Set(topics)] : [UNFILED_TOPIC]);
     }
+
+    onProgress?.(Math.min(i + GROUP_SIZE, passages.length), passages.length);
 
     group.forEach((p, j) => {
       // A group the model did not answer for falls back to the source's

@@ -5234,6 +5234,18 @@ export const knowledgeSources = pgTable(
     // pass blocks the resume it exists to protect. Staleness is the only
     // evidence available that nobody is still working.
     transcribeHeartbeatAt: timestamp("transcribe_heartbeat_at"),
+    // How far the current long job has got, and how far it has to go.
+    //
+    // Generic across both slow phases -- filing passages after a text
+    // extract, and reading pages on a scan -- because from the admin's side
+    // they are the same question: is this moving, and how much is left.
+    // statusDetail says which phase in words; these two make a bar.
+    //
+    // Null when nothing is running. A count rather than a percentage so the
+    // screen can show "1,240 of 1,800", which tells somebody watching a long
+    // ingest far more than "68%".
+    progressDone: integer("progress_done"),
+    progressTotal: integer("progress_total"),
     // The page range the admin asked for, when they asked for one. Null
     // means the whole document. Kept so a resumed run knows where to stop,
     // and so the list can say what was actually read.

@@ -27,6 +27,8 @@ type Source = {
   statusDetail: string | null;
   licenceNote: string | null;
   transcribedThroughPage: number | null;
+  progressDone: number | null;
+  progressTotal: number | null;
   domains: string[];
   passageCount: number;
   createdAt: string;
@@ -73,8 +75,15 @@ export function KnowledgeBaseContent() {
     // A transcription pass writes its progress to the source row, so the
     // list has to re-read to show it moving. Polled only while something is
     // actually running -- an idle knowledge base should not poll at all.
+    // Polled while EITHER long phase runs. Filing passages was left out the
+    // first time, so a textbook ingest showed a frozen row for several
+    // minutes -- indistinguishable from a stuck one.
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((s) => s.status === "transcribing") ? 5000 : false,
+      (query.state.data ?? []).some(
+        (s) => s.status === "transcribing" || s.status === "extracting",
+      )
+        ? 3000
+        : false,
   });
 
   const { data: conflicts = [] } = useQuery<Conflict[]>({
@@ -122,7 +131,10 @@ export function KnowledgeBaseContent() {
         // waiting on a transcription pass the admin starts from the list.
         toast.info(body.message, { duration: 15000 });
       } else {
-        toast.success(`Ingested ${body.passageCount} passage(s) from ${body.pageCount} pages.`);
+        // The passages are still being filed at this point, so the message
+        // says what is happening rather than claiming a finished count that
+        // would be zero.
+        toast.success(body.message ?? "Uploaded.", { duration: 10000 });
       }
       setTitle("");
       setCitation("");
@@ -266,7 +278,13 @@ export function KnowledgeBaseContent() {
               onClick={upload}
               disabled={uploading || !file || !title.trim() || domains.length === 0}
             >
-              {uploading ? "Extracting…" : "Upload and ingest"}
+              {/* "Uploading and reading" rather than "Extracting", because
+                  this phase is now only the upload plus a local text extract
+                  -- the long part (filing passages) happens after the
+                  response and reports its own progress on the source below.
+                  A button that names a phase it is no longer in is how
+                  somebody concludes the app has hung. */}
+              {uploading ? "Uploading and reading…" : "Upload and ingest"}
             </Button>
           </CardContent>
         </Card>
@@ -380,10 +398,8 @@ export function KnowledgeBaseContent() {
                           "No readable text was found. These pages are images, so Claude has to read them."}
                       </p>
                     )}
-                    {s.status === "transcribing" && (
-                      <p className="text-xs text-amber-500">
-                        Reading the pages. {s.statusDetail ?? ""}
-                      </p>
+                    {(s.status === "transcribing" || s.status === "extracting") && (
+                      <IngestProgress source={s} />
                     )}
                     {s.status === "ready" && s.statusDetail && (
                       <p className="text-xs text-muted-foreground">{s.statusDetail}</p>
@@ -1034,6 +1050,54 @@ function PagePreview({ sourceId, page }: { sourceId: number; page: number }) {
   return (
     <div className="flex aspect-[3/4] w-full items-center justify-center bg-muted px-1 text-center text-[9px] leading-tight text-muted-foreground">
       {state === "loading" ? "…" : state === "empty" ? "nothing to read" : "couldn't load"}
+    </div>
+  );
+}
+
+/**
+ * How far a long job has got, as a bar and a count.
+ *
+ * The button said "Extracting..." and nothing else for the whole run. On a
+ * real textbook that is several minutes of silence, which reads exactly like
+ * a hang -- and the natural response to a hang is to reload or upload again,
+ * both of which make it worse.
+ *
+ * Counts as well as a percentage, because "1,240 of 1,800" answers the
+ * question somebody watching actually has: how much is left, and is it
+ * moving. A percentage alone moves too slowly on a long run to look alive.
+ */
+function IngestProgress({ source }: { source: Source }) {
+  const done = source.progressDone ?? 0;
+  const total = source.progressTotal ?? 0;
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : null;
+  const reading = source.status === "transcribing";
+
+  return (
+    <div className="mt-1 space-y-1">
+      <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-amber-500">
+        <span>{reading ? "Reading the pages" : "Filing passages by subject"}</span>
+        {pct != null && <span className="font-semibold tabular-nums">{pct}%</span>}
+        {total > 0 && (
+          <span className="tabular-nums text-muted-foreground">
+            {done.toLocaleString()} of {total.toLocaleString()} {reading ? "pages" : "passages"}
+          </span>
+        )}
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn(
+            "h-full bg-amber-500 transition-all duration-500",
+            // No total yet means the job has started but has not counted its
+            // work. A pulsing full-width bar says "working" without claiming
+            // a progress figure nobody has computed.
+            pct == null && "w-full animate-pulse",
+          )}
+          style={pct != null ? { width: `${pct}%` } : undefined}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        This runs on the server -- you can leave this screen and come back.
+      </p>
     </div>
   );
 }

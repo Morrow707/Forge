@@ -2875,6 +2875,12 @@ ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "licence_note" text;
 
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribed_through_page" integer;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_heartbeat_at" timestamp;
+
+-- Progress on whichever long job is running: filing passages, or reading
+-- pages. Counts rather than a percentage, so the screen can say
+-- "1,240 of 1,800".
+ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "progress_done" integer;
+ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "progress_total" integer;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_from_page" integer;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_to_page" integer;
 

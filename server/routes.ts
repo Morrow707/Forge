@@ -4175,10 +4175,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // needs_vision status; the admin then starts a transcription pass,
       // which is a separate request because it runs for minutes to hours.
       const split = extracted.looksScanned ? [] : splitIntoPassages(extracted.pages);
-      // Tagged per passage, so a book covering more than one subject reaches
-      // the right assistant chapter by chapter rather than all-or-nothing.
-      // See server/passage-tagging.ts.
-      const passages = await tagPassages(split, domains);
 
       // Written only once extraction has succeeded and the file is known not
       // to be a duplicate -- a rejected upload should leave nothing behind on
@@ -4188,6 +4184,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await fs.promises.writeFile(path.join(KNOWLEDGE_SOURCES_DIR, filename), req.file.buffer);
       const stored = `/uploads/knowledge-sources/${filename}`;
 
+      // The source row is created EMPTY and the passages are filed
+      // afterwards, in the background.
+      //
+      // Tagging used to run inside this request. A real textbook is a couple
+      // of thousand passages, which is a couple of hundred model calls and
+      // several minutes -- so the button sat on "Extracting..." with no
+      // signal, and every proxy between a phone and this process was free to
+      // give up on the request long before it finished. An upload that takes
+      // minutes must not be a request that takes minutes.
       const source = await storage.createKnowledgeSource({
         uploadedByUserId: req.user!.id,
         title: parsed.data.title,
@@ -4197,32 +4202,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileHash,
         pageCount: extracted.pageCount,
         domains,
-        passages,
+        passages: [],
       });
 
-      // Contradiction detection now runs on its own after a text ingest,
-      // rather than waiting for somebody to know to press a button on the
-      // source. A disagreement between two books is exactly the thing an
-      // admin cannot find by reading, and a queue nobody knows to fill is a
-      // queue nobody reads.
-      //
-      // Not awaited: it is many model calls over a whole book and the upload
-      // response should not wait for it. Admin-only, like the queue itself --
-      // no coach or athlete ever sees a conflict.
-      if (passages.length > 0) {
-        void storage
-          .detectKnowledgeConflicts(source.id)
-          .catch((err) => recordSystemFailure("ai", "Conflict detection failed after an ingest", { detail: err }));
+      if (split.length > 0) {
+        await storage.setKnowledgeSourceStatus(source.id, "extracting", "Starting...");
+        await storage.setKnowledgeProgress(source.id, 0, split.length);
+
+        // Not awaited. Every exit below writes a terminal status, because a
+        // source left at "extracting" forever looks exactly like one still
+        // working.
+        void (async () => {
+          try {
+            // Filed in chunks so a long run appends as it goes rather than
+            // holding everything until the end -- the same reason the
+            // transcription pass checkpoints. A crash partway leaves the
+            // passages already filed, not nothing.
+            const CHUNK = 120;
+            let filed = 0;
+            for (let i = 0; i < split.length; i += CHUNK) {
+              const slice = split.slice(i, i + CHUNK);
+              const tagged = await tagPassages(slice, domains, (done) => {
+                void storage.setKnowledgeProgress(
+                  source.id,
+                  filed + done,
+                  split.length,
+                  `Filing passages by subject...`,
+                );
+              });
+              filed += await storage.appendKnowledgePassages(source.id, tagged);
+              await storage.setKnowledgeProgress(source.id, filed, split.length);
+            }
+
+            await storage.setKnowledgeProgress(source.id, null, null);
+            await storage.setKnowledgeSourceStatus(
+              source.id,
+              filed > 0 ? "ready" : "failed",
+              filed > 0 ? `${filed} passage(s) ingested.` : "Nothing could be ingested.",
+            );
+
+            if (filed > 0) {
+              void storage
+                .detectKnowledgeConflicts(source.id)
+                .catch((err) =>
+                  recordSystemFailure("ai", "Conflict detection failed after an ingest", {
+                    detail: err,
+                  }),
+                );
+            }
+          } catch (err) {
+            recordSystemFailure("ai", "Filing passages failed after an upload", { detail: err });
+            await storage.setKnowledgeProgress(source.id, null, null);
+            await storage.setKnowledgeSourceStatus(
+              source.id,
+              "failed",
+              "Filing passages failed. Delete this source and upload it again.",
+            );
+          }
+        })();
       }
 
       res.status(201).json({
         ...source,
-        passageCount: passages.length,
+        passageCount: 0,
+        pendingPassages: split.length,
         looksScanned: extracted.looksScanned,
         message: extracted.looksScanned
           ? "This PDF has almost no readable text, so its pages are images rather than text. " +
             "Nothing has been ingested yet. Start a transcription pass to have Claude read the pages."
-          : undefined,
+          : `Reading ${extracted.pageCount} page(s). Filing ${split.length} passage(s) by subject now -- ` +
+            "progress shows on the source below, and you can leave this screen.",
       });
     },
   );
@@ -4409,10 +4458,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Doubles as the liveness signal between batches: a long run of
             // unreadable pages produces no checkpoint, and without this the
             // heartbeat would go stale while the pass was still working.
-            void storage.setTranscriptionHeartbeat(
-              id,
-              `Read ${p.pagesDone} of ${p.pageCount} page(s).`,
-            );
+            void storage.setTranscriptionHeartbeat(id, "Reading pages...");
+            void storage.setKnowledgeProgress(id, p.pagesDone, p.pageCount);
           },
           // Written batch by batch, which is what makes the run survivable.
           onBatch: async ({ pages, throughPage }) => {
@@ -4441,6 +4488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
         }
 
+        await storage.setKnowledgeProgress(id, null, null);
         await storage.setKnowledgeSourceStatus(
           id,
           written > 0 ? "ready" : "needs_vision",
@@ -4451,6 +4499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
       } catch (err) {
         recordSystemFailure("ai", "A knowledge source transcription pass failed", { detail: err });
+        await storage.setKnowledgeProgress(id, null, null);
         await storage.setKnowledgeSourceStatus(
           id,
           "needs_vision",

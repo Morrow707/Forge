@@ -22244,6 +22244,30 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return row ?? null;
   },
 
+  /**
+   * Progress on whichever long job is running.
+   *
+   * Counts, not a percentage: "1,240 of 1,800" tells somebody watching a long
+   * ingest far more than "68%", and the screen can still compute the bar.
+   * Passing nulls clears it, which is what the terminal states do so a
+   * finished source does not sit showing a full bar forever.
+   */
+  async setKnowledgeProgress(
+    id: number,
+    done: number | null,
+    total: number | null,
+    statusDetail?: string | null,
+  ) {
+    await db
+      .update(knowledgeSources)
+      .set({
+        progressDone: done,
+        progressTotal: total,
+        ...(statusDetail === undefined ? {} : { statusDetail }),
+      })
+      .where(eq(knowledgeSources.id, id));
+  },
+
   /** Liveness only -- no checkpoint move, so it is safe to call every page. */
   async setTranscriptionHeartbeat(id: number, statusDetail?: string) {
     await db
