@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   dominantAxisFrame,
   dominantAxisProjection,
+  repAmplitudeGateCm,
   segmentPhases,
   summarizeTrackedSet,
 } from "./bar-tracking";
@@ -161,5 +162,63 @@ describe("a slow wander does not become the movement axis", () => {
     const driftingSwing =
       Math.max(...drifting.along.slice(0, 200)) - Math.min(...drifting.along.slice(0, 200));
     expect(driftingSwing).toBeCloseTo(cleanRange, 1);
+  });
+});
+
+describe("repAmplitudeGateCm", () => {
+  const HEIGHT_IN = 70;
+
+  it("puts the bench gate under even an arched, wide-grip rep", () => {
+    // Published one-way bench travel is 14-19in for an average adult, but a pronounced arch with
+    // a maximum-width grip can cut it to 6-10in (15-25cm). A gate inside that range rejects real
+    // reps, which is the failure this replaces.
+    const gate = repAmplitudeGateCm("horizontal_press_or_row", HEIGHT_IN);
+    expect(gate).toBeLessThan(15);
+    expect(gate).toBeGreaterThanOrEqual(8);
+  });
+
+  it("is lower than the flat 20cm it replaces for a bench", () => {
+    expect(repAmplitudeGateCm("horizontal_press_or_row", HEIGHT_IN)).toBeLessThan(
+      repAmplitudeGateCm(null, HEIGHT_IN),
+    );
+  });
+
+  it("asks more of a squat than of a bench, because a squat moves further", () => {
+    expect(repAmplitudeGateCm("squat", HEIGHT_IN)).toBeGreaterThan(
+      repAmplitudeGateCm("horizontal_press_or_row", HEIGHT_IN),
+    );
+  });
+
+  it("scales with the athlete", () => {
+    expect(repAmplitudeGateCm("squat", 76)).toBeGreaterThan(repAmplitudeGateCm("squat", 62));
+  });
+
+  it("never drops to a wobble, even for the smallest movements", () => {
+    // A calf raise's impossibility floor is 0.01 of height, under 2cm. That is noise, not a rep.
+    expect(repAmplitudeGateCm("ankle_or_shrug", HEIGHT_IN)).toBeGreaterThanOrEqual(8);
+  });
+
+  it("keeps the old flat gate when the movement is unknown", () => {
+    expect(repAmplitudeGateCm(null, HEIGHT_IN)).toBeCloseTo(20 * (HEIGHT_IN / 69), 5);
+  });
+
+  it("finds the reps of an 18-inch bench press that a 20cm gate would have merged", () => {
+    // Scott's actual set: about 18in each way, ten reps in thirty seconds. Simulated here at a
+    // scale read 60% too small, which is what a calibration resolving on a fifth of the frames
+    // does -- 46cm of real travel arriving as 18cm, just under the flat gate.
+    const underRead = benchSet(0, 0.18);
+    const flatGate = summarizeTrackedSet(underRead, 61, 70)!;
+    const movementGate = summarizeTrackedSet(
+      underRead,
+      61,
+      70,
+      undefined,
+      [],
+      1,
+      false,
+      "horizontal_press_or_row",
+    )!;
+    expect(flatGate.repBreakdown.length).toBeLessThan(3);
+    expect(movementGate.repBreakdown.length).toBeGreaterThanOrEqual(8);
   });
 });

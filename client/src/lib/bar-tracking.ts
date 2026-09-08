@@ -817,6 +817,37 @@ export function heightScaledAmplitudeCm(baseCm: number, heightIn?: number | null
 
 const BASE_MIN_REP_AMPLITUDE_CM = 20;
 
+// Never let a movement-derived gate fall so low that ordinary tracking wobble reads as a rep.
+// The fractions below are "physically impossible under this" floors, and for the smallest
+// movements (a calf raise at 0.01 of height) that is under 2cm, which is noise.
+const MIN_REP_AMPLITUDE_FLOOR_CM = 8;
+
+/**
+ * The smallest reversal that counts as a rep, for THIS movement on THIS athlete.
+ *
+ * One flat 20cm was a compromise that fits nothing. A squat moves 50-70cm and a bench press
+ * moves 36-48cm one way for an average adult -- but grip width, arm length, chest depth and a
+ * powerlifting arch all cut into that, and an arched wide-grip bench can legitimately travel
+ * as little as 15-25cm. A 20cm gate sits inside that range, so it can reject real reps outright,
+ * and it sits close enough to the bottom of an ordinary bench that any under-read of scale
+ * pushes real reps under it. That is the shape of the failure seen on real sets: ten reps
+ * pressed, two counted, the rest merged into their neighbours.
+ *
+ * MIN_ROM_FRACTION_OF_HEIGHT already answers this question per movement -- it is the
+ * anthropometric floor below which a reading is not a small rep but a broken scale. Reusing it
+ * keeps one table as the single statement of how far each lift moves, instead of a second set of
+ * numbers to drift out of step with it. For a 5'10" athlete this puts the bench gate near 14cm,
+ * under even an extreme arch, while still discarding anything that could only be wobble.
+ */
+export function repAmplitudeGateCm(romKind: string | null, heightIn?: number | null): number {
+  if (!romKind || !heightIn || heightIn <= 0) {
+    return heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
+  }
+  const fraction = MIN_ROM_FRACTION_OF_HEIGHT[romKind] ?? DEFAULT_MIN_ROM_FRACTION;
+  const heightCm = heightIn * 2.54;
+  return Math.max(MIN_REP_AMPLITUDE_FLOOR_CM, heightCm * fraction);
+}
+
 // Turns a raw pixel-space trace for one set into real-world metrics. Returns
 // null when there isn't enough signal to say anything meaningful (marker
 // lost for most of the take, or the athlete stopped before moving).
@@ -887,9 +918,13 @@ export function summarizeTrackedSet(
   // within the set, so they work identically with or without a scale -- and duplicating them
   // into a parallel function would be how the two copies drift apart.
   relativeSegmentation = false,
+  // Which movement this is, in the same vocabulary implausibleRangeOfMotion already uses (see
+  // romBucketForExercise). Optional, and null keeps the old flat gate, so every existing caller
+  // behaves exactly as before until it passes one.
+  romKind: string | null = null,
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
-  const minRepAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_REP_AMPLITUDE_CM, heightIn);
+  const minRepAmplitudeCm = repAmplitudeGateCm(romKind, heightIn);
 
   // Repair single-frame implausible-acceleration glitches before anything
   // downstream (smoothing, phase segmentation, bar-path deviation) ever

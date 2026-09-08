@@ -955,6 +955,12 @@ export function AvBarTrackerDialog({
       firstMoveForExercise(exerciseName),
       rejectionEvents,
       positionScaleCorrection ?? 1,
+      false,
+      // The rep gate now comes from this movement's own range of motion rather than one flat
+      // 20cm for every lift -- see repAmplitudeGateCm. Same bucket implausibleRangeOfMotion is
+      // given below, so the floor a rep has to clear and the floor below which a reading is
+      // called impossible are stated once, in one table.
+      romBucketForExercise(exerciseName),
     );
     if (!metrics) {
       const message = "Couldn't get a clean read -- make sure the bar stays in frame throughout the set.";
