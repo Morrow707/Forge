@@ -125,3 +125,57 @@ describe("removing a page range", () => {
     expect(left[0].pageNumber).toBe(10);
   });
 });
+
+describe("the source list returns everything the screen renders", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it("includes progress, licence and resume fields, not just the basics", async () => {
+    // Each of these was declared in the client's type and missing from the
+    // server's select, so a whole feature typechecked, shipped and did
+    // nothing: the progress bar had no counts, the licence never showed, and
+    // the transcribe dialog could not tell a resumable source from a fresh
+    // one.
+    const admin = await makeCoach({ role: "admin" });
+    const source = await storage.createKnowledgeSource({
+      uploadedByUserId: admin.id,
+      title: "Fielded Book",
+      licenceNote: "Internal use only",
+      filePath: null,
+      fileHash: `hash5-${Date.now()}`,
+      pageCount: 400,
+      domains: ["strength"],
+      initialStatus: "extracting",
+      passages: [],
+    });
+    await storage.setKnowledgeProgress(source.id, 240, 1800, "Filing passages by subject...");
+    await storage.setTranscriptionCheckpoint(source.id, 120);
+
+    const row = (await storage.listKnowledgeSources()).find((r) => r.id === source.id)!;
+    expect(row.progressDone).toBe(240);
+    expect(row.progressTotal).toBe(1800);
+    expect(row.licenceNote).toBe("Internal use only");
+    expect(row.transcribedThroughPage).toBe(120);
+    expect(row.status).toBe("extracting");
+  });
+
+  it("starts a text ingest as extracting, never as needs_vision", async () => {
+    // Created as needs_vision and corrected a moment later, a text PDF
+    // flashed "No readable text was found" while its passages were being
+    // filed -- the opposite of the truth, and the message an admin acts on.
+    const admin = await makeCoach({ role: "admin" });
+    const source = await storage.createKnowledgeSource({
+      uploadedByUserId: admin.id,
+      title: "Text Book",
+      filePath: null,
+      fileHash: `hash6-${Date.now()}`,
+      pageCount: 100,
+      domains: ["strength"],
+      initialStatus: "extracting",
+      passages: [],
+    });
+    const row = (await storage.listKnowledgeSources()).find((r) => r.id === source.id)!;
+    expect(row.status).toBe("extracting");
+  });
+});

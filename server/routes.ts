@@ -4051,12 +4051,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 400-page book against its neighbours is a couple of thousand model calls,
   // and that belongs behind a button with a known cost rather than hidden in
   // an upload.
+  /**
+   * Starts a contradiction sweep over a source.
+   *
+   * Returns immediately and runs in the background, for the same reason the
+   * ingest does: this is one model call per passage that has a close
+   * neighbour, so on a 2,900-passage textbook it is hundreds of calls and
+   * several minutes. Held open as a single request it would time out at a
+   * proxy and the admin would see a failure for work that was actually
+   * running.
+   */
   app.post("/api/admin/knowledge-sources/:id/detect-conflicts", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
-    const result = await storage.detectKnowledgeConflicts(id);
-    if (result.skipped) return res.status(422).json({ message: result.skipped });
-    res.json(result);
+
+    const source = await storage.getKnowledgeSource(id);
+    if (!source) {
+      // A source that is genuinely gone -- almost always a row the screen
+      // still shows after a replace or a delete. Says so, rather than the
+      // bare "Source not found" that reads like a server fault.
+      return res.status(404).json({
+        message: "That source no longer exists. The list has been refreshed.",
+        gone: true,
+      });
+    }
+
+    res.status(202).json({ ok: true, started: true });
+
+    void (async () => {
+      try {
+        await storage.setKnowledgeProgress(id, 0, null, "Checking for contradictions...");
+        const result = await storage.detectKnowledgeConflicts(id);
+        await storage.setKnowledgeProgress(
+          id,
+          null,
+          null,
+          result.skipped
+            ? result.skipped
+            : `Checked ${result.checked} passage(s); found ${result.found} contradiction(s).`,
+        );
+      } catch (err) {
+        recordSystemFailure("ai", "Conflict detection failed", { detail: err });
+        await storage.setKnowledgeProgress(id, null, null, "The contradiction check failed.");
+      }
+    })();
   });
 
   app.get("/api/admin/knowledge-conflicts", requireRole("admin"), async (req, res) => {
@@ -4224,11 +4262,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pageCount: extracted.pageCount,
         domains,
         passages: [],
+        // Starts in the phase it is actually in. Created as "needs_vision"
+        // and corrected a moment later, a text PDF flashed "No readable text
+        // was found" on the admin's screen while its passages were being
+        // filed -- the opposite of the truth, and the message somebody would
+        // act on.
+        initialStatus: extracted.looksScanned ? "needs_vision" : "extracting",
       });
 
       if (split.length > 0) {
-        await storage.setKnowledgeSourceStatus(source.id, "extracting", "Starting...");
-        await storage.setKnowledgeProgress(source.id, 0, split.length);
+        await storage.setKnowledgeProgress(source.id, 0, split.length, "Starting...");
 
         // Not awaited. Every exit below writes a terminal status, because a
         // source left at "extracting" forever looks exactly like one still

@@ -87,6 +87,10 @@ export function KnowledgeBaseContent() {
         : false,
   });
 
+  const anyJobRunning = sources.some(
+    (s) => s.status === "transcribing" || s.status === "extracting",
+  );
+
   const { data: conflicts = [] } = useQuery<Conflict[]>({
     queryKey: ["/api/admin/knowledge-conflicts"],
     queryFn: () => getJson("/api/admin/knowledge-conflicts"),
@@ -157,6 +161,10 @@ export function KnowledgeBaseContent() {
       setLicenceNote("");
       setFile(null);
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
+      // Coverage reads the same passages and was drifting out of step after
+      // a replace -- the table kept showing the old book's numbers next to
+      // the new book's row.
+      qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-coverage"] });
     } catch {
       toast.error("Could not reach the server.");
     } finally {
@@ -195,14 +203,26 @@ export function KnowledgeBaseContent() {
   const detect = useMutation({
     mutationFn: (id: number) =>
       apiRequest("POST", `/api/admin/knowledge-sources/${id}/detect-conflicts`),
-    onSuccess: async (res) => {
-      const body = await res.json();
-      toast.success(
-        `Checked ${body.checked} passage(s) with a close match; found ${body.found} conflict(s).`,
+    onSuccess: () => {
+      // Started, not finished. The sweep is one model call per passage with
+      // a close neighbour, so on a textbook it runs for minutes; claiming a
+      // count here would be inventing one.
+      toast.info(
+        "Checking for contradictions. This runs in the background and takes a while on a big " +
+          "book -- anything it finds appears in the queue above.",
+        { duration: 10000 },
       );
+      qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-conflicts"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not run detection"),
+    onError: (err: ApiError) => {
+      toast.error(err.message || "Could not run detection");
+      // A stale row is the usual cause -- the source was replaced or deleted
+      // and the screen still showed it. Refresh so the next tap is not the
+      // same failure.
+      qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
+      qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-coverage"] });
+    },
   });
 
   return (
@@ -587,6 +607,9 @@ function CoverageCard() {
   >({
     queryKey: ["/api/admin/knowledge-coverage"],
     queryFn: () => getJson("/api/admin/knowledge-coverage"),
+    // Follows an ingest as it fills, so the table climbs alongside the bar
+    // rather than sitting on the previous book's numbers until a reload.
+    refetchInterval: 5000,
   });
 
   const empty = coverage.filter((c) => c.passages === 0);

@@ -21929,6 +21929,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     fileHash: string;
     pageCount: number;
     domains: string[];
+    initialStatus?: "extracting" | "ready" | "failed" | "needs_vision" | "transcribing";
     passages: {
       pageNumber: number;
       endPageNumber: number;
@@ -21949,7 +21950,14 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           fileHash: input.fileHash,
           pageCount: input.pageCount,
           domains: input.domains,
-          status: input.passages.length > 0 ? "ready" : "needs_vision",
+          // The caller says what state this is starting in. Defaulting to
+          // "needs_vision" whenever the passage list was empty was wrong for
+          // the async path: a text PDF whose passages are about to be filed
+          // was briefly labelled "No readable text was found", which is the
+          // opposite of what was happening and the message an admin would
+          // act on.
+          status:
+            input.initialStatus ?? (input.passages.length > 0 ? "ready" : "needs_vision"),
         })
         .returning();
 
@@ -22405,6 +22413,18 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         statusDetail: knowledgeSources.statusDetail,
         domains: knowledgeSources.domains,
         createdAt: knowledgeSources.createdAt,
+        // Everything the screen actually renders.
+        //
+        // These four were missing, and each one silently disabled a feature
+        // that looked built: the progress bar had no counts to draw, the
+        // licence note never appeared, and the transcribe dialog could not
+        // tell a resumable source from a fresh one. A select list that omits
+        // a column the client's own type declares is a whole feature that
+        // typechecks, ships, and does nothing.
+        licenceNote: knowledgeSources.licenceNote,
+        transcribedThroughPage: knowledgeSources.transcribedThroughPage,
+        progressDone: knowledgeSources.progressDone,
+        progressTotal: knowledgeSources.progressTotal,
         // Counted with a real GROUP BY rather than a correlated subquery
         // built from interpolated table references.
         //
