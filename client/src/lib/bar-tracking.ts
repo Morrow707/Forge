@@ -965,9 +965,26 @@ export function summarizeTrackedSet(
   const confidences = points.map((p) => p.confidence ?? 1);
 
   const minAmplitudeM = minRepAmplitudeCm / 100;
-  const phases = relativeSegmentation
-    ? (segmentPhasesRelative(ySmoothed) ?? [])
-    : segmentPhases(ySmoothed, minAmplitudeM);
+  // THE SET'S OWN REPS SET THE THRESHOLD, NOT A CONSTANT.
+  //
+  // A rep is a there-and-back along one path, so its eccentric and its concentric cover the same
+  // distance, and reps within a set are close to identical. That makes the set self-calibrating:
+  // once a handful of reversals are visible, their typical size says what a rep is on THIS take,
+  // for THIS athlete, at whatever scale the camera happened to resolve. No constant can know
+  // that -- a 20cm gate is inside the range of a legitimate arched bench press and well under a
+  // squat, and it is only as meaningful as the metres it is stated in.
+  //
+  // segmentPhasesRelative has done exactly this since the scale-free path was built, and was
+  // reachable only when calibration failed COMPLETELY. A scale that resolved on a fifth of the
+  // frames counted as success and went back to the constant. So the more useful of the two
+  // gates was reserved for the takes with the least information in them.
+  //
+  // It leads now, on every take, and returns null when there are too few reversals to say what
+  // typical means -- a single or double rep set, or a trace with nothing in it. The absolute
+  // gate is the fallback for exactly that case, which is the one where a constant is all
+  // anybody has.
+  const phases =
+    segmentPhasesRelative(ySmoothed) ?? segmentPhases(ySmoothed, minAmplitudeM);
   if (phases.length === 0) return null;
 
   const phaseStats = phases.map((phase) => {

@@ -207,18 +207,19 @@ describe("repAmplitudeGateCm", () => {
     // scale read 60% too small, which is what a calibration resolving on a fifth of the frames
     // does -- 46cm of real travel arriving as 18cm, just under the flat gate.
     const underRead = benchSet(0, 0.18);
-    const flatGate = summarizeTrackedSet(underRead, 61, 70)!;
-    const movementGate = summarizeTrackedSet(
-      underRead,
-      61,
-      70,
-      undefined,
-      [],
-      1,
-      false,
-      "horizontal_press_or_row",
-    )!;
-    expect(flatGate.repBreakdown.length).toBeLessThan(3);
-    expect(movementGate.repBreakdown.length).toBeGreaterThanOrEqual(8);
+    // The constant gate, applied directly, is what used to decide this and what still decides it
+    // on a set too short for the relative gate to have anything to average.
+    const flatGate = segmentPhases(
+      underRead.map((p) => p.y),
+      repAmplitudeGateCm(null, 70) / 100,
+    );
+    const movementGate = segmentPhases(
+      underRead.map((p) => p.y),
+      repAmplitudeGateCm("horizontal_press_or_row", 70) / 100,
+    );
+    expect(flatGate.length).toBeLessThan(3);
+    expect(movementGate.length).toBeGreaterThanOrEqual(16);
+    // And the whole pipeline, where the set's own reps now lead, finds them regardless.
+    expect(summarizeTrackedSet(underRead, 61, 70)!.repBreakdown.length).toBeGreaterThanOrEqual(8);
   });
 });

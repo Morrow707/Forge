@@ -4,6 +4,7 @@ import {
   toScaleFreeMetrics,
   normalizeTraceScale,
   type TrackedPoint,
+  segmentPhases,
 } from "./bar-tracking";
 
 // Reps as a triangle wave, each slightly smaller than the last the way a real set fatigues.
@@ -74,10 +75,18 @@ describe("the scale-free path", () => {
 
   // The failure this path replaces: an absolute 20cm rep gate applied to a trace with no scale.
   it("counts reps the absolute centimetre gate cannot find", () => {
+    // Compared against segmentPhases itself rather than against summarizeTrackedSet with the
+    // relative flag off. That flag chose between two gates; the set's own typical rep now leads
+    // on every take and the constant is only the fallback, so there is no longer an "absolute
+    // path" through summarizeTrackedSet to contrast with. The property being tested is the same
+    // one, stated against the thing that actually still differs.
     const unscaled = syntheticSet(6, 0.02);
-    const absolute = summarizeTrackedSet(unscaled, undefined, undefined, undefined, [], 1, false);
+    const absolute = segmentPhases(
+      unscaled.map((p) => p.y),
+      0.2,
+    );
     const relative = analyse(unscaled)!;
-    expect(absolute?.repBreakdown.length ?? 0).toBeLessThan(relative.repCount);
+    expect(absolute.length).toBeLessThan(relative.repCount);
     expect(relative.repCount).toBeGreaterThanOrEqual(6);
   });
 
