@@ -18840,6 +18840,11 @@ ${catalog}`;
     // client still sent back once the new rows are in.
     let priorVideoUrls = new Set<string>();
 
+    // What the save actually WROTE, which is not the same as what the client sent -- a url the
+    // client omitted is preserved above. The orphan sweep at the bottom diffs against this, so
+    // it can only ever delete a file nothing points at any more.
+    const retainedVideoUrls = new Set<string>();
+
     // Collected during the entries loop below, returned alongside the log
     // so the client can show a real celebration for a newly-set PR the
     // moment this save lands -- same "collect during the transaction,
@@ -19081,7 +19086,24 @@ ${catalog}`;
           await tx.insert(workoutSetEntries).values(
             entry.sets.map((s) => {
               const prior = priorVideoByKey.get(`${exerciseKey}:${s.setNumber}`);
-              const isSameVideo = Boolean(s.formCheckVideoUrl) && prior?.url === s.formCheckVideoUrl;
+              // AN OMITTED VIDEO URL MEANS "UNCHANGED", NOT "DELETE IT".
+              //
+              // A video is attached to a set out of band: the clip uploads in the background and
+              // its URL is written by attachVideoToLoggedSet, separately from whatever the
+              // client has in hand. So a client that logs the NEXT set from state it built
+              // before that attach landed sends this set back with no video url at all -- and
+              // this resubmission then wrote null over the column and, at the bottom of this
+              // function, deleted the file off disk as an orphan. Set 1's clip disappeared the
+              // moment Set 2 was saved, which is exactly what a coach reported.
+              //
+              // The same reasoning was already applied to the capture columns just above (see
+              // priorCaptureByKey) and simply never reached the video. Omission is now
+              // preserved. Removing a video is still possible, because a retake sends a
+              // different url and the explicit remove path clears it directly -- what is no
+              // longer possible is losing footage by saving an unrelated set.
+              const effectiveVideoUrl = s.formCheckVideoUrl ?? prior?.url ?? null;
+              const isSameVideo = Boolean(effectiveVideoUrl) && prior?.url === effectiveVideoUrl;
+              if (effectiveVideoUrl) retainedVideoUrls.add(effectiveVideoUrl);
               const weightNum = s.weight ? parseFloat(s.weight) : NaN;
               const priorBest = priorBestByKey.get(`${entryWeightUnit}-${s.reps ?? ""}`);
               // Both sides in pounds -- the stored bests are, and this set
@@ -19136,10 +19158,10 @@ ${catalog}`;
                 romCm: s.romCm ?? null,
                 meanEai: s.meanEai ?? null,
                 velocityLossPercent: s.velocityLossPercent ?? null,
-                formCheckVideoUrl: s.formCheckVideoUrl ?? null,
+                formCheckVideoUrl: effectiveVideoUrl,
                 formCheckFlag: s.formCheckFlag ?? null,
                 videoFavorited: s.formCheckVideoUrl ? (s.videoFavorited ?? false) : false,
-                videoUploadedAt: s.formCheckVideoUrl ? (isSameVideo ? prior!.uploadedAt : new Date()) : null,
+                videoUploadedAt: effectiveVideoUrl ? (isSameVideo ? prior!.uploadedAt : new Date()) : null,
                 jumpHeightCm: s.jumpHeightCm ?? null,
                 jumpDistanceCm: s.jumpDistanceCm ?? null,
                 groundContactSeconds: s.groundContactSeconds ?? null,
@@ -19193,11 +19215,12 @@ ${catalog}`;
     // video URL that isn't still referenced by what was just saved is
     // orphaned: removed, retaken, or its whole set deleted. See
     // priorVideoUrls' own comment above.
-    const newVideoUrls = new Set(
-      input.entries.flatMap((e) => e.sets.map((s) => s.formCheckVideoUrl).filter((u): u is string => !!u)),
-    );
+    // Diffed against what was written, not against the raw request. Built from the request, this
+    // deleted every video the client had merely not mentioned -- including ones this very save
+    // had just preserved in the database, leaving a row pointing at a file that no longer
+    // existed. That is the "File not found" a coach hits on a set that looks fine in the list.
     for (const url of priorVideoUrls) {
-      if (!newVideoUrls.has(url)) await deleteUploadedFile(url);
+      if (!retainedVideoUrls.has(url)) await deleteUploadedFile(url);
     }
 
     return { ...log, newPRs };
