@@ -146,6 +146,11 @@ import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
 import { KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain, knowledgeDomainLabel } from "@shared/knowledge-domains";
 import { answerStyleInstruction, isAnswerRegister, isAnswerLength } from "@shared/answer-style";
 import { renderNormsForPrompt } from "@shared/cohort-norms";
+import {
+  ASK_INSTEAD_OF_GUESSING,
+  ASK_CLARIFYING_QUESTION_TOOL,
+  parseClarifyingQuestion,
+} from "@shared/clarifying-questions";
 import { normsForAthlete } from "./cohort-norms";
 import { normalizeInjuryRegion, INJURY_REGIONS, type InjuryRegion } from "@shared/injury-taxonomy";
 import {
@@ -14174,6 +14179,26 @@ ${athleteContext}
       { text: staticSystem, cache: true },
       { text: dynamicSystem },
     ];
+
+    // The assistant may ask instead of guessing. Structural rather than a
+    // prose instruction: a question written into an answer is rendered as
+    // advice, and the athlete cannot tell the two apart. See
+    // shared/clarifying-questions.ts for why the guidance spends most of its
+    // words on when NOT to ask.
+    const result = await askClaudeWithTools<Record<string, unknown>>(
+      [...(Array.isArray(system) ? system : [{ text: system }]), { text: `\n\n${ASK_INSTEAD_OF_GUESSING}` }],
+      question,
+      [ASK_CLARIFYING_QUESTION_TOOL],
+      { maxTokens: 500, feature: "nutrition-answer" },
+    );
+
+    if (result?.toolName === "ask_clarifying_question") {
+      const parsed = parseClarifyingQuestion(result.input);
+      // A malformed question falls through to a normal answer rather than
+      // showing the athlete a broken one. Asking badly is worse than not
+      // asking.
+      if (parsed) return { question: parsed };
+    }
 
     const text = await askClaude(system, [{ role: "user", content: question }], { maxTokens: 500, feature: "nutrition-answer" });
     if (!text?.trim()) {

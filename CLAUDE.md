@@ -93,6 +93,48 @@
 - Only back squat, Pendlay row, bench press and box jump have been tested
   against real lifts. Everything else is unvalidated.
 
+## The AI knowledge library
+
+- **Domain tags live on the PASSAGE, not the source.** A strength and
+  conditioning textbook has a nutrition chapter in it; tagging the file
+  forced a choice between hiding that chapter from the nutrition assistant
+  and handing it every page of bar-path material. Retrieval matches
+  `knowledge_passages.topics` where set and falls back to the source's
+  domains where not, so pre-tagging passages keep working. Do not "simplify"
+  this back to a source-level filter.
+- **Transcription is checkpointed and must stay that way.** Pages are written
+  and `transcribedThroughPage` moved after every batch. The first build held
+  400 pages in memory and wrote at the end, so a redeploy at page 390 lost
+  the run and charged twice. The checkpoint advances even for a batch that
+  produced nothing, or unreadable pages are retried on every resume forever.
+- **Transcription and conflict detection run on the cheap model.** Both are
+  mechanical and both are once-per-page or once-per-passage across a whole
+  book. Moving either to the expensive model multiplies a real bill.
+- **Usage is recorded in `callAnthropic` and nowhere else.** That is the one
+  point every model call passes through, so a new feature cannot spend money
+  invisibly. The write is best-effort and never awaited -- the opposite of
+  the aggregate-data access log, which is awaited because it doubles as a
+  budget. Nothing depends on this counter.
+
+## Population norms
+
+- **`NORM_MIN_COHORT` is 30 and is not the anonymity floor.** Five stops a
+  chart identifying somebody; thirty is the minimum for a percentile to mean
+  anything. Different questions, do not merge them.
+- **Norms are rebuilt wholesale every night, never updated in place.** That
+  is what lets an athlete change age band on their birthday with no
+  bookkeeping. An incremental update reintroduces exactly the maintenance
+  the design removes.
+- **A cohort too thin to widen returns nothing.** A percentile from eleven
+  people is a different kind of claim, not a weaker one. Every rendering
+  carries the sample size, which dimensions were dropped, and the fact that
+  Forge's athletes are not a random sample of anything.
+- **Nutrition uses norms for description only.** The cohort says what an
+  athlete of this description looks like; the published guidance supplies the
+  recommendation. Intake norms come from self-reported food logs, so deriving
+  a target from them recommends under-fuelling back to a population that is
+  already under-fuelling.
+
 ## Athlete data leaving the platform
 
 Added 2026-09-07, after an audit found the admin analytics surfaces were

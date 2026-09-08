@@ -114,6 +114,15 @@ export function NutritionPanel({
   const [form, setForm] = useState<FormState>(emptyForm());
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
+  // A clarifying question the assistant asked instead of answering. Held
+  // apart from `answer` on purpose: rendering a question in the answer bubble
+  // is exactly the confusion the structured shape exists to prevent -- the
+  // athlete would read "in season or off season?" as advice.
+  const [pendingQuestion, setPendingQuestion] = useState<{
+    question: string;
+    options: string[];
+    because: string;
+  } | null>(null);
   const [goalChoice, setGoalChoice] = useState<string>("");
   const [goalNote, setGoalNote] = useState("");
 
@@ -186,7 +195,13 @@ export function NutritionPanel({
       return res.json();
     },
     onSuccess: (result) => {
-      setAnswer(result.answer);
+      if (result.question) {
+        setPendingQuestion(result.question);
+        setAnswer(null);
+        return;
+      }
+      setPendingQuestion(null);
+      setAnswer(result.answer ?? null);
     },
     // A 402 here is a permanent, expected state for a Free Agent who hasn't paid, not a failure
     // -- the same distinction the AI chat panels already make. A red error toast reads as "the
@@ -378,6 +393,34 @@ export function NutritionPanel({
                   {askMutation.isPending ? "Thinking..." : "Ask"}
                 </Button>
               </div>
+              {pendingQuestion && (
+                <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+                  <p className="font-medium">{pendingQuestion.question}</p>
+                  {pendingQuestion.because && (
+                    <p className="text-xs text-muted-foreground">{pendingQuestion.because}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {pendingQuestion.options.map((option) => (
+                      <Button
+                        key={option}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          // The original question travels with the answer, so
+                          // the second turn has the context of the first. Sending
+                          // the option alone would arrive as a bare fragment.
+                          const combined = `${question} (${pendingQuestion.question} ${option})`;
+                          setQuestion(combined);
+                          setPendingQuestion(null);
+                          askMutation.mutate();
+                        }}
+                      >
+                        {option}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {answer && (
                 <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
                   <Apple className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
