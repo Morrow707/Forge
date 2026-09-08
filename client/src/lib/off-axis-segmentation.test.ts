@@ -4,6 +4,7 @@ import {
   dominantAxisProjection,
   repAmplitudeGateCm,
   movementAxisFromGrip,
+  concentricIsUpward,
   segmentPhases,
   summarizeTrackedSet,
 } from "./bar-tracking";
@@ -297,5 +298,86 @@ describe("movementAxisFromGrip", () => {
     const apparent = Math.max(...points.map((p) => p.y)) - Math.min(...points.map((p) => p.y));
     expect(apparent).toBeLessThan(0.15);
     expect(Math.max(...along) - Math.min(...along)).toBeCloseTo(0.36, 2);
+  });
+});
+
+/** A grinding set: the press up is SLOW and the lowering is quick. Real, and the exact shape
+ *  the "faster half is the concentric" heuristic gets backwards. */
+function grindingSet(barDeg = 0, romM = 0.36, gripM = 0.8) {
+  const bar = (barDeg * Math.PI) / 180;
+  const push = bar + Math.PI / 2;
+  const pairs: { left: { x: number; y: number }; right: { x: number; y: number } }[] = [];
+  const points: { x: number; y: number; z: number; t: number; confidence: number }[] = [];
+  const fps = 60;
+  const downSeconds = 0.8;
+  const upSeconds = 2.6;
+  let t = 0;
+  const emit = (along: number) => {
+    const cx = along * Math.cos(push);
+    const cy = along * Math.sin(push);
+    const hx = (gripM / 2) * Math.cos(bar);
+    const hy = (gripM / 2) * Math.sin(bar);
+    pairs.push({ left: { x: cx - hx, y: cy - hy }, right: { x: cx + hx, y: cy + hy } });
+    points.push({ x: cx, y: cy, z: 0, t: t * 1000, confidence: 0.9 });
+    t += 1 / fps;
+  };
+  for (let rep = 0; rep < 8; rep++) {
+    // Lockout down to the chest, quickly.
+    for (let f = 0; f < downSeconds * fps; f++) emit(romM * (1 - f / (downSeconds * fps)));
+    // Chest back to lockout, slowly.
+    for (let f = 0; f < upSeconds * fps; f++) emit(romM * (f / (upSeconds * fps)));
+  }
+  return { pairs, points };
+}
+
+describe("a slow concentric is still the concentric", () => {
+  it("labels a grinding press by direction, not by which half was faster", () => {
+    const { pairs, points } = grindingSet();
+    const metrics = summarizeTrackedSet(
+      points,
+      61,
+      70,
+      undefined,
+      [],
+      1,
+      false,
+      "horizontal_press_or_row",
+      movementAxisFromGrip(pairs),
+    )!;
+    // The press up takes 2.6s and the lowering 0.8s. Reading the slow half as the concentric is
+    // the whole point; the speed heuristic would report these the other way round.
+    expect(metrics.concentricSeconds).toBeGreaterThan(metrics.eccentricSeconds);
+    expect(metrics.concentricSeconds).toBeGreaterThan(2);
+    expect(metrics.eccentricSeconds).toBeLessThan(1.5);
+  });
+
+  it("gets it backwards without the bar's direction, which is the bug", () => {
+    const { points } = grindingSet();
+    const guessed = summarizeTrackedSet(points, 61, 70)!;
+    expect(guessed.concentricSeconds).toBeLessThan(guessed.eccentricSeconds);
+  });
+
+  it("still reads an ordinary fast-concentric press the right way round", () => {
+    const { pairs, points } = benchGripPairs(0);
+    const metrics = summarizeTrackedSet(
+      points,
+      61,
+      70,
+      undefined,
+      [],
+      1,
+      false,
+      "horizontal_press_or_row",
+      movementAxisFromGrip(pairs),
+    )!;
+    expect(metrics.repBreakdown.length).toBeGreaterThanOrEqual(8);
+    expect(metrics.concentricSeconds).toBeGreaterThan(0);
+  });
+
+  it("knows a lat pulldown's concentric goes the other way", () => {
+    expect(concentricIsUpward("vertical_pull")).toBe(false);
+    expect(concentricIsUpward("horizontal_press_or_row")).toBe(true);
+    expect(concentricIsUpward("squat")).toBe(true);
+    expect(concentricIsUpward(null)).toBe(true);
   });
 });

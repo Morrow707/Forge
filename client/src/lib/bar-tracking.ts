@@ -823,6 +823,22 @@ const BASE_MIN_REP_AMPLITUDE_CM = 20;
 const MIN_REP_AMPLITUDE_FLOOR_CM = 8;
 
 /**
+ * Does the tracked point travel UP on this lift's concentric?
+ *
+ * True for almost everything, because the concentric is the half worked against gravity: a
+ * squat, a deadlift, a bench, an overhead press, a bent-over row, a curl all drive the bar up.
+ * A vertical pull is the exception that matters -- on a lat pulldown the concentric drags the
+ * bar DOWN, and on a pull-up the tracked hands stay put while the athlete rises, which reads the
+ * same way round.
+ *
+ * Keyed off the movement buckets that already exist rather than a new table, so there is one
+ * statement of what each lift is and not two to fall out of step.
+ */
+export function concentricIsUpward(romKind: string | null): boolean {
+  return romKind !== "vertical_pull";
+}
+
+/**
  * The smallest reversal that counts as a rep, for THIS movement on THIS athlete.
  *
  * One flat 20cm was a compromise that fits nothing. A squat moves 50-70cm and a bench press
@@ -1015,7 +1031,33 @@ export function summarizeTrackedSet(
   // the phase right after it -- exactly where firstPhaseHint, when the
   // caller could safely infer one, gets a say.
   const FIRST_PHASE_AMBIGUITY_THRESHOLD = 0.15;
+
+  // WHEN THE BAR HAS STATED THE DIRECTION, READ IT INSTEAD OF GUESSING FROM SPEED.
+  //
+  // The heuristic below assumes the concentric is the faster half. That holds for most lifting
+  // and is exactly wrong for the case a coach cares most about: a near-limit grind, or tempo
+  // work where the athlete is told to control the way up. There the concentric is the SLOW half,
+  // and every one of them has been getting labelled as the eccentric -- so an athlete's hardest
+  // rep reports its concentric velocity as its eccentric and vice versa.
+  //
+  // Nothing about that needed guessing once the axis comes from the bar (see
+  // movementAxisFromGrip). The axis has its polarity pinned to y, so the sign of a phase's
+  // displacement along it says which way the bar went, and which way is the concentric is a
+  // fact about the lift rather than about this take. Every phase is judged on its own
+  // displacement, so a spurious leading phase -- settling under the bar before the first rep --
+  // is labelled by what it did and cannot propagate an error into the rest of the set the way
+  // alternating from the first phase would.
+  //
+  // Only when the axis came from the bar. The trace's own principal component has no reliable
+  // polarity when the motion it was recovered from was small or noisy, and a direction read off
+  // that would be a guess wearing a measurement's clothes.
+  const directionKnown = movementAxis != null && romKind != null;
+  const concentricGoesUp = concentricIsUpward(romKind);
   const isConcentric = phaseStats.map((phase, i) => {
+    if (directionKnown) {
+      const rose = ySmoothed[phase.endIdx] > ySmoothed[phase.startIdx];
+      return rose === concentricGoesUp;
+    }
     const neighbor = phaseStats[i + 1] ?? phaseStats[i - 1];
     if (i === 0 && firstPhaseHint) {
       if (!neighbor) return firstPhaseHint === "concentric";
