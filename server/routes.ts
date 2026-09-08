@@ -48,6 +48,9 @@ import { getHealthSnapshot } from "./health-probes";
 import { RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION } from "@shared/research-consent";
 import { requireGuardianAccess } from "./auth";
 import { transcribeScannedPdf } from "./pdf-vision";
+import { tagPassages } from "./passage-tagging";
+import { estimateUsd, getAiUsage } from "./ai-usage";
+import { fastModel } from "./ai";
 import { extractPdf, splitIntoPassages, hashBytes } from "./pdf-extract";
 import { searchKnowledgePassages } from "./knowledge-retrieval";
 import { recordSystemFailure } from "./system-events";
@@ -4169,7 +4172,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // stored and the source is created with no passages and a
       // needs_vision status; the admin then starts a transcription pass,
       // which is a separate request because it runs for minutes to hours.
-      const passages = extracted.looksScanned ? [] : splitIntoPassages(extracted.pages);
+      const split = extracted.looksScanned ? [] : splitIntoPassages(extracted.pages);
+      // Tagged per passage, so a book covering more than one subject reaches
+      // the right assistant chapter by chapter rather than all-or-nothing.
+      // See server/passage-tagging.ts.
+      const passages = await tagPassages(split, domains);
 
       // Written only once extraction has succeeded and the file is known not
       // to be a duplicate -- a rejected upload should leave nothing behind on
@@ -4203,6 +4210,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   /**
+   * What a transcription pass would cost, before anyone starts one.
+   *
+   * A 400-page scan is 400 model calls and the first number an admin would
+   * otherwise see is a bill. The published rate for the model actually used
+   * is applied to a per-page token estimate, and the estimate is deliberately
+   * described as an estimate: a page image's token cost depends on its
+   * dimensions and the transcription's length on how dense the page is.
+   */
+  app.get("/api/admin/knowledge-sources/:id/transcribe-estimate", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const source = await storage.getKnowledgeSource(id);
+    if (!source) return res.status(404).json({ message: "Source not found" });
+
+    const fromPage = Math.max(1, Number(req.query.fromPage) || 1);
+    const toPage = Math.min(source.pageCount ?? 1, Number(req.query.toPage) || source.pageCount || 1);
+    const done = source.transcribedThroughPage ?? 0;
+    const pages = Math.max(0, toPage - Math.max(fromPage - 1, done));
+
+    // Per page: one downsampled page image plus a short instruction in, one
+    // page of transcribed text out. Round numbers on purpose -- a false
+    // precision here would be read as a quote.
+    const INPUT_TOKENS_PER_PAGE = 2_750;
+    const OUTPUT_TOKENS_PER_PAGE = 1_000;
+    const estimatedUsd = estimateUsd({
+      model: fastModel,
+      inputTokens: pages * INPUT_TOKENS_PER_PAGE,
+      outputTokens: pages * OUTPUT_TOKENS_PER_PAGE,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
+
+    res.json({
+      pages,
+      alreadyDone: done,
+      model: fastModel,
+      estimatedUsd,
+      estimatedInputTokens: pages * INPUT_TOKENS_PER_PAGE,
+      estimatedOutputTokens: pages * OUTPUT_TOKENS_PER_PAGE,
+    });
+  });
+
+  /**
    * Starts a vision transcription pass over a scanned source.
    *
    * Returns immediately and runs in the background. A 400-page book is 400
@@ -4211,6 +4261,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * unable to tell a slow run from a dead one. Progress lands on the source
    * row instead, which the list already polls.
    *
+   * Resumable. Pages are written and the checkpoint moved after every batch,
+   * so a redeploy, a crash or a restart picks up where it stopped rather than
+   * re-reading -- and re-paying for -- everything before it. The first build
+   * held all 400 pages in memory and wrote them at the end, which meant a
+   * failure at page 390 lost the entire run. On a host that redeploys on
+   * every push, that is not a rare case.
+   *
    * Guarded by the status: a source already transcribing does not get a
    * second pass started on top of the first, which would double every
    * passage it produces.
@@ -4218,6 +4275,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/knowledge-sources/:id/transcribe", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+
+    const parsedBody = z
+      .object({
+        fromPage: z.number().int().min(1).optional(),
+        toPage: z.number().int().min(1).optional(),
+        // A resume continues from the checkpoint; a restart clears it and
+        // reads the range again. Restarting is the escape hatch for a run
+        // that produced garbage, and it is opt-in because the default should
+        // never be "pay for those pages twice".
+        restart: z.boolean().optional(),
+      })
+      .safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      return res.status(400).json({ message: parsedBody.error.issues[0]?.message });
+    }
+
     const source = await storage.getKnowledgeSource(id);
     if (!source) return res.status(404).json({ message: "Source not found" });
     if (source.status === "transcribing") {
@@ -4235,16 +4308,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(422).json({ message: "The original file for this source could not be read." });
     }
 
-    await storage.setKnowledgeSourceStatus(id, "transcribing", "Starting...");
-    res.status(202).json({ ok: true, pageCount: source.pageCount });
+    const requestedFrom = parsedBody.data.fromPage ?? source.transcribeFromPage ?? 1;
+    const requestedTo = parsedBody.data.toPage ?? source.transcribeToPage ?? undefined;
+    const checkpoint = parsedBody.data.restart ? 0 : source.transcribedThroughPage ?? 0;
+    // Resume from just after the last page already written, never before the
+    // range the admin asked for.
+    const startPage = Math.max(requestedFrom, checkpoint + 1);
+
+    await storage.setTranscriptionRange(id, requestedFrom, requestedTo ?? null);
+    if (parsedBody.data.restart) await storage.setTranscriptionCheckpoint(id, 0);
+    await storage.setKnowledgeSourceStatus(
+      id,
+      "transcribing",
+      checkpoint > 0 && !parsedBody.data.restart
+        ? `Resuming after page ${checkpoint}...`
+        : "Starting...",
+    );
+    res.status(202).json({ ok: true, pageCount: source.pageCount, startPage });
 
     // Deliberately not awaited: the response has already gone. Every failure
     // path below ends by writing a terminal status, because a source left at
     // "transcribing" forever is indistinguishable to the admin from one still
     // working.
     void (async () => {
+      let written = 0;
       try {
-        const { pages, attempted, failed } = await transcribeScannedPdf(bytes, {
+        const { attempted, failed } = await transcribeScannedPdf(bytes, {
+          fromPage: startPage,
+          toPage: requestedTo,
           onProgress: (p) => {
             void storage.setKnowledgeSourceStatus(
               id,
@@ -4252,14 +4343,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
               `Read ${p.pagesDone} of ${p.pageCount} page(s).`,
             );
           },
+          // Written batch by batch, which is what makes the run survivable.
+          onBatch: async ({ pages, throughPage }) => {
+            if (pages.length > 0) {
+              const split = splitIntoPassages(pages);
+              const tagged = await tagPassages(split, source.domains);
+              written += await storage.appendKnowledgePassages(
+                id,
+                tagged.map((p) => ({ ...p, fromVision: true })),
+              );
+            }
+            // Moved even for a batch that produced nothing, or a run of
+            // unreadable pages would be retried on every resume forever.
+            await storage.setTranscriptionCheckpoint(id, throughPage);
+          },
         });
-        const transcribed = splitIntoPassages(pages).map((p) => ({ ...p, fromVision: true }));
-        await storage.appendKnowledgePassages(id, transcribed);
+
         await storage.setKnowledgeSourceStatus(
           id,
-          transcribed.length > 0 ? "ready" : "needs_vision",
-          transcribed.length > 0
-            ? `Transcribed ${attempted - failed} of ${attempted} page(s) into ${transcribed.length} passage(s).` +
+          written > 0 ? "ready" : "needs_vision",
+          written > 0
+            ? `Transcribed ${attempted - failed} of ${attempted} page(s) into ${written} passage(s).` +
                 (failed > 0 ? ` ${failed} page(s) could not be read.` : "")
             : "No text could be read from any page.",
         );
@@ -4268,10 +4372,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.setKnowledgeSourceStatus(
           id,
           "needs_vision",
-          "The transcription pass failed. It can be started again.",
+          written > 0
+            ? `Stopped after ${written} passage(s). Start it again to carry on from where it left off.`
+            : "The transcription pass failed. It can be started again.",
         );
       }
     })();
+  });
+
+  // What the AI has cost, by day, feature and model. There was no counter of
+  // any kind before this, so every figure anyone quoted was reasoning from
+  // the code rather than from a bill.
+  app.get("/api/admin/ai-usage", requireRole("admin"), async (req, res) => {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 180);
+    res.json(await getAiUsage(days));
   });
 
   app.get("/api/admin/knowledge-sources", requireRole("admin"), async (_req, res) => {

@@ -13,6 +13,7 @@ import {
   index,
   real,
   uuid,
+  bigint,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -5022,6 +5023,53 @@ export const notificationDeliveryDaily = pgTable(
 );
 export type NotificationDeliveryDaily = typeof notificationDeliveryDaily.$inferSelect;
 
+// ---------- AI usage and spend ----------
+//
+// What every Claude call in the app costs, rolled up by day, feature and
+// model. Written from the single choke point in ai.ts, so a feature cannot
+// spend money without appearing here.
+//
+// Rolled up rather than one row per call, for the same reason
+// notificationDeliveryDaily is: the question is always "what is this
+// feature costing us" and never "what did request 4,812,003 cost". A row
+// per call on a platform making thousands a day is a table nobody queries
+// and a bill nobody reads.
+//
+// Token counts are stored, not dollars. Prices change, and a stored dollar
+// figure computed under last year's rates is worse than no figure because
+// it looks authoritative. server/ai-usage.ts holds the rate table and does
+// the multiplication at read time.
+export const aiUsageDaily = pgTable(
+  "ai_usage_daily",
+  {
+    id: serial("id").primaryKey(),
+    day: date("day").notNull(),
+    // Which part of the app spent this -- "nutrition-answer",
+    // "pdf-transcription", "program-draft". Set at the call site; calls that
+    // do not name one land under "unattributed", which is itself a finding.
+    feature: text("feature").notNull(),
+    model: text("model").notNull(),
+    calls: integer("calls").notNull().default(0),
+    inputTokens: bigint("input_tokens", { mode: "number" }).notNull().default(0),
+    outputTokens: bigint("output_tokens", { mode: "number" }).notNull().default(0),
+    // Kept apart from inputTokens because they are priced differently: a
+    // cache read is roughly a tenth of the input rate and a cache write
+    // slightly more than full. Folding them together would make caching look
+    // like it did nothing.
+    cacheReadTokens: bigint("cache_read_tokens", { mode: "number" }).notNull().default(0),
+    cacheWriteTokens: bigint("cache_write_tokens", { mode: "number" }).notNull().default(0),
+  },
+  (table) => ({
+    dayFeatureModelIdx: uniqueIndex("ai_usage_daily_day_feature_model_idx").on(
+      table.day,
+      table.feature,
+      table.model,
+    ),
+    dayIdx: index("ai_usage_daily_day_idx").on(table.day),
+  }),
+);
+export type AiUsageDaily = typeof aiUsageDaily.$inferSelect;
+
 // ---------- Research export log ----------
 // One row per dataset extract generated, written before the PDF is sent.
 //
@@ -5112,6 +5160,20 @@ export const knowledgeSources = pgTable(
     // Which AI domains may retrieve from this source. Same closed list the
     // assistants use; a source can serve several.
     domains: text("domains").array().notNull().default([]),
+    // How far a vision transcription pass has got, as a page number.
+    //
+    // Written after every batch of pages, so a restart, a redeploy or a
+    // crash resumes from here instead of starting over. The first build
+    // accumulated every page in memory and wrote them only at the end,
+    // which meant a failure at page 390 of 400 lost the whole run and
+    // charged for it twice. On a host that redeploys, that is not a rare
+    // case.
+    transcribedThroughPage: integer("transcribed_through_page"),
+    // The page range the admin asked for, when they asked for one. Null
+    // means the whole document. Kept so a resumed run knows where to stop,
+    // and so the list can say what was actually read.
+    transcribeFromPage: integer("transcribe_from_page"),
+    transcribeToPage: integer("transcribe_to_page"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -5141,6 +5203,20 @@ export const knowledgePassages = pgTable(
     // fake contradiction against a correctly-read source. Marking it lets
     // the contradiction queue say "check the photo" instead.
     fromVision: boolean("from_vision").notNull().default(false),
+    // What this passage is actually about, from the same closed domain list
+    // the sources carry.
+    //
+    // Per PASSAGE, not per source, and that distinction is the whole reason
+    // this column exists. A strength and conditioning textbook has a
+    // nutrition chapter in it. Tagged only at the source level, the choice
+    // is between hiding that chapter from the nutrition assistant or
+    // handing it every page of bar-path material as well. Neither is right,
+    // and the first real book anyone uploads is exactly that book.
+    //
+    // Retrieval filters on this where it is set and falls back to the
+    // source's domains where it is not, so passages ingested before this
+    // existed keep working.
+    topics: text("topics").array().notNull().default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({

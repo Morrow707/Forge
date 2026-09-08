@@ -1,4 +1,4 @@
-import { askClaudeVision } from "./ai";
+import { askClaudeVision, fastModel } from "./ai";
 import { extractPageImage } from "./pdf-page-images";
 import type { ExtractedPage } from "./pdf-extract";
 
@@ -72,6 +72,21 @@ export async function transcribeScannedPdf(
   bytes: Buffer,
   options: {
     pageNumbers?: number[];
+    /** Inclusive 1-based page range. Ignored when pageNumbers is given. */
+    fromPage?: number;
+    toPage?: number;
+    /**
+     * Called with each completed batch of pages, so the caller can write
+     * them and record how far it got.
+     *
+     * This is what makes a long run survivable. The first build returned
+     * everything at the end, so a redeploy at page 390 of 400 lost the lot
+     * and charged for it twice. Batched rather than per-page because
+     * passages overlap across page boundaries and splitting one page at a
+     * time would throw that overlap away at every page.
+     */
+    onBatch?: (batch: { pages: ExtractedPage[]; throughPage: number }) => Promise<void>;
+    batchSize?: number;
     onProgress?: (progress: TranscribeProgress) => void;
     signal?: AbortSignal;
   } = {},
@@ -89,11 +104,31 @@ export async function transcribeScannedPdf(
   const wanted =
     options.pageNumbers && options.pageNumbers.length > 0
       ? options.pageNumbers.filter((n) => n >= 1 && n <= doc.numPages).sort((a, b) => a - b)
-      : Array.from({ length: doc.numPages }, (_, i) => i + 1);
+      : (() => {
+          // A range, so an admin can transcribe the four chapters they care
+          // about rather than paying to read the index and the reference
+          // list. On a real textbook that is often a quarter of the pages.
+          const from = Math.max(1, options.fromPage ?? 1);
+          const to = Math.min(doc.numPages, options.toPage ?? doc.numPages);
+          const out: number[] = [];
+          for (let n = from; n <= to; n++) out.push(n);
+          return out;
+        })();
 
   const pages: ExtractedPage[] = [];
+  const batchSize = Math.max(1, options.batchSize ?? 10);
+  let batch: ExtractedPage[] = [];
   let failed = 0;
   let charactersRecovered = 0;
+
+  const flush = async (throughPage: number) => {
+    if (!options.onBatch) return;
+    // Called even with no pages in hand: a run of unreadable pages still
+    // has to move the checkpoint forward, or a resume would retry them
+    // forever.
+    await options.onBatch({ pages: batch, throughPage });
+    batch = [];
+  };
 
   for (const pageNumber of wanted) {
     if (options.signal?.aborted) break;
@@ -106,14 +141,23 @@ export async function transcribeScannedPdf(
           SYSTEM,
           `Transcribe page ${pageNumber} of this document.`,
           [{ mediaType: image.mediaType, data: image.data }],
-          // Generous: a dense textbook page runs well past a thousand
-          // tokens, and a transcription cut off mid-sentence is a passage
-          // that ends in the middle of a claim.
-          { maxTokens: 4096 },
+          {
+            // Generous: a dense textbook page runs well past a thousand
+            // tokens, and a transcription cut off mid-sentence is a passage
+            // that ends in the middle of a claim.
+            maxTokens: 4096,
+            // The cheap model, deliberately. This is copying words off a
+            // page, not reasoning about them -- the expensive model buys
+            // nothing here and a 400-page book is 400 calls of it.
+            model: fastModel,
+            feature: "pdf-transcription",
+          },
         );
         const cleaned = (text ?? "").trim();
         if (cleaned && cleaned !== NO_TEXT) {
-          pages.push({ pageNumber, text: cleaned });
+          const page = { pageNumber, text: cleaned };
+          pages.push(page);
+          batch.push(page);
           charactersRecovered += cleaned.length;
         }
       } else {
@@ -131,8 +175,11 @@ export async function transcribeScannedPdf(
       pageCount: wanted.length,
       charactersRecovered,
     });
+
+    if (batch.length >= batchSize) await flush(pageNumber);
   }
 
+  await flush(wanted[wanted.length - 1] ?? 0);
   await doc.destroy();
   return { pages, attempted: wanted.length, failed };
 }

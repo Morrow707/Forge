@@ -21360,7 +21360,13 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     fileHash: string;
     pageCount: number;
     domains: string[];
-    passages: { pageNumber: number; endPageNumber: number; text: string; fromVision?: boolean }[];
+    passages: {
+      pageNumber: number;
+      endPageNumber: number;
+      text: string;
+      fromVision?: boolean;
+      topics?: string[];
+    }[];
   }) {
     return db.transaction(async (tx) => {
       const [source] = await tx
@@ -21391,6 +21397,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
               endPageNumber: p.endPageNumber,
               text: p.text,
               fromVision: p.fromVision ?? false,
+              // Falls back to the source's own domains, so a passage the
+              // tagger could not place is still reachable rather than
+              // filed nowhere.
+              topics: p.topics ?? input.domains,
             })),
           );
         }
@@ -21604,7 +21614,13 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    */
   async appendKnowledgePassages(
     sourceId: number,
-    passages: { pageNumber: number; endPageNumber: number; text: string; fromVision?: boolean }[],
+    passages: {
+      pageNumber: number;
+      endPageNumber: number;
+      text: string;
+      fromVision?: boolean;
+      topics?: string[];
+    }[],
   ) {
     if (passages.length === 0) return 0;
     const [existing] = await db
@@ -21623,10 +21639,38 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           endPageNumber: p.endPageNumber,
           text: p.text,
           fromVision: p.fromVision ?? false,
+          topics: p.topics ?? [],
         })),
       );
     }
     return passages.length;
+  },
+
+  /**
+   * Moves the transcription checkpoint forward.
+   *
+   * Separate from setKnowledgeSourceStatus because it is written after every
+   * batch of pages rather than at a state change, and because a resumed run
+   * has to read it back to know where to start. A run that cannot record how
+   * far it got is a run that starts from page one after every redeploy.
+   */
+  async setTranscriptionCheckpoint(id: number, throughPage: number, statusDetail?: string) {
+    const [row] = await db
+      .update(knowledgeSources)
+      .set({
+        transcribedThroughPage: throughPage,
+        ...(statusDetail === undefined ? {} : { statusDetail }),
+      })
+      .where(eq(knowledgeSources.id, id))
+      .returning();
+    return row ?? null;
+  },
+
+  async setTranscriptionRange(id: number, fromPage: number | null, toPage: number | null) {
+    await db
+      .update(knowledgeSources)
+      .set({ transcribeFromPage: fromPage, transcribeToPage: toPage })
+      .where(eq(knowledgeSources.id, id));
   },
 
   async getKnowledgeSourceByHash(fileHash: string) {

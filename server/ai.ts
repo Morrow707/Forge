@@ -1,3 +1,4 @@
+import { recordAiUsage } from "./ai-usage";
 import { recordSystemFailure, recordSystemSuccess } from "./system-events";
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -40,7 +41,14 @@ function buildSystemField(system: SystemPrompt) {
   }));
 }
 
-type CallOptions = { maxTokens?: number; model?: string };
+type CallOptions = {
+  maxTokens?: number;
+  model?: string;
+  // Which part of the app is spending this, for the usage rollup. Optional
+  // so no existing call site breaks; anything that omits it lands under
+  // "unattributed", which is itself a finding worth seeing on the page.
+  feature?: string;
+};
 
 // One shared retry policy for every Claude call in the app: a network
 // hiccup or a 5xx (overloaded/internal error) is worth one retry after a
@@ -57,7 +65,10 @@ type CallOptions = { maxTokens?: number; model?: string };
 // the app (a 8192-token program draft) and still bounded.
 const REQUEST_TIMEOUT_MS = 120_000;
 
-async function callAnthropic(body: Record<string, unknown>): Promise<any | null> {
+async function callAnthropic(
+  body: Record<string, unknown>,
+  feature = "unattributed",
+): Promise<any | null> {
   for (let attempt = 0; attempt <= 1; attempt++) {
     try {
       const res = await fetch(API_URL, {
@@ -102,6 +113,19 @@ async function callAnthropic(body: Record<string, unknown>): Promise<any | null>
         return null;
       }
       recordSystemSuccess("ai");
+      // Every model call in the app comes through here, so recording usage
+      // at this one point means a feature added later cannot spend money
+      // without showing up. Not awaited: a counter must never delay or fail
+      // the answer somebody is waiting on.
+      const usage = data.usage ?? {};
+      void recordAiUsage({
+        feature,
+        model: String(body.model ?? "unknown"),
+        inputTokens: Number(usage.input_tokens ?? 0),
+        outputTokens: Number(usage.output_tokens ?? 0),
+        cacheReadTokens: Number(usage.cache_read_input_tokens ?? 0),
+        cacheWriteTokens: Number(usage.cache_creation_input_tokens ?? 0),
+      });
       return data;
     } catch (err: any) {
       const timedOut = err?.name === "TimeoutError" || err?.name === "AbortError";
@@ -133,7 +157,7 @@ async function callAnthropic(body: Record<string, unknown>): Promise<any | null>
 export async function askClaude(
   system: SystemPrompt,
   messages: { role: "user" | "assistant"; content: string }[],
-  { maxTokens = 1024, model }: CallOptions = {},
+  { maxTokens = 1024, model, feature }: CallOptions = {},
 ): Promise<string | null> {
   if (!aiEnabled) return null;
   const data = await callAnthropic({
@@ -141,7 +165,7 @@ export async function askClaude(
     max_tokens: maxTokens,
     system: buildSystemField(system),
     messages,
-  });
+  }, feature);
   if (!data) return null;
   const text = data.content?.find((b: any) => b.type === "text")?.text;
   return typeof text === "string" ? text : null;
@@ -155,7 +179,7 @@ export async function askClaudeVision(
   system: SystemPrompt,
   text: string,
   images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
-  { maxTokens = 1024, model }: CallOptions = {},
+  { maxTokens = 1024, model, feature }: CallOptions = {},
 ): Promise<string | null> {
   if (!aiEnabled) return null;
   const data = await callAnthropic({
@@ -174,7 +198,7 @@ export async function askClaudeVision(
         ],
       },
     ],
-  });
+  }, feature);
   if (!data) return null;
   const textBlock = data.content?.find((b: any) => b.type === "text")?.text;
   return typeof textBlock === "string" ? textBlock : null;
@@ -190,7 +214,7 @@ export async function askClaudeStructured<T>(
   system: SystemPrompt,
   userPrompt: string,
   tool: { name: string; description: string; input_schema: Record<string, unknown> },
-  { maxTokens = 1024, model }: CallOptions = {},
+  { maxTokens = 1024, model, feature }: CallOptions = {},
 ): Promise<T | null> {
   if (!aiEnabled) return null;
   const data = await callAnthropic({
@@ -200,7 +224,7 @@ export async function askClaudeStructured<T>(
     messages: [{ role: "user", content: userPrompt }],
     tools: [tool],
     tool_choice: { type: "tool", name: tool.name },
-  });
+  }, feature);
   if (!data) return null;
   const toolUse = data.content?.find((b: any) => b.type === "tool_use");
   return (toolUse?.input as T) ?? null;
@@ -216,7 +240,7 @@ export async function askClaudeVisionStructured<T>(
   text: string,
   images: { mediaType: "image/jpeg" | "image/png"; data: string }[],
   tool: { name: string; description: string; input_schema: Record<string, unknown> },
-  { maxTokens = 1024, model }: CallOptions = {},
+  { maxTokens = 1024, model, feature }: CallOptions = {},
 ): Promise<T | null> {
   if (!aiEnabled) return null;
   const data = await callAnthropic({
@@ -237,7 +261,7 @@ export async function askClaudeVisionStructured<T>(
     ],
     tools: [tool],
     tool_choice: { type: "tool", name: tool.name },
-  });
+  }, feature);
   if (!data) return null;
   const toolUse = data.content?.find((b: any) => b.type === "tool_use");
   return (toolUse?.input as T) ?? null;
@@ -268,6 +292,7 @@ export async function askClaudeWithTools<T = any>(
   {
     maxTokens = 1024,
     model,
+    feature,
     serverTools,
     images,
     toolExecutors,
@@ -313,7 +338,7 @@ export async function askClaudeWithTools<T = any>(
       messages,
       tools: allTools,
       tool_choice: { type: "auto" },
-    });
+    }, feature);
     if (!data) return null;
     const toolUse = data.content?.find((b: any) => b.type === "tool_use");
     if (toolUse) {

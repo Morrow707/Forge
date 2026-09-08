@@ -2819,6 +2819,38 @@ CREATE INDEX IF NOT EXISTS "research_subject_injuries_subject_idx"
   ON "research_subject_injuries" ("subject_id");
 CREATE INDEX IF NOT EXISTS "research_subject_injuries_region_idx"
   ON "research_subject_injuries" ("region");
+
+-- What every Claude call costs, rolled up by day, feature and model. Tokens
+-- rather than dollars: prices change, and a stored figure computed under an
+-- old rate reads as authoritative while being wrong.
+CREATE TABLE IF NOT EXISTS "ai_usage_daily" (
+  "id" serial PRIMARY KEY,
+  "day" date NOT NULL,
+  "feature" text NOT NULL,
+  "model" text NOT NULL,
+  "calls" integer NOT NULL DEFAULT 0,
+  "input_tokens" bigint NOT NULL DEFAULT 0,
+  "output_tokens" bigint NOT NULL DEFAULT 0,
+  "cache_read_tokens" bigint NOT NULL DEFAULT 0,
+  "cache_write_tokens" bigint NOT NULL DEFAULT 0
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "ai_usage_daily_day_feature_model_idx"
+  ON "ai_usage_daily" ("day", "feature", "model");
+CREATE INDEX IF NOT EXISTS "ai_usage_daily_day_idx"
+  ON "ai_usage_daily" ("day");
+
+-- Transcription checkpointing, so a redeploy mid-run resumes instead of
+-- re-reading and re-paying for every page before the failure.
+ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribed_through_page" integer;
+ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_from_page" integer;
+ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_to_page" integer;
+
+-- Per-passage subject tags. Retrieval falls back to the source's domains
+-- where this is empty, so passages ingested before it existed keep working.
+ALTER TABLE "knowledge_passages" ADD COLUMN IF NOT EXISTS "topics" text[] NOT NULL DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS "knowledge_passages_topics_idx"
+  ON "knowledge_passages" USING GIN ("topics");
 `;
 
 async function main() {

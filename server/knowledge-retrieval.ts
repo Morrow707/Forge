@@ -34,6 +34,15 @@ import type { Pool } from "pg";
  * If the corpus grows to where this stops being good enough, the replacement
  * is a local embedding model and a vector column, and nothing else here has
  * to change: callers ask for passages and get passages.
+ *
+ * WHAT THE DOMAIN FILTER MATCHES AGAINST
+ *
+ * The PASSAGE's topics where it has them, the source's domains where it
+ * does not. Filtering on the source alone forced an impossible choice on
+ * any book covering more than one subject -- see server/passage-tagging.ts
+ * for why a strength textbook's nutrition chapter is the case that breaks
+ * it. The fallback keeps every passage ingested before tagging existed
+ * exactly as findable as it was.
  */
 
 export type RetrievedPassage = {
@@ -89,7 +98,14 @@ export async function searchKnowledgePassages(input: {
          FROM knowledge_passages p
          JOIN knowledge_sources s ON s.id = p.source_id
         WHERE p.search_vector @@ websearch_to_tsquery('english', $1)
-          AND s.domains && $2::text[]
+          -- The passage's own topics decide, and the source's domains are
+          -- the fallback for passages ingested before tagging existed.
+          -- Without the fallback every one of those would vanish from every
+          -- assistant the moment this shipped.
+          AND (CASE WHEN cardinality(p.topics) > 0
+                    THEN p.topics && $2::text[]
+                    ELSE s.domains && $2::text[]
+               END)
         ORDER BY rank DESC, p.id ASC
         LIMIT $3`,
       [query, input.domains, limit],
@@ -154,7 +170,10 @@ export async function findSimilarPassages(input: {
         WHERE p.search_vector @@ to_tsquery('english', $1)
           AND p.id <> $2
           AND p.source_id <> (SELECT source_id FROM knowledge_passages WHERE id = $2)
-          AND s.domains && $3::text[]
+          AND (CASE WHEN cardinality(p.topics) > 0
+                    THEN p.topics && $3::text[]
+                    ELSE s.domains && $3::text[]
+               END)
         ORDER BY rank DESC
         LIMIT $4`,
       [tsquery, input.passageId, input.domains, limit],
