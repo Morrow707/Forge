@@ -476,6 +476,11 @@ export default function AthleteDetailPage() {
                     <MovementScreenPanel athleteId={athlete.id} />
                   </CardContent>
                 </Card>
+                <Card className="mt-4">
+                  <CardContent className="p-5">
+                    <SuggestedCorrectives athleteId={athlete.id} />
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="weakness">
@@ -614,5 +619,72 @@ export default function AthleteDetailPage() {
         </DialogContent>
       </Dialog>
     </AppShell>
+  );
+}
+
+/**
+ * Corrective work drafted from what is already on file.
+ *
+ * On the athlete's own screening tab, beside the movement screen the
+ * suggestions are partly drawn from, because that is where a coach is
+ * already thinking about this athlete's limitations.
+ *
+ * A DRAFT, and the copy says so. The coach applies it through the corrective
+ * editor that already exists -- an athlete's rehab work is not something
+ * software changes unattended, and nothing here writes.
+ *
+ * Asked for on demand rather than fetched on page load: it is several model
+ * calls, and most visits to this tab are not about correctives.
+ */
+function SuggestedCorrectives({ athleteId }: { athleteId: number }) {
+  const [result, setResult] = useState<{
+    summary: string;
+    correctives: { exerciseId: number; exerciseName: string; sets: number; reps: string; why: string }[];
+  } | null>(null);
+
+  const suggest = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/coach/roster/${athleteId}/suggest-correctives`);
+      return res.json();
+    },
+    onSuccess: (data) => setResult(data),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't draft correctives"),
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="font-bold">Suggested correctives</p>
+          <p className="text-xs text-muted-foreground">
+            Drafted from this athlete's repeated soreness, screen findings and unresolved
+            injuries. Nothing is applied -- add what you agree with in the corrective editor.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => suggest.mutate()} disabled={suggest.isPending}>
+          {suggest.isPending ? "Thinking..." : "Draft suggestions"}
+        </Button>
+      </div>
+
+      {result && (
+        <div className="space-y-2">
+          <p className="text-sm">{result.summary}</p>
+          {result.correctives.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nothing on file suggests corrective work right now.
+            </p>
+          ) : (
+            result.correctives.map((c) => (
+              <div key={c.exerciseId} className="rounded-md border px-3 py-2">
+                <p className="text-sm font-medium">
+                  {c.exerciseName} — {c.sets} x {c.reps}
+                </p>
+                <p className="text-xs text-muted-foreground">{c.why}</p>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   );
 }

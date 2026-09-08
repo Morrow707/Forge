@@ -2322,6 +2322,13 @@ export function WorkoutPage({
                                     onAddSet={() => addSet(item.key)}
                                     onRemoveSet={() => removeSet(item.key)}
                                   />
+                                  {item.kind === "exercise" && (
+                                    <TooHardControl
+                                      assignmentId={Number(assignmentId)}
+                                      programDayId={Number(programDayId)}
+                                      programExerciseId={item.refId}
+                                    />
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -3990,6 +3997,104 @@ function ExerciseLogContent({
           onChange={(e) => onUpdateItem({ athleteNotes: e.target.value })}
           placeholder="Add exercise note"
         />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "This is too hard."
+ *
+ * The gap this closes: an athlete who cannot do what was programmed had one
+ * option, which was not to do it, and that is the failure that quietly ends
+ * a program. The pain path only fires for a flagged body part, and
+ * difficulty is not pain.
+ *
+ * A REGRESSION, not a swap: same movement, lower demand. Advice, not an
+ * edit -- nothing is written to the log, because an athlete silently
+ * training lighter for six weeks is a coaching problem the coach never
+ * learns about, and quietly rewriting the prescription would hide it.
+ *
+ * Deliberately understated and inside the expanded card, not a button on
+ * every row. Making it prominent turns a hard set into a choice.
+ */
+function TooHardControl({
+  assignmentId,
+  programDayId,
+  programExerciseId,
+}: {
+  assignmentId: number;
+  programDayId: number;
+  programExerciseId: number;
+}) {
+  const [note, setNote] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [advice, setAdvice] = useState<{
+    summary: string;
+    sets: number;
+    reps: string;
+    loadHint: string;
+  } | null>(null);
+
+  const regress = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/athlete/regress-exercise", {
+        assignmentId,
+        programDayId,
+        programExerciseId,
+        note: note.trim() || undefined,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setAdvice(data);
+      setAsking(false);
+    },
+    onError: (err: ApiError) =>
+      toast.error(err.message || "Couldn't work out an easier version just now"),
+  });
+
+  if (advice) {
+    return (
+      <div className="mt-3 space-y-1 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+        <p>{advice.summary}</p>
+        <p className="font-medium">
+          Try {advice.sets} x {advice.reps}. {advice.loadHint}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Log what you actually do. Your coach sees the real numbers, which is the point.
+        </p>
+      </div>
+    );
+  }
+
+  if (!asking) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAsking(true)}
+        className="mt-3 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      >
+        This is too hard today
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2 rounded-md border p-3">
+      <Input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Anything worth knowing? (optional)"
+        className="text-sm"
+      />
+      <div className="flex gap-2">
+        <Button size="sm" onClick={() => regress.mutate()} disabled={regress.isPending}>
+          {regress.isPending ? "Thinking..." : "Give me an easier version"}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setAsking(false)}>
+          Cancel
+        </Button>
       </div>
     </div>
   );

@@ -41,7 +41,7 @@ import {
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
 import { resolveRosterGroups, type RosterGroup } from "@shared/roster-groups";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { toast } from "sonner";
@@ -82,6 +82,7 @@ import {
   Loader2,
   BellRing,
   Tags,
+  AlertTriangle,
 } from "lucide-react";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
@@ -621,6 +622,7 @@ export default function CoachRoster() {
         </div>
 
         <TabsContent value="roster">
+          <PainEscalations />
           <div className="mb-4">
             <ProvisionalRosterPanel />
           </div>
@@ -1458,5 +1460,65 @@ function AddMemberSelect({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Athletes flagging the same body region often enough that somebody should
+ * look.
+ *
+ * The failure this exists for is quiet: an athlete flags a sore shoulder,
+ * the AI adjusts today's session around it, and that repeats for months with
+ * nobody told. Software managing a shoulder problem indefinitely is worse
+ * than software that never helped, because it removes the friction that
+ * would have caused a conversation.
+ *
+ * At the top of the roster, not behind a tab. A warning somebody has to go
+ * looking for is one nobody sees, and this one was shipped as a route with
+ * no screen at all.
+ *
+ * Renders nothing when there is nothing to say -- an empty panel that is
+ * always present trains people to ignore the space it occupies.
+ */
+function PainEscalations() {
+  const { data: escalations = [] } = useQuery<
+    { athleteId: number; athleteName: string; region: string; flags: number; isMinor: boolean }[]
+  >({
+    queryKey: ["/api/coach/pain-escalations"],
+    queryFn: () => getJson("/api/coach/pain-escalations"),
+  });
+
+  if (escalations.length === 0) return null;
+
+  return (
+    <Card className="mb-4 border-amber-500/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base text-amber-500">
+          <AlertTriangle className="h-4 w-4" />
+          Repeated soreness worth a conversation
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {escalations.map((e) => (
+          <div
+            key={`${e.athleteId}-${e.region}`}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+          >
+            <span>
+              <span className="font-medium">{e.athleteName}</span> flagged{" "}
+              <span className="font-medium">{e.region}</span> on {e.flags} of the last 14 check-ins
+              {e.isMinor && <span className="ml-1 text-amber-500">(under 18)</span>}
+            </span>
+            <Button size="sm" variant="outline" asChild>
+              <a href={`/coach/athlete/${e.athleteId}`}>Open</a>
+            </Button>
+          </div>
+        ))}
+        <p className="text-xs text-muted-foreground">
+          Sessions are already being adjusted around these. That is not the same as anyone having
+          looked at why.
+        </p>
+      </CardContent>
+    </Card>
   );
 }

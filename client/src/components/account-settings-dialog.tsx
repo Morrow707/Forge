@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { ColorField } from "@/components/color-field";
-import { apiRequest, ApiError } from "@/lib/queryClient";
+import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
+import { ANSWER_REGISTERS, ANSWER_LENGTHS } from "@shared/answer-style";
 import { toast } from "sonner";
 import { Ticket, AlertTriangle, Moon, Sun } from "lucide-react";
 import { contrastForegroundHsl, meetsWcagAA, nearestAccessibleColor } from "@/lib/color";
@@ -245,6 +246,8 @@ export function AccountSettingsDialog({
               </button>
             </div>
           </div>
+
+          <AnswerStyleSection />
 
           {user.role === "coach" && (
             <div className="space-y-5 border-t border-border pt-4">
@@ -492,5 +495,96 @@ export function AccountSettingsDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * How the assistants should write to you.
+ *
+ * Lives in account settings rather than beside any one assistant, because it
+ * applies to all of them and a control that appears next to the nutrition
+ * chat reads as being about the nutrition chat. Shipped server-side with no
+ * way to set it, which made the whole feature invisible.
+ *
+ * Both axes default to Standard, and Standard sends no instruction at all --
+ * a reader who never touches this gets exactly what they got before.
+ */
+function AnswerStyleSection() {
+  const qc = useQueryClient();
+  const { data } = useQuery<{ answerRegister: string | null; answerLength: string | null }>({
+    queryKey: ["/api/answer-style"],
+    queryFn: () => getJson("/api/answer-style"),
+  });
+
+  const save = useMutation({
+    mutationFn: (next: { register: string | null; length: string | null }) =>
+      apiRequest("PUT", "/api/answer-style", next),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/answer-style"] });
+      toast.success("The assistants will write to you this way from now on.");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+  });
+
+  const register = data?.answerRegister ?? "standard";
+  const length = data?.answerLength ?? "standard";
+
+  const Row = ({
+    label,
+    options,
+    value,
+    onPick,
+  }: {
+    label: string;
+    options: readonly { key: string; label: string }[];
+    value: string;
+    onPick: (key: string) => void;
+  }) => (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <div className="flex gap-2">
+        {options.map((o) => (
+          <button
+            key={o.key}
+            type="button"
+            aria-pressed={value === o.key}
+            onClick={() => onPick(o.key)}
+            disabled={save.isPending}
+            className={cn(
+              "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+              value === o.key
+                ? "border-primary bg-primary/10 text-foreground"
+                : "border-border text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 border-t border-border pt-4">
+      <div className="space-y-1.5">
+        <Label>How the AI writes to you</Label>
+        <p className="text-xs text-muted-foreground">
+          Applies everywhere an assistant writes to you. It changes the wording only -- never
+          what you are told, and never a safety caveat.
+        </p>
+      </div>
+      <Row
+        label="Language"
+        options={ANSWER_REGISTERS}
+        value={register}
+        onPick={(key) => save.mutate({ register: key, length })}
+      />
+      <Row
+        label="Length"
+        options={ANSWER_LENGTHS}
+        value={length}
+        onPick={(key) => save.mutate({ register, length: key })}
+      />
+    </div>
   );
 }
