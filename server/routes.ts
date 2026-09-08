@@ -4421,9 +4421,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/coach/roster/:athleteId/suggest-correctives",
     requireRole("coach"),
     async (req, res) => {
+      // currentUser + user.id rather than req.user!.id, matching every other
+      // coach roster route in this file. cross-tenant-scoping.test.ts reads
+      // this source to prove each parameterised route resolves its id against
+      // the caller, and it looks for exactly this shape -- suggestCorrectives
+      // does check getRosterAthleteForCoach internally, but a scoping rule
+      // that is only true inside a callee is one a future edit can break
+      // without the route looking any different.
+      const user = currentUser(req);
       const athleteId = Number(req.params.athleteId);
       if (!Number.isInteger(athleteId)) return res.status(400).json({ message: "Invalid id" });
-      const result = await storage.suggestCorrectives(req.user!.id, athleteId);
+      const result = await storage.suggestCorrectives(user.id, athleteId);
       if (!result) {
         return res.status(200).json({
           correctives: [],
