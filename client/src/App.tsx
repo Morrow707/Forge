@@ -98,6 +98,7 @@ const AdminSkillPrograms = lazy(withLoadTimeout(() => import("@/pages/admin/skil
 const AdminSkillProgramBuilder = lazy(withLoadTimeout(() => import("@/pages/admin/skill-program-builder")));
 const AdminReports = lazy(withLoadTimeout(() => import("@/pages/admin/reports")));
 const AdminTeachAi = lazy(withLoadTimeout(() => import("@/pages/admin/teach-ai")));
+const AdminCameraAi = lazy(withLoadTimeout(() => import("@/pages/admin/camera-ai")));
 const AdminTrackingReport = lazy(withLoadTimeout(() => import("@/pages/admin/tracking-report")));
 const AdminDocuments = lazy(withLoadTimeout(() => import("@/pages/admin/documents")));
 const AdminMyCalendar = lazy(withLoadTimeout(() => import("@/pages/admin/my-calendar")));
@@ -480,6 +481,9 @@ function Router() {
         </Route>
         <Route path="/admin/review">
           <ProtectedRoute role="admin" component={AdminReports} />
+        </Route>
+        <Route path="/admin/camera-ai">
+          <ProtectedRoute role="admin" component={AdminCameraAi} />
         </Route>
         <Route path="/admin/teach-ai">
           <ProtectedRoute role="admin" component={AdminTeachAi} />

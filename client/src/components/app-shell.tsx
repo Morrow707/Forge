@@ -176,6 +176,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/review", label: "Reports", icon: Flag, overflow: true },
   { href: "/admin/coach-exercises", label: "Coach builds", icon: Copy, overflow: true },
   { href: "/admin/teach-ai", label: "Teach AI", icon: Sparkles, overflow: true },
+  { href: "/admin/camera-ai", label: "Camera AI", icon: Aperture, overflow: true },
   { href: "/admin/tracking-report", label: "AR Diagnosis", icon: FileText, overflow: true },
   { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
   { href: "/admin/knowledge-base", label: "Knowledge Base", icon: Library, overflow: true },

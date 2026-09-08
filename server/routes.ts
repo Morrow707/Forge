@@ -49,6 +49,7 @@ import { RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION } from "@shared/researc
 import { requireGuardianAccess } from "./auth";
 import { transcribeScannedPdf } from "./pdf-vision";
 import { tagPassages } from "./passage-tagging";
+import { renderPageForPreview } from "./pdf-page-images";
 import { estimateUsd, getAiUsage } from "./ai-usage";
 import { fastModel } from "./ai";
 import { extractPdf, splitIntoPassages, hashBytes } from "./pdf-extract";
@@ -4223,6 +4224,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
             "Nothing has been ingested yet. Start a transcription pass to have Claude read the pages."
           : undefined,
       });
+    },
+  );
+
+  /**
+   * One page of a stored source, as an image, for the page picker.
+   *
+   * Deliberately the SAME extraction the transcription pass uses. A preview
+   * drawn another way could look perfectly readable while the real pass saw
+   * nothing on that page, which would make the picker actively misleading --
+   * somebody would select forty pages of plates and pay for forty empty
+   * transcriptions. If it is blank here, it is blank there.
+   */
+  app.get(
+    "/api/admin/knowledge-sources/:id/page-preview/:pageNumber",
+    requireRole("admin"),
+    async (req, res) => {
+      const id = Number(req.params.id);
+      const pageNumber = Number(req.params.pageNumber);
+      if (!Number.isInteger(id) || !Number.isInteger(pageNumber)) {
+        return res.status(400).json({ message: "Invalid id" });
+      }
+      const source = await storage.getKnowledgeSource(id);
+      if (!source?.filePath) return res.status(404).json({ message: "Source not found" });
+
+      const diskPath = path.join(UPLOADS_ROOT, source.filePath.replace(/^\/uploads\//, ""));
+      try {
+        const bytes = await fs.promises.readFile(diskPath);
+        const image = await renderPageForPreview(bytes, pageNumber);
+        if (!image) {
+          // 204 rather than 404: the page exists, it simply has nothing the
+          // transcription pass could read. The picker renders that as an
+          // explicit "nothing to read here" tile, which is information.
+          return res.status(204).end();
+        }
+        res.setHeader("Content-Type", image.mediaType);
+        // Page images never change for a given source, and a picker scrolling
+        // a 400-page book would otherwise re-extract the same pages
+        // repeatedly. Private: this is an admin-only document.
+        res.setHeader("Cache-Control", "private, max-age=3600");
+        res.send(image.data);
+      } catch {
+        res.status(422).json({ message: "Could not read that page." });
+      }
     },
   );
 

@@ -221,3 +221,42 @@ export async function extractPageImage(page: any, pageNumber: number): Promise<P
     data: encodePng(scaled.width, scaled.height, scaled.rgb).toString("base64"),
   };
 }
+
+/**
+ * One page of a stored PDF as image bytes, for the page picker.
+ *
+ * Reuses extractPageImage rather than adding a renderer, which means it
+ * shows exactly what the transcription pass will be reading -- if the
+ * preview is blank, the transcription would have found nothing on that page
+ * either. A preview drawn a different way could look fine while the real
+ * pass saw nothing, which is worse than no preview.
+ *
+ * Returns null for a page with no embedded image, which for a scanned book
+ * means a page the pass cannot read.
+ */
+export async function renderPageForPreview(
+  bytes: Buffer,
+  pageNumber: number,
+): Promise<{ mediaType: string; data: Buffer } | null> {
+  const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const doc = await pdfjs.getDocument({
+    data: new Uint8Array(bytes),
+    useSystemFonts: true,
+    disableFontFace: true,
+    isEvalSupported: false,
+  }).promise;
+
+  try {
+    if (pageNumber < 1 || pageNumber > doc.numPages) return null;
+    const page = await doc.getPage(pageNumber);
+    try {
+      const image = await extractPageImage(page, pageNumber);
+      if (!image) return null;
+      return { mediaType: image.mediaType, data: Buffer.from(image.data, "base64") };
+    } finally {
+      page.cleanup?.();
+    }
+  } finally {
+    await doc.destroy();
+  }
+}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -655,7 +655,7 @@ function TranscribeDialog({
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="kb-from">First page (optional)</Label>
+            <Label htmlFor="kb-from">First page</Label>
             <Input
               id="kb-from"
               inputMode="numeric"
@@ -665,7 +665,7 @@ function TranscribeDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="kb-to">Last page (optional)</Label>
+            <Label htmlFor="kb-to">Last page</Label>
             <Input
               id="kb-to"
               inputMode="numeric"
@@ -675,6 +675,18 @@ function TranscribeDialog({
             />
           </div>
         </div>
+
+        <PagePicker
+          sourceId={source.id}
+          pageCount={source.pageCount ?? 0}
+          fromPage={fromPage ? Number(fromPage) : 1}
+          toPage={toPage ? Number(toPage) : (source.pageCount ?? 1)}
+          onPick={(page, edge) => {
+            if (edge === "start") setFromPage(String(page));
+            else setToPage(String(page));
+          }}
+        />
+
         <p className="text-xs text-muted-foreground">
           Skipping the index, the front matter and the reference list is usually the biggest
           saving on a textbook. Nothing is lost by leaving them out; they answer no questions.
@@ -826,5 +838,202 @@ export default function AdminKnowledgeBase() {
     <AppShell title="Knowledge Base">
       <KnowledgeBaseContent />
     </AppShell>
+  );
+}
+
+/**
+ * The page picker, the way a print dialog does it: look at the pages, pick
+ * the range.
+ *
+ * Typing two numbers into a 400-page scan is guesswork -- an admin has no
+ * idea whether the index starts at term 380 or 412, so they either transcribe
+ * the whole thing or guess and cut real content. Seeing the pages removes the
+ * guess.
+ *
+ * WHAT THE THUMBNAILS ACTUALLY ARE
+ *
+ * The exact image the transcription pass reads, not a separate rendering.
+ * A preview drawn another way could look perfectly readable while the real
+ * pass saw nothing, which would make the picker worse than useless: somebody
+ * would select forty pages of plates and pay for forty empty transcriptions.
+ * A page that shows "nothing to read" here is a page the pass would also
+ * find empty, and that is information worth having before you pay.
+ *
+ * Loaded a window at a time. A 400-page book is 400 image extractions and
+ * nobody scrolls all of them; the strip pages through in blocks so the cost
+ * matches what is actually being looked at.
+ */
+const WINDOW = 12;
+
+function PagePicker({
+  sourceId,
+  pageCount,
+  fromPage,
+  toPage,
+  onPick,
+}: {
+  sourceId: number;
+  pageCount: number;
+  fromPage: number;
+  toPage: number;
+  onPick: (page: number, edge: "start" | "end") => void;
+}) {
+  const [windowStart, setWindowStart] = useState(1);
+  // Two-tap selection, and which tap comes next is explicit rather than
+  // inferred from where the page sits relative to the current range. The
+  // first attempt guessed, and guessing produced a control where the same
+  // tap on the same tile did different things depending on state nobody
+  // could see.
+  const [nextEdge, setNextEdge] = useState<"start" | "end">("start");
+
+  if (pageCount <= 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No page count on file for this source, so there is nothing to preview. The range boxes
+        above still work.
+      </p>
+    );
+  }
+
+  const last = Math.min(pageCount, windowStart + WINDOW - 1);
+  const pages = Array.from({ length: last - windowStart + 1 }, (_, i) => windowStart + i);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          Pages {windowStart}–{last} of {pageCount}. Next tap sets the{" "}
+          <span className="font-semibold text-foreground">
+            {nextEdge === "start" ? "first" : "last"}
+          </span>{" "}
+          page.
+        </p>
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={windowStart <= 1}
+            onClick={() => setWindowStart(Math.max(1, windowStart - WINDOW))}
+          >
+            Back
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={last >= pageCount}
+            onClick={() => setWindowStart(Math.min(pageCount, windowStart + WINDOW))}
+          >
+            Forward
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {pages.map((page) => {
+          const inRange = page >= fromPage && page <= toPage;
+          return (
+            <button
+              key={page}
+              type="button"
+              onClick={() => {
+                onPick(page, nextEdge);
+                setNextEdge(nextEdge === "start" ? "end" : "start");
+              }}
+              className={cn(
+                "group relative overflow-hidden rounded-md border transition-colors",
+                inRange ? "border-primary" : "border-border opacity-50 hover:opacity-100",
+              )}
+              title={`Page ${page}`}
+            >
+              <PagePreview sourceId={sourceId} page={page} />
+              <span
+                className={cn(
+                  "absolute bottom-0 left-0 right-0 bg-background/80 py-0.5 text-center text-[10px] font-semibold",
+                  inRange ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {page}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        A blank tile is a page with nothing the reader can pick up -- it would transcribe to
+        nothing, so it is worth leaving out of the range.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * One page thumbnail.
+ *
+ * Fetched rather than set as an <img src>, because in the native app the
+ * session is a bearer token and an img tag cannot send a header -- every
+ * thumbnail would have come back 401 on a phone, which is the one place this
+ * picker matters most. The fetch goes through the same helper the rest of
+ * the app uses, so it carries the token on native and the cookie on web.
+ *
+ * A 204 means the page holds nothing the reader can pick up. Rendered as an
+ * explicit "nothing to read" rather than a broken image, because that is a
+ * real answer about the page and worth seeing before paying to transcribe
+ * it.
+ */
+function PagePreview({ sourceId, page }: { sourceId: number; page: number }) {
+  const [state, setState] = useState<"loading" | "empty" | "error">("loading");
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const token = getNativeToken();
+        const res = await fetch(
+          resolveApiUrl(`/api/admin/knowledge-sources/${sourceId}/page-preview/${page}`),
+          {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            credentials: "include",
+          },
+        );
+        if (cancelled) return;
+        if (res.status === 204) {
+          setState("empty");
+          return;
+        }
+        if (!res.ok) {
+          setState("error");
+          return;
+        }
+        objectUrl = URL.createObjectURL(await res.blob());
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        setUrl(objectUrl);
+      } catch {
+        if (!cancelled) setState("error");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      // Revoked on unmount, or scrolling a 400-page book leaks a blob per
+      // page for the life of the session.
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [sourceId, page]);
+
+  if (url) {
+    return <img src={url} alt={`Page ${page}`} className="aspect-[3/4] w-full bg-muted object-cover" />;
+  }
+
+  return (
+    <div className="flex aspect-[3/4] w-full items-center justify-center bg-muted px-1 text-center text-[9px] leading-tight text-muted-foreground">
+      {state === "loading" ? "…" : state === "empty" ? "nothing to read" : "couldn't load"}
+    </div>
   );
 }
