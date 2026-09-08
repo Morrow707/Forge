@@ -1880,24 +1880,34 @@ export function dominantAxisFrame(points: { x: number; y: number }[]): {
   // the very reversals segmentation needs. That is a way to find FEWER reps than plain image-y,
   // which is worse than not trying.
   //
-  // Detrending first removes it. Each point has a centred moving average subtracted, over a
-  // window long enough to span a rep or two, so anything slower than a rep contributes nothing
-  // to the covariance and the axis is chosen by the oscillation alone. The projection itself is
-  // still applied to the ORIGINAL points -- the detrended copy exists only to pick a direction.
-  const window = Math.max(3, Math.min(Math.floor(points.length / 4), 121));
-  const half = Math.floor(window / 2);
-  const detrended = points.map((p, i) => {
-    const from = Math.max(0, i - half);
-    const to = Math.min(points.length - 1, i + half);
-    let sx = 0;
-    let sy = 0;
-    for (let j = from; j <= to; j++) {
-      sx += points[j].x;
-      sy += points[j].y;
-    }
-    const n = to - from + 1;
-    return { x: p.x - sx / n, y: p.y - sy / n };
-  });
+  // Detrending first removes it, by subtracting the straight line each axis is drifting along
+  // rather than a moving average. The first attempt at this used a centred moving average, and
+  // the window is the whole difficulty with that: any window comparable to a rep subtracts the
+  // REP, not the drift. It shipped at about two seconds against three-second bench reps, so it
+  // removed most of the signal it was supposed to preserve and left the axis to be chosen from
+  // what remained, which was noise -- a set that should have found ten reps still found two.
+  //
+  // A least-squares line has no window to get wrong. Drift over a set is close to linear, a rep
+  // is an oscillation about it that sums to nearly nothing over the take, so the fit follows the
+  // drift and leaves the reps in the residual whatever tempo they are lifted at. The projection
+  // is still applied to the ORIGINAL points; this copy only picks a direction.
+  const n = points.length;
+  const meanI = (n - 1) / 2;
+  let sii = 0;
+  let six = 0;
+  let siy = 0;
+  for (let i = 0; i < n; i++) {
+    const di = i - meanI;
+    sii += di * di;
+    six += di * (points[i].x - meanX);
+    siy += di * (points[i].y - meanY);
+  }
+  const slopeX = sii > 0 ? six / sii : 0;
+  const slopeY = sii > 0 ? siy / sii : 0;
+  const detrended = points.map((p, i) => ({
+    x: p.x - meanX - slopeX * (i - meanI),
+    y: p.y - meanY - slopeY * (i - meanI),
+  }));
 
   // Covariance of the detrended trace. Symmetric, so three numbers describe it.
   let sxx = 0;
