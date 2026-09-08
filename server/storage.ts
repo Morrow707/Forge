@@ -22184,6 +22184,22 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   },
 
   /**
+   * Records the page count once extraction has actually read the file.
+   *
+   * The upload request no longer waits for extraction, so the source row is
+   * created before anyone knows how long the book is. Zero pages on the
+   * screen for the first minute is honest; a guess would not be.
+   */
+  async setKnowledgeSourcePageCount(id: number, pageCount: number) {
+    const [row] = await db
+      .update(knowledgeSources)
+      .set({ pageCount })
+      .where(eq(knowledgeSources.id, id))
+      .returning();
+    return row ?? null;
+  },
+
+  /**
    * Adds passages to a source that already exists.
    *
    * The vision path needs this because it cannot write its passages in the

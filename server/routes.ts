@@ -4221,37 +4221,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.deleteKnowledgeSource(existing.id);
       }
 
-      let extracted;
-      try {
-        extracted = await extractPdf(req.file.buffer);
-      } catch (err) {
-        recordSystemFailure("storage", "Could not read an uploaded PDF", { detail: err });
-        return res.status(422).json({ message: "That PDF could not be read. It may be corrupt or password-protected." });
-      }
-
-      // A scan is not a failure and is no longer a dead end. The file is
-      // stored and the source is created with no passages and a
-      // needs_vision status; the admin then starts a transcription pass,
-      // which is a separate request because it runs for minutes to hours.
-      const split = extracted.looksScanned ? [] : splitIntoPassages(extracted.pages);
-
-      // Written only once extraction has succeeded and the file is known not
-      // to be a duplicate -- a rejected upload should leave nothing behind on
-      // the disk that holds every athlete's video.
+      // Written before anything is read out of it -- a rejected upload has
+      // already been turned away above, so from here the bytes are worth
+      // keeping whatever extraction makes of them.
       await fs.promises.mkdir(KNOWLEDGE_SOURCES_DIR, { recursive: true });
       const filename = `${crypto.randomUUID()}.pdf`;
       await fs.promises.writeFile(path.join(KNOWLEDGE_SOURCES_DIR, filename), req.file.buffer);
       const stored = `/uploads/knowledge-sources/${filename}`;
 
-      // The source row is created EMPTY and the passages are filed
-      // afterwards, in the background.
+      // EXTRACTION IS NO LONGER INSIDE THIS REQUEST EITHER.
       //
-      // Tagging used to run inside this request. A real textbook is a couple
-      // of thousand passages, which is a couple of hundred model calls and
-      // several minutes -- so the button sat on "Extracting..." with no
-      // signal, and every proxy between a phone and this process was free to
-      // give up on the request long before it finished. An upload that takes
-      // minutes must not be a request that takes minutes.
+      // Tagging was moved out already, and the upload still failed with
+      // "Could not reach the server" on a real textbook, because reading a
+      // 700-page PDF is itself a minute or more of work sitting between a
+      // 50MB upload and the response. The phone had already spent that long
+      // sending the file; anything in front of this process was free to give
+      // up before a byte came back, and the client cannot tell a dropped
+      // connection from a dead server.
+      //
+      // So the request now ends as soon as the file is on disk and the row
+      // exists. Everything after that -- reading pages, splitting, tagging --
+      // reports through the same progress columns the screen already polls.
       const source = await storage.createKnowledgeSource({
         uploadedByUserId: req.user!.id,
         title: parsed.data.title,
@@ -4259,83 +4249,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
         licenceNote: parsed.data.licenceNote ?? null,
         filePath: stored,
         fileHash,
-        pageCount: extracted.pageCount,
+        // Unknown until extraction runs. Zero for a minute is honest; a
+        // guess would be a number somebody might act on.
+        pageCount: 0,
         domains,
         passages: [],
-        // Starts in the phase it is actually in. Created as "needs_vision"
-        // and corrected a moment later, a text PDF flashed "No readable text
-        // was found" on the admin's screen while its passages were being
-        // filed -- the opposite of the truth, and the message somebody would
-        // act on.
-        initialStatus: extracted.looksScanned ? "needs_vision" : "extracting",
+        initialStatus: "extracting",
       });
+      await storage.setKnowledgeProgress(source.id, null, null, "Reading the file...");
 
-      if (split.length > 0) {
-        await storage.setKnowledgeProgress(source.id, 0, split.length, "Starting...");
+      const fileBuffer = req.file.buffer;
 
-        // Not awaited. Every exit below writes a terminal status, because a
-        // source left at "extracting" forever looks exactly like one still
-        // working.
-        void (async () => {
-          try {
-            // Filed in chunks so a long run appends as it goes rather than
-            // holding everything until the end -- the same reason the
-            // transcription pass checkpoints. A crash partway leaves the
-            // passages already filed, not nothing.
-            const CHUNK = 120;
-            let filed = 0;
-            for (let i = 0; i < split.length; i += CHUNK) {
-              const slice = split.slice(i, i + CHUNK);
-              const tagged = await tagPassages(slice, domains, (done) => {
-                void storage.setKnowledgeProgress(
-                  source.id,
-                  filed + done,
-                  split.length,
-                  `Filing passages by subject...`,
-                );
-              });
-              filed += await storage.appendKnowledgePassages(source.id, tagged);
-              await storage.setKnowledgeProgress(source.id, filed, split.length);
-            }
+      // Not awaited. Every exit writes a terminal status, because a source
+      // left at "extracting" forever looks exactly like one still working.
+      void (async () => {
+        try {
+          const extracted = await extractPdf(fileBuffer);
+          await storage.setKnowledgeSourcePageCount(source.id, extracted.pageCount);
 
+          // A scan is not a failure. The file is stored and the source
+          // exists; the admin starts a transcription pass from the list.
+          if (extracted.looksScanned) {
             await storage.setKnowledgeProgress(source.id, null, null);
             await storage.setKnowledgeSourceStatus(
               source.id,
-              filed > 0 ? "ready" : "failed",
-              filed > 0 ? `${filed} passage(s) ingested.` : "Nothing could be ingested.",
+              "needs_vision",
+              "No readable text -- the pages are images. Start a transcription pass to have them read.",
             );
+            return;
+          }
 
-            if (filed > 0) {
-              void storage
-                .detectKnowledgeConflicts(source.id)
-                .catch((err) =>
-                  recordSystemFailure("ai", "Conflict detection failed after an ingest", {
-                    detail: err,
-                  }),
-                );
-            }
-          } catch (err) {
-            recordSystemFailure("ai", "Filing passages failed after an upload", { detail: err });
+          const split = splitIntoPassages(extracted.pages);
+          if (split.length === 0) {
             await storage.setKnowledgeProgress(source.id, null, null);
             await storage.setKnowledgeSourceStatus(
               source.id,
               "failed",
-              "Filing passages failed. Delete this source and upload it again.",
+              "Nothing could be ingested.",
             );
+            return;
           }
-        })();
-      }
+
+          await storage.setKnowledgeProgress(source.id, 0, split.length, "Starting...");
+
+          // Filed in chunks so a long run appends as it goes rather than
+          // holding everything until the end -- the same reason the
+          // transcription pass checkpoints. A crash partway leaves the
+          // passages already filed, not nothing.
+          const CHUNK = 120;
+          let filed = 0;
+          for (let i = 0; i < split.length; i += CHUNK) {
+            const slice = split.slice(i, i + CHUNK);
+            const tagged = await tagPassages(slice, domains, (done) => {
+              void storage.setKnowledgeProgress(
+                source.id,
+                filed + done,
+                split.length,
+                `Filing passages by subject...`,
+              );
+            });
+            filed += await storage.appendKnowledgePassages(source.id, tagged);
+            await storage.setKnowledgeProgress(source.id, filed, split.length);
+          }
+
+          await storage.setKnowledgeProgress(source.id, null, null);
+          await storage.setKnowledgeSourceStatus(
+            source.id,
+            filed > 0 ? "ready" : "failed",
+            filed > 0 ? `${filed} passage(s) ingested.` : "Nothing could be ingested.",
+          );
+
+          if (filed > 0) {
+            void storage
+              .detectKnowledgeConflicts(source.id)
+              .catch((err) =>
+                recordSystemFailure("ai", "Conflict detection failed after an ingest", {
+                  detail: err,
+                }),
+              );
+          }
+        } catch (err) {
+          recordSystemFailure("storage", "Ingesting an uploaded PDF failed", { detail: err });
+          await storage.setKnowledgeProgress(source.id, null, null);
+          await storage.setKnowledgeSourceStatus(
+            source.id,
+            "failed",
+            "That PDF could not be read. It may be corrupt or password-protected. " +
+              "Delete this source and try again.",
+          );
+        }
+      })();
 
       res.status(201).json({
         ...source,
         passageCount: 0,
-        pendingPassages: split.length,
-        looksScanned: extracted.looksScanned,
-        message: extracted.looksScanned
-          ? "This PDF has almost no readable text, so its pages are images rather than text. " +
-            "Nothing has been ingested yet. Start a transcription pass to have Claude read the pages."
-          : `Reading ${extracted.pageCount} page(s). Filing ${split.length} passage(s) by subject now -- ` +
-            "progress shows on the source below, and you can leave this screen.",
+        message:
+          "Uploaded. Reading the file and filing it by subject now -- progress shows on the " +
+          "source below, and you can leave this screen.",
       });
     },
   );

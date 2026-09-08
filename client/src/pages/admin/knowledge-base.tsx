@@ -146,16 +146,11 @@ export function KnowledgeBaseContent() {
         toast.error(body.message || "Upload failed");
         return;
       }
-      if (body.looksScanned) {
-        // Not a failure. The file is stored and the source exists; it is
-        // waiting on a transcription pass the admin starts from the list.
-        toast.info(body.message, { duration: 15000 });
-      } else {
-        // The passages are still being filed at this point, so the message
-        // says what is happening rather than claiming a finished count that
-        // would be zero.
-        toast.success(body.message ?? "Uploaded.", { duration: 10000 });
-      }
+      // Nothing has been read yet at this point -- the reply comes back as
+      // soon as the file is stored, and whether the book is text or a scan
+      // is not known until extraction runs. The source row says which, a
+      // moment later, on the screen the admin is already looking at.
+      toast.success(body.message ?? "Uploaded.", { duration: 10000 });
       setTitle("");
       setCitation("");
       setLicenceNote("");
@@ -166,7 +161,17 @@ export function KnowledgeBaseContent() {
       // the new book's row.
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-coverage"] });
     } catch {
-      toast.error("Could not reach the server.");
+      // A thrown fetch on this screen is almost always the upload itself
+      // being cut off rather than the server being down -- a 50MB book over
+      // a phone connection. Saying "could not reach the server" sends
+      // somebody to check a server that is fine, so the message names the
+      // likelier cause and the thing to do about it.
+      toast.error(
+        "The upload did not finish. This is usually the connection dropping partway through a " +
+          "large file -- check the list below in case it arrived, then try again on wifi.",
+        { duration: 15000 },
+      );
+      qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
     } finally {
       setUploading(false);
     }
