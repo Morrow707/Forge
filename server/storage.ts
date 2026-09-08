@@ -144,6 +144,7 @@ import {
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
 import { KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain, knowledgeDomainLabel } from "@shared/knowledge-domains";
+import { answerStyleInstruction, isAnswerRegister, isAnswerLength } from "@shared/answer-style";
 import { normalizeInjuryRegion, INJURY_REGIONS, type InjuryRegion } from "@shared/injury-taxonomy";
 import {
   findSimilarPassages,
@@ -4788,6 +4789,42 @@ export const storage = {
     return updated;
   },
 
+  /**
+   * Sets how someone wants the assistants to write to them.
+   *
+   * Self-service by design: this is the one AI setting a person can change
+   * about their own experience without asking anybody, because getting a
+   * plainer answer is not a decision that needs a coach's permission.
+   *
+   * An unrecognised value clears rather than rejects. A preference is not
+   * worth a 400 to the person who set it, and clearing lands them on the
+   * default, which is the behaviour everyone had before this existed.
+   */
+  async setAnswerStyle(userId: number, input: { register?: string | null; length?: string | null }) {
+    const [row] = await db
+      .update(users)
+      .set({
+        answerRegister:
+          input.register && isAnswerRegister(input.register) ? input.register : null,
+        answerLength: input.length && isAnswerLength(input.length) ? input.length : null,
+      })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        answerRegister: users.answerRegister,
+        answerLength: users.answerLength,
+      });
+    return row ?? null;
+  },
+
+  async getAnswerStyle(userId: number) {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { answerRegister: true, answerLength: true },
+    });
+    return row ?? null;
+  },
+
   async getResearchDataConsent(athleteId: number) {
     const row = await db.query.users.findFirst({
       where: eq(users.id, athleteId),
@@ -7394,7 +7431,7 @@ Write ONE short note (1-2 sentences, plain language, talking directly to the ath
     const text = await askClaude(
       "You are a concise, expert strength and conditioning coach's assistant. You write short, direct, athlete-facing readiness notes grounded only in the data you're given -- never invent data, never give medical advice, never diagnose. If soreness or stress data suggests something concerning, tell the athlete to flag it with their coach rather than offering a workaround. Some of the athlete's profile is coach-only analytics (health status, joint ROM flags, leg-drive asymmetry, training-load/ACWR risk, camera-tracked bar speed trend) they don't see on their own dashboard -- use it to shape the note's tone and advice, but never name those specific coach-only labels/numbers in the note itself (e.g. never write \"your ACWR is red\" or \"your bar speed dropped 22%\" or \"you're flagged as hurt\"); phrase any influence from it generally instead.",
       [{ role: "user", content: prompt }],
-      { maxTokens: 350 },
+      { maxTokens: 350, feature: "readiness-briefing" },
     );
     if (!text) return null;
 
@@ -7475,7 +7512,7 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
     const text = await askClaude(
       "You are a concise, encouraging strength and conditioning coach's assistant writing a weekly training summary. Ground everything strictly in the data given -- never invent numbers, exercises, or events you weren't told about. Some of the athlete's profile is coach-only analytics (health status, joint ROM flags, leg-drive asymmetry, training-load/ACWR risk) they don't see on their own dashboard -- use it to shape the summary's tone and emphasis, but never name those specific coach-only labels/numbers directly.",
       [{ role: "user", content: prompt }],
-      { maxTokens: 450 },
+      { maxTokens: 450, feature: "athlete-digest" },
     );
     if (!text) return null;
 
@@ -7666,7 +7703,7 @@ Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do n
           required: ["summary", "deficits"],
         },
       },
-      { maxTokens: 1500 },
+      { maxTokens: 1500, feature: "weakness-report" },
     );
     if (!result) return null;
     const parsed = z
@@ -7806,7 +7843,7 @@ Write a short (3-5 sentence) plain-language weekly summary for the coach, highli
     const text = await askClaude(
       "You are a concise, direct strength and conditioning assistant coach writing a weekly roster summary for the head coach. Ground everything strictly in the data given -- never invent athletes, numbers, or events you weren't told about. This summary is for the coach's eyes only, to help them decide who to check in with.",
       [{ role: "user", content: prompt }],
-      { maxTokens: 500 },
+      { maxTokens: 500, feature: "coach-digest" },
     );
     if (!text) return null;
 
@@ -10081,8 +10118,8 @@ Hard rules, no exceptions:
 
     const raw =
       images && images.length > 0
-        ? await askClaudeVisionStructured(system, instruction, images, tool, { maxTokens: 16000 })
-        : await askClaudeStructured(system, instruction, tool, { maxTokens: 16000 });
+        ? await askClaudeVisionStructured(system, instruction, images, tool, { maxTokens: 16000, feature: "class-draft" })
+        : await askClaudeStructured(system, instruction, tool, { maxTokens: 16000, feature: "class-draft" });
     if (!raw) return null;
 
     const parsed = classAiDraftSchema.safeParse(raw);
@@ -12824,7 +12861,7 @@ ${catalog}
 
 Design a complete draft program matching the coach's request.`;
 
-    const rawDraft = await askClaudeStructured(system, userPrompt, tool, { maxTokens: 4096 });
+    const rawDraft = await askClaudeStructured(system, userPrompt, tool, { maxTokens: 4096, feature: "program-draft" });
     const parsedDraft = programDraftSchema.safeParse(rawDraft);
     if (!parsedDraft.success) return null;
     const draft = parsedDraft.data;
@@ -13952,7 +13989,7 @@ ${catalog}
 
 Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGroup}, ${pe.exercise.movementType || "unclassified"} movement${pe.exercise.movementComplexity ? `, ${pe.exercise.movementComplexity}` : ""}${pe.exercise.bodyRegion ? `, ${pe.exercise.bodyRegion}` : ""}${pe.exercise.plane ? `, ${pe.exercise.plane}` : ""}) for a suitable alternative. Reason: ${reason}${notes.trim() ? ` -- ${notes.trim()}` : ""}.${forgeAiContext ? `\n\n${forgeAiContext}` : ""}`;
 
-    const rawResult = await askClaudeStructured(system, userPrompt, tool, { maxTokens: 400 });
+    const rawResult = await askClaudeStructured(system, userPrompt, tool, { maxTokens: 400, feature: "exercise-swap" });
     const parsed = exerciseSubstitutionSchema.safeParse(rawResult);
     if (!parsed.success || !validIds.includes(parsed.data.exerciseId)) {
       return fail("Sorry, I couldn't find a good swap just now -- try again in a bit.");
@@ -14072,6 +14109,15 @@ Hard rules, no exceptions -- these exist because you are not a registered dietit
     // The nutrition domain only. A strength textbook's periodization
     // chapters are tagged strength and stay out of here even when the same
     // file supplied both -- see server/passage-tagging.ts.
+    // How this athlete asked to be written to. Style only -- the instruction
+    // itself says so, because the failure mode is a model reading "be brief"
+    // as permission to drop a referral. Empty for anyone who never touched
+    // the setting, so their answers are byte-identical to before.
+    const styleInstruction = answerStyleInstruction(
+      nutritionAthleteProfile?.answerRegister,
+      nutritionAthleteProfile?.answerLength,
+    );
+
     const nutritionPassages = await searchKnowledgePassages({
       query: question,
       domains: ["nutrition"],
@@ -14083,14 +14129,14 @@ Hard rules, no exceptions -- these exist because you are not a registered dietit
 
 Athlete context:
 ${athleteContext}
-- Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}${taughtGuidelines ? `\n\nAdditional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too, subject to rule 1 above:\n${coachesCornerPrinciples}` : ""}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}${nutritionReference ? `\n\n${nutritionReference}` : ""}`;
+- Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}${taughtGuidelines ? `\n\nAdditional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too, subject to rule 1 above:\n${coachesCornerPrinciples}` : ""}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}${nutritionReference ? `\n\n${nutritionReference}` : ""}${styleInstruction ? `\n\n${styleInstruction}` : ""}`;
 
     const system: SystemPrompt = [
       { text: staticSystem, cache: true },
       { text: dynamicSystem },
     ];
 
-    const text = await askClaude(system, [{ role: "user", content: question }], { maxTokens: 500 });
+    const text = await askClaude(system, [{ role: "user", content: question }], { maxTokens: 500, feature: "nutrition-answer" });
     if (!text?.trim()) {
       return { error: "Sorry, I couldn't come up with an answer just now -- try again in a bit." };
     }
@@ -15924,7 +15970,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
 
     const userText = `${metricsText ? `Here are frames from a set of ${exerciseName}.\n\n${metricsText}` : `Here are frames from a set of ${exerciseName}. What do you see?`}\n\nAthlete profile and analytics:\n${athleteContext}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}`;
 
-    const text = await askClaudeVision(system, userText, images, { maxTokens: 600 });
+    const text = await askClaudeVision(system, userText, images, { maxTokens: 600, feature: "form-check" });
 
     return reply(
       text?.trim() ?? "Couldn't get a read on that video -- try again with a clearer angle.",
@@ -18259,7 +18305,7 @@ ${catalog}`;
       system,
       userPrompt,
       tool,
-      { maxTokens: 800 },
+      { maxTokens: 800, feature: "pain-substitution" },
     );
     const parsed = generateModifiedWorkoutSchema.safeParse(rawResult);
     if (!parsed.success) {
@@ -21584,7 +21630,11 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
             required: ["conflicts"],
           },
         },
-        { maxTokens: 400 },
+        // The cheap model, and a feature label so the spend page shows what a
+        // whole-book conflict sweep actually costs. This is a yes/no
+        // comparison of two paragraphs run once per passage; the expensive
+        // model buys nothing and a 400-page book is a thousand of them.
+        { maxTokens: 400, model: fastModel, feature: "conflict-detection" },
       );
 
       if (!verdict?.conflicts || !verdict.summary) continue;

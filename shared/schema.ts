@@ -342,6 +342,12 @@ export const users = pgTable(
     // it is the reason the mirror is described as anonymous at the export
     // boundary rather than anonymous everywhere.
     researchSubjectId: uuid("research_subject_id"),
+    // How this person wants the assistants to write to them. See
+    // shared/answer-style.ts -- two independent axes, both defaulting to the
+    // middle, because an assistant that changes its voice before being asked
+    // is worse than one that never does.
+    answerRegister: text("answer_register"),
+    answerLength: text("answer_length"),
     // The athlete's own IANA time zone (e.g. "America/Los_Angeles"),
     // reported by their browser or app rather than asked for, and used to
     // work out what "today" means for them.

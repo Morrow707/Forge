@@ -2759,6 +2759,11 @@ ALTER TYPE "knowledge_source_status" ADD VALUE IF NOT EXISTS 'transcribing';
 
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "research_subject_id" uuid;
 
+-- How each person wants to be written to. Null on both means the default,
+-- which is exactly the behaviour every reader had before these existed.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "answer_register" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "answer_length" text;
+
 CREATE TABLE IF NOT EXISTS "research_subjects" (
   "subject_id" uuid PRIMARY KEY,
   "age" integer,

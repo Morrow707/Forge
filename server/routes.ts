@@ -4411,6 +4411,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // What the AI has cost, by day, feature and model. There was no counter of
   // any kind before this, so every figure anyone quoted was reasoning from
   // the code rather than from a bill.
+  // How the assistants should write to you. Any signed-in person, about
+  // themselves only -- getting a plainer answer is not a decision that needs
+  // somebody else's permission.
+  app.get("/api/answer-style", requireAuth, async (req, res) => {
+    res.json((await storage.getAnswerStyle(req.user!.id)) ?? {});
+  });
+
+  app.put("/api/answer-style", requireAuth, async (req, res) => {
+    const parsed = z
+      .object({
+        register: z.string().nullable().optional(),
+        length: z.string().nullable().optional(),
+      })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const row = await storage.setAnswerStyle(req.user!.id, parsed.data);
+    if (!row) return res.status(404).json({ message: "Not found" });
+    res.json(row);
+  });
+
   app.get("/api/admin/ai-usage", requireRole("admin"), async (req, res) => {
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 180);
     res.json(await getAiUsage(days));
