@@ -4136,6 +4136,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: z.string().trim().min(1).max(200),
           citation: z.string().trim().max(300).optional(),
           licenceNote: z.string().trim().max(500).optional(),
+          // Multipart sends everything as text, so "true" rather than a
+          // boolean.
+          replace: z.string().optional().transform((v) => v === "true"),
           domains: z.string().optional(),
         })
         .safeParse(req.body);
@@ -4153,13 +4156,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hashed and checked before extraction: re-uploading the same book
       // would double every passage AND manufacture a contradiction between
       // the document and itself.
+      //
+      // Refusing outright was the wrong end of that. The reason somebody
+      // uploads the same book twice is almost always that the first ingest
+      // produced something wrong -- a bad range, the wrong areas ticked, a
+      // run that died partway -- and telling them "already ingested" leaves
+      // them stuck with the bad copy and no obvious way out. `replace` is
+      // the way out: the old source and every passage from it go, then this
+      // one is ingested fresh.
+      //
+      // Still opt-in rather than the default. Replacing silently would make
+      // a mistyped re-upload destroy a good ingest with no warning.
       const fileHash = hashBytes(req.file.buffer);
       const existing = await storage.getKnowledgeSourceByHash(fileHash);
-      if (existing) {
+      if (existing && !parsed.data.replace) {
         return res.status(409).json({
           message: `That exact file is already ingested as "${existing.title}".`,
           existingId: existing.id,
+          existingTitle: existing.title,
+          // The client turns this into a "Replace it" button, so the way out
+          // is one tap from the refusal rather than something to go and find.
+          canReplace: true,
         });
+      }
+      if (existing && parsed.data.replace) {
+        await storage.deleteKnowledgeSource(existing.id);
       }
 
       let extracted;
@@ -4606,6 +4627,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // only place an admin can see the difference.
   app.get("/api/admin/knowledge-coverage", requireRole("admin"), async (_req, res) => {
     res.json(await storage.getKnowledgeCoverage());
+  });
+
+  // What each page of a source actually produced. The reading view: an admin
+  // can see where the real content stops and the index begins, which is the
+  // thing nobody can know at upload time.
+  app.get("/api/admin/knowledge-sources/:id/page-map", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    res.json(await storage.getKnowledgePageMap(id));
+  });
+
+  // Drop a page range -- the foreword, the index, the bibliography. The undo
+  // for what can only be judged after seeing what came out.
+  app.delete("/api/admin/knowledge-sources/:id/pages", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const parsed = z
+      .object({ fromPage: z.number().int().min(1), toPage: z.number().int().min(1) })
+      .refine((v) => v.toPage >= v.fromPage, { message: "The last page must not be before the first." })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+
+    const removed = await storage.deleteKnowledgePassagesInRange(
+      id,
+      parsed.data.fromPage,
+      parsed.data.toPage,
+    );
+    res.json({ removed });
   });
 
   // Correcting one passage, rather than deleting a whole book because a

@@ -68,6 +68,7 @@ export function KnowledgeBaseContent() {
   const [searchText, setSearchText] = useState("");
   const [searchDomains, setSearchDomains] = useState<string[]>(["strength"]);
   const [transcribeTarget, setTranscribeTarget] = useState<Source | null>(null);
+  const [readingSource, setReadingSource] = useState<Source | null>(null);
 
   const { data: sources = [] } = useQuery<Source[]>({
     queryKey: ["/api/admin/knowledge-sources"],
@@ -103,7 +104,7 @@ export function KnowledgeBaseContent() {
     enabled: false,
   });
 
-  async function upload() {
+  async function upload(replace = false) {
     if (!file || !title.trim() || domains.length === 0) return;
     setUploading(true);
     try {
@@ -112,6 +113,7 @@ export function KnowledgeBaseContent() {
       form.append("title", title.trim());
       if (citation.trim()) form.append("citation", citation.trim());
       if (licenceNote.trim()) form.append("licenceNote", licenceNote.trim());
+      if (replace) form.append("replace", "true");
       form.append("domains", domains.join(","));
 
       const token = getNativeToken();
@@ -123,6 +125,20 @@ export function KnowledgeBaseContent() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // The way out of "already ingested" is one tap, not something to go
+        // and find. Somebody re-uploading the same book almost always does
+        // it because the first ingest came out wrong, and a bare refusal
+        // leaves them stuck with the bad copy.
+        if (body.canReplace) {
+          toast.error(body.message, {
+            duration: 20000,
+            action: {
+              label: "Replace it",
+              onClick: () => void upload(true),
+            },
+          });
+          return;
+        }
         toast.error(body.message || "Upload failed");
         return;
       }
@@ -275,7 +291,7 @@ export function KnowledgeBaseContent() {
               </p>
             </div>
             <Button
-              onClick={upload}
+              onClick={() => void upload()}
               disabled={uploading || !file || !title.trim() || domains.length === 0}
             >
               {/* "Uploading and reading" rather than "Extracting", because
@@ -405,6 +421,15 @@ export function KnowledgeBaseContent() {
                       <p className="text-xs text-muted-foreground">{s.statusDetail}</p>
                     )}
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setReadingSource(s)}
+                    disabled={s.passageCount === 0}
+                  >
+                    <BookOpen className="mr-1.5 h-4 w-4" />
+                    Read
+                  </Button>
                   {s.status === "needs_vision" && (
                     <Button
                       variant="secondary"
@@ -437,6 +462,10 @@ export function KnowledgeBaseContent() {
             )}
           </CardContent>
         </Card>
+
+        {readingSource && (
+          <SourceReader source={readingSource} onClose={() => setReadingSource(null)} />
+        )}
 
         <TranscribeDialog
           source={transcribeTarget}
@@ -1099,5 +1128,204 @@ function IngestProgress({ source }: { source: Source }) {
         This runs on the server -- you can leave this screen and come back.
       </p>
     </div>
+  );
+}
+
+/**
+ * Reading what actually came out of a book, and dropping the parts that
+ * should not have.
+ *
+ * Which pages are a foreword, an index or a bibliography is not knowable at
+ * upload time -- you can only judge it after seeing the text. Before this
+ * the only remedy was deleting the whole book and paying to ingest it again.
+ *
+ * The page map comes first because it answers the question at a glance. Real
+ * chapters produce dense passages; an index produces many tiny ones; front
+ * matter produces almost nothing. The shape of that strip shows where the
+ * body of the book starts and stops without reading a word of it.
+ */
+function SourceReader({ source, onClose }: { source: Source; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [offset, setOffset] = useState(0);
+  const [fromPage, setFromPage] = useState("");
+  const [toPage, setToPage] = useState("");
+  const PAGE_SIZE = 25;
+
+  const { data: pageMap = [] } = useQuery<
+    { pageNumber: number; passages: number; characters: number }[]
+  >({
+    queryKey: ["knowledge-page-map", source.id],
+    queryFn: () => getJson(`/api/admin/knowledge-sources/${source.id}/page-map`),
+  });
+
+  const { data: passages = [] } = useQuery<
+    {
+      id: number;
+      pageNumber: number;
+      endPageNumber: number;
+      text: string;
+      topics: string[];
+      fromVision: boolean;
+    }[]
+  >({
+    queryKey: ["knowledge-passages", source.id, offset],
+    queryFn: () =>
+      getJson(
+        `/api/admin/knowledge-sources/${source.id}/passages?limit=${PAGE_SIZE}&offset=${offset}`,
+      ),
+  });
+
+  const dropPages = useMutation({
+    mutationFn: () =>
+      apiRequest("DELETE", `/api/admin/knowledge-sources/${source.id}/pages`, {
+        fromPage: Number(fromPage),
+        toPage: Number(toPage),
+      }),
+    onSuccess: async (res) => {
+      const body = await res.json();
+      toast.success(`Removed ${body.removed} passage(s) from pages ${fromPage}-${toPage}.`);
+      setFromPage("");
+      setToPage("");
+      qc.invalidateQueries({ queryKey: ["knowledge-page-map", source.id] });
+      qc.invalidateQueries({ queryKey: ["knowledge-passages", source.id] });
+      qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
+      qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-coverage"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove those pages"),
+  });
+
+  const canDrop = !!fromPage && !!toPage && Number(toPage) >= Number(fromPage);
+  // Below this, a page produced so little that it is almost certainly an
+  // index entry, a running header or a page of references rather than prose.
+  const THIN_PAGE_CHARS = 400;
+
+  return (
+    <Card className="border-primary/50">
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span>What came out of "{source.title}"</span>
+          <Button size="sm" variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </CardTitle>
+        <CardDescription>
+          {source.passageCount.toLocaleString()} passage(s), from{" "}
+          {pageMap.length.toLocaleString()} page(s) that produced any text.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Pages, by how much they produced
+          </p>
+          <div className="max-h-40 overflow-y-auto rounded-md border">
+            <div className="flex flex-wrap gap-1 p-2">
+              {pageMap.map((p) => (
+                <span
+                  key={p.pageNumber}
+                  title={`Page ${p.pageNumber}: ${p.passages} passage(s), ${p.characters} characters`}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[10px] tabular-nums",
+                    p.characters < THIN_PAGE_CHARS
+                      ? "bg-amber-500/20 text-amber-500"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {p.pageNumber}
+                </span>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Amber pages produced very little text. A run of them at the front or the back is
+            usually front matter, an index or a bibliography.
+          </p>
+        </div>
+
+        <div className="space-y-2 rounded-md border p-3">
+          <p className="text-sm font-medium">Remove a page range</p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="drop-from" className="text-xs">
+                From
+              </Label>
+              <Input
+                id="drop-from"
+                inputMode="numeric"
+                value={fromPage}
+                onChange={(e) => setFromPage(e.target.value.replace(/[^0-9]/g, ""))}
+                className="h-9 w-24"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="drop-to" className="text-xs">
+                To
+              </Label>
+              <Input
+                id="drop-to"
+                inputMode="numeric"
+                value={toPage}
+                onChange={(e) => setToPage(e.target.value.replace(/[^0-9]/g, ""))}
+                className="h-9 w-24"
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={!canDrop || dropPages.isPending}
+              onClick={() => dropPages.mutate()}
+            >
+              {dropPages.isPending ? "Removing..." : "Remove these pages"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Removes the passages from those pages and nothing else. The book stays, so you never
+            pay to ingest it again. A passage straddling the boundary goes with them.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              The passages themselves
+            </p>
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={offset === 0}
+                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+              >
+                Back
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={passages.length < PAGE_SIZE}
+                onClick={() => setOffset(offset + PAGE_SIZE)}
+              >
+                Forward
+              </Button>
+            </div>
+          </div>
+
+          {passages.map((p) => (
+            <div key={p.id} className="rounded-md border px-3 py-2">
+              <p className="text-xs font-bold text-muted-foreground">
+                p. {p.pageNumber}
+                {p.endPageNumber !== p.pageNumber && `-${p.endPageNumber}`}
+                {p.topics.length > 0 && (
+                  <span className="ml-2 font-normal">{p.topics.join(", ")}</span>
+                )}
+                {p.fromVision && (
+                  <span className="ml-2 font-normal text-amber-500">read from an image</span>
+                )}
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{p.text.slice(0, 600)}</p>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

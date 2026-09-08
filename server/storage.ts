@@ -22405,9 +22405,24 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         statusDetail: knowledgeSources.statusDetail,
         domains: knowledgeSources.domains,
         createdAt: knowledgeSources.createdAt,
-        passageCount: sql<number>`(SELECT count(*)::int FROM ${knowledgePassages} WHERE ${knowledgePassages.sourceId} = ${knowledgeSources.id})`,
+        // Counted with a real GROUP BY rather than a correlated subquery
+        // built from interpolated table references.
+        //
+        // The subquery form returned 1 for every source no matter how many
+        // passages it held -- a book with 2,700 passages reported "1
+        // passages" on the admin screen while the coverage table beside it
+        // reported thousands. Two numbers from the same table disagreeing by
+        // three orders of magnitude, and the wrong one was the one an admin
+        // would read first to decide whether an upload had worked.
+        //
+        // A left join keeps a source with no passages at all in the list,
+        // which is exactly the state a failed or in-progress ingest is in and
+        // the last thing that should vanish from the screen.
+        passageCount: sql<number>`count(${knowledgePassages.id})::int`,
       })
       .from(knowledgeSources)
+      .leftJoin(knowledgePassages, eq(knowledgePassages.sourceId, knowledgeSources.id))
+      .groupBy(knowledgeSources.id)
       .orderBy(desc(knowledgeSources.createdAt));
     return rows;
   },
@@ -22434,6 +22449,48 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .orderBy(asc(knowledgePassages.ordinal))
       .limit(limit)
       .offset(offset);
+  },
+
+  /**
+   * Removes every passage in a page range from one source.
+   *
+   * The undo for the thing nobody can get right at upload time: an index, a
+   * bibliography, a foreword. You only know where they start once you can see
+   * what came out, and before this the only remedy was deleting the whole
+   * book and paying to ingest it again.
+   *
+   * Ranges are inclusive and matched on any overlap, because a passage can
+   * straddle a page break -- one that starts on the last page of a chapter
+   * and ends on the first page of the index belongs to the index as much as
+   * the chapter, and leaving it in defeats the point of removing the range.
+   */
+  async deleteKnowledgePassagesInRange(sourceId: number, fromPage: number, toPage: number) {
+    const deleted = await db
+      .delete(knowledgePassages)
+      .where(
+        and(
+          eq(knowledgePassages.sourceId, sourceId),
+          lte(knowledgePassages.pageNumber, toPage),
+          gte(knowledgePassages.endPageNumber, fromPage),
+        ),
+      )
+      .returning({ id: knowledgePassages.id });
+    return deleted.length;
+  },
+
+  /** Which pages of a source actually produced passages, and how many each. */
+  async getKnowledgePageMap(sourceId: number) {
+    const rows = await db
+      .select({
+        pageNumber: knowledgePassages.pageNumber,
+        passages: sql<number>`count(*)::int`,
+        characters: sql<number>`sum(length(${knowledgePassages.text}))::int`,
+      })
+      .from(knowledgePassages)
+      .where(eq(knowledgePassages.sourceId, sourceId))
+      .groupBy(knowledgePassages.pageNumber)
+      .orderBy(asc(knowledgePassages.pageNumber));
+    return rows;
   },
 
   async runResearchCohortQuery(adminId: number, text: string) {
