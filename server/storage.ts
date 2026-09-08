@@ -145,6 +145,8 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
 import { KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain, knowledgeDomainLabel } from "@shared/knowledge-domains";
 import { answerStyleInstruction, isAnswerRegister, isAnswerLength } from "@shared/answer-style";
+import { renderNormsForPrompt } from "@shared/cohort-norms";
+import { normsForAthlete } from "./cohort-norms";
 import { normalizeInjuryRegion, INJURY_REGIONS, type InjuryRegion } from "@shared/injury-taxonomy";
 import {
   findSimilarPassages,
@@ -7655,6 +7657,16 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
     // report is exactly the place where a published screening or
     // return-to-play criterion should be doing the arguing rather than the
     // model's own recollection of one.
+    // Population norms, so a number is compared against real athletes of the
+    // same description rather than against the model's own recollection of a
+    // textbook table. Withheld entirely when no cohort is large enough --
+    // see shared/cohort-norms.ts for why a thin percentile is a different
+    // kind of claim rather than a weaker one.
+    const normContext = await normsForAthlete(athlete);
+    const normBlock = normContext
+      ? renderNormsForPrompt(normContext.key, normContext.norms, normContext.widenedFrom)
+      : "";
+
     const weaknessReference = await referenceBlock(
       [athlete.sport, athlete.position, painText, "deficit screening return to play"]
         .filter(Boolean)
@@ -7670,7 +7682,7 @@ Acute:chronic training load ratio (ACWR): ${acwrText}
 Recurring soreness/pain over the last ${wellnessHistory.length} wellness check-ins (avg soreness ${avgSoreness != null ? avgSoreness.toFixed(1) : "n/a"}/5): ${painText}
 Combine/testing history (most recent up to 3 sessions): ${testingText}
 ${forgeAiContext ? `\n${forgeAiContext}\n` : ""}
-Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do not invent a deficit that isn't actually supported by one of these data points. For each: a short title, which category of data it comes from, the specific evidence (cite the actual numbers given above), a plain-language explanation of why this matters for injury risk or performance, and a concrete suggested focus area (not a full program, just the direction). If the data genuinely doesn't support finding anything concerning, return an empty deficits array rather than manufacturing one.${weaknessReference ? `\n\n${weaknessReference}` : ""}`;
+Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do not invent a deficit that isn't actually supported by one of these data points. For each: a short title, which category of data it comes from, the specific evidence (cite the actual numbers given above), a plain-language explanation of why this matters for injury risk or performance, and a concrete suggested focus area (not a full program, just the direction). If the data genuinely doesn't support finding anything concerning, return an empty deficits array rather than manufacturing one.${normBlock ? `\n\n${normBlock}` : ""}${weaknessReference ? `\n\n${weaknessReference}` : ""}`;
 
     const result = await askClaudeStructured<{ summary: string; deficits: WeaknessDeficit[] }>(
       "You are an expert physical therapist and strength & conditioning analyst. You identify specific, data-grounded physical deficits from PT/S&C metrics and explain clearly why each matters -- never invent a finding the data doesn't support, never diagnose a medical condition, never recommend anything beyond a general training focus area. If asked to analyze data that shows nothing concerning, say so plainly rather than manufacturing a deficit.",
@@ -14113,6 +14125,33 @@ Hard rules, no exceptions -- these exist because you are not a registered dietit
     // itself says so, because the failure mode is a model reading "be brief"
     // as permission to drop a referral. Empty for anyone who never touched
     // the setting, so their answers are byte-identical to before.
+    // Population norms for this athlete, and the constraint that governs how
+    // they may be used.
+    //
+    // The direction matters and getting it backwards is the way this goes
+    // badly. Performance norms work because Forge measures the truth: the
+    // jump happened. Intake norms would come from food logs, which are
+    // self-reported and under-reported everywhere they have been checked. So
+    // the cohort supplies the DESCRIPTION -- what an athlete of this
+    // description typically weighs and trains like, which is what energy
+    // needs scale off -- and the published guidance in the knowledge base
+    // supplies the RECOMMENDATION. Deriving a target from what the crowd
+    // logs would recommend under-fuelling back to a population that is
+    // already under-fuelling, which is the failure the energy availability
+    // material in this prompt exists because of.
+    const nutritionNorms = await normsForAthlete(nutritionAthleteProfile ?? {});
+    const nutritionNormBlock = nutritionNorms
+      ? [
+          renderNormsForPrompt(nutritionNorms.key, nutritionNorms.norms, nutritionNorms.widenedFrom),
+          "",
+          "These describe what athletes of this description LOOK LIKE. They are",
+          "not nutrition targets and must never be used as one. Use them only to",
+          "place a general published range sensibly for someone of this size and",
+          "training load; the recommendation itself always comes from the",
+          "knowledge base above, and rule 1 still applies to every number.",
+        ].join("\n")
+      : "";
+
     const styleInstruction = answerStyleInstruction(
       nutritionAthleteProfile?.answerRegister,
       nutritionAthleteProfile?.answerLength,
@@ -14129,7 +14168,7 @@ Hard rules, no exceptions -- these exist because you are not a registered dietit
 
 Athlete context:
 ${athleteContext}
-- Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}${taughtGuidelines ? `\n\nAdditional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too, subject to rule 1 above:\n${coachesCornerPrinciples}` : ""}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}${nutritionReference ? `\n\n${nutritionReference}` : ""}${styleInstruction ? `\n\n${styleInstruction}` : ""}`;
+- Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}${taughtGuidelines ? `\n\nAdditional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too, subject to rule 1 above:\n${coachesCornerPrinciples}` : ""}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}${nutritionReference ? `\n\n${nutritionReference}` : ""}${nutritionNormBlock ? `\n\n${nutritionNormBlock}` : ""}${styleInstruction ? `\n\n${styleInstruction}` : ""}`;
 
     const system: SystemPrompt = [
       { text: staticSystem, cache: true },

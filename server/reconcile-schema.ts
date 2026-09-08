@@ -2845,6 +2845,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS "ai_usage_daily_day_feature_model_idx"
 CREATE INDEX IF NOT EXISTS "ai_usage_daily_day_idx"
   ON "ai_usage_daily" ("day");
 
+-- Population norms, rebuilt wholesale each night. Nothing references this
+-- table and nothing here is durable, which is what lets an athlete move
+-- cohorts on their birthday with no migration.
+CREATE TABLE IF NOT EXISTS "cohort_norms" (
+  "id" serial PRIMARY KEY,
+  "sport" text,
+  "position" text,
+  "age_band" text,
+  "gender" text,
+  "metric" text NOT NULL,
+  "unit" text NOT NULL,
+  "n" integer NOT NULL,
+  "p10" real NOT NULL,
+  "p25" real NOT NULL,
+  "p50" real NOT NULL,
+  "p75" real NOT NULL,
+  "p90" real NOT NULL,
+  "computed_at" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "cohort_norms_lookup_idx"
+  ON "cohort_norms" ("sport", "position", "age_band", "gender");
+
 -- Transcription checkpointing, so a redeploy mid-run resumes instead of
 -- re-reading and re-paying for every page before the failure.
 -- Free text, read by a person. What Forge may do with this source.

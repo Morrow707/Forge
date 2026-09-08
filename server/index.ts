@@ -87,6 +87,7 @@ import { startReflectionJob } from "./reflection-job";
 import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { startResearchMirrorJob } from "./research-mirror-job";
+import { startCohortNormsJob } from "./cohort-norms-job";
 import { verifyStripeWebhook, handleStripeWebhookEvent } from "./billing";
 import { verifyAppleNotification } from "./apple-iap";
 import { storage } from "./storage";
@@ -425,6 +426,7 @@ app.get("/healthz", async (_req, res) => {
     startDataRetentionJob();
     startVideoRetentionJob();
     startResearchMirrorJob();
+    startCohortNormsJob();
     // One-time backlog cleanup for the dev-testing account's accumulated
     // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own
     // comment for why this is safe to leave as permanent boot-time code

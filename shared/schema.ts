@@ -5076,6 +5076,47 @@ export const aiUsageDaily = pgTable(
 );
 export type AiUsageDaily = typeof aiUsageDaily.$inferSelect;
 
+// ---------- Cohort norms ----------
+//
+// Distributions per sport, position, age band and sex, recomputed nightly
+// from the athletes actually on the platform. See shared/cohort-norms.ts for
+// the floor and the widening rules, and server/cohort-norms.ts for why the
+// table is rebuilt from scratch rather than updated in place.
+//
+// Rebuilt wholesale every night, so nothing here is a durable record and
+// nothing references it. That is what lets an athlete change cohorts on
+// their birthday with no migration and no bookkeeping.
+export const cohortNorms = pgTable(
+  "cohort_norms",
+  {
+    id: serial("id").primaryKey(),
+    // Null means "any" on that dimension, which is how the widened cohorts
+    // are stored alongside the specific ones.
+    sport: text("sport"),
+    position: text("position"),
+    ageBand: text("age_band"),
+    gender: text("gender"),
+    metric: text("metric").notNull(),
+    unit: text("unit").notNull(),
+    n: integer("n").notNull(),
+    p10: real("p10").notNull(),
+    p25: real("p25").notNull(),
+    p50: real("p50").notNull(),
+    p75: real("p75").notNull(),
+    p90: real("p90").notNull(),
+    computedAt: timestamp("computed_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    lookupIdx: index("cohort_norms_lookup_idx").on(
+      table.sport,
+      table.position,
+      table.ageBand,
+      table.gender,
+    ),
+  }),
+);
+export type CohortNorm = typeof cohortNorms.$inferSelect;
+
 // ---------- Research export log ----------
 // One row per dataset extract generated, written before the PDF is sent.
 //
