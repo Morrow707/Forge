@@ -4,6 +4,7 @@ import { AdminTeachChatPanel } from "@/components/admin-teach-chat-panel";
 import { ForgeAiContent } from "./forge-ai";
 import { MovementKnowledgeContent } from "./movement-knowledge";
 import { CameraAiHistoryContent } from "./camera-ai-history";
+import { KnowledgeBaseContent } from "./knowledge-base";
 
 /** One page for every "teach the AI something" surface -- previously four
  * separate nav entries (Teach AI, Forge AI, Teach Nutrition AI, Teach
@@ -23,6 +24,7 @@ export default function AdminTeachAi() {
           <TabsTrigger value="nutrition">Nutrition</TabsTrigger>
           <TabsTrigger value="movement">Movement</TabsTrigger>
           <TabsTrigger value="camera-ai">Camera AI</TabsTrigger>
+          <TabsTrigger value="documents">Books & Documents</TabsTrigger>
         </TabsList>
 
         <TabsContent value="program-builder">
@@ -65,6 +67,14 @@ export default function AdminTeachAi() {
 
         <TabsContent value="camera-ai">
           <CameraAiHistoryContent />
+        </TabsContent>
+
+        {/* The same knowledge base that lives at /admin/knowledge-base, hosted
+            here because this is the screen an admin opens when they want to
+            teach the AI from a book. An upload reachable only from the More
+            menu is one nobody finds -- which is exactly what happened. */}
+        <TabsContent value="documents">
+          <KnowledgeBaseContent />
         </TabsContent>
       </Tabs>
     </AppShell>

@@ -74,7 +74,6 @@ export function MovementKnowledgeContent() {
   const qc = useQueryClient();
   const [movementType, setMovementType] = useState<string>(MOVEMENT_TYPES[0]);
   const [content, setContent] = useState("");
-  const [url, setUrl] = useState("");
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -99,14 +98,12 @@ export function MovementKnowledgeContent() {
     mutationFn: async () => {
       const res = await apiRequest("POST", `${fetchUrl}/chat`, {
         content: content.trim() || undefined,
-        url: url.trim() || undefined,
       });
       return res.json() as Promise<ChatState & { proposal: Proposal | null }>;
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setContent("");
-      setUrl("");
       setProposal(result.proposal ?? null);
     },
     onError: () => toast.error("Couldn't send that -- try again"),
@@ -125,7 +122,7 @@ export function MovementKnowledgeContent() {
     onError: () => toast.error("Couldn't apply that -- try again"),
   });
 
-  const canSend = (content.trim() || url.trim()) && !send.isPending;
+  const canSend = !!content.trim() && !send.isPending;
 
   const changedFields = proposal
     ? FIELD_META.filter((f) => proposal[f.key] !== (activeProfile?.[f.key] ?? null))
@@ -268,20 +265,12 @@ export function MovementKnowledgeContent() {
                   }
                 }}
               />
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  <label className="flex items-center gap-1 text-[10px] font-semibold uppercase text-muted-foreground">
-                    <Video className="h-3 w-3" />
-                    Or a URL (optional)
-                  </label>
-                  <Input
-                    type="url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="h-9"
-                  />
-                </div>
+              {/* The URL field that used to sit here is gone. Forge's AI does
+                  not reach the internet, so the server rejected every link
+                  with an explanation -- a field whose only possible outcome
+                  is a refusal is worse than no field, because somebody has
+                  to type into it to find out. */}
+              <div className="flex items-end justify-end gap-2">
                 <Button type="submit" disabled={!canSend}>
                   <Send className="h-4 w-4" />
                 </Button>

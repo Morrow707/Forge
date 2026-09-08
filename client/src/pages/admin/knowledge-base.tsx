@@ -46,7 +46,16 @@ type Conflict = {
   } | null;
 };
 
-export default function AdminKnowledgeBase() {
+/**
+ * The full knowledge base, without the page chrome.
+ *
+ * Exported separately so Teach AI can host it as a tab. An admin looking for
+ * "how do I teach the AI from a book" goes to Teach AI -- that is what the
+ * screen is called -- and a PDF upload living only on its own page in the
+ * More menu is one nobody finds. Same component in both places rather than
+ * two that drift.
+ */
+export function KnowledgeBaseContent() {
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
   const [citation, setCitation] = useState("");
@@ -169,7 +178,7 @@ export default function AdminKnowledgeBase() {
   });
 
   return (
-    <AppShell title="Knowledge Base">
+    <>
       <div className="space-y-4">
         <Card>
           <CardHeader>
@@ -236,12 +245,22 @@ export default function AdminKnowledgeBase() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="kb-file">PDF</Label>
+              {/* Both the MIME type and the extension. iOS decides which
+                  sources to offer from `accept`, and some versions of the
+                  document picker match on extension rather than MIME -- with
+                  the type alone a PDF sitting in Files could appear greyed
+                  out. Listing both keeps Files, iCloud and Dropbox
+                  selectable. */}
               <Input
                 id="kb-file"
                 type="file"
-                accept="application/pdf"
+                accept="application/pdf,.pdf"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
+              <p className="text-xs text-muted-foreground">
+                On a phone this opens the document picker -- choose Browse or Files to reach a PDF
+                saved on the device. Up to 60MB.
+              </p>
             </div>
             <Button
               onClick={upload}
@@ -412,7 +431,7 @@ export default function AdminKnowledgeBase() {
           }}
         />
       </div>
-    </AppShell>
+    </>
   );
 }
 
@@ -798,5 +817,14 @@ function SearchHit({ hit }: { hit: any }) {
         <p className="mt-1 text-sm">{String(hit.text ?? "").slice(0, 400)}…</p>
       )}
     </div>
+  );
+}
+
+/** The standalone page, for the direct link and the More menu. */
+export default function AdminKnowledgeBase() {
+  return (
+    <AppShell title="Knowledge Base">
+      <KnowledgeBaseContent />
+    </AppShell>
   );
 }
