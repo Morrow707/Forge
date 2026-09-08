@@ -922,6 +922,10 @@ export function summarizeTrackedSet(
   // romBucketForExercise). Optional, and null keeps the old flat gate, so every existing caller
   // behaves exactly as before until it passes one.
   romKind: string | null = null,
+  // The lift's direction as measured off the bar rather than inferred from the trace -- see
+  // movementAxisFromGrip. Null keeps the covariance-derived axis, so every existing caller is
+  // unchanged until it passes one.
+  movementAxis: { x: number; y: number } | null = null,
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = repAmplitudeGateCm(romKind, heightIn);
@@ -945,7 +949,7 @@ export function summarizeTrackedSet(
   //
   // z is left alone. It is the lens axis, a single camera cannot resolve it, and rotating an
   // unmeasured quantity would only launder that fact.
-  const axisFrame = dominantAxisFrame(scaledPoints);
+  const axisFrame = dominantAxisFrame(scaledPoints, movementAxis);
   const points = scaledPoints.map((p, i) => ({
     ...p,
     x: axisFrame.across[i],
@@ -1904,6 +1908,69 @@ export function dominantAxisProjection(points: { x: number; y: number }[]): numb
   return dominantAxisFrame(points).along;
 }
 
+/** The movement axis worked out from the BAR itself, rather than from the trace it drew.
+ *
+ * A barbell is rigid and horizontal, and the lift is perpendicular to it. So the line between
+ * the two hands states the horizontal directly, every frame, and the direction the bar travels
+ * is its perpendicular -- no covariance, no assumption about which way the camera is pointing,
+ * and nothing inferred from how far anything happened to move.
+ *
+ * This is a better answer than the trace's own principal component wherever it is available.
+ * The principal component has to be RECOVERED from motion, so it degrades exactly when the
+ * motion is small in frame or noisy, which is the case that needs it most. The grip line is
+ * measured from a rigid object the tracker is holding lock on regardless of how the set went --
+ * on the sets in question the object detector was running at 91% confidence on 566 of 636
+ * frames while the reps themselves were being missed.
+ *
+ * It also survives the case that defeats the body's own sense of up. That comes from comparing
+ * shoulder height against hip height, and it gives up when the two are within 5% of each other
+ * -- which is precisely what an athlete lying flat on a bench looks like. The bar does not
+ * care: filmed from the side or square down the length of the bench, it still reads broadside,
+ * and its perpendicular is still the press.
+ *
+ * Returns null when the pairs are too few or too inconsistent to state a direction, so the
+ * caller falls back to the trace. The median is taken over angles rather than vectors so a
+ * handful of frames where the tracker briefly lost one hand cannot swing the result.
+ */
+const MIN_GRIP_PAIRS_FOR_AXIS = 12;
+const MIN_GRIP_SEPARATION_FRACTION = 0.02;
+
+export function movementAxisFromGrip(
+  pairs: { left: { x: number; y: number }; right: { x: number; y: number } }[],
+): { x: number; y: number } | null {
+  const angles: number[] = [];
+  let widest = 0;
+  for (const { left, right } of pairs) {
+    widest = Math.max(widest, Math.hypot(right.x - left.x, right.y - left.y));
+  }
+  if (!(widest > 0)) return null;
+  for (const { left, right } of pairs) {
+    const dx = right.x - left.x;
+    const dy = right.y - left.y;
+    // A collapsed pair is two detections of the same hand, or one hand and a piece of the rack.
+    // Its angle is noise, and including it would drag the median toward nothing in particular.
+    if (Math.hypot(dx, dy) < widest * MIN_GRIP_SEPARATION_FRACTION) continue;
+    // Folded onto a half turn: a bar read left-to-right and the same bar read right-to-left
+    // describe the same line, and averaging them raw would cancel to zero.
+    let angle = Math.atan2(dy, dx);
+    if (angle < 0) angle += Math.PI;
+    angles.push(angle);
+  }
+  if (angles.length < MIN_GRIP_PAIRS_FOR_AXIS) return null;
+  angles.sort((a, b) => a - b);
+  const barAngle = angles[Math.floor(angles.length / 2)];
+
+  // Perpendicular to the bar, pointed so that its y component is positive -- the same polarity
+  // pinning dominantAxisFrame applies, so "larger means higher" keeps its meaning downstream.
+  let ax = -Math.sin(barAngle);
+  let ay = Math.cos(barAngle);
+  if (ay < 0) {
+    ax = -ax;
+    ay = -ay;
+  }
+  return { x: ax, y: ay };
+}
+
 /** The trace re-expressed in the movement's own frame: `along` the axis it travelled, `across`
  *  the perpendicular to it.
  *
@@ -1911,7 +1978,12 @@ export function dominantAxisProjection(points: { x: number; y: number }[]): numb
  *  and on a tilted trace the raw image-x carries most of the LIFT, not the drift -- reading
  *  deviation off it would report a perfectly straight press filmed at an angle as wandering tens
  *  of centimetres. Measured perpendicular to the movement axis it stays what it claims to be. */
-export function dominantAxisFrame(points: { x: number; y: number }[]): {
+export function dominantAxisFrame(
+  points: { x: number; y: number }[],
+  // When the bar's own geometry has already stated the direction, use it and skip the
+  // covariance entirely -- see movementAxisFromGrip.
+  axisHint?: { x: number; y: number } | null,
+): {
   along: number[];
   across: number[];
 } {
@@ -1921,6 +1993,19 @@ export function dominantAxisFrame(points: { x: number; y: number }[]): {
 
   const meanX = points.reduce((a, p) => a + p.x, 0) / points.length;
   const meanY = points.reduce((a, p) => a + p.y, 0) / points.length;
+
+  // The bar said which way the lift goes, so nothing below has to guess it from the trace.
+  if (axisHint) {
+    const norm = Math.hypot(axisHint.x, axisHint.y);
+    if (norm > 0) {
+      const hx = axisHint.x / norm;
+      const hy = axisHint.y / norm;
+      return {
+        along: points.map((p) => (p.x - meanX) * hx + (p.y - meanY) * hy + meanY),
+        across: points.map((p) => -(p.x - meanX) * hy + (p.y - meanY) * hx + meanX),
+      };
+    }
+  }
 
   // THE AXIS COMES FROM THE REPS, NOT FROM THE WHOLE TRACE.
   //

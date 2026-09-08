@@ -3,6 +3,7 @@ import {
   dominantAxisFrame,
   dominantAxisProjection,
   repAmplitudeGateCm,
+  movementAxisFromGrip,
   segmentPhases,
   summarizeTrackedSet,
 } from "./bar-tracking";
@@ -221,5 +222,80 @@ describe("repAmplitudeGateCm", () => {
     expect(movementGate.length).toBeGreaterThanOrEqual(16);
     // And the whole pipeline, where the set's own reps now lead, finds them regardless.
     expect(summarizeTrackedSet(underRead, 61, 70)!.repBreakdown.length).toBeGreaterThanOrEqual(8);
+  });
+});
+
+/** The two hands at each instant, for a bar tilted `barDeg` across the frame and pressed
+ *  perpendicular to itself -- which is what a barbell actually does. */
+function benchGripPairs(barDeg: number, romM = 0.36, gripM = 0.8) {
+  const bar = (barDeg * Math.PI) / 180;
+  // The press runs perpendicular to the bar.
+  const push = bar + Math.PI / 2;
+  const pairs: { left: { x: number; y: number }; right: { x: number; y: number } }[] = [];
+  const points: { x: number; y: number; z: number; t: number; confidence: number }[] = [];
+  const fps = 60;
+  const secondsPerRep = 3.3;
+  for (let rep = 0; rep < 10; rep++) {
+    for (let f = 0; f < secondsPerRep * fps; f++) {
+      const along = (romM / 2) * (1 - Math.cos((f / (secondsPerRep * fps)) * 2 * Math.PI));
+      const cx = along * Math.cos(push);
+      const cy = along * Math.sin(push);
+      const hx = (gripM / 2) * Math.cos(bar);
+      const hy = (gripM / 2) * Math.sin(bar);
+      pairs.push({ left: { x: cx - hx, y: cy - hy }, right: { x: cx + hx, y: cy + hy } });
+      points.push({
+        x: cx,
+        y: cy,
+        z: 0,
+        t: (rep * secondsPerRep + f / fps) * 1000,
+        confidence: 0.9,
+      });
+    }
+  }
+  return { pairs, points };
+}
+
+describe("movementAxisFromGrip", () => {
+  it("reads the press as perpendicular to the bar", () => {
+    for (const barDeg of [0, 20, 45, 70]) {
+      const { pairs } = benchGripPairs(barDeg);
+      const axis = movementAxisFromGrip(pairs)!;
+      const bar = (barDeg * Math.PI) / 180;
+      // Perpendicular means the dot product with the bar's own direction is zero.
+      expect(Math.abs(axis.x * Math.cos(bar) + axis.y * Math.sin(bar))).toBeLessThan(0.02);
+    }
+  });
+
+  it("points the axis the same way as y, so up stays up", () => {
+    expect(movementAxisFromGrip(benchGripPairs(30).pairs)!.y).toBeGreaterThan(0);
+  });
+
+  it("ignores frames where the two hands collapsed onto each other", () => {
+    const { pairs } = benchGripPairs(0);
+    const collapsed = Array.from({ length: 40 }, () => ({
+      left: { x: 0.5, y: 0.2 },
+      right: { x: 0.5, y: 0.2 },
+    }));
+    const axis = movementAxisFromGrip([...pairs, ...collapsed])!;
+    const clean = movementAxisFromGrip(pairs)!;
+    expect(axis.x).toBeCloseTo(clean.x, 2);
+    expect(axis.y).toBeCloseTo(clean.y, 2);
+  });
+
+  it("says nothing rather than guessing from too few pairs", () => {
+    expect(movementAxisFromGrip(benchGripPairs(0).pairs.slice(0, 5))).toBeNull();
+  });
+
+  it("recovers the full range of a press the trace alone under-reads", () => {
+    // The bar nearly edge-on in frame, so image-vertical sees a fraction of the real press.
+    const { pairs, points } = benchGripPairs(70);
+    const axis = movementAxisFromGrip(pairs)!;
+    const { along } = dominantAxisFrame(
+      points.map((p) => ({ x: p.x, y: p.y })),
+      axis,
+    );
+    const apparent = Math.max(...points.map((p) => p.y)) - Math.min(...points.map((p) => p.y));
+    expect(apparent).toBeLessThan(0.15);
+    expect(Math.max(...along) - Math.min(...along)).toBeCloseTo(0.36, 2);
   });
 });

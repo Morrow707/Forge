@@ -52,6 +52,7 @@ import {
   computeArmDriveAsymmetry,
   computeRepTrustScores,
   implausibleRangeOfMotion,
+  movementAxisFromGrip,
   toScaleFreeMetrics,
   normalizeTraceScale,
   type ScaleFreeMetrics,
@@ -742,6 +743,7 @@ export function AvBarTrackerDialog({
     // pipeline, so this locks in from the first frame the replay itself has
     // available, the closest available proxy to "framing right when the set
     // started."
+    const gripPairs: { left: { x: number; y: number }; right: { x: number; y: number } }[] = [];
     let alignmentReason: CameraAlignment["reason"] | null = null;
     let subjectFacing: SubjectFacing | null = null;
 
@@ -870,6 +872,17 @@ export function AvBarTrackerDialog({
         if (rawTilt != null) tiltReadings.push(rawTilt);
       }
 
+      // Both hands, kept as a pair rather than only as the midpoint the trace uses. The line
+      // between them is the bar, and the lift runs perpendicular to it -- see
+      // movementAxisFromGrip for why that is a better statement of the movement direction than
+      // anything recovered from the trace afterwards.
+      if (fusedLeft && fusedRight) {
+        gripPairs.push({
+          left: { x: fusedLeft.x, y: verticalSign * fusedLeft.y },
+          right: { x: fusedRight.x, y: verticalSign * fusedRight.y },
+        });
+      }
+
       const combined =
         fusedLeft && fusedRight
           ? {
@@ -961,6 +974,10 @@ export function AvBarTrackerDialog({
       // given below, so the floor a rep has to clear and the floor below which a reading is
       // called impossible are stated once, in one table.
       romBucketForExercise(exerciseName),
+      // And the direction of the lift comes from the bar, measured, rather than from the trace,
+      // inferred. Null on a one-handed movement or a take where the pair never held, which puts
+      // it back on the trace's own principal component.
+      movementAxisFromGrip(gripPairs),
     );
     if (!metrics) {
       const message = "Couldn't get a clean read -- make sure the bar stays in frame throughout the set.";
