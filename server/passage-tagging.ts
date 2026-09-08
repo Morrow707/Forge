@@ -1,5 +1,10 @@
 import { askClaudeStructured, aiEnabled, fastModel } from "./ai";
-import { KNOWLEDGE_DOMAINS, KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain } from "@shared/knowledge-domains";
+import {
+  KNOWLEDGE_DOMAINS,
+  KNOWLEDGE_DOMAIN_KEYS,
+  isKnowledgeDomain,
+  UNFILED_TOPIC,
+} from "@shared/knowledge-domains";
 import type { Passage } from "./pdf-extract";
 
 /**
@@ -142,7 +147,11 @@ export async function tagPassages(
         .filter(isKnowledgeDomain)
         // The source's domains are the ceiling, not a hint.
         .filter((t) => allowed.includes(t));
-      byIndex.set(row.index, [...new Set(topics)]);
+      // An empty verdict is the tagger saying "this is not subject matter".
+      // Stored as the sentinel rather than as [], because [] means "never
+      // tagged" downstream and falls back to the source's domains -- which
+      // would publish index entries and copyright pages to every assistant.
+      byIndex.set(row.index, topics.length > 0 ? [...new Set(topics)] : [UNFILED_TOPIC]);
     }
 
     group.forEach((p, j) => {

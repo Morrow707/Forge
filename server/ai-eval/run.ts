@@ -98,8 +98,26 @@ async function main() {
     }
   }
 
-  // Missing counts as failure. A suite that reports green because it graded
-  // nothing is the specific outcome this whole harness exists to prevent.
+  // Three outcomes, deliberately distinct.
+  //
+  // A real grading failure always fails. A PARTIALLY recorded suite fails
+  // too: somebody added a case and never recorded an answer for it, which is
+  // a case that silently tests nothing. But a suite with NO answers recorded
+  // at all is a different thing -- the harness exists and has never been run
+  // live, which is the honest state of a fresh checkout and must not hold CI
+  // red forever on a fact everybody already knows.
+  //
+  // The moment one answer is recorded, every missing case starts failing.
+  // That is the property worth keeping: the ratchet only turns one way.
+  const nothingRecorded = summary.results.length === 0 && summary.missing.length > 0;
+  if (nothingRecorded) {
+    console.log(
+      "\nNo answers recorded yet, so nothing was graded. Run with --live against a database " +
+        "to record them; from then on a missing case is a failure.",
+    );
+    process.exit(0);
+  }
+
   process.exit(summary.failed > 0 || summary.missing.length > 0 ? 1 : 0);
 }
 

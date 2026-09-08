@@ -2874,6 +2874,7 @@ CREATE INDEX IF NOT EXISTS "cohort_norms_lookup_idx"
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "licence_note" text;
 
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribed_through_page" integer;
+ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_heartbeat_at" timestamp;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_from_page" integer;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_to_page" integer;
 

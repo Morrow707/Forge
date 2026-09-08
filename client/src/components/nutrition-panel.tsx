@@ -190,8 +190,13 @@ export function NutritionPanel({
   });
 
   const askMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", askUrl!, { question });
+    // Takes the text as an argument rather than reading `question` from
+    // state. Clicking a clarifying-question option called setQuestion() and
+    // mutate() in the same tick, and React had not re-rendered yet, so the
+    // mutation sent the ORIGINAL question again -- the athlete's answer never
+    // reached the server and they got the same question back forever.
+    mutationFn: async (text?: string) => {
+      const res = await apiRequest("POST", askUrl!, { question: text ?? question });
       return res.json();
     },
     onSuccess: (result) => {
@@ -412,7 +417,7 @@ export function NutritionPanel({
                           const combined = `${question} (${pendingQuestion.question} ${option})`;
                           setQuestion(combined);
                           setPendingQuestion(null);
-                          askMutation.mutate();
+                          askMutation.mutate(combined);
                         }}
                       >
                         {option}

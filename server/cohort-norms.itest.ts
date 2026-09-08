@@ -81,6 +81,46 @@ describe("cohort norms", () => {
     expect(result!.norms[0].n).toBeLessThanOrEqual(NORM_MIN_COHORT + 2);
   });
 
+  it("bands on date of birth rather than a stale stored age", async () => {
+    // users.age is optional and self-reported; date_of_birth is required at
+    // signup. Banding on `age` alone meant most real accounts had no band at
+    // all and silently fell through to the sport-wide cohort -- a sixteen
+    // year old compared against adults with nothing on the page to say so.
+    for (let i = 0; i < NORM_MIN_COHORT + 2; i++) {
+      await makeAthlete({
+        sport: "Lacrosse",
+        gender: "male",
+        // Says 25, actually 16. The date of birth is the fact about the
+        // person; the stored number is a fact about the day it was typed.
+        age: 25,
+        dateOfBirth: "2010-01-01",
+        verticalJumpIn: 24 + (i % 12),
+      } as never);
+    }
+    await rebuildCohortNorms();
+
+    const result = await normsForAthlete({
+      sport: "Lacrosse",
+      gender: "male",
+      dateOfBirth: "2010-01-01",
+    });
+    expect(result).not.toBeNull();
+    expect(result!.key.ageBand).toBe("16-17");
+  });
+
+  it("names gender when the last-resort widening drops it", async () => {
+    // "Athletes like you" quietly meaning "everyone" is the exact misreading
+    // the provenance list exists to prevent.
+    for (let i = 0; i < NORM_MIN_COHORT + 2; i++) {
+      await makeAthlete({ verticalJumpIn: 24 + (i % 12) } as never);
+    }
+    await rebuildCohortNorms();
+
+    const result = await normsForAthlete({ sport: "Curling", gender: "female", age: 44 });
+    expect(result).not.toBeNull();
+    expect(result!.widenedFrom).toContain("gender");
+  });
+
   it("excludes an athlete who opted out of tracking", async () => {
     await makeCohort(NORM_MIN_COHORT + 2, { sport: "Rugby", age: 16, gender: "male", trackingOptOut: true });
     await rebuildCohortNorms();

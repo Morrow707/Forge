@@ -33,3 +33,18 @@ export function isKnowledgeDomain(value: string): value is KnowledgeDomain {
 export function knowledgeDomainLabel(key: string): string {
   return KNOWLEDGE_DOMAINS.find((d) => d.key === key)?.label ?? key;
 }
+
+/**
+ * Marks a passage the tagger deliberately filed under no subject at all --
+ * a table of contents, an index entry, a copyright page, a bare heading.
+ *
+ * A sentinel rather than an empty array, because retrieval treats an empty
+ * topics list as "ingested before tagging existed" and falls back to the
+ * source's domains. That fallback is right for old passages and exactly
+ * wrong here: it takes the one verdict that means "this belongs nowhere" and
+ * turns it into "this belongs to every shelf the book was filed under", so
+ * index entries and copyright notices become retrievable by every assistant.
+ *
+ * Not a member of KNOWLEDGE_DOMAINS, so it can never match a domain filter.
+ */
+export const UNFILED_TOPIC = "__unfiled__";

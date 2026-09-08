@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { ageFromDateOfBirth } from "@shared/privacy-tiers";
 import {
   NORM_MIN_COHORT,
   NORM_WIDENING_ORDER,
@@ -50,8 +51,19 @@ const PROFILE_METRICS: { metric: string; column: string; unit: string }[] = [
  */
 export async function rebuildCohortNorms(): Promise<{ cohorts: number; norms: number }> {
   return withPool(async (pool) => {
+    // date_of_birth as well as age, and the derived one wins.
+    //
+    // users.age is optional and self-reported; date_of_birth is required at
+    // signup because a privacy tier has to be derived from it. Banding on
+    // `age` alone meant most real accounts had no age band, so the age
+    // dimension quietly vanished and every athlete fell through to the
+    // sport-wide cohort -- a sixteen year old compared against adults, with
+    // nothing on the page to say so.
+    //
+    // It also keeps the bands honest over time: a stored age is a fact about
+    // the day it was typed, a date of birth is a fact about the person.
     const { rows: athletes } = await pool.query(
-      `SELECT age, gender, sport, position, ${PROFILE_METRICS.map((m) => m.column).join(", ")}
+      `SELECT age, date_of_birth, gender, sport, position, ${PROFILE_METRICS.map((m) => m.column).join(", ")}
          FROM users
         WHERE role = 'athlete' AND tracking_opt_out = false`,
     );
@@ -75,7 +87,7 @@ export async function rebuildCohortNorms(): Promise<{ cohorts: number; norms: nu
     };
 
     for (const row of athletes) {
-      const ageBand = ageBandFor(row.age);
+      const ageBand = ageBandFor(effectiveAge(row.date_of_birth, row.age));
       const gender = row.gender ?? null;
       const sport = row.sport ?? null;
       const position = row.position ?? null;
@@ -114,38 +126,66 @@ export async function rebuildCohortNorms(): Promise<{ cohorts: number; norms: nu
       }
     }
 
-    await pool.query("DELETE FROM cohort_norms");
-    for (let i = 0; i < toInsert.length; i += 200) {
-      const chunk = toInsert.slice(i, i + 200);
-      const values: unknown[] = [];
-      const placeholders = chunk.map((entry, j) => {
-        const b = j * 12;
-        values.push(
-          entry.key.sport,
-          entry.key.position,
-          entry.key.ageBand,
-          entry.key.gender,
-          entry.norm.metric,
-          entry.norm.unit,
-          entry.norm.n,
-          entry.norm.p10,
-          entry.norm.p25,
-          entry.norm.p50,
-          entry.norm.p75,
-          entry.norm.p90,
+    // One transaction around the delete and every insert.
+    //
+    // The first build committed the DELETE and then inserted in separate
+    // statements, so a crash, a deploy or a connection drop between them left
+    // the table empty until the next night. Empty norms are not a degraded
+    // reference -- normsForAthlete returns null and every assistant silently
+    // loses its population context for a day, with nothing anywhere saying
+    // why. A rebuild is either the new table or the old one, never neither.
+    await pool.query("BEGIN");
+    try {
+      await pool.query("DELETE FROM cohort_norms");
+      for (let i = 0; i < toInsert.length; i += 200) {
+        const chunk = toInsert.slice(i, i + 200);
+        const values: unknown[] = [];
+        const placeholders = chunk.map((entry, j) => {
+          const b = j * 12;
+          values.push(
+            entry.key.sport,
+            entry.key.position,
+            entry.key.ageBand,
+            entry.key.gender,
+            entry.norm.metric,
+            entry.norm.unit,
+            entry.norm.n,
+            entry.norm.p10,
+            entry.norm.p25,
+            entry.norm.p50,
+            entry.norm.p75,
+            entry.norm.p90,
+          );
+          return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12})`;
+        });
+        await pool.query(
+          `INSERT INTO cohort_norms
+             (sport, position, age_band, gender, metric, unit, n, p10, p25, p50, p75, p90)
+           VALUES ${placeholders.join(",")}`,
+          values,
         );
-        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12})`;
-      });
-      await pool.query(
-        `INSERT INTO cohort_norms
-           (sport, position, age_band, gender, metric, unit, n, p10, p25, p50, p75, p90)
-         VALUES ${placeholders.join(",")}`,
-        values,
-      );
+      }
+      await pool.query("COMMIT");
+    } catch (err) {
+      await pool.query("ROLLBACK").catch(() => {});
+      throw err;
     }
 
     return { cohorts: buckets.size, norms: toInsert.length };
   });
+}
+
+/** Derived age where a date of birth exists, the self-reported one otherwise. */
+function effectiveAge(dateOfBirth: unknown, age: unknown): number | null {
+  if (typeof dateOfBirth === "string" && dateOfBirth) {
+    const derived = ageFromDateOfBirth(dateOfBirth);
+    if (typeof derived === "number" && Number.isFinite(derived)) return derived;
+  }
+  if (dateOfBirth instanceof Date) {
+    const derived = ageFromDateOfBirth(dateOfBirth.toISOString().slice(0, 10));
+    if (typeof derived === "number" && Number.isFinite(derived)) return derived;
+  }
+  return typeof age === "number" ? age : null;
 }
 
 function percentiles(values: number[]) {
@@ -171,6 +211,7 @@ function percentiles(values: number[]) {
  */
 export async function normsForAthlete(athlete: {
   age?: number | null;
+  dateOfBirth?: string | Date | null;
   gender?: string | null;
   sport?: string | null;
   position?: string | null;
@@ -178,7 +219,8 @@ export async function normsForAthlete(athlete: {
   const full: CohortKey = {
     sport: athlete.sport ?? null,
     position: athlete.position ?? null,
-    ageBand: ageBandFor(athlete.age),
+    // Same rule as the rebuild, or a lookup would miss the cohort it built.
+    ageBand: ageBandFor(effectiveAge(athlete.dateOfBirth, athlete.age)),
     gender: athlete.gender ?? null,
   };
 
@@ -187,7 +229,14 @@ export async function normsForAthlete(athlete: {
     { key: { ...full, position: null }, dropped: ["position"] },
     { key: { ...full, position: null, ageBand: null }, dropped: ["position", "ageBand"] },
     { key: { sport: null, position: null, ageBand: full.ageBand, gender: full.gender }, dropped: ["position", "sport"] },
-    { key: { sport: null, position: null, ageBand: null, gender: null }, dropped: [...NORM_WIDENING_ORDER] },
+    {
+      // The last resort drops gender too, which the reported list must say --
+      // comparing a fifteen year old girl against every athlete on the
+      // platform while the page implies "athletes like her" is the exact
+      // misreading the provenance exists to prevent.
+      key: { sport: null, position: null, ageBand: null, gender: null },
+      dropped: [...NORM_WIDENING_ORDER, "gender"],
+    },
   ];
 
   for (const attempt of attempts) {

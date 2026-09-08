@@ -2266,6 +2266,29 @@ async function queryTrackedCohort(
  * drop it into a template with no branching and an instance with no books
  * behaves exactly as it did before.
  */
+/**
+ * The reader's answer-style instruction, or "" when they never set one.
+ *
+ * A helper rather than three lines repeated at each surface, because
+ * "which assistants honour the setting" should be answerable by grepping
+ * for one name. Shipping it wired into a single assistant made the control
+ * look broken to anyone who set it and then read a digest.
+ */
+async function styleFor(userId: number | null | undefined): Promise<string> {
+  if (!userId) return "";
+  try {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { answerRegister: true, answerLength: true },
+    });
+    return answerStyleInstruction(row?.answerRegister, row?.answerLength);
+  } catch {
+    // A preference lookup must never take down the answer it was meant to
+    // shape.
+    return "";
+  }
+}
+
 async function referenceBlock(query: string, domains: string[], limit = 6): Promise<string> {
   const trimmed = query.trim();
   if (!trimmed) return "";
@@ -7321,6 +7344,9 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   // null (no row written) if there's no wellness check-in yet for this date
   // or AI isn't configured, so the caller can just render nothing.
   async generateReadinessBriefing(athleteId: number, date: string) {
+    // The reader's own answer-style preference. Empty for anyone who never
+    // set one, so their output is byte-identical to before.
+    const readerStyle = await styleFor(athleteId);
     const wellness = await this.getWellnessCheckin(athleteId, date);
     if (!wellness) return null;
 
@@ -7432,7 +7458,7 @@ Athlete readiness snapshot for today:
       recentRpes.length > 0 ? recentRpes.join(", ") : "no recent RPE data logged"
     }
 - Bar speed trend from camera-tracked lifts (not shown to the athlete directly): ${velocityTrendText}
-${forgeAiContext ? `\n${forgeAiContext}\n` : ""}
+${forgeAiContext ? `\n${forgeAiContext}\n` : ""}${readerStyle ? `\n${readerStyle}\n` : ""}
 Write ONE short note (1-2 sentences, plain language, talking directly to the athlete as "you") on how to approach today's training given their recovery state, recent training stress, and profile/analytics above (e.g. ease off if their training-load risk is elevated or they have a flagged joint/asymmetry). Be specific and direct, not generic filler. Do not mention or invent specific exercises, weights, or sets -- you were not given today's workout. If a body area was flagged as painful, acknowledge it and suggest they mention it to their coach rather than offering a medical workaround yourself. No preamble or sign-off, just the note itself.`;
 
     const text = await askClaude(
@@ -7467,6 +7493,9 @@ Write ONE short note (1-2 sentences, plain language, talking directly to the ath
   },
 
   async generateAthleteDigest(athleteId: number, weekStart: string) {
+    // The reader's own answer-style preference. Empty for anyone who never
+    // set one, so their output is byte-identical to before.
+    const readerStyle = await styleFor(athleteId);
     const digestAthleteProfile = await this.getUser(athleteId);
     const [summary, streak, wellnessHistory, athleteContext, forgeAiContext] = await Promise.all([
       this.getAthleteProgressSummary(athleteId),
@@ -7513,7 +7542,7 @@ Athlete's training data for their weekly summary:
       recentRpes.length > 0 ? recentRpes.join(", ") : "none logged recently"
     }
 - Recent wellness check-ins: ${wellnessSummary}
-${forgeAiContext ? `\n${forgeAiContext}\n` : ""}
+${forgeAiContext ? `\n${forgeAiContext}\n` : ""}${readerStyle ? `\n${readerStyle}\n` : ""}
 Write a short (2-4 sentence) plain-language weekly training summary for this athlete, highlighting real trends from the data above -- progress, effort trend, recovery trend. Be specific and reference actual numbers where relevant. Talk directly to the athlete as "you". No preamble or sign-off, just the summary itself.`;
 
     const text = await askClaude(
@@ -7562,6 +7591,9 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
   // fabricated report) if there isn't enough real data to say anything
   // grounded yet, or if AI isn't configured.
   async generateWeaknessReport(athleteId: number, generatedBy: number) {
+    // The reader's own answer-style preference. Empty for anyone who never
+    // set one, so their output is byte-identical to before.
+    const readerStyle = await styleFor(athleteId);
     const [athlete, latestGoniometer, legAsymmetryFlags, acwrHistory, wellnessHistory, testingHistory] =
       await Promise.all([
         db.query.users.findFirst({ where: eq(users.id, athleteId) }),
@@ -7686,7 +7718,7 @@ Leg-drive asymmetry (bilateral lower-body lifts, from camera-tracked reps): ${as
 Acute:chronic training load ratio (ACWR): ${acwrText}
 Recurring soreness/pain over the last ${wellnessHistory.length} wellness check-ins (avg soreness ${avgSoreness != null ? avgSoreness.toFixed(1) : "n/a"}/5): ${painText}
 Combine/testing history (most recent up to 3 sessions): ${testingText}
-${forgeAiContext ? `\n${forgeAiContext}\n` : ""}
+${forgeAiContext ? `\n${forgeAiContext}\n` : ""}${readerStyle ? `\n${readerStyle}\n` : ""}
 Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do not invent a deficit that isn't actually supported by one of these data points. For each: a short title, which category of data it comes from, the specific evidence (cite the actual numbers given above), a plain-language explanation of why this matters for injury risk or performance, and a concrete suggested focus area (not a full program, just the direction). If the data genuinely doesn't support finding anything concerning, return an empty deficits array rather than manufacturing one.${normBlock ? `\n\n${normBlock}` : ""}${weaknessReference ? `\n\n${weaknessReference}` : ""}`;
 
     const result = await askClaudeStructured<{ summary: string; deficits: WeaknessDeficit[] }>(
@@ -7754,6 +7786,9 @@ Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do n
   },
 
   async generateCoachDigest(coachId: number, weekStart: string) {
+    // The reader's own answer-style preference. Empty for anyone who never
+    // set one, so their output is byte-identical to before.
+    const readerStyle = await styleFor(coachId);
     const roster = await this.getRosterForCoach(coachId);
     if (roster.length === 0) return null;
     const athleteIds = roster.map((a) => a.id);
@@ -7854,7 +7889,7 @@ Identify 2-5 specific, concrete deficits grounded ONLY in the data above -- do n
 - Athletes with 2+ flagged (poor) readiness days this week: ${flaggedNames.length > 0 ? capNames(flaggedNames) : "none"}
 - Athletes currently marked hurt: ${hurtNames.length > 0 ? capNames(hurtNames) : "none"}
 - New PRs this week: ${prLines.length > 0 ? prLines.join("; ") : "none logged"}
-${forgeAiContext ? `\n${forgeAiContext}\n` : ""}
+${forgeAiContext ? `\n${forgeAiContext}\n` : ""}${readerStyle ? `\n${readerStyle}\n` : ""}
 Write a short (3-5 sentence) plain-language weekly summary for the coach, highlighting real trends -- overall roster compliance, standout performances, and anyone who may need a check-in (missed sessions, flagged readiness, or currently hurt). Be specific and reference actual names and numbers from the data above. Talk directly to the coach as "you". No preamble or sign-off, just the summary itself.`;
 
     const text = await askClaude(
@@ -14200,6 +14235,16 @@ ${athleteContext}
       if (parsed) return { question: parsed };
     }
 
+    // ONE call, not two. The tool is optional, so the ordinary case is that
+    // the model ignores it and answers in prose -- and that answer comes back
+    // on this same response. The first build discarded it and asked again,
+    // doubling the cost and the latency of every nutrition question in the
+    // app. The second call below is now only a fallback for a response that
+    // carried neither a usable question nor any text.
+    if (result?.toolName === null && result.text) {
+      return { answer: result.text };
+    }
+
     const text = await askClaude(system, [{ role: "user", content: question }], { maxTokens: 500, feature: "nutrition-answer" });
     if (!text?.trim()) {
       return { error: "Sorry, I couldn't come up with an answer just now -- try again in a bit." };
@@ -16333,10 +16378,20 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     );
     if (!slots) return null;
 
-    const exerciseList = (slots as { exercises?: unknown[] }).exercises ?? [];
-    const slot = (exerciseList as { programExerciseId?: number; exercise?: { name?: string; movementType?: string | null }; sets?: number; reps?: string }[]).find(
-      (e) => e.programExerciseId === input.programExerciseId,
-    );
+    // getWorkoutDayDetail returns { day: { exercises: [...] } }, not a bare
+    // exercises array, and each entry spreads the programExercise so its id
+    // is `id`, not `programExerciseId`. The first build read both wrongly, so
+    // the list was always empty and this route could only ever return 422 --
+    // it never worked once.
+    const exerciseList = (slots as { day?: { exercises?: unknown[] } }).day?.exercises ?? [];
+    const slot = (
+      exerciseList as {
+        id?: number;
+        exercise?: { name?: string; movementType?: string | null };
+        sets?: number;
+        reps?: string;
+      }[]
+    ).find((e) => e.id === input.programExerciseId);
     if (!slot?.exercise?.name) return null;
 
     const reference = await referenceBlock(
@@ -22146,11 +22201,26 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .update(knowledgeSources)
       .set({
         transcribedThroughPage: throughPage,
+        // Every checkpoint is also a heartbeat. A pass whose process died
+        // cannot clear its own status, so a stale heartbeat is the only way
+        // to tell "still working" from "died an hour ago".
+        transcribeHeartbeatAt: new Date(),
         ...(statusDetail === undefined ? {} : { statusDetail }),
       })
       .where(eq(knowledgeSources.id, id))
       .returning();
     return row ?? null;
+  },
+
+  /** Liveness only -- no checkpoint move, so it is safe to call every page. */
+  async setTranscriptionHeartbeat(id: number, statusDetail?: string) {
+    await db
+      .update(knowledgeSources)
+      .set({
+        transcribeHeartbeatAt: new Date(),
+        ...(statusDetail === undefined ? {} : { statusDetail }),
+      })
+      .where(eq(knowledgeSources.id, id));
   },
 
   async setTranscriptionRange(id: number, fromPage: number | null, toPage: number | null) {
@@ -22215,14 +22285,26 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * textbook are both "1 source" and are not remotely the same thing.
    */
   async getKnowledgeCoverage() {
+    // Joined to the source, because the count has to use the SAME rule
+    // retrieval does: passage topics where set, the source's domains where
+    // not. Counting topics alone reported every passage ingested before
+    // tagging existed as belonging to no shelf at all, so a library that
+    // answers questions perfectly well showed as empty and an admin would
+    // reasonably conclude the assistants had nothing behind them.
     const rows = await db
-      .select({ topics: knowledgePassages.topics, fromVision: knowledgePassages.fromVision })
-      .from(knowledgePassages);
+      .select({
+        topics: knowledgePassages.topics,
+        fromVision: knowledgePassages.fromVision,
+        sourceDomains: knowledgeSources.domains,
+      })
+      .from(knowledgePassages)
+      .innerJoin(knowledgeSources, eq(knowledgePassages.sourceId, knowledgeSources.id));
 
     const byDomain = new Map<string, { passages: number; fromVision: number }>();
     for (const key of KNOWLEDGE_DOMAIN_KEYS) byDomain.set(key, { passages: 0, fromVision: 0 });
     for (const row of rows) {
-      for (const topic of row.topics ?? []) {
+      const effective = (row.topics?.length ?? 0) > 0 ? row.topics : (row.sourceDomains ?? []);
+      for (const topic of effective) {
         const entry = byDomain.get(topic);
         if (!entry) continue;
         entry.passages += 1;

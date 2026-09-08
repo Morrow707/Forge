@@ -54,6 +54,16 @@ jobs:
       - name: Test
         run: npm test
 
+      # The AI guardrail suite. Grading is pure string work against answers
+      # recorded in the repo, so this costs nothing and needs no API key --
+      # only `--live`, which regenerates them, calls the model.
+      #
+      # Passes trivially while no answers are recorded, and starts gating the
+      # moment the first one is. That ratchet is the point: the alternative
+      # was leaving it out of CI entirely, where it would have rotted.
+      - name: AI guardrails
+        run: npm run eval
+
       # Blocking, and deliberately scoped to what actually runs in
       # production. The full tree currently reports a critical and several
       # highs, all of them in build tooling (tar via the Capacitor CLI,

@@ -42,7 +42,15 @@ export const NORM_MIN_COHORT = 30;
 /** Cohort dimensions, in the order they are dropped when a group is too thin. */
 export const NORM_WIDENING_ORDER = ["position", "ageBand", "sport"] as const;
 
-export type NormDimension = (typeof NORM_WIDENING_ORDER)[number];
+/**
+ * Every dimension a cohort can be widened on, including gender.
+ *
+ * Gender is not in NORM_WIDENING_ORDER because it is only ever dropped at the
+ * last resort, when nothing narrower reached the floor -- but when it IS
+ * dropped the reader has to be told, or "athletes like you" silently means
+ * "everyone".
+ */
+export type NormDimension = (typeof NORM_WIDENING_ORDER)[number] | "gender";
 
 export type CohortKey = {
   sport: string | null;

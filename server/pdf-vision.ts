@@ -118,6 +118,7 @@ export async function transcribeScannedPdf(
   const pages: ExtractedPage[] = [];
   const batchSize = Math.max(1, options.batchSize ?? 10);
   let batch: ExtractedPage[] = [];
+  let sinceFlush = 0;
   let failed = 0;
   let charactersRecovered = 0;
 
@@ -130,8 +131,10 @@ export async function transcribeScannedPdf(
     batch = [];
   };
 
+  let seen = 0;
   for (const pageNumber of wanted) {
     if (options.signal?.aborted) break;
+    seen += 1;
     let page: any;
     try {
       page = await doc.getPage(pageNumber);
@@ -171,15 +174,30 @@ export async function transcribeScannedPdf(
       page?.cleanup?.();
     }
     options.onProgress?.({
-      pagesDone: pages.length + failed,
+      // seen, not pages.length + failed: a page that legitimately held no
+      // text counted as neither, so the progress line stalled while the run
+      // was in fact advancing.
+      pagesDone: seen,
       pageCount: wanted.length,
       charactersRecovered,
     });
 
-    if (batch.length >= batchSize) await flush(pageNumber);
+    // Batched on PAGES SEEN, not pages that produced text. A run of blank or
+    // unreadable pages produced nothing to append, so the old condition never
+    // fired and the checkpoint never moved -- a crash after 40 unreadable
+    // pages re-read and re-paid for all of them.
+    sinceFlush += 1;
+    if (sinceFlush >= batchSize) {
+      await flush(pageNumber);
+      sinceFlush = 0;
+    }
   }
 
-  await flush(wanted[wanted.length - 1] ?? 0);
+  // Only when there was something to finish. wanted[] is empty when a resume
+  // starts past the last page, and flushing 0 there RESET the checkpoint to
+  // zero -- so the next run re-read the entire book from page one and paid
+  // for it again. That is the opposite of what checkpointing is for.
+  if (wanted.length > 0) await flush(wanted[wanted.length - 1]);
   await doc.destroy();
   return { pages, attempted: wanted.length, failed };
 }

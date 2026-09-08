@@ -5228,6 +5228,12 @@ export const knowledgeSources = pgTable(
     // charged for it twice. On a host that redeploys, that is not a rare
     // case.
     transcribedThroughPage: integer("transcribed_through_page"),
+    // When the running pass last showed signs of life. A process that dies
+    // mid-run cannot clear its own status, so without this a crashed source
+    // sits at "transcribing" forever and the guard against starting a second
+    // pass blocks the resume it exists to protect. Staleness is the only
+    // evidence available that nobody is still working.
+    transcribeHeartbeatAt: timestamp("transcribe_heartbeat_at"),
     // The page range the admin asked for, when they asked for one. Null
     // means the whole document. Kept so a resumed run knows where to stop,
     // and so the list can say what was actually read.

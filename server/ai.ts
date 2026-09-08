@@ -310,7 +310,7 @@ export async function askClaudeWithTools<T = any>(
     // that never pass this see no change in behavior at all.
     toolExecutors?: Record<string, (input: any) => Promise<string>>;
   } = {},
-): Promise<{ toolName: string; input: T } | null> {
+): Promise<{ toolName: string; input: T; text?: undefined } | { toolName: null; input?: undefined; text: string } | null> {
   if (!aiEnabled) return null;
   const allTools = serverTools ? [...serverTools, ...tools] : tools;
   const userContent =
@@ -363,6 +363,16 @@ export async function askClaudeWithTools<T = any>(
     if (data.stop_reason === "pause_turn") {
       messages = [...messages, { role: "assistant", content: data.content }];
       continue;
+    }
+    // The model answered in prose instead of calling a tool. That used to
+    // return null, which forced any caller offering an OPTIONAL tool -- one
+    // the model is free to ignore -- to throw the answer away and make a
+    // second full request for the same thing. On the nutrition assistant,
+    // the busiest AI surface in the app, that doubled the cost and the
+    // latency of every ordinary question. The text was always right here.
+    const textBlock = data.content?.find((b: any) => b.type === "text")?.text;
+    if (typeof textBlock === "string" && textBlock.trim()) {
+      return { toolName: null, text: textBlock.trim() };
     }
     return null;
   }

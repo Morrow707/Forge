@@ -4310,7 +4310,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const source = await storage.getKnowledgeSource(id);
     if (!source) return res.status(404).json({ message: "Source not found" });
-    if (source.status === "transcribing") {
+    // A pass that is genuinely running is protected; one whose process died
+    // is not. Without the staleness check a crashed run left the source at
+    // "transcribing" forever and this guard blocked the resume it was built
+    // to protect -- the source became permanently unfinishable, which is
+    // worse than the double-run it was preventing.
+    const STALE_AFTER_MS = 15 * 60 * 1000;
+    const heartbeat = source.transcribeHeartbeatAt?.getTime() ?? 0;
+    const looksAlive = Date.now() - heartbeat < STALE_AFTER_MS;
+    if (source.status === "transcribing" && looksAlive) {
       return res.status(409).json({ message: "A transcription pass is already running on this source." });
     }
     if (!source.filePath) {
@@ -4354,9 +4362,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           fromPage: startPage,
           toPage: requestedTo,
           onProgress: (p) => {
-            void storage.setKnowledgeSourceStatus(
+            // Doubles as the liveness signal between batches: a long run of
+            // unreadable pages produces no checkpoint, and without this the
+            // heartbeat would go stale while the pass was still working.
+            void storage.setTranscriptionHeartbeat(
               id,
-              "transcribing",
               `Read ${p.pagesDone} of ${p.pageCount} page(s).`,
             );
           },
