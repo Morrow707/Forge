@@ -896,10 +896,26 @@ export function summarizeTrackedSet(
   // sees them -- see rejectImplausibleAccelerationSpikes above. `points` is
   // used everywhere below instead of the raw parameter.
   const repairedPoints = rejectImplausibleAccelerationSpikes(rawPoints);
-  const points =
+  const scaledPoints =
     positionScaleCorrection !== 1
       ? repairedPoints.map((p) => ({ ...p, x: p.x * positionScaleCorrection, y: p.y * positionScaleCorrection, z: p.z * positionScaleCorrection }))
       : repairedPoints;
+
+  // The whole trace is rotated into the movement's own frame here, once, before any metric reads
+  // it -- see dominantAxisFrame at the foot of this file. y becomes travel along the axis the bar
+  // actually moved on and x becomes drift perpendicular to it, so range of motion, velocity,
+  // power and bar-path deviation all stop depending on where the phone was standing. On a lift
+  // filmed square from the side the axis IS vertical and this is within rounding of the trace it
+  // replaces, which is why the validated squat and bench numbers are unchanged by it.
+  //
+  // z is left alone. It is the lens axis, a single camera cannot resolve it, and rotating an
+  // unmeasured quantity would only launder that fact.
+  const axisFrame = dominantAxisFrame(scaledPoints);
+  const points = scaledPoints.map((p, i) => ({
+    ...p,
+    x: axisFrame.across[i],
+    y: axisFrame.along[i],
+  }));
 
   const ySmoothed = kalmanSmooth(
     points.map((p) => p.y),
@@ -1797,5 +1813,122 @@ export function toScaleFreeMetrics(metrics: RepMetrics): ScaleFreeMetrics | null
     eccentricSeconds: meanEccentric,
     velocityLossPercent: metrics.velocityLossPercent ?? null,
     barPathDriftPercentOfRom,
+  };
+}
+
+// FILMING FROM ANYWHERE: SEGMENT ALONG THE AXIS THE BAR ACTUALLY MOVED ON.
+//
+// Everything above segments reps out of the image-VERTICAL trace alone. That is correct only
+// while the lift's real motion is vertical in the frame, which is true for a squat filmed from
+// the side and false the moment the camera moves. A bench press filmed from the foot of the
+// bench is the extreme case: the press points down the lens, so what survives in image-y is a
+// fraction of the real range, most reversals never clear the rep-amplitude gate, and ten reps
+// segment as two. The numbers that come out of that are not noisy, they are answers to a
+// different question -- two reps of eleven seconds each.
+//
+// The fix is to stop assuming which direction "up" is on the sensor and measure it. The bar's
+// motion in the image plane is overwhelmingly along one line whatever the camera angle, because
+// a rep is a there-and-back along a single path; the scatter across that line is grip sway and
+// tracking noise. So the first principal component of the (x, y) trace IS the movement axis,
+// and projecting onto it recovers the full swing that image-y only saw a component of.
+//
+// Two properties make this safe to apply everywhere rather than behind a mode:
+//
+//   - On a correctly filmed lift the principal axis IS near-vertical, so the projection is
+//     within a percent or two of today's y and every validated number stays where it was. It
+//     degrades into current behaviour rather than replacing it.
+//   - The sign is pinned to y, so "larger means higher" still holds. The concentric-vs-eccentric
+//     heuristic, the first-phase hint and the phantom-phase filter are all comparisons along
+//     this axis and keep their meaning untouched.
+//
+// What this does NOT do, and no amount of calibration can from one camera: recover motion along
+// the lens axis itself. Filmed square from the foot of the bench, the part of the press pointing
+// at the phone is not foreshortened, it is absent, and bar-path deviation in that direction
+// cannot be measured at all. This recovers the rep structure from an oblique angle. It does not
+// make a head-on view equivalent to a side view, and the film guidance still asks for the side.
+const AXIS_DOMINANCE_RATIO = 1.2;
+
+export function dominantAxisProjection(points: { x: number; y: number }[]): number[] {
+  return dominantAxisFrame(points).along;
+}
+
+/** The trace re-expressed in the movement's own frame: `along` the axis it travelled, `across`
+ *  the perpendicular to it.
+ *
+ *  `across` matters as much as `along`. Bar-path deviation is drift away from the intended line,
+ *  and on a tilted trace the raw image-x carries most of the LIFT, not the drift -- reading
+ *  deviation off it would report a perfectly straight press filmed at an angle as wandering tens
+ *  of centimetres. Measured perpendicular to the movement axis it stays what it claims to be. */
+export function dominantAxisFrame(points: { x: number; y: number }[]): {
+  along: number[];
+  across: number[];
+} {
+  const ys = points.map((p) => p.y);
+  const xs = points.map((p) => p.x);
+  if (points.length < 3) return { along: ys, across: xs };
+
+  const meanX = points.reduce((a, p) => a + p.x, 0) / points.length;
+  const meanY = points.reduce((a, p) => a + p.y, 0) / points.length;
+
+  // Covariance of the centred trace. Symmetric, so three numbers describe it.
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const p of points) {
+    const dx = p.x - meanX;
+    const dy = p.y - meanY;
+    sxx += dx * dx;
+    syy += dy * dy;
+    sxy += dx * dy;
+  }
+  sxx /= points.length;
+  syy /= points.length;
+  sxy /= points.length;
+
+  // Eigenvalues of a 2x2 symmetric matrix, closed form -- no iteration, no library.
+  const trace = sxx + syy;
+  const det = sxx * syy - sxy * sxy;
+  const disc = Math.sqrt(Math.max(0, (trace * trace) / 4 - det));
+  const major = trace / 2 + disc;
+  const minor = trace / 2 - disc;
+  if (!(major > 0)) return { along: ys, across: xs };
+
+  // A trace with no clearly dominant direction has no movement axis to find -- an athlete
+  // shifting under the bar between reps, or a take where tracking never locked, scatters roughly
+  // evenly and its "principal axis" is whichever way the noise happened to fall. Falling back to
+  // y there keeps a bad take behaving exactly as it does today instead of segmenting along a
+  // direction chosen by noise.
+  if (!(major > minor * AXIS_DOMINANCE_RATIO)) return { along: ys, across: xs };
+
+  // Eigenvector for the major eigenvalue.
+  let ax: number;
+  let ay: number;
+  if (Math.abs(sxy) > 1e-12) {
+    ax = major - syy;
+    ay = sxy;
+  } else {
+    // Already axis-aligned: the dominant direction is whichever of x/y carries more variance.
+    ax = sxx >= syy ? 1 : 0;
+    ay = sxx >= syy ? 0 : 1;
+  }
+  const norm = Math.hypot(ax, ay);
+  if (!(norm > 0)) return { along: ys, across: xs };
+  ax /= norm;
+  ay /= norm;
+
+  // Pin the sign to y so the projection keeps y's polarity and every downstream comparison of
+  // "higher" against "lower" means what it meant before. An axis that came out pointing down is
+  // the same line; only its label is backwards.
+  if (ay < 0) {
+    ax = -ax;
+    ay = -ay;
+  }
+
+  // Offsets added back so both series stay in the same units and rough range as the x/y they
+  // replace: everything downstream reads differences, but a metric that accidentally became a
+  // distance-from-origin would change meaning silently.
+  return {
+    along: points.map((p) => (p.x - meanX) * ax + (p.y - meanY) * ay + meanY),
+    across: points.map((p) => -(p.x - meanX) * ay + (p.y - meanY) * ax + meanX),
   };
 }

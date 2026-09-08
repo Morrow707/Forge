@@ -338,6 +338,17 @@ export function AvBarTrackerDialog({
   onUploadProgress?: (setNumber: number, percent: number) => void;
 }) {
   const filmGuidance = filmGuidanceForExercise(exerciseName);
+  // Where to film from is the one instruction that decides whether the take is measurable at
+  // all, so it opens as a card in the middle of the screen that has to be dismissed, not a
+  // strip pinned to the top. Pinned to the top it landed under the status bar and behind the
+  // zoom control, which is how a bench press got filmed from the foot of the bench -- the view
+  // the text itself rules out, on the take where the tracker then found two reps out of ten.
+  // Dismissal is per-open rather than remembered: the right camera position is a different
+  // sentence for every lift, and the cost of reading it again is a tap.
+  const [guidanceDismissed, setGuidanceDismissed] = useState(false);
+  useEffect(() => {
+    if (open) setGuidanceDismissed(false);
+  }, [open]);
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -1250,12 +1261,29 @@ export function AvBarTrackerDialog({
                 front has not taken a slightly worse video -- they have taken one where bar drift,
                 the fault that matters most on that lift, points straight at the lens and cannot
                 be seen at all. Telling them afterwards costs them the set. */}
-            {!recording && !analyzing && !saving && filmGuidance && (
-              <div className="absolute inset-x-3 top-3 rounded-md bg-black/70 px-3 py-2 text-xs text-white">
-                <p className="font-semibold uppercase tracking-wide text-white/60">Where to film from</p>
-                <p className="mt-0.5">{filmGuidance.view}</p>
-                <p className="mt-1.5 font-semibold uppercase tracking-wide text-white/60">Keep in frame</p>
-                <p className="mt-0.5">{filmGuidance.inFrame}</p>
+            {!recording && !analyzing && !saving && !guidanceDismissed && filmGuidance && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-6">
+                <div className="relative w-full max-w-sm rounded-lg bg-neutral-900 p-5 text-sm text-white shadow-xl">
+                  <button
+                    type="button"
+                    onClick={() => setGuidanceDismissed(true)}
+                    aria-label="Close filming instructions"
+                    className="absolute right-2 top-2 rounded-full p-2 text-white/70 hover:text-white"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                  <p className="pr-8 font-semibold uppercase tracking-wide text-white/60">
+                    Where to film from
+                  </p>
+                  <p className="mt-1 leading-snug">{filmGuidance.view}</p>
+                  <p className="mt-4 font-semibold uppercase tracking-wide text-white/60">
+                    Keep in frame
+                  </p>
+                  <p className="mt-1 leading-snug">{filmGuidance.inFrame}</p>
+                  <Button className="mt-5 w-full" onClick={() => setGuidanceDismissed(true)}>
+                    Got it
+                  </Button>
+                </div>
               </div>
             )}
 
