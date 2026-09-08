@@ -4414,6 +4414,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // How the assistants should write to you. Any signed-in person, about
   // themselves only -- getting a plainer answer is not a decision that needs
   // somebody else's permission.
+  // Corrective work drafted from the findings already on file. A DRAFT the
+  // coach reviews and applies through the editor that already exists -- an
+  // athlete's rehab work is not something software should change unattended.
+  app.post(
+    "/api/coach/roster/:athleteId/suggest-correctives",
+    requireRole("coach"),
+    async (req, res) => {
+      const athleteId = Number(req.params.athleteId);
+      if (!Number.isInteger(athleteId)) return res.status(400).json({ message: "Invalid id" });
+      const result = await storage.suggestCorrectives(req.user!.id, athleteId);
+      if (!result) {
+        return res.status(200).json({
+          correctives: [],
+          // A real and common answer. Manufacturing corrective work for an
+          // athlete with no findings is worse than saying there is nothing.
+          summary: "Nothing on file suggests corrective work right now.",
+        });
+      }
+      res.json(result);
+    },
+  );
+
+  // Athletes who keep flagging the same body region. The failure this exists
+  // for is software quietly managing a shoulder problem for months with
+  // nobody told.
+  app.get("/api/coach/pain-escalations", requireRole("coach"), async (req, res) => {
+    res.json(await storage.getRecurringPainEscalations(req.user!.id));
+  });
+
+  // "This is too hard." A regression of the same movement, not a swap.
+  app.post("/api/athlete/regress-exercise", requireRole("athlete"), async (req, res) => {
+    const parsed = z
+      .object({
+        assignmentId: z.number().int(),
+        programDayId: z.number().int(),
+        programExerciseId: z.number().int(),
+        note: z.string().trim().max(300).optional(),
+      })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+
+    const result = await storage.regressExerciseForAthlete(req.user!.id, parsed.data);
+    if (!result) {
+      return res
+        .status(422)
+        .json({ message: "Couldn't work out an easier version just now -- try again in a bit." });
+    }
+    res.json(result);
+  });
+
   app.get("/api/answer-style", requireAuth, async (req, res) => {
     res.json((await storage.getAnswerStyle(req.user!.id)) ?? {});
   });
