@@ -20,6 +20,48 @@ import path from "path";
 // exactly the kind of thing that quietly drifts apart during a refactor.
 export const UPLOADS_ROOT = process.env.STORAGE_PATH || path.join(process.cwd(), "server", "uploads");
 
+// Whether that fallback is what is actually in use. In development it is the normal case; in
+// production it means every uploaded file is being written into the deployed source tree, which
+// the host replaces on each deploy -- so videos and books survive only until the next push.
+//
+// This is not hypothetical. It ran that way in production while a 10GB persistent disk sat
+// mounted and empty: the disk existed, the mount path was right, STORAGE_PATH simply was not set
+// on the service, and the fallback silently absorbed it. Nothing anywhere said so. The only
+// visible symptom was athletes' clips and an ingested textbook disappearing hours later, which
+// looks exactly like a bug in whatever code last touched them -- and cost most of a day being
+// investigated as one.
+//
+// A default that quietly does the wrong thing in production has to announce itself. See
+// warnIfUploadsAreEphemeral, called at startup.
+export const UPLOADS_ROOT_IS_FALLBACK = !process.env.STORAGE_PATH;
+
+export function warnIfUploadsAreEphemeral(): void {
+  if (!UPLOADS_ROOT_IS_FALLBACK) {
+    console.log(`Uploads root: ${UPLOADS_ROOT} (STORAGE_PATH)`);
+    return;
+  }
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`Uploads root: ${UPLOADS_ROOT} (local fallback, no STORAGE_PATH set)`);
+    return;
+  }
+  // Deliberately not fatal. Refusing to boot would take a working platform offline over a
+  // misconfiguration that only affects new uploads, and an athlete who cannot open the app is
+  // worse off than one whose video is at risk. Loud enough to be found, though: this is the
+  // difference between files that persist and files that do not.
+  console.error(
+    "=".repeat(78) +
+      `\nUPLOADS ARE EPHEMERAL: STORAGE_PATH is not set, so uploads are being written to\n` +
+      `  ${UPLOADS_ROOT}\n` +
+      "which is inside the deployed source tree and is REPLACED ON EVERY DEPLOY. Every\n" +
+      "form-check video, skill clip, annotation and ingested document written here will be\n" +
+      "lost the next time this service deploys.\n\n" +
+      "Fix: set STORAGE_PATH on the service to the persistent disk's mount path (render.yaml\n" +
+      "declares /var/data/forge-uploads). A disk being mounted is not enough on its own -- if\n" +
+      "nothing sets this variable, the disk stays empty and the app never notices.\n" +
+      "=".repeat(78),
+  );
+}
+
 // Every URL this is ever called with is one this server generated itself
 // (crypto.randomUUID()-named, returned from an /api/*/form-video or
 // /api/*/skill-video upload route and round-tripped back through a save --

@@ -82,6 +82,7 @@ import compression from "compression";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
+import { warnIfUploadsAreEphemeral } from "./uploaded-files";
 import { setupVite, serveStatic, log } from "./vite";
 import { startReflectionJob } from "./reflection-job";
 import { startDataRetentionJob } from "./data-retention-job";
@@ -422,6 +423,10 @@ app.get("/healthz", async (_req, res) => {
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
+    // Says where uploads are actually going, every boot, and shouts if that is a path the
+    // next deploy will replace -- see warnIfUploadsAreEphemeral for the production incident
+    // that made a silent default unacceptable.
+    warnIfUploadsAreEphemeral();
     startReflectionJob();
     startDataRetentionJob();
     startVideoRetentionJob();

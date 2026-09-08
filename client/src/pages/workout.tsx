@@ -421,6 +421,9 @@ type SetMetrics = {
   // formCheckFlag is the athlete's own best/worst tag for the comparison
   // view; every recorded clip is kept regardless of whether it's flagged.
   formCheckVideoUrl: string | null;
+  // Set only by the Remove button, and cleared again the moment a new clip attaches. Absent on
+  // every ordinary save, which is the point: an ordinary save must never read as a removal.
+  removeFormCheckVideo?: boolean;
   formCheckFlag: FormCheckFlag;
   // Exempts this clip from the rolling-deletion cap once retention limits
   // are actually enforced -- see shared/video-retention.ts. Independent of
@@ -1206,6 +1209,7 @@ export function WorkoutPage({
           meanEai: s.meanEai,
           velocityLossPercent: s.velocityLossPercent,
           formCheckVideoUrl: s.formCheckVideoUrl,
+          removeFormCheckVideo: s.removeFormCheckVideo,
           formCheckFlag: s.formCheckFlag,
           videoFavorited: s.videoFavorited,
           jumpHeightCm: s.jumpHeightCm,
@@ -1718,7 +1722,11 @@ export function WorkoutPage({
       const match = itemsRef.current.find(
         (it) => it.kind === "exercise" && it.refId === detail.programExerciseId,
       );
-      if (match) updateSet(match.key, detail.setNumber, { formCheckVideoUrl: detail.videoUrl });
+      if (match)
+        updateSet(match.key, detail.setNumber, {
+          formCheckVideoUrl: detail.videoUrl,
+          removeFormCheckVideo: false,
+        });
     }
     window.addEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
     return () => window.removeEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
@@ -3844,8 +3852,13 @@ function ExerciseLogContent({
             setRecordingSetNumber(previewSet.setNumber);
           }}
           onRemove={() => {
+            // removeFormCheckVideo, not just a null url. A null url is what this screen also
+            // sends for a set whose clip finished uploading after this state was built, and the
+            // server can no longer tell those apart by the url alone -- so removing has to say
+            // that it is removing. See the field's own comment in shared/schema.ts.
             onUpdateSet(previewSet.setNumber, {
               formCheckVideoUrl: null,
+              removeFormCheckVideo: true,
               formCheckFlag: null,
               videoFavorited: false,
             });

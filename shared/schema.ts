@@ -7423,6 +7423,16 @@ export const setLogInputSchema = z.object({
   meanEai: z.number().optional().nullable(),
   velocityLossPercent: z.number().optional().nullable(),
   formCheckVideoUrl: z.string().trim().max(500).optional().nullable(),
+  // Removing a video has to say so, because a null url no longer means it.
+  //
+  // A clip is attached to a set out of band (the upload finishes in the
+  // background, attachVideoToLoggedSet writes the url), so a client logging
+  // a LATER set from state assembled before that landed sends the earlier
+  // set back with a null url it never meant as an instruction. The server
+  // used to take that literally and delete the file, which is how saving
+  // Set 2 destroyed Set 1's video. A null url is now read as "I don't know
+  // about a video here", and only this flag actually removes one.
+  removeFormCheckVideo: z.boolean().optional(),
   formCheckFlag: z.enum(["best", "worst"]).optional().nullable(),
   // See workoutSetEntries.videoFavorited -- exempts this video from the
   // rolling-deletion cap once retention limits are actually enforced.

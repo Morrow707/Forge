@@ -19098,10 +19098,12 @@ ${catalog}`;
               //
               // The same reasoning was already applied to the capture columns just above (see
               // priorCaptureByKey) and simply never reached the video. Omission is now
-              // preserved. Removing a video is still possible, because a retake sends a
-              // different url and the explicit remove path clears it directly -- what is no
-              // longer possible is losing footage by saving an unrelated set.
-              const effectiveVideoUrl = s.formCheckVideoUrl ?? prior?.url ?? null;
+              // preserved. Removing one is still possible and now has to be deliberate: the
+              // Remove button sends removeFormCheckVideo, and a retake sends a different url.
+              // What is no longer possible is losing footage by saving an unrelated set.
+              const effectiveVideoUrl = s.removeFormCheckVideo
+                ? null
+                : (s.formCheckVideoUrl ?? prior?.url ?? null);
               const isSameVideo = Boolean(effectiveVideoUrl) && prior?.url === effectiveVideoUrl;
               if (effectiveVideoUrl) retainedVideoUrls.add(effectiveVideoUrl);
               const weightNum = s.weight ? parseFloat(s.weight) : NaN;
