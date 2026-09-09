@@ -242,10 +242,25 @@ function plateScaleFromFrames(
   frames: NativePoseFrame[],
   trackingMode: string | undefined,
 ): { scale: number; uncertaintyFraction: number } | null {
-  if (trackingMode !== "plate") return null;
+  // WHICHEVER DETECTOR SAW THE PLATE, NOT WHICHEVER ONE WAS ASKED FIRST.
+  //
+  // The clip now carries two classes (see AvCoreMlImplementDetector.secondaryLabel): the class
+  // the caller asked for, tracked every frame, and the other half of a loaded barbell, sampled.
+  // Which of the two is the plate depends on the tracking mode, and a plate is a plate whichever
+  // slot it arrived in -- so this reads the one that IS one rather than the one that happens to
+  // be primary. Before, asking for the bar meant no plate was measured all take even though the
+  // detector was perfectly capable of finding one, which is the entire reason scale kept falling
+  // back onto the athlete's body and dragging camera angle in with it.
+  const plateIsPrimary = trackingMode === "plate";
+  const plateIsSecondary = trackingMode === "barbell";
+  if (!plateIsPrimary && !plateIsSecondary) return null;
   const samples: number[] = [];
   for (const f of frames) {
-    const box = f.coreMlImplement;
+    const box = plateIsPrimary
+      ? f.coreMlImplement
+      : f.coreMlSecondary?.label === "plate"
+        ? f.coreMlSecondary
+        : undefined;
     if (!box || box.confidence < COREML_MIN_CONFIDENCE_TO_PENALIZE) continue;
     const pixelSize = Math.max(box.width * f.frameWidth, box.height * f.frameHeight);
     if (pixelSize > 0) samples.push(pixelSize);

@@ -53,6 +53,14 @@ export type PoseImplement = {
 // there's real on-device data to validate the choice against.
 export type PoseCoreMlImplement = { x: number; y: number; width: number; height: number; confidence: number };
 
+// The second class detected on the same clip, carrying which class it is -- see
+// AvCoreMlImplementDetector.secondaryLabel. A loaded barbell is both a bar and a pair of plates,
+// and the two answer different questions: the plate is a disc of known diameter, so it states
+// real-world scale regardless of where the camera stands; the bar is harder to see but survives
+// a setup whose plates the model does not recognise. Sampled every fourth frame rather than
+// tracked continuously, since what it feeds is a median over the take, not a trace.
+export type PoseCoreMlSecondary = PoseCoreMlImplement & { label: string };
+
 // Med-ball-only, same scope/reasoning as coreMlImplement above -- how far
 // this frame's background has drifted from the clip's first frame (camera
 // shake, not implement motion), normalized the same 0-1 way as every other
@@ -92,6 +100,7 @@ export type PoseFrame = {
   leftImplement?: PoseImplement;
   rightImplement?: PoseImplement;
   coreMlImplement?: PoseCoreMlImplement;
+  coreMlSecondary?: PoseCoreMlSecondary;
   cameraDrift?: PoseCameraDrift;
   handJoints?: PoseHandJoint[];
   body3DJoints?: PoseBody3DJoint[];

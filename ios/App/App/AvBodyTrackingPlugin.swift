@@ -151,6 +151,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // additive alongside the motion-diff trackers above, not a replacement.
     // See AvCoreMlImplementDetector's own header comment.
     private var coreMlImplementDetector = AvCoreMlImplementDetector()
+    // A SECOND CLASS, SO ONE FAILING DETECTION DOES NOT END THE MATTER.
+    //
+    // The detector is asked for exactly one class per clip, and whichever one that is becomes the
+    // only object the pipeline can see. On a barbell lift that meant a choice between the plate
+    // (a 45cm disc, the one object here of known size, so the only source of real-world scale
+    // that does not depend on where the camera is standing) and the bar (a thin dark line, but
+    // present even on an unloaded or bumper-less setup). Picking either threw the other away for
+    // the whole take, with no way to notice it had been the wrong pick.
+    //
+    // Its own instance rather than a second call on the first: the detector holds a tracking lock
+    // on the object it found, and two labels sharing one lock would fight over it every frame.
+    private var coreMlSecondaryDetector = AvCoreMlImplementDetector()
     private var cameraStabilizer = AvCameraStabilizer()
 
     // The public, documented Vision joint names this plugin reports -- unlike ARKit's own
@@ -982,6 +994,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         leftImplementTracker.reset()
         rightImplementTracker.reset()
         coreMlImplementDetector.reset()
+        coreMlSecondaryDetector.reset()
         cameraStabilizer.reset()
 
         // Confirmed against a real field report: AVAssetReader/Vision setup can hang
@@ -1113,6 +1126,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // AvCoreMlImplementDetector and the other small per-call helper types.)
         let coreMlTargetLabel = AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode)
         let coreMlDetectionEnabled = coreMlTargetLabel != nil && coreMlImplementDetector.isAvailable
+        // The other half of a loaded barbell. Whichever class the caller asked for, the pipeline
+        // also wants the one it did not: the plate carries real-world scale and the bar survives
+        // a setup with no plates the detector recognises.
+        let coreMlSecondaryLabel = AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode)
+        let coreMlSecondaryEnabled = coreMlSecondaryLabel != nil && coreMlSecondaryDetector.isAvailable
         // Background-execution edge case, same as stopRecording's finalize step -- a coach
         // backgrounding the app to check something mid-analysis shouldn't kill this partway
         // through a clip.
@@ -1556,6 +1574,31 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence)
             }
 
+            // The second class, sampled rather than tracked every frame.
+            //
+            // Every-frame detection is what the primary class is for: it follows the implement,
+            // so a gap in it is a gap in the trace. The secondary exists to answer questions that
+            // need a good sample rather than a continuous one -- above all real-world scale from
+            // a plate's diameter, which is a median over the take and needs tens of readings, not
+            // hundreds. Running it on every frame would double the per-frame Vision work on a
+            // phone this file's own header records as already thermally constrained, for
+            // measurements that do not improve past a few dozen samples.
+            //
+            // No region of interest either: the primary is narrowed to where the wrists are
+            // because it is following the thing in the hands, while a plate sits out at the end
+            // of the bar, well outside that box. Searching the whole frame is the point.
+            var coreMlSecondary: [String: Any]?
+            if coreMlSecondaryEnabled, let secondaryLabel = coreMlSecondaryLabel,
+               processedCount % Self.coreMlSecondaryEveryNthFrame == 0,
+               let secondary = coreMlSecondaryDetector.track(
+                   pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, orientation: orientation,
+                   targetLabel: secondaryLabel, regionOfInterest: nil
+               ) {
+                var dict = coreMlResultDict(secondary.box, confidence: secondary.confidence)
+                dict["label"] = secondaryLabel
+                coreMlSecondary = dict
+            }
+
             // Same gate as the CoreML detector above -- handheld camera shake is a real problem
             // for every tracking mode; this rides along on the same enable/disable decision
             // rather than a separate one, since a session worth enabling object detection for is
@@ -1587,6 +1630,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if let leftImplement = leftImplement { eventData["leftImplement"] = leftImplement }
             if let rightImplement = rightImplement { eventData["rightImplement"] = rightImplement }
             if let coreMlImplement = coreMlImplement { eventData["coreMlImplement"] = coreMlImplement }
+            if let coreMlSecondary = coreMlSecondary { eventData["coreMlSecondary"] = coreMlSecondary }
             if let cameraDrift = cameraDrift { eventData["cameraDrift"] = cameraDrift }
             // Omit-when-empty, not always-present like joints above -- a hand out of frame is
             // genuinely "nothing to report this frame," the same semantics leftImplement/
@@ -1987,6 +2031,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         return dict
     }
 
+    // How often the secondary class is sampled. Every fourth frame at 60fps is fifteen readings a
+    // second, which is far more than a median over a set needs and a quarter of the cost.
+    private static let coreMlSecondaryEveryNthFrame = 4
+
     private func coreMlResultDict(_ boundingBox: CGRect, confidence: Float) -> [String: Any] {
         // Vision's box is (x, y, width, height) with the same normalized,
         // bottom-left-origin convention as every joint this file already
@@ -2082,6 +2130,22 @@ private final class AvCoreMlImplementDetector {
     static func targetLabel(forTrackingMode trackingMode: String?) -> String? {
         guard let trackingMode, supportedTrackingModes.contains(trackingMode) else { return nil }
         return trackingMode
+    }
+
+    /// The other class worth looking for on the same clip, or nil where there isn't one.
+    ///
+    /// Only the barbell family has two: a loaded bar is both a bar and a pair of plates, and the
+    /// two answer different questions. The plate is a disc of known diameter, so it is the one
+    /// object in a gym that states real-world scale regardless of camera position; the bar is
+    /// harder to see but is there when no plate is loaded, or when the plates are a type the
+    /// model does not know. A dumbbell or a kettlebell is one object with one answer, so asking
+    /// twice would only cost frame time.
+    static func secondaryLabel(forTrackingMode trackingMode: String?) -> String? {
+        switch trackingMode {
+        case "plate": return "barbell"
+        case "barbell": return "plate"
+        default: return nil
+        }
     }
 
     // Loaded once per plugin instance lookup, not per clip -- Bundle.main
