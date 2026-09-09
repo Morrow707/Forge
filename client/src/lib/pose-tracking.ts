@@ -657,6 +657,71 @@ export function scaleWorldLandmarks(worldLandmarks: Landmark[], factor: number):
 // method, not a replacement for it.
 const SHOULDER_HEIGHT_FRACTION = 0.818;
 
+// SHOULDER BREADTH, FOR THE LIFTS WHERE BODY LENGTH IS NOT AVAILABLE.
+//
+// Every scale this file derives measures the athlete along their own long axis -- nose to ankle,
+// shoulder to ankle, a supine body at full length. All three need that axis to lie across the
+// frame, which is why they fail on a bench press and why a bench press was refused outright: the
+// athlete is lying down, and from anywhere near the end of the bench their length points at the
+// lens where nothing can measure it.
+//
+// Their WIDTH does not. Biacromial breadth sits perpendicular to the body's long axis, so it is
+// broadside in exactly the framing that destroys the length -- filmed from the foot of a bench,
+// a lifter's shoulders span the frame while their body is a foot deep. It is the one
+// anthropometric reference still measurable there, and it was being ignored in favour of
+// refusing to measure at all.
+//
+// 0.23 of stature is the usual adult figure and it is genuinely looser than a length read:
+// biacromial-to-height varies with sex, build and training age, and a broad-shouldered lifter
+// and a narrow one of the same height differ by something like a tenth. That is a real
+// uncertainty and it is carried as one -- a scale from this source is marked as such, so a
+// number built on it is never mistaken for one built on a full-length read. It is not close and
+// it is not exact; it is the difference between a bench press having numbers and having none.
+const BIACROMIAL_HEIGHT_FRACTION = 0.23;
+const BIACROMIAL_TOLERANCE_FRACTION = 0.1;
+
+// Below this the shoulders are turned away from the lens rather than square to it, and their
+// apparent width is foreshortened by an unknown amount -- the same failure the length read hits,
+// in the other axis. Refusing here is right; there is nothing to measure.
+const MIN_SHOULDER_BROADSIDE_RATIO = 2;
+
+/**
+ * Real-world scale from the athlete's shoulder breadth, for a body whose length the camera
+ * cannot see. Metres per pixel-space unit, with the honest uncertainty of the estimate.
+ *
+ * Returns null when the shoulders are not reliably visible, or are angled enough that their
+ * apparent width is foreshortened -- a bad scale is worse than none, which is the one part of
+ * the old refusal that was right.
+ */
+export function shoulderWidthScaleFromFrames(
+  frames: { worldLandmarks: Landmark[] }[],
+  heightIn: number | null | undefined,
+): { scale: number; uncertaintyFraction: number } | null {
+  if (!heightIn || heightIn <= 0) return null;
+  const widths: number[] = [];
+  for (const f of frames) {
+    const l = f.worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+    const r = f.worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+    if (!visible(l) || !visible(r)) continue;
+    const across = Math.hypot(l.x - r.x, l.y - r.y);
+    const depth = Math.abs(l.z - r.z);
+    if (!(across > 0)) continue;
+    // Square to the lens: the two shoulders sit side by side in the image rather than one behind
+    // the other. A body rotated toward the camera fails this and is skipped.
+    if (depth > 0 && across / depth < MIN_SHOULDER_BROADSIDE_RATIO) continue;
+    widths.push(across);
+  }
+  if (widths.length < MIN_CALIBRATION_SAMPLES) return null;
+  widths.sort((a, b) => a - b);
+  const medianWidth = widths[Math.floor(widths.length / 2)];
+  if (!(medianWidth > 0)) return null;
+  const realWidthM = heightIn * 0.0254 * BIACROMIAL_HEIGHT_FRACTION;
+  return {
+    scale: realWidthM / medianWidth,
+    uncertaintyFraction: BIACROMIAL_TOLERANCE_FRACTION,
+  };
+}
+
 // Same nose-to-ankle-span idea as computeImpliedStandingHeightM, but returns the RAW pixel-
 // space span with no anthropometric NOSE_TO_CROWN_M add-on -- that 0.12m constant is
 // real-meters-specific, and estimating its pixel-space equivalent would need a scale factor

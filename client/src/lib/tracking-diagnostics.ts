@@ -96,7 +96,7 @@ export type TrackingDiagnostics = {
     // is a handful of instances from three photos, so the first numbers it produces need to be
     // attributable to it rather than blended anonymously into everything else -- that is exactly
     // what the replay harness needs to tell a good plate read from a bad one.
-    scaleSource?: "height" | "plate" | "both" | null;
+    scaleSource?: "height" | "plate" | "both" | "shoulder_width" | null;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
@@ -221,7 +221,7 @@ export function buildTrackingDiagnostics(args: {
   } | null;
   calibration?: {
     scaleFactor: number | null;
-    scaleSource?: "height" | "plate" | "both" | null;
+    scaleSource?: "height" | "plate" | "both" | "shoulder_width" | null;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;

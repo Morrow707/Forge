@@ -24,6 +24,7 @@ import {
   POSE_LANDMARKS,
   detectFormFaults,
   worldVerticalSign,
+  shoulderWidthScaleFromFrames,
   tiltDegreesFromPoints,
   usesSharedBarEquipment,
   assessCameraAlignment,
@@ -690,22 +691,49 @@ export function AvBarTrackerDialog({
     // reasoning applyCoreMlCorroboration and medBallTrustScore already apply elsewhere in this
     // codebase to exactly this "two signals, not one" situation.
     const plateScale = plateScaleFromFrames(rawFrames, coreMlTrackingMode);
+
+    // SHOULDER BREADTH, WHERE THE BODY'S LENGTH IS UNAVAILABLE.
+    //
+    // A bench press was refused outright, on the exercise's NAME: lying down means height cannot
+    // give scale, so no scale, so no numbers, on every bench anyone will ever film. That is a
+    // policy rather than a measurement, and no camera angle could satisfy it -- which is exactly
+    // what made it indefensible. "This lift is done lying down" is not a fault an athlete can
+    // fix, and a bench press is not an exotic case to opt out of.
+    //
+    // The refusal was right about one thing and wrong about what followed from it. A lying
+    // athlete's LENGTH genuinely is unmeasurable from the end of a bench -- it points at the lens.
+    // Their shoulder breadth is not: it sits perpendicular to that axis, so it is broadside in
+    // precisely the framing that ruins the length, and the tracker holds both shoulders through
+    // the whole set. The measurement was there the entire time and the code declined to look at
+    // it. See shoulderWidthScaleFromFrames.
+    //
+    // Only as a fallback, and never averaged with a length read: it is a looser estimate
+    // (biacromial-to-height varies by build, so a broad lifter and a narrow one of the same
+    // height differ by around a tenth), and blending it with a good read would spread its
+    // uncertainty into a number that did not have any.
+    const shoulderScale =
+      heightScaleFactor == null && plateScale == null
+        ? shoulderWidthScaleFromFrames(calibrationInput, heightIn)
+        : null;
+
     const scaleFactor =
       heightScaleFactor != null && plateScale != null
         ? (heightScaleFactor + plateScale.scale) / 2
-        : (plateScale?.scale ?? heightScaleFactor);
+        : (plateScale?.scale ?? heightScaleFactor ?? shoulderScale?.scale ?? null);
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     // Which mechanism actually produced the scale, recorded alongside it. Plate-derived scale is
     // new and its training data is thin, so a number built on one has to be identifiable as such
     // rather than indistinguishable from a height-derived one.
-    const scaleSource: "height" | "plate" | "both" | null =
+    const scaleSource: "height" | "plate" | "both" | "shoulder_width" | null =
       heightScaleFactor != null && plateScale != null
         ? "both"
         : plateScale != null
           ? "plate"
           : heightScaleFactor != null
             ? "height"
-            : null;
+            : shoulderScale != null
+              ? "shoulder_width"
+              : null;
 
     // No scale used to end the take here, with nothing saved but the video. It no longer does.
     //

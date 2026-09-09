@@ -87,10 +87,23 @@ describe("postureForExercise", () => {
   });
 
   it("gives a posture-specific reason and none for a standing lift", () => {
-    expect(calibrationRefusalReason("seated")).toContain("seated");
-    expect(calibrationRefusalReason("lying")).toContain("lying down");
+    expect(calibrationRefusalReason("seated")).toContain("Seated");
+    expect(calibrationRefusalReason("lying")).toContain("Lying down");
     expect(calibrationRefusalReason("standing")).toBeNull();
     expect(calibrationRefusalReason("hanging")).toBeNull();
+  });
+
+  it("names something the athlete can change, not a verdict on the lift", () => {
+    // These used to fire on the exercise's NAME before any measurement was attempted, so a bench
+    // press was told its numbers were withheld because it is done lying down -- true, permanent,
+    // and impossible to act on. They fire now only once the shoulder-breadth fallback has also
+    // failed, which is a property of the take.
+    for (const posture of ["lying", "seated", "supported"] as const) {
+      const reason = calibrationRefusalReason(posture)!;
+      expect(reason).toContain("shoulder");
+      expect(reason).toContain("camera");
+      expect(reason).not.toContain("withheld rather than guessed");
+    }
   });
 });
 

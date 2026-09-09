@@ -181,12 +181,17 @@ export function heightCalibrationUnreliable(
  * or the next thing they try is another take from another angle, which cannot help. */
 export function calibrationRefusalReason(posture: CameraPosture): string | null {
   switch (posture) {
+    // These fire only after the shoulder-breadth fallback has ALSO failed to find a scale (see
+    // shoulderWidthScaleFromFrames). They used to fire on the exercise's name alone, which made
+    // them a verdict on the lift rather than on the footage -- "this lift is done lying down" is
+    // not a fault an athlete can correct, and a bench press is not an exotic case to opt out of.
+    // Each now names the thing in THIS take that could not be measured, and what would fix it.
     case "lying":
-      return "This lift is done lying down, so your height can't be used to work out real-world scale -- that only works for a standing athlete, at any camera angle. Numbers are withheld rather than guessed.";
+      return "Couldn't work out real-world scale for this take. Lying down, your height can't be measured along your body, so scale comes from your shoulder width instead -- and your shoulders need to be square to the camera for that. Film from the side, level with the bar, with both shoulders in frame.";
     case "seated":
-      return "This lift is done seated, so the camera sees roughly three quarters of your standing height and would read every distance about a third too big. Numbers are withheld rather than guessed.";
+      return "Couldn't work out real-world scale for this take. Seated, the camera can't measure your standing height, so scale comes from your shoulder width instead -- and your shoulders need to be square to the camera for that. Film from the side with both shoulders in frame.";
     case "supported":
-      return "Your legs aren't straight under you on this lift, so your height can't be used to work out real-world scale. Numbers are withheld rather than guessed.";
+      return "Couldn't work out real-world scale for this take. Your legs aren't straight under you, so scale can't come from your height -- it comes from your shoulder width instead, which needs both shoulders square to the camera and in frame.";
     default:
       return null;
   }
