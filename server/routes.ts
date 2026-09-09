@@ -2787,16 +2787,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Groups up to FREE_AGENT_TIERS.family.athleteProfileCap athletes under
   // one Family plan (see storage.createFamilyGroup) -- each member ends up
   // with freeAgentTier="family" and a shared familyGroupId.
-  app.post("/api/admin/family-groups", requireRole("admin"), async (req, res) => {
-    const parsed = createFamilyGroupSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const result = await storage.createFamilyGroup(parsed.data.athleteEmails);
-    if (!result.ok) {
-      return res.status(400).json({ message: result.message });
-    }
-    res.status(201).json(result);
+  //
+  // Retired (Scott, 2026-09-09: remove the family pack). Closed here rather
+  // than deleted, because the groups that already exist keep resolving and
+  // their members keep their entitlements -- what stops is creating new
+  // ones. A route that still enrolled accounts onto a product nobody can
+  // see a price for is the worse failure of the two.
+  app.post("/api/admin/family-groups", requireRole("admin"), async (_req, res) => {
+    return res
+      .status(410)
+      .json({ message: "The Family plan has been retired. Existing groups are unaffected." });
   });
 
   // Cheap headcount tiles for the admin dashboard -- see
@@ -9942,7 +9942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
-      const schema = z.object({ tier: z.enum(["basic", "ai_coach", "ai_coach_video", "family"]) });
+      const schema = z.object({ tier: z.enum(["basic", "ai_coach", "ai_coach_video"]) });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Pick a plan first." });

@@ -67,7 +67,16 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
 
 // Ordered cheapest-to-priciest, for rendering the /pricing page and the
 // admin assignment dropdown in a sensible order without re-sorting.
-export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["basic", "ai_coach", "ai_coach_video", "family"];
+//
+// WHAT IS SELLABLE TODAY, which is no longer the same as what is defined.
+// Family is retired (Scott, 2026-09-09: remove the family pack) and is
+// therefore absent here, so it disappears from the pricing page, the landing
+// page, the admin pricing editor and the list of Stripe prices that must
+// exist -- but its definition stays above, because an account already on it
+// still has to resolve to real entitlements rather than to nothing, and
+// family_groups rows already reference it. Retiring a product is not the
+// same as pretending it never existed.
+export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["basic", "ai_coach", "ai_coach_video"];
 
 // The app's real bundle id (see ios/App/App.xcodeproj) -- StoreKit 2 Product
 // ids are conventionally namespaced under it. Shared here (not just in
