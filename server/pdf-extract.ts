@@ -208,7 +208,39 @@ export function splitIntoPassages(pages: ExtractedPage[]): Passage[] {
     }
 
     if (end >= combined.length) break;
-    cursor = Math.max(end - OVERLAP_CHARS, cursor + 1);
+
+    // The overlap has to start on a word too.
+    //
+    // Where a passage ENDS was chosen carefully above -- a paragraph break, a sentence end, a
+    // space. Where the next one BEGINS was not: it stepped back a flat 200 characters and started
+    // there, wherever that landed. In a real book that is almost always the middle of a word, so
+    // the overlapping copy of a passage opened with "ich a repetition is executed", "stance
+    // Training--methods", "itness Center in Champaign" and "es at the end of its axon".
+    //
+    // Which is not just ugly. That fragment is what an assistant quotes back as evidence and what
+    // the search index holds, so half the stored text began with a word that does not exist.
+    //
+    // The step back is now the FLOOR, not the answer: from there, forward to the first clean
+    // start -- a paragraph, then a sentence, then a word. Forward rather than back so the overlap
+    // can only ever shrink, never grow past what was intended, and the loop cannot stall.
+    const floor = Math.max(end - OVERLAP_CHARS, cursor + 1);
+    const tail = combined.slice(floor, end);
+    const paragraphStart = tail.indexOf("\n\n");
+    const sentenceStart = Math.min(
+      ...[tail.indexOf(". "), tail.indexOf(".\n"), tail.indexOf("? "), tail.indexOf("! ")]
+        .filter((i) => i >= 0)
+        .concat([Infinity]),
+    );
+    const wordStart = tail.indexOf(" ");
+    const snapped =
+      paragraphStart >= 0
+        ? floor + paragraphStart + 2
+        : Number.isFinite(sentenceStart)
+          ? floor + sentenceStart + 2
+          : wordStart >= 0
+            ? floor + wordStart + 1
+            : floor;
+    cursor = Math.min(Math.max(snapped, cursor + 1), end);
   }
 
   return passages;
