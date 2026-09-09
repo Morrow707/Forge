@@ -420,13 +420,17 @@ export function KnowledgeBaseContent() {
                 <div
                   key={s.id}
                   className={cn(
-                    "flex items-start gap-3 rounded-md border px-3 py-2",
+                    // Wraps on a phone. The actions were laid out beside the title as an
+                    // unwrapping row, so on a narrow screen they took the width and squeezed the
+                    // details column to about one word: "752 / pages, / 1920 / passages," down
+                    // the left edge, with the buttons stacked and unreadable beside it.
+                    "flex flex-wrap items-start gap-3 rounded-md border px-3 py-2",
                     s.status === "needs_vision" || s.status === "transcribing"
                       ? "border-amber-500/50"
                       : "border-border",
                   )}
                 >
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-[14rem] flex-1">
                     <p className="text-sm font-bold">{s.title}</p>
                     <p className="text-xs text-muted-foreground">
                       {s.pageCount ?? 0} pages, {s.passageCount} passages,{" "}
@@ -1175,6 +1179,7 @@ function IngestProgress({ source }: { source: Source }) {
 function SourceReader({ source, onClose }: { source: Source; onClose: () => void }) {
   const qc = useQueryClient();
   const [offset, setOffset] = useState(0);
+  const [gotoPage, setGotoPage] = useState("");
   const [fromPage, setFromPage] = useState("");
   const [toPage, setToPage] = useState("");
   const PAGE_SIZE = 25;
@@ -1222,6 +1227,30 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
     onError: (err: ApiError) => toast.error(err.message || "Couldn't remove those pages"),
   });
 
+  // Where a given page's passages start in the flat list the reader pages through.
+  //
+  // The reader opened at offset zero and stepped forward twenty-five passages at a time, which
+  // on a 752-page textbook means the only thing anybody ever saw was the title page, the
+  // copyright notice and the start of chapter one. Deciding that pages 1-8 are front matter
+  // worth removing needs a way to look at page 400, and there wasn't one -- so the page strip
+  // was a picture of the book that could not be opened, and the range remover asked for numbers
+  // nothing on the screen could help anyone choose.
+  //
+  // The map is grouped by the page a passage STARTS on and every passage starts on exactly one
+  // page, so a running total across it lands on that page's first passage exactly rather than
+  // approximately.
+  const offsetOfPage = (target: number) => {
+    let total = 0;
+    for (const p of pageMap) {
+      if (p.pageNumber >= target) break;
+      total += p.passages;
+    }
+    return total;
+  };
+  const jumpToPage = (target: number) => {
+    setOffset(Math.max(0, Math.floor(offsetOfPage(target) / PAGE_SIZE) * PAGE_SIZE));
+  };
+
   const canDrop = !!fromPage && !!toPage && Number(toPage) >= Number(fromPage);
   // Below this, a page produced so little that it is almost certainly an
   // index entry, a running header or a page of references rather than prose.
@@ -1249,25 +1278,49 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
           <div className="max-h-40 overflow-y-auto rounded-md border">
             <div className="flex flex-wrap gap-1 p-2">
               {pageMap.map((p) => (
-                <span
+                <button
+                  type="button"
                   key={p.pageNumber}
-                  title={`Page ${p.pageNumber}: ${p.passages} passage(s), ${p.characters} characters`}
+                  onClick={() => jumpToPage(p.pageNumber)}
+                  title={`Page ${p.pageNumber}: ${p.passages} passage(s), ${p.characters} characters -- tap to read it`}
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-[10px] tabular-nums",
+                    "rounded px-1.5 py-0.5 text-[10px] tabular-nums transition-colors",
                     p.characters < THIN_PAGE_CHARS
-                      ? "bg-amber-500/20 text-amber-500"
-                      : "bg-muted text-muted-foreground",
+                      ? "bg-amber-500/20 text-amber-500 hover:bg-amber-500/40"
+                      : "bg-muted text-muted-foreground hover:bg-muted-foreground/30",
                   )}
                 >
                   {p.pageNumber}
-                </span>
+                </button>
               ))}
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Amber pages produced very little text. A run of them at the front or the back is
-            usually front matter, an index or a bibliography.
+            Tap a page to read it. Amber pages produced very little text -- a run of them at the
+            front or the back is usually front matter, an index or a bibliography.
           </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="goto-page" className="text-xs">
+                Go to page
+              </Label>
+              <Input
+                id="goto-page"
+                inputMode="numeric"
+                value={gotoPage}
+                onChange={(e) => setGotoPage(e.target.value.replace(/[^0-9]/g, ""))}
+                className="h-9 w-24"
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!gotoPage}
+              onClick={() => jumpToPage(Number(gotoPage))}
+            >
+              Go
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-2 rounded-md border p-3">
@@ -1314,9 +1367,21 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
 
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              The passages themselves
-            </p>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                The passages themselves
+              </p>
+              {/* Where in the book this is. Without it, twenty-five passages of front matter and
+                  twenty-five from the middle of chapter nine look identical, and there is no way
+                  to tell whether Forward is worth pressing four hundred more times. */}
+              {passages.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Pages {passages[0].pageNumber}-{passages[passages.length - 1].endPageNumber} --
+                  passage {(offset + 1).toLocaleString()} of{" "}
+                  {source.passageCount.toLocaleString()}
+                </p>
+              )}
+            </div>
             <div className="flex gap-1">
               <Button
                 size="sm"

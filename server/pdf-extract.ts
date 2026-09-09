@@ -66,12 +66,14 @@ export async function extractPdf(bytes: Buffer): Promise<ExtractedDocument> {
     // pieces. hasEOL marks a real line break; everything else is joined
     // directly, because inserting spaces between runs would break words
     // that were only split for kerning.
-    const text = content.items
-      .map((item: any) => (item.str ?? "") + (item.hasEOL ? "\n" : ""))
-      .join("")
-      .replace(/[ \t]+/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+    const text = reflowExtractedText(
+      content.items
+        .map((item: any) => (item.str ?? "") + (item.hasEOL ? "\n" : ""))
+        .join("")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim(),
+    );
     characterCount += text.length;
     pages.push({ pageNumber, text });
     // Frees the page's operator list; a 400-page book held entirely in
@@ -113,6 +115,37 @@ const OVERLAP_CHARS = 200;
  * quoted back to an admin in a contradiction prompt, and the point of
  * verbatim retrieval is that the quoted text is readable.
  */
+/**
+ * Turns a page's typeset lines back into prose.
+ *
+ * A PDF stores where each line of type sits on the page, not sentences, so a book set in a
+ * narrow column arrives with a line break every fifty characters and every word the typesetter
+ * hyphenated is left broken across two of them. Kept as-is, "stimulation" is stored as
+ * "stim-\nulation" and "potential" as "poten-\ntial". An admin reading the ingest sees what
+ * looks like a page full of misspellings and reasonably concludes the book was never read
+ * properly.
+ *
+ * It is worse than cosmetic. Those passages are what the assistants quote and what the search
+ * index is built from, so a coach searching "potential" cannot match a page that contains the
+ * word, and a passage handed to a model as evidence reads as broken text.
+ *
+ * Two joins, both conservative:
+ *
+ * A hyphen at the end of a line, with lowercase on both sides, is typesetting rather than
+ * meaning -- "stim-" then "ulation" -- so the hyphen goes and the halves close up. A capital
+ * after the break leaves it alone, since "cross-\nEducation" is a real compound that happened
+ * to wrap, and so does a digit, which is far more likely a range or a formula than a broken word.
+ *
+ * A single newline between two lines of the same paragraph becomes a space. A blank line is a
+ * real paragraph break and survives, as does a line ending in sentence punctuation, which keeps
+ * headings, list items and table rows on their own lines instead of running them together.
+ */
+export function reflowExtractedText(text: string): string {
+  return text
+    .replace(/([a-z])-\n([a-z])/g, "$1$2")
+    .replace(/([^\n.!?:;])\n(?!\n)([^\n])/g, "$1 $2");
+}
+
 export function splitIntoPassages(pages: ExtractedPage[]): Passage[] {
   const passages: Passage[] = [];
 
