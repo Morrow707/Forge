@@ -1831,8 +1831,38 @@ export function WorkoutPage({
   // card) -- individual exercises each carry their own unit now (see
   // ItemState.weightUnit), this is just what the combined total is shown
   // in, not a setting that changes what any exercise actually saves.
+  //
+  // Pounds unless the account has actually asked for kilograms, and the
+  // toggle beside the total is how it asks. The total was rendering in
+  // whatever unit the account happened to hold with nothing anywhere in
+  // the app to change it, so an account that ended up on kilograms was
+  // stuck reading its own training volume in a unit it never picked.
   const unit = user?.preferredWeightUnit ?? "lbs";
   const stats = computeStats(items, unit);
+  // Writes the account preference rather than a local display flag, because
+  // the same preference is what every other surface reads (see
+  // athlete/progress.tsx). A per-page toggle would leave those disagreeing
+  // with this one.
+  const preferencesPath =
+    user?.role === "coach"
+      ? "/api/coach/my/preferences"
+      : user?.role === "admin"
+        ? "/api/admin/my/preferences"
+        : "/api/athlete/preferences";
+  const setPreferredUnit = useMutation({
+    mutationFn: async (next: WeightUnit) => {
+      const res = await apiRequest("PATCH", preferencesPath, {
+        preferredWeightUnit: next,
+      });
+      return (await res.json()) as { preferredWeightUnit: WeightUnit };
+    },
+    onSuccess: (updated) => {
+      qc.setQueryData(["/api/auth/me"], (prev: any) =>
+        prev ? { ...prev, preferredWeightUnit: updated.preferredWeightUnit } : prev,
+      );
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't change the unit"),
+  });
   const exerciseCount = pages.reduce((sum, p) => sum + p.items.length, 0);
 
   async function handleShareWorkout() {
@@ -2120,9 +2150,24 @@ export function WorkoutPage({
                   <p className="font-display text-3xl font-extrabold leading-none tabular-nums">
                     {stats.totalVolume.toLocaleString()}
                   </p>
-                  <p className="label-xs mt-1">
-                    {unit}
-                  </p>
+                  <div className="mt-1 flex items-center gap-0.5 rounded-md bg-secondary p-0.5">
+                    {(["lbs", "kg"] as const).map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        disabled={setPreferredUnit.isPending}
+                        onClick={() => setPreferredUnit.mutate(u)}
+                        className={cn(
+                          "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase transition-colors",
+                          unit === u
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {data.log?.completed && (
                   <Button
@@ -2330,13 +2375,6 @@ export function WorkoutPage({
                                     onAddSet={() => addSet(item.key)}
                                     onRemoveSet={() => removeSet(item.key)}
                                   />
-                                  {item.kind === "exercise" && (
-                                    <TooHardControl
-                                      assignmentId={Number(assignmentId)}
-                                      programDayId={Number(programDayId)}
-                                      programExerciseId={item.refId}
-                                    />
-                                  )}
                                 </div>
                               )}
                             </div>
@@ -4015,100 +4053,3 @@ function ExerciseLogContent({
   );
 }
 
-/**
- * "This is too hard."
- *
- * The gap this closes: an athlete who cannot do what was programmed had one
- * option, which was not to do it, and that is the failure that quietly ends
- * a program. The pain path only fires for a flagged body part, and
- * difficulty is not pain.
- *
- * A REGRESSION, not a swap: same movement, lower demand. Advice, not an
- * edit -- nothing is written to the log, because an athlete silently
- * training lighter for six weeks is a coaching problem the coach never
- * learns about, and quietly rewriting the prescription would hide it.
- *
- * Deliberately understated and inside the expanded card, not a button on
- * every row. Making it prominent turns a hard set into a choice.
- */
-function TooHardControl({
-  assignmentId,
-  programDayId,
-  programExerciseId,
-}: {
-  assignmentId: number;
-  programDayId: number;
-  programExerciseId: number;
-}) {
-  const [note, setNote] = useState("");
-  const [asking, setAsking] = useState(false);
-  const [advice, setAdvice] = useState<{
-    summary: string;
-    sets: number;
-    reps: string;
-    loadHint: string;
-  } | null>(null);
-
-  const regress = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/athlete/regress-exercise", {
-        assignmentId,
-        programDayId,
-        programExerciseId,
-        note: note.trim() || undefined,
-      });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setAdvice(data);
-      setAsking(false);
-    },
-    onError: (err: ApiError) =>
-      toast.error(err.message || "Couldn't work out an easier version just now"),
-  });
-
-  if (advice) {
-    return (
-      <div className="mt-3 space-y-1 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
-        <p>{advice.summary}</p>
-        <p className="font-medium">
-          Try {advice.sets} x {advice.reps}. {advice.loadHint}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Log what you actually do. Your coach sees the real numbers, which is the point.
-        </p>
-      </div>
-    );
-  }
-
-  if (!asking) {
-    return (
-      <button
-        type="button"
-        onClick={() => setAsking(true)}
-        className="mt-3 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-      >
-        This is too hard today
-      </button>
-    );
-  }
-
-  return (
-    <div className="mt-3 space-y-2 rounded-md border p-3">
-      <Input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Anything worth knowing? (optional)"
-        className="text-sm"
-      />
-      <div className="flex gap-2">
-        <Button size="sm" onClick={() => regress.mutate()} disabled={regress.isPending}>
-          {regress.isPending ? "Thinking..." : "Give me an easier version"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setAsking(false)}>
-          Cancel
-        </Button>
-      </div>
-    </div>
-  );
-}
