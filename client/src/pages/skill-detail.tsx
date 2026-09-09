@@ -16,13 +16,15 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, Pencil, Trash2, Lock, Youtube } from "lucide-react";
 import type { SkillExerciseWithOwnership } from "@/lib/skill-types";
-import { SKILL_TYPES, SKILL_EQUIPMENT } from "@/lib/skill-taxonomy";
+import { SKILL_TYPES, SKILL_EQUIPMENT, SKILL_TARGETS } from "@/lib/skill-taxonomy";
 import { SPORTS } from "@shared/exercise-taxonomy";
 import {
   SKILL_BADGE_CLASS,
   SKILL_FILTER_ACTIVE_CLASS,
   SPORT_FILTER_ACTIVE_CLASS,
   EQUIPMENT_FILTER_ACTIVE_CLASS,
+  TARGET_FILTER_ACTIVE_CLASS,
+  TARGET_BADGE_CLASS,
 } from "@/lib/exercise-colors";
 import { FilterChipGroup, RadioChipGroup } from "@/components/filter-chip-group";
 
@@ -31,6 +33,7 @@ type SkillForm = {
   skillType: string;
   sports: Set<string>;
   equipment: Set<string>;
+  targets: Set<string>;
   videoUrl: string;
   instructions: string;
   // Admin-only control (see the checkbox's own render-site comment) --
@@ -45,6 +48,7 @@ const emptyForm: SkillForm = {
   skillType: "Hitting",
   sports: new Set(["Baseball"]),
   equipment: new Set(),
+  targets: new Set(),
   videoUrl: "",
   instructions: "",
   videoEligible: null,
@@ -56,6 +60,7 @@ function formFrom(sk: SkillExerciseWithOwnership): SkillForm {
     skillType: sk.skillType,
     sports: new Set(sk.sports ?? []),
     equipment: new Set(sk.equipment ?? []),
+    targets: new Set(sk.targets ?? []),
     videoUrl: sk.videoUrl ?? "",
     instructions: sk.instructions ?? "",
     videoEligible: sk.videoEligible,
@@ -91,6 +96,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
         skillType: form.skillType || "Hitting",
         sports: form.sports.size > 0 ? Array.from(form.sports) : null,
         equipment: form.equipment.size > 0 ? Array.from(form.equipment) : null,
+        targets: form.targets.size > 0 ? Array.from(form.targets) : null,
         videoUrl: form.videoUrl || null,
         instructions: form.instructions || null,
         videoEligible: form.videoEligible,
@@ -212,6 +218,21 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                   value={skill.equipment && skill.equipment.length > 0 ? skill.equipment.join(", ") : "—"}
                 />
               </div>
+              {skill.targets && skill.targets.length > 0 && (
+                <div>
+                  <p className="label-xs">Targets</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {skill.targets.map((t) => (
+                      <span
+                        key={t}
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${TARGET_BADGE_CLASS}`}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               {skill.sports && skill.sports.length > 0 && (
                 <div>
                   <p className="label-xs">Sports</p>
@@ -336,6 +357,37 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                     }
                     colorClass={EQUIPMENT_FILTER_ACTIVE_CLASS}
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <FilterChipGroup
+                    label="Targets"
+                    options={
+                      Array.from(form.targets).some((t) => !SKILL_TARGETS.includes(t))
+                        ? [...Array.from(form.targets).filter((t) => !SKILL_TARGETS.includes(t)), ...SKILL_TARGETS]
+                        : SKILL_TARGETS
+                    }
+                    selected={form.targets}
+                    onToggle={(v) =>
+                      setForm((f) => {
+                        const next = new Set(f.targets);
+                        if (next.has(v)) {
+                          next.delete(v);
+                        } else if (next.size >= 6) {
+                          toast.error("You can select up to 6 targets");
+                          return f;
+                        } else {
+                          next.add(v);
+                        }
+                        return { ...f, targets: next };
+                      })
+                    }
+                    colorClass={TARGET_FILTER_ACTIVE_CLASS}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    What this drill actually trains -- accuracy, power, reaction time, mental
+                    focus. Not a muscle group; a drill can carry more than one (a throwing drill is
+                    usually both Accuracy and Arm Strength).
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="sk-video">YouTube video URL</Label>

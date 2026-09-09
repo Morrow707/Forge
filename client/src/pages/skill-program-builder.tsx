@@ -29,6 +29,10 @@ type LocalExercise = {
   skillExerciseName: string;
   sets: number;
   reps: string;
+  // Optional per-set override -- null means every set shares `reps` above
+  // (today's exact behavior). Index i is Set i+1's target; length can be
+  // shorter than `sets` (the extra sets just fall back to `reps`).
+  perSetReps: (number | null)[] | null;
   restSeconds: string;
   notes: string;
   trackingLevel: SkillTrackingLevel;
@@ -133,6 +137,7 @@ function stateFromProgram(program: any) {
           skillExerciseName: pe.skillExercise.name,
           sets: pe.sets,
           reps: pe.reps,
+          perSetReps: pe.perSetReps ?? null,
           restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
           notes: pe.notes ?? "",
           trackingLevel: (pe.trackingLevel ?? "none") as SkillTrackingLevel,
@@ -281,6 +286,7 @@ export function SkillProgramBuilderPage({
               orderIndex: i,
               sets: Number(ex.sets) || 1,
               reps: ex.reps || "10",
+              perSetReps: ex.perSetReps ?? null,
               restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
               notes: ex.notes || null,
               trackingLevel: ex.trackingLevel,
@@ -467,6 +473,7 @@ export function SkillProgramBuilderPage({
                 skillExerciseName: skill.name,
                 sets: 3,
                 reps: "10",
+                perSetReps: null,
                 restSeconds: "",
                 notes: "",
                 trackingLevel: "none",
@@ -606,9 +613,18 @@ function DayCard({
                       onChange={(v) =>
                         onChange((d) => ({
                           ...d,
-                          exercises: d.exercises.map((e) =>
-                            e.key === ex.key ? { ...e, sets: Number(v) || 0 } : e,
-                          ),
+                          exercises: d.exercises.map((e) => {
+                            if (e.key !== ex.key) return e;
+                            const nextSets = Number(v) || 0;
+                            // Keep the per-set array in step with the set
+                            // count so a coach who customizes per set and
+                            // then adds a 4th set doesn't lose Sets 1-3's
+                            // targets or end up short an input.
+                            const nextPerSetReps = e.perSetReps
+                              ? Array.from({ length: nextSets }, (_, j) => e.perSetReps?.[j] ?? null)
+                              : null;
+                            return { ...e, sets: nextSets, perSetReps: nextPerSetReps };
+                          }),
                         }))
                       }
                     />
@@ -638,6 +654,75 @@ function DayCard({
                       }
                     />
                   </div>
+                  {/* Sprint-timed sets have no Reps field to override -- each
+                      attempt is just timed by the camera, so there's nothing
+                      here for a customize toggle to apply to. */}
+                  {ex.trackingLevel !== "sprint" && (
+                    <div className="mt-1.5 space-y-1.5">
+                      <p className="text-[11px] text-muted-foreground">
+                        What the athlete will see:{" "}
+                        <span className="font-medium text-foreground">
+                          {Array.from(
+                            { length: ex.sets },
+                            (_, i) => ex.perSetReps?.[i] ?? (ex.reps || "10"),
+                          ).join(", ")}
+                        </span>
+                      </p>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          checked={ex.perSetReps != null}
+                          onCheckedChange={(c) =>
+                            onChange((d) => ({
+                              ...d,
+                              exercises: d.exercises.map((e) =>
+                                e.key === ex.key
+                                  ? {
+                                      ...e,
+                                      perSetReps:
+                                        c === true ? Array.from({ length: e.sets }, () => null) : null,
+                                    }
+                                  : e,
+                              ),
+                            }))
+                          }
+                        />
+                        Customize per set
+                      </label>
+                      {ex.perSetReps != null && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {Array.from({ length: ex.sets }, (_, i) => i).map((i) => (
+                            <div key={i} className="flex flex-col items-center gap-0.5">
+                              <span className="text-[9px] font-semibold uppercase text-muted-foreground">
+                                Set {i + 1}
+                              </span>
+                              <Input
+                                type="number"
+                                className="h-8 w-14 text-center text-sm"
+                                placeholder={ex.reps}
+                                value={ex.perSetReps?.[i] ?? ""}
+                                onChange={(e) => {
+                                  const raw = e.target.value.trim();
+                                  const val = raw === "" ? null : Number(raw) || 0;
+                                  onChange((d) => ({
+                                    ...d,
+                                    exercises: d.exercises.map((ex2) => {
+                                      if (ex2.key !== ex.key) return ex2;
+                                      const next = Array.from(
+                                        { length: ex2.sets },
+                                        (_, j) => ex2.perSetReps?.[j] ?? null,
+                                      );
+                                      next[i] = val;
+                                      return { ...ex2, perSetReps: next };
+                                    }),
+                                  }));
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {/* Hidden entirely for an admin-restricted drill -- unless it's
                       already on, so a coach can still turn OFF a capture that
                       predates the restriction. See videoEligible's own comment. */}
@@ -648,7 +733,16 @@ function DayCard({
                         onChange((d) => ({
                           ...d,
                           exercises: d.exercises.map((e) =>
-                            e.key === ex.key ? { ...e, trackingLevel } : e,
+                            e.key === ex.key
+                              ? {
+                                  ...e,
+                                  trackingLevel,
+                                  // Sprint sets have no Reps field, so a
+                                  // per-set override left on from before
+                                  // switching would just be dead state.
+                                  perSetReps: trackingLevel === "sprint" ? null : e.perSetReps,
+                                }
+                              : e,
                           ),
                         }))
                       }

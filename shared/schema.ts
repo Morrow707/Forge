@@ -1310,6 +1310,14 @@ export const skillExercises = pgTable(
     // a compound string can't be filtered against a fixed button grid the
     // way a real array can.
     equipment: json("equipment").$type<string[]>(),
+    // What the drill actually trains -- Accuracy, Arm Strength, Reaction
+    // Time, and so on (see SKILL_TARGETS in client/src/lib/skill-taxonomy.ts).
+    // Deliberately not a muscle group: a skill drill develops a capability,
+    // not a body part, and the strength side's muscleGroup column has no
+    // equivalent meaning here. Array for the same reason equipment is one --
+    // a throwing drill routinely trains both Accuracy and Arm Strength at
+    // once.
+    targets: json("targets").$type<string[]>(),
     videoUrl: text("video_url"),
     instructions: text("instructions"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1496,6 +1504,14 @@ export const skillProgramExercises = pgTable(
     orderIndex: integer("order_index").notNull().default(0),
     sets: integer("sets").notNull().default(3),
     reps: text("reps").notNull().default("10"),
+    // Optional per-set override of reps -- null (the default, and every row
+    // that predates this) means every set shares the flat `reps` target
+    // above, exactly like before. When set, index i is the target for Set
+    // i+1; a null entry inside the array falls back to the flat target for
+    // that one set. Deliberately reps-only: elapsedSeconds-tracked (sprint)
+    // sets are already per-set by nature (each attempt is just timed), so
+    // there's nothing here for them to override.
+    perSetReps: json("per_set_reps").$type<(number | null)[] | null>(),
     restSeconds: integer("rest_seconds"),
     notes: text("notes"),
     // Only "none", "sprint", or "mechanics" are meaningful here -- "bar_path"/
@@ -6809,6 +6825,7 @@ export const insertSkillExerciseSchema = createInsertSchema(skillExercises)
   .extend({
     sports: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 sports").optional().nullable(),
     equipment: z.array(z.string().trim().min(1)).max(8, "You can select up to 8 pieces of equipment").optional().nullable(),
+    targets: z.array(z.string().trim().min(1)).max(6, "You can select up to 6 targets").optional().nullable(),
     // Admin-only in practice via UI gating, same posture as
     // insertExerciseSchema's videoEligible above.
     videoEligible: z.boolean().optional().nullable(),
@@ -6821,6 +6838,11 @@ export const skillProgramExerciseInputSchema = z.object({
   orderIndex: z.number().default(0),
   sets: z.number().min(1).default(3),
   reps: z.string().default("10"),
+  // Index i overrides Set i+1's target; a shorter array or a null entry
+  // falls back to the flat `reps` above for that set. Capped generously
+  // above any realistic set count -- the sets field itself has no upper
+  // bound, so this only guards against a malformed payload.
+  perSetReps: z.array(z.number().int().min(0).max(999).nullable()).max(50).optional().nullable(),
   restSeconds: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
   trackingLevel: z.enum(["none", "sprint", "mechanics"]).optional(),

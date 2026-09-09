@@ -43,6 +43,13 @@ export const MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS = "border-orange-500 bg-ora
 export const SKILL_BADGE_CLASS = "bg-teal-500/15 text-teal-400";
 export const SKILL_FILTER_ACTIVE_CLASS = "border-teal-500 bg-teal-500/15 text-teal-400";
 
+// SKILL_TARGETS' color -- the skill side's equivalent of
+// MUSCLE_FILTER_ACTIVE_CLASS above, but deliberately its own hue (amber, not
+// emerald) since a target is a capability, not a body part, and the two
+// concepts should never visually read as the same thing.
+export const TARGET_FILTER_ACTIVE_CLASS = "border-amber-500 bg-amber-500/15 text-amber-400";
+export const TARGET_BADGE_CLASS = "bg-amber-500/15 text-amber-400";
+
 // One color per exercise-family accordion button (see shared/exercise-
 // family.ts) -- unlike the flat single-hue dimensions above, each family
 // gets its own color so the row of 9 buttons in the picker doesn't read as

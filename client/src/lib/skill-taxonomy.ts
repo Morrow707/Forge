@@ -100,3 +100,24 @@ export const SKILL_EQUIPMENT = [
   "Wrestling Mat",
   "Starting Blocks",
 ];
+
+// What a drill actually trains, same free-text-with-suggested-chips pattern
+// as SKILL_TYPES above -- deliberately not muscle groups. A skill drill's
+// muscleGroup equivalent is the capability it builds (accuracy, reaction
+// time, mental focus...), not a body part, so this is its own list rather
+// than reusing exercise-taxonomy.ts's MUSCLE_GROUPS. A drill can carry more
+// than one (a throwing drill trains both Accuracy and Arm Strength).
+export const SKILL_TARGETS = [
+  "Accuracy",
+  "Power",
+  "Acceleration",
+  "Top-End Speed",
+  "First-Step Quickness",
+  "Reaction Time",
+  "Footwork/Agility",
+  "Hand-Eye Coordination",
+  "Balance",
+  "Arm Strength",
+  "Endurance",
+  "Mental/Focus",
+];

@@ -18,6 +18,7 @@ import { externalLinkClick } from "@/lib/open-external";
 import { extractVideoFrames } from "@/lib/video-frames";
 import { cn } from "@/lib/utils";
 import { colorForLabel, borderTintForLabel } from "@/lib/supersets";
+import { TARGET_BADGE_CLASS } from "@/lib/exercise-colors";
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -52,8 +53,10 @@ type SkillExercise = {
   id: number;
   name: string;
   skillType: string;
+  targets: string[] | null;
   prescribedSets: number;
   reps: string;
+  perSetReps: (number | null)[] | null;
   restSeconds: number | null;
   notes: string | null;
   instructions: string | null;
@@ -363,6 +366,18 @@ export default function SkillWorkoutPage() {
                           Prescribed: {ex.prescribedSets} x {ex.reps}
                           {ex.restSeconds != null && ` -- rest ${ex.restSeconds}s`}
                         </p>
+                        {ex.targets && ex.targets.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {ex.targets.map((t) => (
+                              <span
+                                key={t}
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${TARGET_BADGE_CLASS}`}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {ex.equipment && ex.equipment.length > 0 && (
                           <p className="text-xs text-muted-foreground">
                             You need: {ex.equipment.join(", ")}
@@ -420,12 +435,21 @@ export default function SkillWorkoutPage() {
                               </div>
                             ) : (
                               <div>
-                                <label className="mb-1 block text-[10px] uppercase text-muted-foreground">
+                                <label className="mb-1 flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground">
                                   Result
+                                  {ex.perSetReps?.[visibleSet.setNumber - 1] != null && (
+                                    <span className="normal-case text-foreground">
+                                      &middot; target {ex.perSetReps[visibleSet.setNumber - 1]} reps
+                                    </span>
+                                  )}
                                 </label>
                                 <Input
                                   type="text"
-                                  placeholder="e.g. 18/20 makes"
+                                  placeholder={
+                                    ex.perSetReps?.[visibleSet.setNumber - 1] != null
+                                      ? `e.g. ${ex.perSetReps[visibleSet.setNumber - 1]}`
+                                      : "e.g. 18/20 makes"
+                                  }
                                   defaultValue={visibleSet.manualResult ?? ""}
                                   key={`${ex.id}-${visibleSet.setNumber}-result`}
                                   onBlur={(e) => {

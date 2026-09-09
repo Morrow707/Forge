@@ -351,6 +351,7 @@ CREATE TABLE IF NOT EXISTS "skill_exercises" (
 CREATE INDEX IF NOT EXISTS "skill_exercises_coach_idx" ON "skill_exercises" ("coach_id");
 ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "video_eligible" boolean;
 ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "cross_sport_free" boolean NOT NULL DEFAULT false;
+ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "targets" json;
 -- equipment was a free-text "Bat, Balls, Screen" string until the skill
 -- picker got a real equipment filter -- converts any row still on the old
 -- text column to a real json array (comma-split), guarded by the column's
@@ -418,6 +419,7 @@ CREATE TABLE IF NOT EXISTS "skill_program_exercises" (
 );
 CREATE INDEX IF NOT EXISTS "skill_program_exercises_day_idx" ON "skill_program_exercises" ("day_id");
 ALTER TABLE "skill_program_exercises" ADD COLUMN IF NOT EXISTS "tracking_level" tracking_level NOT NULL DEFAULT 'none';
+ALTER TABLE "skill_program_exercises" ADD COLUMN IF NOT EXISTS "per_set_reps" json;
 
 CREATE TABLE IF NOT EXISTS "skill_assignments" (
   "id" serial PRIMARY KEY,
