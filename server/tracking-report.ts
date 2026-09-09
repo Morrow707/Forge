@@ -70,6 +70,18 @@ type TrackingDiagnostics = {
   };
   calibration?: {
     scaleFactor: number | null;
+    // Which source produced the number, what each source actually measured, and whether anything
+    // agreed with the winner -- see the "Scale sources" line in buildCaptureLines for why a
+    // measurement matters more here than a verdict.
+    scaleSource?: string | null;
+    scaleCandidates?: {
+      source: string;
+      scale: number;
+      measured?: number | null;
+      samples?: number | null;
+    }[];
+    scaleOutliers?: { source: string; ratioToChosen: number }[];
+    scaleCorroborated?: boolean;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
@@ -422,6 +434,49 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
             `(pointing away from the lens -- e.g. a bench filmed from the head or foot of the ` +
             `bench rather than square to its side)`,
     });
+
+    // WHAT EACH SOURCE MEASURED, NOT JUST WHICH ONE WON.
+    //
+    // The line above says whether a scale was found. It does not say what any source measured,
+    // which is the only thing that explains a scale being wrong. Three takes in a row came back
+    // with a range of motion several times too short, and each diagnosis worked backwards from
+    // that one number to guess which source had misread and by how much -- inference, wrong more
+    // often than right. The measurements themselves are here now: a plate's diameter in pixels
+    // and how many frames agreed on it, a shoulder span and its frame count, the scale each
+    // derived, and whether anything corroborated the winner. A plate detector that has locked
+    // onto a plate on the rack behind the lifter says so as a diameter nothing like a plate at
+    // that distance, instead of only as a wrong number four steps downstream.
+    if (c.scaleCandidates && c.scaleCandidates.length > 0) {
+      lines.push({
+        label: "Scale sources",
+        value: c.scaleCandidates
+          .map((candidate) => {
+            const measured =
+              candidate.measured != null
+                ? ` from ${Math.round(candidate.measured * 100) / 100}${
+                    candidate.source === "plate" ? "px" : " units"
+                  }`
+                : "";
+            const samples = candidate.samples != null ? ` over ${candidate.samples} frames` : "";
+            return `${candidate.source}: ${candidate.scale.toPrecision(3)} m/unit${measured}${samples}`;
+          })
+          .join("; "),
+      });
+      lines.push({
+        label: "Scale agreement",
+        value: c.scaleCorroborated
+          ? `two or more sources agreed -- ${c.scaleSource ?? "unknown"} used`
+          : c.scaleCandidates.length > 1
+            ? `sources DISAGREED, so nothing corroborated the number. ${c.scaleSource ?? "none"} ` +
+              `was used because it is the most trustworthy of them` +
+              (c.scaleOutliers && c.scaleOutliers.length > 0
+                ? ` -- ${c.scaleOutliers
+                    .map((o) => `${o.source} was ${o.ratioToChosen}x it`)
+                    .join(", ")}`
+                : "")
+            : `only one source could measure anything, so nothing corroborated it`,
+      });
+    }
   }
   return lines;
 }

@@ -241,7 +241,7 @@ function applyCoreMlCorroboration(
 function plateScaleFromFrames(
   frames: NativePoseFrame[],
   trackingMode: string | undefined,
-): { scale: number; uncertaintyFraction: number } | null {
+): { scale: number; uncertaintyFraction: number; measured: number; samples: number } | null {
   // WHICHEVER DETECTOR SAW THE PLATE, NOT WHICHEVER ONE WAS ASKED FIRST.
   //
   // The clip now carries two classes (see AvCoreMlImplementDetector.secondaryLabel): the class
@@ -269,7 +269,17 @@ function plateScaleFromFrames(
   samples.sort((a, b) => a - b);
   const medianPixelSize = samples[Math.floor(samples.length / 2)];
   const reference = CALIBRATION_REFERENCES.find((r) => r.id === "bumper_plate_perform_better")!;
-  return computeReferenceObjectScale(medianPixelSize, reference.nominalSizeM, reference.toleranceM);
+  const computed = computeReferenceObjectScale(
+    medianPixelSize,
+    reference.nominalSizeM,
+    reference.toleranceM,
+  );
+  // The measured diameter travels with the scale. When a plate read goes wrong it is because the
+  // detector measured the wrong thing -- a plate on the rack behind the lifter, a bench end, a
+  // dark patch -- and that shows up as a pixel size nothing like a plate at that distance. It was
+  // invisible before, so a bad read could only be inferred backwards from a wrong range of
+  // motion, which is guessing.
+  return computed ? { ...computed, measured: medianPixelSize, samples: samples.length } : null;
 }
 
 // Every field the RepMetrics type marks `| null` stays null here, not 0 -- see romCm's and
@@ -784,6 +794,7 @@ export function AvBarTrackerDialog({
     ]);
 
     const scaleFactor = scaleVerdict.scale;
+
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     // Which mechanism actually produced the scale, recorded alongside it. Plate-derived scale is
     // new and its training data is thin, so a number built on one has to be identifiable as such
@@ -793,6 +804,41 @@ export function AvBarTrackerDialog({
       scaleVerdict.agreedSources.length > 1
         ? "both"
         : (scaleVerdict.agreedSources[0] ?? null);
+
+    const scaleCandidates = [
+      ...(plateScale != null
+        ? [
+            {
+              source: "plate",
+              scale: plateScale.scale,
+              measured: plateScale.measured,
+              samples: plateScale.samples,
+            },
+          ]
+        : []),
+      ...(heightScaleFactor != null
+        ? [{ source: "height", scale: heightScaleFactor, measured: null, samples: null }]
+        : []),
+      ...(shoulderScaleValue != null
+        ? [
+            {
+              source: "shoulder_width",
+              scale: shoulderScaleValue,
+              measured: shoulderScale.medianSpanUnits,
+              samples: shoulderScale.framesUsed,
+            },
+          ]
+        : []),
+    ];
+    const calibrationDiagnostics = {
+      scaleSource,
+      scaleCandidates,
+      scaleOutliers: scaleVerdict.outliers.map((o) => ({
+        source: o.source,
+        ratioToChosen: o.ratioToChosen,
+      })),
+      scaleCorroborated: scaleVerdict.corroborated,
+    };
 
     // No scale used to end the take here, with nothing saved but the video. It no longer does.
     //
@@ -888,6 +934,7 @@ export function AvBarTrackerDialog({
               coreMlTrackingMode === "plate" ? null : coreMlPoint,
             )
           : null;
+
       if (fused && !isPlausibleVelocity(prevFused, { ...fused, t })) {
         rejectionEvents.push(t);
         fused = null;
@@ -1025,7 +1072,7 @@ export function AvBarTrackerDialog({
             rawFrames,
             trackingMode: coreMlTrackingMode,
             recording: recordingStats,
-            calibration: { scaleFactor: null, scaleSource, ...calibrationFrames },
+            calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
           }),
           uploadPromise,
           forSetNumber,
@@ -1043,7 +1090,7 @@ export function AvBarTrackerDialog({
           rawFrames,
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
-          calibration: { scaleFactor: null, scaleSource, ...calibrationFrames },
+          calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
         }),
         uploadPromise,
         forSetNumber,
@@ -1085,7 +1132,7 @@ export function AvBarTrackerDialog({
           rawFrames,
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
-          calibration: { scaleFactor, scaleSource, ...calibrationFrames },
+          calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
         }),
         uploadPromise,
         forSetNumber,
@@ -1136,7 +1183,7 @@ export function AvBarTrackerDialog({
             rawFrames,
             trackingMode: coreMlTrackingMode,
             recording: recordingStats,
-            calibration: { scaleFactor: null, scaleSource, ...calibrationFrames },
+            calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
           }),
           uploadPromise,
           forSetNumber,
@@ -1153,7 +1200,7 @@ export function AvBarTrackerDialog({
           rawFrames,
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
-          calibration: { scaleFactor, scaleSource, ...calibrationFrames },
+          calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
         }),
         uploadPromise,
         forSetNumber,
@@ -1279,7 +1326,7 @@ export function AvBarTrackerDialog({
       rawFrames,
       trackingMode: coreMlTrackingMode,
       recording: recordingStats,
-      calibration: { scaleFactor, scaleSource, ...calibrationFrames },
+      calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
     });
 
     // readerStatus exists specifically to tell "the athlete's take was genuinely short" apart

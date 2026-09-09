@@ -97,6 +97,29 @@ export type TrackingDiagnostics = {
     // attributable to it rather than blended anonymously into everything else -- that is exactly
     // what the replay harness needs to tell a good plate read from a bad one.
     scaleSource?: "height" | "plate" | "both" | "shoulder_width" | null;
+    // WHAT EACH SOURCE ACTUALLY MEASURED, REPORTED WHETHER IT WON OR NOT.
+    //
+    // Three takes in a row came back with a range of motion several times too short, and every
+    // round of diagnosis worked backwards from that one number to guess which source had gone
+    // wrong and how. That is inference, not measurement, and it was wrong more often than it was
+    // right. Recorded here instead: the size the plate was measured at and how many frames
+    // agreed, the span the shoulders were measured at, the scale each source derived, and what
+    // the reconciliation made of the set. A take that comes out wrong now says WHY in its own
+    // report rather than leaving it to be reconstructed.
+    scaleCandidates?: {
+      source: string;
+      scale: number;
+      // The raw measurement behind it, in whatever unit that source works in -- a plate's
+      // diameter in pixels, a shoulder span in pixel-space units. This is the number that goes
+      // wrong when a detector locks onto the wrong object, and it was never visible.
+      measured?: number | null;
+      samples?: number | null;
+    }[];
+    // Named outliers from the reconciliation, with how far each sat from the chosen scale.
+    scaleOutliers?: { source: string; ratioToChosen: number }[];
+    // True only when two independent sources agreed. A lone source can be right, but nothing
+    // corroborated it, and the difference matters when a number looks wrong later.
+    scaleCorroborated?: boolean;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
@@ -219,14 +242,7 @@ export function buildTrackingDiagnostics(args: {
     maxInterFrameGapSeconds?: number;
     boxTopNormalizedY?: number;
   } | null;
-  calibration?: {
-    scaleFactor: number | null;
-    scaleSource?: "height" | "plate" | "both" | "shoulder_width" | null;
-    noseToAnkleFrames: number;
-    shoulderToAnkleFrames: number;
-    supineFullLengthFrames?: number;
-    unresolvedFrames: number;
-  } | null;
+  calibration?: TrackingDiagnostics["calibration"];
 }): TrackingDiagnostics {
   return {
     outcome: args.outcome,
