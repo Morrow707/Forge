@@ -7369,11 +7369,43 @@ export const trackingDiagnosticsSchema = z.object({
   // Which of pose-tracking.ts's two calibration methods (nose-to-ankle, or the shoulder-to-
   // ankle fallback) each frame actually resolved through -- see calibrationMethodBreakdown's
   // own comment. unresolvedFrames > 0 across the whole clip is why calibration failed.
+  //
+  // Every key the client sends has to be listed here. A zod object strips what it does not
+  // declare, so a field added to tracking-diagnostics.ts and rendered by tracking-report.ts
+  // still arrives as undefined unless it also exists below -- which is exactly what happened
+  // to the scale-source fields: three takes were filmed on a build that captured them, and the
+  // report showed nothing, because the insert had already dropped them.
   calibration: z
     .object({
       scaleFactor: z.number().optional().nullable(),
+      scaleSource: z
+        .enum(["height", "plate", "both", "shoulder_width"])
+        .optional()
+        .nullable(),
+      scaleCandidates: z
+        .array(
+          z.object({
+            source: z.string().max(40),
+            scale: z.number(),
+            measured: z.number().optional().nullable(),
+            samples: z.number().optional().nullable(),
+          }),
+        )
+        .max(8)
+        .optional(),
+      scaleOutliers: z
+        .array(
+          z.object({
+            source: z.string().max(40),
+            ratioToChosen: z.number(),
+          }),
+        )
+        .max(8)
+        .optional(),
+      scaleCorroborated: z.boolean().optional(),
       noseToAnkleFrames: z.number(),
       shoulderToAnkleFrames: z.number(),
+      supineFullLengthFrames: z.number().optional(),
       unresolvedFrames: z.number(),
     })
     .optional()
