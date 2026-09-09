@@ -18144,6 +18144,17 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         reps: ex.reps,
         restSeconds: ex.restSeconds,
         notes: ex.notes,
+        // The drill's own instructions, which the athlete never saw.
+        //
+        // A strength exercise arrives with its description ("Bar in the front rack, elbows high,
+        // sit between the knees keeping the torso upright") and the workout screen prints it
+        // under the name. A skill drill has exactly the same field, written by the same coach in
+        // the same library, and this payload simply never carried it -- so every drill reached
+        // the athlete as a title, a set count and an empty box to type a result into. `notes` is
+        // not a substitute: that is the coach's remark about THIS day's use of the drill, and is
+        // usually absent.
+        instructions: ex.skillExercise.instructions,
+        equipment: ex.skillExercise.equipment,
         videoUrl: ex.skillExercise.videoUrl,
         trackingLevel: ex.trackingLevel,
         // One row per planned set regardless of whether it's been touched

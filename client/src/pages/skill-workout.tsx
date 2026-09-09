@@ -56,6 +56,8 @@ type SkillExercise = {
   reps: string;
   restSeconds: number | null;
   notes: string | null;
+  instructions: string | null;
+  equipment: string[] | null;
   videoUrl: string | null;
   trackingLevel: "none" | "sprint" | "mechanics";
   sets: SkillSet[];
@@ -354,7 +356,26 @@ export default function SkillWorkoutPage() {
                         onTouchStart={handleSwipeStart}
                         onTouchEnd={(e) => handleSwipeEnd(ex, e)}
                       >
-                        {ex.notes && <p className="text-xs text-muted-foreground">{ex.notes}</p>}
+                        {/* What the strength screen has had all along: what you are being asked
+                            to do, how much of it, and what you need to hand. A drill arriving as
+                            a title and an empty box is not something an athlete can execute. */}
+                        <p className="text-xs text-muted-foreground">
+                          Prescribed: {ex.prescribedSets} x {ex.reps}
+                          {ex.restSeconds != null && ` -- rest ${ex.restSeconds}s`}
+                        </p>
+                        {ex.equipment && ex.equipment.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            You need: {ex.equipment.join(", ")}
+                          </p>
+                        )}
+                        {ex.instructions && (
+                          <p className="whitespace-pre-wrap text-sm">{ex.instructions}</p>
+                        )}
+                        {ex.notes && (
+                          <p className="rounded-md bg-surface-elevated px-2.5 py-2 text-xs text-muted-foreground">
+                            Coach note: {ex.notes}
+                          </p>
+                        )}
                         {ex.videoUrl && (
                           <a
                             href={ex.videoUrl}
