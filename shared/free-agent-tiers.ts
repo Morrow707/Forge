@@ -5,7 +5,7 @@
 // same isBetaAccount/trialExpiresAt safety switches already on the users
 // table -- nothing new to keep "off by default" here.
 
-export type FreeAgentTierId = "ai_coach" | "ai_coach_video" | "family";
+export type FreeAgentTierId = "basic" | "ai_coach" | "ai_coach_video" | "family";
 
 export interface FreeAgentTierDef {
   id: FreeAgentTierId;
@@ -22,6 +22,20 @@ export interface FreeAgentTierDef {
 }
 
 export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
+  // The floor of the ladder: logging, and nothing that costs a model call.
+  // Nutrition and exercise logging are not gated by any entitlement flag --
+  // they never were -- so "both flags false" IS this tier, and no new flag
+  // is needed to express it. What it buys is a paid account with no AI chat,
+  // no AI program builder and no form-check.
+  basic: {
+    id: "basic",
+    label: "Basic",
+    monthlyPriceCents: 499,
+    description: "Log your training and your nutrition. No AI coach, no video form-check.",
+    hasAiChat: false,
+    hasVideoFormCheck: false,
+    athleteProfileCap: null,
+  },
   ai_coach: {
     id: "ai_coach",
     label: "AI Coach",
@@ -53,7 +67,7 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
 
 // Ordered cheapest-to-priciest, for rendering the /pricing page and the
 // admin assignment dropdown in a sensible order without re-sorting.
-export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["ai_coach", "ai_coach_video", "family"];
+export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["basic", "ai_coach", "ai_coach_video", "family"];
 
 // The app's real bundle id (see ios/App/App.xcodeproj) -- StoreKit 2 Product
 // ids are conventionally namespaced under it. Shared here (not just in

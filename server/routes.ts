@@ -9942,7 +9942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
-      const schema = z.object({ tier: z.enum(["ai_coach", "ai_coach_video", "family"]) });
+      const schema = z.object({ tier: z.enum(["basic", "ai_coach", "ai_coach_video", "family"]) });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Pick a plan first." });

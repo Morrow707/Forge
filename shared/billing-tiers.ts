@@ -11,7 +11,7 @@
 // switches that gate whether any of it actually restricts anyone -- both
 // default to "don't restrict," on purpose, while still in beta.
 //
-// Pricing model: a flat $10.00 base fee plus $3.50/athlete, with NO volume
+// Pricing model: a flat $10.00 base fee plus $4.00/athlete, with NO volume
 // discount at any roster size. The previous design (Solo/Coach/Growth/
 // Program/Enterprise, each with its own price + a cheap per-athlete overage
 // that got cheaper at bigger tiers) went net-negative at scale once real
@@ -29,10 +29,10 @@
 //
 // Presented to customers in 25-athlete bands (a customer pays for a band's
 // ceiling, not their exact headcount) since a stepped ladder sells better
-// than "exactly $3.50 x your roster" -- but the underlying rate never
+// than "exactly $4.00 x your roster" -- but the underlying rate never
 // changes band to band, which is the actual fix.
 export const ORG_BASE_CENTS = 1000; // $10.00 flat account fee
-export const ORG_PER_ATHLETE_CENTS = 350; // $3.50/athlete, flat, every band, no discount
+export const ORG_PER_ATHLETE_CENTS = 400; // $4.00/athlete, flat, every band, no discount
 
 export type BillingTierId = string;
 export type AddOnId = "custom_colors" | "team_identity" | "workflow" | "full_bundle" | "personal_page";
@@ -78,7 +78,7 @@ function bandPriceCents(athleteCapIncluded: number): number {
 // replace -- then every 25 athletes from 31 up through 1,000. Nothing stops
 // a roster bigger than 1,000; buildBands only enumerates this far because
 // that's as far as anyone's actually asked to see priced out. A school
-// beyond it prices the same way: $10 + $3.50 x their band ceiling, in the
+// beyond it prices the same way: $10 + $4.00 x their band ceiling, in the
 // next 25-athlete step.
 function buildBands(): BillingTierDef[] {
   const ranges: [number, number][] = [
@@ -211,7 +211,7 @@ export const COACHES_CORNER_MONTHLY_PRICE_CENTS = 1999;
 
 // Rosters at or above this size get the Corner at no charge. At the flat
 // per-athlete rate above, a 100-athlete org is already paying
-// $10 + 100 x $3.50 = $360/mo, so another $19.99 is noise on their invoice
+// $10 + 100 x $4.00 = $410/mo, so another $19.99 is noise on their invoice
 // and friction on the sale.
 //
 export const COACHES_CORNER_FREE_AT_ATHLETE_COUNT = 100;

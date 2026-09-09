@@ -10,6 +10,8 @@ import {
   BILLING_ADD_ON_ORDER,
   bandForAthleteCount,
   formatCents,
+  ORG_BASE_CENTS,
+  ORG_PER_ATHLETE_CENTS,
 } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER, FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
@@ -77,7 +79,13 @@ export default function PricingPage() {
               <Badge className="mb-1 w-fit gap-1 bg-primary/15 text-primary hover:bg-primary/15">
                 Growing programs &amp; schools
               </Badge>
-              <CardTitle className="text-lg">$10.00 base + $3.50/athlete</CardTitle>
+              {/* Derived, not typed out. This headline was the one place on
+                  the page carrying hand-written numbers, so a rate change in
+                  billing-tiers.ts moved every band below it and left the
+                  sentence above them advertising the old price. */}
+              <CardTitle className="text-lg">
+                {formatCents(ORG_BASE_CENTS)} base + {formatCents(ORG_PER_ATHLETE_CENTS)}/athlete
+              </CardTitle>
               <CardDescription>
                 One flat per-athlete rate, no volume discount, no roster-size ceiling -- price
                 scales with your program instead of stalling out at a flat cap. Full branding,
