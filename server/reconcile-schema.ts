@@ -2891,6 +2891,38 @@ ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_to_page" in
 ALTER TABLE "knowledge_passages" ADD COLUMN IF NOT EXISTS "topics" text[] NOT NULL DEFAULT '{}';
 CREATE INDEX IF NOT EXISTS "knowledge_passages_topics_idx"
   ON "knowledge_passages" USING GIN ("topics");
+
+-- ---------------------------------------------------------------------------
+-- Pounds for everyone, once.
+--
+-- Scott, 2026-09-09: make lbs the default for every athlete in the app.
+--
+-- The column has defaulted to 'lbs' since it was added, but accounts created
+-- before that, or seeded, hold 'kg', and until this deploy there was no screen
+-- anywhere in the app that could write the field. So an account on kilograms
+-- had no way off it, and the workout screen seeded every exercise AND the
+-- page-wide volume total from that same stuck value.
+--
+-- ONE TIME, and the marker table is what makes that true. This is the one
+-- statement in this script that overwrites a value a person could have chosen
+-- deliberately, and there is now a toggle beside the volume total that writes
+-- exactly this field -- so an unguarded version would quietly undo that choice
+-- on the next deploy, every deploy, and the toggle would look broken rather
+-- than overridden. The marker is a general mechanism: a backfill that must not
+-- repeat inserts its own key here and tests for it first.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "applied_backfills" (
+  "key" text PRIMARY KEY,
+  "applied_at" timestamp NOT NULL DEFAULT now()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'weight_unit_lbs_default_2026_09_09') THEN
+    UPDATE "users" SET "preferred_weight_unit" = 'lbs' WHERE "preferred_weight_unit" <> 'lbs';
+    INSERT INTO "applied_backfills" ("key") VALUES ('weight_unit_lbs_default_2026_09_09');
+  END IF;
+END $$;
 `;
 
 async function main() {
