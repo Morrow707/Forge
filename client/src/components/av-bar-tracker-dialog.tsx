@@ -238,12 +238,19 @@ function plateScaleFromFrames(
   return computeReferenceObjectScale(medianPixelSize, reference.nominalSizeM, reference.toleranceM);
 }
 
+// Every field the RepMetrics type marks `| null` stays null here, not 0 -- see romCm's and
+// peakVelocityMps' own comments in bar-tracking.ts ("zero would be a different lie: charts
+// plot it, coaches read it"). This constant is exactly the case those comments warn about: a
+// refused take (failed calibration, implausible range of motion, no clean read) with nothing
+// to report. The fields the type keeps non-nullable (concentricSeconds/eccentricSeconds/
+// meanEai/eccentricMeanVelocityMps) stay 0, since scale-free timing values are legitimately
+// zero for a take with no reps, and the type does not offer null for them.
 const EMPTY_REP_METRICS: RepMetrics = {
-  peakVelocityMps: 0,
-  meanVelocityMps: 0,
+  peakVelocityMps: null,
+  meanVelocityMps: null,
   concentricSeconds: 0,
   eccentricSeconds: 0,
-  barPathDeviationCm: 0,
+  barPathDeviationCm: null,
   barPathTrace: [],
   repBreakdown: [],
   meanEai: 0,
@@ -251,7 +258,7 @@ const EMPTY_REP_METRICS: RepMetrics = {
   peakPowerWatts: null,
   meanPowerWatts: null,
   eccentricMeanVelocityMps: 0,
-  romCm: 0,
+  romCm: null,
   velocityLossPercent: null,
 };
 
