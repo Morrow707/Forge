@@ -4732,6 +4732,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/knowledge-sources/:id/passages", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    // One page at a time when asked for one -- see getKnowledgePassagesOnPage. The flat
+    // limit/offset window stays for anything that wants to walk the whole book.
+    const page = Number(req.query.page);
+    if (Number.isInteger(page) && page > 0) {
+      return res.json(await storage.getKnowledgePassagesOnPage(id, page));
+    }
     const limit = Math.min(Number(req.query.limit) || 50, 200);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
     res.json(await storage.getKnowledgePassages(id, limit, offset));

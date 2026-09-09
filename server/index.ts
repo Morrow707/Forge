@@ -83,6 +83,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { warnIfUploadsAreEphemeral } from "./uploaded-files";
+import { resumeInterruptedIngests } from "./resume-ingest";
 import { setupVite, serveStatic, log } from "./vite";
 import { startReflectionJob } from "./reflection-job";
 import { startDataRetentionJob } from "./data-retention-job";
@@ -427,6 +428,9 @@ app.get("/healthz", async (_req, res) => {
     // next deploy will replace -- see warnIfUploadsAreEphemeral for the production incident
     // that made a silent default unacceptable.
     warnIfUploadsAreEphemeral();
+    // A book left mid-ingest by the deploy that replaced the previous process gets finished
+    // rather than left frozen at whatever percentage it reached -- see resumeInterruptedIngests.
+    void resumeInterruptedIngests();
     startReflectionJob();
     startDataRetentionJob();
     startVideoRetentionJob();

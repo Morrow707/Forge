@@ -22513,6 +22513,61 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   },
 
   /**
+   * Everything printed on one page of the book.
+   *
+   * Reviewing an ingest is a page-at-a-time job -- deciding that the front matter ends at page 8
+   * or that the index starts at 700 means looking at page 8 and at page 700. Paging through a
+   * flat list twenty-five passages at a time cannot answer that on a 752-page book: it is a
+   * thousand taps to the middle, and every window looks like the last one.
+   *
+   * Matched on overlap rather than on the starting page, the same rule deleteKnowledgePassagesInRange
+   * already uses. A passage that begins on page 7 and ends on page 8 is on page 8 as far as anyone
+   * looking at page 8 is concerned, and omitting it would show a page with its first paragraph
+   * missing.
+   */
+  /**
+   * Ingests that were still filing when the process stopped.
+   *
+   * A deploy replaces the process, and the loop that tags and files a book's passages lives in
+   * it. Nothing was watching for that, so a book interrupted at 69% stayed at 69% forever, with a
+   * progress bar that kept implying work was happening and a status that said "extracting" -- the
+   * exact appearance of a job in flight, on a job with nobody left to do it.
+   */
+  async getInterruptedIngests() {
+    return db
+      .select({
+        id: knowledgeSources.id,
+        title: knowledgeSources.title,
+        filePath: knowledgeSources.filePath,
+        domains: knowledgeSources.domains,
+      })
+      .from(knowledgeSources)
+      .where(eq(knowledgeSources.status, "extracting"));
+  },
+
+  async countKnowledgePassages(sourceId: number) {
+    const [row] = await db
+      .select({ count: count() })
+      .from(knowledgePassages)
+      .where(eq(knowledgePassages.sourceId, sourceId));
+    return row?.count ?? 0;
+  },
+
+  async getKnowledgePassagesOnPage(sourceId: number, pageNumber: number) {
+    return db
+      .select()
+      .from(knowledgePassages)
+      .where(
+        and(
+          eq(knowledgePassages.sourceId, sourceId),
+          lte(knowledgePassages.pageNumber, pageNumber),
+          gte(knowledgePassages.endPageNumber, pageNumber),
+        ),
+      )
+      .orderBy(asc(knowledgePassages.ordinal));
+  },
+
+  /**
    * Removes every passage in a page range from one source.
    *
    * The undo for the thing nobody can get right at upload time: an index, a

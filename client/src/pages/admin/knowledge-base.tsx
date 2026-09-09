@@ -1176,13 +1176,35 @@ function IngestProgress({ source }: { source: Source }) {
  * matter produces almost nothing. The shape of that strip shows where the
  * body of the book starts and stops without reading a word of it.
  */
+/** One passage, short by default. Long ones open on request rather than filling the screen. */
+function PassageText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const LIMIT = 300;
+  if (text.length <= LIMIT) return <p className="mt-1 whitespace-pre-wrap text-sm">{text}</p>;
+  return (
+    <div>
+      <p className="mt-1 whitespace-pre-wrap text-sm">
+        {open ? text : `${text.slice(0, LIMIT).trimEnd()}...`}
+      </p>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="mt-1 text-xs font-medium text-primary"
+      >
+        {open ? "Show less" : `Show all ${text.length.toLocaleString()} characters`}
+      </button>
+    </div>
+  );
+}
+
 function SourceReader({ source, onClose }: { source: Source; onClose: () => void }) {
   const qc = useQueryClient();
-  const [offset, setOffset] = useState(0);
+  // Which page of the book is open. Null until the map arrives, then the first page that
+  // produced anything -- so the reader opens on real content rather than on nothing.
+  const [page, setPage] = useState<number | null>(null);
   const [gotoPage, setGotoPage] = useState("");
   const [fromPage, setFromPage] = useState("");
   const [toPage, setToPage] = useState("");
-  const PAGE_SIZE = 25;
 
   const { data: pageMap = [] } = useQuery<
     { pageNumber: number; passages: number; characters: number }[]
@@ -1201,11 +1223,9 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
       fromVision: boolean;
     }[]
   >({
-    queryKey: ["knowledge-passages", source.id, offset],
-    queryFn: () =>
-      getJson(
-        `/api/admin/knowledge-sources/${source.id}/passages?limit=${PAGE_SIZE}&offset=${offset}`,
-      ),
+    queryKey: ["knowledge-passages", source.id, page],
+    queryFn: () => getJson(`/api/admin/knowledge-sources/${source.id}/passages?page=${page}`),
+    enabled: page != null,
   });
 
   const dropPages = useMutation({
@@ -1239,16 +1259,32 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
   // The map is grouped by the page a passage STARTS on and every passage starts on exactly one
   // page, so a running total across it lands on that page's first passage exactly rather than
   // approximately.
-  const offsetOfPage = (target: number) => {
-    let total = 0;
-    for (const p of pageMap) {
-      if (p.pageNumber >= target) break;
-      total += p.passages;
+  const pagesWithText = pageMap.map((p) => p.pageNumber);
+  useEffect(() => {
+    if (page == null && pagesWithText.length > 0) setPage(pagesWithText[0]);
+  }, [page, pagesWithText]);
+
+  // Steps to the next page that actually produced text, not the next number. A book has runs of
+  // plates and blank versos, and walking through them one empty page at a time is the same dead
+  // end as walking a flat list.
+  const stepPage = (direction: 1 | -1) => {
+    if (page == null || pagesWithText.length === 0) return;
+    const i = pagesWithText.indexOf(page);
+    if (i === -1) {
+      setPage(pagesWithText[0]);
+      return;
     }
-    return total;
+    const next = pagesWithText[i + direction];
+    if (next != null) setPage(next);
   };
   const jumpToPage = (target: number) => {
-    setOffset(Math.max(0, Math.floor(offsetOfPage(target) / PAGE_SIZE) * PAGE_SIZE));
+    if (pagesWithText.length === 0) return;
+    // Nearest page that produced something, so typing a number from the printed book rather than
+    // the PDF's own numbering still lands somewhere readable instead of on an empty result.
+    const nearest = pagesWithText.reduce((best, n) =>
+      Math.abs(n - target) < Math.abs(best - target) ? n : best,
+    );
+    setPage(nearest);
   };
 
   const canDrop = !!fromPage && !!toPage && Number(toPage) >= Number(fromPage);
@@ -1285,9 +1321,11 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
                   title={`Page ${p.pageNumber}: ${p.passages} passage(s), ${p.characters} characters -- tap to read it`}
                   className={cn(
                     "rounded px-1.5 py-0.5 text-[10px] tabular-nums transition-colors",
-                    p.characters < THIN_PAGE_CHARS
-                      ? "bg-amber-500/20 text-amber-500 hover:bg-amber-500/40"
-                      : "bg-muted text-muted-foreground hover:bg-muted-foreground/30",
+                    p.pageNumber === page
+                      ? "bg-primary font-bold text-primary-foreground"
+                      : p.characters < THIN_PAGE_CHARS
+                        ? "bg-amber-500/20 text-amber-500 hover:bg-amber-500/40"
+                        : "bg-muted text-muted-foreground hover:bg-muted-foreground/30",
                   )}
                 >
                   {p.pageNumber}
@@ -1369,16 +1407,11 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                The passages themselves
+                What is on this page
               </p>
-              {/* Where in the book this is. Without it, twenty-five passages of front matter and
-                  twenty-five from the middle of chapter nine look identical, and there is no way
-                  to tell whether Forward is worth pressing four hundred more times. */}
-              {passages.length > 0 && (
+              {page != null && (
                 <p className="text-xs text-muted-foreground">
-                  Pages {passages[0].pageNumber}-{passages[passages.length - 1].endPageNumber} --
-                  passage {(offset + 1).toLocaleString()} of{" "}
-                  {source.passageCount.toLocaleString()}
+                  Page {page} of {source.pageCount ?? 0} -- {passages.length} passage(s) on it
                 </p>
               )}
             </div>
@@ -1386,21 +1419,29 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
               <Button
                 size="sm"
                 variant="outline"
-                disabled={offset === 0}
-                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+                disabled={page == null || pagesWithText.indexOf(page) <= 0}
+                onClick={() => stepPage(-1)}
               >
-                Back
+                Previous page
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                disabled={passages.length < PAGE_SIZE}
-                onClick={() => setOffset(offset + PAGE_SIZE)}
+                disabled={
+                  page == null || pagesWithText.indexOf(page) >= pagesWithText.length - 1
+                }
+                onClick={() => stepPage(1)}
               >
-                Forward
+                Next page
               </Button>
             </div>
           </div>
+
+          {page != null && passages.length === 0 && (
+            <p className="rounded-md border px-3 py-4 text-center text-sm text-muted-foreground">
+              Nothing was extracted from page {page}.
+            </p>
+          )}
 
           {passages.map((p) => (
             <div key={p.id} className="rounded-md border px-3 py-2">
@@ -1414,7 +1455,10 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
                   <span className="ml-2 font-normal text-amber-500">read from an image</span>
                 )}
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{p.text.slice(0, 600)}</p>
+              {/* Collapsed by default. A passage is about 1,200 characters, which is the right
+                  size for the assistants to quote and far too much to scan twenty of -- the
+                  reader was a wall of text with no way to see the shape of the page. */}
+              <PassageText text={p.text} />
             </div>
           ))}
         </div>
