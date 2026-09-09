@@ -2248,6 +2248,7 @@ private final class AvCoreMlImplementDetector {
     func reset() {
         trackingRequest = nil
         trackingLabel = nil
+        framesSinceReclassify = 0
         recentBoxes = []
         trajectoryRequest = makeTrajectoryRequest()
         latestTrajectoryObservations = []
@@ -2299,6 +2300,15 @@ private final class AvCoreMlImplementDetector {
     // now-different class. Vision's object tracker follows a pixel region, not a label, so
     // without this a tracked-but-now-wrong-class region would just keep reporting confidently.
     private var trackingLabel: String?
+
+    // Frames since the model was last asked, from scratch, whether the locked region is still the
+    // class it was seeded on -- see the re-classification block in track().
+    private var framesSinceReclassify = 0
+
+    // Twice a second at 60fps. Often enough that a drifted lock is corrected within a rep rather
+    // than at the end of a set, rare enough that the extra classification is a few percent on top
+    // of a tracking pass that already runs every frame.
+    private static let reclassifyEveryNthFrame = 30
 
     // How far (as a fraction of the frame, in Vision's own normalized 0-1 space) a FRESH
     // detection's search region extends past the wrist(s) actually driving it -- generous enough
@@ -2394,6 +2404,52 @@ private final class AvCoreMlImplementDetector {
                         return nil
                     }
                 }
+                // Camera overlord: RE-ASK THE MODEL, PERIODICALLY, WHETHER THIS IS STILL THE THING.
+                //
+                // The two checks above break a lock that jumps or contradicts a trajectory. Both
+                // are checks on MOTION, so both miss the failure that actually strands a take: a
+                // lock that slides smoothly onto the wrong object and then behaves impeccably.
+                // VNTrackObjectRequest follows a pixel region and never re-classifies it, so a
+                // plate lock that drifts onto a plate on the rack behind the lifter, or onto a
+                // wall clock, keeps reporting high confidence about the wrong object for the rest
+                // of the clip -- confidently, consistently, and with nothing in the pipeline in a
+                // position to disagree. Every number downstream is then measured off furniture.
+                //
+                // So the model is asked again, from scratch, a couple of times a second. Three
+                // outcomes, and the asymmetry between them is the point:
+                //
+                //   - No confident detection: KEEP the lock. A missed detection on one frame is
+                //     ordinary (motion blur, a hand across the plate), and absence of evidence is
+                //     not evidence the object has gone. Dropping a good lock on a quiet frame
+                //     would be the same over-eagerness this is meant to cure.
+                //   - A detection overlapping where the tracker says it is: keep the lock, and
+                //     take the fresh box, which is the better-grounded of the two.
+                //   - A confident detection somewhere ELSE: the tracker has drifted. Take the
+                //     detection and re-seed on it. That is the unlock -- mid-clip, without
+                //     waiting for the take to end and be thrown away.
+                //
+                // One extra classification every thirty frames against a tracking pass on every
+                // one of them, so the cost is a few percent of what this detector already spends.
+                framesSinceReclassify += 1
+                if framesSinceReclassify >= Self.reclassifyEveryNthFrame {
+                    framesSinceReclassify = 0
+                    // Deliberately no region of interest: the whole question is whether the right
+                    // object is somewhere other than where the tracker is looking, and a search
+                    // anchored on the current belief could not find out.
+                    if let fresh = freshDetection(
+                        pixelBuffer: pixelBuffer, orientation: orientation,
+                        targetLabel: targetLabel, regionOfInterest: nil
+                    ) {
+                        // Re-seeded on the fresh box either way, since a live classification is
+                        // better grounded than a tracked region. seedTracking also restarts the
+                        // box history there, which matters most in the correcting case: the boxes
+                        // it held describe a different object, so comparing the next frame
+                        // against them would read the correction itself as an implausible jump
+                        // and immediately throw the good lock away.
+                        seedTracking(on: fresh.box)
+                        return (fresh.box, fresh.confidence)
+                    }
+                }
                 recordBox(newBox)
                 request.inputObservation = observation
                 return (newBox, observation.confidence)
@@ -2406,6 +2462,24 @@ private final class AvCoreMlImplementDetector {
 
         guard let regionOfInterest else { return nil }
 
+        guard let best = freshDetection(
+            pixelBuffer: pixelBuffer, orientation: orientation,
+            targetLabel: targetLabel, regionOfInterest: regionOfInterest
+        ) else { return nil }
+
+        seedTracking(on: best.box)
+        return (best.box, best.confidence)
+    }
+
+    /// A classification from scratch: what the model says is in the frame RIGHT NOW, ignoring
+    /// whatever the tracker currently believes. Returns nil when this class is not confidently
+    /// present, which is not the same as it being absent -- a missed detection on one frame is
+    /// ordinary, so a caller must never read nil as evidence the object has gone.
+    private func freshDetection(
+        pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation,
+        targetLabel: String, regionOfInterest: CGRect?
+    ) -> (box: CGRect, confidence: Float)? {
+        guard let visionModel = visionModel else { return nil }
         let detectRequest = VNCoreMLRequest(model: visionModel)
         detectRequest.imageCropAndScaleOption = .scaleFit
         // Per Apple's documented Vision behavior, a request's regionOfInterest only narrows what
@@ -2415,7 +2489,7 @@ private final class AvCoreMlImplementDetector {
         // against this specific model/request combination on real hardware (this sandbox has no
         // device to confirm on) -- if a real build ever shows the reported box visibly offset
         // from the actual implement, this assumption is the first place to check.
-        detectRequest.regionOfInterest = regionOfInterest
+        if let regionOfInterest { detectRequest.regionOfInterest = regionOfInterest }
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
         // Vision doesn't guarantee these come back sorted by confidence -- taking the max
         // explicitly rather than assuming .first is the best candidate. The bundled model knows
@@ -2431,15 +2505,18 @@ private final class AvCoreMlImplementDetector {
                 .max(by: { $0.confidence < $1.confidence }),
             best.confidence >= minDetectionConfidence
         else { return nil }
+        return (best.boundingBox, best.confidence)
+    }
 
-        let seedObservation = VNDetectedObjectObservation(boundingBox: best.boundingBox)
+    private func seedTracking(on box: CGRect) {
+        let seedObservation = VNDetectedObjectObservation(boundingBox: box)
         let newRequest = VNTrackObjectRequest(detectedObjectObservation: seedObservation)
         newRequest.trackingLevel = .accurate
         trackingRequest = newRequest
         // Fresh acquisition -- recentBoxes restarts clean rather than comparing against
         // whatever a previous, unrelated lock last reported.
-        recentBoxes = [best.boundingBox]
-        return (best.boundingBox, best.confidence)
+        recentBoxes = [box]
+        framesSinceReclassify = 0
     }
 }
 
