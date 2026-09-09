@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { CreditCard, Users } from "lucide-react";
-import { ORG_BASE_CENTS, formatCents } from "@shared/billing-tiers";
+import { bandForAthleteCount, formatCents } from "@shared/billing-tiers";
 
 type RosterAthlete = { id: number };
 
@@ -31,7 +31,11 @@ export default function CoachBilling() {
     queryKey: ["/api/coach/roster"],
     queryFn: () => getJson("/api/coach/roster"),
   });
-  const monthlyCents = ORG_BASE_CENTS;
+  // The roster band, not a flat fee. This read ORG_BASE_CENTS, which was the
+  // whole bill back when there was a flat account fee; there isn't one now,
+  // so that same read would have quoted every coach $0.00 a month.
+  const band = bandForAthleteCount(roster.length);
+  const monthlyCents = band.monthlyPriceCents;
 
   async function subscribe() {
     setStarting(true);
@@ -71,15 +75,17 @@ export default function CoachBilling() {
 
           <div className="space-y-1 border-t border-border pt-4 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Account</span>
-              <span>{formatCents(ORG_BASE_CENTS)}</span>
-            </div>
-            <div className="flex justify-between">
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <Users className="h-3.5 w-3.5" />
                 {roster.length} {roster.length === 1 ? "athlete" : "athletes"}
               </span>
-              <span className="text-muted-foreground">Included</span>
+              <span>{band.label}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Band covers up to</span>
+              <span className="text-muted-foreground">
+                {band.athleteCapIncluded} athletes
+              </span>
             </div>
           </div>
 

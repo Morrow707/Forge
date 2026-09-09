@@ -8,7 +8,6 @@
 // storage.getPricingCatalog merges each entry's defaultCents with any row
 // in pricingOverrides sharing its key.
 import {
-  ORG_BASE_CENTS,
   ORG_PER_ATHLETE_CENTS,
   BILLING_ADD_ONS,
   BILLING_ADD_ON_ORDER,
@@ -35,18 +34,11 @@ export type PricingCatalogItem = {
 
 export const PRICING_CATALOG: PricingCatalogItem[] = [
   {
-    key: "org_base_fee",
-    category: "Org / Coach Plan",
-    label: "Base account fee",
-    description: "Flat monthly fee every org/coach account pays, before the per-athlete rate.",
-    defaultCents: ORG_BASE_CENTS,
-  },
-  {
     key: "org_per_athlete",
     category: "Org / Coach Plan",
     label: "Per-athlete rate",
     description:
-      "Added per athlete on roster, flat at every roster size -- this is the one number every 25-athlete pricing band on /pricing is computed from.",
+      "The whole org bill. Charged per athlete on roster, flat at every roster size, with no account fee alongside it -- every pricing band on /pricing is this one number times the band's ceiling.",
     defaultCents: ORG_PER_ATHLETE_CENTS,
   },
   ...BILLING_ADD_ON_ORDER.map((id) => ({

@@ -11,7 +11,7 @@
 // switches that gate whether any of it actually restricts anyone -- both
 // default to "don't restrict," on purpose, while still in beta.
 //
-// Pricing model: a flat $10.00 base fee plus $4.00/athlete, with NO volume
+// Pricing model: $4.00/athlete and nothing else, with NO volume
 // discount at any roster size. The previous design (Solo/Coach/Growth/
 // Program/Enterprise, each with its own price + a cheap per-athlete overage
 // that got cheaper at bigger tiers) went net-negative at scale once real
@@ -27,11 +27,17 @@
 // video-tracking as the expected case, 50% and 100% as stress cases) --
 // every band stays margin-positive even in the 100% case.
 //
-// Presented to customers in 25-athlete bands (a customer pays for a band's
-// ceiling, not their exact headcount) since a stepped ladder sells better
-// than "exactly $4.00 x your roster" -- but the underlying rate never
-// changes band to band, which is the actual fix.
-export const ORG_BASE_CENTS = 1000; // $10.00 flat account fee
+// Presented to customers in bands (a customer pays for a band's ceiling, not
+// their exact headcount) since a stepped ladder sells better than "exactly
+// $4.00 x your roster" -- but the underlying rate never changes band to
+// band, which is the actual fix.
+//
+// No flat account fee. There was a $10 one, and dropping it is what makes a
+// small team's price honest: a five-athlete youth team was paying $30 for
+// five seats, half of it a fee unrelated to anything it used. The whole bill
+// is now roster x rate and nothing else, so the cheapest band starts at $20
+// and every band divides back out to exactly $4.00 an athlete.
+export const ORG_BASE_CENTS = 0;
 export const ORG_PER_ATHLETE_CENTS = 400; // $4.00/athlete, flat, every band, no discount
 
 export type BillingTierId = string;
@@ -73,23 +79,33 @@ function bandPriceCents(athleteCapIncluded: number): number {
   return ORG_BASE_CENTS + athleteCapIncluded * ORG_PER_ATHLETE_CENTS;
 }
 
-// Band boundaries: 0-15 (small team), 16-30 (next jump) -- both flat prices,
-// not part of the per-athlete formula's climb, same as the two tiers they
-// replace -- then every 25 athletes from 31 up through 1,000. Nothing stops
-// a roster bigger than 1,000; buildBands only enumerates this far because
-// that's as far as anyone's actually asked to see priced out. A school
-// beyond it prices the same way: $10 + $4.00 x their band ceiling, in the
-// next 25-athlete step.
+/** Athletes per block above the starter bands -- $80 a block at $4.00 each. */
+export const ORG_BLOCK_SIZE = 20;
+
+// Band boundaries: fives up to 20 (0-5, 6-10, 11-15, 16-20), then whole
+// 20-athlete blocks from 21 up through 1,000.
+//
+// The fives exist because that is where real small rosters actually land and
+// a five-athlete team should not be quoted a fifteen-athlete price. The
+// blocks above them are sized to real squads: 20 completes a volleyball
+// roster, 40 covers baseball, 120 covers an FBS football roster.
+//
+// Nothing stops a roster bigger than 1,000; buildBands only enumerates this
+// far because that is as far as anyone has asked to see priced out. A school
+// beyond it prices the same way: $4.00 x their band ceiling, in the next
+// 20-athlete step.
 function buildBands(): BillingTierDef[] {
   const ranges: [number, number][] = [
-    [0, 15],
-    [16, 30],
+    [0, 5],
+    [6, 10],
+    [11, 15],
+    [16, 20],
   ];
-  let start = 31;
+  let start = 21;
   while (start <= 1000) {
-    const end = Math.min(start + 24, 1000);
+    const end = Math.min(start + ORG_BLOCK_SIZE - 1, 1000);
     ranges.push([start, end]);
-    start += 25;
+    start += ORG_BLOCK_SIZE;
   }
   return ranges.map(([lo, hi]) => ({
     id: `${lo}-${hi}`,
@@ -98,8 +114,10 @@ function buildBands(): BillingTierDef[] {
     athleteCapIncluded: hi,
     athleteFloor: lo,
     perAthleteOverageCents: 0,
-    includesFullPersonalization: lo > 30,
-    includesMultiTeam: lo > 30,
+    // Everything past the first block is a coached program rather than one
+    // small team, which is where full personalization and multi-team start.
+    includesFullPersonalization: lo > ORG_BLOCK_SIZE,
+    includesMultiTeam: lo > ORG_BLOCK_SIZE,
   }));
 }
 
@@ -211,7 +229,7 @@ export const COACHES_CORNER_MONTHLY_PRICE_CENTS = 1999;
 
 // Rosters at or above this size get the Corner at no charge. At the flat
 // per-athlete rate above, a 100-athlete org is already paying
-// $10 + 100 x $4.00 = $410/mo, so another $19.99 is noise on their invoice
+// 100 x $4.00 = $400/mo, so another $19.99 is noise on their invoice
 // and friction on the sale.
 //
 export const COACHES_CORNER_FREE_AT_ATHLETE_COUNT = 100;

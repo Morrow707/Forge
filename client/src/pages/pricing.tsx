@@ -10,8 +10,8 @@ import {
   BILLING_ADD_ON_ORDER,
   bandForAthleteCount,
   formatCents,
-  ORG_BASE_CENTS,
   ORG_PER_ATHLETE_CENTS,
+  ORG_BLOCK_SIZE,
 } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER, FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
@@ -84,12 +84,13 @@ export default function PricingPage() {
                   billing-tiers.ts moved every band below it and left the
                   sentence above them advertising the old price. */}
               <CardTitle className="text-lg">
-                {formatCents(ORG_BASE_CENTS)} base + {formatCents(ORG_PER_ATHLETE_CENTS)}/athlete
+                {formatCents(ORG_PER_ATHLETE_CENTS)}/athlete
               </CardTitle>
               <CardDescription>
-                One flat per-athlete rate, no volume discount, no roster-size ceiling -- price
-                scales with your program instead of stalling out at a flat cap. Full branding,
-                personalization, and multi-team support included above 30 athletes.
+                One flat per-athlete rate, no account fee, no volume discount, no roster-size
+                ceiling -- you pay for your roster and nothing else. Sold in blocks of{" "}
+                {ORG_BLOCK_SIZE} above the starter bands. Full branding, personalization, and
+                multi-team support included above {ORG_BLOCK_SIZE} athletes.
               </CardDescription>
             </CardHeader>
             <CardContent>
