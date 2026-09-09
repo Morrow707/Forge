@@ -25,6 +25,7 @@ import {
   detectFormFaults,
   worldVerticalSign,
   shoulderWidthScaleFromFrames,
+  reconcileScaleEstimates,
   tiltDegreesFromPoints,
   usesSharedBarEquipment,
   assessCameraAlignment,
@@ -728,30 +729,55 @@ export function AvBarTrackerDialog({
     // (biacromial-to-height varies by build, so a broad lifter and a narrow one of the same
     // height differ by around a tenth), and blending it with a good read would spread its
     // uncertainty into a number that did not have any.
-    const shoulderScale =
-      heightScaleFactor == null && plateScale == null
-        ? shoulderWidthScaleFromFrames(calibrationInput, heightIn)
-        : null;
-    const shoulderScaleValue = shoulderScale?.scale ?? null;
+    // EVERY SOURCE IS COMPUTED, THEN THEY ARE COMPARED.
+    //
+    // Scale used to be a waterfall: the plate, else the athlete's height, else their shoulders,
+    // with the later ones not even evaluated once an earlier one answered. So the pipeline held
+    // at most one opinion about how big a pixel is, and no way to tell a good reading from a bad
+    // one. That is exactly how a shoulder-derived scale six times too small reached a screen --
+    // there was no second opinion to check it against, and the two detectors that could have
+    // provided one were never asked.
+    //
+    // All three run now and reconcileScaleEstimates compares them: agreement between independent
+    // sources is the strongest evidence available here, and disagreement is the signal that
+    // something is wrong, which is worth far more than a single confident-looking number.
+    const shoulderScale = shoulderWidthScaleFromFrames(calibrationInput, heightIn);
+    const shoulderScaleValue = shoulderScale.scale;
 
-    const scaleFactor =
-      heightScaleFactor != null && plateScale != null
-        ? (heightScaleFactor + plateScale.scale) / 2
-        : (plateScale?.scale ?? heightScaleFactor ?? shoulderScaleValue);
+    const scaleVerdict = reconcileScaleEstimates([
+      ...(plateScale != null
+        ? [
+            {
+              source: "plate" as const,
+              scale: plateScale.scale,
+              uncertaintyFraction: plateScale.uncertaintyFraction,
+            },
+          ]
+        : []),
+      ...(heightScaleFactor != null
+        ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: 0.05 }]
+        : []),
+      ...(shoulderScaleValue != null
+        ? [
+            {
+              source: "shoulder_width" as const,
+              scale: shoulderScaleValue,
+              uncertaintyFraction: shoulderScale.uncertaintyFraction,
+            },
+          ]
+        : []),
+    ]);
+
+    const scaleFactor = scaleVerdict.scale;
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     // Which mechanism actually produced the scale, recorded alongside it. Plate-derived scale is
     // new and its training data is thin, so a number built on one has to be identifiable as such
     // rather than indistinguishable from a height-derived one.
+    // Names what actually decided the number, including whether anything corroborated it.
     const scaleSource: "height" | "plate" | "both" | "shoulder_width" | null =
-      heightScaleFactor != null && plateScale != null
+      scaleVerdict.agreedSources.length > 1
         ? "both"
-        : plateScale != null
-          ? "plate"
-          : heightScaleFactor != null
-            ? "height"
-            : shoulderScaleValue != null
-              ? "shoulder_width"
-              : null;
+        : (scaleVerdict.agreedSources[0] ?? null);
 
     // No scale used to end the take here, with nothing saved but the video. It no longer does.
     //

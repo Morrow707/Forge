@@ -693,6 +693,91 @@ const MIN_SHOULDER_BROADSIDE_RATIO = 2;
  * apparent width is foreshortened -- a bad scale is worse than none, which is the one part of
  * the old refusal that was right.
  */
+export type ScaleEstimate = {
+  source: "plate" | "height" | "shoulder_width";
+  scale: number;
+  /** How wrong this source can be even when it is working correctly. */
+  uncertaintyFraction: number;
+};
+
+export type ScaleVerdict = {
+  scale: number | null;
+  /** Which sources were used for the chosen number. */
+  agreedSources: ScaleEstimate["source"][];
+  /** Sources that were computed and disagreed with the chosen cluster. */
+  outliers: { source: ScaleEstimate["source"]; scale: number; ratioToChosen: number }[];
+  /** True when two or more independent sources agreed -- the only case where anything here is
+   *  corroborated rather than merely asserted. */
+  corroborated: boolean;
+};
+
+// Two scale estimates count as agreeing when they are within the looser one's own stated
+// uncertainty, doubled. Doubled because each is allowed to be wrong by its own tolerance in
+// opposite directions, so two honest readings of the same take can legitimately sit that far
+// apart without either being broken.
+const SCALE_AGREEMENT_MULTIPLE = 2;
+
+/**
+ * Reconciles every real-world scale the take could produce, instead of taking the first one that
+ * answered.
+ *
+ * Scale used to be a waterfall -- plate, else the athlete's height, else their shoulder breadth,
+ * with the later ones not even computed once an earlier one returned. So the pipeline held at
+ * most one opinion about how big a pixel is, could not tell a good reading from a bad one, and
+ * had no way to notice two sources disagreeing by a factor of six. That is precisely how a
+ * shoulder-derived scale six times too small reached an athlete's screen: nothing in the system
+ * had a second opinion to check it against.
+ *
+ * Every source is computed now and they are compared. Where two or more agree, their mean is the
+ * answer and it is marked corroborated -- two independent measurements landing in the same place
+ * is real evidence, and it is the strongest signal this pipeline can produce. Where they
+ * disagree, the most trustworthy single source still answers, the others are reported as
+ * outliers with how far off they were, and the result is explicitly NOT corroborated so
+ * everything downstream can say so rather than presenting a lone guess as a measurement.
+ *
+ * Order of trust when nothing agrees: a plate is an object of known size and does not care about
+ * the camera; height is measured on the athlete but along their whole body; shoulder breadth is
+ * the loosest, since biacromial-to-height genuinely varies by build.
+ */
+export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdict {
+  const usable = estimates.filter((e) => Number.isFinite(e.scale) && e.scale > 0);
+  if (usable.length === 0) {
+    return { scale: null, agreedSources: [], outliers: [], corroborated: false };
+  }
+
+  const TRUST: Record<ScaleEstimate["source"], number> = {
+    plate: 0,
+    height: 1,
+    shoulder_width: 2,
+  };
+  const ranked = [...usable].sort((a, b) => TRUST[a.source] - TRUST[b.source]);
+
+  // The largest set that agrees with each other, preferring the one anchored on the most
+  // trustworthy source when two clusters are the same size.
+  let best: ScaleEstimate[] = [ranked[0]];
+  for (const anchor of ranked) {
+    const cluster = ranked.filter((other) => {
+      const tolerance =
+        Math.max(anchor.uncertaintyFraction, other.uncertaintyFraction) * SCALE_AGREEMENT_MULTIPLE;
+      const ratio = other.scale / anchor.scale;
+      return Math.abs(ratio - 1) <= tolerance;
+    });
+    if (cluster.length > best.length) best = cluster;
+  }
+
+  const scale = best.reduce((sum, e) => sum + e.scale, 0) / best.length;
+  const agreedSources = best.map((e) => e.source);
+  const outliers = usable
+    .filter((e) => !agreedSources.includes(e.source))
+    .map((e) => ({
+      source: e.source,
+      scale: e.scale,
+      ratioToChosen: Math.round((e.scale / scale) * 100) / 100,
+    }));
+
+  return { scale, agreedSources, outliers, corroborated: best.length > 1 };
+}
+
 export type ShoulderScaleReading = {
   scale: number | null;
   uncertaintyFraction: number;
