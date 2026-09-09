@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+    * { box-sizing: border-box; }
+    body { margin:0; width:390px; height:844px; overflow:hidden;
+      background:#0a0c11; color:#f5f5f5;
+      font-family:"Inter", ui-sans-serif, system-ui, sans-serif; font-size:14px; }
+    a { color:#c63b10; } a:hover { color:#e04d1c; }
+    .dsp { font-family:"Barlow Condensed","Inter",sans-serif; text-transform:uppercase; letter-spacing:.01em; }
+    .scr { height:844px; overflow:hidden; display:flex; flex-direction:column; }
+    .pad { padding:0 16px; }
+    .card { background:#22262f; border:1px solid #333a47; border-radius:9.6px; }
+    .sunk { background:#171a21; border-radius:9.6px; }
+    .mut { color:#9aa0ab; }
+    .pri { color:#c63b10; }
+    .chip { border-radius:999px; font-weight:700; font-size:13px; padding:8px 16px; min-height:44px;
+      display:flex; align-items:center; justify-content:center; }
+    .btn { min-height:48px; border-radius:9.6px; display:flex; align-items:center; justify-content:center;
+      gap:8px; font-weight:700; font-size:15px; border:none; }
+    .btnp { background:#c63b10; color:#fff; }
+    .btno { background:transparent; color:#f5f5f5; border:1px solid #333a47; }
+    .lbl { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#9aa0ab; font-weight:600; }
+  </style>
+</helmet>
+<div class="scr">
+  <div style="position:relative;height:300px;background:linear-gradient(165deg,#2c313d,#12151b);flex-shrink:0;">
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+      <div style="width:66px;height:66px;border-radius:50%;background:rgba(198,59,16,.92);display:flex;align-items:center;justify-content:center;">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M8 5l12 7-12 7z"/></svg>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;padding:16px;background:linear-gradient(transparent,rgba(10,12,17,.95));">
+      <h1 class="dsp" style="margin:0;font-size:28px;font-weight:700;">Tee Work — Outside</h1>
+      <p class="mut" style="margin:3px 0 0;font-size:12px;">Watch first · 0:38 · Coach Marcus</p>
+    </div>
+  </div>
+
+  <div class="pad" style="flex:1;padding-top:14px;display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;gap:8px;">
+      <div class="card" style="flex:1;padding:10px;text-align:center;">
+        <div class="dsp" style="font-size:22px;font-weight:700;">3</div><span class="lbl">Sets</span>
+      </div>
+      <div class="card" style="flex:1;padding:10px;text-align:center;">
+        <div class="dsp" style="font-size:22px;font-weight:700;">10</div><span class="lbl">Swings</span>
+      </div>
+      <div class="card" style="flex:1;padding:10px;text-align:center;">
+        <div class="dsp" style="font-size:22px;font-weight:700;">45s</div><span class="lbl">Rest</span>
+      </div>
+    </div>
+
+    <div>
+      <span class="lbl">Three things to feel</span>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+        <div style="display:flex;gap:10px;"><span class="pri dsp" style="font-size:16px;font-weight:700;">01</span><span style="line-height:1.45;">Let the ball travel deeper than you think.</span></div>
+        <div style="display:flex;gap:10px;"><span class="pri dsp" style="font-size:16px;font-weight:700;">02</span><span style="line-height:1.45;">Back elbow stays connected to the ribs.</span></div>
+        <div style="display:flex;gap:10px;"><span class="pri dsp" style="font-size:16px;font-weight:700;">03</span><span style="line-height:1.45;">Finish with the barrel pointing to right-centre.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pad" style="padding-bottom:24px;">
+    <button class="btn btnp" style="width:100%;">Start set 1</button>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

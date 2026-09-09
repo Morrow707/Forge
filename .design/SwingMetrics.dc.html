@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+    * { box-sizing: border-box; }
+    body { margin:0; width:390px; height:844px; overflow:hidden;
+      background:#0a0c11; color:#f5f5f5;
+      font-family:"Inter", ui-sans-serif, system-ui, sans-serif; font-size:14px; }
+    a { color:#c63b10; } a:hover { color:#e04d1c; }
+    .dsp { font-family:"Barlow Condensed","Inter",sans-serif; text-transform:uppercase; letter-spacing:.01em; }
+    .scr { height:844px; overflow:hidden; display:flex; flex-direction:column; }
+    .pad { padding:0 16px; }
+    .card { background:#22262f; border:1px solid #333a47; border-radius:9.6px; }
+    .sunk { background:#171a21; border-radius:9.6px; }
+    .mut { color:#9aa0ab; }
+    .pri { color:#c63b10; }
+    .chip { border-radius:999px; font-weight:700; font-size:13px; padding:8px 16px; min-height:44px;
+      display:flex; align-items:center; justify-content:center; }
+    .btn { min-height:48px; border-radius:9.6px; display:flex; align-items:center; justify-content:center;
+      gap:8px; font-weight:700; font-size:15px; border:none; }
+    .btnp { background:#c63b10; color:#fff; }
+    .btno { background:transparent; color:#f5f5f5; border:1px solid #333a47; }
+    .lbl { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#9aa0ab; font-weight:600; }
+  </style>
+</helmet>
+<div class="scr">
+  <div class="pad" style="padding-top:56px;">
+    <h1 class="dsp" style="margin:0;font-size:26px;font-weight:700;">Tee Work — Inside</h1>
+    <p class="mut" style="margin:4px 0 0;font-size:12px;">Set 2 · 10 swings recorded</p>
+  </div>
+
+  <div class="pad" style="flex:1;padding-top:16px;display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;gap:8px;">
+      <div class="card" style="flex:1;padding:13px;">
+        <div class="dsp" style="font-size:30px;font-weight:700;line-height:1;">68<span class="mut" style="font-size:14px;"> mph</span></div>
+        <span class="lbl">Bat speed</span>
+      </div>
+      <div class="card" style="flex:1;padding:13px;">
+        <div class="dsp" style="font-size:30px;font-weight:700;line-height:1;">11<span class="mut" style="font-size:14px;">°</span></div>
+        <span class="lbl">Attack angle</span>
+      </div>
+    </div>
+
+    <div class="card" style="padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+        <span class="lbl">Bat speed, swing by swing</span>
+        <span class="mut" style="font-size:11px;">this set</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:5px;height:70px;">
+        <div style="flex:1;height:62%;background:#2a2e37;border-radius:3px;"></div>
+        <div style="flex:1;height:71%;background:#2a2e37;border-radius:3px;"></div>
+        <div style="flex:1;height:84%;background:#c63b10;border-radius:3px;"></div>
+        <div style="flex:1;height:79%;background:#2a2e37;border-radius:3px;"></div>
+        <div style="flex:1;height:76%;background:#2a2e37;border-radius:3px;"></div>
+        <div style="flex:1;height:81%;background:#2a2e37;border-radius:3px;"></div>
+        <div style="flex:1;height:69%;background:#2a2e37;border-radius:3px;"></div>
+        <div style="flex:1;height:58%;background:#2a2e37;border-radius:3px;"></div>
+        <div style="flex:1;height:54%;background:#2a2e37;border-radius:3px;"></div>
+        <div style="flex:1;height:49%;background:#2a2e37;border-radius:3px;"></div>
+      </div>
+      <p class="mut" style="margin:9px 0 0;font-size:12px;line-height:1.45;">Fastest on swing 3, then a steady drop. Fatigue, or you stopped resetting between swings.</p>
+    </div>
+
+    <div class="sunk" style="padding:13px;">
+      <div style="display:flex;justify-content:space-between;">
+        <div><span class="lbl">Time to contact</span><div class="dsp" style="font-size:21px;font-weight:700;">0.148s</div></div>
+        <div><span class="lbl">On plane</span><div class="dsp" style="font-size:21px;font-weight:700;color:#21c45d;">8/10</div></div>
+        <div><span class="lbl">Trust</span><div class="dsp" style="font-size:21px;font-weight:700;">Good</div></div>
+      </div>
+    </div>
+
+    <p class="mut" style="font-size:11px;line-height:1.45;margin:0;">Measured from your video on this phone. Nothing leaves the device until you save the set.</p>
+  </div>
+
+  <div class="pad" style="padding-bottom:24px;display:flex;gap:10px;">
+    <button class="btn btno" style="flex:1;">Watch it back</button>
+    <button class="btn btnp" style="flex:1.3;">Save set 2</button>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+    * { box-sizing: border-box; }
+    body { margin:0; width:390px; height:844px; overflow:hidden;
+      background:#0a0c11; color:#f5f5f5;
+      font-family:"Inter", ui-sans-serif, system-ui, sans-serif; font-size:14px; }
+    a { color:#c63b10; } a:hover { color:#e04d1c; }
+    .dsp { font-family:"Barlow Condensed","Inter",sans-serif; text-transform:uppercase; letter-spacing:.01em; }
+    .scr { height:844px; overflow:hidden; display:flex; flex-direction:column; }
+    .pad { padding:0 16px; }
+    .card { background:#22262f; border:1px solid #333a47; border-radius:9.6px; }
+    .sunk { background:#171a21; border-radius:9.6px; }
+    .mut { color:#9aa0ab; }
+    .pri { color:#c63b10; }
+    .chip { border-radius:999px; font-weight:700; font-size:13px; padding:8px 16px; min-height:44px;
+      display:flex; align-items:center; justify-content:center; }
+    .btn { min-height:48px; border-radius:9.6px; display:flex; align-items:center; justify-content:center;
+      gap:8px; font-weight:700; font-size:15px; border:none; }
+    .btnp { background:#c63b10; color:#fff; }
+    .btno { background:transparent; color:#f5f5f5; border:1px solid #333a47; }
+    .lbl { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#9aa0ab; font-weight:600; }
+  </style>
+</helmet>
+<div class="scr">
+  <div class="pad" style="padding-top:56px;padding-bottom:12px;">
+    <p class="mut" style="margin:0;font-size:12px;">American Hitting — Lesson 1</p>
+    <h1 class="dsp" style="margin:2px 0 0;font-size:27px;font-weight:700;line-height:1.05;">What Every Hitter Must Know</h1>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:9px;">
+      <div style="flex:1;height:4px;background:#2a2e37;border-radius:2px;"><div style="width:33%;height:4px;background:#c63b10;border-radius:2px;"></div></div>
+      <span class="mut" style="font-size:11px;">3 of 9 sets</span>
+    </div>
+  </div>
+
+  <div class="pad" style="flex:1;display:flex;flex-direction:column;gap:9px;">
+    <div class="card" style="padding:12px;opacity:.6;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#21c45d" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+          <span style="font-weight:600;">Athletic Stance Hold</span>
+        </div>
+        <span class="mut" style="font-size:12px;">3 × 10 done</span>
+      </div>
+    </div>
+
+    <div class="card" style="padding:14px;border-color:#c63b10;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><span style="font-weight:700;font-size:16px;">Tee Work — Inside</span>
+          <p class="mut" style="margin:3px 0 0;font-size:12px;">Let it travel · finish to right-centre</p></div>
+        <a href="#" style="font-size:12px;font-weight:600;white-space:nowrap;">Demo</a>
+      </div>
+      <div style="display:flex;gap:7px;margin-top:12px;">
+        <div class="sunk" style="flex:1;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;">
+          <span class="dsp" style="font-size:19px;font-weight:700;color:#21c45d;">8/10</span><span class="lbl" style="font-size:9px;">Set 1</span>
+        </div>
+        <div class="sunk" style="flex:1;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border:1px solid #c63b10;">
+          <span class="dsp" style="font-size:19px;font-weight:700;">—</span><span class="lbl" style="font-size:9px;color:#c63b10;">Set 2</span>
+        </div>
+        <div class="sunk" style="flex:1;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;">
+          <span class="dsp" style="font-size:19px;font-weight:700;color:#4a5263;">—</span><span class="lbl" style="font-size:9px;">Set 3</span>
+        </div>
+      </div>
+      <button class="btn btnp" style="width:100%;margin-top:10px;min-height:44px;font-size:14px;">Log set 2</button>
+    </div>
+
+    <div class="card" style="padding:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div><span style="font-weight:600;">Tee Work — Outside</span>
+          <p class="mut" style="margin:3px 0 0;font-size:12px;">3 × 10 · bat, tee, net</p></div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9aa0ab" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="pad" style="padding-bottom:24px;">
+    <button class="btn btno" style="width:100%;">Mark session done</button>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",        "x": 0,    "y": 0,    "w": 390, "h": 844, "title": "Today's screen, finished" },
+    { "file": "TapCounter.dc.html",  "x": 470,  "y": 0,    "w": 390, "h": 844, "title": "Tap to count" },
+    { "file": "DemoFirst.dc.html",   "x": 940,  "y": 0,    "w": 390, "h": 844, "title": "Demo first" },
+    { "file": "CueCheck.dc.html",    "x": 1410, "y": 0,    "w": 390, "h": 844, "title": "Cue checklist" },
+    { "file": "StrikeZone.dc.html",  "x": 0,    "y": 1100, "w": 390, "h": 844, "title": "Zone map" },
+    { "file": "LastTime.dc.html",    "x": 470,  "y": 1100, "w": 390, "h": 844, "title": "Beat last time" },
+    { "file": "FocusMode.dc.html",   "x": 940,  "y": 1100, "w": 390, "h": 844, "title": "Focus mode" },
+    { "file": "CoachVoice.dc.html",  "x": 1410, "y": 1100, "w": 390, "h": 844, "title": "Coach's voice" },
+    { "file": "SwingMetrics.dc.html","x": 0,    "y": 2200, "w": 390, "h": 844, "title": "Swing metrics" },
+    { "file": "SessionList.dc.html", "x": 470,  "y": 2200, "w": 390, "h": 844, "title": "Whole session" },
+    { "file": "Equipment.dc.html",   "x": 940,  "y": 2200, "w": 390, "h": 844, "title": "Set up first" }
+  ],
+  "annotations": [
+    { "id": "n-main", "x": 0, "y": -160, "w": 390, "text": "The screen you have, with the gaps filled: instructions, equipment, demo, and reps that are actually recorded.\n\nTradeoff: safest, least distinctive. It fixes the drill page without deciding what a drill page should be." },
+    { "id": "n-tap", "x": 470, "y": -160, "w": 390, "text": "Counting IS the log. Two big targets, one tap per swing, a grid you can correct afterwards.\n\nTradeoff: only fits drills where an attempt is good or bad. Useless for a hold or a tempo drill." },
+    { "id": "n-demo", "x": 940, "y": -160, "w": 390, "text": "Video is the page. You watch before you touch anything, and the three cues sit under it.\n\nTradeoff: dead weight on the fiftieth rep of a drill they already know." },
+    { "id": "n-cue", "x": 1410, "y": -160, "w": 390, "text": "Coaching cues as a checklist the athlete ticks as they feel each one. Turns a hold into something with a task.\n\nTradeoff: ticking a box is not evidence. Easy to tap through without doing it." },
+    { "id": "n-zone", "x": 0, "y": 940, "w": 390, "text": "Tap where the ball finished. Location is what an inside-pitch drill is actually about, and it reads back as a pattern.\n\nTradeoff: nine taps of precision per set, and only hitting-shaped drills have a zone." },
+    { "id": "n-last", "x": 470, "y": 940, "w": 390, "text": "Opens on your history and a number to beat. Answers 'why am I doing this again' before it asks for anything.\n\nTradeoff: nothing to show the first two or three times, which is exactly when motivation matters most." },
+    { "id": "n-focus", "x": 940, "y": 940, "w": 390, "text": "One set, arm's length away, readable mid-drill. Everything else is a tap behind it.\n\nTradeoff: hides the context. Needs one of the other screens behind it, so it is a mode rather than a design." },
+    { "id": "n-coach", "x": 1410, "y": 940, "w": 390, "text": "The coach leads: a voice note, today's one instruction, and your best rep against the demo.\n\nTradeoff: only as good as the coach's input. Falls back to the bland version when they leave it empty." },
+    { "id": "n-metrics", "x": 0, "y": 2040, "w": 390, "text": "The camera work applied to hitting: bat speed, attack angle, swing-by-swing decay.\n\nTradeoff: none of these numbers are calibrated for a swing yet, and a wrong number read confidently is worse than no number." },
+    { "id": "n-list", "x": 470, "y": 2040, "w": 390, "text": "No expanding. Every drill and every set on one screen, logging inline, so a coach can run a group through it.\n\nTradeoff: no room for instructions. Assumes they already know the drills." },
+    { "id": "n-equip", "x": 940, "y": 2040, "w": 390, "text": "A setup step before the drill: what to grab, tee height, where to stand the phone.\n\nTradeoff: an extra screen between the athlete and the work, every single time." }
+  ],
+  "launch": { "view": "canvas" }
+}

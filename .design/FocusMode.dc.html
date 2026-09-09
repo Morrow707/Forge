@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+    * { box-sizing: border-box; }
+    body { margin:0; width:390px; height:844px; overflow:hidden;
+      background:#0a0c11; color:#f5f5f5;
+      font-family:"Inter", ui-sans-serif, system-ui, sans-serif; font-size:14px; }
+    a { color:#c63b10; } a:hover { color:#e04d1c; }
+    .dsp { font-family:"Barlow Condensed","Inter",sans-serif; text-transform:uppercase; letter-spacing:.01em; }
+    .scr { height:844px; overflow:hidden; display:flex; flex-direction:column; }
+    .pad { padding:0 16px; }
+    .card { background:#22262f; border:1px solid #333a47; border-radius:9.6px; }
+    .sunk { background:#171a21; border-radius:9.6px; }
+    .mut { color:#9aa0ab; }
+    .pri { color:#c63b10; }
+    .chip { border-radius:999px; font-weight:700; font-size:13px; padding:8px 16px; min-height:44px;
+      display:flex; align-items:center; justify-content:center; }
+    .btn { min-height:48px; border-radius:9.6px; display:flex; align-items:center; justify-content:center;
+      gap:8px; font-weight:700; font-size:15px; border:none; }
+    .btnp { background:#c63b10; color:#fff; }
+    .btno { background:transparent; color:#f5f5f5; border:1px solid #333a47; }
+    .lbl { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#9aa0ab; font-weight:600; }
+  </style>
+</helmet>
+<div class="scr" style="background:#0a0c11;">
+  <div class="pad" style="padding-top:56px;display:flex;justify-content:space-between;align-items:center;">
+    <span class="lbl">Set 2 of 3</span>
+    <span class="mut" style="font-size:12px;">Tee Work — Inside</span>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+    <div class="dsp" style="font-size:120px;font-weight:700;line-height:.9;">10</div>
+    <p class="lbl">Swings this set</p>
+    <p class="mut" style="margin:22px 32px 0;text-align:center;line-height:1.5;font-size:15px;">Let it travel. Back elbow to the ribs. Finish to right-centre.</p>
+  </div>
+
+  <div class="pad" style="padding-bottom:24px;display:flex;flex-direction:column;gap:10px;">
+    <div class="sunk" style="padding:12px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:9px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9aa0ab" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span class="mut" style="font-size:13px;">Rest after this set</span>
+      </div>
+      <span class="dsp" style="font-size:20px;font-weight:700;">0:45</span>
+    </div>
+    <button class="btn btnp" style="width:100%;height:60px;font-size:17px;">Done — log the set</button>
+    <button class="btn" style="width:100%;background:transparent;color:#9aa0ab;font-weight:500;font-size:13px;min-height:36px;">Show the full drill</button>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

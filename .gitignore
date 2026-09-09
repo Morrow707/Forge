@@ -164,3 +164,8 @@ scripts/med-ball-detector/*.onnx
 # Scratch upload root for the integration suite (vitest.integration.config.ts
 # points STORAGE_PATH here so deleteUploadedFile has real files to unlink).
 server/test-support/.uploads/
+
+# Seeded design-canvas output. Regenerated from the .dc.html sources beside it
+# and carries a ~2.5MB editor payload -- the sources are what is worth keeping.
+.design/*.html
+!.design/*.dc.html

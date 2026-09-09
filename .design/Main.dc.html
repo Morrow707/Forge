@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+    * { box-sizing: border-box; }
+    body { margin:0; width:390px; height:844px; overflow:hidden;
+      background:#0a0c11; color:#f5f5f5;
+      font-family:"Inter", ui-sans-serif, system-ui, sans-serif; font-size:14px; }
+    a { color:#c63b10; } a:hover { color:#e04d1c; }
+    .dsp { font-family:"Barlow Condensed","Inter",sans-serif; text-transform:uppercase; letter-spacing:.01em; }
+    .scr { height:844px; overflow:hidden; display:flex; flex-direction:column; }
+    .pad { padding:0 16px; }
+    .card { background:#22262f; border:1px solid #333a47; border-radius:9.6px; }
+    .sunk { background:#171a21; border-radius:9.6px; }
+    .mut { color:#9aa0ab; }
+    .pri { color:#c63b10; }
+    .chip { border-radius:999px; font-weight:700; font-size:13px; padding:8px 16px; min-height:44px;
+      display:flex; align-items:center; justify-content:center; }
+    .btn { min-height:48px; border-radius:9.6px; display:flex; align-items:center; justify-content:center;
+      gap:8px; font-weight:700; font-size:15px; border:none; }
+    .btnp { background:#c63b10; color:#fff; }
+    .btno { background:transparent; color:#f5f5f5; border:1px solid #333a47; }
+    .lbl { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#9aa0ab; font-weight:600; }
+  </style>
+</helmet>
+<div class="scr">
+  <div class="pad" style="padding-top:56px;padding-bottom:10px;">
+    <p class="mut" style="margin:0;font-size:12px;">American Hitting — Lesson 1</p>
+    <h1 class="dsp" style="margin:2px 0 0;font-size:30px;font-weight:700;line-height:1.05;">Athletic Stance Hold</h1>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+      <span class="chip" style="background:rgba(33,196,93,.14);color:#21c45d;min-height:26px;padding:4px 10px;font-size:11px;">Hitting</span>
+      <span class="mut" style="font-size:12px;">3 sets × 10 · rest 45s</span>
+    </div>
+  </div>
+
+  <div style="flex:1;overflow:hidden;">
+  <div class="pad" style="display:flex;flex-direction:column;gap:12px;">
+
+    <div class="card" style="overflow:hidden;">
+      <div style="height:150px;background:linear-gradient(160deg,#2c313d,#171a21);display:flex;align-items:center;justify-content:center;position:relative;">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#f5f5f5" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M10 8.5l6 3.5-6 3.5z" fill="#f5f5f5" stroke="none"/></svg>
+        <span class="mut" style="position:absolute;bottom:8px;right:10px;font-size:11px;">0:42</span>
+      </div>
+      <div style="padding:10px 12px;"><span class="lbl">Coach demo</span></div>
+    </div>
+
+    <div>
+      <span class="lbl">How to do it</span>
+      <p style="margin:6px 0 0;line-height:1.5;">Feet just outside the hips, weight in the middle of the foot. Soft knees, hands at the back shoulder. Hold the position and breathe — you are training the shape, not the swing.</p>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <span class="lbl" style="width:100%;">You need</span>
+      <span class="chip" style="background:#2a2e37;font-weight:500;font-size:12px;min-height:30px;padding:6px 12px;">Bat</span>
+      <span class="chip" style="background:#2a2e37;font-weight:500;font-size:12px;min-height:30px;padding:6px 12px;">Mirror</span>
+    </div>
+
+    <div class="sunk" style="padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="lbl">Set 1 of 3</span>
+        <div style="display:flex;gap:6px;">
+          <span class="chip" style="background:#c63b10;color:#fff;min-height:28px;padding:5px 12px;font-size:12px;">1</span>
+          <span class="chip" style="background:#2a2e37;min-height:28px;padding:5px 12px;font-size:12px;">2</span>
+          <span class="chip" style="background:#2a2e37;min-height:28px;padding:5px 12px;font-size:12px;">3</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <div style="flex:1;">
+          <span class="lbl">Reps held</span>
+          <div class="card" style="margin-top:5px;height:52px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;">10</div>
+        </div>
+        <div style="flex:1;">
+          <span class="lbl">Seconds each</span>
+          <div class="card" style="margin-top:5px;height:52px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#9aa0ab;">15</div>
+        </div>
+      </div>
+      <button class="btn btnp" style="width:100%;margin-top:12px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.5-2.5v9L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>
+        Record this set
+      </button>
+    </div>
+  </div>
+  </div>
+
+  <div class="pad" style="padding-bottom:24px;padding-top:12px;">
+    <button class="btn btno" style="width:100%;">Next drill: Tee Work — Inside</button>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
