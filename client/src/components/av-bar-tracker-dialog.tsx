@@ -151,8 +151,25 @@ import type { Landmark } from "@mediapipe/tasks-vision";
 // share usesSharedBarEquipment's bar-tilt treatment but look visually different enough from a
 // straight barbell that mapping them to "barbell" would just seed the detector against the
 // wrong shape, so they (and everything else) fall through to undefined, same as today.
+// A LOADED BARBELL IS TRACKED BY ITS PLATES.
+//
+// This asked the detector for the "barbell" class, which had two consequences and both were bad.
+// The bar is a thin dark line against a gym full of thin dark lines, so it is the hardest thing
+// in the frame to find; and plateScaleFromFrames, the one calibration in this app that measures
+// an object of KNOWN SIZE rather than the athlete, only runs when the detector was asked for
+// plates. So every barbell lift was tracked off the least visible object present and then had to
+// derive real-world scale from the lifter's body -- which is what forced the whole posture
+// question, refused a bench press outright for being done lying down, and left an athlete
+// filming from a normal angle with no numbers.
+//
+// The plate is the obvious reference and it was there the whole time: a 45cm disc, the largest
+// high-contrast object on the bar, and unlike a body it does not foreshorten in a way that
+// matters. A circle viewed from any angle is an ellipse whose LONG axis is still its true
+// diameter, which is exactly why it works from the side, the front, the foot of a bench or 45
+// degrees off it. Scale from the equipment does not care where the camera is standing. Scale
+// from a body does, and that is the entire source of the angle problem.
 const COREML_TRACKING_MODE_BY_EQUIPMENT: Record<string, string> = {
-  Barbell: "barbell",
+  Barbell: "plate",
   Dumbbell: "dumbbell",
   Kettlebell: "kettlebell",
 };
@@ -715,11 +732,12 @@ export function AvBarTrackerDialog({
       heightScaleFactor == null && plateScale == null
         ? shoulderWidthScaleFromFrames(calibrationInput, heightIn)
         : null;
+    const shoulderScaleValue = shoulderScale?.scale ?? null;
 
     const scaleFactor =
       heightScaleFactor != null && plateScale != null
         ? (heightScaleFactor + plateScale.scale) / 2
-        : (plateScale?.scale ?? heightScaleFactor ?? shoulderScale?.scale ?? null);
+        : (plateScale?.scale ?? heightScaleFactor ?? shoulderScaleValue);
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     // Which mechanism actually produced the scale, recorded alongside it. Plate-derived scale is
     // new and its training data is thin, so a number built on one has to be identifiable as such
@@ -731,7 +749,7 @@ export function AvBarTrackerDialog({
           ? "plate"
           : heightScaleFactor != null
             ? "height"
-            : shoulderScale != null
+            : shoulderScaleValue != null
               ? "shoulder_width"
               : null;
 

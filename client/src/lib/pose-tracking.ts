@@ -693,12 +693,47 @@ const MIN_SHOULDER_BROADSIDE_RATIO = 2;
  * apparent width is foreshortened -- a bad scale is worse than none, which is the one part of
  * the old refusal that was right.
  */
+export type ShoulderScaleReading = {
+  scale: number | null;
+  uncertaintyFraction: number;
+  // What was actually measured, reported whether or not the scale was accepted.
+  //
+  // The first version of this returned a bare scale or null, and its first real take produced a
+  // scale about six times too small on a bench filmed from roughly 45 degrees. Nothing in the
+  // output said what it had measured, so the only way to reason about it was to infer backwards
+  // from a range of motion -- which is guessing dressed up as analysis. Every input to the
+  // decision is now reported, so the next take answers the question instead of prompting another
+  // round of inference.
+  framesUsed: number;
+  framesRejectedForAngle: number;
+  medianSpanUnits: number | null;
+  rejectedBecause: "no_height" | "too_few_frames" | "implausible_span" | null;
+};
+
+/**
+ * Real-world scale from the athlete's shoulder breadth, for a body whose length the camera
+ * cannot see. Metres per pixel-space unit, with the honest uncertainty of the estimate.
+ *
+ * Returns a reading whose `scale` is null when it will not commit -- the shoulders are not
+ * reliably visible, are angled enough that their apparent width is foreshortened by an unknown
+ * amount, or imply a span no human has. A bad scale is worse than none.
+ */
 export function shoulderWidthScaleFromFrames(
   frames: { worldLandmarks: Landmark[] }[],
   heightIn: number | null | undefined,
-): { scale: number; uncertaintyFraction: number } | null {
-  if (!heightIn || heightIn <= 0) return null;
+): ShoulderScaleReading {
+  const empty: ShoulderScaleReading = {
+    scale: null,
+    uncertaintyFraction: BIACROMIAL_TOLERANCE_FRACTION,
+    framesUsed: 0,
+    framesRejectedForAngle: 0,
+    medianSpanUnits: null,
+    rejectedBecause: null,
+  };
+  if (!heightIn || heightIn <= 0) return { ...empty, rejectedBecause: "no_height" };
+
   const widths: number[] = [];
+  let framesRejectedForAngle = 0;
   for (const f of frames) {
     const l = f.worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
     const r = f.worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
@@ -708,18 +743,88 @@ export function shoulderWidthScaleFromFrames(
     if (!(across > 0)) continue;
     // Square to the lens: the two shoulders sit side by side in the image rather than one behind
     // the other. A body rotated toward the camera fails this and is skipped.
-    if (depth > 0 && across / depth < MIN_SHOULDER_BROADSIDE_RATIO) continue;
+    if (depth > 0 && across / depth < MIN_SHOULDER_BROADSIDE_RATIO) {
+      framesRejectedForAngle++;
+      continue;
+    }
     widths.push(across);
   }
-  if (widths.length < MIN_CALIBRATION_SAMPLES) return null;
+  if (widths.length < MIN_CALIBRATION_SAMPLES) {
+    return { ...empty, framesRejectedForAngle, rejectedBecause: "too_few_frames" };
+  }
   widths.sort((a, b) => a - b);
-  const medianWidth = widths[Math.floor(widths.length / 2)];
-  if (!(medianWidth > 0)) return null;
+  const medianSpanUnits = widths[Math.floor(widths.length / 2)];
+  if (!(medianSpanUnits > 0)) {
+    return { ...empty, framesRejectedForAngle, rejectedBecause: "too_few_frames" };
+  }
+
   const realWidthM = heightIn * 0.0254 * BIACROMIAL_HEIGHT_FRACTION;
+  const scale = realWidthM / medianSpanUnits;
+
+  // A SPAN THAT IMPLIES AN IMPOSSIBLE BODY IS NOT A MEASUREMENT.
+  //
+  // The angle guard leans on Vision's z, which is the least trustworthy axis it produces, and it
+  // let a 45-degree take through and returned a scale roughly six times too small. Whatever the
+  // z estimate was doing there, the span itself was the thing that could have been checked and
+  // was not.
+  //
+  // The rest of this pipeline works in the same units the body itself is measured in, so the
+  // athlete's own height in those units is the yardstick: shoulder breadth near a quarter of it.
+  // Landing outside a generous band around that means the two points are not the shoulders of a
+  // body facing the camera -- one of them is behind the other, or the tracker has them somewhere
+  // it should not. Refusing there costs a take its metres and keeps every rep count, tempo and
+  // ratio, which is a far better trade than a number wrong by a factor of six.
+  const impliedHeightUnits = medianSpanUnits / BIACROMIAL_HEIGHT_FRACTION;
+  const bodyUnits = impliedBodyLengthUnits(frames);
+  if (bodyUnits != null) {
+    const ratio = impliedHeightUnits / bodyUnits;
+    if (ratio < 0.5 || ratio > 2) {
+      return {
+        ...empty,
+        framesUsed: widths.length,
+        framesRejectedForAngle,
+        medianSpanUnits,
+        rejectedBecause: "implausible_span",
+      };
+    }
+  }
+
   return {
-    scale: realWidthM / medianWidth,
+    scale,
     uncertaintyFraction: BIACROMIAL_TOLERANCE_FRACTION,
+    framesUsed: widths.length,
+    framesRejectedForAngle,
+    medianSpanUnits,
+    rejectedBecause: null,
   };
+}
+
+/** The longest body segment the take can see, in the same units, as a cross-check on the
+ *  shoulder span. Null when nothing usable was tracked -- then there is nothing to check
+ *  against and the span stands on its own. */
+function impliedBodyLengthUnits(frames: { worldLandmarks: Landmark[] }[]): number | null {
+  const spans: number[] = [];
+  for (const f of frames) {
+    const lShoulder = f.worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rShoulder = f.worldLandmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const lAnkle = f.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+    const rAnkle = f.worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+    if (!visible(lShoulder) || !visible(rShoulder) || !visible(lAnkle) || !visible(rAnkle)) {
+      continue;
+    }
+    const shoulderX = (lShoulder.x + rShoulder.x) / 2;
+    const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+    const ankleX = (lAnkle.x + rAnkle.x) / 2;
+    const ankleY = (lAnkle.y + rAnkle.y) / 2;
+    const span = Math.hypot(shoulderX - ankleX, shoulderY - ankleY);
+    if (span > 0) spans.push(span / SHOULDER_HEIGHT_FRACTION);
+  }
+  if (spans.length < MIN_CALIBRATION_SAMPLES) return null;
+  spans.sort((a, b) => a - b);
+  // The LARGEST readings, not the median: a body swinging toward and away from the lens is
+  // foreshortened in most frames and true in its best ones, so the upper end is the honest
+  // estimate of its real extent.
+  return spans[Math.floor(spans.length * 0.9)];
 }
 
 // Same nose-to-ankle-span idea as computeImpliedStandingHeightM, but returns the RAW pixel-
