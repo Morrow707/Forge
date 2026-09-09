@@ -1022,6 +1022,40 @@ export function AvBarTrackerDialog({
     );
     if (romProblem) {
       const message = `${romProblem} Film this lift square to the side, with the camera level with the bar, and make sure you're fully in frame.`;
+      // The scale is what's wrong here, not the trace -- rep count, tempo and velocity loss are
+      // times and ratios that don't need one, the same reasoning the scaleRefusalMessage branch
+      // above already applies when no scale resolves at all. Recompute the same way: normalize
+      // the trace to arbitrary units and summarize with no load, since a bad scale would corrupt
+      // watts as much as it corrupts centimetres.
+      const unscaledOnRomProblem = summarizeTrackedSet(
+        normalizeTraceScale(trace),
+        undefined,
+        undefined,
+        firstMoveForExercise(exerciseName),
+        rejectionEvents,
+        1,
+        true,
+      );
+      const scaleFreeOnRomProblem = unscaledOnRomProblem ? toScaleFreeMetrics(unscaledOnRomProblem) : null;
+      if (scaleFreeOnRomProblem) {
+        await saveScaleFreeAndWarn(
+          blob,
+          scaleFreeOnRomProblem,
+          message,
+          captureDeviceInfo,
+          buildTrackingDiagnostics({
+            outcome: "scale_free_only",
+            message,
+            rawFrames,
+            trackingMode: coreMlTrackingMode,
+            recording: recordingStats,
+            calibration: { scaleFactor: null, scaleSource, ...calibrationFrames },
+          }),
+          uploadPromise,
+          forSetNumber,
+        );
+        return;
+      }
       await saveEmptyAndWarn(
         blob,
         message,
