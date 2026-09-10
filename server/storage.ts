@@ -1627,6 +1627,74 @@ const knowledgeAskQuestionResultSchema = z.object({ reply: z.string() });
 // (shared/schema.ts) plus sourceSummary being called "summary" here -- kept
 // as two separate schemas since one validates an AI tool call and the other
 // validates a client request, even though they describe the same fields.
+  // Shared by the two ways a movement gets taught: an admin typing, and learnMovementFromLibrary
+// reading the uploaded library. One definition, so the two cannot drift into proposing
+// different shapes of the same profile.
+const askQuestionTool = {
+    name: "ask_question",
+    description:
+      "Reply conversationally without proposing any tracking-profile change. Use this when the admin's message needs clarification, is just a question about what's already taught, or isn't kinematic/coaching guidance at all.",
+    input_schema: {
+      type: "object",
+      properties: { reply: { type: "string", description: "Your conversational reply to the admin." } },
+      required: ["reply"],
+    },
+  };
+
+  const proposeMovementProfileTool = {
+    name: "propose_movement_profile",
+    description:
+      "Proposes updated camera-tracker thresholds for this movement, for the admin to review before it takes effect. Only include a field once you've actually learned something concrete about it -- an omitted field keeps whatever the current profile already has (or the tracker's hardcoded default if there's no profile yet), it does NOT get cleared.",
+    input_schema: {
+      type: "object",
+      properties: {
+        minKneeAngleDeg: {
+          type: "number",
+          description:
+            "Bottom-position knee angle (degrees) beyond which depth is flagged shallow -- lower means deeper is required. Only for movements with a real squat-depth judgment (squat/hinge/lunge patterns); omit entirely for movements where knee depth isn't a meaningful check.",
+        },
+        valgusRatioMin: {
+          type: "number",
+          description:
+            "Minimum knee-width/ankle-width ratio before flagging knee valgus (caving in). 1.0 means knees exactly over ankles; lower allows more inward travel before flagging.",
+        },
+        maxTorsoLeanDeg: {
+          type: "number",
+          description: "Max forward torso lean from vertical (degrees) before flagging excessive forward lean.",
+        },
+        barPathDeviationMaxCm: {
+          type: "number",
+          description:
+            "Max acceptable horizontal bar drift (cm) before flagging bar-path drift. Only meaningful for barbell lifts.",
+        },
+        barTiltMaxDeg: {
+          type: "number",
+          description: "Max acceptable side-to-side bar tilt (degrees) before flagging uneven bar tilt.",
+        },
+        jumpHeightOutlierPercent: {
+          type: "number",
+          description:
+            "Jump tracking only (movementType \"jump\"): how far (%) a single rep's jump height can deviate from the set's own median before it's flagged as a likely tracking glitch rather than a real rep.",
+        },
+        positionScaleCorrection: {
+          type: "number",
+          description:
+            "Multiplier (near 1.0) applied to every tracked position for this movement before ROM/velocity/power are computed from them -- e.g. 0.78 to shrink readings that are running consistently high. Only set this from a real reference reading for THIS movementType specifically (a trusted external device's readings for the same set, a tape-measured ROM) -- never guess one, and never carry a number learned for one movement over to another, even a similar one (bench and squat are filmed at different distances/angles and need their own reading).",
+        },
+        cameraFramingNotes: {
+          type: "string",
+          description:
+            "Where to place the camera for this movement, shown to the athlete before they record -- e.g. 'Side-on, framed from knees to bar path, far enough back to catch the full range of motion.'",
+        },
+        summary: {
+          type: "string",
+          description: "A short (1-3 sentence) conversational reply describing what you're proposing and why.",
+        },
+      },
+      required: ["summary"],
+    },
+  };
+
 const movementProfileProposalResultSchema = z.object({
   minKneeAngleDeg: z.number().optional(),
   valgusRatioMin: z.number().optional(),
@@ -14715,6 +14783,164 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   // no AI path in the app reaches the internet; the input.url branch below
   // explains what to do instead. Typed text and attached photos are the way
   // material gets in.
+  /** LEARN THIS MOVEMENT FROM WHAT HAS ALREADY BEEN UPLOADED.
+   *
+   * Scott: the AI bots should have read the document and learned -- what is the point of
+   * uploading a textbook if they never read it.
+   *
+   * They do read it, at answer time: a program draft, a nutrition answer, an exercise swap and
+   * five other paths all retrieve passages before they respond. What none of them could do is
+   * turn that material into the NUMBERS the camera tracker actually enforces. Those only ever
+   * came from an admin typing a sentence, so a shelf of strength-and-conditioning texts and an
+   * empty movement profile could sit side by side indefinitely, which is exactly what happened.
+   *
+   * This closes that. It retrieves the passages for one movement, hands them to the same two
+   * tools the teaching chat already uses, and lands the result in the same conversation as a
+   * reviewable proposal. Deliberately NOT auto-applied: nothing reaches movementProfiles, which
+   * every tracked set on the platform reads, without the admin's explicit apply step -- a
+   * threshold inferred from a book is still an inference, and the citations are there so it can
+   * be checked against the page it came from.
+   */
+  async learnMovementFromLibrary(adminId: number, movementType: string) {
+    const fail = async (text: string) => {
+      const [assistantMessage] = await db
+        .insert(movementKnowledgeMessages)
+        .values({ movementType, authorId: adminId, role: "assistant", content: text })
+        .returning();
+      return {
+        adminMessage: null,
+        assistantMessage,
+        activeProfile: await this.getActiveMovementProfile(movementType),
+        proposal: null as (ApplyMovementProfileProposalInput & { summary: string }) | null,
+      };
+    };
+
+    if (!aiEnabled) {
+      return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
+    }
+
+    // Movement words, not the bare tag. Searching for "pull" returns everything in a strength
+    // text that mentions pulling; searching for the mechanics vocabulary of a pull returns the
+    // pages actually about performing one.
+    const query = `${movementType} technique mechanics coaching cues faults depth range of motion bar path camera angle`;
+    const passages = await searchKnowledgePassages({
+      query,
+      domains: ["strength", "sport", "rehab", "movement"],
+      limit: 12,
+    });
+
+    if (passages.length === 0) {
+      return fail(
+        `Nothing in the library matches "${movementType}" yet. Upload a source that covers it ` +
+          `under Books & Documents, or teach me directly here.`,
+      );
+    }
+
+    const [adminMessage] = await db
+      .insert(movementKnowledgeMessages)
+      .values({
+        movementType,
+        authorId: adminId,
+        role: "admin",
+        content: `Read the library and learn what you can about ${movementType}.`,
+      })
+      .returning();
+
+    const currentProfile = await this.getActiveMovementProfile(movementType);
+
+    const cite = (i: number) => {
+      const p = passages[i];
+      const page = p.pageNumber != null ? `, p.${p.pageNumber}` : "";
+      return `[${i + 1}] ${p.sourceTitle}${page}`;
+    };
+    const passageBlock = passages
+      .map((p, i) => `${cite(i)}\n${p.text.slice(0, 1800)}`)
+      .join("\n\n---\n\n");
+
+    const system = `You maintain camera-tracker kinematic tracking profiles for "${movementType}" movements on a strength-and-conditioning platform. The pose-tracking pipeline already runs deterministic checks -- knee angle, knee valgus ratio, torso lean, bar-path drift, bar tilt -- against threshold numbers; your job is to refine those numbers and the camera guidance for this movement, not to invent a new kind of check. "jump" is a special movementType with no bar or knee-depth judgment -- only jumpHeightOutlierPercent and cameraFramingNotes apply there.
+
+You are being handed passages from the platform's own uploaded reference library. Two rules about them:
+- Only propose a value a passage actually supports. Where the material gives a range, coaching cue or explicit figure, use it. Where it does not address a field, LEAVE THAT FIELD ALONE -- an invented number is worse than no number, because the tracker enforces it against every athlete.
+- Say where each thing came from, using the [n] markers on the passages, in the summary you write.
+
+If the passages genuinely do not support any threshold change, call ask_question and say what they did and did not cover.
+
+Current active profile for ${movementType}${
+      currentProfile
+        ? `:\n${JSON.stringify(
+            {
+              minKneeAngleDeg: currentProfile.minKneeAngleDeg,
+              valgusRatioMin: currentProfile.valgusRatioMin,
+              maxTorsoLeanDeg: currentProfile.maxTorsoLeanDeg,
+              barPathDeviationMaxCm: currentProfile.barPathDeviationMaxCm,
+              barTiltMaxDeg: currentProfile.barTiltMaxDeg,
+              jumpHeightOutlierPercent: currentProfile.jumpHeightOutlierPercent,
+              positionScaleCorrection: currentProfile.positionScaleCorrection,
+              cameraFramingNotes: currentProfile.cameraFramingNotes,
+            },
+            null,
+            2,
+          )}`
+        : " -- none applied yet, the tracker is using its built-in hardcoded defaults."
+    }`;
+
+    const userPrompt = `Passages retrieved from the library for "${movementType}":
+
+${passageBlock}
+
+Propose what these passages support for this movement's tracking profile, or call ask_question if they support nothing concrete.`;
+
+    const result = await askClaudeWithTools(
+      system,
+      userPrompt,
+      [askQuestionTool, proposeMovementProfileTool],
+      { maxTokens: 3000 },
+    );
+    if (!result) return fail("Sorry, I couldn't read the library just now -- try again in a bit.");
+
+    const sourceList = passages
+      .map((p, i) => cite(i))
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .join("\n");
+
+    if (result.toolName === "ask_question") {
+      const parsedQuestion = knowledgeAskQuestionResultSchema.safeParse(result.input);
+      const reply = parsedQuestion.success ? parsedQuestion.data.reply.trim() : "";
+      const [assistantMessage] = await db
+        .insert(movementKnowledgeMessages)
+        .values({
+          movementType,
+          authorId: adminId,
+          role: "assistant",
+          content: `${reply || "The library did not cover this movement's mechanics concretely enough to set a threshold."}\n\nRead:\n${sourceList}`,
+        })
+        .returning();
+      return { adminMessage, assistantMessage, activeProfile: currentProfile, proposal: null };
+    }
+
+    const parsedProposal = movementProfileProposalResultSchema.safeParse(result.input);
+    if (!parsedProposal.success) {
+      return fail("I read the library but couldn't turn it into a clean proposal -- try again.");
+    }
+
+    const [assistantMessage] = await db
+      .insert(movementKnowledgeMessages)
+      .values({
+        movementType,
+        authorId: adminId,
+        role: "assistant",
+        content: `${parsedProposal.data.summary}\n\nRead:\n${sourceList}`,
+      })
+      .returning();
+
+    return {
+      adminMessage,
+      assistantMessage,
+      activeProfile: currentProfile,
+      proposal: parsedProposal.data,
+    };
+  },
+
   async updateMovementKnowledgeFromChat(
     adminId: number,
     movementType: string,
@@ -14770,70 +14996,6 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       }),
     ]);
 
-    const askQuestionTool = {
-      name: "ask_question",
-      description:
-        "Reply conversationally without proposing any tracking-profile change. Use this when the admin's message needs clarification, is just a question about what's already taught, or isn't kinematic/coaching guidance at all.",
-      input_schema: {
-        type: "object",
-        properties: { reply: { type: "string", description: "Your conversational reply to the admin." } },
-        required: ["reply"],
-      },
-    };
-
-    const proposeMovementProfileTool = {
-      name: "propose_movement_profile",
-      description:
-        "Proposes updated camera-tracker thresholds for this movement, for the admin to review before it takes effect. Only include a field once you've actually learned something concrete about it -- an omitted field keeps whatever the current profile already has (or the tracker's hardcoded default if there's no profile yet), it does NOT get cleared.",
-      input_schema: {
-        type: "object",
-        properties: {
-          minKneeAngleDeg: {
-            type: "number",
-            description:
-              "Bottom-position knee angle (degrees) beyond which depth is flagged shallow -- lower means deeper is required. Only for movements with a real squat-depth judgment (squat/hinge/lunge patterns); omit entirely for movements where knee depth isn't a meaningful check.",
-          },
-          valgusRatioMin: {
-            type: "number",
-            description:
-              "Minimum knee-width/ankle-width ratio before flagging knee valgus (caving in). 1.0 means knees exactly over ankles; lower allows more inward travel before flagging.",
-          },
-          maxTorsoLeanDeg: {
-            type: "number",
-            description: "Max forward torso lean from vertical (degrees) before flagging excessive forward lean.",
-          },
-          barPathDeviationMaxCm: {
-            type: "number",
-            description:
-              "Max acceptable horizontal bar drift (cm) before flagging bar-path drift. Only meaningful for barbell lifts.",
-          },
-          barTiltMaxDeg: {
-            type: "number",
-            description: "Max acceptable side-to-side bar tilt (degrees) before flagging uneven bar tilt.",
-          },
-          jumpHeightOutlierPercent: {
-            type: "number",
-            description:
-              "Jump tracking only (movementType \"jump\"): how far (%) a single rep's jump height can deviate from the set's own median before it's flagged as a likely tracking glitch rather than a real rep.",
-          },
-          positionScaleCorrection: {
-            type: "number",
-            description:
-              "Multiplier (near 1.0) applied to every tracked position for this movement before ROM/velocity/power are computed from them -- e.g. 0.78 to shrink readings that are running consistently high. Only set this from a real reference reading for THIS movementType specifically (a trusted external device's readings for the same set, a tape-measured ROM) -- never guess one, and never carry a number learned for one movement over to another, even a similar one (bench and squat are filmed at different distances/angles and need their own reading).",
-          },
-          cameraFramingNotes: {
-            type: "string",
-            description:
-              "Where to place the camera for this movement, shown to the athlete before they record -- e.g. 'Side-on, framed from knees to bar path, far enough back to catch the full range of motion.'",
-          },
-          summary: {
-            type: "string",
-            description: "A short (1-3 sentence) conversational reply describing what you're proposing and why.",
-          },
-        },
-        required: ["summary"],
-      },
-    };
 
     const system = `You maintain camera-tracker kinematic tracking profiles for "${movementType}" movements on a strength-and-conditioning platform. The app's pose-tracking pipeline (MediaPipe-based, on-device) already runs deterministic checks -- knee angle, knee valgus ratio, torso lean, bar-path drift, bar tilt -- against threshold numbers; your job is to refine those numbers and camera guidance for this specific movement based on what the admin teaches you, not to invent a new kind of check. "jump" is a special movementType for vertical/broad jump tracking, which has no bar or knee-depth judgment -- only jumpHeightOutlierPercent and cameraFramingNotes apply there.
 

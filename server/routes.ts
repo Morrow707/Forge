@@ -3533,6 +3533,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(result);
   });
 
+  // Learn this movement from what has already been uploaded, rather than from an admin typing.
+  // Lands in the same conversation as a reviewable proposal -- nothing reaches movementProfiles
+  // without the explicit apply step below.
+  app.post(
+    "/api/admin/movement-knowledge/:movementType/learn-from-library",
+    requireRole("admin"),
+    async (req, res) => {
+      const result = await storage.learnMovementFromLibrary(
+        currentUser(req).id,
+        req.params.movementType as string,
+      );
+      res.status(201).json(result);
+    },
+  );
+
   app.post("/api/admin/movement-knowledge/:movementType/chat", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const parsed = sendMovementKnowledgeChatMessageSchema.safeParse(req.body);

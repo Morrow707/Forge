@@ -9,7 +9,7 @@ import { apiRequest, getJson } from "@/lib/queryClient";
 import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
-import { Send, Sparkles, Loader2, Camera, Eye, Video } from "lucide-react";
+import { Send, Sparkles, Loader2, Camera, Eye, Video, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // "jump" isn't a movementType in exercise-taxonomy.ts (jump tracking is its
@@ -107,6 +107,21 @@ export function MovementKnowledgeContent() {
       setProposal(result.proposal ?? null);
     },
     onError: () => toast.error("Couldn't send that -- try again"),
+  });
+
+  // Reads the uploaded library for this movement instead of waiting to be typed at. Same
+  // conversation, same reviewable proposal, same apply step -- the only difference is where the
+  // material came from, and the reply names the sources it read.
+  const learnFromLibrary = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `${fetchUrl}/learn-from-library`, {});
+      return res.json() as Promise<ChatState & { proposal: Proposal | null }>;
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: [fetchUrl] });
+      setProposal(result.proposal ?? null);
+    },
+    onError: () => toast.error("Couldn't read the library -- try again"),
   });
 
   const apply = useMutation({
@@ -270,7 +285,16 @@ export function MovementKnowledgeContent() {
                   with an explanation -- a field whose only possible outcome
                   is a refusal is worse than no field, because somebody has
                   to type into it to find out. */}
-              <div className="flex items-end justify-end gap-2">
+              <div className="flex items-end justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={learnFromLibrary.isPending}
+                  onClick={() => learnFromLibrary.mutate()}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  {learnFromLibrary.isPending ? "Reading..." : "Learn from library"}
+                </Button>
                 <Button type="submit" disabled={!canSend}>
                   <Send className="h-4 w-4" />
                 </Button>
