@@ -450,6 +450,8 @@ export function NutritionPanel({
                   proteinG: data.proteinG,
                   carbsG: data.carbsG,
                   fatG: data.fatG,
+                  fiberG: data.fiberG,
+                  waterOz: data.waterOz,
                   calciumMg: data.calciumMg,
                   ironMg: data.ironMg,
                   vitaminDMcg: data.vitaminDMcg,

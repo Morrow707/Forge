@@ -159,6 +159,7 @@ import {
   setNutritionGoalSchema,
   submitInjurySchema,
   createFoodLogEntrySchema,
+  createWaterLogEntrySchema,
   updateFoodLogEntrySchema,
   logCaraActivitySchema,
   setCaraCapSchema,
@@ -7911,6 +7912,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const entry = await storage.updateFoodLogEntry(user.id, id, parsed.data);
     if (!entry) return res.status(404).json({ message: "Entry not found" });
     res.json(entry);
+  });
+
+  // Water is its own log rather than a field on a food entry: an athlete drinks water at moments
+  // that have nothing to do with eating, and the day's total has to be correctable one drink at
+  // a time. It comes back alongside the food log's own day fetch so the panel makes one request.
+  app.post("/api/athlete/water-log", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createWaterLogEntrySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const entry = await storage.addWaterLogEntry(user.id, parsed.data);
+    res.status(201).json(entry);
+  });
+
+  app.delete("/api/athlete/water-log/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const ok = await storage.deleteWaterLogEntry(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Entry not found" });
+    res.status(204).end();
   });
 
   app.delete("/api/athlete/food-log/:id", requireRole("athlete"), async (req, res) => {

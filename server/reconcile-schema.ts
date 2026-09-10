@@ -47,6 +47,10 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
+  CREATE TYPE "food_log_meal" AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
   CREATE TYPE "laterality" AS ENUM ('bilateral', 'unilateral');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
@@ -856,7 +860,21 @@ ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "potassium_mg" real;
 ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "magnesium_mg" real;
 ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "vitamin_b12_mcg" real;
 ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "zinc_mg" real;
+-- Nullable on purpose: an entry logged before meal grouping existed has no answer, and a
+-- backfill from its timestamp would invent one. See foodLogMealEnum in shared/schema.ts.
+ALTER TABLE "food_log_entries" ADD COLUMN IF NOT EXISTS "meal" "food_log_meal";
 CREATE INDEX IF NOT EXISTS "food_log_entries_athlete_date_idx" ON "food_log_entries" ("athlete_id", "date");
+
+-- Water logged against nutritionTargets.water_oz, which has been settable since nutrition
+-- targets shipped with nothing able to log against it.
+CREATE TABLE IF NOT EXISTS "water_log_entries" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "amount_oz" real NOT NULL,
+  "logged_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "water_log_entries_athlete_date_idx" ON "water_log_entries" ("athlete_id", "date");
 
 CREATE TABLE IF NOT EXISTS "testing_results" (
   "id" serial PRIMARY KEY,

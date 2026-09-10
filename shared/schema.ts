@@ -2757,6 +2757,71 @@ export const nutritionTargets = pgTable(
 
 export const foodLogSourceEnum = pgEnum("food_log_source", ["barcode", "search", "manual", "photo"]);
 
+// Which meal an entry belongs to. Nullable on the row rather than defaulted, because every entry
+// logged before this column existed genuinely has no answer and guessing one from its timestamp
+// would invent a fact -- those group under "Not sorted" and can be moved by hand. New entries do
+// get a time-of-day suggestion at the point of logging, which is a suggestion the athlete sees
+// and can change, not a silent assignment after the fact.
+export const foodLogMealEnum = pgEnum("food_log_meal", ["breakfast", "lunch", "dinner", "snack"]);
+
+export const FOOD_LOG_MEALS = ["breakfast", "lunch", "dinner", "snack"] as const;
+export type FoodLogMeal = (typeof FOOD_LOG_MEALS)[number];
+
+export const FOOD_LOG_MEAL_LABEL: Record<FoodLogMeal, string> = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner",
+  snack: "Snacks",
+};
+
+/** The meal to preselect for something being logged right now.
+ *
+ * A default, not a determination -- see foodLogMealEnum. The boundaries are ordinary eating
+ * hours and nothing downstream depends on them being right; the athlete is looking at the picker
+ * when it is applied. Anything outside the three meal windows is a snack, which is what eating
+ * at 4pm or 11pm usually is.
+ */
+export function suggestedMealForHour(hour: number): FoodLogMeal {
+  if (hour >= 4 && hour < 11) return "breakfast";
+  if (hour >= 11 && hour < 15) return "lunch";
+  if (hour >= 17 && hour < 21) return "dinner";
+  return "snack";
+}
+
+// One row per drink logged, not one row per day with a running total. A mis-tapped 32oz has to be
+// removable on its own, and a total that is only ever incremented cannot be corrected without
+// inventing a "subtract" that would also let it go negative. Same shape as a food entry for the
+// same reason: they are both "a thing the athlete consumed at a moment on a date".
+//
+// Ounces, matching nutritionTargets.waterOz -- which has existed, and been settable by a coach,
+// since nutrition targets were built, with nothing anywhere able to log against it. The goal was
+// real and permanently unmet.
+export const waterLogEntries = pgTable(
+  "water_log_entries",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    amountOz: real("amount_oz").notNull(),
+    loggedAt: timestamp("logged_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteDateIdx: index("water_log_entries_athlete_date_idx").on(table.athleteId, table.date),
+  }),
+);
+
+export type WaterLogEntry = typeof waterLogEntries.$inferSelect;
+
+export const createWaterLogEntrySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  // A 128oz jug in one go is a real thing an athlete does; a four-figure number is a typo or an
+  // attempt to break the chart.
+  amountOz: z.coerce.number().positive().max(512),
+});
+export type CreateWaterLogEntryInput = z.infer<typeof createWaterLogEntrySchema>;
+
 // One row per logged food item, on a given calendar date -- mostly never an
 // AI capability (see server/food-lookup.ts): barcode/name lookups just proxy
 // a public food database (Open Food Facts, USDA FoodData Central) for
@@ -2806,6 +2871,9 @@ export const foodLogEntries = pgTable(
     vitaminB12Mcg: real("vitamin_b12_mcg"),
     zincMg: real("zinc_mg"),
     source: foodLogSourceEnum("source").notNull(),
+    // See foodLogMealEnum -- null means this entry predates meal grouping, or the athlete
+    // deliberately left it unsorted.
+    meal: foodLogMealEnum("meal"),
     barcode: text("barcode"),
     loggedAt: timestamp("logged_at").notNull().defaultNow(),
   },
@@ -2839,6 +2907,7 @@ export const createFoodLogEntrySchema = z.object({
   sodiumMg: z.coerce.number().min(0).max(20000).optional().nullable(),
   ...foodLogMicroFields,
   source: z.enum(["barcode", "search", "manual", "photo"]),
+  meal: z.enum(FOOD_LOG_MEALS).optional().nullable(),
   barcode: z.string().trim().max(64).optional().nullable(),
 });
 export type CreateFoodLogEntryInput = z.infer<typeof createFoodLogEntrySchema>;
@@ -2858,6 +2927,10 @@ export const updateFoodLogEntrySchema = z.object({
   fiberG: z.coerce.number().min(0).max(300).optional().nullable(),
   sodiumMg: z.coerce.number().min(0).max(20000).optional().nullable(),
   ...foodLogMicroFields,
+  // Moving an entry between meals is an edit like any other -- including moving one INTO a meal
+  // from the unsorted group, which is the only way an entry logged before meal grouping existed
+  // ever gets one.
+  meal: z.enum(FOOD_LOG_MEALS).optional().nullable(),
 });
 export type UpdateFoodLogEntryInput = z.infer<typeof updateFoodLogEntrySchema>;
 

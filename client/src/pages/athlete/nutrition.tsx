@@ -47,11 +47,23 @@ export default function AthleteNutrition() {
 
   return (
     <AppShell title="Nutrition">
-      <p className="mb-6 text-sm text-muted-foreground">
-        {isFreeAgent
-          ? "Set your own macro and micro targets, log what you eat, and ask general sports-nutrition questions."
-          : "Your macro and micro targets, set by your coach -- log what you eat here to track against them."}
-      </p>
+      <div className="mb-6 space-y-2">
+        <p className="text-sm text-muted-foreground">
+          {isFreeAgent
+            ? "Set your own macro and micro targets, log what you eat, and ask general sports-nutrition questions."
+            : "Your macro and micro targets, set by your coach -- log what you eat here to track against them."}
+        </p>
+        {/* Said once, plainly, on the page rather than only next to the AI box. Forge is not run
+            by dietitians and does not employ any, so nothing here is a prescription -- it records
+            what an athlete ate and drank and compares it to numbers a person chose. The AI box
+            already carries its own version of this; a minor logging food should not have to open
+            that box to find out what this page is. */}
+        <p className="text-xs text-muted-foreground">
+          Forge tracks what you log and can suggest general guidance. It is not a dietitian and
+          nothing here is a prescription -- individual targets should come from a coach or a
+          registered dietitian who knows you.
+        </p>
+      </div>
       {(latestBodyMass != null || avgBodyMass != null) && (
         <Card className="mb-6">
           <CardContent className="flex items-center justify-between gap-4 p-5">

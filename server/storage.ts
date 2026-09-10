@@ -99,6 +99,7 @@ import {
   movementScreens,
   movementScreenResults,
   foodLogEntries,
+  waterLogEntries,
   redeemCodes,
   redeemCodeRedemptions,
   familyGroups,
@@ -205,6 +206,7 @@ import type {
   CreateMovementScreenInput,
   UpdateMovementScreenBatteryInput,
   CreateFoodLogEntryInput,
+  CreateWaterLogEntryInput,
   UpdateBrandingInput,
   UpdateExercisePageThemeInput,
   ExercisePageTheme,
@@ -5609,7 +5611,28 @@ export const storage = {
         zincMg: 0,
       },
     );
-    return { entries, totals };
+    const water = await db.query.waterLogEntries.findMany({
+      where: and(eq(waterLogEntries.athleteId, athleteId), eq(waterLogEntries.date, date)),
+      orderBy: asc(waterLogEntries.loggedAt),
+    });
+    const waterOz = Math.round(water.reduce((sum, w) => sum + w.amountOz, 0) * 10) / 10;
+    return { entries, totals, water, waterOz };
+  },
+
+  async addWaterLogEntry(athleteId: number, input: CreateWaterLogEntryInput) {
+    const [row] = await db
+      .insert(waterLogEntries)
+      .values({ athleteId, date: input.date, amountOz: input.amountOz })
+      .returning();
+    return row;
+  },
+
+  async deleteWaterLogEntry(athleteId: number, id: number) {
+    const [row] = await db
+      .delete(waterLogEntries)
+      .where(and(eq(waterLogEntries.id, id), eq(waterLogEntries.athleteId, athleteId)))
+      .returning();
+    return !!row;
   },
 
   // Bulk, today-only version of getNutritionTargetsForAthlete +

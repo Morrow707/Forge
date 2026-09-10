@@ -23,6 +23,13 @@ import {
 import { capturePhotoFromVideo, downscalePhotoFile, type CapturedPhoto } from "@/lib/photo-capture";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 import { cn } from "@/lib/utils";
+import { RadioChipGroup } from "@/components/filter-chip-group";
+import {
+  FOOD_LOG_MEALS,
+  FOOD_LOG_MEAL_LABEL,
+  suggestedMealForHour,
+  type FoodLogMeal,
+} from "@shared/schema";
 import { toast } from "sonner";
 import {
   Camera,
@@ -110,6 +117,29 @@ function emptyManual(): FoodCandidate {
  * free for every athlete regardless of coach/paywall status -- see that
  * schema's comment for why the photo path is the one exception to "never an
  * AI capability" and why that doesn't change the access story. */
+/** One meal choice for everything logged in this pass. Deliberately not per-item on the photo
+ *  screen: a photo of a plate is one meal, and asking four times which meal each item on it
+ *  belongs to would be a worse question than the one it answers. */
+function MealPicker({
+  value,
+  onChange,
+}: {
+  value: FoodLogMeal;
+  onChange: (meal: FoodLogMeal) => void;
+}) {
+  return (
+    <RadioChipGroup
+      label="Meal"
+      options={FOOD_LOG_MEALS.map((m) => FOOD_LOG_MEAL_LABEL[m])}
+      value={FOOD_LOG_MEAL_LABEL[value]}
+      onChange={(label) => {
+        const picked = FOOD_LOG_MEALS.find((m) => FOOD_LOG_MEAL_LABEL[m] === label);
+        if (picked) onChange(picked);
+      }}
+    />
+  );
+}
+
 export function FoodScannerDialog({
   open,
   onOpenChange,
@@ -130,6 +160,11 @@ export function FoodScannerDialog({
   const [source, setSource] = useState<Source>("barcode");
   const [candidate, setCandidate] = useState<FoodCandidate>(emptyManual());
   const [servings, setServings] = useState("1");
+  // Which meal everything logged in this dialog session belongs to. Seeded from the clock as a
+  // suggestion the athlete is looking at while they confirm, never applied silently after the
+  // fact -- see suggestedMealForHour. Re-seeded each time the dialog opens so it follows the
+  // day rather than sticking at whatever was picked hours ago.
+  const [meal, setMeal] = useState<FoodLogMeal>(() => suggestedMealForHour(new Date().getHours()));
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FoodCandidate[]>([]);
   const [searching, setSearching] = useState(false);
@@ -343,6 +378,10 @@ export function FoodScannerDialog({
     },
   });
 
+  useEffect(() => {
+    if (open) setMeal(suggestedMealForHour(new Date().getHours()));
+  }, [open]);
+
   const addMutation = useMutation({
     mutationFn: async () => {
       const multiplier = Number(servings) || 1;
@@ -369,6 +408,7 @@ export function FoodScannerDialog({
         vitaminB12Mcg: scale(candidate.vitaminB12Mcg),
         zincMg: scale(candidate.zincMg),
         source,
+        meal,
         barcode: candidate.barcode,
       });
       return res.json();
@@ -465,6 +505,7 @@ export function FoodScannerDialog({
           vitaminB12Mcg: item.vitaminB12Mcg,
           zincMg: item.zincMg,
           source: "photo",
+          meal,
           barcode: null,
         });
         const logged = await res.json();
@@ -710,6 +751,7 @@ export function FoodScannerDialog({
                 </div>
               ))}
             </div>
+            <MealPicker value={meal} onChange={setMeal} />
             <div className="flex gap-2">
               <Button type="button" variant="ghost" onClick={() => setMode("photo")}>
                 Retake
@@ -793,6 +835,7 @@ export function FoodScannerDialog({
             {mode === "confirm" && candidate.brand && (
               <p className="text-xs text-muted-foreground">{candidate.brand}</p>
             )}
+            <MealPicker value={meal} onChange={setMeal} />
             {mode === "confirm" ? (
               <div className="space-y-1.5">
                 <Label htmlFor="food-servings">Servings ({candidate.servingDescription ?? "1 serving"})</Label>

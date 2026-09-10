@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { format, addDays, parseISO } from "date-fns";
 import { todayIso } from "@/lib/local-date";
+import { FOOD_LOG_MEALS, FOOD_LOG_MEAL_LABEL, type FoodLogMeal } from "@shared/schema";
 
 const MICRO_FIELDS = [
   ["calciumMg", "Calcium", "mg"],
@@ -55,7 +56,10 @@ type FoodLogEntry = {
   vitaminB12Mcg: number | null;
   zincMg: number | null;
   source: "barcode" | "search" | "manual";
+  meal: FoodLogMeal | null;
 };
+
+type WaterEntry = { id: number; amountOz: number; loggedAt: string };
 
 type FoodLogResponse = {
   entries: FoodLogEntry[];
@@ -74,6 +78,8 @@ type FoodLogResponse = {
     vitaminB12Mcg: number;
     zincMg: number;
   };
+  water: WaterEntry[];
+  waterOz: number;
 };
 
 type Targets = {
@@ -81,6 +87,8 @@ type Targets = {
   proteinG: number | null;
   carbsG: number | null;
   fatG: number | null;
+  fiberG: number | null;
+  waterOz: number | null;
   calciumMg: number | null;
   ironMg: number | null;
   vitaminDMcg: number | null;
@@ -90,6 +98,13 @@ type Targets = {
   vitaminB12Mcg: number | null;
   zincMg: number | null;
 } | null;
+
+// Ordered as a day is eaten, with the bucket for entries that have no meal last -- see
+// foodLogMealEnum in shared/schema.ts for why that bucket has to exist at all.
+const MEAL_SECTIONS: { key: FoodLogMeal | null; label: string }[] = [
+  ...FOOD_LOG_MEALS.map((key) => ({ key: key as FoodLogMeal | null, label: FOOD_LOG_MEAL_LABEL[key] })),
+  { key: null, label: "Not sorted" },
+];
 
 const MICRO_TARGET_FIELDS = [
   ["calciumMg", "Calcium", "mg"],
@@ -184,6 +199,7 @@ export function FoodLogPanel({
     vitaminB12Mcg: 0,
     zincMg: 0,
   };
+  const waterOz = data?.waterOz ?? 0;
   const isToday = date === todayIso();
   // Secondary to the macros above -- only worth a row (and only shown
   // collapsed) when there's actually something to compare: a target set for
@@ -233,7 +249,19 @@ export function FoodLogPanel({
             <ProgressBar label="Protein" value={totals.proteinG} target={targets?.proteinG ?? null} unit="g" />
             <ProgressBar label="Carbs" value={totals.carbsG} target={targets?.carbsG ?? null} unit="g" />
             <ProgressBar label="Fat" value={totals.fatG} target={targets?.fatG ?? null} unit="g" />
+            {/* Fiber was stored on every entry, summed into the day totals and given its own
+                target field, and then never rendered anywhere. It was computed and thrown away. */}
+            <ProgressBar label="Fiber" value={totals.fiberG} target={targets?.fiberG ?? null} unit="g" />
           </div>
+
+          <WaterSection
+            totalOz={waterOz}
+            targetOz={targets?.waterOz ?? null}
+            entries={data?.water ?? []}
+            editable={editable}
+            date={date}
+            onChanged={() => qc.invalidateQueries({ queryKey })}
+          />
 
           {relevantDayMicros.length > 0 && (
             <div>
@@ -264,82 +292,102 @@ export function FoodLogPanel({
             </div>
           )}
 
-          <div className="space-y-1.5">
+          {/* GROUPED BY MEAL, WITH AN HONEST BUCKET FOR WHAT HAS NONE.
+              Entries logged before meal grouping existed have no meal, and deriving one from
+              their timestamp after the fact would be inventing a fact about somebody's day.
+              They sit under "Not sorted" until the athlete moves them, which the edit dialog
+              now lets them do. An empty meal renders nothing rather than an empty heading. */}
+          <div className="space-y-3">
             {!data?.entries.length && (
               <p className="py-3 text-center text-sm text-muted-foreground">Nothing logged yet.</p>
             )}
-            {data?.entries.map((e) => {
-              const presentMicros = MICRO_FIELDS.filter(([key]) => e[key] != null);
-              const microsOpen = expandedMicros.has(e.id);
+            {MEAL_SECTIONS.map(({ key, label }) => {
+              const inMeal = (data?.entries ?? []).filter((e) => (e.meal ?? null) === key);
+              if (inMeal.length === 0) return null;
+              const mealCalories = inMeal.reduce((sum, e) => sum + (e.caloriesKcal ?? 0), 0);
               return (
-                <div key={e.id} className="rounded-md border border-border p-2.5 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{e.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {e.servingDescription ? `${e.servingDescription} -- ` : ""}
-                        {e.caloriesKcal ?? "?"} kcal
-                        {e.proteinG != null ? `, ${e.proteinG}g protein` : ""}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      {presentMicros.length > 0 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={microsOpen ? "Hide micros" : "Show micros"}
-                          onClick={() =>
-                            setExpandedMicros((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(e.id)) next.delete(e.id);
-                              else next.add(e.id);
-                              return next;
-                            })
-                          }
-                        >
-                          <ChevronDown
-                            className={`h-3.5 w-3.5 transition-transform ${microsOpen ? "rotate-180" : ""}`}
-                          />
-                        </Button>
-                      )}
-                      {editable && (
-                        <>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Edit entry"
-                            onClick={() => setEditingEntry(e)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Remove entry"
-                            onClick={() => deleteMutation.mutate(e.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
+                <div key={label} className="space-y-1.5">
+                  <div className="flex items-baseline justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {label}
+                    </p>
+                    <span className="text-xs text-muted-foreground">{Math.round(mealCalories)} kcal</span>
                   </div>
-                  {microsOpen && presentMicros.length > 0 && (
-                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground sm:grid-cols-3">
-                      {presentMicros.map(([key, label, unit]) => (
-                        <div key={key} className="flex justify-between">
-                          <span>{label}</span>
-                          <span className="font-medium text-foreground">
-                            {e[key]}
-                            {unit}
-                          </span>
-                        </div>
-                      ))}
+                  {inMeal.map((e) => {
+                const presentMicros = MICRO_FIELDS.filter(([key]) => e[key] != null);
+                const microsOpen = expandedMicros.has(e.id);
+                return (
+                  <div key={e.id} className="rounded-md border border-border p-2.5 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{e.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {e.servingDescription ? `${e.servingDescription} -- ` : ""}
+                          {e.caloriesKcal ?? "?"} kcal
+                          {e.proteinG != null ? `, ${e.proteinG}g protein` : ""}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {presentMicros.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={microsOpen ? "Hide micros" : "Show micros"}
+                            onClick={() =>
+                              setExpandedMicros((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(e.id)) next.delete(e.id);
+                                else next.add(e.id);
+                                return next;
+                              })
+                            }
+                          >
+                            <ChevronDown
+                              className={`h-3.5 w-3.5 transition-transform ${microsOpen ? "rotate-180" : ""}`}
+                            />
+                          </Button>
+                        )}
+                        {editable && (
+                          <>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Edit entry"
+                              onClick={() => setEditingEntry(e)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Remove entry"
+                              onClick={() => deleteMutation.mutate(e.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  )}
+                    {microsOpen && presentMicros.length > 0 && (
+                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground sm:grid-cols-3">
+                        {presentMicros.map(([key, label, unit]) => (
+                          <div key={key} className="flex justify-between">
+                            <span>{label}</span>
+                            <span className="font-medium text-foreground">
+                              {e[key]}
+                              {unit}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+                  })}
                 </div>
               );
             })}
@@ -376,6 +424,79 @@ export function FoodLogPanel({
   );
 }
 
+/** Quick-add sizes, in ounces. A standard glass, a big glass, a small and a large bottle, and a
+ *  jug -- the containers an athlete actually drinks out of, rather than a number pad. Anything
+ *  that is not one of these is two taps of something close, which is what a rough log deserves;
+ *  water intake is not a measurement anyone gets to the ounce. */
+const WATER_QUICK_ADD_OZ = [8, 12, 16, 24, 32];
+
+function WaterSection({
+  totalOz,
+  targetOz,
+  entries,
+  editable,
+  date,
+  onChanged,
+}: {
+  totalOz: number;
+  targetOz: number | null;
+  entries: WaterEntry[];
+  editable: boolean;
+  date: string;
+  onChanged: () => void;
+}) {
+  const addMutation = useMutation({
+    mutationFn: (amountOz: number) =>
+      apiRequest("POST", "/api/athlete/water-log", { date, amountOz }),
+    onSuccess: onChanged,
+    onError: () => toast.error("Couldn't log that"),
+  });
+  const removeMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/athlete/water-log/${id}`),
+    onSuccess: onChanged,
+    onError: () => toast.error("Couldn't remove that"),
+  });
+
+  // Nothing logged and no target set means this athlete is not tracking water at all, and a
+  // coach viewing a read-only day should not get an empty widget for it either.
+  if (!editable && totalOz === 0 && targetOz == null) return null;
+
+  return (
+    <div className="space-y-2">
+      <ProgressBar label="Water" value={totalOz} target={targetOz} unit="oz" />
+      {editable && (
+        <div className="flex flex-wrap gap-1.5">
+          {WATER_QUICK_ADD_OZ.map((oz) => (
+            <Button
+              key={oz}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2.5 text-xs"
+              disabled={addMutation.isPending}
+              onClick={() => addMutation.mutate(oz)}
+            >
+              +{oz} oz
+            </Button>
+          ))}
+          {entries.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2.5 text-xs text-muted-foreground"
+              disabled={removeMutation.isPending}
+              onClick={() => removeMutation.mutate(entries[entries.length - 1].id)}
+            >
+              Undo last ({entries[entries.length - 1].amountOz} oz)
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const MACRO_FIELDS = [
   ["caloriesKcal", "Calories", ""],
   ["proteinG", "Protein", "g"],
@@ -404,6 +525,11 @@ function EditFoodEntryDialog({
   const [values, setValues] = useState<Partial<Record<EditableField, string>>>({});
   const [micrasOpen, setMicrosOpen] = useState(false);
   const [hydratedFor, setHydratedFor] = useState<number | null>(null);
+  // Null is a real, keepable value here, not an empty form field -- an entry logged before meal
+  // grouping existed has no meal, and the athlete may not want to invent one for a thing they
+  // ate three weeks ago either. Moving it into a meal is a choice they make, not one this
+  // dialog makes for them by defaulting the picker.
+  const [meal, setMeal] = useState<FoodLogMeal | null>(null);
 
   useEffect(() => {
     if (entry && hydratedFor !== entry.id) {
@@ -416,6 +542,7 @@ function EditFoodEntryDialog({
           ]),
         ),
       );
+      setMeal(entry.meal ?? null);
       setHydratedFor(entry.id);
     }
     if (!entry) setHydratedFor(null);
@@ -428,6 +555,7 @@ function EditFoodEntryDialog({
         const raw = values[key];
         payload[key] = raw && raw.trim() !== "" ? Number(raw) : null;
       }
+      payload.meal = meal;
       await apiRequest("PATCH", `/api/athlete/food-log/${entry!.id}`, payload);
     },
     onSuccess: () => {
@@ -451,6 +579,23 @@ function EditFoodEntryDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
+          </div>
+          <div className="space-y-1.5">
+            <p className="label-xs">Meal</p>
+            <div className="flex flex-wrap gap-1">
+              {MEAL_SECTIONS.map(({ key, label }) => (
+                <Button
+                  key={label}
+                  type="button"
+                  variant={meal === key ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setMeal(key)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {MACRO_FIELDS.map(([key, label, unit]) => (
