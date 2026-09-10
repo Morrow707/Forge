@@ -126,6 +126,18 @@ export default function AdminCoachesCorner() {
         }
       >
         <p className="mb-6 max-w-2xl text-sm text-muted-foreground">{selectedTrack.description}</p>
+        {/* Headed and counted. The quiz below carries its own "Track Quiz" heading and the
+            lessons carried none, so a track whose lessons had not loaded -- or a reader
+            skimming -- saw a page whose only titled section was the quiz, and read it as a
+            track that could not be read. An empty state says which of the two it is. */}
+        <h2 className="mb-2 font-display text-lg font-bold uppercase tracking-wide">
+          Lessons ({selectedTrack.lessons.length})
+        </h2>
+        {selectedTrack.lessons.length === 0 && (
+          <p className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
+            This track has no lessons yet. Add them with Edit.
+          </p>
+        )}
         <div className="space-y-2">
           {selectedTrack.lessons.map((lesson) => (
             <button
@@ -172,21 +184,27 @@ export default function AdminCoachesCorner() {
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tracks.map((track) => (
-          <Card key={track.id} className="transition-colors hover:border-primary/50">
+          // The whole card opens the track, not just the words in its title. The card already
+          // highlighted on hover as though all of it were the target, while only the title
+          // text actually was -- a click on the description or the badges did nothing at all.
+          <Card
+            key={track.id}
+            onClick={() => setSelectedTrackId(track.id)}
+            className="cursor-pointer transition-colors hover:border-primary/50"
+          >
             <CardContent className="flex flex-col gap-2 p-5">
               <div className="flex items-start justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedTrackId(track.id)}
-                  className="text-left font-display text-base font-bold uppercase tracking-wide hover:text-primary"
-                >
+                <span className="text-left font-display text-base font-bold uppercase tracking-wide">
                   {track.title}
-                </button>
+                </span>
                 <Button
                   size="icon"
                   variant="ghost"
                   className="shrink-0"
-                  onClick={() => navigate(`/admin/academy-tracks/${track.id}`)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/admin/academy-tracks/${track.id}`);
+                  }}
                   aria-label={`Edit ${track.title}`}
                 >
                   <Pencil className="h-4 w-4" />

@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
 import {
   Dumbbell,
-  Plus,
   ArrowRight,
   ClipboardCheck,
   CalendarDays,
@@ -393,31 +392,6 @@ export default function AdminDashboard() {
           </Card>
         )}
 
-        <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle>Forge Library</CardTitle>
-              <CardDescription>
-                Every exercise you create here shows up for every coach, branded FORGE, and can
-                only be edited by you.
-              </CardDescription>
-            </div>
-            <Link href="/admin/exercises/new">
-              <Button>
-                <Plus className="h-4 w-4" />
-                New Exercise
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/exercises">
-              <Button variant="outline" className="w-full">
-                View Full Library
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
       </div>
     </AppShell>
   );
