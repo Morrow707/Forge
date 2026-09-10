@@ -249,6 +249,8 @@ export function AccountSettingsDialog({
 
           <AnswerStyleSection />
 
+          {user.role === "athlete" && <MyResearchConsentSection />}
+
           {user.role === "coach" && (
             <div className="space-y-5 border-t border-border pt-4">
               <div className="space-y-1.5">
@@ -585,6 +587,104 @@ function AnswerStyleSection() {
         value={length}
         onPick={(key) => save.mutate({ register, length: key })}
       />
+    </div>
+  );
+}
+
+/** THE ATHLETE'S OWN SAY OVER WHETHER THEIR DATA LEAVES FORGE.
+ *
+ * The server has had PUT /api/athlete/research-consent since research consent shipped, and
+ * nothing in the app ever called it: the only consent control anywhere lived on the COACH's
+ * roster screen. So an adult athlete could not opt in, could not opt out, and could not change
+ * their mind without asking their coach to do it for them -- which is a strange shape for a
+ * decision that is theirs alone.
+ *
+ * A minor's answer is not made here and the server refuses it outright; the guardian decides and
+ * a coach records who they heard it from. This says so rather than showing a control that would
+ * fail.
+ */
+function MyResearchConsentSection() {
+  const qc = useQueryClient();
+  const [showText, setShowText] = useState(false);
+
+  const { data: status } = useQuery<{
+    granted: boolean;
+    requiresGuardian: boolean;
+    grantedAt: string | null;
+  }>({ queryKey: ["/api/athlete/research-consent"] });
+
+  const { data: consentText } = useQuery<{ text: string }>({
+    queryKey: ["/api/research-consent/text"],
+    enabled: showText,
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (granted: boolean) => {
+      await apiRequest("PUT", "/api/athlete/research-consent", { granted });
+    },
+    onSuccess: (_d, granted) => {
+      qc.invalidateQueries({ queryKey: ["/api/athlete/research-consent"] });
+      toast.success(
+        granted
+          ? "You're opted in to research data collection"
+          : "You're opted out -- nothing prepared from now on will include you",
+      );
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't change that"),
+  });
+
+  if (!status) return null;
+
+  return (
+    <div className="space-y-3 border-t border-border pt-4">
+      <div className="space-y-1.5">
+        <Label>Research data</Label>
+        <p className="text-xs text-muted-foreground">
+          Separate from your training data, which your coach always sees. This is only about
+          whether your numbers can be included, without your name, in anything Forge prepares for
+          an outside party. You can change it whenever you like, and changing it to off leaves you
+          out of everything prepared from that point on.
+        </p>
+      </div>
+
+      {status.requiresGuardian ? (
+        <p className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted-foreground">
+          A parent or guardian makes this decision while you're under 18. Ask them to change it
+          through your coach.
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={status.granted ? "default" : "outline"}
+            size="sm"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate(true)}
+          >
+            Opted in
+          </Button>
+          <Button
+            variant={!status.granted ? "default" : "outline"}
+            size="sm"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate(false)}
+          >
+            Opted out
+          </Button>
+          <button
+            type="button"
+            onClick={() => setShowText((v) => !v)}
+            className="text-xs underline underline-offset-2 text-muted-foreground hover:text-foreground"
+          >
+            {showText ? "Hide" : "Read"} what you're agreeing to
+          </button>
+        </div>
+      )}
+
+      {showText && consentText && (
+        <p className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-3 text-xs text-muted-foreground">
+          {consentText.text}
+        </p>
+      )}
     </div>
   );
 }
