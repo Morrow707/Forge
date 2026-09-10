@@ -3331,7 +3331,7 @@ function ExerciseLogContent({
                         }
                       >
                         {formatDistanceCm(j.jumpHeightCm, distanceUnit)}
-                        {j.groundContactSeconds != null ? ` · GCT ${j.groundContactSeconds}s` : ""}
+                        {j.groundContactSeconds != null ? ` · ${j.groundContactSeconds}s on the ground` : ""}
                       </span>
                     ))}
                   </div>

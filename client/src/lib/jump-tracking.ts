@@ -163,12 +163,30 @@ const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;
 // reported as the best, the same way bestJumpHeightCm is a max over reps
 // rather than a blend. The set's average ground contact stays as its own
 // number; it is labelled an average and is honest as one.
+// A REBOUND, NOT A REST. Above this, the athlete reset between reps and there is no reactive
+// strength to measure.
+//
+// RSI is jump height over the ground contact that PRODUCED it, and the whole quantity only means
+// anything when that contact is an elastic one -- a depth jump, a pogo, repeat hops. Drop-jump
+// contacts sit near 0.2s and a coach starts calling a contact slow at about 0.3s. A second is
+// already far outside that, and generous enough that a genuinely fast but sloppy rebound is
+// never thrown away.
+//
+// A set of box jumps is the case this exists for. The athlete lands on the box, steps down,
+// squares up and goes again, so the gap between reps is two or three seconds of resetting.
+// Dividing by it produced a number in the right range for an RSI -- 0.27 off 2.91 seconds -- that
+// was not one, and nothing on the screen said so. A number that looks like a measurement and is
+// not one is worse than a blank.
+const MAX_REBOUND_CONTACT_SECONDS = 1.0;
+
 export function bestReactiveStrengthIndex(
   reps: { jumpHeightCm: number; groundContactSeconds: number | null }[],
 ): number | null {
   const perRep = reps
     .map((r) =>
-      r.groundContactSeconds != null && r.groundContactSeconds > 0
+      r.groundContactSeconds != null &&
+      r.groundContactSeconds > 0 &&
+      r.groundContactSeconds <= MAX_REBOUND_CONTACT_SECONDS
         ? r.jumpHeightCm / 100 / r.groundContactSeconds
         : null,
     )

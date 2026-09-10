@@ -1419,6 +1419,27 @@ export function AvBarTrackerDialog({
       toast.warning("Analysis was cut short partway through this set -- numbers below may not cover every rep.");
     }
 
+    // SAY SO WHEN THE COUNT DOES NOT MATCH.
+    //
+    // targetReps has been a prop on this dialog the whole time and nothing ever read it. Scott
+    // squatted five and the set came back with six, which then set the set's mean velocity, its
+    // range of motion and its velocity loss -- and the only place that was visible was counting
+    // the entries in the rep list yourself. The extra one has its own fix (see the rack-artifact
+    // filter in bar-tracking.ts), but no filter catches every case, and the athlete is the only
+    // one here who knows how many reps they actually did.
+    //
+    // Deliberately not an error and deliberately does not change a number. A set genuinely taken
+    // to two past the prescription is a normal thing to do, so this says what was found and
+    // leaves the judgement where it belongs.
+    if (targetReps && targetReps > 0 && metrics.repBreakdown.length !== targetReps) {
+      const found = metrics.repBreakdown.length;
+      toast.info(
+        `Tracked ${found} rep${found === 1 ? "" : "s"} on a set prescribed at ${targetReps}. ` +
+          `Check the rep list below if that isn't what you did -- the set's averages are built from it.`,
+        { duration: 10000 },
+      );
+    }
+
     if (!recordVideo) {
       // No video saved this set -- skeleton replay has nothing to overlay, so there's nothing
       // worth attaching here (skeletonFrames without a video is orphaned data).

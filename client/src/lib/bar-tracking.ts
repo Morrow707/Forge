@@ -1103,7 +1103,46 @@ export function summarizeTrackedSet(
   const medianConcentricDuration =
     concentricDurations.length > 0 ? concentricDurations[Math.floor(concentricDurations.length / 2)] : 0;
   const PHANTOM_DURATION_RATIO = 0.4;
+
+  // A WALKOUT AND A RE-RACK ARE NOT REPS, AND THE DURATION TEST CANNOT SEE THEM.
+  //
+  // Everything above only catches a phase that is anomalously SHORT IN TIME -- a tracking spike,
+  // a lock-loss-and-recover blip. The two artifacts that actually bracket every racked lift are
+  // the opposite: unracking and stepping back before the first rep, and stepping in and setting
+  // the bar down after the last one. Both are slow, so `duration < 0.4x median` never fires, and
+  // both were counted. A five-rep back squat came back as six, with the extra rep sitting at one
+  // end of the set at about two thirds of every real rep's speed, which then dragged the set's
+  // mean velocity and inflated its velocity loss as well.
+  //
+  // What separates them from a rep is not time, it is TRAVEL. A rep is a there-and-back along
+  // the bar's own axis, so every rep in a set covers close to the same distance; an unrack or a
+  // re-rack covers a fraction of it. Measured against this set's own median, so it needs no
+  // constant and works at whatever scale the camera resolved -- including none at all.
+  //
+  // Restricted to the FIRST and LAST concentric phase of the set on purpose. Those are the only
+  // two positions a rack artifact can occupy, and a genuinely shallow rep in the middle of a set
+  // is a real rep an athlete should see rather than one this file quietly deletes. Under-counting
+  // is the worse failure here, same stance as the duration test above.
+  const concentricAmplitudes = concentric
+    .map((p) => Math.abs(ySmoothed[p.endIdx] - ySmoothed[p.startIdx]))
+    .sort((a, b) => a - b);
+  const medianConcentricAmplitude =
+    concentricAmplitudes.length > 0
+      ? concentricAmplitudes[Math.floor(concentricAmplitudes.length / 2)]
+      : 0;
+  const EDGE_PHANTOM_AMPLITUDE_RATIO = 0.5;
+  const firstConcentric = concentric[0];
+  const lastConcentric = concentric[concentric.length - 1];
+
+  function isEdgeRackArtifact(phase: (typeof phaseStats)[number]): boolean {
+    if (concentric.length < 3 || medianConcentricAmplitude <= 0) return false;
+    if (phase !== firstConcentric && phase !== lastConcentric) return false;
+    const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
+    return amplitude < medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO;
+  }
+
   function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
+    if (isEdgeRackArtifact(phase)) return true;
     // Fewer than 3 concentric phases isn't enough of a sample to call
     // anything "anomalously short" relative to the rest of the set with
     // any confidence -- skip the filter entirely rather than risk a bad

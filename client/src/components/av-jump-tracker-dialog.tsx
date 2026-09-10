@@ -573,10 +573,19 @@ export function AvJumpTrackerDialog({
     // no-number-is-better-than-a-wrong-one restraint as the calibration-failure paths above,
     // not a warning nagging the athlete about a signal that was never available.
     if (usesBox && metrics.bestBoxClearanceCm != null) {
+      // Says what was measured, not what it sounds like. This is the ANKLE's peak against the
+      // box top, and a box jump tucks the knees hard, so the feet come up well past the height
+      // the athlete's body actually travelled -- 47.9cm over a 24-inch box on a jump that only
+      // cleared it by a few inches. Read as "you jumped 47.9cm higher than you needed to" that
+      // is simply false, and it was phrased to be read exactly that way.
       if (metrics.bestBoxClearanceCm >= 0) {
-        toast.success(`Cleared the box by ${metrics.bestBoxClearanceCm.toFixed(1)} cm`);
+        toast.success(
+          `Cleared the box -- feet peaked ${metrics.bestBoxClearanceCm.toFixed(1)} cm above the top`,
+        );
       } else {
-        toast.warning(`Came up ${Math.abs(metrics.bestBoxClearanceCm).toFixed(1)} cm short of the box`);
+        toast.warning(
+          `Did not clear the box -- feet peaked ${Math.abs(metrics.bestBoxClearanceCm).toFixed(1)} cm below the top`,
+        );
       }
     }
 

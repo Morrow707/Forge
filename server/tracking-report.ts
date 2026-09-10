@@ -191,7 +191,13 @@ function formatDataPoints(r: TrackedSetRow): ReportField[] {
 
   push("Jump height", num(r.jumpHeightCm, " cm"));
   push("Jump distance", num(r.jumpDistanceCm, " cm"));
-  push("Ground contact time", num(r.groundContactSeconds, " s"));
+  // Not "ground contact time". This is the gap from one rep's landing to the next rep's takeoff,
+  // which on repeat hops IS an elastic ground contact and on a set of box jumps is the athlete
+  // stepping down and squaring up -- two or three seconds of resetting. One label that claims
+  // the first for both was how a 2.91-second reset came to sit under a heading a coach reads as
+  // a rebound. See MAX_REBOUND_CONTACT_SECONDS in jump-tracking.ts, which is what now decides
+  // whether a reactive strength index is reported off it at all.
+  push("Time on the ground between reps", num(r.groundContactSeconds, " s"));
   push("Reactive strength index", num(r.reactiveStrengthIndex, ""));
 
   push("Peak shoulder-hip separation", num(r.swingSeparationDeg, " deg"));
