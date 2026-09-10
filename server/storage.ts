@@ -131,6 +131,8 @@ import {
   type InsertUser,
   MAX_PINNED_ATHLETES,
   mediaRemovalRequests,
+  researchConsentRequests,
+  type ResearchConsentRequest,
   type MediaRemovalRequest,
 } from "@shared/schema";
 import {
@@ -4958,6 +4960,120 @@ export const storage = {
       columns: { answerRegister: true, answerLength: true },
     });
     return row ?? null;
+  },
+
+  /** A minor asking their guardian to change their research consent. The ask, not the decision
+   * -- approving it is what writes consent, with the guardian recorded as the grantor. */
+  async requestResearchConsentChange(input: {
+    athleteId: number;
+    granted: boolean;
+    note?: string | null;
+  }): Promise<{ ok: true; request: ResearchConsentRequest } | { ok: false; message: string }> {
+    const existing = await db.query.researchConsentRequests.findFirst({
+      where: and(
+        eq(researchConsentRequests.athleteId, input.athleteId),
+        eq(researchConsentRequests.status, "pending"),
+      ),
+    });
+    if (existing) {
+      return { ok: false, message: "You already have a request waiting on your guardian." };
+    }
+    const [request] = await db
+      .insert(researchConsentRequests)
+      .values({
+        athleteId: input.athleteId,
+        requestedGranted: input.granted,
+        note: input.note?.trim() || null,
+      })
+      .returning();
+    return { ok: true, request };
+  },
+
+  async getPendingResearchConsentRequest(athleteId: number) {
+    return (
+      (await db.query.researchConsentRequests.findFirst({
+        where: and(
+          eq(researchConsentRequests.athleteId, athleteId),
+          eq(researchConsentRequests.status, "pending"),
+        ),
+      })) ?? null
+    );
+  },
+
+  /** Every pending ask from the athletes this guardian is linked to. */
+  async listPendingResearchConsentRequestsForGuardian(guardianId: number) {
+    return db
+      .select({
+        id: researchConsentRequests.id,
+        athleteId: researchConsentRequests.athleteId,
+        athleteName: users.name,
+        requestedGranted: researchConsentRequests.requestedGranted,
+        note: researchConsentRequests.note,
+        createdAt: researchConsentRequests.createdAt,
+      })
+      .from(researchConsentRequests)
+      .innerJoin(guardianLinks, eq(guardianLinks.athleteId, researchConsentRequests.athleteId))
+      .leftJoin(users, eq(users.id, researchConsentRequests.athleteId))
+      .where(
+        and(
+          eq(guardianLinks.guardianId, guardianId),
+          eq(researchConsentRequests.status, "pending"),
+        ),
+      )
+      .orderBy(asc(researchConsentRequests.createdAt));
+  },
+
+  /** The sign-off. Approving writes the consent with the GUARDIAN as grantor, so the consent
+   * trail records an adult's decision rather than the minor's ask. Denying changes nothing
+   * except the request's own status -- a refused ask must not be able to move consent. */
+  async decideResearchConsentRequest(
+    guardianId: number,
+    input: {
+    requestId: number;
+    approve: boolean;
+    ipAddress?: string;
+    userAgent?: string;
+    },
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    const [row] = await db
+      .select({
+        id: researchConsentRequests.id,
+        athleteId: researchConsentRequests.athleteId,
+        requestedGranted: researchConsentRequests.requestedGranted,
+        guardianId: guardianLinks.guardianId,
+      })
+      .from(researchConsentRequests)
+      .innerJoin(guardianLinks, eq(guardianLinks.athleteId, researchConsentRequests.athleteId))
+      .where(
+        and(
+          eq(researchConsentRequests.id, input.requestId),
+          eq(researchConsentRequests.status, "pending"),
+          eq(guardianLinks.guardianId, guardianId),
+        ),
+      )
+      .limit(1);
+    if (!row) return { ok: false, message: "That request is not yours to decide, or is already decided." };
+
+    if (input.approve) {
+      await this.setResearchDataConsent({
+        athleteId: row.athleteId,
+        granted: row.requestedGranted,
+        grantedByUserId: guardianId,
+        relayedFrom: "the athlete's own guardian, signing off in the app",
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+      });
+    }
+
+    await db
+      .update(researchConsentRequests)
+      .set({
+        status: input.approve ? "approved" : "denied",
+        decidedAt: new Date(),
+        decidedBy: guardianId,
+      })
+      .where(eq(researchConsentRequests.id, input.requestId));
+    return { ok: true };
   },
 
   async getResearchDataConsent(athleteId: number) {

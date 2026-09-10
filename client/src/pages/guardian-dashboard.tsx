@@ -176,6 +176,7 @@ export default function GuardianDashboardPage() {
       </header>
 
       <main className="mx-auto max-w-2xl space-y-4 p-4">
+        <ResearchConsentRequests />
         {athletesLoading || !athletes ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : athletes.length === 0 ? (
@@ -429,5 +430,88 @@ export default function GuardianDashboardPage() {
         )}
       </main>
     </div>
+  );
+}
+
+/** THE GUARDIAN'S SIGN-OFF.
+ *
+ * A minor cannot set their own research consent -- that decision is an adult's -- but they can
+ * now ask for it, and this is where the adult answers. Approving is what writes the consent, and
+ * it is written with the guardian as the grantor, so the trail records a real guardian decision
+ * rather than the minor's tick. Denying changes nothing at all.
+ *
+ * Sits above the athlete tabs rather than inside one: a pending ask about a child's data is the
+ * first thing a guardian should see on opening this page, not something to find under a tab.
+ */
+function ResearchConsentRequests() {
+  const qc = useQueryClient();
+  const { data: requests = [] } = useQuery<
+    {
+      id: number;
+      athleteName: string | null;
+      requestedGranted: boolean;
+      note: string | null;
+      createdAt: string;
+    }[]
+  >({ queryKey: ["/api/guardian/research-consent-requests"] });
+
+  const decide = useMutation({
+    mutationFn: async (input: { id: number; approve: boolean }) => {
+      await apiRequest("POST", `/api/guardian/research-consent-requests/${input.id}`, {
+        approve: input.approve,
+      });
+    },
+    onSuccess: (_d, input) => {
+      qc.invalidateQueries({ queryKey: ["/api/guardian/research-consent-requests"] });
+      toast.success(input.approve ? "Approved" : "Declined");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+  });
+
+  if (requests.length === 0) return null;
+
+  return (
+    <Card className="border-primary/40">
+      <CardHeader>
+        <CardTitle>Waiting on you</CardTitle>
+        <CardDescription>
+          Your athlete has asked to change whether their training numbers can be included, without
+          their name, in anything Forge prepares for an outside party. Nothing changes unless you
+          approve it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {requests.map((r) => (
+          <div key={r.id} className="rounded-md border border-border p-3">
+            <p className="text-sm">
+              <span className="font-semibold">{r.athleteName ?? "Your athlete"}</span> wants
+              research data sharing turned{" "}
+              <span className="font-semibold">{r.requestedGranted ? "on" : "off"}</span>.
+            </p>
+            {r.note && <p className="mt-1 text-sm text-muted-foreground">{r.note}</p>}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Asked {new Date(r.createdAt).toLocaleDateString()}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Button
+                size="sm"
+                disabled={decide.isPending}
+                onClick={() => decide.mutate({ id: r.id, approve: true })}
+              >
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={decide.isPending}
+                onClick={() => decide.mutate({ id: r.id, approve: false })}
+              >
+                Decline
+              </Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

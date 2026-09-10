@@ -618,6 +618,21 @@ function MyResearchConsentSection() {
     enabled: showText,
   });
 
+  const { data: pendingRequest } = useQuery<{ requestedGranted: boolean } | null>({
+    queryKey: ["/api/athlete/research-consent/request"],
+  });
+
+  const requestChange = useMutation({
+    mutationFn: async (granted: boolean) => {
+      await apiRequest("POST", "/api/athlete/research-consent/request", { granted });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/athlete/research-consent/request"] });
+      toast.success("Sent to your guardian");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that request"),
+  });
+
   const mutation = useMutation({
     mutationFn: async (granted: boolean) => {
       await apiRequest("PUT", "/api/athlete/research-consent", { granted });
@@ -648,10 +663,30 @@ function MyResearchConsentSection() {
       </div>
 
       {status.requiresGuardian ? (
-        <p className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted-foreground">
-          A parent or guardian makes this decision while you're under 18. Ask them to change it
-          through your coach.
-        </p>
+        // Under 18 the decision is a guardian's, but the ASK is the athlete's. Before this they
+        // had no route at all: consent could only move if a guardian happened to raise it with a
+        // coach, so a minor who wanted back in could not say so.
+        <div className="space-y-2 rounded-md border border-border bg-surface px-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            A parent or guardian signs this off while you're under 18. Send them a request and
+            they can approve it in their own account.
+          </p>
+          {pendingRequest ? (
+            <p className="text-sm font-medium">
+              Waiting on your guardian to approve turning this{" "}
+              {pendingRequest.requestedGranted ? "on" : "off"}.
+            </p>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={requestChange.isPending}
+              onClick={() => requestChange.mutate(!status.granted)}
+            >
+              Ask my guardian to turn this {status.granted ? "off" : "on"}
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <Button

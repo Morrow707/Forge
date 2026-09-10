@@ -898,6 +898,49 @@ export const mediaRemovalRequestStatusEnum = pgEnum("media_removal_request_statu
   "denied",
 ]);
 
+// A MINOR ASKS; THE GUARDIAN SIGNS OFF.
+//
+// Scott, 2026-09-10: if the athlete is underage they can opt back in, but only with a guardian
+// sign-off.
+//
+// Before this a minor could not touch research consent at all -- the server refused, and the only
+// route in was a coach relaying a guardian's answer. That is fine when the guardian raises it and
+// useless when the athlete does: a 16-year-old who decides they want to be in the data set had no
+// way to say so, and no way to un-say a withdrawal.
+//
+// So the ASK belongs to the athlete and the DECISION still belongs to the guardian. The row below
+// is the ask. Approving it is what writes consent, and it writes it with the guardian as the
+// grantor, so the consent trail records a real guardian decision rather than a minor's tick.
+// Denying it leaves consent exactly as it was.
+export const researchConsentRequestStatusEnum = pgEnum("research_consent_request_status", [
+  "pending",
+  "approved",
+  "denied",
+]);
+
+export const researchConsentRequests = pgTable(
+  "research_consent_requests",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // What the athlete is asking for -- opting in, or asking to come back out. Both need the
+    // same sign-off, because both change whether their data leaves Forge.
+    requestedGranted: boolean("requested_granted").notNull(),
+    note: text("note"),
+    status: researchConsentRequestStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    decidedAt: timestamp("decided_at"),
+    decidedBy: integer("decided_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (table) => ({
+    athleteIdx: index("research_consent_requests_athlete_idx").on(table.athleteId),
+    statusIdx: index("research_consent_requests_status_idx").on(table.status, table.createdAt),
+  }),
+);
+export type ResearchConsentRequest = typeof researchConsentRequests.$inferSelect;
+
 export const mediaRemovalRequests = pgTable(
   "media_removal_requests",
   {

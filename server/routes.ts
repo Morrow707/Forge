@@ -4817,9 +4817,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!status) return res.status(404).json({ message: "Not found" });
     // A minor cannot consent for themselves, and cannot withdraw a
     // guardian's consent either -- the decision belongs to whoever made it.
+    // A minor still cannot set this themselves -- but they are no longer stuck. The ask goes to
+    // their guardian and the guardian's approval is what writes it (see
+    // storage.decideResearchConsentRequest), so a 16-year-old who wants back in has a route that
+    // does not depend on a coach happening to raise it.
     if (status.requiresGuardian) {
       return res.status(403).json({
-        message: "A parent or guardian makes this decision. Ask them to change it through your coach.",
+        message: "A parent or guardian signs this off. Send them a request and they can approve it.",
+        needsGuardianSignOff: true,
       });
     }
     const updated = await storage.setResearchDataConsent({
@@ -4831,6 +4836,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     res.json(updated);
   });
+
+  // A minor asking their guardian to change it. The ask only -- approving is the guardian's.
+  app.post("/api/athlete/research-consent/request", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z
+      .object({ granted: z.boolean(), note: z.string().trim().max(500).optional() })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "granted is required" });
+    const status = await storage.getResearchDataConsent(user.id);
+    if (!status) return res.status(404).json({ message: "Not found" });
+    if (!status.requiresGuardian) {
+      return res.status(400).json({ message: "You can change this yourself in Account settings." });
+    }
+    const result = await storage.requestResearchConsentChange({
+      athleteId: user.id,
+      granted: parsed.data.granted,
+      note: parsed.data.note ?? null,
+    });
+    if (!result.ok) return res.status(409).json({ message: result.message });
+    res.status(201).json(result.request);
+  });
+
+  app.get("/api/athlete/research-consent/request", requireRole("athlete"), async (req, res) => {
+    res.json(await storage.getPendingResearchConsentRequest(currentUser(req).id));
+  });
+
+  // The guardian's side of the same request: see what has been asked, and sign it off or not.
+  app.get("/api/guardian/research-consent-requests", requireGuardianAccess, async (req, res) => {
+    res.json(await storage.listPendingResearchConsentRequestsForGuardian(currentUser(req).id));
+  });
+
+  app.post(
+    "/api/guardian/research-consent-requests/:id",
+    requireGuardianAccess,
+    async (req, res) => {
+      const requestId = Number(req.params.id);
+      if (!Number.isInteger(requestId)) return res.status(400).json({ message: "Invalid request id" });
+      const parsed = z.object({ approve: z.boolean() }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "approve is required" });
+      const user = currentUser(req);
+      const result = await storage.decideResearchConsentRequest(user.id, {
+        requestId,
+        approve: parsed.data.approve,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") ?? undefined,
+      });
+      if (!result.ok) return res.status(404).json({ message: result.message });
+      res.json({ ok: true });
+    },
+  );
 
   // Coach relaying a guardian's answer, same pattern as the tracking opt-out
   // above. Roster-scoped, so a coach can only answer for their own athletes.

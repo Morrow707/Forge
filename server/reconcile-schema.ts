@@ -2555,6 +2555,30 @@ WHERE "reps_count" IS NULL
 // See mediaRemovalRequests' own comment in shared/schema.ts for why this is
 // a request queue rather than a delete the guardian performs.
 const SQL_PART_3 = `
+-- A minor asks for a research-consent change; their guardian signs off. See
+-- researchConsentRequests in shared/schema.ts for why the ask and the decision are split.
+DO $$ BEGIN
+  CREATE TYPE "research_consent_request_status" AS ENUM ('pending', 'approved', 'denied');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "research_consent_requests" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "requested_granted" boolean NOT NULL,
+  "note" text,
+  "status" "research_consent_request_status" NOT NULL DEFAULT 'pending',
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "decided_at" timestamp,
+  "decided_by" integer REFERENCES "users"("id") ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS "research_consent_requests_athlete_idx"
+  ON "research_consent_requests" ("athlete_id");
+CREATE INDEX IF NOT EXISTS "research_consent_requests_status_idx"
+  ON "research_consent_requests" ("status", "created_at");
+-- One pending ask at a time per athlete, while still allowing another after a decision.
+CREATE UNIQUE INDEX IF NOT EXISTS "research_consent_requests_pending_idx"
+  ON "research_consent_requests" ("athlete_id") WHERE "status" = 'pending';
+
 DO $$ BEGIN
   CREATE TYPE "media_removal_request_status" AS ENUM ('open', 'approved', 'denied');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;

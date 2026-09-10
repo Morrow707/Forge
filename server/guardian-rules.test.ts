@@ -121,16 +121,38 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     expect(section).not.toContain("updateProfileSchema");
   });
 
-  it("leaves exactly two guardian writes, both deliberate", () => {
-    // Camera tracking off, which is prospective and is the parental control
-    // the feature exists for, and asking for a removal, which somebody else
-    // answers. Anything else appearing here is a regression.
+  it("leaves exactly three guardian writes, all deliberate", () => {
+    // Camera tracking off, which is prospective and is the parental control the feature exists
+    // for; asking for a removal, which somebody else answers; and signing off a research-consent
+    // change the ATHLETE asked for.
+    //
+    // The third was added deliberately (Scott, 2026-09-10: if the athlete is underage they can
+    // opt back in, but only with a guardian sign-off) and it is worth being explicit about why it
+    // does not breach rule 3. Rule 3 is that a guardian cannot change or log information about
+    // their child -- their training, their numbers, their record. Research consent is not
+    // information about the child; it is a permission that is legally the guardian's to give in
+    // the first place, and the app already recorded it, just laundered through a coach relaying
+    // what a guardian said. A guardian answering directly is the same decision with one fewer
+    // person in the middle.
+    //
+    // The shape still respects the rule: the guardian cannot ORIGINATE it. There is no route for
+    // a guardian to set consent -- only to approve or decline something the athlete asked for.
+    // Anything else appearing here is a regression.
     const guardianWrites = [...routes.matchAll(/app\.(post|patch|put|delete)\(\s*\n?\s*"\/api\/guardian\/[^"]*"/g)];
     const paths = guardianWrites.map((m) => m[0].split('"')[1]);
     expect(paths.sort()).toEqual([
       "/api/guardian/athletes/:athleteId/removal-requests",
       "/api/guardian/athletes/:athleteId/tracking-opt-out",
+      "/api/guardian/research-consent-requests/:id",
     ]);
+  });
+
+  it("gives a guardian no way to originate a consent change", () => {
+    // The ask is the athlete's and only the athlete's. A guardian route that SET consent, rather
+    // than answering a request for it, would be the rule-3 breach this one is careful not to be.
+    const section = routes.slice(routes.indexOf("// ---------------- Guardian"));
+    expect(section).not.toContain('app.put("/api/guardian/athletes/:athleteId/research-consent"');
+    expect(routes).toContain('"/api/athlete/research-consent/request"');
   });
 });
 
