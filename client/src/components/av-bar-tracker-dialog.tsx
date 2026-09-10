@@ -830,7 +830,16 @@ export function AvBarTrackerDialog({
           ]
         : []),
     ];
-    const calibrationDiagnostics = {
+    const calibrationDiagnostics: {
+      scaleSource: typeof scaleSource;
+      scaleCandidates: typeof scaleCandidates;
+      scaleOutliers: { source: string; ratioToChosen: number }[];
+      scaleCorroborated: boolean;
+      axisSource?: "grip" | "trace_covariance";
+      gripPairsUsed?: number;
+      traceTravelAlongPx?: number;
+      traceTravelAcrossPx?: number;
+    } = {
       scaleSource,
       scaleCandidates,
       scaleOutliers: scaleVerdict.outliers.map((o) => ({
@@ -1098,6 +1107,31 @@ export function AvBarTrackerDialog({
       return;
     }
 
+    // Measured, then reported. The axis decides which direction counts as "up" for this lift,
+    // and the travel is how far the tracked point actually went along it -- in raw pixels,
+    // before scale. Together they are the other half of every range-of-motion number this
+    // pipeline produces, and neither was visible until now.
+    const movementAxis = movementAxisFromGrip(gripPairs);
+    if (trace.length > 0) {
+      const ax = movementAxis ?? { x: 0, y: 1 };
+      let minAlong = Infinity;
+      let maxAlong = -Infinity;
+      let minAcross = Infinity;
+      let maxAcross = -Infinity;
+      for (const p of trace) {
+        const along = p.x * ax.x + p.y * ax.y;
+        const across = -p.x * ax.y + p.y * ax.x;
+        if (along < minAlong) minAlong = along;
+        if (along > maxAlong) maxAlong = along;
+        if (across < minAcross) minAcross = across;
+        if (across > maxAcross) maxAcross = across;
+      }
+      calibrationDiagnostics.axisSource = movementAxis ? "grip" : "trace_covariance";
+      calibrationDiagnostics.gripPairsUsed = gripPairs.length;
+      calibrationDiagnostics.traceTravelAlongPx = maxAlong - minAlong;
+      calibrationDiagnostics.traceTravelAcrossPx = maxAcross - minAcross;
+    }
+
     const metrics = summarizeTrackedSet(
       trace,
       loadKg,
@@ -1118,7 +1152,7 @@ export function AvBarTrackerDialog({
       // And the direction of the lift comes from the bar, measured, rather than from the trace,
       // inferred. Null on a one-handed movement or a take where the pair never held, which puts
       // it back on the trace's own principal component.
-      movementAxisFromGrip(gripPairs),
+      movementAxis,
     );
     if (!metrics) {
       const message = "Couldn't get a clean read -- make sure the bar stays in frame throughout the set.";

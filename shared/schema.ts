@@ -7403,6 +7403,10 @@ export const trackingDiagnosticsSchema = z.object({
         .max(8)
         .optional(),
       scaleCorroborated: z.boolean().optional(),
+      axisSource: z.enum(["grip", "trace_covariance"]).optional().nullable(),
+      gripPairsUsed: z.number().optional().nullable(),
+      traceTravelAlongPx: z.number().optional().nullable(),
+      traceTravelAcrossPx: z.number().optional().nullable(),
       noseToAnkleFrames: z.number(),
       shoulderToAnkleFrames: z.number(),
       supineFullLengthFrames: z.number().optional(),

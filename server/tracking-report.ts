@@ -82,6 +82,10 @@ type TrackingDiagnostics = {
     }[];
     scaleOutliers?: { source: string; ratioToChosen: number }[];
     scaleCorroborated?: boolean;
+    axisSource?: string | null;
+    gripPairsUsed?: number | null;
+    traceTravelAlongPx?: number | null;
+    traceTravelAcrossPx?: number | null;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
@@ -451,11 +455,14 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
         label: "Scale sources",
         value: c.scaleCandidates
           .map((candidate) => {
+            // Pixels for every source. The shoulder read used to be labelled "units", which
+            // read as a different coordinate space and invited exactly the wrong conclusion
+            // when two sources disagreed -- the body landmarks are scaled by frame width and
+            // height on the way in (see visionJointsToWorldLandmarks), so a shoulder span and
+            // a plate diameter are directly comparable pixel measurements of the same frame.
             const measured =
               candidate.measured != null
-                ? ` from ${Math.round(candidate.measured * 100) / 100}${
-                    candidate.source === "plate" ? "px" : " units"
-                  }`
+                ? ` from ${Math.round(candidate.measured * 100) / 100}px`
                 : "";
             const samples = candidate.samples != null ? ` over ${candidate.samples} frames` : "";
             return `${candidate.source}: ${candidate.scale.toPrecision(3)} m/unit${measured}${samples}`;
@@ -475,6 +482,34 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
                     .join(", ")}`
                 : "")
             : `only one source could measure anything, so nothing corroborated it`,
+      });
+    }
+
+    // THE OTHER HALF OF EVERY RANGE-OF-MOTION NUMBER.
+    //
+    // Range of motion is the scale multiplied by how far the tracked point travelled along the
+    // movement axis. Every line above describes the scale. None described the travel, so a
+    // short reading has been indistinguishable from a scale error for four takes running, and
+    // each diagnosis assumed the scale because that was the only half on the page.
+    //
+    // Read it against the plate diameter on the line above, which is a known 45cm in the same
+    // pixels: a bench press travels roughly three quarters of a plate. A trace that moved a
+    // sixth of one did not follow the bar through a rep, whatever the scale says.
+    if (c.traceTravelAlongPx != null) {
+      const across =
+        c.traceTravelAcrossPx != null ? `, ${Math.round(c.traceTravelAcrossPx)}px across` : "";
+      lines.push({
+        label: "Trace travel",
+        value: `${Math.round(c.traceTravelAlongPx)}px along the movement axis${across}`,
+      });
+      lines.push({
+        label: "Movement axis",
+        value:
+          c.axisSource === "grip"
+            ? `measured from the bar itself, across ${c.gripPairsUsed ?? 0} grip pairs`
+            : `fell back to the trace's own principal component -- the grip pair never held ` +
+              `(${c.gripPairsUsed ?? 0} pairs), so the direction of the lift is inferred from ` +
+              `the motion rather than measured from the bar`,
       });
     }
   }

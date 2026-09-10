@@ -120,6 +120,22 @@ export type TrackingDiagnostics = {
     // True only when two independent sources agreed. A lone source can be right, but nothing
     // corroborated it, and the difference matters when a number looks wrong later.
     scaleCorroborated?: boolean;
+    // WHICH DIRECTION THE LIFT WAS MEASURED ALONG, AND HOW FAR THE TRACE ACTUALLY MOVED.
+    //
+    // A scale can be perfect and the take still come back with a range of motion several times
+    // too short, because range of motion is the scale MULTIPLIED BY the distance the tracked
+    // point travelled along the movement axis. Only the scale half was ever reported, so a
+    // short reading could not be told apart from a scale error -- and every round of diagnosis
+    // so far has assumed the scale.
+    //
+    // These are the other half, in raw pixels before any scale touches them. A trace that
+    // travelled 80px when the plate beside it measures 510px did not move the length of a bench
+    // press, whatever the scale says; a trace that travelled 420px did, and the scale is the
+    // problem. One number separates the two, and it was never on the page.
+    axisSource?: "grip" | "trace_covariance";
+    gripPairsUsed?: number;
+    traceTravelAlongPx?: number;
+    traceTravelAcrossPx?: number;
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
