@@ -460,10 +460,36 @@ export function AvJumpTrackerDialog({
     // comparable against the ankle trace. frameWidth/frameHeight are constant for one
     // recording (see native-av-preview.ts's PoseFrame comment), so any tracked frame's own
     // frameHeight is as good as any other's.
+    // THE HEIGHT THE ATHLETE TYPED BEATS THE RECTANGLE THE DETECTOR FOUND.
+    //
+    // "Came up 108cm short of the box" on a set of clean jumps onto a two-foot box, and the
+    // diagnostics say why: the detected top surface sat 455px above the floor, which at the
+    // body's own scale is 1.67 metres. Whatever passed the aspect-ratio filter, it was not a
+    // 24-inch box, and every clearance measured against it was measured against furniture.
+    //
+    // The athlete typed 24 into the set. That number is not an estimate and does not depend on a
+    // detector, so clearance is measured from the floor plus that height whenever it is
+    // available. The detected surface stays as the fallback for a box jump logged without one.
+    const floorWorldY = ((): number | null => {
+      const ys: number[] = [];
+      for (const f of frames) {
+        const l = f.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+        const r = f.worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+        if (visible(l) && visible(r)) ys.push((l.y + r.y) / 2);
+      }
+      if (ys.length < 10) return null;
+      ys.sort((a, b) => a - b);
+      return ys[Math.min(ys.length - 1, Math.floor(ys.length * 0.9))];
+    })();
     const boxTopWorldY =
-      recordingStats.boxTopNormalizedY != null && nativeRawFrames[0]
-        ? visionBoxTopToWorldY(recordingStats.boxTopNormalizedY, nativeRawFrames[0].frameHeight) * scaleFactor
-        : null;
+      boxHeightIn && boxHeightIn > 0 && floorWorldY != null
+        ? // Up is the negative direction in this trace, so a surface above the floor is the
+          // floor's y MINUS the box's height.
+          floorWorldY - boxHeightIn * 0.0254
+        : recordingStats.boxTopNormalizedY != null && nativeRawFrames[0]
+          ? visionBoxTopToWorldY(recordingStats.boxTopNormalizedY, nativeRawFrames[0].frameHeight) *
+            scaleFactor
+          : null;
     const metrics = summarizeJumpSet(trace, heightIn, jumpHeightOutlierPercent ?? undefined, boxTopWorldY);
     if (!metrics) {
       const diagnostics = buildTrackingDiagnostics({

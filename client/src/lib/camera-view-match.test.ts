@@ -38,8 +38,15 @@ describe("assessSubjectFacing", () => {
 describe("cameraViewMismatch", () => {
   // The case that matters: filming a squat from the front does not make bar drift noisy, it
   // makes it invisible, because the drift points straight at the lens.
-  it("flags a side-view lift filmed from the front", () => {
-    expect(cameraViewMismatch("facing_camera", "side")).toContain("side view");
+  it("names the one axis a head-on or rear view loses, and does not condemn the take", () => {
+    // Scott films his squats from behind, with the bar and both wrists in clear view. This used
+    // to tell him the lift "needs a side view" and that the drift "can't be measured at all",
+    // which is wrong twice: only forward-and-back drift points at the lens, and everything
+    // vertical is measured exactly as well from there.
+    const message = cameraViewMismatch("facing_camera", "side")!;
+    expect(message).toContain("forward-and-back");
+    expect(message).not.toContain("needs a side view");
+    expect(message).not.toContain("can't be measured at all");
   });
 
   it("flags a front-view lift filmed from the side", () => {

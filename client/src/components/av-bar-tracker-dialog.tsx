@@ -1269,16 +1269,14 @@ export function AvBarTrackerDialog({
       return;
     }
 
-    // Filmed from the wrong side. Not a degradation: the fault that matters most on a bar-path
-    // lift is forward-and-back drift, and from the front that drift points straight at the lens
-    // where a single camera cannot resolve it at all. Surfaced as a warning on the take rather
-    // than a refusal, since everything vertical -- rep count, timing, range of motion -- is still
-    // measured correctly from there.
+    // What this framing costs, stated as a fact about one axis rather than as a verdict on the
+    // take -- see cameraViewMismatch, which no longer claims a head-on or rear view cannot be
+    // measured. Informational, not a warning: nothing here says the numbers shown are wrong.
     const viewProblem = cameraViewMismatch(
       subjectFacing ?? "unknown",
       expectedCameraView(exerciseName),
     );
-    if (viewProblem) toast.warning(viewProblem, { duration: 8000 });
+    if (viewProblem) toast.info(viewProblem, { duration: 8000 });
 
     // On an Olympic lift the bar deliberately does not travel a straight vertical line -- it
     // loops back around the knees and in under the athlete. Bar-path deviation measures distance

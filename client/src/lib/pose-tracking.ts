@@ -1791,7 +1791,19 @@ export function cameraViewMismatch(
   if (!expected || expected === "either") return null;
   if (facing === "unknown" || facing === "oblique") return null;
   if (expected === "side" && facing === "facing_camera") {
-    return "This lift needs a side view. Filmed from the front, the bar's forward-and-back drift points straight at the lens, so it can't be measured at all.";
+    // FROM BEHIND IS A REAL ANGLE, NOT A MISTAKE.
+    //
+    // Scott films his squats from behind: the bar is in clear view, so are both wrists and the
+    // torso. This told him the lift "needs a side view" and that the drift "can't be measured at
+    // all", which is wrong twice. Only FORWARD-AND-BACK drift points at the lens. Everything
+    // vertical -- range of motion, rep timing, velocity, power -- is measured exactly as well
+    // from here, and side-to-side drift and bar tilt are measured BETTER from here than from the
+    // side, where one plate hides the other.
+    //
+    // The two shoulders spread wide whether the athlete is facing the camera or has their back
+    // to it, so this cannot tell those apart and does not pretend to. What it can say is what
+    // this framing costs, which is one axis, and it says that instead of condemning the take.
+    return "Filmed head-on or from behind. Everything vertical is measured normally, and side-to-side bar drift and tilt are measured well from here -- only forward-and-back drift points at the lens, so that one axis is not reported.";
   }
   if (expected === "front" && facing === "side_on") {
     return "This lift needs a front or back view. From the side, one arm or leg hides the other.";
