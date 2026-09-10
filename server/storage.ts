@@ -1757,7 +1757,32 @@ const PLATFORM_TRENDS_MIN_COHORT = 5;
 // compliance report (which exists precisely to count how many athletes are
 // opted out); and the video retention sweeps (their videos still need
 // purging on schedule -- more so, not less).
-const platformDatasetAthlete = () => and(eq(users.role, "athlete"), eq(users.trackingOptOut, false));
+/**
+ * ONE CONSENT RULE, EVERYWHERE ATHLETE DATA IS AGGREGATED.
+ *
+ * Scott, 2026-09-10: everyone has to opt in to data collection regardless of age -- opt out and
+ * no data is collected, opt in and it is. The same rule, both surfaces.
+ *
+ * This predicate used to require only that the athlete had not opted OUT of tracking, so every
+ * athlete on the platform appeared in the admin's aggregates by default and consent applied only
+ * to what left the building. The reasoning was that wanting a coach to analyse your squat is not
+ * agreeing to be in someone's study, and that distinction is real -- but it put the burden the
+ * wrong way round on the surface with more athletes in it, and it made "did this person agree to
+ * be counted" have two different answers depending on which admin page you were on.
+ *
+ * Both flags are now required in both places, so the predicate below and researchDatasetAthlete
+ * express the same rule. trackingOptOut still governs collection for the athlete's OWN coaching,
+ * which is a third and genuinely different question, and is why it stays a separate column.
+ *
+ * This changes the numbers. An athlete who never answered is not counted, which is what opt-in
+ * means.
+ */
+const platformDatasetAthlete = () =>
+  and(
+    eq(users.role, "athlete"),
+    eq(users.trackingOptOut, false),
+    eq(users.researchDataConsent, true),
+  );
 
 function average(values: (number | null | undefined)[]): number | null {
   const nums = values.filter((v): v is number => v != null && !Number.isNaN(v));
@@ -2154,14 +2179,12 @@ async function summarizeInjuriesForCohort(
 }
 
 /**
- * The population a dataset extract may be built from: opted-in athletes
- * only, and opt-IN rather than opt-out.
+ * The population a dataset extract may be built from.
  *
- * Deliberately separate from platformDatasetAthlete(), which governs what
- * an admin may see inside Forge. Those are different questions -- wanting
- * a coach to analyse your squat is not agreeing to be in someone's study --
- * and collapsing them into one flag would answer the second question with
- * the first one's answer.
+ * Identical to platformDatasetAthlete() since the consent rule was unified -- see its comment.
+ * Kept as its own name rather than collapsed into one, because the two are read by code with
+ * very different consequences (a chart inside Forge, and a document that leaves it), and a
+ * future change to one of them should have to be written deliberately rather than inherited.
  */
 const researchDatasetAthlete = () =>
   and(

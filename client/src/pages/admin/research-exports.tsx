@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +24,12 @@ type ExportLogRow = {
   createdAt: string;
 };
 
-export default function AdminResearchExports() {
+/** The extract half of Cohort Explorer. Rendered as a section of that page rather than as its
+ * own screen: Scott, on the two pages -- they have slight differences, but they do the same
+ * thing. Kept as its own component and its own file because the code underneath genuinely is
+ * separate (the mirror, the higher suppression floor, the PDF), and folding the markup into the
+ * trends page would have hidden that rather than simplified it. */
+export function ResearchExportsContent() {
   const qc = useQueryClient();
   const [cohortText, setCohortText] = useState("");
   const [recipient, setRecipient] = useState("");
@@ -93,7 +97,6 @@ export default function AdminResearchExports() {
   const total = consent?.totalAthletes ?? 0;
 
   return (
-    <AppShell title="Dataset Extracts">
       <div className="space-y-4">
         <Card className={cn(consented < 10 && "border-amber-500/50")}>
           <CardHeader>
@@ -198,6 +201,5 @@ export default function AdminResearchExports() {
           </CardContent>
         </Card>
       </div>
-    </AppShell>
   );
 }

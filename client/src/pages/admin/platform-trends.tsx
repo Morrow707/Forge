@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
+import { ResearchExportsContent } from "./research-exports";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -556,6 +557,12 @@ export default function AdminPlatformTrends() {
             </Card>
           </>
         )}
+
+        {/* The extract half. Same page as the cuts it is built from, because they are the same
+            question asked twice -- once for a number on this screen, once for a document that
+            leaves the building. The floors and the population still differ underneath, and the
+            section says so. */}
+        <ResearchExportsContent />
       </div>
     </AppShell>
   );

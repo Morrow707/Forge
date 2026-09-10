@@ -104,7 +104,6 @@ const AdminDocuments = lazy(withLoadTimeout(() => import("@/pages/admin/document
 const AdminMyCalendar = lazy(withLoadTimeout(() => import("@/pages/admin/my-calendar")));
 const AdminMyWorkout = lazy(withLoadTimeout(() => import("@/pages/admin/my-workout")));
 const AdminPlatformTrends = lazy(withLoadTimeout(() => import("@/pages/admin/platform-trends")));
-const AdminResearchExports = lazy(withLoadTimeout(() => import("@/pages/admin/research-exports")));
 const AdminKnowledgeBase = lazy(withLoadTimeout(() => import("@/pages/admin/knowledge-base")));
 const AdminAiSpend = lazy(withLoadTimeout(() => import("@/pages/admin/ai-spend")));
 const AdminBilling = lazy(withLoadTimeout(() => import("@/pages/admin/billing")));
@@ -500,8 +499,10 @@ function Router() {
         <Route path="/admin/ai-spend">
           <ProtectedRoute role="admin" component={AdminAiSpend} />
         </Route>
+        {/* Dataset Extracts is a section of Cohort Explorer now, not its own screen -- an old
+            link lands on the page that contains it. */}
         <Route path="/admin/research-exports">
-          <ProtectedRoute role="admin" component={AdminResearchExports} />
+          <Redirect to="/admin/platform-trends" />
         </Route>
         <Route path="/admin/platform-trends">
           <ProtectedRoute role="admin" component={AdminPlatformTrends} />

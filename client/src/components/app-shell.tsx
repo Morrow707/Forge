@@ -23,7 +23,6 @@ import {
   UserPlus,
   Apple,
   BarChart3,
-  FileDown,
   ChevronDown,
   Palette,
   SlidersHorizontal,
@@ -183,7 +182,10 @@ const adminNav: NavItem[] = [
   // very same KnowledgeBaseContent component, so this was a second door onto one room. The
   // route still resolves, so an existing link or bookmark keeps working.
   { href: "/admin/ai-spend", label: "AI Spend", icon: DollarSign, overflow: true },
-  { href: "/admin/research-exports", label: "Dataset Extracts", icon: FileDown, overflow: true },
+  // No Dataset Extracts entry: it is a section of Cohort Explorer now. The two answered the
+  // same question -- who is on the platform and what do their numbers look like -- once for a
+  // chart and once for a document, and having them as separate destinations made that look like
+  // two different capabilities.
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
   { href: "/admin/documents", label: "Legal & Compliance", icon: ShieldCheck, overflow: true },
