@@ -35,6 +35,88 @@ export const UPLOADS_ROOT = process.env.STORAGE_PATH || path.join(process.cwd(),
 // warnIfUploadsAreEphemeral, called at startup.
 export const UPLOADS_ROOT_IS_FALLBACK = !process.env.STORAGE_PATH;
 
+/**
+ * IS THE DISK ACTUALLY WORKING, ANSWERED RATHER THAN ASSUMED.
+ *
+ * "The videos still aren't saving" has been diagnosed three times now from the outside -- a
+ * missing env var once, a suspected wrong mount another time -- and each round guessed at a
+ * fact the server could simply have reported. This reports it: where uploads are being written,
+ * whether that is the persistent disk or the ephemeral fallback, whether the directory can
+ * actually be written to right now, and how much is in it.
+ *
+ * The write test is a real write. A directory that exists and is readable can still be
+ * read-only, or full, and both of those look identical to a passing existence check right up
+ * until an athlete's video disappears.
+ */
+export async function inspectUploadsStorage(): Promise<{
+  uploadsRoot: string;
+  usingPersistentDisk: boolean;
+  directoryExists: boolean;
+  writable: boolean;
+  writeError: string | null;
+  fileCount: number;
+  totalBytes: number;
+  newestFileAt: string | null;
+}> {
+  const result = {
+    uploadsRoot: UPLOADS_ROOT,
+    usingPersistentDisk: !UPLOADS_ROOT_IS_FALLBACK,
+    directoryExists: false,
+    writable: false,
+    writeError: null as string | null,
+    fileCount: 0,
+    totalBytes: 0,
+    newestFileAt: null as string | null,
+  };
+
+  try {
+    await fs.mkdir(UPLOADS_ROOT, { recursive: true });
+    result.directoryExists = true;
+  } catch (err) {
+    result.writeError = err instanceof Error ? err.message : String(err);
+    return result;
+  }
+
+  const probe = path.join(UPLOADS_ROOT, `.forge-write-probe-${Date.now()}`);
+  try {
+    await fs.writeFile(probe, "probe");
+    await fs.unlink(probe);
+    result.writable = true;
+  } catch (err) {
+    result.writeError = err instanceof Error ? err.message : String(err);
+  }
+
+  // Walked rather than listed: uploads live in per-kind subdirectories, and a count of the top
+  // level would report zero on a disk holding a thousand videos.
+  const walk = async (dir: string): Promise<void> => {
+    let entries: { name: string; isDirectory(): boolean }[] = [];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+        continue;
+      }
+      try {
+        const stat = await fs.stat(full);
+        result.fileCount++;
+        result.totalBytes += stat.size;
+        const at = stat.mtime.toISOString();
+        if (!result.newestFileAt || at > result.newestFileAt) result.newestFileAt = at;
+      } catch {
+        // A file that vanished between readdir and stat is not worth failing the whole report.
+      }
+    }
+  };
+  await walk(UPLOADS_ROOT);
+
+  return result;
+}
+
 export function warnIfUploadsAreEphemeral(): void {
   if (!UPLOADS_ROOT_IS_FALLBACK) {
     console.log(`Uploads root: ${UPLOADS_ROOT} (STORAGE_PATH)`);

@@ -32,6 +32,7 @@ import {
   getUploadsDiskUsage,
   statUploadedFile,
   UPLOADS_ROOT,
+  inspectUploadsStorage,
 } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
@@ -1094,6 +1095,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // bracketed-paste escape sequences on a phone browser). Admin-only,
   // read-only, one file per request. Safe to remove once this investigation
   // is closed out -- it's diagnostic scaffolding, not a feature.
+  // Where uploads actually go, and whether that place actually works right now. Answers the
+  // "videos still aren't saving" question with facts instead of another round of guessing --
+  // see inspectUploadsStorage.
+  app.get("/api/admin/storage-status", requireRole("admin"), async (_req, res) => {
+    res.json(await inspectUploadsStorage());
+  });
+
   app.get("/api/admin/storage-check", requireRole("admin"), async (req, res) => {
     const raw = typeof req.query.path === "string" ? req.query.path : null;
     if (!raw) {
