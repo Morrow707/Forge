@@ -19168,7 +19168,20 @@ ${catalog}`;
     // exact bug that let every removed video keep eating disk space.
     // Captured before the delete so it can be diffed against whatever the
     // client still sent back once the new rows are in.
-    let priorVideoUrls = new Set<string>();
+    // Only ever the videos this save SUPERSEDED: a set the client explicitly cleared with
+    // removeFormCheckVideo, or one whose url this save replaced with a different url (a retake).
+    //
+    // It used to be every video the log held before the save, diffed against what got written.
+    // That made "the client did not mention this set" indistinguishable from "delete it", and
+    // the client omits sets all the time -- a debounced autosave fires mid-workout from state
+    // built before the last clip attached, and the payload for one exercise carries no rows for
+    // the others. Each of those saves unlinked footage nothing had asked to remove. A ledger
+    // walk found 56 of 58 recorded uploads gone from a healthy disk, losses interleaved with
+    // successful writes minutes apart, which is exactly the shape of this bug.
+    //
+    // Omission now means "leave it alone" on disk, the same as it already meant in the database
+    // (see priorVideoByKey and priorCaptureByKey). Deleting a file takes a deliberate act.
+    const supersededVideoUrls = new Set<string>();
 
     // What the save actually WROTE, which is not the same as what the client sent -- a url the
     // client omitted is preserved above. The orphan sweep at the bottom diffs against this, so
@@ -19228,7 +19241,6 @@ ${catalog}`;
                 url: s.formCheckVideoUrl,
                 uploadedAt: s.videoUploadedAt ?? null,
               });
-              priorVideoUrls.add(s.formCheckVideoUrl);
             }
             // Same snapshot, same key, for the frame-by-frame capture columns -- see
             // priorCaptureByKey's own comment on why a client is now allowed to omit them.
@@ -19436,6 +19448,10 @@ ${catalog}`;
                 : (s.formCheckVideoUrl ?? prior?.url ?? null);
               const isSameVideo = Boolean(effectiveVideoUrl) && prior?.url === effectiveVideoUrl;
               if (effectiveVideoUrl) retainedVideoUrls.add(effectiveVideoUrl);
+              // A file is only orphaned if this set HAD one and this save put something else
+              // (or nothing) in its place. Reaching this line at all means the client sent this
+              // exact set, so the intent is real rather than inferred from silence.
+              if (prior?.url && prior.url !== effectiveVideoUrl) supersededVideoUrls.add(prior.url);
               const weightNum = s.weight ? parseFloat(s.weight) : NaN;
               const priorBest = priorBestByKey.get(`${entryWeightUnit}-${s.reps ?? ""}`);
               // Both sides in pounds -- the stored bests are, and this set
@@ -19542,16 +19558,12 @@ ${catalog}`;
       return log;
     });
 
-    // Outside the transaction (a filesystem delete isn't transactional, and
-    // shouldn't be able to roll back a successful DB commit) -- any prior
-    // video URL that isn't still referenced by what was just saved is
-    // orphaned: removed, retaken, or its whole set deleted. See
-    // priorVideoUrls' own comment above.
-    // Diffed against what was written, not against the raw request. Built from the request, this
-    // deleted every video the client had merely not mentioned -- including ones this very save
-    // had just preserved in the database, leaving a row pointing at a file that no longer
-    // existed. That is the "File not found" a coach hits on a set that looks fine in the list.
-    for (const url of priorVideoUrls) {
+    // Outside the transaction (a filesystem delete isn't transactional, and shouldn't be able to
+    // roll back a successful DB commit). Two conditions, both required: this save superseded the
+    // url on the set that held it, AND nothing this save wrote still points at it. The second
+    // guard matters because the same clip can legitimately move between sets within one payload.
+    // See supersededVideoUrls' own comment for why absence from the payload is not a third.
+    for (const url of supersededVideoUrls) {
       if (!retainedVideoUrls.has(url)) await deleteUploadedFile(url);
     }
 
