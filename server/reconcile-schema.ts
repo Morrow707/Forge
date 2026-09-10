@@ -2886,6 +2886,12 @@ ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "progress_total" intege
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_from_page" integer;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_to_page" integer;
 
+-- An admin clears a problem report by hand; nothing ages one out. Kept, not deleted, so a
+-- cleared report is still findable.
+ALTER TABLE "problem_reports" ADD COLUMN IF NOT EXISTS "resolved_at" timestamp;
+ALTER TABLE "problem_reports" ADD COLUMN IF NOT EXISTS "resolved_by" integer REFERENCES "users"("id") ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS "problem_reports_resolved_idx" ON "problem_reports" ("resolved_at");
+
 -- Per-passage subject tags. Retrieval falls back to the source's domains
 -- where this is empty, so passages ingested before it existed keep working.
 ALTER TABLE "knowledge_passages" ADD COLUMN IF NOT EXISTS "topics" text[] NOT NULL DEFAULT '{}';

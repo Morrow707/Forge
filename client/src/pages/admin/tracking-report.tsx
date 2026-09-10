@@ -97,7 +97,7 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
         {entry.dataPoints.length === 0 ? (
           <p className="text-xs italic text-muted-foreground">No data points recorded for this set.</p>
         ) : (
-          <dl className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+          <dl className="grid grid-cols-2 gap-x-4">
             {entry.dataPoints.map((f) => (
               <div
                 key={f.label}
@@ -237,7 +237,7 @@ export default function AdminTrackingReport() {
 
   return (
     <AppShell title="AR Diagnosis">
-      <div className="mx-auto max-w-6xl space-y-4 p-4">
+      <div className="mx-auto max-w-[1800px] space-y-4 p-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -383,8 +383,11 @@ export default function AdminTrackingReport() {
           </p>
         )}
 
+        {/* A laptop was showing three narrow columns inside a 6xl container with most of the
+            screen empty either side, while each card wrapped its own two-column data grid onto
+            four lines. Wider container, more columns as the screen allows. */}
         {filteredEntries.length > 0 && (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {filteredEntries.map((entry, i) => (
               <EntryCard key={i} entry={entry} />
             ))}

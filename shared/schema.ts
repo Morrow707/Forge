@@ -5425,9 +5425,18 @@ export const problemReports = pgTable(
     // client's own route (e.g. "/coach/roster/42"), just a debugging aid.
     path: text("path"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // A REPORT LEAVES THE INBOX WHEN AN ADMIN SAYS SO, NOT WHEN IT GETS OLD.
+    //
+    // There was no way to mark one dealt with, so the inbox was a list that only ever grew and
+    // gave no signal about which entries had been read. An admin clears each one deliberately;
+    // nothing ages out on its own, and the row is kept rather than deleted so a cleared report
+    // can still be found.
+    resolvedAt: timestamp("resolved_at"),
+    resolvedBy: integer("resolved_by").references(() => users.id, { onDelete: "set null" }),
   },
   (table) => ({
     createdIdx: index("problem_reports_created_idx").on(table.createdAt),
+    resolvedIdx: index("problem_reports_resolved_idx").on(table.resolvedAt),
   }),
 );
 export type ProblemReport = typeof problemReports.$inferSelect;

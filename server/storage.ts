@@ -20810,8 +20810,14 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return row;
   },
 
-  async listProblemReports(limit = 100): Promise<(ProblemReport & { userName: string | null })[]> {
-    return db
+  // Open reports only by default. Nothing ages out -- an admin clears each one by hand (see
+  // resolveProblemReport), and includeResolved is how the cleared ones are read back, since
+  // they are kept rather than deleted.
+  async listProblemReports(
+    limit = 100,
+    includeResolved = false,
+  ): Promise<(ProblemReport & { userName: string | null })[]> {
+    const query = db
       .select({
         id: problemReports.id,
         userId: problemReports.userId,
@@ -20819,12 +20825,26 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         imageUrl: problemReports.imageUrl,
         path: problemReports.path,
         createdAt: problemReports.createdAt,
+        resolvedAt: problemReports.resolvedAt,
+        resolvedBy: problemReports.resolvedBy,
         userName: users.name,
       })
       .from(problemReports)
-      .leftJoin(users, eq(problemReports.userId, users.id))
+      .leftJoin(users, eq(problemReports.userId, users.id));
+    return (includeResolved ? query : query.where(isNull(problemReports.resolvedAt)))
       .orderBy(desc(problemReports.createdAt))
       .limit(limit);
+  },
+
+  /** Clears one report out of the admin inbox. Stamped with who cleared it and when, and the
+   * row stays -- clearing is "I have dealt with this," not "erase what they told us." */
+  async resolveProblemReport(reportId: number, adminId: number): Promise<boolean> {
+    const [row] = await db
+      .update(problemReports)
+      .set({ resolvedAt: new Date(), resolvedBy: adminId })
+      .where(and(eq(problemReports.id, reportId), isNull(problemReports.resolvedAt)))
+      .returning({ id: problemReports.id });
+    return !!row;
   },
 
   // Ownership check mirrors the read above -- a coach can only annotate a

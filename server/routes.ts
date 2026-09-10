@@ -6139,9 +6139,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.get("/api/admin/problem-reports", requireRole("admin"), async (_req, res) => {
-    const reports = await storage.listProblemReports();
+  app.get("/api/admin/problem-reports", requireRole("admin"), async (req, res) => {
+    const reports = await storage.listProblemReports(100, req.query.includeResolved === "1");
     res.json(reports);
+  });
+
+  // Clearing is deliberate and per-report -- nothing ages a report out of the inbox on its own.
+  app.post("/api/admin/problem-reports/:id/resolve", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid report id" });
+    const ok = await storage.resolveProblemReport(id, currentUser(req).id);
+    if (!ok) return res.status(404).json({ message: "Report not found, or already cleared" });
+    res.json({ ok: true });
   });
 
   // Escape hatch for a coach/admin locked out by MFA (lost their

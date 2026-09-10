@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getJson } from "@/lib/queryClient";
@@ -98,9 +99,13 @@ export default function AdminCoachExercisesPage() {
   const counts = data?.counts;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-4">
+    // Inside the app shell like every other admin page. This one rendered a bare div, so it had
+    // no navigation at all -- the only way off it was the one link in its own toolbar, which
+    // landed somewhere that DID have a nav bar and so read as being thrown back out to the rest
+    // of the site.
+    <AppShell title="Coach builds">
+      <div className="mx-auto max-w-5xl space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">Coach-created exercises</h1>
         <p className="text-sm text-muted-foreground">
           Everything coaches have built outside the Forge library, with anything that looks like a
           duplicate flagged. Read-only.
@@ -194,6 +199,7 @@ export default function AdminCoachExercisesPage() {
           </Card>
         ))}
       </div>
-    </div>
+      </div>
+    </AppShell>
   );
 }
