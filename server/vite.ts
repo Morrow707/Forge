@@ -91,7 +91,26 @@ export function serveStatic(app: Express) {
 
   app.use(staticLimiter);
   app.use(express.static(distPath));
-  app.use("*", (_req, res) => {
+  // A MISSING BUILD ASSET IS A 404, NOT THE APP'S HTML.
+  //
+  // Everything unmatched fell through to index.html, including a request for a hashed asset
+  // that no longer exists -- which is exactly what a browser does for the seconds and minutes
+  // after a deploy, with a tab still open on the previous build asking for chunks that were
+  // just replaced. Handing back index.html with a 200 and text/html means the browser's
+  // dynamic import() gets a document where a module should be, and the failure surfaces as
+  // something incomprehensible ("Cannot read properties of undefined (reading 'default')")
+  // rather than as what it is.
+  //
+  // A real 404 makes it legible, and it is also what the client's own recovery is waiting
+  // for: main.tsx's vite:preloadError listener and lazy-load-recovery.ts turn a failed chunk
+  // fetch into one reload onto the current build. A 200 never reaches either of them.
+  //
+  // Anything with a file extension is an asset request; a client route (/admin/exercises) has
+  // none and still gets the app.
+  app.use("*", (req, res) => {
+    if (/\.[a-zA-Z0-9]+$/.test(req.path)) {
+      return res.status(404).type("text/plain").send("Not found");
+    }
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

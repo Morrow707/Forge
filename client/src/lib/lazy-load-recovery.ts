@@ -31,6 +31,21 @@ export function withLoadTimeout<T>(loader: () => Promise<T>, timeoutMs = 15000):
       loader().then(
         (mod) => {
           clearTimeout(timer);
+          // A RESOLVED IMPORT WITH NOTHING IN IT IS A STALE CHUNK, NOT A PAGE.
+          //
+          // React.lazy reads .default off whatever this resolves to, so a module that comes
+          // back undefined or empty surfaces as "Cannot read properties of undefined (reading
+          // 'default')" from inside React, with a minified stack and no hint that the cause is
+          // a deploy having replaced the chunk mid-session. Seen in production on
+          // /admin/exercises during a redeploy.
+          //
+          // Same recovery as a chunk that never settles: one reload onto the current build,
+          // guarded so a genuinely broken build cannot loop.
+          if (mod == null || typeof mod !== "object" || !("default" in (mod as object))) {
+            recoverFromStuckChunkLoad();
+            reject(new Error("This page was updated. Reloading."));
+            return;
+          }
           resolve(mod);
         },
         (err) => {
