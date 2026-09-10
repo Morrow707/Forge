@@ -324,7 +324,53 @@ export function summarizeJumpSet(
           const flightSeconds = (landingT - takeoffT) / 1000;
 
           if (flightSeconds > 0 && flightSeconds <= MAX_FLIGHT_SECONDS) {
-            const jumpHeightCm = (GRAVITY_MPS2 * flightSeconds * flightSeconds * 100) / 8;
+            // THE FLIGHT-TIME FORMULA ASSUMES YOU LAND WHERE YOU TOOK OFF. A BOX JUMP DOES NOT.
+            //
+            // g*t^2/8 is the standard jump-height formula and it is derived from a SYMMETRIC
+            // parabola: half the flight going up, half coming down. That holds for a
+            // countermovement jump on flat ground and for nothing else this function supports.
+            // The landing branch a few lines above already says so out loud -- "a box jump lands
+            // higher (on the box), a depth jump lands lower" -- and then the symmetric formula
+            // was applied to both anyway.
+            //
+            // On a box jump the fall is shorter than the rise, so total flight time is shorter
+            // than an equal jump onto the floor, and the symmetric formula reads the athlete as
+            // having jumped LESS the taller the box gets. That is backwards, and it is the
+            // single number a box-jump set is judged on.
+            //
+            // The landing height is measurable and is sitting right here, so nothing has to be
+            // assumed. With up positive and d the net rise from takeoff to landing:
+            //   d = v0*t - g*t^2/2   =>   v0 = (d + g*t^2/2) / t   =>   rise = v0^2 / (2g)
+            // At d = 0 that reduces exactly to g*t^2/8, so a flat jump is unchanged to the last
+            // decimal -- this generalises the old formula rather than replacing it.
+            //
+            // Trace y decreases upward, so a landing surface HIGHER than takeoff has a SMALLER
+            // y, which is why the subtraction runs this way round.
+            // Both heights read from the RAW trace, not the smoothed one. A Kalman filter
+            // carrying velocity into an abrupt stop overshoots, so the smoothed trace dips
+            // below the floor for a moment right where the landing height gets measured --
+            // and the settle test tolerates that, because a flat window a few centimetres
+            // low is still a flat window. Nine centimetres of overshoot was enough to turn a
+            // level landing into a downhill one on a synthetic trace, and the raw samples do
+            // not have the problem: they are where the ankle actually was.
+            const medianRawY = (from: number, to: number): number => {
+              const ys = rawPoints
+                .slice(Math.max(0, from), Math.max(1, to))
+                .map((p) => p.y)
+                .sort((a, b) => a - b);
+              return ys[Math.floor(ys.length / 2)];
+            };
+            const takeoffY = medianRawY(takeoffIdx - SETTLE_FRAMES + 1, takeoffIdx + 1);
+            const landingY = medianRawY(landingIdx, landingIdx + SETTLE_FRAMES);
+            const netRiseM = takeoffY - landingY;
+            const takeoffVelocityMps =
+              (netRiseM + (GRAVITY_MPS2 * flightSeconds * flightSeconds) / 2) / flightSeconds;
+            // A negative take-off velocity is not a jump -- it is a step down that happened to
+            // clear the trigger. Clamped rather than reported as a negative height.
+            const jumpHeightCm =
+              takeoffVelocityMps > 0
+                ? ((takeoffVelocityMps * takeoffVelocityMps) / (2 * GRAVITY_MPS2)) * 100
+                : 0;
 
             const peakHeightCm = Math.max(0, amplitudeSoFar * 100);
 

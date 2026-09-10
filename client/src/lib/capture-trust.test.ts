@@ -228,6 +228,55 @@ describe("summarizeJumpSet", () => {
     );
   });
 
+  it("does not read a taller box as a smaller jump", () => {
+    // g*t^2/8 assumes the athlete lands where they took off. On a box jump they land higher,
+    // so the fall is shorter than the rise and total flight time is shorter than an equal
+    // jump onto the floor -- which made the symmetric formula report LESS jump the taller
+    // the box got. Backwards, on the one number a box-jump set is judged on.
+    //
+    // Same athlete, same push off the floor, two different boxes. The reported jump height
+    // has to be about the same for both, and neither may come out below the box it cleared.
+    const onto = (boxM: number) =>
+      summarizeJumpSet(
+        trace(
+          [
+            { heightM: 0, holdMs: 600 },
+            { heightM: boxM, holdMs: 800 },
+          ],
+          0.3,
+          420,
+        ),
+      );
+    const low = onto(0.2);
+    const high = onto(0.5);
+    expect(low!.repBreakdown.length).toBeGreaterThan(0);
+    expect(high!.repBreakdown.length).toBeGreaterThan(0);
+    const lowCm = low!.repBreakdown[0].jumpHeightCm;
+    const highCm = high!.repBreakdown[0].jumpHeightCm;
+    expect(highCm).toBeGreaterThan(45);
+    expect(lowCm).toBeGreaterThan(20);
+    // The taller box must not report the smaller jump.
+    expect(highCm).toBeGreaterThan(lowCm);
+  });
+
+  it("still uses the plain flight-time formula when the landing is level", () => {
+    // The correction generalises g*t^2/8 rather than replacing it, so a flat jump has to come
+    // out exactly where it always did.
+    const metrics = summarizeJumpSet(
+      trace(
+        [
+          { heightM: 0, holdMs: 600 },
+          { heightM: 0, holdMs: 800 },
+        ],
+        0.35,
+        420,
+      ),
+    );
+    const rep = metrics!.repBreakdown[0];
+    const t = rep.flightSeconds;
+    expect(rep.jumpHeightCm).toBeCloseTo((9.81 * t * t * 100) / 8, 1);
+  });
+
   it("measures a box jump the same after a dismount as before one", () => {
     // The defect the audit turned up: the grounded baseline only re-anchored
     // while the ankle stayed WITHIN the trigger of it, so a dismount off a
