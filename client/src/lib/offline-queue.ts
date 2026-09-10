@@ -258,6 +258,18 @@ export function takePendingLog(dayKey: string): PendingLog | null {
   return entry;
 }
 
+/** Forget anything still queued for this day, because a save for it just reached the server.
+ *
+ * A queued entry means "this day's state never made it". Once a later save lands, that is no
+ * longer true of anything older, and leaving the entry behind means replaying a snapshot the
+ * server has already moved past -- which the revision check now refuses, correctly but noisily,
+ * on a day the athlete had just finished logging. */
+export function clearPendingLog(dayKey: string) {
+  const queue = readQueue();
+  const remaining = queue.filter((p) => p.dayKey !== dayKey);
+  if (remaining.length !== queue.length) writeQueue(remaining);
+}
+
 const STALE_FAILURE_THRESHOLD = 5;
 
 // This flush now fires from four places (startup, "online", a Capacitor

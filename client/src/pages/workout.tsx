@@ -68,6 +68,7 @@ import {
   claimDayKeyForFlush,
   releaseDayKeyForFlush,
   takePendingLog,
+  clearPendingLog,
 } from "@/lib/offline-queue";
 import { dropHeavyFields } from "@/lib/log-payload-trim";
 import {
@@ -1298,6 +1299,8 @@ export function WorkoutPage({
       // Complete" tap does, since that's a real state transition worth
       // confirming, not just a background save.
       silent?: boolean;
+      // Replayed from the offline queue rather than built by this screen -- see runQueuedSave.
+      replay?: boolean;
     }) => {
       try {
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
@@ -1339,6 +1342,9 @@ export function WorkoutPage({
       // Each save advances the stored revision, so the next payload has to claim the
       // new one or it would look stale to the server and be refused.
       if (synced && typeof data?.revision === "number") baseRevisionRef.current = data.revision;
+      // Anything still queued for this day is now behind what the server holds, so it is not
+      // a rescue any more -- replaying it would just be refused as stale. Drop it.
+      if (synced) clearPendingLog(dayKey);
       if (synced) {
         for (const it of itemsRef.current) {
           for (const st of it.sets) {
@@ -1391,7 +1397,7 @@ export function WorkoutPage({
         toast.info("You're offline — saved on this device, will sync automatically");
       }
     },
-    onError: (err: ApiError, { silent }) => {
+    onError: (err: ApiError, { silent, replay }) => {
       // 409 means the stored day moved on since this screen loaded, so this payload
       // would have replaced newer data rather than merging with it (a save is a
       // delete-and-reinsert of the whole day). The server refused it; the only correct
@@ -1399,6 +1405,13 @@ export function WorkoutPage({
       // can cost whatever was typed since the conflict, which is a far smaller loss
       // than the sets, tracked metrics and videos the overwrite used to destroy.
       if (err.status === 409) {
+        // A refused REPLAY is the expected, quiet case: work this device queued while offline,
+        // superseded by something newer that already reached the server. The screen is already
+        // showing the server's version, so there is nothing to reload and nothing to say.
+        if (replay) {
+          clearPendingLog(dayKey);
+          return;
+        }
         if (autosaveTimerRef.current) {
           clearTimeout(autosaveTimerRef.current);
           autosaveTimerRef.current = null;
@@ -1407,8 +1420,8 @@ export function WorkoutPage({
         setHydrated(false);
         baseRevisionRef.current = null;
         qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
-        toast.info("This workout was updated somewhere else -- reloading the latest version.", {
-          duration: 8000,
+        toast.info("Catching up with the saved version of this workout -- one moment.", {
+          duration: 6000,
         });
         return;
       }
@@ -1504,9 +1517,27 @@ export function WorkoutPage({
     null,
   );
 
-  function runQueuedSave(args: { payload: ReturnType<typeof buildLogPayload>; silent: boolean }) {
+  function runQueuedSave(args: {
+    payload: ReturnType<typeof buildLogPayload>;
+    silent: boolean;
+    // A payload recovered from the offline queue rather than built by this screen just now.
+    // It keeps the revision it was built against: it is the athlete's own older work, and if
+    // the stored day has moved on since, it genuinely must not be applied. Everything else
+    // here is re-stamped -- see below.
+    replay?: boolean;
+  }) {
     saveInFlightRef.current = true;
-    submitMutation.mutate(args, {
+    // A save queued behind an in-flight one was built before that one landed, so it still
+    // claims the revision from before -- which the in-flight save has since advanced. Sending
+    // it unchanged made the server refuse this screen's own next keystroke as stale, over and
+    // over, which is what "updated somewhere else" was actually reporting. These two saves are
+    // strictly ordered on one device with nothing in between, so the revision this one should
+    // claim is whatever our last save produced.
+    const stamped =
+      args.replay || baseRevisionRef.current == null
+        ? args
+        : { ...args, payload: { ...args.payload, baseRevision: baseRevisionRef.current } };
+    submitMutation.mutate(stamped, {
       onSettled: () => {
         saveInFlightRef.current = false;
         const next = pendingSaveRef.current;
@@ -1525,7 +1556,11 @@ export function WorkoutPage({
   // payload ever needs to actually reach the server -- a save requested
   // while one's in flight replaces whatever was queued rather than piling
   // up a backlog of stale in-between snapshots to send later.
-  function queueRawSave(args: { payload: ReturnType<typeof buildLogPayload>; silent: boolean }) {
+  function queueRawSave(args: {
+    payload: ReturnType<typeof buildLogPayload>;
+    silent: boolean;
+    replay?: boolean;
+  }) {
     if (saveInFlightRef.current) {
       pendingSaveRef.current = args;
       return;
@@ -1568,7 +1603,12 @@ export function WorkoutPage({
     claimDayKeyForFlush(dayKey);
     function resolveOwnPendingLog() {
       const entry = takePendingLog(dayKey);
-      if (entry) queueRawSave({ payload: entry.payload as ReturnType<typeof buildLogPayload>, silent: true });
+      if (entry)
+        queueRawSave({
+          payload: entry.payload as ReturnType<typeof buildLogPayload>,
+          silent: true,
+          replay: true,
+        });
     }
     resolveOwnPendingLog();
     window.addEventListener("online", resolveOwnPendingLog);

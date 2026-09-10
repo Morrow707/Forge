@@ -235,3 +235,32 @@ describe("the video queue is scoped and serialised the same way", () => {
     expect(src).toContain("if (videoFlushInFlight) return;");
   });
 });
+
+// A queued entry is a rescue for state that never reached the server. Once a later save for
+// that day lands, it stops being one: replaying it would only be refused as stale, which is
+// what put a "catching up with the saved version" message in front of an athlete repeatedly on
+// a day they had just finished logging.
+describe("a queued day is forgotten once a save for it lands", () => {
+  it("drops the entry for that day and leaves the others", async () => {
+    const m = await load();
+    m.setQueueOwner(7);
+    m.queueLog(DAY, URL, { sets: 1 });
+    m.queueLog("9:9:2026-09-06", URL, { sets: 2 });
+
+    m.clearPendingLog(DAY);
+
+    const remaining = m.getPendingLogs();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].dayKey).toBe("9:9:2026-09-06");
+  });
+
+  it("is a no-op for a day with nothing queued", async () => {
+    const m = await load();
+    m.setQueueOwner(7);
+    m.queueLog(DAY, URL, { sets: 1 });
+
+    m.clearPendingLog("no:such:day");
+
+    expect(m.getPendingLogs()).toHaveLength(1);
+  });
+});
