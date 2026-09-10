@@ -24062,6 +24062,60 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // of the athlete's own footage, and the guardian view renders a label and
   // a date rather than a player, so there is nothing to break by listing
   // one.
+  /**
+   * EVERY UPLOAD WE RECORDED, AGAINST WHAT IS ACTUALLY ON THE DISK.
+   *
+   * The disk reports healthy -- persistent, writable, 9.5GB free -- and a bench-press video
+   * uploaded twenty hours ago is still gone. Both of those can be true, and which one matters
+   * depends on a number nobody has: how many of the files we believe we hold are actually there.
+   *
+   * uploaded_files is the ledger. Every gated upload writes a row with a path and a timestamp,
+   * so walking it and stat-ing each path answers the question directly, and the timestamps say
+   * WHEN the losses stop -- which is the difference between "the disk was configured on Tuesday
+   * and everything before it died" and "something is still eating files today".
+   *
+   * Newest first, capped, and it returns the missing ones rather than only counting them: a
+   * count says there is a problem, the list says which day it started.
+   */
+  async reconcileUploadedFiles(limit = 500): Promise<{
+    checked: number;
+    present: number;
+    missing: number;
+    missingFiles: { path: string; uploadedAt: string }[];
+    oldestPresentAt: string | null;
+    newestMissingAt: string | null;
+  }> {
+    const rows = await db
+      .select({ path: uploadedFiles.path, createdAt: uploadedFiles.createdAt })
+      .from(uploadedFiles)
+      .orderBy(desc(uploadedFiles.createdAt))
+      .limit(limit);
+
+    const missingFiles: { path: string; uploadedAt: string }[] = [];
+    let present = 0;
+    let oldestPresentAt: string | null = null;
+    for (const row of rows) {
+      const size = await statUploadedFile(row.path);
+      const at = row.createdAt.toISOString();
+      if (size === null) {
+        missingFiles.push({ path: row.path, uploadedAt: at });
+      } else {
+        present++;
+        if (!oldestPresentAt || at < oldestPresentAt) oldestPresentAt = at;
+      }
+    }
+
+    return {
+      checked: rows.length,
+      present,
+      missing: missingFiles.length,
+      // Capped in the response too -- an admin needs the shape of the loss, not a thousand paths.
+      missingFiles: missingFiles.slice(0, 25),
+      oldestPresentAt,
+      newestMissingAt: missingFiles[0]?.uploadedAt ?? null,
+    };
+  },
+
   async getVideosForAthlete(athleteId: number): Promise<
     { source: "set" | "skill" | "comment" | "skillComment"; id: number; label: string; date: string; videoUrl: string }[]
   > {

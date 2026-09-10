@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { apiRequest, ApiError, resolveApiUrl } from "@/lib/queryClient";
+import { apiRequest, ApiError, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Flag, Check } from "lucide-react";
 
@@ -26,10 +26,15 @@ export function ProblemReportsContent() {
   const [showCleared, setShowCleared] = useState(false);
   const { data, isLoading } = useQuery<ProblemReport[]>({
     queryKey: ["/api/admin/problem-reports", showCleared],
+    // getJson, not a bare fetch. The native app authenticates with a bearer token rather than a
+    // cookie (see queryClient's getNativeToken), so `credentials: "include"` authenticated
+    // nobody on iOS: the request came back 401, .json() produced an error OBJECT rather than an
+    // array, and the render below called .map on it. That is the "Something went wrong" Scott
+    // hit the moment he opened this tab on his phone -- my own change from an hour earlier.
     queryFn: () =>
-      fetch(resolveApiUrl(`/api/admin/problem-reports${showCleared ? "?includeResolved=1" : ""}`), {
-        credentials: "include",
-      }).then((r) => r.json()),
+      getJson(`/api/admin/problem-reports${showCleared ? "?includeResolved=1" : ""}`) as Promise<
+        ProblemReport[]
+      >,
   });
 
   const resolveMutation = useMutation({
@@ -61,7 +66,7 @@ export function ProblemReportsContent() {
       <CardContent className="space-y-4">
         {isLoading ? (
           <div className="h-40 animate-pulse rounded-md bg-surface" />
-        ) : !data || data.length === 0 ? (
+        ) : !Array.isArray(data) || data.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {showCleared ? "No reports yet." : "Nothing open."}
           </p>

@@ -1099,7 +1099,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // "videos still aren't saving" question with facts instead of another round of guessing --
   // see inspectUploadsStorage.
   app.get("/api/admin/storage-status", requireRole("admin"), async (_req, res) => {
-    res.json(await inspectUploadsStorage());
+    // The disk's own health AND what it is actually still holding. A disk that reports healthy
+    // while files uploaded yesterday are gone is the exact case that needs both halves in one
+    // answer -- see storage.reconcileUploadedFiles.
+    const [disk, ledger] = await Promise.all([
+      inspectUploadsStorage(),
+      storage.reconcileUploadedFiles(),
+    ]);
+    res.json({ ...disk, ledger });
   });
 
   app.get("/api/admin/storage-check", requireRole("admin"), async (req, res) => {
