@@ -9,6 +9,7 @@
 // into the route-registration file.
 import fs from "fs/promises";
 import path from "path";
+import { recordSystemFailure } from "./system-events";
 
 // STORAGE_PATH (render.yaml) points this at the persistent disk's mount point
 // (outside the deployed source tree) in production; falls back to the old
@@ -115,6 +116,68 @@ export async function inspectUploadsStorage(): Promise<{
   await walk(UPLOADS_ROOT);
 
   return result;
+}
+
+/**
+ * THE STORAGE REPORT HAS TO COME FIND THE ADMIN, NOT WAIT TO BE FETCHED.
+ *
+ * Scott, on the endpoint below it: where does that report go, to you, or do I have to pull it?
+ * Neither, which was the wrong answer. A diagnostic nobody opens is a diagnostic nobody has.
+ *
+ * Run at boot, so every deploy re-answers the question. When uploads are landing somewhere that
+ * will not survive the next deploy, or the disk cannot actually be written to, it raises a real
+ * system event -- the same feed the admin dashboard already shows with a Dismiss button, and the
+ * same "only the admin sees the errors" rule as everything else in there. A recurrence
+ * un-dismisses it, because if it is still happening it is still not handled.
+ *
+ * Silent when storage is healthy. An alert that fires on a working system trains people to
+ * ignore it.
+ */
+export async function reportUploadsStorageHealth(): Promise<void> {
+  let report: Awaited<ReturnType<typeof inspectUploadsStorage>>;
+  try {
+    report = await inspectUploadsStorage();
+  } catch (err) {
+    recordSystemFailure("storage", "Could not inspect the uploads directory at all", {
+      detail: err,
+    });
+    return;
+  }
+
+  if (!report.usingPersistentDisk) {
+    recordSystemFailure(
+      "storage",
+      "Uploads are being written somewhere that will not survive the next deploy",
+      {
+        detail: {
+          uploadsRoot: report.uploadsRoot,
+          why: "STORAGE_PATH is not set on this service, so UPLOADS_ROOT fell back to a path inside the deployed source tree.",
+          consequence:
+            "Every video, annotation and ingested document written here is deleted on the next deploy.",
+          fix: "Set STORAGE_PATH to the persistent disk's mount path (render.yaml has it as /var/data/forge-uploads) and redeploy.",
+          filesCurrentlyThere: report.fileCount,
+        },
+      },
+    );
+    return;
+  }
+
+  if (!report.writable) {
+    recordSystemFailure("storage", "The uploads disk is mounted but cannot be written to", {
+      detail: {
+        uploadsRoot: report.uploadsRoot,
+        writeError: report.writeError,
+        consequence: "Every upload will fail until this is resolved.",
+      },
+    });
+    return;
+  }
+
+  console.log(
+    `Uploads storage healthy: ${report.uploadsRoot} on the persistent disk, ` +
+      `${report.fileCount} file(s), ${Math.round(report.totalBytes / 1024 / 1024)}MB, ` +
+      `newest ${report.newestFileAt ?? "none yet"}.`,
+  );
 }
 
 export function warnIfUploadsAreEphemeral(): void {

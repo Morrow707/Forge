@@ -82,7 +82,7 @@ import compression from "compression";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
-import { warnIfUploadsAreEphemeral } from "./uploaded-files";
+import { warnIfUploadsAreEphemeral, reportUploadsStorageHealth } from "./uploaded-files";
 import { resumeInterruptedIngests } from "./resume-ingest";
 import { setupVite, serveStatic, log } from "./vite";
 import { startReflectionJob } from "./reflection-job";
@@ -428,6 +428,9 @@ app.get("/healthz", async (_req, res) => {
     // next deploy will replace -- see warnIfUploadsAreEphemeral for the production incident
     // that made a silent default unacceptable.
     warnIfUploadsAreEphemeral();
+    // And again as something an admin will actually see, rather than a line in a log nobody
+    // opens -- see reportUploadsStorageHealth.
+    void reportUploadsStorageHealth();
     // A book left mid-ingest by the deploy that replaced the previous process gets finished
     // rather than left frozen at whatever percentage it reached -- see resumeInterruptedIngests.
     void resumeInterruptedIngests();
