@@ -26,6 +26,8 @@ import {
   worldVerticalSign,
   shoulderWidthScaleFromFrames,
   reconcileScaleEstimates,
+  rejectImplausibleScales,
+  impliedBodyLengthUnits,
   tiltDegreesFromPoints,
   usesSharedBarEquipment,
   assessCameraAlignment,
@@ -769,7 +771,12 @@ export function AvBarTrackerDialog({
     const shoulderScale = shoulderWidthScaleFromFrames(calibrationInput, heightIn);
     const shoulderScaleValue = shoulderScale.scale;
 
-    const scaleVerdict = reconcileScaleEstimates([
+    // Every candidate is checked against the athlete's own height before any of them is ranked --
+    // see rejectImplausibleScales. A scale that puts a 5'10" lifter at sixteen inches tall is
+    // measuring something other than what it thinks it is, and that is knowable from the footage
+    // rather than from which source it came out of.
+    const bodySpanUnits = impliedBodyLengthUnits(calibrationInput);
+    const scaleCandidatesRaw = [
       ...(plateScale != null
         ? [
             {
@@ -791,7 +798,13 @@ export function AvBarTrackerDialog({
             },
           ]
         : []),
-    ]);
+    ];
+    const { kept: plausibleScales, rejected: implausibleScales } = rejectImplausibleScales(
+      scaleCandidatesRaw,
+      bodySpanUnits,
+      heightIn,
+    );
+    const scaleVerdict = reconcileScaleEstimates(plausibleScales);
 
     const scaleFactor = scaleVerdict.scale;
 
@@ -835,10 +848,13 @@ export function AvBarTrackerDialog({
       scaleCandidates: typeof scaleCandidates;
       scaleOutliers: { source: string; ratioToChosen: number }[];
       scaleCorroborated: boolean;
+      scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number }[];
       axisSource?: "grip" | "trace_covariance";
       gripPairsUsed?: number;
       traceTravelAlongPx?: number;
       traceTravelAcrossPx?: number;
+      traceTravelAlongCm?: number;
+      traceTravelAcrossCm?: number;
     } = {
       scaleSource,
       scaleCandidates,
@@ -847,6 +863,7 @@ export function AvBarTrackerDialog({
         ratioToChosen: o.ratioToChosen,
       })),
       scaleCorroborated: scaleVerdict.corroborated,
+      scalesRejectedAsImplausible: implausibleScales,
     };
 
     // No scale used to end the take here, with nothing saved but the video. It no longer does.
@@ -1126,10 +1143,20 @@ export function AvBarTrackerDialog({
         if (across < minAcross) minAcross = across;
         if (across > maxAcross) maxAcross = across;
       }
+      // METRES, NOT PIXELS. The trace has already been multiplied by the scale by the time it
+      // is pushed (see effectiveScale above), so the first version of this reported a real 0.18m
+      // squat as "0px" -- rounded away, and reading as though the bar had never moved. Reported
+      // in centimetres now, with the pixel equivalent alongside it so it can still be held up
+      // against the plate diameter on the line above, which is the comparison that makes it
+      // mean something.
       calibrationDiagnostics.axisSource = movementAxis ? "grip" : "trace_covariance";
       calibrationDiagnostics.gripPairsUsed = gripPairs.length;
-      calibrationDiagnostics.traceTravelAlongPx = maxAlong - minAlong;
-      calibrationDiagnostics.traceTravelAcrossPx = maxAcross - minAcross;
+      calibrationDiagnostics.traceTravelAlongCm = (maxAlong - minAlong) * 100;
+      calibrationDiagnostics.traceTravelAcrossCm = (maxAcross - minAcross) * 100;
+      if (scaleFactor && scaleFactor > 0) {
+        calibrationDiagnostics.traceTravelAlongPx = (maxAlong - minAlong) / scaleFactor;
+        calibrationDiagnostics.traceTravelAcrossPx = (maxAcross - minAcross) / scaleFactor;
+      }
     }
 
     const metrics = summarizeTrackedSet(

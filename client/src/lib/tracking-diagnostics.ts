@@ -136,6 +136,10 @@ export type TrackingDiagnostics = {
     gripPairsUsed?: number;
     traceTravelAlongPx?: number;
     traceTravelAcrossPx?: number;
+    traceTravelAlongCm?: number;
+    traceTravelAcrossCm?: number;
+    // Candidates thrown out for implying an impossible athlete, with the height each implied.
+    scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number }[];
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;

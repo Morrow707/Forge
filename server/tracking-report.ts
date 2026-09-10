@@ -86,6 +86,9 @@ type TrackingDiagnostics = {
     gripPairsUsed?: number | null;
     traceTravelAlongPx?: number | null;
     traceTravelAcrossPx?: number | null;
+    traceTravelAlongCm?: number | null;
+    traceTravelAcrossCm?: number | null;
+    scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number }[];
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
@@ -485,6 +488,23 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
       });
     }
 
+    // WHAT WAS THROWN OUT BEFORE ANYTHING WAS RANKED.
+    //
+    // Every candidate is checked against the athlete's own height first: the body span the pose
+    // measured, times that scale, is how tall it says the athlete is. A scale that puts a 5'10"
+    // lifter at sixteen inches is measuring something other than what it thinks it is, whatever
+    // source it came from, and it is dropped rather than ranked. This says which and how far off,
+    // because a silently dropped source is the same kind of invisible as the wrong number it
+    // replaced.
+    if (c.scalesRejectedAsImplausible && c.scalesRejectedAsImplausible.length > 0) {
+      lines.push({
+        label: "Scales rejected",
+        value: c.scalesRejectedAsImplausible
+          .map((r) => `${r.source} (it would make the athlete ${r.impliedHeightIn}in tall)`)
+          .join("; "),
+      });
+    }
+
     // THE OTHER HALF OF EVERY RANGE-OF-MOTION NUMBER.
     //
     // Range of motion is the scale multiplied by how far the tracked point travelled along the
@@ -495,12 +515,16 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
     // Read it against the plate diameter on the line above, which is a known 45cm in the same
     // pixels: a bench press travels roughly three quarters of a plate. A trace that moved a
     // sixth of one did not follow the bar through a rep, whatever the scale says.
-    if (c.traceTravelAlongPx != null) {
-      const across =
-        c.traceTravelAcrossPx != null ? `, ${Math.round(c.traceTravelAcrossPx)}px across` : "";
+    if (c.traceTravelAlongCm != null || c.traceTravelAlongPx != null) {
+      const cm = c.traceTravelAlongCm;
+      const px = c.traceTravelAlongPx;
+      const acrossCm = c.traceTravelAcrossCm;
       lines.push({
         label: "Trace travel",
-        value: `${Math.round(c.traceTravelAlongPx)}px along the movement axis${across}`,
+        value:
+          `${cm != null ? `${Math.round(cm * 10) / 10}cm` : "?"} along the movement axis` +
+          `${px != null ? ` (${Math.round(px)}px at the chosen scale)` : ""}` +
+          `${acrossCm != null ? `, ${Math.round(acrossCm * 10) / 10}cm across` : ""}`,
       });
       lines.push({
         label: "Movement axis",

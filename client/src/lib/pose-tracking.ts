@@ -739,6 +739,56 @@ const SCALE_AGREEMENT_MULTIPLE = 2;
  * the camera; height is measured on the athlete but along their whole body; shoulder breadth is
  * the loosest, since biacromial-to-height genuinely varies by build.
  */
+/** How far a candidate scale may put the athlete from their real height before it is treated as
+ *  measuring something other than what it thinks it is. Generous on purpose: the body span the
+ *  pose can see is a shoulder-to-ankle or nose-to-ankle reach, not a stature, and it shortens
+ *  legitimately with posture. What it is here to catch is not a 20% error, it is the factor of
+ *  four that says a detector locked onto the rack instead of the bar. */
+const IMPLAUSIBLE_BODY_HEIGHT_LOW = 0.55;
+const IMPLAUSIBLE_BODY_HEIGHT_HIGH = 1.8;
+
+/**
+ * THE ONE NUMBER WE ACTUALLY KNOW IS HOW TALL THE ATHLETE IS.
+ *
+ * Two takes, two different sources wrong, and a fixed trust order got one right and one wrong.
+ * On a bench filmed from the side the shoulders sit one behind the other, their separation
+ * collapses, and the shoulder scale came out 4.2x off -- the plate was right and preferring it
+ * saved the take. On a back squat the plate detector measured 512px for something that is 45cm,
+ * which at the body's own scale would be about 2 metres, so the plate was wrong and preferring
+ * it cost the take. Rank cannot tell those apart, because rank does not look at the footage.
+ *
+ * This does. Every candidate scale implies a height for the athlete in frame: the body span the
+ * pose measured, times that scale. We know their real height. A scale that says a 5'10" athlete
+ * is 16 inches tall is not a scale, whatever produced it, and it is dropped before anything is
+ * averaged or ranked.
+ *
+ * Left alone entirely when the pose gives no usable span -- a bench where calibration failed on
+ * 97% of frames has nothing to check against, and refusing on no evidence would throw away the
+ * only good source that take had.
+ */
+export function rejectImplausibleScales(
+  estimates: ScaleEstimate[],
+  bodySpanUnits: number | null,
+  heightIn: number | null | undefined,
+): { kept: ScaleEstimate[]; rejected: { source: string; impliedHeightIn: number }[] } {
+  if (!bodySpanUnits || !heightIn || heightIn <= 0) return { kept: estimates, rejected: [] };
+  const trueHeightM = heightIn * 0.0254;
+  const kept: ScaleEstimate[] = [];
+  const rejected: { source: string; impliedHeightIn: number }[] = [];
+  for (const e of estimates) {
+    const impliedM = bodySpanUnits * e.scale;
+    const ratio = impliedM / trueHeightM;
+    if (ratio < IMPLAUSIBLE_BODY_HEIGHT_LOW || ratio > IMPLAUSIBLE_BODY_HEIGHT_HIGH) {
+      rejected.push({ source: e.source, impliedHeightIn: Math.round((impliedM / 0.0254) * 10) / 10 });
+    } else {
+      kept.push(e);
+    }
+  }
+  // Never reject everything. If no candidate survives, the body span is the thing that is wrong,
+  // not all three scales at once, and a take with a questionable number beats a take with none.
+  return kept.length > 0 ? { kept, rejected } : { kept: estimates, rejected: [] };
+}
+
 export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdict {
   const usable = estimates.filter((e) => Number.isFinite(e.scale) && e.scale > 0);
   if (usable.length === 0) {
@@ -887,7 +937,7 @@ export function shoulderWidthScaleFromFrames(
 /** The longest body segment the take can see, in the same units, as a cross-check on the
  *  shoulder span. Null when nothing usable was tracked -- then there is nothing to check
  *  against and the span stands on its own. */
-function impliedBodyLengthUnits(frames: { worldLandmarks: Landmark[] }[]): number | null {
+export function impliedBodyLengthUnits(frames: { worldLandmarks: Landmark[] }[]): number | null {
   const spans: number[] = [];
   for (const f of frames) {
     const lShoulder = f.worldLandmarks[POSE_LANDMARKS.LEFT_SHOULDER];

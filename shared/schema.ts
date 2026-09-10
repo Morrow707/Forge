@@ -7473,6 +7473,12 @@ export const trackingDiagnosticsSchema = z.object({
       gripPairsUsed: z.number().optional().nullable(),
       traceTravelAlongPx: z.number().optional().nullable(),
       traceTravelAcrossPx: z.number().optional().nullable(),
+      traceTravelAlongCm: z.number().optional().nullable(),
+      traceTravelAcrossCm: z.number().optional().nullable(),
+      scalesRejectedAsImplausible: z
+        .array(z.object({ source: z.string().max(40), impliedHeightIn: z.number() }))
+        .max(8)
+        .optional(),
       noseToAnkleFrames: z.number(),
       shoulderToAnkleFrames: z.number(),
       supineFullLengthFrames: z.number().optional(),
