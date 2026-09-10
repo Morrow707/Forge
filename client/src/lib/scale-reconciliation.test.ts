@@ -134,3 +134,45 @@ describe("rejectImplausibleScales", () => {
     expect(rejected).toHaveLength(0);
   });
 });
+
+
+describe("a jump's box as a known-size reference", () => {
+  const HEIGHT_IN = 70;
+  const BODY_SPAN_PX = 459;
+  const TRUE_SCALE = (HEIGHT_IN * 0.0254) / BODY_SPAN_PX;
+
+  // The box-derived scale as the dialog computes it: a real height over the pixel gap between
+  // the box top and the floor the athlete is standing on.
+  const boxScale = (boxHeightIn: number, gapPx: number) => (boxHeightIn * 0.0254) / gapPx;
+
+  it("agrees with the body when both are right", () => {
+    // A 24in box on a frame where the body scale is correct: the gap between box top and floor
+    // is that height at that scale.
+    const gapPx = (24 * 0.0254) / TRUE_SCALE;
+    const verdict = reconcileScaleEstimates([
+      { source: "plate", scale: boxScale(24, gapPx), uncertaintyFraction: 0.05 },
+      { source: "height", scale: TRUE_SCALE, uncertaintyFraction: 0.05 },
+    ]);
+    expect(verdict.corroborated).toBe(true);
+    expect(verdict.scale!).toBeCloseTo(TRUE_SCALE, 6);
+  });
+
+  it("throws out a body scale that would make a 24in box jump read as 338cm", () => {
+    // The real take. A body scale several times too large turns a two-foot box into something
+    // over two metres; measured against the athlete's own height it puts them at ten feet, and
+    // it is dropped before the box has to argue with it.
+    const gapPx = (24 * 0.0254) / TRUE_SCALE;
+    const wrongBody = TRUE_SCALE * 4.5;
+    const { kept, rejected } = rejectImplausibleScales(
+      [
+        { source: "plate", scale: boxScale(24, gapPx), uncertaintyFraction: 0.05 },
+        { source: "height", scale: wrongBody, uncertaintyFraction: 0.05 },
+      ],
+      BODY_SPAN_PX,
+      HEIGHT_IN,
+    );
+    expect(kept.map((k) => k.source)).toEqual(["plate"]);
+    expect(rejected[0].source).toBe("height");
+    expect(reconcileScaleEstimates(kept).scale!).toBeCloseTo(TRUE_SCALE, 6);
+  });
+});

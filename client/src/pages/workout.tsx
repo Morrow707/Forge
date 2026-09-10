@@ -179,6 +179,20 @@ function formatLoad(entry: {
   return parts.length > 0 ? parts.join(", ") : "Bodyweight";
 }
 
+/** The box height for one set, in inches, however the athlete entered it. Null when there is no
+ * box on the set or the value will not parse -- a guessed box is worse than no box, because the
+ * whole point of it is being a length we actually know. */
+function boxHeightInchesFor(
+  item: { sets: { setNumber: number; boxHeight: string | null; boxHeightUnit: BoxHeightUnit | null }[] },
+  setNumber: number | null,
+): number | null {
+  const row = item.sets.find((s) => s.setNumber === setNumber) ?? item.sets[0];
+  if (!row?.boxHeight) return null;
+  const value = Number.parseFloat(row.boxHeight);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return row.boxHeightUnit === "m" ? value * 39.3701 : value;
+}
+
 type LastPerformance = {
   date: string;
   sets: number;
@@ -3748,6 +3762,11 @@ function ExerciseLogContent({
                 movementType={item.movementType}
                 equipment={item.equipment}
                 usesBox={item.materials.usesBox}
+                // The box the athlete typed in, in inches. This is a real object of known size
+                // in frame, and the only one a jump take has -- see the box-derived scale in
+                // AvJumpTrackerDialog. Read off the set being filmed, falling back to the first,
+                // since a box height is set per-set but rarely varies within one.
+                boxHeightIn={boxHeightInchesFor(item, trackingSet)}
                 recordVideo={mergedTracking}
                 // trackingSet is guaranteed non-null while this dialog can meaningfully be
                 // asked to stop -- same reasoning as AvBarTrackerDialog's own identical

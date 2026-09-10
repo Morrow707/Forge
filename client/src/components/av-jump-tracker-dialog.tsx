@@ -18,6 +18,9 @@ import {
   detectFormFaults,
   computeLandingAsymmetry,
   calibrateFromFrames,
+  impliedBodyLengthUnits,
+  rejectImplausibleScales,
+  reconcileScaleEstimates,
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
   POSE_LANDMARKS,
@@ -67,6 +70,7 @@ export function AvJumpTrackerDialog({
   open,
   onOpenChange,
   heightIn,
+  boxHeightIn,
   movementType,
   equipment,
   usesBox,
@@ -93,6 +97,10 @@ export function AvJumpTrackerDialog({
   // (see that file's own comment) -- a box jump is identified by its equipment, not a
   // dedicated movementType string.
   usesBox?: boolean;
+  // The box's real height in inches, as the athlete entered it. A jump take has no plate and no
+  // bar; the box is the one object of known size in frame, and it is the only thing that can
+  // contradict a body-derived scale that has gone wrong.
+  boxHeightIn?: number | null;
   recordVideo?: boolean;
   // Same "closes before analysis finishes" redesign as AvBarTrackerDialog -- see that
   // component's own comments on setNumber/onAnalysisStarted/onProcessingSettled/
@@ -248,8 +256,99 @@ export function AvJumpTrackerDialog({
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
     forSetNumber: number,
   ) {
-    const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
+    const bodyScale = calibrateFromFrames(rawFrames, heightIn);
     const calibrationFrames = calibrationMethodBreakdown(rawFrames);
+
+    // THE BOX IS THE ONE THING IN A JUMP TAKE WHOSE SIZE WE ACTUALLY KNOW.
+    //
+    // Scott typed 24 inches into the set. Vision found the box's top surface. Between those two
+    // there is a real length in the frame, measured against the floor the athlete is standing
+    // on -- which is exactly the kind of reference a barbell take gets from a plate and a jump
+    // take has never had. Every number on a jump has come from the athlete's own body, so when
+    // the body read goes wrong there has been nothing to say so, and a take came back reporting
+    // a 338cm jump onto a two-foot box.
+    //
+    // Floor is the athlete's own ankle at its lowest tracked position: they are standing on it
+    // for most of a box-jump set, and it is measured in the same space as the box top, so the
+    // two subtract cleanly.
+    //
+    // Absolute difference on purpose. Whether the detector's normalized Y counts up from the
+    // bottom of the frame or down from the top decides the SIGN of that gap and not its size,
+    // and a scale only needs the size. Getting the sign wrong here would silently invert a
+    // calibration; taking the magnitude cannot.
+    const boxScale = ((): number | null => {
+      if (!boxHeightIn || boxHeightIn <= 0) return null;
+      const frameHeight = nativeRawFrames[0]?.frameHeight;
+      if (!frameHeight || recordingStats.boxTopNormalizedY == null) return null;
+      const boxTopPx = visionBoxTopToWorldY(recordingStats.boxTopNormalizedY, frameHeight);
+      const ankleYs: number[] = [];
+      for (const f of rawFrames) {
+        const l = f.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
+        const r = f.worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+        if (visible(l) && visible(r)) ankleYs.push((l.y + r.y) / 2);
+      }
+      if (ankleYs.length < 10) return null;
+      ankleYs.sort((a, b) => a - b);
+      // The lowest the ankles ever were, taken off the tenth percentile rather than the extreme
+      // so one stray landmark on the floor cannot become the floor.
+      const floorPx = ankleYs[Math.min(ankleYs.length - 1, Math.floor(ankleYs.length * 0.9))];
+      const gapPx = Math.abs(floorPx - boxTopPx);
+      if (!(gapPx > 1)) return null;
+      return (boxHeightIn * 0.0254) / gapPx;
+    })();
+
+    // The body span the pose measured, used to throw out any scale that implies an impossible
+    // athlete before either is trusted -- the same check the barbell tracker now applies, and
+    // for the same reason: a source is right or wrong because of what it measured, not because
+    // of which source it is.
+    const jumpBodySpan = impliedBodyLengthUnits(rawFrames);
+    const jumpScaleCandidates = [
+      ...(boxScale != null
+        ? [{ source: "plate" as const, scale: boxScale, uncertaintyFraction: 0.05 }]
+        : []),
+      ...(bodyScale != null
+        ? [{ source: "height" as const, scale: bodyScale, uncertaintyFraction: 0.05 }]
+        : []),
+    ];
+    const { kept: jumpScalesKept, rejected: jumpScalesRejected } = rejectImplausibleScales(
+      jumpScaleCandidates,
+      jumpBodySpan,
+      heightIn,
+    );
+    const jumpVerdict = reconcileScaleEstimates(jumpScalesKept);
+    const scaleFactor = jumpVerdict.scale ?? bodyScale;
+
+    // What each source said, and what was thrown out. Same two lines the barbell report carries,
+    // for the same reason: a jump that comes back wrong should say which half was wrong instead
+    // of leaving it to be reconstructed from the one number on the card.
+    const jumpCalibrationDiagnostics = {
+      scaleSource: (jumpVerdict.agreedSources.length > 1
+        ? "both"
+        : (jumpVerdict.agreedSources[0] ?? null)) as
+        | "height"
+        | "plate"
+        | "both"
+        | "shoulder_width"
+        | null,
+      scaleCandidates: jumpScaleCandidates.map((c) => ({
+        // The box arrives under the "plate" name because that is the slot the schema has for a
+        // known-size reference object. Renamed for the reader here so a jump report does not
+        // claim a plate was in frame.
+        source: c.source === "plate" ? "box" : c.source,
+        scale: c.scale,
+        measured: null,
+        samples: null,
+      })),
+      scaleOutliers: jumpVerdict.outliers.map((o) => ({
+        source: o.source === "plate" ? "box" : o.source,
+        ratioToChosen: o.ratioToChosen,
+      })),
+      scaleCorroborated: jumpVerdict.corroborated,
+      scalesRejectedAsImplausible: jumpScalesRejected.map((r) => ({
+        source: r.source === "plate" ? "box" : r.source,
+        impliedHeightIn: r.impliedHeightIn,
+      })),
+    };
 
     if (scaleFactor == null) {
       const diagnostics = buildTrackingDiagnostics({
@@ -372,7 +471,7 @@ export function AvJumpTrackerDialog({
         message: "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.",
         rawFrames: nativeRawFrames,
         recording: recordingStats,
-        calibration: { scaleFactor, ...calibrationFrames },
+        calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames },
       });
       const emptyMetrics: JumpSetMetrics = { ...EMPTY_JUMP_METRICS, captureDeviceInfo, trackingDiagnostics: diagnostics };
       if (recordVideo && uploadPromise) {
@@ -428,7 +527,7 @@ export function AvJumpTrackerDialog({
       outcome: "tracked",
       rawFrames: nativeRawFrames,
       recording: recordingStats,
-      calibration: { scaleFactor, ...calibrationFrames },
+      calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames },
     });
 
     // See av-bar-tracker-dialog.tsx's own comment on this same check -- readerStatus "failed"
