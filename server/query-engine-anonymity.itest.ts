@@ -24,9 +24,18 @@ describe("query engine anonymity", () => {
     adminId = admin.id;
   });
 
+  // Opted in explicitly, and NOT by changing the fixture's default. Consent defaults to off and
+  // research-consent.itest.ts exists to prove it, so flipping the shared fixture to make this
+  // file pass would have broken that one -- and would have left every other suite quietly
+  // testing the consent gate instead of whatever it was written for.
   async function makeFootballAthletes(count: number) {
     for (let i = 0; i < count; i++) {
-      await makeAthlete({ sport: "Football", age: 17, name: `Real Name ${i}` });
+      await makeAthlete({
+        sport: "Football",
+        age: 17,
+        name: `Real Name ${i}`,
+        researchDataConsent: true,
+      });
     }
   }
 
@@ -39,6 +48,41 @@ describe("query engine anonymity", () => {
       sport: ["Football"],
     } as any);
     expect(rows).toEqual([]);
+  });
+
+  it("leaves out an athlete who has not opted in to data collection", async () => {
+    // One consent rule, both surfaces (Scott, 2026-09-10). An athlete who never answered is not
+    // counted, which is what opt-in means -- so a cohort of five where two never opted in is a
+    // cohort of three, and three is below the floor.
+    await makeFootballAthletes(3);
+    for (let i = 0; i < 2; i++) {
+      await makeAthlete({
+        sport: "Football",
+        age: 17,
+        name: `No Consent ${i}`,
+        researchDataConsent: false,
+      });
+    }
+    const rows = await storage.queryAthletesAdvanced(adminId, {
+      lookbackDays: 30,
+      sport: ["Football"],
+    } as any);
+    expect(rows).toEqual([]);
+  });
+
+  it("counts only the opted-in athletes toward the minimum", async () => {
+    await makeFootballAthletes(5);
+    await makeAthlete({
+      sport: "Football",
+      age: 17,
+      name: "No Consent",
+      researchDataConsent: false,
+    });
+    const rows = await storage.queryAthletesAdvanced(adminId, {
+      lookbackDays: 30,
+      sport: ["Football"],
+    } as any);
+    expect(rows).toHaveLength(5);
   });
 
   it("returns rows once the cohort reaches the minimum", async () => {
@@ -112,7 +156,7 @@ describe("query budget", () => {
     const admin = await makeCoach({ role: "admin", name: "Admin" });
     adminId = admin.id;
     for (let i = 0; i < 5; i++) {
-      await makeAthlete({ sport: "Football", age: 17 });
+      await makeAthlete({ sport: "Football", age: 17, researchDataConsent: true });
     }
   });
 
