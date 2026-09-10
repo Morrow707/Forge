@@ -5533,6 +5533,20 @@ export const aggregateDataAccessLog = pgTable("aggregate_data_access_log", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   viewedAt: timestamp("viewed_at").notNull().defaultNow(),
+  // WHAT WAS ASKED, WHY, AND FOR WHOM.
+  //
+  // The log was a bare (who, when) pair, which answers "was this looked at" and nothing else.
+  // Six months later, facing the question "why did we pull data on 15-17 year old female track
+  // athletes on the 9th," there was nothing to answer it with -- and that is the question that
+  // actually gets asked, by an ethics board, by a partner, or by an admin trying to remember.
+  //
+  // purpose is required at the one surface a person types a query into; the other callers are
+  // page loads with no question attached and leave it null. Free text on purpose: the honest
+  // answer is usually a sentence ("Cal Berkeley asked for youth track velocity norms"), not a
+  // category.
+  queryText: text("query_text"),
+  purpose: text("purpose"),
+  requestedFor: text("requested_for"),
 });
 
 export type AggregateDataAccessLogEntry = typeof aggregateDataAccessLog.$inferSelect;

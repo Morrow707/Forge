@@ -2432,6 +2432,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(trends);
   });
 
+  // The record of every data cut that has been run: what was asked, why, and for whom.
+  app.get("/api/admin/cohort-query-history", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listCohortQueryHistory());
+  });
+
   // Natural-language cohort query -- "15-17 year old female track athletes,
   // bar velocity on back squats" in, an anonymized aggregate (or a clear
   // "AI isn't configured" / "couldn't parse that" response) out. Same
@@ -2442,13 +2447,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!aiEnabled) {
       return res.status(503).json({ message: "AI parsing isn't configured on this server." });
     }
-    const parsed = z.object({ text: z.string().trim().min(1).max(500) }).safeParse(req.body);
+    // Purpose is required, not optional. A data cut with no stated reason is the one this log
+    // cannot account for later, and later is when the question gets asked.
+    const parsed = z
+      .object({
+        text: z.string().trim().min(1).max(500),
+        purpose: z.string().trim().min(3).max(500),
+        requestedFor: z.string().trim().max(200).optional(),
+      })
+      .safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: "A non-empty search text is required." });
+      return res.status(400).json({
+        message:
+          parsed.error.issues[0]?.path[0] === "purpose"
+            ? "Say why you're pulling this -- it goes in the record with the query."
+            : "A non-empty search text is required.",
+      });
     }
     let result;
     try {
-      result = await storage.runCohortQuery(req.user!.id, parsed.data.text);
+      result = await storage.runCohortQuery(req.user!.id, parsed.data.text, {
+        purpose: parsed.data.purpose,
+        requestedFor: parsed.data.requestedFor ?? null,
+      });
     } catch (err) {
       if (err instanceof CohortQueryBudgetExceeded) {
         return res.status(429).json({ message: err.message, budget: err.budget });

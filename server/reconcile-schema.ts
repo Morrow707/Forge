@@ -2886,6 +2886,12 @@ ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "progress_total" intege
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_from_page" integer;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_to_page" integer;
 
+-- What each aggregate-data query asked, why, and who it was for. The log was a bare
+-- (who, when) pair, which cannot answer "why did we pull this" months later.
+ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "query_text" text;
+ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "purpose" text;
+ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "requested_for" text;
+
 -- An admin clears a problem report by hand; nothing ages one out. Kept, not deleted, so a
 -- cleared report is still findable.
 ALTER TABLE "problem_reports" ADD COLUMN IF NOT EXISTS "resolved_at" timestamp;

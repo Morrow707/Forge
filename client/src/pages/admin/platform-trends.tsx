@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -113,17 +113,63 @@ function formatMetricStat(v: number | undefined, unit: string) {
   return `${Math.round(v * 100) / 100}${unit}`;
 }
 
+type CohortQueryHistoryEntry = {
+  id: number;
+  viewedAt: string;
+  queryText: string | null;
+  purpose: string | null;
+  requestedFor: string | null;
+  adminName: string | null;
+};
+
+/** Every data cut that has actually been run, newest first. The access log has always existed
+ * as the query budget's counter; this reads the same rows as what they also are -- the record
+ * of why athlete data was queried, which is the question that gets asked months later and had
+ * no answer stored anywhere. */
+function CohortQueryHistory() {
+  const { data = [] } = useQuery<CohortQueryHistoryEntry[]>({
+    queryKey: ["/api/admin/cohort-query-history"],
+  });
+  if (data.length === 0) return null;
+  return (
+    <div className="space-y-2 border-t border-border pt-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Previous cuts
+      </p>
+      {data.map((row) => (
+        <div key={row.id} className="rounded-md border border-border p-3 text-sm">
+          <p className="font-medium">{row.queryText}</p>
+          {row.purpose && <p className="mt-1 text-muted-foreground">{row.purpose}</p>}
+          <p className="mt-1 text-xs text-muted-foreground">
+            {row.requestedFor ? `For ${row.requestedFor} — ` : ""}
+            {row.adminName ?? "Unknown"} on {new Date(row.viewedAt).toLocaleString()}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CohortQueryCard() {
   const [text, setText] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [requestedFor, setRequestedFor] = useState("");
+  const qc = useQueryClient();
   const mutation = useMutation({
     mutationFn: async (q: string) => {
-      const res = await apiRequest("POST", "/api/admin/cohort-query", { text: q });
+      const res = await apiRequest("POST", "/api/admin/cohort-query", {
+        text: q,
+        purpose: purpose.trim(),
+        requestedFor: requestedFor.trim() || undefined,
+      });
       return (await res.json()) as CohortQueryResult;
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/cohort-query-history"] }),
   });
 
+  const canRun = text.trim().length > 0 && purpose.trim().length >= 3;
   const run = () => {
-    if (!text.trim() || mutation.isPending) return;
+    if (!canRun || mutation.isPending) return;
     mutation.mutate(text.trim());
   };
 
@@ -149,10 +195,27 @@ function CohortQueryCard() {
             placeholder="e.g. 15-17 year old female track athletes, bar velocity on back squats"
             className="flex-1"
           />
-          <Button onClick={run} disabled={!text.trim() || mutation.isPending}>
+          <Button onClick={run} disabled={!canRun || mutation.isPending}>
             <Search className="h-4 w-4" />
             {mutation.isPending ? "Asking..." : "Ask"}
           </Button>
+        </div>
+        {/* Why, and for whom. Required, because a cut with no stated reason is exactly the one
+            nobody can account for six months later -- and free text, because the honest answer
+            is a sentence, not a category. */}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            value={purpose}
+            onChange={(e) => setPurpose(e.target.value)}
+            placeholder="Why are you pulling this? (required)"
+            className="flex-1"
+          />
+          <Input
+            value={requestedFor}
+            onChange={(e) => setRequestedFor(e.target.value)}
+            placeholder="Who asked for it? e.g. Cal Berkeley"
+            className="sm:w-64"
+          />
         </div>
 
         {mutation.isError && (
@@ -160,6 +223,8 @@ function CohortQueryCard() {
             {(mutation.error as any)?.message || "Couldn't run that query -- try again."}
           </p>
         )}
+
+        <CohortQueryHistory />
 
         {mutation.data && (
           <div className="space-y-4 border-t border-border pt-4">
@@ -315,7 +380,7 @@ export default function AdminPlatformTrends() {
   });
 
   return (
-    <AppShell title="Platform Trends">
+    <AppShell title="Cohort Explorer">
       <div className="space-y-6">
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="flex items-start gap-3 p-4 text-sm text-muted-foreground">

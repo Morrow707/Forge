@@ -178,8 +178,10 @@ const adminNav: NavItem[] = [
   { href: "/admin/teach-ai", label: "Teach AI", icon: Sparkles, overflow: true },
   { href: "/admin/camera-ai", label: "Camera AI", icon: Aperture, overflow: true },
   { href: "/admin/tracking-report", label: "AR Diagnosis", icon: FileText, overflow: true },
-  { href: "/admin/platform-trends", label: "Platform Trends", icon: BarChart3, overflow: true },
-  { href: "/admin/knowledge-base", label: "Knowledge Base", icon: Library, overflow: true },
+  { href: "/admin/platform-trends", label: "Cohort Explorer", icon: BarChart3, overflow: true },
+  // No nav entry for /admin/knowledge-base: Teach the AI's "Books & Documents" tab renders the
+  // very same KnowledgeBaseContent component, so this was a second door onto one room. The
+  // route still resolves, so an existing link or bookmark keeps working.
   { href: "/admin/ai-spend", label: "AI Spend", icon: DollarSign, overflow: true },
   { href: "/admin/research-exports", label: "Dataset Extracts", icon: FileDown, overflow: true },
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },

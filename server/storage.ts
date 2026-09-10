@@ -387,7 +387,16 @@ export type QueryBudgetResult =
  * table with: a budget that can be bypassed by a failed insert is not a
  * budget. If the log cannot be written, the query does not run.
  */
-async function consumeCohortQueryBudget(adminId: number): Promise<QueryBudgetResult> {
+export type CohortQueryContext = {
+  queryText?: string | null;
+  purpose?: string | null;
+  requestedFor?: string | null;
+};
+
+async function consumeCohortQueryBudget(
+  adminId: number,
+  context: CohortQueryContext = {},
+): Promise<QueryBudgetResult> {
   const since = new Date(Date.now() - COHORT_QUERY_BUDGET_WINDOW_MS);
   const [row] = await db
     .select({ used: count() })
@@ -416,7 +425,12 @@ async function consumeCohortQueryBudget(adminId: number): Promise<QueryBudgetRes
     };
   }
 
-  await db.insert(aggregateDataAccessLog).values({ adminId });
+  await db.insert(aggregateDataAccessLog).values({
+    adminId,
+    queryText: context.queryText ?? null,
+    purpose: context.purpose ?? null,
+    requestedFor: context.requestedFor ?? null,
+  });
   return { allowed: true, used: used + 1, limit: COHORT_QUERY_BUDGET_PER_DAY };
 }
 
@@ -22644,6 +22658,26 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return rows;
   },
 
+  /** Every data cut that has actually been run, newest first -- what was asked, why, who it
+   * was for, and who ran it. The log has always existed as a budget counter; this is the same
+   * rows read as what they also are, which is the record of why athlete data was queried. */
+  async listCohortQueryHistory(limit = 50) {
+    return db
+      .select({
+        id: aggregateDataAccessLog.id,
+        viewedAt: aggregateDataAccessLog.viewedAt,
+        queryText: aggregateDataAccessLog.queryText,
+        purpose: aggregateDataAccessLog.purpose,
+        requestedFor: aggregateDataAccessLog.requestedFor,
+        adminName: users.name,
+      })
+      .from(aggregateDataAccessLog)
+      .leftJoin(users, eq(aggregateDataAccessLog.adminId, users.id))
+      .where(isNotNull(aggregateDataAccessLog.queryText))
+      .orderBy(desc(aggregateDataAccessLog.viewedAt))
+      .limit(limit);
+  },
+
   async runResearchCohortQuery(adminId: number, text: string) {
     const budget = await consumeCohortQueryBudget(adminId);
     if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);
@@ -22722,8 +22756,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return { totalAthletes: total?.count ?? 0, consentedAthletes: consented?.count ?? 0 };
   },
 
-  async runCohortQuery(adminId: number, text: string) {
-    const budget = await consumeCohortQueryBudget(adminId);
+  async runCohortQuery(adminId: number, text: string, context: CohortQueryContext = {}) {
+    // The one surface a person types a question into, so it is the one that records what was
+    // asked and why -- the page-load callers have no question attached and leave those null.
+    const budget = await consumeCohortQueryBudget(adminId, { ...context, queryText: text });
     if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);
     const filters = await parseCohortQueryText(text);
     if (!filters) return null;
