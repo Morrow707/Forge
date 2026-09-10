@@ -88,6 +88,7 @@ type TrackingDiagnostics = {
     traceTravelAcrossPx?: number | null;
     traceTravelAlongCm?: number | null;
     traceTravelAcrossCm?: number | null;
+    tracePointsDroppedOffAxis?: number | null;
     scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number }[];
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
@@ -526,6 +527,14 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
           `${px != null ? ` (${Math.round(px)}px at the chosen scale)` : ""}` +
           `${acrossCm != null ? `, ${Math.round(acrossCm * 10) / 10}cm across` : ""}`,
       });
+      if (c.tracePointsDroppedOffAxis != null && c.tracePointsDroppedOffAxis > 0) {
+        lines.push({
+          label: "Off-bar frames dropped",
+          value:
+            `${c.tracePointsDroppedOffAxis} frames sat more than 25cm off the bar's own line ` +
+            `and were thrown out before anything was measured`,
+        });
+      }
       lines.push({
         label: "Movement axis",
         value:

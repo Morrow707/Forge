@@ -138,6 +138,8 @@ export type TrackingDiagnostics = {
     traceTravelAcrossPx?: number;
     traceTravelAlongCm?: number;
     traceTravelAcrossCm?: number;
+    // Frames thrown out for sitting too far off the bar's own line -- see dropAcrossAxisOutliers.
+    tracePointsDroppedOffAxis?: number;
     // Candidates thrown out for implying an impossible athlete, with the height each implied.
     scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number }[];
     noseToAnkleFrames: number;

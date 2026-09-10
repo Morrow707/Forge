@@ -57,6 +57,7 @@ import {
   computeRepTrustScores,
   implausibleRangeOfMotion,
   movementAxisFromGrip,
+  dropAcrossAxisOutliers,
   toScaleFreeMetrics,
   normalizeTraceScale,
   type ScaleFreeMetrics,
@@ -855,6 +856,7 @@ export function AvBarTrackerDialog({
       traceTravelAcrossPx?: number;
       traceTravelAlongCm?: number;
       traceTravelAcrossCm?: number;
+      tracePointsDroppedOffAxis?: number;
     } = {
       scaleSource,
       scaleCandidates,
@@ -1129,6 +1131,19 @@ export function AvBarTrackerDialog({
     // before scale. Together they are the other half of every range-of-motion number this
     // pipeline produces, and neither was visible until now.
     const movementAxis = movementAxisFromGrip(gripPairs);
+
+    // Frames where the tracked point was not on the bar, thrown out before anything is measured
+    // -- see dropAcrossAxisOutliers. The across-axis travel this take reported (150cm on a bar
+    // that moves a few centimetres sideways) is what this is for, and the rep count is what it
+    // was costing.
+    const { kept: cleanedTrace, dropped: acrossOutliersDropped } = dropAcrossAxisOutliers(
+      trace,
+      movementAxis,
+    );
+    trace.length = 0;
+    trace.push(...cleanedTrace);
+    calibrationDiagnostics.tracePointsDroppedOffAxis = acrossOutliersDropped;
+
     if (trace.length > 0) {
       const ax = movementAxis ?? { x: 0, y: 1 };
       let minAlong = Infinity;

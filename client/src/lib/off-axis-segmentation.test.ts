@@ -4,6 +4,7 @@ import {
   dominantAxisProjection,
   repAmplitudeGateCm,
   movementAxisFromGrip,
+  dropAcrossAxisOutliers,
   concentricIsUpward,
   segmentPhases,
   summarizeTrackedSet,
@@ -379,5 +380,55 @@ describe("a slow concentric is still the concentric", () => {
     expect(concentricIsUpward("horizontal_press_or_row")).toBe(true);
     expect(concentricIsUpward("squat")).toBe(true);
     expect(concentricIsUpward(null)).toBe(true);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// The rear-view squat that reported 186cm of travel along the movement axis
+// and 150cm across it.
+// ---------------------------------------------------------------------------
+
+describe("dropAcrossAxisOutliers", () => {
+  const AXIS = { x: 0, y: 1 };
+  // A clean vertical rep: the bar goes down and up, sitting on one line across the frame.
+  const cleanRep = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      t: i * 16,
+      x: 0.01,
+      y: 0.4 * Math.sin((i / n) * Math.PI * 2),
+      z: 0,
+      confidence: 0.9,
+    }));
+
+  it("leaves a bar that stayed on its line alone", () => {
+    const trace = cleanRep(60);
+    const { kept, dropped } = dropAcrossAxisOutliers(trace, AXIS);
+    expect(dropped).toBe(0);
+    expect(kept).toHaveLength(60);
+  });
+
+  it("throws out the frames where the point left the bar", () => {
+    // Six frames where the tracked midpoint swung most of a metre sideways -- the shape the real
+    // take produced when one of the two grip reads jumped onto something else.
+    const trace = cleanRep(60);
+    for (const i of [10, 11, 30, 31, 50, 51]) trace[i] = { ...trace[i], x: 0.9 };
+    const { kept, dropped } = dropAcrossAxisOutliers(trace, AXIS);
+    expect(dropped).toBe(6);
+    expect(kept.every((p) => p.x < 0.5)).toBe(true);
+  });
+
+  it("keeps everything rather than thin a trace that is mostly off the line", () => {
+    // If most of the take sits that far off the median, the axis is what is wrong -- and
+    // replacing one bad answer with no answer is not an improvement.
+    const trace = cleanRep(60).map((p, i) => (i % 2 === 0 ? { ...p, x: 1.5 } : p));
+    const { kept, dropped } = dropAcrossAxisOutliers(trace, AXIS);
+    expect(dropped).toBe(0);
+    expect(kept).toHaveLength(60);
+  });
+
+  it("does nothing without a measured axis", () => {
+    const trace = cleanRep(60);
+    expect(dropAcrossAxisOutliers(trace, null).dropped).toBe(0);
   });
 });

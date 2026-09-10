@@ -1977,6 +1977,53 @@ export function dominantAxisProjection(points: { x: number; y: number }[]): numb
 const MIN_GRIP_PAIRS_FOR_AXIS = 12;
 const MIN_GRIP_SEPARATION_FRACTION = 0.02;
 
+/** How far across the movement axis a tracked point may sit from where the bar actually is,
+ *  before it is treated as not being on the bar. A barbell drifts sideways by centimetres; a
+ *  quarter of a metre is already a generous allowance for a real lift, and nothing legitimate
+ *  reaches it on a squat, bench, press or row. */
+const MAX_ACROSS_AXIS_DEVIATION_M = 0.25;
+
+/**
+ * DROP THE FRAMES WHERE THE TRACKED POINT WAS NOT ON THE BAR.
+ *
+ * A rear-view squat came back with 186cm of travel ALONG the movement axis and 150cm ACROSS it.
+ * The along figure is right -- it is five reps of about 80cm. The across figure is not a bar: a
+ * loaded barbell moves sideways by a few centimetres, and a metre and a half of lateral travel
+ * is the traced point leaving the bar and coming back, repeatedly.
+ *
+ * That wandering is what inflates the rep count. The point the trace follows is the midpoint
+ * between two fused grip reads, so when one of them jumps -- onto the other hand, onto a plate
+ * on the rack behind -- the midpoint swings, and the swing looks like vertical motion to the
+ * segmenter as well as horizontal. Six reps on a five-rep set is the visible half of it; the
+ * velocity numbers carry the same error invisibly.
+ *
+ * The bar's real line across the frame is the median of where the point sat, not its mean --
+ * the excursions are exactly what a mean would chase. A point a quarter of a metre off that
+ * line is dropped rather than smoothed, because smoothing an outlier drags the good samples
+ * either side of it toward a place the bar never was.
+ *
+ * Deliberately never drops more than a third of the trace: if most of the take is that far off
+ * the median line, the axis is what is wrong and thinning the trace would replace one bad answer
+ * with no answer at all.
+ */
+export function dropAcrossAxisOutliers(
+  trace: TrackedPoint[],
+  axis: { x: number; y: number } | null,
+): { kept: TrackedPoint[]; dropped: number } {
+  if (!axis || trace.length < 8) return { kept: trace, dropped: 0 };
+  const across = trace.map((p) => -p.x * axis.y + p.y * axis.x);
+  const sorted = [...across].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const kept: TrackedPoint[] = [];
+  let dropped = 0;
+  for (let i = 0; i < trace.length; i++) {
+    if (Math.abs(across[i] - median) > MAX_ACROSS_AXIS_DEVIATION_M) dropped++;
+    else kept.push(trace[i]);
+  }
+  if (dropped > trace.length / 3) return { kept: trace, dropped: 0 };
+  return { kept, dropped };
+}
+
 export function movementAxisFromGrip(
   pairs: { left: { x: number; y: number }; right: { x: number; y: number } }[],
 ): { x: number; y: number } | null {

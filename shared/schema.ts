@@ -7475,6 +7475,7 @@ export const trackingDiagnosticsSchema = z.object({
       traceTravelAcrossPx: z.number().optional().nullable(),
       traceTravelAlongCm: z.number().optional().nullable(),
       traceTravelAcrossCm: z.number().optional().nullable(),
+      tracePointsDroppedOffAxis: z.number().optional().nullable(),
       scalesRejectedAsImplausible: z
         .array(z.object({ source: z.string().max(40), impliedHeightIn: z.number() }))
         .max(8)
