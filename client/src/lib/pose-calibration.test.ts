@@ -110,6 +110,55 @@ describe("height calibration", () => {
   });
 });
 
+// A back squat at depth: still upright, still the same person, but the nose-to-ankle span has
+// collapsed to two thirds of standing height. Both guards let this through on purpose -- the
+// body IS vertical, and 0.667 / 0.245 is 2.7 against a 2.5 floor -- which is exactly why the
+// estimator, not the guards, has to be the thing that handles it.
+function squatBottomFrame() {
+  return frameFrom({
+    [POSE_LANDMARKS.NOSE]: [0, 0.333],
+    [POSE_LANDMARKS.LEFT_SHOULDER]: [-SHOULDER_HALF, 0.43],
+    [POSE_LANDMARKS.RIGHT_SHOULDER]: [SHOULDER_HALF, 0.43],
+    [POSE_LANDMARKS.LEFT_HIP]: [-0.1, 0.85],
+    [POSE_LANDMARKS.RIGHT_HIP]: [0.1, 0.85],
+    [POSE_LANDMARKS.LEFT_ANKLE]: [-0.1, 1.0],
+    [POSE_LANDMARKS.RIGHT_ANKLE]: [0.1, 1.0],
+  });
+}
+
+describe("a movement that compresses the athlete", () => {
+  // A real set spends most of its frames somewhere other than fully stood up -- the descent,
+  // the bottom, the drive back. Standing frames are the minority, and a median walks straight
+  // into the majority.
+  const squatSet = [
+    ...Array.from({ length: 6 }, standingFrame),
+    ...Array.from({ length: 24 }, squatBottomFrame),
+  ];
+
+  it("calibrates a squat off the athlete standing, not off the athlete at depth", () => {
+    // The right answer is the standing one. Reading it off the bottom would return HEIGHT_M
+    // divided by 0.667 -- half a metre per unit against a true 1.78, every distance,
+    // velocity and power number for the set inflated by the same 1.5x.
+    expect(calibrateFromFrames(squatSet, HEIGHT_IN)!).toBeCloseTo(HEIGHT_M, 5);
+  });
+
+  it("does not take the single most extended frame either", () => {
+    // One landmark glitch that stretches a span would otherwise become the scale for the
+    // whole set. A tenth-percentile read ignores a lone outlier; a pure minimum takes it.
+    const withGlitch = [
+      ...squatSet,
+      frameFrom({
+        [POSE_LANDMARKS.NOSE]: [0, -1.0],
+        [POSE_LANDMARKS.LEFT_SHOULDER]: [-SHOULDER_HALF, 0.15],
+        [POSE_LANDMARKS.RIGHT_SHOULDER]: [SHOULDER_HALF, 0.15],
+        [POSE_LANDMARKS.LEFT_ANKLE]: [-0.1, 1.0],
+        [POSE_LANDMARKS.RIGHT_ANKLE]: [0.1, 1.0],
+      }),
+    ];
+    expect(calibrateFromFrames(withGlitch, HEIGHT_IN)!).toBeCloseTo(HEIGHT_M, 5);
+  });
+});
+
 describe("what the old code did", () => {
   // The regression this suite exists for: a bench set reported 154cm of range of motion
   // against 39cm actually pressed. The vertical leftover of a horizontal body was being

@@ -1508,9 +1508,27 @@ export function calibrateFromFrames(
     if (candidate != null) samples.push(candidate);
   }
   if (samples.length < MIN_CALIBRATION_SAMPLES) return null;
+  // AN ATHLETE IS NEVER TALLER THAN THEIR HEIGHT, AND USUALLY SHORTER.
+  //
+  // This took the MEDIAN of the per-frame scales, which is the right estimator for a quantity
+  // scattered symmetrically around a true value and the wrong one here. The error is one-sided:
+  // a frame can only ever measure the athlete SHORTER than they are -- a squat at depth, the dip
+  // before a jump, a hinge -- never taller. Scale is height divided by that span, so every
+  // compressed frame produces a scale too LARGE, and the median of a set of one-sided errors
+  // sits inside the error rather than at the truth.
+  //
+  // It bites hardest on exactly the movements that compress the most. At the bottom of a back
+  // squat the nose-to-ankle span runs around two thirds of standing height, and both guards
+  // above pass it: the body is still vertical, and the height-to-shoulder ratio is still about
+  // 2.8 against a 2.5 floor. A whole set of those frames drags the median well off, and every
+  // distance, velocity and power number downstream carries the same factor.
+  //
+  // The tenth-percentile scale is the smallest few, which is the LARGEST few spans, which is the
+  // athlete at their most extended. Not the single largest: one bad landmark can stretch a span
+  // and a pure minimum would take that outlier every time.
   const sorted = [...samples].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.1));
+  return sorted[idx];
 }
 
 // Enough coverage from head to ankle that the wrist/ankle point the tracker
