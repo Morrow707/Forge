@@ -2802,6 +2802,24 @@ export class ForbiddenReferenceError extends Error {
   status = 400;
 }
 
+// Thrown when a workout save was built from an older picture of the day than
+// what is stored. Every save is a delete-and-reinsert of that day's entries and
+// sets (there is no per-set merge), so applying one of these does not lose an
+// edit, it loses the whole day: the sets, their tracked metrics, and the videos
+// attached to them.
+//
+// It is not hypothetical. The day view falls back to a cached snapshot when its
+// fetch fails, which is exactly what a deploy or a dropped signal mid-workout
+// produces. It hydrates from that older snapshot and its next autosave writes it
+// back over the newer rows. A refusal the client can recover from by reloading is
+// the only safe answer; index.ts's error handler turns .status into the response.
+export class StaleWorkoutLogError extends Error {
+  status = 409;
+  constructor(readonly currentRevision: number) {
+    super("This workout was updated somewhere else since this screen loaded. Reload to see the latest.");
+  }
+}
+
 // The athlete fields a guardian's dashboard is allowed to see -- shared
 // between getAthletesForGuardian (all linked athletes) and
 // getAthleteForGuardianScoped (one, authorization-checked) so the two never
@@ -19254,11 +19272,21 @@ ${catalog}`;
           }
         }
 
+        // Refuse a save built from an older picture of this day than what is
+        // stored, rather than letting it replace the day wholesale. See
+        // StaleWorkoutLogError and workoutLogs.revision for why this is a
+        // refusal and not a merge. A payload with no baseRevision at all is an
+        // older client and keeps the previous behaviour.
+        if (input.baseRevision != null && input.baseRevision !== log.revision) {
+          throw new StaleWorkoutLogError(log.revision);
+        }
+
         [log] = await tx
           .update(workoutLogs)
           .set({
             completed: input.completed,
             completedAt: input.completed ? new Date() : null,
+            revision: log.revision + 1,
           })
           .where(eq(workoutLogs.id, log.id))
           .returning();

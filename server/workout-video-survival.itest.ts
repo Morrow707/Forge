@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { storage } from "./storage";
+import { storage, StaleWorkoutLogError } from "./storage";
 import { db } from "./db";
 import { uploadedFiles } from "@shared/schema";
 import {
@@ -157,5 +157,109 @@ describe("a workout save only deletes video it was told to replace", () => {
     ]);
 
     expect(await uploadedFileExists(clip)).toBe(true);
+  });
+});
+
+// The other half of the same incident. A save replaces the day's entries and sets outright,
+// so a client saving from an older picture of the day does not lose one edit -- it loses the
+// whole day. The day view falls back to a cached snapshot whenever its fetch fails, which is
+// what a deploy or a dropped signal mid-workout produces, and its next autosave wrote that
+// older snapshot back over the newer rows. Scott logged two sets each of back squat and box
+// jump and found them gone.
+describe("a workout save built on a stale revision is refused, not applied", () => {
+  beforeEach(resetDatabase);
+
+  it("refuses the stale save and leaves the stored sets intact", async () => {
+    const { athlete, program } = await setup();
+    const [squatEx] = program.programExercises;
+
+    const first = await save(athlete.id, program, [
+      entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "225" }]),
+    ]);
+
+    // A second save lands -- another tab, a queued autosave, the athlete's next set.
+    const second = await storage.submitWorkoutLog(athlete.id, {
+      assignmentId: program.assignment.id,
+      programDayId: program.day.id,
+      date: "2026-01-05",
+      completed: false,
+      baseRevision: (first as any).revision,
+      entries: [
+        entry(squatEx.id, [
+          { setNumber: 1, reps: 5, weight: "225" },
+          { setNumber: 2, reps: 5, weight: "245" },
+        ]),
+      ],
+    } as any);
+    expect((second as any).revision).toBe((first as any).revision + 1);
+
+    // Now the stale one: same base revision the first save produced, one set, no knowledge
+    // of set 2. This is the payload that used to erase it.
+    await expect(
+      storage.submitWorkoutLog(athlete.id, {
+        assignmentId: program.assignment.id,
+        programDayId: program.day.id,
+        date: "2026-01-05",
+        completed: false,
+        baseRevision: (first as any).revision,
+        entries: [entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "225" }])],
+      } as any),
+    ).rejects.toBeInstanceOf(StaleWorkoutLogError);
+
+    const stored = await storage.getWorkoutDayDetail(
+      athlete.id,
+      program.assignment.id,
+      program.day.id,
+      "2026-01-05",
+    );
+    expect(stored!.log!.entries[0].sets).toHaveLength(2);
+  });
+
+  it("keeps the stale save from deleting the video on a set it never knew about", async () => {
+    const { athlete, program } = await setup();
+    const [squatEx] = program.programExercises;
+
+    const clip = await makeUploadedFile(`stale-${Date.now()}.mp4`);
+    await registerUpload(clip, athlete.id);
+
+    const first = await save(athlete.id, program, [
+      entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "225" }]),
+    ]);
+    await storage.submitWorkoutLog(athlete.id, {
+      assignmentId: program.assignment.id,
+      programDayId: program.day.id,
+      date: "2026-01-05",
+      completed: false,
+      baseRevision: (first as any).revision,
+      entries: [
+        entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "225", formCheckVideoUrl: clip }]),
+      ],
+    } as any);
+
+    await expect(
+      storage.submitWorkoutLog(athlete.id, {
+        assignmentId: program.assignment.id,
+        programDayId: program.day.id,
+        date: "2026-01-05",
+        completed: false,
+        baseRevision: (first as any).revision,
+        entries: [entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "225" }])],
+      } as any),
+    ).rejects.toBeInstanceOf(StaleWorkoutLogError);
+
+    expect(await uploadedFileExists(clip)).toBe(true);
+  });
+
+  // An older client sends no baseRevision at all, and a first save has nothing to conflict
+  // with. Neither may start failing.
+  it("still accepts a save that makes no claim about what was there", async () => {
+    const { athlete, program } = await setup();
+    const [squatEx] = program.programExercises;
+
+    await save(athlete.id, program, [entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "225" }])]);
+    const again = await save(athlete.id, program, [
+      entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "235" }]),
+    ]);
+    expect((again as any).revision).toBe(1);
   });
 });

@@ -2952,6 +2952,11 @@ CREATE TABLE IF NOT EXISTS "applied_backfills" (
   "applied_at" timestamp NOT NULL DEFAULT now()
 );
 
+-- Optimistic concurrency for a workout day's save. See workoutLogs.revision in
+-- shared/schema.ts: a save replaces the day's rows wholesale, so a client saving
+-- from a stale snapshot silently destroyed newer data.
+ALTER TABLE "workout_logs" ADD COLUMN IF NOT EXISTS "revision" integer NOT NULL DEFAULT 0;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'weight_unit_lbs_default_2026_09_09') THEN

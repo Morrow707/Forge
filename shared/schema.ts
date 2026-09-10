@@ -2032,6 +2032,19 @@ export const workoutLogs = pgTable(
     date: date("date").notNull(),
     completed: boolean("completed").notNull().default(false),
     completedAt: timestamp("completed_at"),
+    // Bumped by every successful submitWorkoutLog. A save is a full
+    // delete-and-reinsert of this day's entries and sets, so a client saving
+    // from a stale picture of the day does not merge with what is already
+    // stored -- it replaces it. That is how a whole workout disappeared: the
+    // day view falls back to an offline cache when the fetch fails (a deploy,
+    // a dropped signal), hydrates from that older snapshot, and its next
+    // autosave writes the older snapshot back over the newer rows.
+    //
+    // The client sends the revision it hydrated from. If this column has moved
+    // on since, the save is refused (409) instead of applied, and the client
+    // reloads rather than overwrites. See submitWorkoutLog and
+    // StaleWorkoutLogError in server/storage.ts.
+    revision: integer("revision").notNull().default(0),
   },
   (table) => ({
     dayInstanceIdx: uniqueIndex("workout_log_day_instance_idx").on(
@@ -7636,6 +7649,11 @@ export const submitWorkoutLogSchema = z.object({
   // level up: without this, the per-set caps could still be multiplied by an
   // unbounded number of entries in the same request.
   entries: z.array(logEntryInputSchema).max(100).default([]),
+  // The workout_logs.revision this payload was built from -- see that column's
+  // own comment. Optional so an older client (or a first save, where there is
+  // no log yet) still works; when it is present and does not match, the save is
+  // refused rather than allowed to overwrite newer data.
+  baseRevision: z.number().int().nonnegative().optional(),
 });
 
 // ---------- Types ----------

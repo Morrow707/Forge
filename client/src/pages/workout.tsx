@@ -545,7 +545,10 @@ type DayDetail = {
     exercises: PrescribedExercise[];
   };
   correctives: PrescribedCorrective[];
-  log: { completed: boolean; entries: LogEntry[] } | null;
+  // revision is the optimistic-concurrency token -- see workoutLogs.revision in
+  // shared/schema.ts. Every payload carries the revision it was built from, and a
+  // save that no longer matches is refused instead of replacing the day.
+  log: { completed: boolean; entries: LogEntry[]; revision?: number } | null;
   // Body parts flagged in today's wellness check-in, and whether any
   // exercise currently shown (post-override) looks risky given them -- see
   // shared/injury-matching.ts. hasModifiableRisk stays true even after a
@@ -1038,6 +1041,12 @@ export function WorkoutPage({
 
   const [items, setItems] = useState<ItemState[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  // Which revision of the stored log this screen's state was built from, sent with
+  // every save so the server can refuse one built on a stale picture of the day
+  // rather than replace the day with it -- see workoutLogs.revision. Null before a
+  // log exists (nothing to conflict with) and re-read from the server's answer on
+  // every successful save, since each save advances it.
+  const baseRevisionRef = useRef<number | null>(null);
   // Peek + Rail accordion: at most one exercise expanded at a time (its own
   // ItemState.key), the whole workout always visible/scrollable above and
   // below it -- replaces the old separate "overview list" vs. "full-screen
@@ -1126,6 +1135,7 @@ export function WorkoutPage({
         ),
       );
       setItems([...correctiveItems, ...exerciseItems]);
+      baseRevisionRef.current = data.log?.revision ?? null;
       setHydrated(true);
       setExpandedKey(null);
     }
@@ -1182,6 +1192,10 @@ export function WorkoutPage({
       programDayId: Number(programDayId),
       date,
       completed,
+      // Undefined rather than null when there is no stored log yet: the server
+      // treats an absent baseRevision as "no claim about what was there", which is
+      // what a first save actually is.
+      baseRevision: baseRevisionRef.current ?? undefined,
       entries: itemsSnapshot.map((it) => ({
         programExerciseId: it.kind === "exercise" ? it.refId : undefined,
         correctiveId: it.kind === "corrective" ? it.refId : undefined,
@@ -1322,6 +1336,9 @@ export function WorkoutPage({
       // synced, not merely reaching onSuccess. An offline save resolves here with
       // synced === false after queueing, so trusting the hook alone would mark capture data
       // as server-held at the exact moment it was not. See capturePersistedRef.
+      // Each save advances the stored revision, so the next payload has to claim the
+      // new one or it would look stale to the server and be refused.
+      if (synced && typeof data?.revision === "number") baseRevisionRef.current = data.revision;
       if (synced) {
         for (const it of itemsRef.current) {
           for (const st of it.sets) {
@@ -1375,6 +1392,26 @@ export function WorkoutPage({
       }
     },
     onError: (err: ApiError, { silent }) => {
+      // 409 means the stored day moved on since this screen loaded, so this payload
+      // would have replaced newer data rather than merging with it (a save is a
+      // delete-and-reinsert of the whole day). The server refused it; the only correct
+      // recovery is to take the server's version, not to retry ours. Reloading here
+      // can cost whatever was typed since the conflict, which is a far smaller loss
+      // than the sets, tracked metrics and videos the overwrite used to destroy.
+      if (err.status === 409) {
+        if (autosaveTimerRef.current) {
+          clearTimeout(autosaveTimerRef.current);
+          autosaveTimerRef.current = null;
+        }
+        setJustCompleted(false);
+        setHydrated(false);
+        baseRevisionRef.current = null;
+        qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
+        toast.info("This workout was updated somewhere else -- reloading the latest version.", {
+          duration: 8000,
+        });
+        return;
+      }
       if (!silent) {
         // The only non-silent save is a "Mark Workout Complete" tap, so a
         // genuine rejection here means that optimistic flip was wrong --

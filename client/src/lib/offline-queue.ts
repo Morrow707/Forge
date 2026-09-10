@@ -313,8 +313,17 @@ async function runFlush() {
       if (permanentlyRejected) {
         writeQueue(readQueue().filter((p) => p.id !== entry.id));
         clearDayFailure(entry.dayKey);
+        // 409 is its own thing and deserves its own words. It does not mean the payload
+        // was malformed; it means the stored day moved on while this one sat in the
+        // queue, and a workout save replaces the day rather than merging into it (see
+        // workoutLogs.revision). Applying it would overwrite the newer sets, their
+        // tracked metrics and their videos, so it is dropped -- but what is on the
+        // server is real data, not a rejection, and telling the athlete to re-enter the
+        // day would have them type over it.
         toast.error(
-          "A workout you logged offline was rejected by the server and can't be synced -- open that day and re-enter it.",
+          status === 409
+            ? "A workout you logged offline couldn't sync because that day was updated somewhere else -- open it and check what's there before re-entering anything."
+            : "A workout you logged offline was rejected by the server and can't be synced -- open that day and re-enter it.",
           { duration: 20000 },
         );
         continue;
