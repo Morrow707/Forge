@@ -789,6 +789,33 @@ export function rejectImplausibleScales(
   return kept.length > 0 ? { kept, rejected } : { kept: estimates, rejected: [] };
 }
 
+// A BUMPER PLATE AGAINST THE HANDS HOLDING THE BAR IT IS ON.
+//
+// A plate is 45cm. A bench grip runs roughly 35cm at its closest to 95cm at its widest, so a real
+// plate measures somewhere between about a quarter and two and a half times the hand span,
+// generously bounded. Anything outside that is not a plate, whatever the detector called it.
+//
+// This matters because the guard that has been catching bad plate reads all week --
+// rejectImplausibleScales, which asks how tall the athlete would have to be -- needs the body to
+// have been measured, and returns everything untouched when it has not. So it switches itself off
+// in exactly the case where the plate is the ONLY source and nothing else can contradict it.
+// That is what happened on a bench press filmed with the ankles out of shot: calibration failed on
+// 89% of frames, the plate read 497px unchallenged, and every number downstream came out at the
+// wrong scale.
+//
+// The wrists need no calibration and were tracked on every frame of that take.
+const PLATE_TO_GRIP_RATIO_LOW = 0.25;
+const PLATE_TO_GRIP_RATIO_HIGH = 2.5;
+
+export function plateReadIsPlausibleAgainstGrip(
+  platePixelSize: number,
+  gripWidthPx: number | null,
+): boolean {
+  if (!gripWidthPx || gripWidthPx <= 0 || !(platePixelSize > 0)) return true;
+  const ratio = platePixelSize / gripWidthPx;
+  return ratio >= PLATE_TO_GRIP_RATIO_LOW && ratio <= PLATE_TO_GRIP_RATIO_HIGH;
+}
+
 export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdict {
   const usable = estimates.filter((e) => Number.isFinite(e.scale) && e.scale > 0);
   if (usable.length === 0) {

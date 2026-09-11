@@ -50,3 +50,40 @@ describe("shoulderPixelsPerMeter", () => {
     expect(shoulderPixelsPerMeter(norm, world, 800, 1600)).toBeNull();
   });
 });
+
+import { plateReadIsPlausibleAgainstGrip } from "./pose-tracking";
+
+// A BUMPER PLATE, CHECKED AGAINST THE HANDS ON THE BAR IT SITS ON.
+//
+// The guard that had been catching bad plate reads all week asks how tall the athlete would have
+// to be, and needs the body to have been measured. It returns everything untouched when it has
+// not -- so it switched itself off in exactly the case where the plate was the only scale source
+// and nothing else could contradict it. A bench press filmed with the ankles out of shot failed
+// calibration on 89% of frames, the plate read 497px unchallenged, and every number downstream
+// came out at the wrong scale.
+//
+// The wrists were tracked on all 747 frames of that take. They need no calibration.
+describe("a plate read is checked against the hand span", () => {
+  it("rejects the box from the take that got through", () => {
+    // 497px of "plate" against a hand span near 114px -- more than four times the grip.
+    expect(plateReadIsPlausibleAgainstGrip(497, 114)).toBe(false);
+  });
+
+  it("accepts a plate that is a believable size next to the hands", () => {
+    // 45cm plate, hands a little wider than it: the ordinary case.
+    expect(plateReadIsPlausibleAgainstGrip(94, 114)).toBe(true);
+    // Close grip, hands narrower than the plate.
+    expect(plateReadIsPlausibleAgainstGrip(94, 74)).toBe(true);
+  });
+
+  it("rejects a box far too small to be a plate as well", () => {
+    expect(plateReadIsPlausibleAgainstGrip(20, 114)).toBe(false);
+  });
+
+  // Never turn a missing measurement into a rejection -- that is the mistake this whole check
+  // exists to correct, one level up.
+  it("says nothing when there is no hand span to check against", () => {
+    expect(plateReadIsPlausibleAgainstGrip(497, null)).toBe(true);
+    expect(plateReadIsPlausibleAgainstGrip(497, 0)).toBe(true);
+  });
+});

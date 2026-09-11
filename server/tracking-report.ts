@@ -95,6 +95,8 @@ type TrackingDiagnostics = {
     }[];
     scaleOutliers?: { source: string; ratioToChosen: number }[];
     scaleCorroborated?: boolean;
+    gripWidthPx?: number | null;
+    plateRejectedAgainstGrip?: boolean;
     referenceObject?: {
       label: string;
       medianWidthPx: number;
@@ -591,6 +593,21 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
           `${Math.round(o.medianCenterXNorm * 100)}% across / ${Math.round(o.medianCenterYNorm * 100)}% up the frame, ` +
           `confidence ${pct(o.minConfidence)}-${pct(o.maxConfidence)} over ${o.samples} frames`,
       });
+      // The hand span is measured off the wrists in the same raw pixels, with no calibration
+      // involved, which is what makes it usable as a check when calibration itself has failed --
+      // the one case where the athlete-height check switches itself off and the plate is the only
+      // source left. A plate is 45cm and a bench grip runs 35-95cm, so a real plate lands between
+      // roughly a quarter and two and a half times the span.
+      if (c.gripWidthPx != null) {
+        const ratio = c.gripWidthPx > 0 ? Math.round((o.medianWidthPx / c.gripWidthPx) * 100) / 100 : null;
+        lines.push({
+          label: "Plate against the hands",
+          value:
+            `hands measured ${Math.round(c.gripWidthPx)}px apart` +
+            `${ratio != null ? `, so that box is ${ratio}x the hand span` : ""}` +
+            `${c.plateRejectedAgainstGrip ? " -- rejected, no plate is that size next to a grip" : ""}`,
+        });
+      }
     }
 
     // THE OTHER HALF OF EVERY RANGE-OF-MOTION NUMBER.

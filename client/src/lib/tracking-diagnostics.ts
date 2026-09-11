@@ -200,6 +200,13 @@ export type TrackingDiagnostics = {
     // neither was recorded. The confidence spread is here for the same reason: an average hides
     // a detector that was certain on four frames and guessing on fifty.
     referenceObject?: ReferenceObjectRead | null;
+    /** Hand span in raw frame pixels, measured off the wrists with no calibration involved --
+     *  the yardstick the plate read is checked against. See plateReadIsPlausibleAgainstGrip. */
+    gripWidthPx?: number | null;
+    /** True when a plate read was thrown out for being an impossible size next to that hand
+     *  span. Recorded because the read still appears under referenceObject above, and a number
+     *  shown without saying it was discarded is how a bad scale looked like a good one. */
+    plateRejectedAgainstGrip?: boolean;
   } | null;
   // WHAT THE TRACE ITSELF CAME OUT AS, AND WHAT THE SEGMENTER MADE OF IT.
   //

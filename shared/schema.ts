@@ -7449,6 +7449,40 @@ export const trackingDiagnosticsSchema = z.object({
   // The exact toast message shown to the athlete in the moment (see saveEmptyAndWarn) -- null
   // when outcome is "tracked".
   message: z.string().optional().nullable(),
+  // THE REPS AND TEMPO OF A TAKE WHOSE SCALE WAS NOT USABLE.
+  //
+  // Undeclared until now, which meant zod stripped it on every single insert. The whole point of
+  // this field is that a take with no trustworthy metres still counted its reps and timed them,
+  // and the report reads it to say so -- so with it dropped, a bench press that had found 31 reps
+  // was reported as "Logged 10 reps but tracking only found 0", the exact wrong conclusion, on a
+  // set where the athlete was simultaneously being told the app got 31.
+  //
+  // Same failure as the scale-source fields before it: added on the client, rendered by the
+  // report, never declared here. See the round-trip test in
+  // shared/tracking-diagnostics-roundtrip.test.ts, which now covers this field by name.
+  scaleFree: z
+    .object({
+      repCount: z.number(),
+      concentricSeconds: z.number(),
+      eccentricSeconds: z.number().optional().nullable(),
+      velocityLossPercent: z.number().optional().nullable(),
+      barPathDriftPercentOfRom: z.number().optional().nullable(),
+      reps: z
+        .array(
+          z.object({
+            repNumber: z.number(),
+            concentricSeconds: z.number(),
+            eccentricSeconds: z.number().optional().nullable(),
+            timeToPeakVelocitySeconds: z.number(),
+            relativePeakVelocity: z.number(),
+            depthDeg: z.number().optional().nullable(),
+          }),
+        )
+        .max(100)
+        .optional(),
+    })
+    .optional()
+    .nullable(),
   // analyzeAvRecording's own return value (AvBodyTrackingPlugin.swift's analyzeRecording) --
   // how many frames Vision looked at vs. how many it found a body in, and how long the
   // on-device pass took.
@@ -7584,6 +7618,8 @@ export const trackingDiagnosticsSchema = z.object({
       // What the reference-object detector actually boxed -- see referenceObject in
       // client/src/lib/tracking-diagnostics.ts. A plate is a disc and should box near square on
       // the bar; shape and position are what say whether it found one at all.
+      gripWidthPx: z.number().optional().nullable(),
+      plateRejectedAgainstGrip: z.boolean().optional(),
       referenceObject: z
         .object({
           label: z.string().max(40),

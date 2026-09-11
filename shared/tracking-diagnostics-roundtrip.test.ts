@@ -18,8 +18,27 @@ import { trackingDiagnosticsSchema } from "./schema";
  * which is the only moment anyone can still cheaply notice.
  */
 const FULL_PAYLOAD = {
-  outcome: "tracked" as const,
-  message: null,
+  outcome: "scale_free_only" as const,
+  message: "Couldn't tell the reps apart in this one.",
+  // Undeclared in the schema until it was found here: stripped on every insert, which turned a
+  // take that had counted 31 reps into "tracking only found 0" on the report.
+  scaleFree: {
+    repCount: 31,
+    concentricSeconds: 0.33,
+    eccentricSeconds: 0.34,
+    velocityLossPercent: 21.9,
+    barPathDriftPercentOfRom: 12.4,
+    reps: [
+      {
+        repNumber: 1,
+        concentricSeconds: 0.33,
+        eccentricSeconds: 0.34,
+        timeToPeakVelocitySeconds: 0.26,
+        relativePeakVelocity: 1.18,
+        depthDeg: null,
+      },
+    ],
+  },
   recording: {
     frameCount: 949,
     trackedFrameCount: 763,
@@ -57,6 +76,8 @@ const FULL_PAYLOAD = {
     scaleCandidates: [{ source: "plate", scale: 0.000758, measured: 593.94, samples: 59 }],
     scaleOutliers: [{ source: "plate", ratioToChosen: 0.14 }],
     scaleCorroborated: false,
+    gripWidthPx: 114.2,
+    plateRejectedAgainstGrip: true,
     referenceObject: {
       label: "plate (secondary)",
       medianWidthPx: 593.94,
@@ -115,5 +136,15 @@ describe("tracking diagnostics survive the trip into the database", () => {
     expect(parsed.objectDetection.sourceAgreement.medianGapPx).toBe(41.5);
     expect(parsed.trace.repsFound).toBe(10);
     expect(parsed.calibration.referenceObject.aspectRatio).toBe(3.12);
+    expect(parsed.calibration.gripWidthPx).toBe(114.2);
+    expect(parsed.calibration.plateRejectedAgainstGrip).toBe(true);
+  });
+
+  // The field this test was written a day too late to catch. Named on its own so a future edit
+  // that drops it fails with the reason rather than a diff of two long path lists.
+  it("keeps the scale-free summary, the one that was silently stripped", () => {
+    const parsed = trackingDiagnosticsSchema.parse(FULL_PAYLOAD) as typeof FULL_PAYLOAD;
+    expect(parsed.scaleFree.repCount).toBe(31);
+    expect(parsed.scaleFree.reps[0].relativePeakVelocity).toBe(1.18);
   });
 });

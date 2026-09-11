@@ -27,6 +27,7 @@ import {
   shoulderWidthScaleFromFrames,
   reconcileScaleEstimates,
   rejectImplausibleScales,
+  plateReadIsPlausibleAgainstGrip,
   impliedBodyLengthUnits,
   tiltDegreesFromPoints,
   usesSharedBarEquipment,
@@ -245,6 +246,32 @@ function applyCoreMlCorroboration(
 // (confidences around 0.02, far under the 0.4 detection floor), so no box is produced in
 // practice today. That is a model-quality accident, not a guard: the moment barbell detection
 // improves, every barbell set's scale would be silently corrupted. Gated properly now.
+// HOW WIDE THE HANDS WERE, IN RAW FRAME PIXELS, WITH NO CALIBRATION INVOLVED.
+//
+// Measured straight off the wrist joints, in the same raw pixel units the CoreML box is measured
+// in, so the two can be divided. Deliberately independent of every scale: this exists to CHECK a
+// scale, so it cannot depend on one.
+//
+// Median over the take, and only frames where both wrists were seen. A bench press holds a fixed
+// grip for the whole set, so the median is a solid read even when individual frames are noisy.
+function gripWidthPxFromFrames(frames: NativePoseFrame[]): number | null {
+  const widths: number[] = [];
+  for (const f of frames) {
+    const left = f.joints.find((j) => j.name === "leftWrist");
+    const right = f.joints.find((j) => j.name === "rightWrist");
+    if (!left || !right) continue;
+    if (left.confidence < MIN_JOINT_CONFIDENCE_FOR_GRIP || right.confidence < MIN_JOINT_CONFIDENCE_FOR_GRIP) continue;
+    const width = Math.hypot((right.x - left.x) * f.frameWidth, (right.y - left.y) * f.frameHeight);
+    if (width > 0) widths.push(width);
+  }
+  if (widths.length < MIN_CALIBRATION_SAMPLES) return null;
+  widths.sort((a, b) => a - b);
+  return widths[Math.floor(widths.length / 2)];
+}
+
+const MIN_JOINT_CONFIDENCE_FOR_GRIP = 0.3;
+
+
 function plateScaleFromFrames(
   frames: NativePoseFrame[],
   trackingMode: string | undefined,
@@ -780,7 +807,14 @@ export function AvBarTrackerDialog({
     // them -- two independent reads agreeing is stronger evidence than either alone, the same
     // reasoning applyCoreMlCorroboration and medBallTrustScore already apply elsewhere in this
     // codebase to exactly this "two signals, not one" situation.
-    const plateScale = plateScaleFromFrames(rawFrames, coreMlTrackingMode);
+    const plateScaleRaw = plateScaleFromFrames(rawFrames, coreMlTrackingMode);
+    // See plateReadIsPlausibleAgainstGrip. Dropped here rather than left for
+    // rejectImplausibleScales, which needs a measured body and therefore cannot help on the one
+    // take shape where the plate is the only source.
+    const gripWidthPx = gripWidthPxFromFrames(rawFrames);
+    const plateFailedGripCheck =
+      plateScaleRaw != null && !plateReadIsPlausibleAgainstGrip(plateScaleRaw.measured, gripWidthPx);
+    const plateScale = plateFailedGripCheck ? null : plateScaleRaw;
 
     // SHOULDER BREADTH, WHERE THE BODY'S LENGTH IS UNAVAILABLE.
     //
@@ -902,6 +936,8 @@ export function AvBarTrackerDialog({
       traceTravelAcrossCm?: number;
       tracePointsDroppedOffAxis?: number;
       referenceObject?: ReferenceObjectRead | null;
+      gripWidthPx?: number | null;
+      plateRejectedAgainstGrip?: boolean;
     } = {
       scaleSource,
       scaleCandidates,
@@ -911,7 +947,11 @@ export function AvBarTrackerDialog({
       })),
       scaleCorroborated: scaleVerdict.corroborated,
       scalesRejectedAsImplausible: implausibleScales,
-      referenceObject: plateScale?.shape ?? null,
+      // The shape is recorded whether the read was used or thrown out -- a rejected read is the
+      // one worth looking at.
+      referenceObject: (plateScale ?? plateScaleRaw)?.shape ?? null,
+      gripWidthPx: gripWidthPx == null ? null : Math.round(gripWidthPx * 10) / 10,
+      plateRejectedAgainstGrip: plateFailedGripCheck,
     };
 
     // No scale used to end the take here, with nothing saved but the video. It no longer does.
