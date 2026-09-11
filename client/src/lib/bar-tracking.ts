@@ -2063,6 +2063,62 @@ export function dropAcrossAxisOutliers(
   return { kept, dropped };
 }
 
+/** One tracked point for the bar, from whichever hands were visible this frame.
+ *
+ * THE POINT HAS TO KEEP MEANING THE SAME THING.
+ *
+ * With both hands it is their midpoint -- the middle of the bar. With one hand it used to be
+ * THAT HAND, and nothing recorded that the meaning had changed. So on a set where one side
+ * tracked intermittently, the traced point jumped between the middle of the bar and the end of
+ * it, over and over: half a grip width, roughly 25-30cm on a bench press, appearing and
+ * disappearing with the detector rather than with the lift.
+ *
+ * The segmenter cannot tell that apart from movement. A ten-rep bench press with the right hand
+ * seen on 316 of 747 frames came back as 31 reps, which then made each "rep" a third of a real
+ * one and put range of motion at 9cm -- read afterwards as a calibration fault, which it was not.
+ * The same jumping is the 45.9cm of across-axis travel on a lift whose bar moves sideways by a
+ * couple of centimetres.
+ *
+ * A hand and the midpoint differ by half the grip, and the grip is fixed for the length of a set,
+ * so the most recent measured half-span carries the lone hand back to the middle of the bar.
+ * Without one -- one side has not yet been seen at all -- the bare hand is still the best
+ * available answer and is used as before.
+ */
+export function barPointFromSides(
+  left: { x: number; y: number; confidence: number } | null,
+  right: { x: number; y: number; confidence: number } | null,
+  lastHalfSpan: { x: number; y: number } | null,
+): { point: { x: number; y: number; confidence: number } | null; halfSpan: { x: number; y: number } | null } {
+  if (left && right) {
+    return {
+      point: {
+        x: (left.x + right.x) / 2,
+        y: (left.y + right.y) / 2,
+        confidence: (left.confidence + right.confidence) / 2,
+      },
+      // Measured this frame, so it replaces whatever was carried in.
+      halfSpan: { x: (right.x - left.x) / 2, y: (right.y - left.y) / 2 },
+    };
+  }
+  const lone = left ?? right;
+  if (!lone) return { point: null, halfSpan: lastHalfSpan };
+  if (!lastHalfSpan) return { point: lone, halfSpan: lastHalfSpan };
+  // Left sits half a span short of the middle; right sits half a span past it.
+  const sign = left ? 1 : -1;
+  return {
+    point: {
+      x: lone.x + sign * lastHalfSpan.x,
+      y: lone.y + sign * lastHalfSpan.y,
+      // Inferred rather than measured, so it does not get to claim the confidence of a frame
+      // where both sides were actually seen.
+      confidence: lone.confidence * SINGLE_SIDE_CONFIDENCE_DISCOUNT,
+    },
+    halfSpan: lastHalfSpan,
+  };
+}
+
+const SINGLE_SIDE_CONFIDENCE_DISCOUNT = 0.8;
+
 export function movementAxisFromGrip(
   pairs: { left: { x: number; y: number }; right: { x: number; y: number } }[],
 ): { x: number; y: number } | null {

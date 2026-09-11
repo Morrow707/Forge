@@ -159,17 +159,31 @@ function deriveWeightMode(m: Materials): WeightMode {
 
 // Shared by the top "LAST" summary line and the per-set "Last @ X reps"
 // history line -- combo movements (weight + box) show both parts together.
-function formatLoad(entry: {
-  weightMode: WeightMode;
-  weight: string | null;
-  weightUnit: WeightUnit | null;
-  bandColor: string | null;
-  boxHeight: string | null;
-  boxHeightUnit: BoxHeightUnit | null;
-}) {
+// HISTORY IS SHOWN IN THE UNIT THE ATHLETE IS LOGGING IN, NOT THE ONE IT HAPPENS TO BE STORED IN.
+//
+// Every set carries the unit it was entered under, and the app defaulted to kilograms until
+// recently. So a bench logged today in pounds sat directly beneath "LAST TIME 3 x 10 @ 135 kg"
+// -- same exercise, same number, two different units, one screen. Read quickly that says the
+// weight is unchanged when it is not, and 135kg is 297lb.
+//
+// Converted rather than relabelled. Relabelling would be a guess about what the athlete meant
+// back then; converting states what is actually stored, in the unit they are reading in. If an
+// old row really is mislabelled it now shows as 297.6 lbs, which is a visible wrong number rather
+// than an invisible one -- the right way round.
+function formatLoad(
+  entry: {
+    weightMode: WeightMode;
+    weight: string | null;
+    weightUnit: WeightUnit | null;
+    bandColor: string | null;
+    boxHeight: string | null;
+    boxHeightUnit: BoxHeightUnit | null;
+  },
+  displayUnit: WeightUnit,
+) {
   const parts: string[] = [];
   if (entry.weightMode === "numeric" && entry.weight) {
-    parts.push(`${entry.weight}${entry.weightUnit ? ` ${entry.weightUnit}` : ""}`);
+    parts.push(`${formatWeightIn(entry.weight, entry.weightUnit, displayUnit)} ${displayUnit}`);
   }
   if (entry.weightMode === "band") {
     parts.push(entry.bandColor ?? entry.weight ?? "Band");
@@ -178,6 +192,16 @@ function formatLoad(entry: {
     parts.push(`${entry.boxHeight}${entry.boxHeightUnit ? ` ${entry.boxHeightUnit}` : ""} box`);
   }
   return parts.length > 0 ? parts.join(", ") : "Bodyweight";
+}
+
+/** One stored weight, restated in the unit being read. Falls back to the raw text when it will
+ *  not parse -- a weight typed as something other than a number is still worth showing. Trailing
+ *  ".0" trimmed, since 135.0 lbs reads as a measurement and 135 reads as a weight. */
+function formatWeightIn(weight: string, storedUnit: WeightUnit | null, displayUnit: WeightUnit): string {
+  const value = Number.parseFloat(weight);
+  if (!Number.isFinite(value)) return weight;
+  const converted = convertWeight(value, storedUnit ?? displayUnit, displayUnit);
+  return String(Math.round(converted * 10) / 10);
 }
 
 /** The box height for one set, in inches, however the athlete entered it. Null when there is no
@@ -733,9 +757,9 @@ const RPE_SCALE: { value: number; label: string; rir: string }[] = [
   { value: 10, label: "Max Effort", rir: "0 in reserve" },
 ];
 
-function formatLastPerformance(lp: NonNullable<LastPerformance>) {
+function formatLastPerformance(lp: NonNullable<LastPerformance>, displayUnit: WeightUnit) {
   let s = `${lp.sets} × ${lp.reps ?? "-"}`;
-  const load = formatLoad(lp);
+  const load = formatLoad(lp, displayUnit);
   if (load !== "Bodyweight") s += ` @ ${load}`;
   if (lp.rpe != null) s += ` · RPE ${lp.rpe}`;
   return s;
@@ -3002,7 +3026,7 @@ function ExerciseLogContent({
             <span className="mr-1.5 text-[10px] font-extrabold uppercase tracking-wide text-primary">
               Last time
             </span>
-            {formatLastPerformance(item.lastPerformance)}
+            {formatLastPerformance(item.lastPerformance, item.weightUnit)}
           </p>
         </div>
       )}
@@ -3148,7 +3172,7 @@ function ExerciseLogContent({
                 </div>
                 {historyMatch && !isPR && (
                   <p className="mt-0.5 pl-9 text-[10px] text-muted-foreground">
-                    Last @ {set.reps} reps: {formatLoad(historyMatch)}
+                    Last @ {set.reps} reps: {formatLoad(historyMatch, item.weightUnit)}
                   </p>
                 )}
                 {(item.trackingLevel !== "none" || videoRequired || usesPlateCalc || canQuickFillSame) && (

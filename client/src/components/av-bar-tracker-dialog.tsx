@@ -58,6 +58,7 @@ import {
 import {
   summarizeTrackedSet,
   interpolateOcclusionGap,
+  barPointFromSides,
   computeArmDriveAsymmetry,
   computeRepTrustScores,
   implausibleRangeOfMotion,
@@ -990,6 +991,9 @@ export function AvBarTrackerDialog({
     const rightVelocitySamples: VelocitySample[] = [];
     const rejectionEvents: number[] = [];
     let verticalSign: 1 | -1 = 1;
+    // Half the measured distance from the left grip to the right, carried forward so a frame with
+    // only one hand can still be placed at the middle of the bar -- see barPointFromSides.
+    let lastHalfSpan: { x: number; y: number } | null = null;
     let prevFusedLeft: { x: number; y: number; t: number } | null = null;
     let prevFusedRight: { x: number; y: number; t: number } | null = null;
     // Substitutes for ArBarTrackerDialog's "assessed right when Start Set is
@@ -1138,14 +1142,10 @@ export function AvBarTrackerDialog({
         });
       }
 
-      const combined =
-        fusedLeft && fusedRight
-          ? {
-              x: (fusedLeft.x + fusedRight.x) / 2,
-              y: (fusedLeft.y + fusedRight.y) / 2,
-              confidence: (fusedLeft.confidence + fusedRight.confidence) / 2,
-            }
-          : (fusedLeft ?? fusedRight);
+      // See barPointFromSides. A lone hand is carried back to the middle of the bar rather than
+      // traced where it sits, so the point keeps meaning the same thing from frame to frame.
+      const { point: combined, halfSpan } = barPointFromSides(fusedLeft, fusedRight, lastHalfSpan);
+      lastHalfSpan = halfSpan;
       if (combined) {
         const point: TrackedPoint = { t, x: combined.x, y: verticalSign * combined.y, z: 0, confidence: combined.confidence };
         const prevPoint = trace[trace.length - 1];
