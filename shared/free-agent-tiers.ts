@@ -5,7 +5,7 @@
 // same isBetaAccount/trialExpiresAt safety switches already on the users
 // table -- nothing new to keep "off by default" here.
 
-export type FreeAgentTierId = "basic" | "ai_coach" | "ai_coach_video" | "family";
+export type FreeAgentTierId = "basic" | "ai_coach" | "ai_coach_video";
 
 export interface FreeAgentTierDef {
   id: FreeAgentTierId;
@@ -14,11 +14,6 @@ export interface FreeAgentTierDef {
   description: string;
   hasAiChat: boolean;
   hasVideoFormCheck: boolean;
-  /** null = a single athlete's own subscription. Family only: how many
-   * athlete profiles one payment covers -- see users.familyGroupId and
-   * storage.createFamilyGroup. Every member gets the same capabilities as
-   * ai_coach_video; Family changes who's paying, not what's unlocked. */
-  athleteProfileCap: number | null;
 }
 
 export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
@@ -34,7 +29,6 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
     description: "Log your training and your nutrition. No AI coach, no video form-check.",
     hasAiChat: false,
     hasVideoFormCheck: false,
-    athleteProfileCap: null,
   },
   ai_coach: {
     id: "ai_coach",
@@ -43,7 +37,6 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
     description: "AI chat coach and AI program builder.",
     hasAiChat: true,
     hasVideoFormCheck: false,
-    athleteProfileCap: null,
   },
   ai_coach_video: {
     id: "ai_coach_video",
@@ -52,30 +45,16 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
     description: "Everything in AI Coach, plus AI form-check on your lifts.",
     hasAiChat: true,
     hasVideoFormCheck: true,
-    athleteProfileCap: null,
-  },
-  family: {
-    id: "family",
-    label: "Family",
-    monthlyPriceCents: 4999,
-    description: "AI Coach + Video for up to 3 athletes on one household plan.",
-    hasAiChat: true,
-    hasVideoFormCheck: true,
-    athleteProfileCap: 3,
   },
 };
 
-// Ordered cheapest-to-priciest, for rendering the /pricing page and the
-// admin assignment dropdown in a sensible order without re-sorting.
+// Ordered cheapest-to-priciest, for rendering the /pricing page and the admin assignment
+// dropdown in a sensible order without re-sorting.
 //
-// WHAT IS SELLABLE TODAY, which is no longer the same as what is defined.
-// Family is retired (Scott, 2026-09-09: remove the family pack) and is
-// therefore absent here, so it disappears from the pricing page, the landing
-// page, the admin pricing editor and the list of Stripe prices that must
-// exist -- but its definition stays above, because an account already on it
-// still has to resolve to real entitlements rather than to nothing, and
-// family_groups rows already reference it. Retiring a product is not the
-// same as pretending it never existed.
+// Family is gone entirely -- the product, the household grouping behind it and the code that
+// created groups. Any account still stored on it is moved to AI Coach + Video by a backfill in
+// reconcile-schema.ts, which is what Family always resolved to anyway: it never changed what one
+// member could do, only how many profiles one payment covered.
 export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["basic", "ai_coach", "ai_coach_video"];
 
 // The app's real bundle id (see ios/App/App.xcodeproj) -- StoreKit 2 Product
@@ -89,10 +68,10 @@ export const APPLE_BUNDLE_ID = "com.foreperformancesystems.forge";
 /** The App Store Connect subscription Product id for a Free Agent tier.
  * These three ids must be created as real, priced auto-renewable
  * subscription Products in ONE subscription group in App Store Connect
- * before Apple IAP can go live (see server/apple-iap.ts) -- ai_coach,
- * ai_coach_video, and family are mutually exclusive (an athlete is only
- * ever on one at a time), which is exactly what belonging to the same
- * StoreKit subscription group enforces. Whatever price is configured for
+ * before Apple IAP can go live (see server/apple-iap.ts) -- basic, ai_coach
+ * and ai_coach_video are mutually exclusive (an athlete is only ever on one
+ * at a time), which is exactly what belonging to the same StoreKit
+ * subscription group enforces. Whatever price is configured for
  * each Product in App Store Connect IS the real price shown to the
  * customer (via StoreKit's own Product.displayPrice) -- this file's
  * monthlyPriceCents is what that configuration should match, not a value

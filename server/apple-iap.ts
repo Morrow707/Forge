@@ -112,7 +112,7 @@ export async function verifyAppleTransaction(signedTransactionInfo: string): Pro
 // Built from appleProductIdForFreeAgentTier rather than a second hand-typed
 // table -- the earlier version of this file had its own literal product-id
 // strings that quietly drifted out of sync with the real pricing model
-// (shared/free-agent-tiers.ts moved to ai_coach/ai_coach_video/family while
+// (shared/free-agent-tiers.ts moved to basic/ai_coach/ai_coach_video while
 // this file kept mapping stale "base"/"pro"-named ids that didn't
 // correspond to anything actually priced). One source, both directions.
 const PRODUCT_ID_TO_TIER: Record<string, FreeAgentTierId> = Object.fromEntries(
@@ -127,8 +127,8 @@ export function tierForAppleProductId(productId: string): FreeAgentTierId | null
 // ENTITLEMENT level, not the customer-facing SKU -- the same column and
 // vocabulary a coach's Stripe subscription also uses for an unrelated
 // purpose (Coaches Corner access). Multiple Free Agent SKUs can carry the
-// same entitlement: ai_coach_video and family both include video form-check
-// (see FREE_AGENT_TIERS), so both grant "pro" here, matching
+// same entitlement: ai_coach_video includes video form-check (see
+// FREE_AGENT_TIERS), so it grants "pro" here, matching
 // hasAthletePaidForAiAccess's existing sub.tier === "pro" check in
 // routes.ts rather than introducing a second vocabulary for the same
 // column.

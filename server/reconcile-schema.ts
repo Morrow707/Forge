@@ -2975,6 +2975,25 @@ CREATE TABLE IF NOT EXISTS "applied_backfills" (
 -- from a stale snapshot silently destroyed newer data.
 ALTER TABLE "workout_logs" ADD COLUMN IF NOT EXISTS "revision" integer NOT NULL DEFAULT 0;
 
+-- THE FAMILY PLAN IS GONE, AND NOBODY LOSES ACCESS OVER IT.
+--
+-- Family never changed what one member could do; it resolved to exactly the same entitlements as
+-- AI Coach + Video and only changed how many profiles one payment covered. With the tier removed
+-- from the code, an account still stored on it would fall through to no entitlements at all --
+-- silently, since the lookup returns undefined and the caller reads that as "no plan". So every
+-- such account moves to the tier it already behaved as.
+--
+-- The family_groups table and users.family_group_id are deliberately NOT dropped. This file is
+-- additive-only by design: a DROP here runs on every deploy against real data, and there is
+-- nothing to gain from destroying rows that no code reads any more. They sit unused.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'retire_family_plan_2026_09_11') THEN
+    UPDATE "users" SET "free_agent_tier" = 'ai_coach_video' WHERE "free_agent_tier" = 'family';
+    INSERT INTO "applied_backfills" ("key") VALUES ('retire_family_plan_2026_09_11');
+  END IF;
+END $$;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'weight_unit_lbs_default_2026_09_09') THEN

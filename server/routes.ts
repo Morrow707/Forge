@@ -133,7 +133,6 @@ import {
   setPricingOverrideSchema,
   redeemCodeInputSchema,
   updateFreeAgentBillingSchema,
-  createFamilyGroupSchema,
   createBodyMetricSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
@@ -2774,7 +2773,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       freeAgentTier: athlete.freeAgentTier,
       freeAgentAddOns: athlete.freeAgentAddOns ?? [],
       isBetaAccount: athlete.isBetaAccount,
-      familyGroupId: athlete.familyGroupId,
       hasVideoStorageAddOn: athlete.hasVideoStorageAddOn,
       unlockedSkillSports: athlete.unlockedSkillSports ?? [],
     });
@@ -2821,20 +2819,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
-  // Groups up to FREE_AGENT_TIERS.family.athleteProfileCap athletes under
-  // one Family plan (see storage.createFamilyGroup) -- each member ends up
-  // with freeAgentTier="family" and a shared familyGroupId.
-  //
-  // Retired (Scott, 2026-09-09: remove the family pack). Closed here rather
-  // than deleted, because the groups that already exist keep resolving and
-  // their members keep their entitlements -- what stops is creating new
-  // ones. A route that still enrolled accounts onto a product nobody can
-  // see a price for is the worse failure of the two.
-  app.post("/api/admin/family-groups", requireRole("admin"), async (_req, res) => {
-    return res
-      .status(410)
-      .json({ message: "The Family plan has been retired. Existing groups are unaffected." });
-  });
 
   // Cheap headcount tiles for the admin dashboard -- see
   // storage.getAdminPlatformStats' own comment for why this is separate

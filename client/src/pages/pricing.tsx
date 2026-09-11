@@ -174,12 +174,6 @@ export default function PricingPage() {
                   <CardContent className="flex flex-1 flex-col justify-between gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">{tier.description}</p>
-                      {tier.athleteProfileCap != null && (
-                        <p className="mt-2 flex items-center gap-2 text-sm">
-                          <Check className="h-4 w-4 shrink-0 text-primary" />
-                          Covers up to {tier.athleteProfileCap} athlete profiles
-                        </p>
-                      )}
                     </div>
                   </CardContent>
                 </Card>

@@ -146,9 +146,6 @@ const FREE_AGENT_CARDS = FREE_AGENT_TIER_ORDER.map((id) => {
       ...(tier.hasVideoFormCheck
         ? ["AI form-check on your lifts", "Form-check video logging"]
         : []),
-      ...(tier.athleteProfileCap
-        ? [`Up to ${tier.athleteProfileCap} athletes on one household plan`]
-        : []),
     ],
   };
 });

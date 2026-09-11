@@ -116,7 +116,7 @@ function PriceRow({
 
 /** Billing-only admin page: create/manage redeem codes, and edit every
  * priced thing on the platform in one place. Per-account tier assignment
- * (org billing tier, Free Agent tier, family groups) used to live here too
+ * (org billing tier, Free Agent tier) used to live here too
  * -- pulled out since nothing on this page needs a coach/athlete lookup to
  * just see and edit prices, and the lookup tools weren't finding accounts
  * as expected. The server routes those used (/api/admin/coaches/:id/billing

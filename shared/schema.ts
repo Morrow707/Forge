@@ -614,14 +614,6 @@ export const users = pgTable(
     // no new safety switch needed for this second pricing track.
     freeAgentTier: text("free_agent_tier"),
     freeAgentAddOns: json("free_agent_add_ons").$type<string[]>(),
-    // Set when an admin groups this athlete under a shared Family plan
-    // (see storage.createFamilyGroup) -- null for everyone not on one.
-    // Family membership doesn't change what a member can do (still
-    // resolves to ai_coach_video-level entitlements); it's only about who
-    // pays for how many profiles.
-    familyGroupId: integer("family_group_id").references(() => familyGroups.id, {
-      onDelete: "set null",
-    }),
     // Extra form-check video retention (see shared/video-retention.ts) --
     // applies to this account regardless of role/coached status, admin-
     // assignable the same way as everything else in this pass (no self-
@@ -734,17 +726,6 @@ export const pricingOverrides = pgTable("pricing_overrides", {
 export const setPricingOverrideSchema = z.object({
   // null clears the override, reverting to the coded default.
   priceCents: z.number().int().min(0).nullable(),
-});
-
-// A Family Free Agent plan (shared/free-agent-tiers.ts: "family", up to
-// FREE_AGENT_TIERS.family.athleteProfileCap members) is billed once but
-// covers multiple athlete accounts -- this is just the shared group they're
-// linked under via users.familyGroupId. Admin-created (see
-// /api/admin/family-groups), same manual-assignment pattern as coach
-// billing -- no self-serve group creation yet.
-export const familyGroups = pgTable("family_groups", {
-  id: serial("id").primaryKey(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const coachAthletes = pgTable(
@@ -6922,17 +6903,6 @@ export const updateFreeAgentBillingSchema = z.object({
   unlockedSkillSports: z.array(z.string().trim().min(1).max(60)).optional(),
 });
 
-// Admin-only -- creates a new Family group and links these athletes to it
-// (see storage.createFamilyGroup). Capped at the tier's own
-// athleteProfileCap so this schema can never validate a group larger than
-// what Family actually covers.
-export const createFamilyGroupSchema = z.object({
-  athleteEmails: z
-    .array(z.string().trim().toLowerCase().email())
-    .min(1)
-    .max(FREE_AGENT_TIERS.family.athleteProfileCap ?? 3),
-});
-
 export const insertExerciseSchema = createInsertSchema(exercises)
   .pick({
     name: true,
@@ -7889,7 +7859,6 @@ export type UpdateCoachBillingInput = z.infer<typeof updateCoachBillingSchema>;
 export type CreateRedeemCodeInput = z.infer<typeof createRedeemCodeSchema>;
 export type RedeemCodeInput = z.infer<typeof redeemCodeInputSchema>;
 export type UpdateFreeAgentBillingInput = z.infer<typeof updateFreeAgentBillingSchema>;
-export type CreateFamilyGroupInput = z.infer<typeof createFamilyGroupSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;
 export type CreateSkillDayCommentInput = z.infer<typeof createSkillDayCommentSchema>;
 export type SetSkillDayCompleteInput = z.infer<typeof setSkillDayCompleteSchema>;
