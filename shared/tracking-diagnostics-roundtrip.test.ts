@@ -69,7 +69,15 @@ const FULL_PAYLOAD = {
       maxGapPx: 380.2,
     },
   },
-  trace: { points: 705, repsFound: 10, velocityRejections: 4, largestGapSeconds: 0.28 },
+  trace: {
+    points: 705,
+    repsFound: 10,
+    framesUsable: 705,
+    framesNoWristOrImplement: 0,
+    framesVelocityRejected: 4,
+    velocityRejections: 4,
+    largestGapSeconds: 0.28,
+  },
   calibration: {
     scaleFactor: 0.00525,
     scaleSource: "shoulder_width" as const,
@@ -135,6 +143,7 @@ describe("tracking diagnostics survive the trip into the database", () => {
     const parsed = trackingDiagnosticsSchema.parse(FULL_PAYLOAD) as typeof FULL_PAYLOAD;
     expect(parsed.objectDetection.sourceAgreement.medianGapPx).toBe(41.5);
     expect(parsed.trace.repsFound).toBe(10);
+    expect(parsed.trace.framesVelocityRejected).toBe(4);
     expect(parsed.calibration.referenceObject.aspectRatio).toBe(3.12);
     expect(parsed.calibration.gripWidthPx).toBe(114.2);
     expect(parsed.calibration.plateRejectedAgainstGrip).toBe(true);

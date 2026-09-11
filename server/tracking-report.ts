@@ -78,6 +78,9 @@ type TrackingDiagnostics = {
   trace?: {
     points: number;
     repsFound?: number | null;
+    framesUsable?: number;
+    framesNoWristOrImplement?: number;
+    framesVelocityRejected?: number;
     velocityRejections: number;
     largestGapSeconds?: number | null;
   } | null;
@@ -458,9 +461,21 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
       value:
         `${d.trace.points} tracked points` +
         `${d.trace.repsFound != null ? `, ${d.trace.repsFound} rep${d.trace.repsFound === 1 ? "" : "s"} found` : ", reps not segmented"}` +
-        `${d.trace.velocityRejections > 0 ? `, ${d.trace.velocityRejections} frames dropped as impossibly fast` : ""}` +
+        `${d.trace.velocityRejections > 0 ? `, ${d.trace.velocityRejections} side-reads dropped as impossibly fast` : ""}` +
         `${d.trace.largestGapSeconds != null ? `, largest gap ${d.trace.largestGapSeconds}s` : ""}`,
     });
+    // An empty trace has two completely different causes and they look the same from outside:
+    // no hand was seen at all (framing), or a hand WAS seen and the speed filter threw it out
+    // (the filter). Counted rather than inferred, because inferring it went wrong twice.
+    if (d.trace.framesUsable != null) {
+      lines.push({
+        label: "Why frames produced no point",
+        value:
+          `${d.trace.framesUsable} frames gave a bar point, ` +
+          `${d.trace.framesNoWristOrImplement ?? 0} had neither hand, ` +
+          `${d.trace.framesVelocityRejected ?? 0} were thrown out by the speed filter`,
+      });
+    }
   }
   // Box-jump-only, and a DIFFERENT detector from the implement tracker directly above (a
   // wrist-implement motion-diff tracker, not a box-top finder) -- see

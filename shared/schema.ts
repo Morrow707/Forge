@@ -7573,6 +7573,9 @@ export const trackingDiagnosticsSchema = z.object({
     .object({
       points: z.number(),
       repsFound: z.number().optional().nullable(),
+      framesUsable: z.number().optional(),
+      framesNoWristOrImplement: z.number().optional(),
+      framesVelocityRejected: z.number().optional(),
       velocityRejections: z.number(),
       largestGapSeconds: z.number().optional().nullable(),
     })

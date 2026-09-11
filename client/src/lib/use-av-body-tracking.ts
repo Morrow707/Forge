@@ -105,6 +105,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     let rafId: number | null = null;
     let started = false;
     let observer: ResizeObserver | null = null;
+    let settleTimers: ReturnType<typeof setTimeout>[] = [];
     let waitFrames = 0;
     const MAX_WAIT_FRAMES = 180;
 
@@ -164,6 +165,22 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       window.addEventListener("resize", onResize);
       window.addEventListener("orientationchange", onOrientationChange);
 
+      // AND PUSH THE RECT AGAIN ANYWAY, ON A TIMER, WHETHER ANYTHING RESIZED OR NOT.
+      //
+      // The observer below is the right mechanism and it is not enough on its own: it can only
+      // fire for a box change that happens AFTER it is attached, and attaching it happens after
+      // startAvPreview is called. When the dialog's open animation finishes inside that gap --
+      // faster device, warmer cache, a build where this code path is a few milliseconds quicker
+      // -- the box stops changing before anything is watching it, and the native layer keeps the
+      // mid-animation rect for the life of the dialog. The letterboxed viewfinder came back for
+      // exactly that reason, months after the observer supposedly fixed it.
+      //
+      // Re-measuring on a short schedule closes the gap without depending on the timing at all.
+      // updateRect is idempotent and costs a rect read, so doing it a handful of times across the
+      // first second is cheap insurance against a race that has now been lost twice.
+      settleTimers = [0, 120, 300, 600, 1000].map((ms) => setTimeout(onResize, ms));
+      requestAnimationFrame(onResize);
+
       // The rect above is whatever the container measured the instant it first had a non-zero
       // box, and the dialog this lives in animates open with a scale transform --
       // getBoundingClientRect reports the TRANSFORMED box, so the first honest-looking
@@ -185,6 +202,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     return () => {
       cancelled = true;
       if (rafId != null) cancelAnimationFrame(rafId);
+      for (const timer of settleTimers) clearTimeout(timer);
       observer?.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onOrientationChange);

@@ -993,6 +993,15 @@ export function AvBarTrackerDialog({
     let verticalSign: 1 | -1 = 1;
     // Half the measured distance from the left grip to the right, carried forward so a frame with
     // only one hand can still be placed at the middle of the bar -- see barPointFromSides.
+    // WHY A FRAME PRODUCED NO POINT, COUNTED RATHER THAN INFERRED.
+    //
+    // A take came back with zero tracked points on a clip where the body was found on all 705
+    // frames and both hands were tracked on most of them. Nothing recorded which of the three
+    // ways a frame can produce nothing actually happened, so the only route to an answer was
+    // reasoning backwards from an empty trace -- which is where the last two of these went wrong.
+    let framesNoWristOrImplement = 0;
+    let framesVelocityRejected = 0;
+    let framesUsable = 0;
     let lastHalfSpan: { x: number; y: number } | null = null;
     let prevFusedLeft: { x: number; y: number; t: number } | null = null;
     let prevFusedRight: { x: number; y: number; t: number } | null = null;
@@ -1115,10 +1124,14 @@ export function AvBarTrackerDialog({
         ? { ...coreMlPointRaw, x: coreMlPointRaw.x * effectiveScale, y: coreMlPointRaw.y * effectiveScale, z: 0 }
         : null;
 
+      const rejectionsBefore = rejectionEvents.length;
       const { fused: fusedLeft, nextPrev: nextPrevLeft } = fuseSide(worldLm, "left", leftImplement, prevFusedLeft, leftVelocitySamples, t, coreMlPoint, f);
       prevFusedLeft = nextPrevLeft;
       const { fused: fusedRight, nextPrev: nextPrevRight } = fuseSide(worldLm, "right", rightImplement, prevFusedRight, rightVelocitySamples, t, coreMlPoint, f);
       prevFusedRight = nextPrevRight;
+      // A side that existed and was thrown out for moving impossibly fast, as opposed to one that
+      // was never seen at all -- the two look identical in an empty trace and mean opposite things.
+      const rejectedThisFrame = rejectionEvents.length > rejectionsBefore;
 
       if (
         usesSharedBar &&
@@ -1146,6 +1159,9 @@ export function AvBarTrackerDialog({
       // traced where it sits, so the point keeps meaning the same thing from frame to frame.
       const { point: combined, halfSpan } = barPointFromSides(fusedLeft, fusedRight, lastHalfSpan);
       lastHalfSpan = halfSpan;
+      if (combined) framesUsable++;
+      else if (rejectedThisFrame) framesVelocityRejected++;
+      else framesNoWristOrImplement++;
       if (combined) {
         const point: TrackedPoint = { t, x: combined.x, y: verticalSign * combined.y, z: 0, confidence: combined.confidence };
         const prevPoint = trace[trace.length - 1];
@@ -1170,6 +1186,9 @@ export function AvBarTrackerDialog({
       return {
         points: trace.length,
         repsFound,
+        framesUsable,
+        framesNoWristOrImplement,
+        framesVelocityRejected,
         velocityRejections: rejectionEvents.length,
         largestGapSeconds: largestGapSeconds == null ? null : Math.round(largestGapSeconds * 1000) / 1000,
       };

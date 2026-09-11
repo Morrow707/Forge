@@ -50,6 +50,13 @@ export type ReferenceObjectRead = {
 export type TraceDiagnostics = {
   points: number;
   repsFound: number | null;
+  /** Frames that produced a usable bar point, and the two ways a frame produces none: neither
+   *  hand was seen at all, or a hand WAS seen and was thrown out for moving impossibly fast.
+   *  Those two look identical in an empty trace and mean opposite things -- one is framing, the
+   *  other is the filter. */
+  framesUsable?: number;
+  framesNoWristOrImplement?: number;
+  framesVelocityRejected?: number;
   velocityRejections: number;
   largestGapSeconds: number | null;
 };
