@@ -7517,7 +7517,33 @@ export const trackingDiagnosticsSchema = z.object({
       })
       .optional()
       .nullable(),
+    // Whether body pose and the implement tracker were pointing at the same place while both of
+    // them ran -- see sourceAgreement in client/src/lib/tracking-diagnostics.ts. The two frame
+    // counts above say each system was working; only this says they were working TOGETHER.
+    sourceAgreement: z
+      .object({
+        framesWithBoth: z.number(),
+        framesPoseOnly: z.number(),
+        framesImplementOnly: z.number(),
+        medianGapPx: z.number().optional().nullable(),
+        maxGapPx: z.number().optional().nullable(),
+      })
+      .optional()
+      .nullable(),
   }),
+  // What the trace came out as and what the segmenter made of it -- see trace in
+  // client/src/lib/tracking-diagnostics.ts. These are the numbers that separate "the bar was
+  // never tracked" from "the bar was tracked and the reps would not separate", which a refused
+  // take could not say about itself and which got guessed wrong on a real bench press.
+  trace: z
+    .object({
+      points: z.number(),
+      repsFound: z.number().optional().nullable(),
+      velocityRejections: z.number(),
+      largestGapSeconds: z.number().optional().nullable(),
+    })
+    .optional()
+    .nullable(),
   // Which of pose-tracking.ts's two calibration methods (nose-to-ankle, or the shoulder-to-
   // ankle fallback) each frame actually resolved through -- see calibrationMethodBreakdown's
   // own comment. unresolvedFrames > 0 across the whole clip is why calibration failed.
@@ -7555,6 +7581,23 @@ export const trackingDiagnosticsSchema = z.object({
         .max(8)
         .optional(),
       scaleCorroborated: z.boolean().optional(),
+      // What the reference-object detector actually boxed -- see referenceObject in
+      // client/src/lib/tracking-diagnostics.ts. A plate is a disc and should box near square on
+      // the bar; shape and position are what say whether it found one at all.
+      referenceObject: z
+        .object({
+          label: z.string().max(40),
+          medianWidthPx: z.number(),
+          medianHeightPx: z.number(),
+          aspectRatio: z.number(),
+          medianCenterXNorm: z.number(),
+          medianCenterYNorm: z.number(),
+          minConfidence: z.number(),
+          maxConfidence: z.number(),
+          samples: z.number(),
+        })
+        .optional()
+        .nullable(),
       axisSource: z.enum(["grip", "trace_covariance"]).optional().nullable(),
       gripPairsUsed: z.number().optional().nullable(),
       traceTravelAlongPx: z.number().optional().nullable(),

@@ -34,6 +34,26 @@ export type ScaleFreeSummary = {
   }[];
 };
 
+export type ReferenceObjectRead = {
+  label: string;
+  medianWidthPx: number;
+  medianHeightPx: number;
+  /** Wider over taller. A bumper plate should sit near 1; a long thin box is a bar or a rail. */
+  aspectRatio: number;
+  medianCenterXNorm: number;
+  medianCenterYNorm: number;
+  minConfidence: number;
+  maxConfidence: number;
+  samples: number;
+};
+
+export type TraceDiagnostics = {
+  points: number;
+  repsFound: number | null;
+  velocityRejections: number;
+  largestGapSeconds: number | null;
+};
+
 export type TrackingDiagnostics = {
   outcome: TrackingOutcome;
   // Present only on a "scale_free_only" capture. Lives here rather than in repBreakdown because
@@ -85,7 +105,28 @@ export type TrackingDiagnostics = {
     // just when no CoreML model is bundled -- all three cases mean "nothing to report," but for
     // different reasons.
     coreMlSizeCheck: { framesChecked: number; implausibleCount: number } | null;
+    // DO THE TWO SYSTEMS ACTUALLY AGREE, FRAME BY FRAME.
+    //
+    // Body pose and the implement tracker both run on every frame and their readings are fused
+    // per side, weighted by each one's confidence. Nothing recorded whether they were agreeing
+    // while they did it. "763/763 frames had a body" and "left hand 691/763" sit next to each
+    // other on the report and say nothing about whether those two were pointing at the same
+    // place -- so a take where the tracker had quietly wandered onto the rack behind the lifter
+    // reads identically to one where both were locked on the same hand all set.
+    //
+    // The gap is measured in the same pixel-space units the fusion itself works in, so it can be
+    // held against a shoulder span from the scale candidates on the line above. A gap a
+    // reasonable fraction of shoulder width is two systems watching one hand; a gap several times
+    // that is two systems watching different objects and averaging them.
+    sourceAgreement: {
+      framesWithBoth: number;
+      framesPoseOnly: number;
+      framesImplementOnly: number;
+      medianGapPx: number | null;
+      maxGapPx: number | null;
+    } | null;
   };
+
   calibration: {
     scaleFactor: number | null;
     // Where the real-world scale actually came from. "height" is the athlete's own stature, the
@@ -146,7 +187,32 @@ export type TrackingDiagnostics = {
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
     unresolvedFrames: number;
+    // WHAT THE REFERENCE-OBJECT DETECTOR ACTUALLY BOXED.
+    //
+    // The plate read is reported as one number -- the diameter it measured -- and that number
+    // has been wrong on every take so far: 594px for something that should read about 94 on a
+    // bench press, off by a similar factor on a squat. Rejected correctly each time, and each
+    // time the only way to ask WHY was to reason backwards from the implied athlete height.
+    //
+    // A plate is a disc. Boxed properly it comes out close to square, sitting on the bar near
+    // the hands. Its shape and where it sat are what say whether the detector found a plate at
+    // all or something else entirely -- a rack upright, a bench end, the whole loaded bar -- and
+    // neither was recorded. The confidence spread is here for the same reason: an average hides
+    // a detector that was certain on four frames and guessing on fifty.
+    referenceObject?: ReferenceObjectRead | null;
   } | null;
+  // WHAT THE TRACE ITSELF CAME OUT AS, AND WHAT THE SEGMENTER MADE OF IT.
+  //
+  // A refused take said "couldn't get a clean read" and nothing else. Whether that meant six
+  // tracked points or seven hundred, and whether the reps failed to separate or were never
+  // there, had to be inferred backwards from the rest of the page -- which is guessing, and on a
+  // real bench press it guessed wrong and told the athlete to keep the bar in frame when the bar
+  // had never left it.
+  //
+  // These are the two numbers that separate those cases outright, plus what got thrown away on
+  // the way: frames rejected for moving impossibly fast between samples, and the longest stretch
+  // with no usable reading at all.
+  trace?: TraceDiagnostics | null;
 };
 
 function round2(n: number): number {
@@ -198,8 +264,32 @@ function summarizeObjectDetection(
   let coreMlConfSum = 0;
   let coreMlFramesChecked = 0;
   let coreMlImplausibleCount = 0;
+  // See sourceAgreement's own comment. Pose and implement readings are compared in the raw
+  // normalized space both arrive in, then expressed in that frame's own pixels -- the units the
+  // fusion and every scale candidate already work in.
+  let framesWithBoth = 0;
+  let framesPoseOnly = 0;
+  let framesImplementOnly = 0;
+  const gapsPx: number[] = [];
   const checkSize = trackingMode === "med_ball";
   for (const f of rawFrames) {
+    for (const side of ["left", "right"] as const) {
+      const implement = side === "left" ? f.leftImplement : f.rightImplement;
+      const wrist = f.joints.find((j) => j.name === (side === "left" ? "leftWrist" : "rightWrist"));
+      if (implement && wrist) {
+        framesWithBoth++;
+        gapsPx.push(
+          Math.hypot(
+            (implement.x - wrist.x) * f.frameWidth,
+            (implement.y - wrist.y) * f.frameHeight,
+          ),
+        );
+      } else if (wrist) {
+        framesPoseOnly++;
+      } else if (implement) {
+        framesImplementOnly++;
+      }
+    }
     if (f.leftImplement) {
       framesWithLeftImplement++;
       implConfSum += f.leftImplement.confidence;
@@ -232,7 +322,24 @@ function summarizeObjectDetection(
       checkSize && scaleFactor != null
         ? { framesChecked: coreMlFramesChecked, implausibleCount: coreMlImplausibleCount }
         : null,
+    sourceAgreement:
+      framesWithBoth + framesPoseOnly + framesImplementOnly > 0
+        ? {
+            framesWithBoth,
+            framesPoseOnly,
+            framesImplementOnly,
+            medianGapPx: gapsPx.length > 0 ? round2(median(gapsPx)) : null,
+            maxGapPx: gapsPx.length > 0 ? round2(Math.max(...gapsPx)) : null,
+          }
+        : null,
   };
+}
+
+// Median, not mean: the whole point of these is to survive a handful of frames where a tracker
+// jumped somewhere it had no business being, which is exactly what a mean would follow.
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
 }
 
 // Assembled once per finished recording (success or a saveEmptyAndWarn-style failure) by every
@@ -265,9 +372,13 @@ export function buildTrackingDiagnostics(args: {
     boxTopNormalizedY?: number;
   } | null;
   calibration?: TrackingDiagnostics["calibration"];
+  // See TrackingDiagnostics["trace"]. Passed in rather than derived here because only the caller
+  // has the finished trace and whatever the segmenter made of it.
+  trace?: TrackingDiagnostics["trace"];
 }): TrackingDiagnostics {
   return {
     outcome: args.outcome,
+    trace: args.trace ?? null,
     scaleFree: args.scaleFree ?? null,
     message: args.message ?? null,
     recording: args.recording ?? null,

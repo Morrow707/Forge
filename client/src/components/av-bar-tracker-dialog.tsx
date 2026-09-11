@@ -49,7 +49,11 @@ import {
   type CameraAlignment,
   type FormFaultThresholds,
 } from "@/lib/pose-tracking";
-import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
+import {
+  buildTrackingDiagnostics,
+  type TrackingDiagnostics,
+  type ReferenceObjectRead,
+} from "@/lib/tracking-diagnostics";
 import {
   summarizeTrackedSet,
   interpolateOcclusionGap,
@@ -244,7 +248,16 @@ function applyCoreMlCorroboration(
 function plateScaleFromFrames(
   frames: NativePoseFrame[],
   trackingMode: string | undefined,
-): { scale: number; uncertaintyFraction: number; measured: number; samples: number } | null {
+): {
+  scale: number;
+  uncertaintyFraction: number;
+  measured: number;
+  samples: number;
+  // What the detector actually boxed, not just how wide it came out. See the referenceObject
+  // field in tracking-diagnostics.ts: a plate is a disc and should box near square, on the bar,
+  // near the hands. Shape and position are what separate a real plate read from a rack upright.
+  shape: ReferenceObjectRead;
+} | null {
   // WHICHEVER DETECTOR SAW THE PLATE, NOT WHICHEVER ONE WAS ASKED FIRST.
   //
   // The clip now carries two classes (see AvCoreMlImplementDetector.secondaryLabel): the class
@@ -258,6 +271,11 @@ function plateScaleFromFrames(
   const plateIsSecondary = trackingMode === "barbell";
   if (!plateIsPrimary && !plateIsSecondary) return null;
   const samples: number[] = [];
+  const widths: number[] = [];
+  const heights: number[] = [];
+  const centersX: number[] = [];
+  const centersY: number[] = [];
+  const confidences: number[] = [];
   for (const f of frames) {
     const box = plateIsPrimary
       ? f.coreMlImplement
@@ -265,8 +283,17 @@ function plateScaleFromFrames(
         ? f.coreMlSecondary
         : undefined;
     if (!box || box.confidence < COREML_MIN_CONFIDENCE_TO_PENALIZE) continue;
-    const pixelSize = Math.max(box.width * f.frameWidth, box.height * f.frameHeight);
-    if (pixelSize > 0) samples.push(pixelSize);
+    const widthPx = box.width * f.frameWidth;
+    const heightPx = box.height * f.frameHeight;
+    const pixelSize = Math.max(widthPx, heightPx);
+    if (pixelSize > 0) {
+      samples.push(pixelSize);
+      widths.push(widthPx);
+      heights.push(heightPx);
+      centersX.push(box.x);
+      centersY.push(box.y);
+      confidences.push(box.confidence);
+    }
   }
   if (samples.length < MIN_CALIBRATION_SAMPLES) return null;
   samples.sort((a, b) => a - b);
@@ -282,7 +309,24 @@ function plateScaleFromFrames(
   // dark patch -- and that shows up as a pixel size nothing like a plate at that distance. It was
   // invisible before, so a bad read could only be inferred backwards from a wrong range of
   // motion, which is guessing.
-  return computed ? { ...computed, measured: medianPixelSize, samples: samples.length } : null;
+  // Median throughout -- a detector that jumped to the wrong object on a handful of frames is
+  // exactly what these exist to expose, and a mean would follow it there.
+  const med = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const medianWidthPx = med(widths);
+  const medianHeightPx = med(heights);
+  const shape = {
+    label: plateIsPrimary ? "plate (primary)" : "plate (secondary)",
+    medianWidthPx: round2(medianWidthPx),
+    medianHeightPx: round2(medianHeightPx),
+    aspectRatio: medianHeightPx > 0 ? round2(medianWidthPx / medianHeightPx) : 0,
+    medianCenterXNorm: round2(med(centersX)),
+    medianCenterYNorm: round2(med(centersY)),
+    minConfidence: round2(Math.min(...confidences)),
+    maxConfidence: round2(Math.max(...confidences)),
+    samples: samples.length,
+  };
+  return computed ? { ...computed, measured: medianPixelSize, samples: samples.length, shape } : null;
 }
 
 // Every field the RepMetrics type marks `| null` stays null here, not 0 -- see romCm's and
@@ -857,6 +901,7 @@ export function AvBarTrackerDialog({
       traceTravelAlongCm?: number;
       traceTravelAcrossCm?: number;
       tracePointsDroppedOffAxis?: number;
+      referenceObject?: ReferenceObjectRead | null;
     } = {
       scaleSource,
       scaleCandidates,
@@ -866,6 +911,7 @@ export function AvBarTrackerDialog({
       })),
       scaleCorroborated: scaleVerdict.corroborated,
       scalesRejectedAsImplausible: implausibleScales,
+      referenceObject: plateScale?.shape ?? null,
     };
 
     // No scale used to end the take here, with nothing saved but the video. It no longer does.
@@ -1070,6 +1116,25 @@ export function AvBarTrackerDialog({
       }
     }
 
+    // See TrackingDiagnostics["trace"]. Reads the trace at call time rather than snapshotting it,
+    // so a caller after dropAcrossAxisOutliers (which rewrites the array in place) gets the
+    // trimmed count and a caller before it gets the raw one. Every save path below is handed one
+    // of these -- the REFUSED paths need it more than the successful one does, and those were
+    // the ones reporting nothing at all about why.
+    const traceDiagnostics = (repsFound: number | null) => {
+      let largestGapSeconds: number | null = null;
+      for (let i = 1; i < trace.length; i++) {
+        const gap = (trace[i].t - trace[i - 1].t) / 1000;
+        if (largestGapSeconds == null || gap > largestGapSeconds) largestGapSeconds = gap;
+      }
+      return {
+        points: trace.length,
+        repsFound,
+        velocityRejections: rejectionEvents.length,
+        largestGapSeconds: largestGapSeconds == null ? null : Math.round(largestGapSeconds * 1000) / 1000,
+      };
+    };
+
     // The scale-free branch. Runs before anything that reads a real-world unit -- form-fault
     // detection, the range-of-motion plausibility check and the power maths all compare against
     // absolute centimetres and would be nonsense here.
@@ -1101,6 +1166,7 @@ export function AvBarTrackerDialog({
             trackingMode: coreMlTrackingMode,
             recording: recordingStats,
             calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
+            trace: traceDiagnostics(scaleFree.repCount),
           }),
           uploadPromise,
           forSetNumber,
@@ -1119,6 +1185,7 @@ export function AvBarTrackerDialog({
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
           calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
+          trace: traceDiagnostics(null),
         }),
         uploadPromise,
         forSetNumber,
@@ -1244,6 +1311,7 @@ export function AvBarTrackerDialog({
             trackingMode: coreMlTrackingMode,
             recording: recordingStats,
             calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
+            trace: traceDiagnostics(scaleFree.repCount),
           }),
           uploadPromise,
           forSetNumber,
@@ -1262,6 +1330,7 @@ export function AvBarTrackerDialog({
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
           calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
+          trace: traceDiagnostics(null),
         }),
         uploadPromise,
         forSetNumber,
@@ -1313,6 +1382,7 @@ export function AvBarTrackerDialog({
             trackingMode: coreMlTrackingMode,
             recording: recordingStats,
             calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
+            trace: traceDiagnostics(scaleFreeOnRomProblem.repCount),
           }),
           uploadPromise,
           forSetNumber,
@@ -1330,6 +1400,7 @@ export function AvBarTrackerDialog({
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
           calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
+          trace: traceDiagnostics(null),
         }),
         uploadPromise,
         forSetNumber,
@@ -1454,6 +1525,7 @@ export function AvBarTrackerDialog({
       trackingMode: coreMlTrackingMode,
       recording: recordingStats,
       calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
+      trace: traceDiagnostics(metrics.repBreakdown.length),
     });
 
     // readerStatus exists specifically to tell "the athlete's take was genuinely short" apart

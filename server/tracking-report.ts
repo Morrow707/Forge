@@ -67,7 +67,20 @@ type TrackingDiagnostics = {
     framesWithCoreMlImplement?: number;
     avgCoreMlConfidence?: number | null;
     coreMlSizeCheck?: { framesChecked: number; implausibleCount: number } | null;
+    sourceAgreement?: {
+      framesWithBoth: number;
+      framesPoseOnly: number;
+      framesImplementOnly: number;
+      medianGapPx?: number | null;
+      maxGapPx?: number | null;
+    } | null;
   };
+  trace?: {
+    points: number;
+    repsFound?: number | null;
+    velocityRejections: number;
+    largestGapSeconds?: number | null;
+  } | null;
   calibration?: {
     scaleFactor: number | null;
     // Which source produced the number, what each source actually measured, and whether anything
@@ -82,6 +95,17 @@ type TrackingDiagnostics = {
     }[];
     scaleOutliers?: { source: string; ratioToChosen: number }[];
     scaleCorroborated?: boolean;
+    referenceObject?: {
+      label: string;
+      medianWidthPx: number;
+      medianHeightPx: number;
+      aspectRatio: number;
+      medianCenterXNorm: number;
+      medianCenterYNorm: number;
+      minConfidence: number;
+      maxConfidence: number;
+      samples: number;
+    } | null;
     axisSource?: string | null;
     gripPairsUsed?: number | null;
     traceTravelAlongPx?: number | null;
@@ -398,6 +422,44 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
             : ""
         }`,
   });
+
+  // DID THE TWO SYSTEMS AGREE WHILE THEY BOTH RAN.
+  //
+  // The two lines above each say one system was working. Neither says they were watching the
+  // same thing, and the fused trace every number comes from is a weighted average of the two --
+  // so a tracker that had quietly wandered onto the rack behind the lifter reads exactly like
+  // one locked on the hand all set. Hold the gap against the shoulder span in "Scale sources"
+  // below: a gap a fraction of shoulder width is two systems on one hand, several times that is
+  // two systems on different objects being averaged together.
+  const agreement = d.objectDetection.sourceAgreement;
+  if (agreement && agreement.framesWithBoth + agreement.framesPoseOnly + agreement.framesImplementOnly > 0) {
+    lines.push({
+      label: "Do the two systems agree",
+      value:
+        `both saw a hand on ${agreement.framesWithBoth} side-frames` +
+        `${agreement.medianGapPx != null ? `, typically ${Math.round(agreement.medianGapPx)}px apart` : ""}` +
+        `${agreement.maxGapPx != null ? ` (worst ${Math.round(agreement.maxGapPx)}px)` : ""}` +
+        `. Pose alone on ${agreement.framesPoseOnly}, object tracker alone on ${agreement.framesImplementOnly}`,
+    });
+  }
+
+  // WHAT THE TRACE CAME OUT AS, AND WHETHER THE REPS SEPARATED.
+  //
+  // A refused take used to say "couldn't get a clean read" and nothing else, and the two things
+  // that produce it -- too few tracked points, or points that would not split into reps -- look
+  // identical from the outside. They were guessed at, and on a real ten-rep bench press the
+  // guess was wrong: the athlete was told to keep the bar in frame on a clip where the detector
+  // had it on 676 of 763 frames.
+  if (d.trace) {
+    lines.push({
+      label: "Trace and reps",
+      value:
+        `${d.trace.points} tracked points` +
+        `${d.trace.repsFound != null ? `, ${d.trace.repsFound} rep${d.trace.repsFound === 1 ? "" : "s"} found` : ", reps not segmented"}` +
+        `${d.trace.velocityRejections > 0 ? `, ${d.trace.velocityRejections} frames dropped as impossibly fast` : ""}` +
+        `${d.trace.largestGapSeconds != null ? `, largest gap ${d.trace.largestGapSeconds}s` : ""}`,
+    });
+  }
   // Box-jump-only, and a DIFFERENT detector from the implement tracker directly above (a
   // wrist-implement motion-diff tracker, not a box-top finder) -- see
   // AvBodyTrackingPlugin.swift's detectBoxTopCandidate. Only shown for jump-mode sets so this
@@ -509,6 +571,25 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
         value: c.scalesRejectedAsImplausible
           .map((r) => `${r.source} (it would make the athlete ${r.impliedHeightIn}in tall)`)
           .join("; "),
+      });
+    }
+
+    // WHAT THE DETECTOR ACTUALLY BOXED, NOT JUST HOW WIDE IT CAME OUT.
+    //
+    // The plate read has been wrong on every take so far and was rejected correctly each time,
+    // and the only way to ask why was to reason backwards from the implied athlete height. A
+    // bumper plate is a disc: boxed properly it comes out near square, on the bar, near the
+    // hands. An aspect ratio far off 1, or a box sitting at the edge of frame, says the detector
+    // found something that is not a plate -- a rack upright, a bench end, the whole loaded bar.
+    if (c.referenceObject) {
+      const o = c.referenceObject;
+      lines.push({
+        label: "Reference object boxed",
+        value:
+          `${o.label}: ${Math.round(o.medianWidthPx)} x ${Math.round(o.medianHeightPx)}px ` +
+          `(aspect ${o.aspectRatio}, a plate should be near 1), centred at ` +
+          `${Math.round(o.medianCenterXNorm * 100)}% across / ${Math.round(o.medianCenterYNorm * 100)}% up the frame, ` +
+          `confidence ${pct(o.minConfidence)}-${pct(o.maxConfidence)} over ${o.samples} frames`,
       });
     }
 
