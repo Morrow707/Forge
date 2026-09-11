@@ -1909,6 +1909,44 @@ export function WorkoutPage({
     scheduleAutosave(nextItems);
   }
 
+  // ABOVE THE EARLY RETURN, AND IT HAS TO STAY THERE.
+  //
+  // This sat below it. React counts hooks per render, so the loading render ran N and the render
+  // right after the day arrived ran N+1, and React refuses that -- the whole page fell into the
+  // error boundary with "Something went wrong". It only happened when the loading branch actually
+  // rendered first, which is why it looked random: a day already in the query cache renders
+  // straight to content and never trips it, while a cold day, or one fetched against a server
+  // still waking up from a deploy, does every time. Scott hit it eight times in a row and then it
+  // "fixed itself" -- that was the day landing in cache, not the bug going away.
+  //
+  // Nothing below the early return may call a hook. There is a test that checks this
+  // (hooks-after-early-return.test.ts) because the rule is invisible at the call site: the code
+  // reads perfectly fine right up until the page is opened cold.
+  //
+  // Writes the account preference rather than a local display flag, because the same preference
+  // is what every other surface reads (see athlete/progress.tsx). A per-page toggle would leave
+  // those disagreeing with this one.
+  const preferencesPath =
+    user?.role === "coach"
+      ? "/api/coach/my/preferences"
+      : user?.role === "admin"
+        ? "/api/admin/my/preferences"
+        : "/api/athlete/preferences";
+  const setPreferredUnit = useMutation({
+    mutationFn: async (next: WeightUnit) => {
+      const res = await apiRequest("PATCH", preferencesPath, {
+        preferredWeightUnit: next,
+      });
+      return (await res.json()) as { preferredWeightUnit: WeightUnit };
+    },
+    onSuccess: (updated) => {
+      qc.setQueryData(["/api/auth/me"], (prev: any) =>
+        prev ? { ...prev, preferredWeightUnit: updated.preferredWeightUnit } : prev,
+      );
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't change the unit"),
+  });
+
   if (isLoading || !data) {
     return (
       <AppShell title="Loading Workout…">
@@ -1930,30 +1968,6 @@ export function WorkoutPage({
   // stuck reading its own training volume in a unit it never picked.
   const unit = user?.preferredWeightUnit ?? "lbs";
   const stats = computeStats(items, unit);
-  // Writes the account preference rather than a local display flag, because
-  // the same preference is what every other surface reads (see
-  // athlete/progress.tsx). A per-page toggle would leave those disagreeing
-  // with this one.
-  const preferencesPath =
-    user?.role === "coach"
-      ? "/api/coach/my/preferences"
-      : user?.role === "admin"
-        ? "/api/admin/my/preferences"
-        : "/api/athlete/preferences";
-  const setPreferredUnit = useMutation({
-    mutationFn: async (next: WeightUnit) => {
-      const res = await apiRequest("PATCH", preferencesPath, {
-        preferredWeightUnit: next,
-      });
-      return (await res.json()) as { preferredWeightUnit: WeightUnit };
-    },
-    onSuccess: (updated) => {
-      qc.setQueryData(["/api/auth/me"], (prev: any) =>
-        prev ? { ...prev, preferredWeightUnit: updated.preferredWeightUnit } : prev,
-      );
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't change the unit"),
-  });
   const exerciseCount = pages.reduce((sum, p) => sum + p.items.length, 0);
 
   async function handleShareWorkout() {

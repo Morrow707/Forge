@@ -1197,7 +1197,60 @@ export function AvBarTrackerDialog({
       movementAxis,
     );
     if (!metrics) {
-      const message = "Couldn't get a clean read -- make sure the bar stays in frame throughout the set.";
+      // "MAKE SURE THE BAR STAYS IN FRAME" WAS A GUESS, AND ON A REAL TAKE IT WAS WRONG.
+      //
+      // This branch fired on a ten-rep bench press where the bar never left the shot: the
+      // detector had it on 676 of 763 frames and the left hand on 691. The athlete was told to
+      // keep the bar in frame, which he had, and the set was saved with nothing in it.
+      //
+      // Reaching here does not mean the bar was lost. summarizeTrackedSet returns null for two
+      // reasons -- too few tracked points to work with, or points it could not split into reps --
+      // and only the first is about framing. The evidence separating them is already sitting in
+      // this function, so the message is chosen from it instead of assumed.
+      const TOO_FEW_POINTS = 6;
+      const message =
+        trace.length < TOO_FEW_POINTS
+          ? "Couldn't get a clean read -- make sure the bar stays in frame throughout the set."
+          : "Couldn't tell the reps apart in this one. The bar was tracked, but its path didn't " +
+            "break into separate reps -- filming square to the side, level with the bar, gives " +
+            "the clearest read.";
+
+      // And a take this well tracked should not come back empty. The scale-free summary one
+      // branch up already recovers rep count, tempo and velocity loss from a trace with no usable
+      // scale -- every one of those is a duration or a ratio, so none of them needs metres. It
+      // was only ever reachable when calibration failed outright; a take that HAD a scale and
+      // then failed to segment at it got nothing at all, which is strictly less than this same
+      // trace would have produced with no calibration whatsoever.
+      const unscaled = summarizeTrackedSet(
+        normalizeTraceScale(trace),
+        undefined,
+        undefined,
+        firstMoveForExercise(exerciseName),
+        rejectionEvents,
+        1,
+        true,
+      );
+      const scaleFree = unscaled ? toScaleFreeMetrics(unscaled) : null;
+      if (scaleFree) {
+        await saveScaleFreeAndWarn(
+          blob,
+          scaleFree,
+          message,
+          captureDeviceInfo,
+          buildTrackingDiagnostics({
+            outcome: "scale_free_only",
+            message,
+            rawFrames,
+            trackingMode: coreMlTrackingMode,
+            recording: recordingStats,
+            calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
+          }),
+          uploadPromise,
+          forSetNumber,
+        );
+        return;
+      }
+
       await saveEmptyAndWarn(
         blob,
         message,
