@@ -189,6 +189,15 @@ const adminNav: NavItem[] = [
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
   { href: "/admin/documents", label: "Legal & Compliance", icon: ShieldCheck, overflow: true },
+  // BOTH OF THESE EXISTED, WORKED, AND HAD NO WAY IN.
+  //
+  // Each had a route in App.tsx, a working server endpoint and a finished page, and no entry
+  // here or a link from any other page -- reachable only by typing the URL. The removal queue is
+  // the one that matters: a guardian raises a media removal request from their own dashboard
+  // (see guardian-dashboard.tsx), it lands in a table nobody was ever shown, and the request sits
+  // there. A compliance queue with no door is the same as no queue.
+  { href: "/admin/removal-requests", label: "Removal Requests", icon: Trash2, overflow: true },
+  { href: "/admin/blocked-athletes", label: "Blocked Athletes", icon: Flag, overflow: true },
 ];
 
 export function AppShell({
