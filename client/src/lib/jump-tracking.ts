@@ -138,6 +138,15 @@ export type JumpSetMetrics = {
 
 const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;
 
+// See the settle-window check inside the airborne branch below.
+const LANDING_ABOVE_BOX_TOLERANCE_M = 0.05;
+
+// See the netRiseM rejection below. A few centimetres of slack for ordinary landing-height
+// measurement noise (medianRawY over a handful of frames), so a genuinely flat jump with a
+// slightly-negative reading from noise isn't discarded -- only a landing that is clearly,
+// not marginally, below the takeoff surface. Judgement call, not a measured bound.
+const NET_DESCENT_TOLERANCE_M = 0.03;
+
 // loadKg has no equivalent here (jumps have no external load to base power
 // on the way summarizeTrackedSet's does) -- this is display of body-flight
 // kinematics, not force or power.
@@ -333,7 +342,25 @@ export function summarizeJumpSet(
       if (amplitudeSoFar >= minAmplitudeM && pastApex && i - (SETTLE_FRAMES - 1) > peakIdx) {
         const window = ySmoothed.slice(i - SETTLE_FRAMES + 1, i + 1);
         const settled = Math.max(...window) - Math.min(...window) < settleToleranceM;
-        if (settled) {
+        // A real apex has near-zero vertical speed for an instant too (the same reason the
+        // comment above warns against "just pausing at the top of the arc"), and on a tall
+        // enough flight that flat spot can itself last close to SETTLE_FRAMES worth of
+        // samples -- long enough to satisfy `settled` here before the athlete has actually
+        // finished falling. Confirmed on a synthetic box-jump dismount energetic enough to
+        // include its own push-off (not a step, and not an ordinary hop): the settle test
+        // fired on the dismount's OWN apex, part way back down, rather than at the true
+        // touchdown. When a box height is known this catches that specific failure without
+        // touching the general timing every jump (including every real rep) depends on: a
+        // real landing is a surface the athlete is standing ON, and nothing in this pipeline
+        // has the athlete resting in mid-air above the box's own top. A false "landing" that
+        // is still measurably higher than the box itself is rejected outright, left airborne,
+        // and picked up again -- typically at the true floor -- the next time the settle test
+        // fires. LANDING_ABOVE_BOX_TOLERANCE_M is a few centimetres of slack for ordinary
+        // measurement noise, not a calibrated bound.
+        const floatingAboveBox =
+          boxTopWorldY != null &&
+          window.reduce((a, b) => a + b, 0) / window.length < boxTopWorldY - LANDING_ABOVE_BOX_TOLERANCE_M;
+        if (settled && !floatingAboveBox) {
           // First frame of the settled window -- the actual touchdown
           // moment, not the frame settling was confirmed on.
           const landingIdx = i - SETTLE_FRAMES + 1;
@@ -383,12 +410,40 @@ export function summarizeJumpSet(
             const netRiseM = takeoffY - landingY;
             const takeoffVelocityMps =
               (netRiseM + (GRAVITY_MPS2 * flightSeconds * flightSeconds) / 2) / flightSeconds;
-            // A negative take-off velocity is not a jump -- it is a step down that happened to
-            // clear the trigger. Clamped rather than reported as a negative height.
-            const jumpHeightCm =
-              takeoffVelocityMps > 0
-                ? ((takeoffVelocityMps * takeoffVelocityMps) / (2 * GRAVITY_MPS2)) * 100
-                : 0;
+
+            // A landing net below the takeoff surface by more than NET_DESCENT_TOLERANCE_M's
+            // worth of noise is a dismount, not a rep: stepping or jumping DOWN off the box
+            // between reps. A box jump lands higher than it took off and a flat jump lands level
+            // -- neither ever lands meaningfully lower -- so this is the box's own step-down that
+            // outran the grounded baseline's drift-tracking (a fast, forceful dismount can clear
+            // the takeoff trigger and BASE_MIN_FLIGHT_AMPLITUDE_CM the same way a real jump does;
+            // the state machine can't tell the two apart in advance, only after takeoffY and
+            // landingY are both known).
+            //
+            // This used to clamp takeoffVelocityMps to a floor of 0 and still push the rep with
+            // jumpHeightCm 0. That is worse than discarding it outright: a box-jump set's own
+            // dismount clears the trigger on every single rep, so every real rep would gain a
+            // phantom "0cm" sibling and the reported rep count would silently run double the
+            // true one -- exactly the failure this rejects.
+            //
+            // This only sees the true landing height if the settle test found the true landing
+            // frame. A dismount energetic enough to include its own brief rise before falling (a
+            // hard hop off the box, not a step) can have enough apex hang-time of its own to fool
+            // the SAME settle test a real rep's landing relies on -- its "landing" resolves to a
+            // point on its own downward arc rather than the ground, reading netRiseM as an ascent
+            // and defeating this check entirely. `floatingAboveBox` above is what actually catches
+            // that case when a box height is known (a settle point can't be above the box's own
+            // top and be a real landing); this check is what catches it the rest of the time --
+            // when there's no box (a plain jump-down/step-down failure) or the false settle
+            // happens to fall AT OR below the box top rather than above it.
+            if (takeoffVelocityMps <= 0 || netRiseM < -NET_DESCENT_TOLERANCE_M) {
+              state = "grounded";
+              baseline = window.reduce((a, b) => a + b, 0) / window.length;
+              baselineIdx = i;
+              continue;
+            }
+
+            const jumpHeightCm = ((takeoffVelocityMps * takeoffVelocityMps) / (2 * GRAVITY_MPS2)) * 100;
 
             const peakHeightCm = Math.max(0, amplitudeSoFar * 100);
 
