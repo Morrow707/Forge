@@ -4231,10 +4231,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   });
 
+  // multer rejections carry no status, and the global error handler rewrites
+  // anything that is not a 4xx into "Something went wrong on our end. Please try
+  // again." -- so a 70MB book and a .docx both came back as a server error the
+  // admin could do nothing about. This turns both into the 400 they are, with
+  // the actual reason.
+  const knowledgeUploadSingle: express.RequestHandler = (req, res, next) => {
+    knowledgeUpload.single("file")(req, res, (err: unknown) => {
+      if (!err) return next();
+      if (err instanceof multer.MulterError) {
+        return res.status(400).json({
+          message:
+            err.code === "LIMIT_FILE_SIZE"
+              ? "That PDF is over 60MB. Split it, or re-export it at a lower scan resolution."
+              : `Could not read that upload (${err.code}).`,
+        });
+      }
+      if (err instanceof Error && err.message === "Upload a PDF.") {
+        return res.status(400).json({ message: "Upload a PDF." });
+      }
+      next(err);
+    });
+  };
+
   app.post(
     "/api/admin/knowledge-sources",
     requireRole("admin"),
-    knowledgeUpload.single("file"),
+    knowledgeUploadSingle,
     async (req, res) => {
       if (!req.file) return res.status(400).json({ message: "A PDF file is required." });
       const parsed = z
@@ -7974,6 +7997,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/athlete/food/search", requireRole("athlete"), async (req, res) => {
     const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
     if (query.length < 2) return res.status(400).json({ message: "Enter at least 2 characters" });
+    // USDA FoodData Central is the only backend for name search (Open Food Facts
+    // is barcode-only), and searchFoodsByName returns [] when the key is unset.
+    // Served as a plain 200 that looked exactly like "no food on earth matches
+    // what you typed", for every search, forever.
+    if (!usdaFoodLookupEnabled) {
+      return res.status(503).json({
+        message:
+          "Search by name isn't set up on this server yet. Scan a barcode, or add the food manually.",
+      });
+    }
     const results = await storage.searchFoods(query);
     res.json(results);
   });

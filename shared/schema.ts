@@ -7991,11 +7991,16 @@ export const setNutritionGoalSchema = z.object({
 export type SetNutritionGoalInput = z.infer<typeof setNutritionGoalSchema>;
 
 export const testingTrendsQuerySchema = z.object({
+  // Keep in step with TESTING_METRICS in shared/testing-metrics.ts, which is
+  // what the coach's Team Trends chip row is built from. threeConeSeconds was
+  // in that list and missing here, so the 3-Cone / L-Drill chip 400'd -- the
+  // column exists on testing_results and the query needed nothing else.
   metric: z.enum([
     "fortyYardDash",
     "verticalJumpIn",
     "broadJumpIn",
     "proAgilitySeconds",
+    "threeConeSeconds",
     "benchMaxLbs",
     "squatMaxLbs",
     "deadliftMaxLbs",

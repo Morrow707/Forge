@@ -372,9 +372,11 @@ export function FoodScannerDialog({
       setSearchResults(results);
       setSearching(false);
     },
-    onError: () => {
+    onError: (err: ApiError) => {
       setSearching(false);
-      toast.error("Search failed -- try again");
+      // The server says when name search simply isn't configured (503) -- that is
+      // not something retrying fixes, so don't tell the athlete to try again.
+      toast.error(err.message || "Search failed -- try again");
     },
   });
 

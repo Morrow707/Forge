@@ -194,7 +194,10 @@ export default function AthleteClassDetail() {
                       {hasReadOnce ? "Take Lesson Again" : "Take Lesson"}
                     </Button>
                   )}
-                  {canTakeLesson && hasReadOnce && (
+                  {/* hasQuiz too: a quiz is optional in the builder, and this
+                      button opened the reader straight to an empty quiz step for
+                      every lesson that has none. */}
+                  {canTakeLesson && hasReadOnce && lesson.hasQuiz && (
                     <Button size="sm" onClick={() => openReader(lesson.id, "quiz")}>
                       <ListChecks className="h-3.5 w-3.5" />
                       Take Test

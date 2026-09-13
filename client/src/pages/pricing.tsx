@@ -182,8 +182,7 @@ export default function PricingPage() {
           </div>
 
           <p className="mb-4 mt-8 text-center text-sm text-muted-foreground">
-            Sport-specialist coaches (coming soon) will be available as add-ons on any Free Agent
-            tier:
+            Sport-specialist coaches, available as add-ons on any Free Agent tier:
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {FREE_AGENT_ADD_ON_ORDER.map((id) => {

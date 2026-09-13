@@ -249,7 +249,21 @@ export default function ClaimPage() {
             </div>
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
               <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
-              I agree to the terms of service
+              {/* A link, because the checkbox is mandatory and the page carried no
+                  terms text and no way to reach any -- agreeing to something you
+                  cannot read is not a clickwrap. /legal is public and is the same
+                  agreement signup shows inline. */}
+              <span>
+                I agree to the{" "}
+                <a
+                  href="/legal"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  terms of service
+                </a>
+              </span>
             </label>
             <Button
               type="submit"

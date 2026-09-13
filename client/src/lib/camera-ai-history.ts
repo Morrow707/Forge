@@ -58,7 +58,7 @@ export const CAMERA_AI_DOMAINS: CameraAiDomain[] = [
         date: "2026-09-02",
         headline: "plate class added",
         detail:
-          "3 real photos of the same 10lb bumper plate, circle-fit measured the same way as med_ball. 96-99% confidence. Not yet wired into any live tracking feature -- squat/bench/deadlift bar-path tracking still runs on motion tracking only, this class just exists and works if something calls it.",
+          "3 real photos of the same 10lb bumper plate, circle-fit measured the same way as med_ball. 96-99% confidence. Live since the scale work: av-bar-tracker-dialog sets coreMlTrackingMode to plate for any lift where height calibration is refused, and a plate read is cross-checked against grip width before it is trusted as a scale.",
       },
     ],
   },
