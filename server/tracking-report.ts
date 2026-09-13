@@ -782,7 +782,14 @@ function computeFlags(r: TrackedSetRow): string[] {
 
   if (d?.calibration) {
     const c = d.calibration;
-    const totalFrames = c.noseToAnkleFrames + c.shoulderToAnkleFrames + c.unresolvedFrames;
+    // supineFullLengthFrames is the third real calibration path (bench/lying sets,
+    // where the upright-only paths are deliberately zero). Leaving it out of the
+    // denominator flagged every successful bench calibration as "unresolved".
+    const totalFrames =
+      c.noseToAnkleFrames +
+      c.shoulderToAnkleFrames +
+      (c.supineFullLengthFrames ?? 0) +
+      c.unresolvedFrames;
     if (totalFrames > 0 && c.unresolvedFrames / totalFrames > 0.5) {
       flags.push(`Calibration unresolved on ${Math.round((c.unresolvedFrames / totalFrames) * 100)}% of frames`);
     }

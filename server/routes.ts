@@ -2585,12 +2585,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (filterLines.length === 0) filterLines.push({ label: "Filters", value: "none (whole platform)" });
     filterLines.push({ label: "Population", value: "athletes who consented to research use" });
 
+    // queryResearchCohort's crosstab rows are { label, n, suppressed, mean, p25,
+    // p75, min, max } -- one row per group, summarising the FIRST requested
+    // metric only (storage.ts builds it from requestedMetrics[0]). This used to
+    // read g.group/g.cohortSize/g.results, none of which exist, so every grouped
+    // extract rendered with a blank group heading and no measures at all.
+    const primaryMetric = result.results?.[0];
     const groups =
       result.crosstab && result.crosstab.length > 0
         ? result.crosstab.map((g: any) => ({
-            groupLabel: g.group,
-            n: g.cohortSize ?? result.cohortSize,
-            metrics: (g.results ?? []).map(toMetricSummary),
+            groupLabel: g.label,
+            n: g.n ?? 0,
+            metrics: primaryMetric
+              ? [toMetricSummary({ ...g, label: primaryMetric.label, unit: primaryMetric.unit })]
+              : [],
           }))
         : [
             {
@@ -9410,9 +9418,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/athlete/skill-programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
-    const program = await assertCoachOwnsSkillProgram(user.id, id);
+    // Readable set, not owned set -- same reasoning as GET /api/athlete/programs/:id
+    // above. The list this page is reached from (getVisibleSkillProgramsForCoach)
+    // already includes every admin-authored Forge skill program, and the card's
+    // Duplicate button reads the detail before re-posting it, so an owned-only
+    // fetch 404'd every Forge skill program the list had just offered. Ownership
+    // is reported honestly instead of hardcoded to YOU/editable.
+    const program = await storage.getSkillProgramFull(id);
     if (!program) return res.status(404).json({ message: "Skill program not found" });
-    res.json({ ...program, isForgeOfficial: false, ownerLabel: "YOU", editable: true });
+    const { ownerIds } = await storage.getCoachAndAdminOwnerIds(user.id);
+    if (!ownerIds.includes(program.coachId)) {
+      return res.status(404).json({ message: "Skill program not found" });
+    }
+    const isOwn = program.coachId === user.id;
+    res.json({
+      ...program,
+      isForgeOfficial: !isOwn,
+      ownerLabel: isOwn ? "YOU" : "FORGE",
+      editable: isOwn,
+    });
   });
 
   app.post("/api/athlete/skill-programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {

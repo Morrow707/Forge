@@ -13964,9 +13964,19 @@ Respond to the user's latest message by calling ask_question or update_program.`
         },
         trackingLevel: {
           type: "string",
-          enum: ["none", "bar_path", "full", "jump"],
+          enum: [
+            "none",
+            "bar_path",
+            "full",
+            "jump",
+            "golf_swing",
+            "baseball_swing",
+            "med_ball",
+            "kb_swing",
+            "horizontal_load",
+          ],
           description:
-            "Carry forward this exercise's existing tracking level unless the user specifically asked to add/remove bar-path, full, or jump tracking on it -- omitting this resets it to 'none'.",
+            "Carry forward this exercise's existing tracking level unless the user specifically asked to change it -- omitting this resets it to 'none'. bar_path/full/jump are the barbell and jump modes; golf_swing, baseball_swing, med_ball, kb_swing and horizontal_load are the implement modes. Never downgrade a mode you were not asked to change.",
         },
         videoCheckEnabled: {
           type: "boolean",

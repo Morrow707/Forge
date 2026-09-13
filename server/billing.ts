@@ -3,6 +3,7 @@ import { storage } from "./storage";
 import { coachBasePriceId, freeAgentPriceId } from "./stripe-prices";
 import { BILLING_TIERS, type AddOnId, type BillingTierId } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
+import { entitlementTierForFreeAgentTier } from "./apple-iap";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON, type VideoRetentionLimits } from "@shared/video-retention";
 
 // ---------- Entitlements (what an account is allowed to do) ----------
@@ -463,20 +464,35 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       }
 
       if (typeof session.subscription !== "string") break;
-      await storage.updateSubscriptionByUserId(userId, {
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: session.subscription,
-        status: "active",
-      });
       // What they actually bought. Without this the subscription row goes
       // active carrying whatever tier it was created with, so a Free Agent
       // who paid for AI Coach + Video would be entitled to the cheapest
       // tier -- the money arrives and the access does not match it.
-      if (kind === "free_agent_tier") {
-        const tier = session.metadata?.tier;
-        if (tier && tier in FREE_AGENT_TIERS) {
-          await storage.updateFreeAgentBilling(userId, { freeAgentTier: tier as FreeAgentTierId });
-        }
+      //
+      // subscriptions.tier is the column every gate actually reads
+      // (hasAthletePaidForAiAccess and hasCoachesCornerAccess in routes.ts both
+      // test sub.tier === "pro"); users.freeAgentTier is read back by the admin
+      // screens but gates nothing. Writing only freeAgentTier left the whole
+      // Stripe web-checkout path paying money for no access -- the Apple IAP
+      // path has always written both (storage.applyAppleIapVerification), so
+      // this mirrors it rather than inventing a second vocabulary.
+      const purchasedFreeAgentTier =
+        kind === "free_agent_tier" && session.metadata?.tier && session.metadata.tier in FREE_AGENT_TIERS
+          ? (session.metadata.tier as FreeAgentTierId)
+          : null;
+      await storage.updateSubscriptionByUserId(userId, {
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: session.subscription,
+        status: "active",
+        ...(purchasedFreeAgentTier
+          ? {
+              accountType: "free_agent" as const,
+              tier: entitlementTierForFreeAgentTier(purchasedFreeAgentTier),
+            }
+          : {}),
+      });
+      if (purchasedFreeAgentTier) {
+        await storage.updateFreeAgentBilling(userId, { freeAgentTier: purchasedFreeAgentTier });
       }
       await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind }, event.id);
       break;

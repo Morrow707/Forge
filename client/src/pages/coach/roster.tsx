@@ -1510,7 +1510,7 @@ function PainEscalations() {
               {e.isMinor && <span className="ml-1 text-amber-500">(under 18)</span>}
             </span>
             <Button size="sm" variant="outline" asChild>
-              <a href={`/coach/athlete/${e.athleteId}`}>Open</a>
+              <a href={`/coach/roster/${e.athleteId}`}>Open</a>
             </Button>
           </div>
         ))}
