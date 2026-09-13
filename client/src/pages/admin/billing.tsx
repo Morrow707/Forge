@@ -105,12 +105,15 @@ function PriceRow({
 /** Billing-only admin page: create/manage redeem codes, show every priced thing
  * on the platform (read-only -- the numbers live in code), and edit the per-lesson
  * class prices, which are the one price on this page that really is charged from a
- * database row. Per-account tier assignment
- * (org billing tier, Free Agent tier) used to live here too
- * -- pulled out since nothing on this page needs a coach/athlete lookup to
- * just see and edit prices, and the lookup tools weren't finding accounts
- * as expected. The server routes those used (/api/admin/coaches/:id/billing
- * etc.) are untouched, just no longer surfaced from this page. */
+ * database row.
+ *
+ * Per-account tier assignment (org billing tier, Free Agent tier, add-ons, beta
+ * flag) lives on More -> Users now, in the detail panel that already resolves one
+ * person and shows these fields read-only -- so the email lookup this page's old
+ * version needed, and which was the reason it was pulled, is redundant there. It was
+ * unreachable for a while in between, which also meant nothing could write
+ * users.billingTier and the Institutional Service Agreement banner could never fire
+ * for anybody; see AdminBillingAssignment. */
 export default function AdminBilling() {
   const qc = useQueryClient();
 

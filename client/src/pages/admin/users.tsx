@@ -24,6 +24,7 @@ import {
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { AdminBillingAssignment } from "@/components/admin-billing-assignment";
 import {
   Users as UsersIcon,
   Search,
@@ -291,6 +292,14 @@ export default function AdminUsers() {
                               </div>
                             )}
                           </div>
+
+                          {(detail.role === "coach" || detail.role === "athlete") && (
+                            <AdminBillingAssignment
+                              userId={detail.id}
+                              email={detail.email}
+                              role={detail.role}
+                            />
+                          )}
                         </div>
                       )}
                     </div>

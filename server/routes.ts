@@ -2721,10 +2721,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ---------------- Admin: billing/pricing assignment ----------------
-  // No self-serve checkout exists yet (see shared/billing-tiers.ts,
-  // server/billing.ts) -- an admin manually assigning a tier here is the
-  // only way a real coach account ever gets billingTier/billingAddOns set,
-  // matching the pilot-program/manual-sales approach for now.
+  // An admin assigning a tier here is the only way a real coach account gets
+  // billingTier/billingAddOns set -- self-serve checkout exists now but
+  // enforcement is still off (see shared/billing-tiers.ts, server/billing.ts), so
+  // this is the pilot-program/manual-sales path.
+  //
+  // Surfaced from the detail panel on More -> Users (AdminBillingAssignment). These
+  // five routes spent a while with no client caller at all, which also meant nothing
+  // could write users.billingTier -- and since getInstitutionalAgreementStatus
+  // returns {required: false} for a coach without one, the Institutional Service
+  // Agreement banner could never appear for anybody either.
 
   app.get("/api/admin/coaches/lookup", requireRole("admin"), async (req, res) => {
     const email = typeof req.query.email === "string" ? req.query.email.trim() : "";
