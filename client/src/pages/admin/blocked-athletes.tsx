@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDistanceToNow } from "date-fns";
 import { ShieldCheck, MailX, MailWarning, Clock } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
 
 type BlockedAthlete = {
   id: number;
@@ -85,8 +86,14 @@ export default function AdminBlockedAthletesPage() {
     };
   }
 
+  // Wrapped in AppShell: it is the only thing that renders navigation, and the
+  // only place the iOS safe-area inset is applied (capacitor.config.ts sets
+  // ios.contentInset "never"). Both of these pages rendered bare, so even once
+  // they had a nav entry they opened into a screen with no nav to get back out
+  // of, and on device the heading sat under the Dynamic Island.
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
+    <AppShell title="Blocked Athletes">
+      <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
       <div className="space-y-1">
         <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide">
           Blocked athletes
@@ -155,6 +162,7 @@ export default function AdminBlockedAthletesPage() {
           </div>
         </>
       )}
-    </div>
+      </div>
+    </AppShell>
   );
 }

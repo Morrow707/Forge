@@ -164,7 +164,15 @@ export default function GuardianDashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
+      {/* capacitor.config.ts sets ios.contentInset: "never", so every page root
+          has to push itself below the notch in CSS -- AppShell and the login/
+          signup pages all do. This page renders its own header instead of
+          AppShell's, and had no inset, so on device the Forge mark and the
+          sign-out button sat under the Dynamic Island. */}
+      <header
+        className="flex items-center justify-between border-b border-border px-4 py-3"
+        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+      >
         <div className="flex items-center gap-2">
           <ForgeMark className="h-7 w-7" />
           <span className="font-display text-lg font-extrabold uppercase tracking-wider">Forge</span>

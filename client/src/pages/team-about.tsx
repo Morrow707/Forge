@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getJson } from "@/lib/queryClient";
+import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { Palette, Mail } from "lucide-react";
@@ -60,7 +60,7 @@ export default function TeamAboutPage() {
           <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
             {branding?.brandLogoUrl && (
               <img
-                src={branding.brandLogoUrl}
+                src={resolveApiUrl(branding.brandLogoUrl)}
                 alt={teamName}
                 className="h-20 w-20 rounded-xl object-contain"
               />

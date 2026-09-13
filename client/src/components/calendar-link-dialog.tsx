@@ -8,7 +8,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { getJson } from "@/lib/queryClient";
+import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { externalLinkClick } from "@/lib/open-external";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { Copy, CalendarDays, CalendarPlus, Download } from "lucide-react";
@@ -38,7 +38,14 @@ export function CalendarLinkDialog({
     enabled: open,
   });
 
-  const url = data ? `${window.location.origin}/api/calendar/${data.token}.ics` : "";
+  // resolveApiUrl, not window.location.origin: inside the native app the
+  // origin is capacitor://localhost, so the subscribe URL came out as
+  // capacitor://localhost/api/calendar/TOKEN.ics -- the ^https?:// replace
+  // below then failed to match, webcal:// never happened, and the Copy Link
+  // button handed the user that same unusable string. The Google URL was
+  // equally broken. "Import Events Now" worked only because it goes through
+  // share-file.ts, which already resolves the path.
+  const url = data ? resolveApiUrl(`/api/calendar/${data.token}.ics`) : "";
   // webcal:// is the scheme calendar apps register a subscribe handler for --
   // tapping it opens Apple Calendar's/Google Calendar's/Outlook's native
   // "add subscription" flow directly, no copy-pasting required.

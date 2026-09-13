@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { FileDown, ShieldCheck, AlertTriangle } from "lucide-react";
+import { shareOrDownloadBlob } from "@/lib/share-file";
 
 type ConsentCounts = { totalAthletes: number; consentedAthletes: number };
 
@@ -77,13 +78,14 @@ export function ResearchExportsContent() {
         return;
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "forge-dataset-extract.pdf";
-      a.click();
-      URL.revokeObjectURL(url);
+      // shareOrDownloadBlob, not a hand-rolled <a download>: WKWebView has no
+      // download manager and ignores the attribute, so inside the native app
+      // the extract generated, was logged as an access, and then vanished --
+      // the anchor was never even added to the document and the object URL was
+      // revoked synchronously after the click. The shared helper writes the
+      // file to disk and hands it to the share sheet on native, and does the
+      // plain download on web.
+      await shareOrDownloadBlob(await res.blob(), "forge-dataset-extract.pdf", "Forge dataset extract");
       toast.success("Extract generated and logged.");
       qc.invalidateQueries({ queryKey: ["/api/admin/research-exports"] });
     } catch {

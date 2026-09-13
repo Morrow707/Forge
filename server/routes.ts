@@ -1152,7 +1152,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       entries
         .filter((e) => !e.isRestDay)
         .map((e) => ({
-          uid: `forge-assignment${e.assignmentId}-day${e.programDayId}-${e.date}`,
+          // e.kind in the uid: getCalendarForAthlete merges strength rows
+          // (assignments/programDays) with skill rows (skillAssignments/
+          // skillProgramDays), two independent id sequences, so a strength day
+          // and a skill day can share an assignment id, a day id and a date.
+          // Without the discriminator they produce the same UID and the
+          // calendar client keeps one of the two events and silently drops the
+          // other.
+          uid: `forge-${e.kind}${e.assignmentId}-day${e.programDayId}-${e.date}`,
           date: e.date,
           summary: e.title,
           description: e.programName,
@@ -1886,6 +1893,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Exercise not found" });
     }
     res.json(exercise);
+  });
+
+  // Admin and athlete twins of the coach route above. ExercisePickerDialog
+  // renders its Sparkles AI-search button unconditionally and posts to
+  // `${apiBase}/exercises/ai-search`, and the program builder is mounted with
+  // apiBase "/api/admin" and "/api/athlete" as well as "/api/coach" -- so the
+  // button 404'd on two of the three surfaces that show it.
+  app.post("/api/admin/exercises/ai-search", requireRole("admin"), async (req, res) => {
+    const parsed = z.object({ query: z.string().trim().min(1).max(200) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.interpretExerciseSearchQuery(parsed.data.query);
+    if (!result) {
+      return res
+        .status(422)
+        .json({ message: "Couldn't interpret that search -- try the filters below instead." });
+    }
+    res.json(result);
   });
 
   app.post("/api/admin/exercises", requireRole("admin"), async (req, res) => {
@@ -9034,6 +9058,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // via getVisibleExercisesForCoach, just exposed for a human to browse
   // instead of an AI to reference by id. Free for every Free Agent, same
   // as the plain CRUD program routes below.
+  app.post(
+    "/api/athlete/exercises/ai-search",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const parsed = z.object({ query: z.string().trim().min(1).max(200) }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      const result = await storage.interpretExerciseSearchQuery(parsed.data.query);
+      if (!result) {
+        return res
+          .status(422)
+          .json({ message: "Couldn't interpret that search -- try the filters below instead." });
+      }
+      res.json(result);
+    },
+  );
+
   app.get("/api/athlete/exercises", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getVisibleExercisesForCoach(user.id);

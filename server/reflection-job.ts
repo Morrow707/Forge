@@ -30,9 +30,12 @@ export async function runReflectionJob(): Promise<Record<string, number>> {
         // bad push token throwing here shouldn't also cost every admin
         // after them in this loop their notification for a finding that
         // won't be regenerated again this week.
+        // /admin/teach-ai, not /admin/forge-ai: ForgeAiContent has no route of
+        // its own, it renders inside the Teach tab of /admin/teach-ai. The old
+        // link resolved to the 404 page, in-app and through push alike.
         try {
           if (finding.tier === "safety") {
-            await notifyUser(admin.id, "reflection_safety", finding.summary, finding.detail, "/admin/forge-ai", {
+            await notifyUser(admin.id, "reflection_safety", finding.summary, finding.detail, "/admin/teach-ai", {
               bypassEmailPref: true,
             });
           } else {
@@ -41,7 +44,7 @@ export async function runReflectionJob(): Promise<Record<string, number>> {
               "reflection_info",
               finding.summary,
               finding.detail,
-              "/admin/forge-ai",
+              "/admin/teach-ai",
             );
           }
           notified += 1;

@@ -110,6 +110,12 @@ export function AthleteProfileDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+      // The athlete-detail page behind this dialog reads a different key --
+      // ["/api/coach/roster/123"], which React Query does not match from the
+      // ["/api/coach/roster"] prefix (matching is element-wise). With
+      // staleTime 30s and refetchOnWindowFocus off, saving a height or a max
+      // showed a success toast over the old values.
+      qc.invalidateQueries({ queryKey: [`/api/coach/roster/${athlete?.id}`] });
       toast.success("Profile updated");
       onOpenChange(false);
     },

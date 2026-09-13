@@ -1343,14 +1343,28 @@ function LessonCard({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
+            {/* A span, not a <button>: the whole lesson list is wrapped in
+                <fieldset disabled> for a class the coach does not own (a Forge
+                official one), and a disabled fieldset swallows clicks on every
+                descendant form control. Preview is read-only -- it is the one
+                thing that SHOULD work on a class you cannot edit, and it was
+                rendering in full primary colour with a hover underline while
+                doing nothing at all. */}
+            <span
+              role="button"
+              tabIndex={0}
               onClick={onPreview}
-              className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onPreview();
+                }
+              }}
+              className="flex cursor-pointer items-center gap-1 text-xs font-semibold text-primary hover:underline"
             >
               <BookOpen className="h-3.5 w-3.5" />
               Preview
-            </button>
+            </span>
             <button
               type="button"
               aria-label={`Remove Lesson ${lessonNumber}`}

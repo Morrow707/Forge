@@ -49,11 +49,21 @@ export function useWidgetVisibility(scope: "coach" | "athlete") {
   // layout in that exact order, carrying over each id's existing hidden
   // flag (false for one that's never been in the stored layout before,
   // same "unknown means visible" default as everywhere else here).
+  // Entries for ids this page does not render are carried through untouched.
+  // The coach Dashboard and Analytics share one stored layout under the same
+  // "coach" scope but each knows only its own widget ids, and the PATCH
+  // replaces users.hiddenWidgets wholesale -- so a drag on the Dashboard used
+  // to write only its own 8 ids and drop every Analytics preference the coach
+  // had set, and the next drag on Analytics dropped the Dashboard's back.
   function setOrder(orderedIds: string[]) {
-    const next = orderedIds.map((id) => ({
-      id,
-      hidden: layout.find((w) => w.id === id)?.hidden ?? false,
-    }));
+    const ordered = new Set(orderedIds);
+    const next = [
+      ...orderedIds.map((id) => ({
+        id,
+        hidden: layout.find((w) => w.id === id)?.hidden ?? false,
+      })),
+      ...layout.filter((w) => !ordered.has(w.id)),
+    ];
     mutation.mutate(next);
   }
 

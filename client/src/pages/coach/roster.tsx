@@ -41,7 +41,7 @@ import {
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
 import { resolveRosterGroups, type RosterGroup } from "@shared/roster-groups";
-import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
+import { apiRequest, getJson, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { toast } from "sonner";
@@ -1008,7 +1008,7 @@ export default function CoachRoster() {
                     <div className="flex min-w-0 items-center gap-2">
                       {team.brandLogoUrl && (
                         <img
-                          src={team.brandLogoUrl}
+                          src={resolveApiUrl(team.brandLogoUrl)}
                           alt=""
                           className="h-6 w-6 shrink-0 rounded object-contain"
                         />
