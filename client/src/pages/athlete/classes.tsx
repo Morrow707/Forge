@@ -293,17 +293,33 @@ export default function AthleteClasses() {
                           Complete "{c.prerequisiteName}" to unlock
                         </p>
                       ) : null}
-                      <Button
-                        size="sm"
-                        className="w-full"
-                        disabled={!c.prerequisiteSatisfied}
-                        onClick={() => {
-                          setStartDate(todayIso());
-                          setEnrollTarget(c);
-                        }}
-                      >
-                        Enroll
-                      </Button>
+                      <div className="flex gap-2">
+                        {/* "Look before you enrol". GET /api/athlete/classes/:id/progress
+                            has always answered with every lesson's title and description
+                            for a coachless athlete who has NOT enrolled -- its own comment
+                            says a Free Agent browsing the catalog gets a preview -- and
+                            the only way forward from this card was the enrol dialog, so
+                            that branch was never reached. */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => navigate(`/athlete/classes/${c.id}`)}
+                        >
+                          Syllabus
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          disabled={!c.prerequisiteSatisfied}
+                          onClick={() => {
+                            setStartDate(todayIso());
+                            setEnrollTarget(c);
+                          }}
+                        >
+                          Enroll
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

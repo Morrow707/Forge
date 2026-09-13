@@ -114,6 +114,26 @@ export default function AthleteClassDetail() {
         <p className="mb-6 max-w-2xl text-sm text-muted-foreground">{data.class.description}</p>
       )}
 
+      {/* Not enrolled: this is the syllabus, reached from the catalog's Syllabus
+          button. Every lesson comes back state "locked" by construction here, so the
+          per-lesson action buttons below are all correctly absent -- what this adds is
+          saying WHY, instead of showing a class that looks entirely locked off. */}
+      {!data.enrolled && (
+        <Card className="mb-6 border-primary/40 bg-primary/5">
+          <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold">You haven't enrolled in this class</p>
+              <p className="text-sm text-muted-foreground">
+                Here's every lesson in it. Enrol to start the first one.
+              </p>
+            </div>
+            <Button size="sm" onClick={() => navigate("/athlete/classes")}>
+              Back to classes to enrol
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {data.completedAt && (
         <Card className="mb-6 border-amber-400/40 bg-amber-400/5">
           <CardContent className="flex items-center gap-3 p-4">
