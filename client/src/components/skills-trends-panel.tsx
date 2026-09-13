@@ -25,9 +25,14 @@ import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 import { getJson } from "@/lib/queryClient";
 import { Video as VideoIcon, TrendingUp } from "lucide-react";
 
+/** "none" is a real, common value: skillProgramExercises.trackingLevel defaults to it,
+ * and it is exactly the case the athlete's free-text "Result" box serves. Typing it as
+ * sprint|mechanics did not stop those rows arriving -- it stopped them being handled,
+ * so they rendered as a Mechanics capture with every metric null and an empty chart,
+ * which reads as broken tracking rather than as somebody's own note. */
 type SkillSessionRow = {
   id: number;
-  trackingLevel: "sprint" | "mechanics";
+  trackingLevel: "sprint" | "mechanics" | "none";
   createdAt: string;
   skillExerciseName: string;
   elapsedSeconds: number | null;
@@ -47,6 +52,7 @@ type SkillSessionRow = {
   setPointPauseSeconds: number | null;
   kneeBendDepthDeg: number | null;
   videoUrl: string | null;
+  manualResult: string | null;
 };
 
 type MechanicsMetric =
@@ -115,7 +121,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
   // conflating those would mix sprint seconds with mechanics degrees on
   // one chart.
   const exerciseOptions = useMemo(() => {
-    const seen = new Map<string, { label: string; trackingLevel: "sprint" | "mechanics" }>();
+    const seen = new Map<string, { label: string; trackingLevel: SkillSessionRow["trackingLevel"] }>();
     for (const s of sessions) {
       const key = `${s.skillExerciseName}::${s.trackingLevel}`;
       if (!seen.has(key)) seen.set(key, { label: s.skillExerciseName, trackingLevel: s.trackingLevel });
@@ -158,7 +164,12 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
         <SelectContent>
           {exerciseOptions.map((o) => (
             <SelectItem key={o.key} value={o.key}>
-              {o.label} · {o.trackingLevel === "sprint" ? "Sprint" : "Mechanics"}
+              {o.label} ·{" "}
+              {o.trackingLevel === "sprint"
+                ? "Sprint"
+                : o.trackingLevel === "mechanics"
+                  ? "Mechanics"
+                  : "Logged by hand"}
             </SelectItem>
           ))}
         </SelectContent>
@@ -188,6 +199,9 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
         />
       )}
 
+      {/* No chart for hand-typed entries: there is no number to plot, only what
+          somebody wrote. An empty axis is a worse answer than no axis. */}
+      {active?.trackingLevel !== "none" && (
       <Card>
         <CardContent className="pt-4">
           <div className="h-56">
@@ -225,6 +239,14 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
           </div>
         </CardContent>
       </Card>
+      )}
+
+      {active?.trackingLevel === "none" && (
+        <p className="text-sm text-muted-foreground">
+          These were typed in rather than measured by the camera, so there is nothing to chart --
+          the entries themselves are below.
+        </p>
+      )}
 
       <Card>
         <CardContent className="p-0">
@@ -241,6 +263,10 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
                         {s.elapsedSeconds != null && s.distanceYards != null
                           ? ` · ${fmtSpeed(s.elapsedSeconds, s.distanceYards)}`
                           : ""}
+                      </span>
+                    ) : s.trackingLevel === "none" ? (
+                      <span className="text-xs text-muted-foreground">
+                        {s.manualResult?.trim() ? s.manualResult : "logged, no result written"}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">

@@ -2385,6 +2385,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total: enriched.length,
         duplicatesOfLibrary: enriched.filter((e) => e.matchesLibrary.length > 0).length,
         duplicatesOfEachOther: enriched.filter((e) => e.matchesOtherCoaches.length > 0).length,
+        // The genuinely new movements -- neither already in Forge nor built twice by
+        // different coaches. This page's own description says it exists to show the
+        // shape of what coaches actually create, and this is that set: the promotion
+        // shortlist. The client had the filter implemented with nothing to switch it on
+        // and no count to show beside it.
+        originals: enriched.filter(
+          (e) => e.matchesLibrary.length === 0 && e.matchesOtherCoaches.length === 0,
+        ).length,
         filmable: enriched.filter((e) => e.videoEligible !== false).length,
       },
     });

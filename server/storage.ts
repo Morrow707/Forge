@@ -20900,6 +20900,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         setPointPauseSeconds: skillSessionLogs.setPointPauseSeconds,
         kneeBendDepthDeg: skillSessionLogs.kneeBendDepthDeg,
         videoUrl: skillSessionLogs.videoUrl,
+        // A hand-typed entry has no camera metrics at all -- the free-text "Result"
+        // box is exactly what a drill with trackingLevel "none" offers instead. Without
+        // this, those rows arrived with every metric null and the trends panel rendered
+        // them as a "Mechanics" capture with an empty chart, which reads as broken
+        // tracking rather than as a coach's own note.
+        manualResult: skillSessionLogs.manualResult,
       })
       .from(skillSessionLogs)
       .innerJoin(

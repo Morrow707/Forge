@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getJson } from "@/lib/queryClient";
 import { formatDistanceToNow } from "date-fns";
-import { Copy, Users, Video, VideoOff } from "lucide-react";
+import { Copy, Users, Video, VideoOff, Sparkles } from "lucide-react";
 
 type Match = { id: number; name: string; coachName?: string; score: number };
 
@@ -33,6 +33,7 @@ type Response = {
     total: number;
     duplicatesOfLibrary: number;
     duplicatesOfEachOther: number;
+    originals: number;
     filmable: number;
   };
 };
@@ -113,12 +114,13 @@ export default function AdminCoachExercisesPage() {
       </div>
 
       {counts && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {(
             [
               ["all", "Total", counts.total, Users],
               ["library_dupes", "Already in Forge", counts.duplicatesOfLibrary, Copy],
               ["coach_dupes", "Built twice", counts.duplicatesOfEachOther, Copy],
+              ["original", "Original", counts.originals, Sparkles],
               ["filmable", "Filmable", counts.filmable, counts.filmable ? Video : VideoOff],
             ] as const
           ).map(([key, label, value, Icon]) => (
