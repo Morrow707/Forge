@@ -2830,10 +2830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/admin/pricing/class-lessons/:id", requireRole("admin"), async (req, res) => {
-    // Number("abc") is NaN, which reached the query and came back a 500.
-    // Same guard every other :id route in this file already has.
     const lessonId = Number(req.params.id);
-    if (!Number.isInteger(lessonId)) return res.status(400).json({ message: "Invalid lesson id" });
     const parsed = setPricingOverrideSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -3052,7 +3049,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // not hide it if it happens again.
   app.post("/api/admin/system-events/:id/clear", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid event id" });
     const cleared = await clearSystemEvent(id);
     if (!cleared) return res.status(404).json({ message: "Event not found or already cleared" });
     res.json({ ok: true });
@@ -3323,7 +3319,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/forge-ai/entries/:id/deactivate", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
     const parsed = deactivateForgeAiEntrySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "A reason is required" });
     const result = await storage.deactivateForgeAiEntry(user.id, id, parsed.data.reason);
@@ -3365,9 +3360,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // anonymous?") is answerable from a handful.
   app.post("/api/admin/athletes/:athleteId/archive", requireRole("admin"), async (req, res) => {
     const athleteId = Number(req.params.athleteId);
-    if (!Number.isInteger(athleteId)) {
-      return res.status(400).json({ message: "Invalid athlete id" });
-    }
     const commit = req.body?.commit === true;
     const result = await storage.archiveAthlete(athleteId, { commit });
     if (!result) {
@@ -4072,12 +4064,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/coach/roster/:athleteId", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
+    // A literal route added under /api/coach/roster/ without noticing this
+    // wildcard sits here is the hazard this route used to re-check its own id
+    // for. That is now covered in two places that cannot be forgotten: the
+    // app.param guard answers 404 for a non-numeric segment, and a test in
+    // numeric-route-params.test.ts fails if such a literal is ever declared
+    // after the wildcard rather than before it.
     const athleteId = Number(req.params.athleteId);
-    // Defense in depth alongside the ordering fix above -- any future
-    // literal route added under /api/coach/roster/ without noticing this
-    // wildcard sits here would otherwise hit the exact same NaN-into-SQL
-    // crash instead of a clean 404.
-    if (!Number.isInteger(athleteId)) return res.status(404).json({ message: "Athlete not found" });
     const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
     if (!athlete) return res.status(404).json({ message: "Athlete not found" });
     res.json(athlete);
@@ -4100,7 +4093,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/coach/roster/:athleteId", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const athleteId = Number(req.params.athleteId);
-    if (!Number.isInteger(athleteId)) return res.status(404).json({ message: "Athlete not found" });
     const removed = await storage.removeAthleteFromCoach(user.id, athleteId);
     if (!removed) return res.status(404).json({ message: "Athlete not found" });
     res.status(204).end();
@@ -4114,7 +4106,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/coach/roster/:athleteId/pin", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const athleteId = Number(req.params.athleteId);
-    if (!Number.isInteger(athleteId)) return res.status(404).json({ message: "Athlete not found" });
     const result = await storage.togglePinnedAthlete(user.id, athleteId);
     if (!result.ok) {
       if (result.reason === "not_on_roster") {
@@ -4204,7 +4195,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
    */
   app.post("/api/admin/knowledge-sources/:id/detect-conflicts", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
 
     const source = await storage.getKnowledgeSource(id);
     if (!source) {
@@ -4247,7 +4237,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // and the conditions say when the newer one wins.
   app.post("/api/admin/knowledge-conflicts/:id/resolve", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
     const parsed = z
       .object({
         status: z.enum(["prefer_new", "prefer_existing", "scoped", "dismissed"]),
@@ -4529,9 +4518,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       const id = Number(req.params.id);
       const pageNumber = Number(req.params.pageNumber);
-      if (!Number.isInteger(id) || !Number.isInteger(pageNumber)) {
-        return res.status(400).json({ message: "Invalid id" });
-      }
       const source = await storage.getKnowledgeSource(id);
       if (!source?.filePath) return res.status(404).json({ message: "Source not found" });
 
@@ -4568,7 +4554,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
    */
   app.get("/api/admin/knowledge-sources/:id/transcribe-estimate", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
     const source = await storage.getKnowledgeSource(id);
     if (!source) return res.status(404).json({ message: "Source not found" });
 
@@ -4622,7 +4607,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
    */
   app.post("/api/admin/knowledge-sources/:id/transcribe", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
 
     const parsedBody = z
       .object({
@@ -4771,7 +4755,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // without the route looking any different.
       const user = currentUser(req);
       const athleteId = Number(req.params.athleteId);
-      if (!Number.isInteger(athleteId)) return res.status(400).json({ message: "Invalid id" });
       const result = await storage.suggestCorrectives(user.id, athleteId);
       if (!result) {
         return res.status(200).json({
@@ -4854,7 +4837,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // thing nobody can know at upload time.
   app.get("/api/admin/knowledge-sources/:id/page-map", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
     res.json(await storage.getKnowledgePageMap(id));
   });
 
@@ -4862,7 +4844,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // for what can only be judged after seeing what came out.
   app.delete("/api/admin/knowledge-sources/:id/pages", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
     const parsed = z
       .object({ fromPage: z.number().int().min(1), toPage: z.number().int().min(1) })
       .refine((v) => v.toPage >= v.fromPage, { message: "The last page must not be before the first." })
@@ -4881,7 +4862,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // transcription misread a number.
   app.patch("/api/admin/knowledge-passages/:passageId", requireRole("admin"), async (req, res) => {
     const passageId = Number(req.params.passageId);
-    if (!Number.isInteger(passageId)) return res.status(400).json({ message: "Invalid id" });
     const parsed = z
       .object({
         text: z.string().trim().min(1).max(20000).optional(),
@@ -4898,7 +4878,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/knowledge-sources/:id/passages", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
     // One page at a time when asked for one -- see getKnowledgePassagesOnPage. The flat
     // limit/offset window stays for anything that wants to walk the whole book.
     const page = Number(req.query.page);
@@ -4914,7 +4893,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // passage and the stored file with it.
   app.delete("/api/admin/knowledge-sources/:id", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
     const removed = await storage.deleteKnowledgeSource(id);
     if (!removed) return res.status(404).json({ message: "Source not found" });
     res.json({ ok: true });
@@ -5003,7 +4981,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireGuardianAccess,
     async (req, res) => {
       const requestId = Number(req.params.id);
-      if (!Number.isInteger(requestId)) return res.status(400).json({ message: "Invalid request id" });
       const parsed = z.object({ approve: z.boolean() }).safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "approve is required" });
       const user = currentUser(req);
@@ -6407,7 +6384,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clearing is deliberate and per-report -- nothing ages a report out of the inbox on its own.
   app.post("/api/admin/problem-reports/:id/resolve", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid report id" });
     const ok = await storage.resolveProblemReport(id, currentUser(req).id);
     if (!ok) return res.status(404).json({ message: "Report not found, or already cleared" });
     res.json({ ok: true });
@@ -6419,7 +6395,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // user-management page below.
   app.post("/api/admin/users/:id/reset-mfa", requireRole("admin"), async (req, res) => {
     const userId = Number(req.params.id);
-    if (!Number.isInteger(userId)) return res.status(400).json({ message: "Invalid user id" });
     const ok = await storage.adminResetMfa(userId);
     if (!ok) return res.status(404).json({ message: "User not found" });
     res.json({ ok: true });
@@ -6443,7 +6418,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/users/:id", requireRole("admin"), async (req, res) => {
     const userId = Number(req.params.id);
-    if (!Number.isInteger(userId)) return res.status(400).json({ message: "Invalid user id" });
     const detail = await storage.getUserDetailForAdmin(userId);
     if (!detail) return res.status(404).json({ message: "User not found" });
     res.json(detail);
@@ -6459,7 +6433,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/users/:id/role", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const userId = Number(req.params.id);
-    if (!Number.isInteger(userId)) return res.status(400).json({ message: "Invalid user id" });
     if (userId === user.id) {
       return res.status(400).json({ message: "You can't change your own role" });
     }
@@ -7710,9 +7683,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const athleteId = Number(req.params.athleteId);
     const exerciseId = Number(req.params.exerciseId);
-    if (!Number.isFinite(athleteId) || !Number.isFinite(exerciseId)) {
-      return res.status(400).json({ message: "Invalid athlete or exercise id" });
-    }
     const result = await storage.getFormOverwatchForExercise(user.id, athleteId, exerciseId);
     if (!result) {
       return res
@@ -10525,9 +10495,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     app.get(`/api/guardian/athletes/:athleteId${path}`, requireGuardianAccess, async (req, res) => {
       const user = currentUser(req);
       const athleteId = Number(req.params.athleteId);
-      if (!Number.isInteger(athleteId)) {
-        return res.status(404).json({ message: "No athlete linked to this account." });
-      }
       const athlete = await storage.getAthleteForGuardianScoped(user.id, athleteId);
       if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
       await handler(athlete.id, req, res);

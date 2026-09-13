@@ -1103,7 +1103,6 @@ export function setupAuth(app: Express) {
   app.post("/api/auth/sessions/:id/revoke", requireAuth, async (req, res) => {
     const user = req.user as any;
     const sessionRecordId = Number(req.params.id);
-    if (!Number.isInteger(sessionRecordId)) return res.status(400).json({ message: "Invalid session id" });
     const result = await storage.revokeSession(user.id, sessionRecordId);
     if (!result) return res.status(404).json({ message: "Session not found" });
     if (result.webSessionId) {

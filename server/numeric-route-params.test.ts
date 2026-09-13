@@ -8,13 +8,30 @@ const SOURCES = ["routes.ts", "auth.ts", "index.ts"].map((f) =>
 );
 const ALL = SOURCES.join("\n");
 
-/** Every ":name" appearing in a literal route path across the route files. */
+/** Every route registration, in source order, across the route files.
+ *
+ * Backtick paths as well as quoted ones: one helper registers its routes as
+ * `/api/guardian/athletes/:athleteId${path}`, and a parser that only saw
+ * double quotes would be blind to any param a future helper introduces. */
+function routeRegistrations(): { verb: string; path: string; at: number }[] {
+  const found: { verb: string; path: string; at: number }[] = [];
+  let base = 0;
+  for (const src of SOURCES) {
+    for (const m of src.matchAll(
+      /app\.(get|post|put|patch|delete|use|all)\(\s*\n?\s*(?:"([^"]+)"|`([^`]+)`)/g,
+    )) {
+      found.push({ verb: m[1].toUpperCase(), path: m[2] ?? m[3], at: base + (m.index ?? 0) });
+    }
+    base += src.length;
+  }
+  return found;
+}
+
+/** Every ":name" appearing in a route path across the route files. */
 function paramNamesInRoutePaths(): Set<string> {
   const names = new Set<string>();
-  for (const src of SOURCES) {
-    for (const m of src.matchAll(/app\.(?:get|post|put|patch|delete|use|all)\(\s*\n?\s*"([^"]+)"/g)) {
-      for (const p of m[1].matchAll(/:([A-Za-z]+)/g)) names.add(p[1]);
-    }
+  for (const r of routeRegistrations()) {
+    for (const p of r.path.matchAll(/:([A-Za-z]+)/g)) names.add(p[1]);
   }
   return names;
 }
@@ -77,22 +94,10 @@ describe("NUMERIC_ROUTE_PARAMS covers what it claims to", () => {
 // literal route never runs. All four of today's collisions are declared in the
 // right order; this keeps the fifth one honest.
 describe("literal routes that collide with a numeric param", () => {
-  type Route = { verb: string; path: string; at: number };
-
-  function routesInOrder(): Route[] {
-    const found: Route[] = [];
-    let base = 0;
-    for (const src of SOURCES) {
-      for (const m of src.matchAll(/app\.(get|post|put|patch|delete|use|all)\(\s*\n?\s*"([^"]+)"/g)) {
-        found.push({ verb: m[1].toUpperCase(), path: m[2], at: base + (m.index ?? 0) });
-      }
-      base += src.length;
-    }
-    return found;
-  }
-
   it("declares every colliding literal before the param route", () => {
-    const routes = routesInOrder();
+    // A path still carrying a ${...} hole cannot be compared segment by
+    // segment; its concrete suffixes are supplied at a call site.
+    const routes = routeRegistrations().filter((r) => !r.path.includes("${"));
     const shadowed: string[] = [];
     for (const paramRoute of routes) {
       const segs = paramRoute.path.split("/");
