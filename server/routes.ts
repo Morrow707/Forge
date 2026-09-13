@@ -6165,20 +6165,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // itself is already exposed pre-auth the same way (it's typed into the
   // signup form), so this exposes nothing new -- only the cosmetic
   // branding fields, never anything else about the coach account.
-  app.get("/api/public/branding/:code", async (req, res) => {
-    const branding = await storage.getCoachBrandingByCode(String(req.params.code));
-    res.json(
-      branding ?? {
-        brandTeamName: null,
-        brandLogoUrl: null,
-        brandPrimaryColor: null,
-        brandSecondaryColor: null,
-        brandMotto: null,
-        brandMission: null,
-        brandContactEmail: null,
-        brandWelcomeMessage: null,
-      },
-    );
+  /**
+   * The public face of a program, by coach code or team code. No account needed --
+   * this is the page a parent, a recruit or a prospective athlete can open.
+   *
+   * Team Identity is sold as "motto, mission/About page, public contact email,
+   * athlete welcome message", and until this had a page there was nothing a person
+   * without an account could open at all, so a coach paid for a public contact
+   * email that was not public anywhere. This is the surface that makes that true.
+   *
+   * Two things it does NOT do, both deliberate:
+   *
+   * - The motto, mission and contact email only appear when the program is actually
+   *   entitled to Team Identity. The old version of this route returned every
+   *   branding column for any code, paid or not, which both gave the add-on away and
+   *   published fields a coach never agreed to publish.
+   * - brandWelcomeMessage is never returned. It is addressed to an athlete who has
+   *   joined ("welcome to the program"), not to the public, and the fact that it is
+   *   in the same add-on does not make it the same audience.
+   */
+  app.get("/api/public/team/:code", async (req, res) => {
+    const code = String(req.params.code).trim();
+    const coach = (await storage.getUserByCoachCode(code)) ?? null;
+    const team = coach ? null : await storage.getTeamByCode(code);
+    const ownerId = coach?.role === "coach" ? coach.id : (team?.coachId ?? null);
+    if (ownerId == null) return res.status(404).json({ message: "No program with that code." });
+
+    const branding = await storage.getCoachBrandingByCode(code);
+    const entitlements = await getEntitlementsForCoach(ownerId);
+    res.json({
+      teamName: branding?.brandTeamName ?? null,
+      logoUrl: team?.brandLogoUrl ?? branding?.brandLogoUrl ?? null,
+      primaryColor: team?.brandPrimaryColor ?? branding?.brandPrimaryColor ?? null,
+      secondaryColor: team?.brandSecondaryColor ?? branding?.brandSecondaryColor ?? null,
+      motto: entitlements.hasTeamIdentity ? (branding?.brandMotto ?? null) : null,
+      mission: entitlements.hasTeamIdentity ? (branding?.brandMission ?? null) : null,
+      contactEmail: entitlements.hasTeamIdentity ? (branding?.brandContactEmail ?? null) : null,
+    });
   });
 
   // Effective branding for whoever's logged in -- any role, since an

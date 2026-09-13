@@ -54,6 +54,7 @@ import {
   Copy,
   Mail,
   QrCode,
+  Globe,
   HeartPulse,
   ChevronDown,
   Loader2,
@@ -521,6 +522,21 @@ function TeamInviteCard({
                 }}
               >
                 <Copy className="h-4 w-4" />
+              </Button>
+              {/* The public page for this code -- no account needed to open it, which
+                  is the half of Team Identity ("public contact email", About page)
+                  that had nowhere to live before. A coach cannot share a link they
+                  are never shown. */}
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Copy public page link for ${opt.label}`}
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/team/${opt.code}`);
+                  toast.success("Public page link copied");
+                }}
+              >
+                <Globe className="h-4 w-4" />
               </Button>
             </div>
           </div>

@@ -23,6 +23,7 @@ import AdminLoginPage from "@/pages/admin-login";
 import SignupPage from "@/pages/signup";
 import PricingPage from "@/pages/pricing";
 import ClaimPage from "@/pages/claim";
+import PublicTeamPage from "@/pages/public-team";
 import GuardianClaimPage from "@/pages/guardian-claim";
 import GuardianPendingPage from "@/pages/guardian-pending";
 import ForgotPasswordPage from "@/pages/forgot-password";
@@ -258,6 +259,10 @@ function Router() {
         <Route path="/admin/login" component={AdminLoginPage} />
         <Route path="/signup" component={SignupPage} />
         <Route path="/pricing" component={PricingPage} />
+        {/* Public, no account -- the link a coach can put on a flyer. See
+            PublicTeamPage: Team Identity sells a public About page and contact email,
+            and the only About page Forge had was behind a login. */}
+        <Route path="/team/:code" component={PublicTeamPage} />
         <Route path="/claim/:code" component={ClaimPage} />
         <Route path="/guardian/claim" component={GuardianClaimPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
