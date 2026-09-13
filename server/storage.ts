@@ -17601,16 +17601,16 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       .where(and(eq(notifications.userId, userId), eq(notifications.read, false)));
   },
 
+  // Patch, not replace -- see updateNotificationPrefsSchema's own comment.
+  // Only the keys actually present in the payload are written, so a dialog
+  // that shows one toggle can't clear a value it never rendered.
   async updateNotificationPrefs(userId: number, input: UpdateNotificationPrefsInput) {
-    const [row] = await db
-      .update(users)
-      .set({
-        phone: input.phone ?? null,
-        notifyEmail: input.notifyEmail,
-        notifySms: input.notifySms,
-      })
-      .where(eq(users.id, userId))
-      .returning();
+    const set: Partial<typeof users.$inferInsert> = {};
+    if ("phone" in input) set.phone = input.phone ?? null;
+    if (input.notifyEmail !== undefined) set.notifyEmail = input.notifyEmail;
+    if (input.notifySms !== undefined) set.notifySms = input.notifySms;
+    if (Object.keys(set).length === 0) return (await this.getUser(userId))!;
+    const [row] = await db.update(users).set(set).where(eq(users.id, userId)).returning();
     return row;
   },
 

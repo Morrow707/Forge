@@ -6796,7 +6796,15 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 // purpose): this only ever fills a currently-null value, never overwrites
 // an existing one -- see storage.backfillDateOfBirth's own guard.
 export const backfillDateOfBirthSchema = z.object({
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  // Same future-date refusal signupSchema and claimSignupSchema both carry.
+  // It was missing here, which mattered more on this route than on either
+  // of those: backfillDateOfBirth only ever fills a null value and refuses
+  // to overwrite one, so a typo'd 2090 was written permanently and left the
+  // account in a privacy tier derived from a negative age.
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date")
+    .refine((v) => new Date(v) <= new Date(), "Date of birth can't be in the future"),
 });
 export type BackfillDateOfBirthInput = z.infer<typeof backfillDateOfBirthSchema>;
 
@@ -6825,11 +6833,19 @@ export const updateProfileSchema = z.object({
   bio: z.string().trim().max(300).optional().nullable(),
 });
 
-export const updateNotificationPrefsSchema = z.object({
-  phone: z.string().trim().max(20).optional().nullable(),
-  notifyEmail: z.boolean(),
-  notifySms: z.boolean(),
-});
+// Every field optional, and the route applies only what was sent. The
+// notifications dialog PATCHes { notifyEmail } alone -- once the SMS toggle
+// came out of the UI, a required notifySms meant every save from that dialog
+// came back 400 "Required" and the email preference could not be changed at
+// all. Optional-and-merge also stops a partial payload blanking a phone
+// number the dialog never showed.
+export const updateNotificationPrefsSchema = z
+  .object({
+    phone: z.string().trim().max(20).optional().nullable(),
+    notifyEmail: z.boolean().optional(),
+    notifySms: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, "Nothing to update");
 
 // Keys are validated against NOTIFICATION_CATEGORIES (shared/notification-
 // categories.ts) at the route, not here -- z.record's key type can't
