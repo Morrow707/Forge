@@ -9,8 +9,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { format } from "date-fns";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -44,6 +46,7 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
   const [capInput, setCapInput] = useState("");
   const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<{ id: number; name: string } | null>(null);
   const [logAthleteId, setLogAthleteId] = useState<number | "">("");
   const [logActivityType, setLogActivityType] =
     useState<(typeof ACTIVITY_TYPES)[number]["value"]>("meeting");
@@ -220,10 +223,19 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
                     />
                   )}
                 </div>
-                <span className="shrink-0 text-xs font-semibold text-muted-foreground">
+                {/* The figure is now a button. GET /api/coach/cara/:athleteId/history
+                    has always returned this week's session-by-session breakdown and
+                    had no caller, so a coach seeing "19.4h / 20h" had no way to check
+                    or correct it -- and a cap a coach cannot audit is one they will not
+                    trust. The CSV/PDF export was the only route to the detail. */}
+                <button
+                  type="button"
+                  onClick={() => setHistoryTarget({ id: a.athleteId, name: a.name })}
+                  className="shrink-0 text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+                >
                   {(a.minutes / 60).toFixed(1)}h / {(a.capMinutes / 60).toFixed(0)}h (
                   {a.percentUsed}%)
-                </span>
+                </button>
               </div>
             ))}
           </div>
@@ -307,6 +319,101 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CaraSessionHistoryDialog
+        target={historyTarget}
+        onOpenChange={(open) => !open && setHistoryTarget(null)}
+      />
     </Card>
+  );
+}
+
+type CaraSession = {
+  id: number;
+  activityType: string;
+  startedAt: string;
+  endedAt: string | null;
+  endReason: string | null;
+  loggedByCoachId: number | null;
+};
+
+const ACTIVITY_LABEL: Record<string, string> = {
+  training: "Training",
+  meeting: "Team Meeting",
+  film_review: "Film Review",
+  travel: "Travel",
+  other: "Other",
+};
+
+/** This week's countable time, session by session.
+ *
+ * The roster figure above it is a total, and a total is not auditable: a coach looking
+ * at "19.4h / 20h" could neither see what made it up nor spot the session that should
+ * not be in it. Every session's own end reason is shown, because an auto-closed idle
+ * session and a session the athlete ended are different facts about the same row --
+ * and a coach-logged meeting is a third.
+ */
+function CaraSessionHistoryDialog({
+  target,
+  onOpenChange,
+}: {
+  target: { id: number; name: string } | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { data: sessions = [], isLoading } = useQuery<CaraSession[]>({
+    queryKey: [`/api/coach/cara/${target?.id}/history`],
+    queryFn: () => getJson(`/api/coach/cara/${target!.id}/history`),
+    enabled: target != null,
+  });
+
+  const minutesOf = (s: CaraSession) =>
+    Math.max(0, (new Date(s.endedAt ?? Date.now()).getTime() - new Date(s.startedAt).getTime()) / 60000);
+
+  return (
+    <Dialog open={target != null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{target?.name}: this week's sessions</DialogTitle>
+          <DialogDescription>
+            Every countable session since Sunday. An open session counts up to right now, which is
+            why the total on the roster moves while someone is training.
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading && <div className="h-20 animate-pulse rounded-md bg-surface" />}
+        {!isLoading && sessions.length === 0 && (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No countable time recorded this week.
+          </p>
+        )}
+        <div className="space-y-1.5">
+          {sessions.map((s) => (
+            <div key={s.id} className="rounded-md border border-border px-2.5 py-2 text-xs">
+              <div className="flex flex-wrap items-center gap-x-2">
+                <span className="font-semibold">
+                  {ACTIVITY_LABEL[s.activityType] ?? s.activityType}
+                </span>
+                {s.loggedByCoachId != null && (
+                  <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    logged by a coach
+                  </span>
+                )}
+                {s.endedAt == null && (
+                  <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                    open now
+                  </span>
+                )}
+                <span className="ml-auto font-mono tabular-nums">
+                  {(minutesOf(s) / 60).toFixed(2)}h
+                </span>
+              </div>
+              <p className="mt-0.5 text-muted-foreground">
+                {format(new Date(s.startedAt), "EEE d MMM, HH:mm")}
+                {s.endedAt ? ` - ${format(new Date(s.endedAt), "HH:mm")}` : ""}
+                {s.endReason ? ` · ended: ${s.endReason.replace(/_/g, " ")}` : ""}
+              </p>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
