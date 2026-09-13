@@ -367,9 +367,17 @@ export function KnowledgeBaseContent() {
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 placeholder="hamstring strain return to play"
-                onKeyDown={(e) => e.key === "Enter" && searchText.trim() && runSearch()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && searchText.trim() && searchDomains.length > 0 && runSearch()
+                }
               />
-              <Button onClick={() => runSearch()} disabled={!searchText.trim()}>
+              {/* Also disabled with no subject area ticked: the server requires at
+                  least one and 400s, and there is no error branch here, so an
+                  unticked search silently did nothing at all. */}
+              <Button
+                onClick={() => runSearch()}
+                disabled={!searchText.trim() || searchDomains.length === 0}
+              >
                 Search
               </Button>
             </div>
@@ -391,6 +399,11 @@ export function KnowledgeBaseContent() {
             {searchHits?.map((hit: any) => (
               <SearchHit key={hit.passageId} hit={hit} />
             ))}
+            {searchDomains.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Tick at least one subject area to search.
+              </p>
+            )}
             {searchHits && searchHits.length === 0 && (
               <p className="text-sm text-muted-foreground">
                 Nothing matched. Try the words the book itself would use.
@@ -459,7 +472,16 @@ export function KnowledgeBaseContent() {
                     <BookOpen className="mr-1.5 h-4 w-4" />
                     Read
                   </Button>
-                  {s.status === "needs_vision" && (
+                  {/* Also shown for a part-read source, not just needs_vision: the
+                      first transcription pass that writes any passages flips the
+                      status to "ready", which used to take this button away and
+                      with it the dialog's entire resume apparatus -- "Carry on
+                      reading" and "Start over" could never be reached, so a 400-page
+                      scan read 40 pages and stopped there for good. */}
+                  {(s.status === "needs_vision" ||
+                    (s.transcribedThroughPage != null &&
+                      s.transcribedThroughPage > 0 &&
+                      s.transcribedThroughPage < (s.pageCount ?? 0))) && (
                     <Button
                       variant="secondary"
                       size="sm"
@@ -467,7 +489,7 @@ export function KnowledgeBaseContent() {
                       disabled={transcribe.isPending}
                     >
                       <ScanText className="mr-1.5 h-4 w-4" />
-                      Read the pages
+                      {s.status === "needs_vision" ? "Read the pages" : "Carry on reading"}
                     </Button>
                   )}
                   <Button

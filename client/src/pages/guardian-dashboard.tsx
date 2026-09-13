@@ -10,7 +10,23 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ForgeMark } from "@/components/forge-mark";
-import { LogOut, CheckCircle2, Circle, Video, VideoOff } from "lucide-react";
+import {
+  LogOut,
+  CheckCircle2,
+  Circle,
+  Video,
+  VideoOff,
+  UserCircle,
+  KeyRound,
+  MonitorSmartphone,
+  Trash2,
+  Flag,
+} from "lucide-react";
+import { AccountSettingsDialog } from "@/components/account-settings-dialog";
+import { ChangePasswordDialog } from "@/components/change-password-dialog";
+import { ActiveSessionsDialog } from "@/components/active-sessions-dialog";
+import { DeleteAccountDialog } from "@/components/delete-account-dialog";
+import { ReportProblemDialog } from "@/components/report-problem-dialog";
 import { localIsoDate } from "@/lib/local-date";
 
 type GuardianAthlete = {
@@ -81,6 +97,12 @@ function rangeLast14Days() {
  * detail queries below by whichever athleteId is currently selected. */
 export default function GuardianDashboardPage() {
   const { user, logoutMutation } = useAuth();
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [activeSessionsOpen, setActiveSessionsOpen] = useState(false);
+  const [reportProblemOpen, setReportProblemOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<number | null>(null);
 
@@ -177,10 +199,67 @@ export default function GuardianDashboardPage() {
           <ForgeMark className="h-7 w-7" />
           <span className="font-display text-lg font-extrabold uppercase tracking-wider">Forge</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => logoutMutation.mutate()} className="gap-1.5">
-          <LogOut className="h-4 w-4" />
-          Log out
-        </Button>
+        {/* A guardian only ever renders this page -- every other ProtectedRoute
+            redirects them here -- and it does not use AppShell, which is where
+            the account menu lives for every other role. So a guardian had no way
+            to change their password, see or revoke their active sessions, report
+            a problem, or delete their account: the routes all accept them
+            (requireAuth), only the doors were missing. */}
+        <div className="flex items-center gap-1.5">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAccountMenuOpen((v) => !v)}
+              aria-expanded={accountMenuOpen}
+              aria-label="Account"
+              className="gap-1.5"
+            >
+              <UserCircle className="h-4 w-4" />
+              Account
+            </Button>
+            {accountMenuOpen && (
+              <div className="absolute right-0 z-50 mt-1 w-60 overflow-hidden rounded-md border border-border bg-surface-elevated shadow-lg">
+                {(
+                  [
+                    { label: "Account settings", icon: UserCircle, open: setAccountSettingsOpen },
+                    { label: "Change password", icon: KeyRound, open: setChangePasswordOpen },
+                    { label: "Active sessions", icon: MonitorSmartphone, open: setActiveSessionsOpen },
+                    { label: "Report a problem", icon: Flag, open: setReportProblemOpen },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      setAccountMenuOpen(false);
+                      item.open(true);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
+                  >
+                    <item.icon className="h-4 w-4 text-muted-foreground" />
+                    {item.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    setDeleteAccountOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-destructive hover:bg-muted"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete account
+                </button>
+              </div>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => logoutMutation.mutate()} className="gap-1.5">
+            <LogOut className="h-4 w-4" />
+            Log out
+          </Button>
+        </div>
       </header>
 
       <main className="mx-auto max-w-2xl space-y-4 p-4">
@@ -437,6 +516,17 @@ export default function GuardianDashboardPage() {
           </>
         )}
       </main>
+      {user && (
+        <AccountSettingsDialog
+          user={user}
+          open={accountSettingsOpen}
+          onOpenChange={setAccountSettingsOpen}
+        />
+      )}
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
+      <ActiveSessionsDialog open={activeSessionsOpen} onOpenChange={setActiveSessionsOpen} />
+      <ReportProblemDialog open={reportProblemOpen} onOpenChange={setReportProblemOpen} />
+      <DeleteAccountDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen} />
     </div>
   );
 }

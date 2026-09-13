@@ -44,6 +44,14 @@ type TrackingDiagnostics = {
     eccentricSeconds: number | null;
     velocityLossPercent: number | null;
     barPathDriftPercentOfRom: number | null;
+    reps?: {
+      repNumber: number;
+      concentricSeconds: number;
+      eccentricSeconds?: number | null;
+      timeToPeakVelocitySeconds: number;
+      relativePeakVelocity: number;
+      depthDeg?: number | null;
+    }[];
   } | null;
   recording?: {
     frameCount: number;
@@ -510,6 +518,41 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
           : ""),
     });
   }
+  // WHAT A SCALE-FREE CAPTURE ACTUALLY MEASURED.
+  //
+  // When calibration fails, the capture still yields everything that needs no real-world scale:
+  // rep count, tempo, velocity loss, bar-path drift as a fraction of the rep's own range, and
+  // the same per rep. schema.ts says the field exists so the report can say so, and the report
+  // read nothing but repCount -- so the one screen for diagnosing a failed capture showed none
+  // of the evidence the failed capture had produced.
+  if (d.scaleFree) {
+    const sf = d.scaleFree;
+    const parts = [`${sf.repCount} reps`, `${sf.concentricSeconds.toFixed(2)}s concentric`];
+    if (sf.eccentricSeconds != null) parts.push(`${sf.eccentricSeconds.toFixed(2)}s eccentric`);
+    if (sf.velocityLossPercent != null) {
+      parts.push(`${Math.round(sf.velocityLossPercent)}% velocity loss`);
+    }
+    if (sf.barPathDriftPercentOfRom != null) {
+      parts.push(`${Math.round(sf.barPathDriftPercentOfRom)}% bar-path drift (of ROM)`);
+    }
+    lines.push({ label: "Scale-free measurements", value: parts.join(", ") });
+    if (sf.reps && sf.reps.length > 0) {
+      lines.push({
+        label: "Scale-free reps",
+        value: sf.reps
+          .map(
+            (r) =>
+              `#${r.repNumber}: ${r.concentricSeconds.toFixed(2)}s up` +
+              (r.eccentricSeconds != null ? `/${r.eccentricSeconds.toFixed(2)}s down` : "") +
+              `, peak at ${r.timeToPeakVelocitySeconds.toFixed(2)}s` +
+              `, ${Math.round(r.relativePeakVelocity * 100)}% of best` +
+              (r.depthDeg != null ? `, ${Math.round(r.depthDeg)}deg depth` : ""),
+          )
+          .join("; "),
+      });
+    }
+  }
+
   if (d.calibration) {
     const c = d.calibration;
     const supineFrames = c.supineFullLengthFrames ?? 0;
