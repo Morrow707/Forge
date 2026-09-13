@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -78,6 +80,54 @@ type ProgressSummary = {
   recentPRs: { exerciseName: string; weight: number | null; reps: number | null; date: string }[];
 };
 
+type GuardianGoal = {
+  id: number;
+  type: "exercise" | "testing" | "skill";
+  exerciseName: string | null;
+  skillExerciseName: string | null;
+  testingMetric: string | null;
+  targetValue: number;
+  targetUnit: string;
+  targetDate: string | null;
+  currentValue: number | null;
+  achieved: boolean;
+  achievedAt: string | null;
+};
+
+type GuardianWellnessEntry = {
+  date: string;
+  sleepHours: number;
+  soreness: number;
+  stress: number;
+  hydration: number;
+  mentalFocus: number;
+};
+
+type GuardianInjury = {
+  id: number;
+  bodyPart: string;
+  bodyRegion: string | null;
+  occurredOn: string;
+  description: string | null;
+  resolved: boolean;
+  resolvedOn: string | null;
+};
+
+type GuardianNutritionTargets = {
+  caloriesKcal: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  fiberG: number | null;
+  waterOz: number | null;
+};
+
+type GuardianFoodLog = {
+  entries: { id: number; description: string; meal: string | null; caloriesKcal: number | null }[];
+  totals: { caloriesKcal: number; proteinG: number; carbsG: number; fatG: number; fiberG: number };
+  waterOz: number;
+};
+
 function rangeLast14Days() {
   const end = new Date();
   const start = new Date();
@@ -135,6 +185,39 @@ export default function GuardianDashboardPage() {
   const { data: videos } = useQuery<AthleteVideo[]>({
     queryKey: ["/api/guardian/athletes", activeId, "videos"],
     queryFn: () => getJson(`/api/guardian/athletes/${activeId}/videos`),
+    enabled: activeId != null,
+  });
+
+  // Five guardianRead routes that existed, fully authorization-checked, with nothing
+  // in the app calling them. The server's own comment says the point: "the thing a
+  // parent opens the app to check was the thing they could not reach".
+  const { data: goals = [] } = useQuery<GuardianGoal[]>({
+    queryKey: ["/api/guardian/athletes", activeId, "goals"],
+    queryFn: () => getJson(`/api/guardian/athletes/${activeId}/goals`),
+    enabled: activeId != null,
+  });
+
+  const { data: wellness = [] } = useQuery<GuardianWellnessEntry[]>({
+    queryKey: ["/api/guardian/athletes", activeId, "wellness-history"],
+    queryFn: () => getJson(`/api/guardian/athletes/${activeId}/wellness/history`),
+    enabled: activeId != null,
+  });
+
+  const { data: injuries = [] } = useQuery<GuardianInjury[]>({
+    queryKey: ["/api/guardian/athletes", activeId, "injury-history"],
+    queryFn: () => getJson(`/api/guardian/athletes/${activeId}/injury-history`),
+    enabled: activeId != null,
+  });
+
+  const { data: nutritionTargets } = useQuery<GuardianNutritionTargets | null>({
+    queryKey: ["/api/guardian/athletes", activeId, "nutrition"],
+    queryFn: () => getJson(`/api/guardian/athletes/${activeId}/nutrition`),
+    enabled: activeId != null,
+  });
+
+  const { data: foodLog } = useQuery<GuardianFoodLog>({
+    queryKey: ["/api/guardian/athletes", activeId, "food-log"],
+    queryFn: () => getJson(`/api/guardian/athletes/${activeId}/food-log`),
     enabled: activeId != null,
   });
 
@@ -425,6 +508,165 @@ export default function GuardianDashboardPage() {
                   </CardContent>
                 </Card>
 
+                {/* Goals, wellness, injuries and nutrition. Five guardianRead routes
+                    existed for these and nothing called them, so a parent could see a
+                    calendar and a video list and not one lift, meal, check-in or
+                    injury -- the server's own comment calls that out as "the thing a
+                    parent opens the app to check". Each card renders only when there is
+                    something in it, so a quiet week does not fill the page with empty
+                    boxes. */}
+                {goals.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Goals</CardTitle>
+                      <CardDescription>
+                        What {athlete.name} is working towards, and where they are now.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {goals.map((g) => (
+                        <div
+                          key={g.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-sm"
+                        >
+                          <span className="font-semibold">
+                            {g.exerciseName ?? g.skillExerciseName ?? g.testingMetric ?? "Goal"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {g.currentValue != null ? `${g.currentValue} / ` : ""}
+                            {g.targetValue} {g.targetUnit}
+                            {g.achieved ? " · done" : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {wellness.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Daily check-ins</CardTitle>
+                      <CardDescription>
+                        What {athlete.name} reported about sleep, soreness and stress. Their own
+                        words about how they feel, not a measurement.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-1.5">
+                      {wellness.slice(0, 10).map((w) => (
+                        <div
+                          key={w.date}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs"
+                        >
+                          <span className="font-semibold">
+                            {format(new Date(`${w.date}T00:00:00`), "EEE d MMM")}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {w.sleepHours}h sleep · soreness {w.soreness}/5 · stress {w.stress}/5
+                          </span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {injuries.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Injuries</CardTitle>
+                      <CardDescription>
+                        Everything on {athlete.name}'s record, open or resolved.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {injuries.map((i) => (
+                        <div
+                          key={i.id}
+                          className={cn(
+                            "rounded-md border px-2.5 py-2 text-sm",
+                            i.resolved ? "border-border" : "border-destructive/50 bg-destructive/5",
+                          )}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-semibold capitalize">{i.bodyPart}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(`${i.occurredOn}T00:00:00`), "d MMM yyyy")}
+                              {i.resolved
+                                ? i.resolvedOn
+                                  ? ` · resolved ${format(new Date(`${i.resolvedOn}T00:00:00`), "d MMM")}`
+                                  : " · resolved"
+                                : " · still open"}
+                            </span>
+                          </div>
+                          {i.description && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">{i.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {(nutritionTargets || (foodLog?.entries.length ?? 0) > 0) && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Eating and drinking</CardTitle>
+                      <CardDescription>
+                        Today's log against whatever targets are set. Forge is not a nutritionist --
+                        targets are guidance, and the log is only what {athlete.name} wrote down.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      {foodLog && (
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+                          <NutritionStat
+                            label="Calories"
+                            value={Math.round(foodLog.totals.caloriesKcal)}
+                            target={nutritionTargets?.caloriesKcal ?? null}
+                          />
+                          <NutritionStat
+                            label="Protein (g)"
+                            value={Math.round(foodLog.totals.proteinG)}
+                            target={nutritionTargets?.proteinG ?? null}
+                          />
+                          <NutritionStat
+                            label="Carbs (g)"
+                            value={Math.round(foodLog.totals.carbsG)}
+                            target={nutritionTargets?.carbsG ?? null}
+                          />
+                          <NutritionStat
+                            label="Fat (g)"
+                            value={Math.round(foodLog.totals.fatG)}
+                            target={nutritionTargets?.fatG ?? null}
+                          />
+                          <NutritionStat
+                            label="Fiber (g)"
+                            value={Math.round(foodLog.totals.fiberG)}
+                            target={nutritionTargets?.fiberG ?? null}
+                          />
+                          <NutritionStat
+                            label="Water (oz)"
+                            value={Math.round(foodLog.waterOz)}
+                            target={nutritionTargets?.waterOz ?? null}
+                          />
+                        </div>
+                      )}
+                      {(foodLog?.entries.length ?? 0) > 0 && (
+                        <ul className="space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+                          {foodLog!.entries.map((e) => (
+                            <li key={e.id} className="flex justify-between gap-2">
+                              <span className="truncate">{e.description}</span>
+                              <span className="shrink-0 tabular-nums">
+                                {e.caloriesKcal != null ? `${Math.round(e.caloriesKcal)} kcal` : ""}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">Videos</CardTitle>
@@ -611,5 +853,29 @@ function ResearchConsentRequests() {
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+/** One nutrition figure against its target, when there is a target to show. The
+ * target is deliberately rendered as context rather than as a pass/fail: Forge does
+ * not diagnose, and a parent reading "under" on their child's intake should be
+ * reading a number, not a verdict. */
+function NutritionStat({
+  label,
+  value,
+  target,
+}: {
+  label: string;
+  value: number;
+  target: number | null;
+}) {
+  return (
+    <div className="flex justify-between gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="tabular-nums">
+        {value}
+        {target != null ? ` / ${Math.round(target)}` : ""}
+      </span>
+    </div>
   );
 }
