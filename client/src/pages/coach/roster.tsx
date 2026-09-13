@@ -73,6 +73,7 @@ import {
   Gauge,
   UserPlus2,
   Palette,
+  Trash2,
   Download,
   CheckSquare,
   ArrowRightLeft,
@@ -484,6 +485,25 @@ export default function CoachRoster() {
     teamName: string;
     athleteId: number;
     athleteName: string;
+  } | null>(null);
+
+  const deleteTeamMutation = useMutation({
+    mutationFn: async (teamId: number) => {
+      await apiRequest("DELETE", `/api/coach/teams/${teamId}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+      // The roster rows carry each athlete's team label, so they go stale too.
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      toast.success("Team deleted");
+      setDeleteTeamTarget(null);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't delete that team"),
+  });
+  const [deleteTeamTarget, setDeleteTeamTarget] = useState<{
+    id: number;
+    name: string;
+    memberCount: number;
   } | null>(null);
 
   function openAssignFor(athleteIds: number[]) {
@@ -1053,6 +1073,27 @@ export default function CoachRoster() {
                       <Send className="h-3.5 w-3.5" />
                       Assign to Team
                     </Button>
+                    {/* DELETE /api/coach/teams/:id has always existed, ownership-checked,
+                        with no caller -- so a coach who made a team to try the feature
+                        out had no way to remove it, ever. Deleting a team takes its
+                        membership rows, challenges and game days with it by cascade and
+                        touches nothing about the athletes themselves, which is what the
+                        confirmation says. */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`Delete ${team.name}`}
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() =>
+                        setDeleteTeamTarget({
+                          id: team.id,
+                          name: team.name,
+                          memberCount: team.members.length,
+                        })
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -1345,6 +1386,20 @@ export default function CoachRoster() {
       <PlayerIntakeImportDialog
         open={activePhotoImport === "player-intake"}
         onOpenChange={(o) => setActivePhotoImport(o ? "player-intake" : null)}
+      />
+
+      <ConfirmDialog
+        open={deleteTeamTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTeamTarget(null)}
+        title="Delete this team?"
+        description={
+          deleteTeamTarget
+            ? `${deleteTeamTarget.name} will be deleted, along with its ${deleteTeamTarget.memberCount} membership${deleteTeamTarget.memberCount === 1 ? "" : "s"}, any team challenges and any game days. The athletes themselves stay on your roster with all of their training and history -- only the grouping goes.`
+            : ""
+        }
+        confirmLabel="Delete team"
+        isPending={deleteTeamMutation.isPending}
+        onConfirm={() => deleteTeamTarget && deleteTeamMutation.mutate(deleteTeamTarget.id)}
       />
 
       <ConfirmDialog
