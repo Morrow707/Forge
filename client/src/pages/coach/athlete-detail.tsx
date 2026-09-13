@@ -14,6 +14,7 @@ import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { AthleteSwitcher } from "@/components/athlete-switcher";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsPanel } from "@/components/body-metrics-panel";
+import { ImportedTestingDataPanel } from "@/components/imported-testing-data-panel";
 import { TestingHistoryPanel } from "@/components/testing-history-panel";
 import { GoniometerPanel } from "@/components/goniometer-panel";
 import { MovementScreenPanel } from "@/components/movement-screen-panel";
@@ -464,6 +465,7 @@ export default function AthleteDetailPage() {
                     <TestingHistoryPanel fetchUrl={`/api/coach/roster/${athlete.id}/testing-history`} />
                   </CardContent>
                 </Card>
+                <ImportedTestingDataPanel athleteId={athlete.id} />
               </TabsContent>
 
               <TabsContent value="rom">

@@ -23741,12 +23741,29 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return db.insert(importedTestingData).values(values).returning();
   },
 
+  /**
+   * Photo-imported VBT / OVR / Perch rows for one athlete, newest first.
+   *
+   * This existed with no caller while the write path was fully reachable: a coach
+   * photographed a velocity printout, corrected every row by hand, got "Imported 14
+   * rows", and nothing in the app ever read them back. Write-only storage plus an AI
+   * transcription bill.
+   *
+   * Deliberately not merged into testingResults. These are per-set velocity/load/
+   * power readings off an external device; testing_results is a snapshot of a
+   * profile's combine numbers. Merging would mean either inventing combine fields
+   * these rows do not have or widening that table for a different kind of
+   * measurement -- and a coach needs to see which number came off a printout rather
+   * than out of Forge.
+   */
   async getImportedTestingDataForAthlete(coachId: number, athleteId: number) {
     const athlete = await this.getRosterAthleteForCoach(coachId, athleteId);
     if (!athlete) return null;
     return db.query.importedTestingData.findMany({
       where: eq(importedTestingData.athleteId, athleteId),
-      orderBy: desc(importedTestingData.date),
+      // Date first, then set order within a session -- a printout's rows are a
+      // sequence and reading them out of order loses the progression.
+      orderBy: [desc(importedTestingData.date), asc(importedTestingData.setNumber)],
     });
   },
 
