@@ -4726,6 +4726,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assignmentId: z.number().int(),
         programDayId: z.number().int(),
         programExerciseId: z.number().int(),
+        // The day the athlete is actually looking at, which can be a backfilled
+        // past date -- without it the regression files against today.
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         note: z.string().trim().max(300).optional(),
       })
       .safeParse(req.body ?? {});
@@ -5046,6 +5049,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if ("error" in result) return res.status(400).json({ message: result.error });
     res.json(result);
   });
+
+  // Every time this athlete has said today's work was too hard, and what they
+  // were given instead. The write side (storage.regressExerciseForAthlete) has
+  // always promised the coach sees this; this is where they see it.
+  app.get(
+    "/api/coach/roster/:athleteId/regressions",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      res.json(await storage.getExerciseRegressionsForAthlete(athleteId));
+    },
+  );
 
   // A parent/guardian's request, relayed by the coach, to stop future
   // camera-tracking collection for this athlete -- see users.trackingOptOut's

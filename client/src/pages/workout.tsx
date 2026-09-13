@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogDescription,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
@@ -82,6 +83,7 @@ import {
   Check,
   ChevronDown,
   TrendingUp,
+  TrendingDown,
   WifiOff,
   CloudUpload,
   Camera,
@@ -277,6 +279,19 @@ type PrescribedExercise = {
   // today's flagged pain (see the restricted-workout banner below) -- null
   // for anything still as prescribed.
   substitutedFrom: string | null;
+  // Set when the athlete has asked for an easier version of this slot today (see
+  // assignment_exercise_regressions). sets/reps above are already the lowered
+  // numbers; this carries what the coach prescribed, so the card can show both.
+  regression: {
+    prescribedSets: number;
+    prescribedReps: string;
+    sets: number;
+    reps: string;
+    loadHint: string;
+    summary: string;
+    athleteNote: string | null;
+    askedAt: string;
+  } | null;
 };
 
 type PrescribedCorrective = {
@@ -598,6 +613,7 @@ export type ItemState = {
   refId: number;
   exerciseName: string;
   substitutedFrom: string | null;
+  regression: PrescribedExercise["regression"];
   muscleGroup: string;
   equipment: string;
   instructions: string | null;
@@ -700,6 +716,7 @@ function buildItem(
     refId: prescribed.id,
     exerciseName: prescribed.exercise.name,
     substitutedFrom: kind === "exercise" ? (prescribed as PrescribedExercise).substitutedFrom : null,
+    regression: kind === "exercise" ? ((prescribed as PrescribedExercise).regression ?? null) : null,
     muscleGroup: prescribed.exercise.muscleGroup,
     equipment: prescribed.exercise.equipment,
     instructions: prescribed.exercise.instructions,
@@ -2846,6 +2863,34 @@ function ExerciseLogContent({
     }));
   const previewSet = previewSetNumber != null ? item.sets.find((s) => s.setNumber === previewSetNumber) : undefined;
 
+  // "This is too hard" -- the same movement, less of it. Distinct from the swap
+  // above on purpose: swapping answers a different question (this exercise is
+  // wrong for me today), and storage.regressExerciseForAthlete refuses to change
+  // the pattern at all. The route and the AI behind it have existed for a while
+  // with nothing in the client calling them.
+  const [regressOpen, setRegressOpen] = useState(false);
+  const [regressNote, setRegressNote] = useState("");
+  const regressMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/athlete/regress-exercise", {
+        assignmentId,
+        programDayId,
+        programExerciseId: item.refId,
+        date,
+        note: regressNote.trim() || undefined,
+      });
+      return res.json() as Promise<{ summary: string; sets: number; reps: string; loadHint: string }>;
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
+      toast.success(result.summary);
+      setRegressOpen(false);
+      setRegressNote("");
+    },
+    onError: (err: ApiError) =>
+      toast.error(err.message || "Could not work out an easier version just now"),
+  });
+
   const [swapOpen, setSwapOpen] = useState(false);
   const [swapReason, setSwapReason] = useState<string | null>(null);
   const [swapNotes, setSwapNotes] = useState("");
@@ -2889,6 +2934,15 @@ function ExerciseLogContent({
                 Swapped
               </Badge>
             )}
+            {item.regression && (
+              <Badge
+                variant="secondary"
+                className="shrink-0 text-[10px] text-amber-600 dark:text-amber-400"
+                title={`You asked for an easier version today. Prescribed ${item.regression.prescribedSets} x ${item.regression.prescribedReps}; scaled to ${item.regression.sets} x ${item.regression.reps}. ${item.regression.loadHint}`}
+              >
+                Scaled down
+              </Badge>
+            )}
             {linked && <Link2 className="h-4 w-4 shrink-0 text-primary" />}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -2924,6 +2978,21 @@ function ExerciseLogContent({
                 className="text-muted-foreground transition-colors hover:text-primary"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {/* Athlete-only, and unlike the swap it is not gated on AI program
+                permissions: scaling today's work down is not the same privilege as
+                having the AI rewrite your programming, and an athlete who needs a
+                lighter version should not be the one who cannot ask for it. */}
+            {user?.role === "athlete" && !isCorrective && (
+              <button
+                type="button"
+                aria-label={`Ask for an easier version of ${item.exerciseName}`}
+                title="This is too hard -- ask for an easier version"
+                onClick={() => setRegressOpen(true)}
+                className="text-muted-foreground transition-colors hover:text-amber-500"
+              >
+                <TrendingDown className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
@@ -2993,6 +3062,17 @@ function ExerciseLogContent({
         </div>
       </div>
 
+      {item.regression && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+          <p className="font-semibold text-amber-600 dark:text-amber-400">
+            {item.regression.summary}
+          </p>
+          <p className="mt-0.5 text-muted-foreground">
+            {item.regression.loadHint} · prescribed {item.regression.prescribedSets} x{" "}
+            {item.regression.prescribedReps}
+          </p>
+        </div>
+      )}
       {item.coachNotes && (
         <p className="rounded-md bg-surface-elevated p-2 text-xs text-muted-foreground">
           Coach note: {item.coachNotes}
@@ -4063,6 +4143,35 @@ function ExerciseLogContent({
           </p>
           <DialogFooter>
             <Button onClick={() => setAiFeedback(null)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={regressOpen} onOpenChange={setRegressOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrendingDown className="h-5 w-5 text-amber-500" />
+              Make {item.exerciseName} easier
+            </DialogTitle>
+            <DialogDescription>
+              Same movement, less of it -- fewer sets or reps, or less load. Your coach sees that
+              you asked, which is the point: training lighter for weeks without them knowing is
+              the thing this avoids.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={regressNote}
+            onChange={(e) => setRegressNote(e.target.value)}
+            placeholder="Anything they should know? (optional)"
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRegressOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => regressMutation.mutate()} disabled={regressMutation.isPending}>
+              {regressMutation.isPending ? "Working it out…" : "Scale it down"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

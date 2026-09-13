@@ -1997,6 +1997,60 @@ export const assignmentExerciseOverrides = pgTable(
 
 export type AssignmentExerciseOverride = typeof assignmentExerciseOverrides.$inferSelect;
 
+// An athlete saying today's prescribed work is too hard, and the lowered
+// prescription that came back. Same "override one athlete's occurrence of a
+// shared day, never the program template" shape as the two tables above, for a
+// third kind of change: the same movement, less of it.
+//
+// It is a table rather than a transient reply because
+// regressExerciseForAthlete's whole contract is that the change is RECORDED and
+// visible to the coach. An athlete quietly training lighter for six weeks is a
+// coaching problem the coach never learns about, and a suggestion that vanished
+// when the screen closed would have been exactly that with extra steps. The
+// athlete's own note is kept alongside it: "knee felt off" is the part a coach
+// most needs and the AI summary is the part they need least.
+export const assignmentExerciseRegressions = pgTable(
+  "assignment_exercise_regressions",
+  {
+    id: serial("id").primaryKey(),
+    assignmentId: integer("assignment_id")
+      .notNull()
+      .references(() => assignments.id, { onDelete: "cascade" }),
+    programDayId: integer("program_day_id")
+      .notNull()
+      .references(() => programDays.id, { onDelete: "cascade" }),
+    programExerciseId: integer("program_exercise_id")
+      .notNull()
+      .references(() => programExercises.id, { onDelete: "cascade" }),
+    /** The date the athlete asked, so a coach can see "three Mondays running"
+     * rather than one undated fact. Unlike an override, which is a property of
+     * the occurrence, this is a property of the moment. */
+    date: text("date").notNull(),
+    sets: integer("sets").notNull(),
+    reps: text("reps").notNull(),
+    loadHint: text("load_hint").notNull(),
+    summary: text("summary").notNull(),
+    athleteNote: text("athlete_note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    assignmentDayIdx: index("assignment_exercise_regressions_assignment_day_idx").on(
+      table.assignmentId,
+      table.programDayId,
+    ),
+    // One per exercise per day: asking twice replaces the first answer rather
+    // than stacking two regressions on the same slot.
+    uniquePerExerciseDate: uniqueIndex("assignment_exercise_regressions_unique_idx").on(
+      table.assignmentId,
+      table.programDayId,
+      table.programExerciseId,
+      table.date,
+    ),
+  }),
+);
+
+export type AssignmentExerciseRegression = typeof assignmentExerciseRegressions.$inferSelect;
+
 export const workoutLogs = pgTable(
   "workout_logs",
   {

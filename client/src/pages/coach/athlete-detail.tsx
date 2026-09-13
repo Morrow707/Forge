@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import { useState } from "react";
 import { useParams, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -319,6 +320,8 @@ export default function AthleteDetailPage() {
                 </Button>
               </CardContent>
             </Card>
+
+            <ExerciseRegressionsCard athleteId={athlete.id} />
 
             <section className="space-y-2">
               <h3 className="label-xs">
@@ -687,5 +690,59 @@ function SuggestedCorrectives({ athleteId }: { athleteId: number }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Every "this is too hard" this athlete has asked for, newest first.
+ *
+ * The whole reason regressExerciseForAthlete writes a row instead of just
+ * answering the athlete: one regression is ordinary, the same lift three weeks
+ * running is a conversation, and a coach who never sees either cannot have it.
+ * Renders nothing when there is nothing to show, so it costs a quiet roster no
+ * space at all. */
+function ExerciseRegressionsCard({ athleteId }: { athleteId: number }) {
+  const { data: regressions = [] } = useQuery<
+    {
+      id: number;
+      date: string;
+      exerciseName: string;
+      sets: number;
+      reps: string;
+      prescribedSets: number;
+      prescribedReps: string;
+      loadHint: string;
+      summary: string;
+      athleteNote: string | null;
+    }[]
+  >({
+    queryKey: [`/api/coach/roster/${athleteId}/regressions`],
+  });
+
+  if (regressions.length === 0) return null;
+
+  return (
+    <section className="space-y-2">
+      <h3 className="label-xs">Asked for something easier</h3>
+      <Card>
+        <CardContent className="space-y-2.5 p-5">
+          {regressions.slice(0, 8).map((r) => (
+            <div key={r.id} className="border-l-2 border-amber-500/60 pl-2.5">
+              <p className="text-sm font-semibold">
+                {r.exerciseName}{" "}
+                <span className="font-normal text-muted-foreground">
+                  · {format(new Date(`${r.date}T00:00:00`), "MMM d")}
+                </span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {r.prescribedSets} x {r.prescribedReps} &rarr; {r.sets} x {r.reps} · {r.loadHint}
+              </p>
+              {r.athleteNote && (
+                <p className="mt-0.5 text-xs italic text-foreground">"{r.athleteNote}"</p>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </section>
   );
 }

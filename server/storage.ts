@@ -32,6 +32,7 @@ import {
   assignments,
   assignmentCorrectives,
   assignmentExerciseOverrides,
+  assignmentExerciseRegressions,
   workoutLogs,
   workoutLogEntries,
   workoutSetEntries,
@@ -6392,6 +6393,45 @@ export const storage = {
       .values({ athleteId, ...data, bodyRegion: normalizeInjuryRegion(data.bodyPart) })
       .returning();
     return row;
+  },
+
+  /**
+   * Every "this is too hard" an athlete has asked for, newest first, with the
+   * exercise and the day it was asked about.
+   *
+   * This is the coach-visible half of regressExerciseForAthlete, and the reason
+   * that function writes a row at all. One regression is ordinary; the same lift
+   * three weeks running is a coaching conversation, and a coach who never sees
+   * either cannot have it.
+   */
+  async getExerciseRegressionsForAthlete(athleteId: number, limit = 30) {
+    const rows = await db
+      .select({
+        id: assignmentExerciseRegressions.id,
+        date: assignmentExerciseRegressions.date,
+        sets: assignmentExerciseRegressions.sets,
+        reps: assignmentExerciseRegressions.reps,
+        loadHint: assignmentExerciseRegressions.loadHint,
+        summary: assignmentExerciseRegressions.summary,
+        athleteNote: assignmentExerciseRegressions.athleteNote,
+        createdAt: assignmentExerciseRegressions.createdAt,
+        prescribedSets: programExercises.sets,
+        prescribedReps: programExercises.reps,
+        exerciseName: exercises.name,
+      })
+      .from(assignmentExerciseRegressions)
+      // Scoped through assignments.athleteId rather than trusting the caller's
+      // athleteId against a table that has no athlete column of its own.
+      .innerJoin(assignments, eq(assignments.id, assignmentExerciseRegressions.assignmentId))
+      .innerJoin(
+        programExercises,
+        eq(programExercises.id, assignmentExerciseRegressions.programExerciseId),
+      )
+      .innerJoin(exercises, eq(exercises.id, programExercises.exerciseId))
+      .where(eq(assignments.athleteId, athleteId))
+      .orderBy(desc(assignmentExerciseRegressions.createdAt))
+      .limit(limit);
+    return rows;
   },
 
   async getInjuryHistoryForAthlete(athleteId: number) {
@@ -16710,15 +16750,25 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
    */
   async regressExerciseForAthlete(
     athleteId: number,
-    input: { assignmentId: number; programDayId: number; programExerciseId: number; note?: string },
+    input: {
+      assignmentId: number;
+      programDayId: number;
+      programExerciseId: number;
+      date?: string;
+      note?: string;
+    },
   ): Promise<{ summary: string; sets: number; reps: string; loadHint: string } | null> {
     if (!aiEnabled) return null;
 
+    // The date comes from the caller when it has one: the athlete asks from a
+    // specific day's page, which can be a backfilled past date, and "today" would
+    // file the regression against a day they were not looking at.
+    const date = input.date ?? new Date().toISOString().slice(0, 10);
     const slots = await this.getWorkoutDayDetail(
       athleteId,
       input.assignmentId,
       input.programDayId,
-      new Date().toISOString().slice(0, 10),
+      date,
     );
     if (!slots) return null;
 
@@ -16785,12 +16835,47 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     );
     if (!result?.summary) return null;
 
-    return {
+    const regression = {
       summary: result.summary.trim(),
       sets: Math.max(1, Math.min(10, result.sets ?? 3)),
       reps: String(result.reps ?? "").slice(0, 20) || "8",
       loadHint: String(result.loadHint ?? "").slice(0, 200),
     };
+
+    // Recorded, which is the whole point (see this function's docblock). Asking
+    // again for the same slot on the same day replaces the answer rather than
+    // stacking a second regression on top of the first.
+    await db
+      .insert(assignmentExerciseRegressions)
+      .values({
+        assignmentId: input.assignmentId,
+        programDayId: input.programDayId,
+        programExerciseId: input.programExerciseId,
+        date,
+        sets: regression.sets,
+        reps: regression.reps,
+        loadHint: regression.loadHint,
+        summary: regression.summary,
+        athleteNote: input.note?.trim() ? input.note.trim().slice(0, 300) : null,
+      })
+      .onConflictDoUpdate({
+        target: [
+          assignmentExerciseRegressions.assignmentId,
+          assignmentExerciseRegressions.programDayId,
+          assignmentExerciseRegressions.programExerciseId,
+          assignmentExerciseRegressions.date,
+        ],
+        set: {
+          sets: regression.sets,
+          reps: regression.reps,
+          loadHint: regression.loadHint,
+          summary: regression.summary,
+          athleteNote: input.note?.trim() ? input.note.trim().slice(0, 300) : null,
+          createdAt: new Date(),
+        },
+      });
+
+    return regression;
   },
 
   /**
@@ -18821,6 +18906,22 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     });
     const overrideByProgramExerciseId = new Map(overrides.map((o) => [o.programExerciseId, o]));
 
+    // And this athlete's own "this is too hard" regressions for this date (see
+    // assignment_exercise_regressions). Same occurrence-scoped shape as the
+    // overrides above; this one lowers the prescription instead of replacing the
+    // movement, and is read back here so the athlete sees what they were given
+    // rather than a one-off message that vanished with the dialog.
+    const regressions = await db.query.assignmentExerciseRegressions.findMany({
+      where: and(
+        eq(assignmentExerciseRegressions.assignmentId, assignmentId),
+        eq(assignmentExerciseRegressions.programDayId, programDayId),
+        eq(assignmentExerciseRegressions.date, date),
+      ),
+    });
+    const regressionByProgramExerciseId = new Map(
+      regressions.map((r) => [r.programExerciseId, r]),
+    );
+
     // One shared fetch for every exercise + corrective on this day, instead
     // of the N nearly-identical queries this used to run (one per exercise,
     // each re-fetching the same last-60-logs window and only differing in
@@ -18837,10 +18938,29 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         recentLogs,
         effectiveExercise.id,
       );
+      // A regression lowers sets/reps and carries the load hint the athlete was
+      // given. The coach's original numbers travel alongside rather than being
+      // lost, so both the athlete's screen and the coach's view of this day can
+      // say what changed and why.
+      const regression = regressionByProgramExerciseId.get(pe.id);
       return {
         ...pe,
         exercise: effectiveExercise,
         substitutedFrom: override ? pe.exercise.name : null,
+        sets: regression ? regression.sets : pe.sets,
+        reps: regression ? regression.reps : pe.reps,
+        regression: regression
+          ? {
+              prescribedSets: pe.sets,
+              prescribedReps: pe.reps,
+              sets: regression.sets,
+              reps: regression.reps,
+              loadHint: regression.loadHint,
+              summary: regression.summary,
+              athleteNote: regression.athleteNote,
+              askedAt: regression.createdAt,
+            }
+          : null,
         lastPerformance,
         setHistory,
       };

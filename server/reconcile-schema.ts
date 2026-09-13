@@ -609,6 +609,22 @@ CREATE TABLE IF NOT EXISTS "assignment_exercise_overrides" (
 CREATE INDEX IF NOT EXISTS "assignment_exercise_overrides_assignment_day_idx" ON "assignment_exercise_overrides" ("assignment_id", "program_day_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "assignment_exercise_overrides_unique_idx" ON "assignment_exercise_overrides" ("assignment_id", "program_day_id", "program_exercise_id");
 
+CREATE TABLE IF NOT EXISTS "assignment_exercise_regressions" (
+  "id" serial PRIMARY KEY,
+  "assignment_id" integer NOT NULL REFERENCES "assignments"("id") ON DELETE CASCADE,
+  "program_day_id" integer NOT NULL REFERENCES "program_days"("id") ON DELETE CASCADE,
+  "program_exercise_id" integer NOT NULL REFERENCES "program_exercises"("id") ON DELETE CASCADE,
+  "date" text NOT NULL,
+  "sets" integer NOT NULL,
+  "reps" text NOT NULL,
+  "load_hint" text NOT NULL,
+  "summary" text NOT NULL,
+  "athlete_note" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "assignment_exercise_regressions_assignment_day_idx" ON "assignment_exercise_regressions" ("assignment_id", "program_day_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "assignment_exercise_regressions_unique_idx" ON "assignment_exercise_regressions" ("assignment_id", "program_day_id", "program_exercise_id", "date");
+
 CREATE TABLE IF NOT EXISTS "workout_logs" (
   "id" serial PRIMARY KEY,
   "assignment_id" integer NOT NULL REFERENCES "assignments"("id") ON DELETE CASCADE,

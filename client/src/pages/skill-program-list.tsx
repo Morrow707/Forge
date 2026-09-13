@@ -19,7 +19,17 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, Target, Trash2, Users, CalendarRange, Send, Copy, CalendarPlus } from "lucide-react";
+import {
+  Plus,
+  Target,
+  Trash2,
+  Users,
+  CalendarRange,
+  Send,
+  Copy,
+  CalendarPlus,
+  Sparkles,
+} from "lucide-react";
 import { todayIso } from "@/lib/local-date";
 
 type SkillProgramSummary = {
@@ -107,6 +117,45 @@ export function SkillProgramListPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not create skill program"),
   });
 
+  // AI Assist, the skills twin of ProgramListPage's own. Two steps in one
+  // mutation so the button has a single loading state: ask for a draft structure,
+  // then create a real fully-editable skill program from it, exactly as "Create"
+  // does. Nothing is assigned or published.
+  //
+  // Athlete-only because /skill-programs/ai-draft only exists under /api/athlete
+  // (gated on the skillsAi entitlement, which is separate from strengthAi --
+  // paying for one never unlocks the other). The route and
+  // storage.generateSkillProgramDraft behind it were complete and had no caller
+  // at all, so the one AI path on the skills side was unreachable.
+  const aiDraftEnabled = apiBase === "/api/athlete";
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const aiDraftMutation = useMutation({
+    mutationFn: async () => {
+      const draftRes = await apiRequest("POST", `${apiBase}/skill-programs/ai-draft`, {
+        prompt: aiPrompt,
+      });
+      const draft: { structure: unknown; note: string | null } | null = await draftRes.json();
+      if (!draft) return null;
+      const res = await apiRequest("POST", `${apiBase}/skill-programs`, draft.structure);
+      const program = await res.json();
+      return { program, note: draft.note };
+    },
+    onSuccess: (result) => {
+      if (!result?.program) {
+        toast.error("AI assist isn't available right now");
+        return;
+      }
+      qc.invalidateQueries({ queryKey: [`${apiBase}/skill-programs`] });
+      toast.success("Draft created -- review it before assigning it to anything");
+      if (result.note) toast.info(result.note, { duration: 10000 });
+      setAiDialogOpen(false);
+      setAiPrompt("");
+      navigate(`${routeBase}/${result.program.id}`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not generate a draft"),
+  });
+
   // Self-assignment: coachId === athleteId -- lands the skill program on the
   // caller's own personal calendar, same as ProgramListPage's
   // selfAssignMutation.
@@ -178,13 +227,23 @@ export function SkillProgramListPage({
       title={title}
       subheader={libraryTabs}
       actions={
-        <Button
-          onClick={() => (aiFirstCreate ? createMutation.mutate("New Skill Program") : setDialogOpen(true))}
-          disabled={aiFirstCreate && createMutation.isPending}
-        >
-          <Plus className="h-4 w-4" />
-          New Skill Program
-        </Button>
+        <div className="flex items-center gap-2">
+          {aiDraftEnabled && (
+            <Button variant="outline" onClick={() => setAiDialogOpen(true)}>
+              <Sparkles className="h-4 w-4" />
+              AI Assist
+            </Button>
+          )}
+          <Button
+            onClick={() =>
+              aiFirstCreate ? createMutation.mutate("New Skill Program") : setDialogOpen(true)
+            }
+            disabled={aiFirstCreate && createMutation.isPending}
+          >
+            <Plus className="h-4 w-4" />
+            New Skill Program
+          </Button>
+        </div>
       }
     >
       {!isLoading && programs.length === 0 && (
@@ -291,6 +350,42 @@ export function SkillProgramListPage({
           </Card>
         ))}
       </div>
+
+      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI skill program draft
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="skill-ai-prompt">What do you want to work on?</Label>
+            <Textarea
+              id="skill-ai-prompt"
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              rows={4}
+              placeholder="e.g. eight weeks of pitching mechanics, three sessions a week, mostly command work and a long-toss progression"
+            />
+            <p className="text-xs text-muted-foreground">
+              You get an editable draft to review -- nothing is assigned to your calendar until you
+              say so.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAiDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => aiDraftMutation.mutate()}
+              disabled={aiDraftMutation.isPending || aiPrompt.trim().length === 0}
+            >
+              {aiDraftMutation.isPending ? "Drafting…" : "Draft it"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
