@@ -1,7 +1,13 @@
 import Stripe from "stripe";
 import { storage } from "./storage";
-import { coachBasePriceId, freeAgentPriceId } from "./stripe-prices";
-import { BILLING_TIERS, type AddOnId, type BillingTierId } from "@shared/billing-tiers";
+import { coachBasePriceId, coachPerAthletePriceId, freeAgentPriceId } from "./stripe-prices";
+import {
+  BILLING_TIERS,
+  ORG_BASE_CENTS,
+  bandForAthleteCount,
+  type AddOnId,
+  type BillingTierId,
+} from "@shared/billing-tiers";
 import {
   FREE_AGENT_TIERS,
   entitlementsForFreeAgentTier,
@@ -262,32 +268,66 @@ export async function createFreeAgentTierCheckout(
   return { url: session.url };
 }
 
-/** A coach organisation: the flat account fee, and nothing per athlete.
+/** A coach organisation: the roster band, charged as the per-athlete rate.
  *
- * ORG_PER_ATHLETE_CENTS is deliberately NOT billed here. That number is an
- * internal unit-cost figure -- what one athlete is modelled to cost Forge in
- * storage -- and it is used to sanity-check margin, not to charge per head.
- * Billing it as a Stripe seat line turned a cost metric into a price, which
- * is not the model. A coach pays one flat fee whatever their roster size.
+ * This is the model shared/billing-tiers.ts describes and that both /pricing and
+ * /coach/billing quote: "$4.00/athlete and nothing else", presented in bands
+ * because a stepped ladder sells better than "exactly $4.00 x your roster", with
+ * every band dividing back out to the same flat rate.
  *
- * There is consequently nothing to keep in sync with the roster: no seat
- * quantity exists on the subscription for a roster change to move. */
+ * It used to line-item coachBasePriceId() alone -- the flat account fee. That fee
+ * is ORG_BASE_CENTS, which is 0 ("No flat account fee. There was a $10 one, and
+ * dropping it is what makes a small team's price honest"), so a 120-athlete program
+ * read "$480/mo" on the billing page and then subscribed to a price unrelated to
+ * it. Quoting one number and charging another is the defect; which number wins is
+ * decided by billing-tiers.ts, the file that calls itself the single source of
+ * truth for this.
+ *
+ * One Price with a quantity, rather than a Price per band: the rate never changes
+ * band to band, so a quantity expresses all of them and re-cutting the bands never
+ * means creating Stripe Prices to match. The quantity is the band's CEILING, not
+ * the exact headcount -- a customer pays for a band, which is what the page they
+ * just read told them.
+ */
 export async function createCoachSubscriptionCheckout(
   userId: number,
   userEmail: string,
+  rosterAthleteCount: number,
   successUrl: string,
   cancelUrl: string,
 ): Promise<CheckoutResult> {
   const stripe = getStripeClient();
   if (!stripe) return { error: "Billing isn't configured yet." };
-  const basePrice = coachBasePriceId();
-  if (!basePrice) return { error: "No Stripe price configured for coach plans yet." };
+  const perAthletePrice = coachPerAthletePriceId();
+  if (!perAthletePrice) return { error: "No Stripe price configured for coach plans yet." };
+  const band = bandForAthleteCount(rosterAthleteCount);
+
+  const lineItems: { price: string; quantity: number }[] = [
+    { price: perAthletePrice, quantity: band.athleteCapIncluded },
+  ];
+  // Only while there is a fee to charge. Line-iteming a $0 price is how the old
+  // behaviour managed to look configured while billing nothing.
+  if (ORG_BASE_CENTS > 0) {
+    const basePrice = coachBasePriceId();
+    if (!basePrice) return { error: "No Stripe price configured for the account fee yet." };
+    lineItems.push({ price: basePrice, quantity: 1 });
+  }
+
+  const metadata = {
+    kind: "coach_subscription",
+    userId: String(userId),
+    // What they were quoted, recorded on the subscription: a roster that grows past
+    // the band later is a different bill, and this is what says which one this was.
+    band: band.id,
+    bandAthleteCap: String(band.athleteCapIncluded),
+    quotedMonthlyCents: String(band.monthlyPriceCents),
+  };
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     ...(await baseSessionParams(userId, userEmail)),
-    line_items: [{ price: basePrice, quantity: 1 }],
-    metadata: { kind: "coach_subscription", userId: String(userId) },
-    subscription_data: { metadata: { kind: "coach_subscription", userId: String(userId) } },
+    line_items: lineItems,
+    metadata,
+    subscription_data: { metadata },
     success_url: successUrl,
     cancel_url: cancelUrl,
   });

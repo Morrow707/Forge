@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { missingPriceEnvVars, freeAgentPriceEnvVar, freeAgentPriceId } from "./stripe-prices";
 import { FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
+import { ORG_BASE_CENTS } from "@shared/billing-tiers";
 
 const routes = readFileSync(join(__dirname, "routes.ts"), "utf8");
 const billing = readFileSync(join(__dirname, "billing.ts"), "utf8");
@@ -15,26 +16,37 @@ describe("Stripe price configuration", () => {
 
   it("reports every price that still has to be created", () => {
     for (const tier of FREE_AGENT_TIER_ORDER) delete process.env[freeAgentPriceEnvVar(tier)];
-    delete process.env.STRIPE_PRICE_COACH_BASE;
+    delete process.env.STRIPE_PRICE_COACH_PER_ATHLETE;
     const missing = missingPriceEnvVars();
     expect(missing).toContain("STRIPE_PRICE_FREE_AGENT_AI_COACH");
-    expect(missing).toContain("STRIPE_PRICE_COACH_BASE");
-    // No per-athlete seat Price exists: the per-athlete figure is an
-    // internal cost metric, not a price billed per head.
-    expect(missing).not.toContain("STRIPE_PRICE_COACH_SEAT");
+    // The coach price is the per-athlete rate, charged with the band's ceiling as
+    // the quantity. This used to require STRIPE_PRICE_COACH_BASE instead -- the flat
+    // account fee -- which is ORG_BASE_CENTS, now 0: checkout looked configured and
+    // charged nothing while /coach/billing quoted the band.
+    expect(missing).toContain("STRIPE_PRICE_COACH_PER_ATHLETE");
     expect(missing.length).toBe(FREE_AGENT_TIER_ORDER.length + 1);
+  });
+
+  it("does not require an account-fee price while the fee is zero", () => {
+    for (const tier of FREE_AGENT_TIER_ORDER) process.env[freeAgentPriceEnvVar(tier)] = `price_${tier}`;
+    process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "price_per_athlete";
+    delete process.env.STRIPE_PRICE_COACH_BASE;
+    // ORG_BASE_CENTS is 0, so there is nothing to charge and nothing to create.
+    expect(ORG_BASE_CENTS).toBe(0);
+    expect(missingPriceEnvVars()).toEqual([]);
   });
 
   it("goes quiet once every price is set", () => {
     for (const tier of FREE_AGENT_TIER_ORDER) process.env[freeAgentPriceEnvVar(tier)] = `price_${tier}`;
-    process.env.STRIPE_PRICE_COACH_BASE = "price_base";
+    process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "price_per_athlete";
     expect(missingPriceEnvVars()).toEqual([]);
     expect(freeAgentPriceId("ai_coach")).toBe("price_ai_coach");
   });
 
   it("treats a blank env var as unset rather than as a price id", () => {
-    process.env.STRIPE_PRICE_COACH_BASE = "   ";
-    expect(missingPriceEnvVars()).toContain("STRIPE_PRICE_COACH_BASE");
+    for (const tier of FREE_AGENT_TIER_ORDER) process.env[freeAgentPriceEnvVar(tier)] = `price_${tier}`;
+    process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "   ";
+    expect(missingPriceEnvVars()).toContain("STRIPE_PRICE_COACH_PER_ATHLETE");
   });
 });
 
@@ -70,14 +82,16 @@ describe("web checkout never runs inside the native app", () => {
 });
 
 describe("prices and quantities come from the server, never the request", () => {
-  it("charges the coach one flat fee with nothing per athlete", () => {
+  it("charges the coach the band its roster falls into", () => {
     const idx = routes.indexOf('"/api/billing/checkout/coach"');
     const route = routes.slice(idx, idx + 900);
-    // No roster-derived quantity, and nothing a client could supply.
-    expect(route).not.toContain("getRosterSeatCountForCoach");
-    expect(route).not.toMatch(/seatCount/);
-    expect(billing).toContain("line_items: [{ price: basePrice, quantity: 1 }]");
-    expect(billing).not.toContain("coachSeatPriceId");
+    // The roster count comes from storage, never from the request body: a
+    // client-supplied quantity would be a client-supplied price.
+    expect(route).toContain("getRosterSeatCountForCoach");
+    expect(route).not.toMatch(/req\.body/);
+    expect(billing).toContain("quantity: band.athleteCapIncluded");
+    // And the band itself is derived server-side from that count.
+    expect(billing).toContain("bandForAthleteCount(rosterAthleteCount)");
   });
 
   it("reads the lesson price from the lesson row", () => {

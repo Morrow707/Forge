@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { CreditCard, Users } from "lucide-react";
-import { bandForAthleteCount, formatCents } from "@shared/billing-tiers";
+import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 
 type RosterAthlete = { id: number };
 
@@ -89,9 +89,15 @@ export default function CoachBilling() {
             </div>
           </div>
 
+          {/* The old copy here said "one flat fee, whatever your roster size", which
+              described the retired model (a $10 account fee plus per-athlete
+              overage). The bill is roster x rate now, so growing past the band's
+              ceiling does change what you pay, and saying otherwise set up exactly
+              the surprise this sentence was meant to prevent. */}
           <p className="text-xs text-muted-foreground">
-            One flat fee, whatever your roster size. Adding or removing an athlete doesn't change
-            what you pay.
+            ${(ORG_PER_ATHLETE_CENTS / 100).toFixed(2)} per athlete, the same rate at every roster
+            size. You pay for the band, so adding an athlete inside it doesn't change your bill --
+            going past {band.athleteCapIncluded} moves you to the next band.
           </p>
 
           {isNative ? (

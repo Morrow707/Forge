@@ -10261,13 +10261,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
-      // One flat account fee, whatever the roster size. Nothing per athlete
-      // is charged -- see createCoachSubscriptionCheckout on why the
-      // per-athlete figure is a cost metric rather than a price.
+      // The roster band, which is what /coach/billing quotes. Seat count rather
+      // than a raw roster length, so the figure checkout uses is the same one the
+      // rest of billing counts (see getRosterSeatCountForCoach).
+      const seats = await storage.getRosterSeatCountForCoach(user.id);
       const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/coach");
       const result = await createCoachSubscriptionCheckout(
         user.id,
         user.email,
+        seats,
         successUrl,
         cancelUrl,
       );
