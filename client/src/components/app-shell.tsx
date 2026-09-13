@@ -44,6 +44,7 @@ import {
   MonitorSmartphone,
   KeyRound,
   Pin,
+  FileSearch,
   HeartPulse,
   Video,
   type LucideIcon,
@@ -209,6 +210,11 @@ const adminNav: NavItem[] = [
   // the one that matters: a guardian raises a media removal request from their own dashboard
   // (see guardian-dashboard.tsx), it lands in a table nobody was ever shown, and the request sits
   // there. A compliance queue with no door is the same as no queue.
+  // Four read-only server answers that no screen ever asked for: the record-access
+  // log, nightly job run history, the system-event history behind the dashboard
+  // badges, and the uploads-disk reconciliation. One page, because they are all the
+  // same question -- what has this platform actually been doing.
+  { href: "/admin/diagnostics", label: "Data & Diagnostics", icon: FileSearch, overflow: true },
   { href: "/admin/removal-requests", label: "Removal Requests", icon: Trash2, overflow: true },
   { href: "/admin/blocked-athletes", label: "Blocked Athletes", icon: Flag, overflow: true },
 ];

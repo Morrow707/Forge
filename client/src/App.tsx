@@ -88,6 +88,7 @@ const AdminDashboard = lazy(withLoadTimeout(() => import("@/pages/admin/dashboar
 const AdminExercises = lazy(withLoadTimeout(() => import("@/pages/admin/exercises")));
 const AdminCoachExercises = lazy(withLoadTimeout(() => import("@/pages/admin/coach-exercises")));
 const AdminRemovalRequests = lazy(withLoadTimeout(() => import("@/pages/admin/removal-requests")));
+const AdminDiagnostics = lazy(withLoadTimeout(() => import("@/pages/admin/diagnostics")));
 const AdminBlockedAthletes = lazy(withLoadTimeout(() => import("@/pages/admin/blocked-athletes")));
 const AdminExerciseDetail = lazy(withLoadTimeout(() => import("@/pages/admin/exercise-detail")));
 const AdminSkills = lazy(withLoadTimeout(() => import("@/pages/admin/skills")));
@@ -435,6 +436,9 @@ function Router() {
         </Route>
         <Route path="/admin/removal-requests">
           <ProtectedRoute role="admin" component={AdminRemovalRequests} />
+        </Route>
+        <Route path="/admin/diagnostics">
+          <ProtectedRoute role="admin" component={AdminDiagnostics} />
         </Route>
         <Route path="/admin/blocked-athletes">
           <ProtectedRoute role="admin" component={AdminBlockedAthletes} />
