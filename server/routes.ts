@@ -2784,24 +2784,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(code);
   });
 
-  // Every priced thing on the platform, admin-editable -- see pricing-catalog.ts.
+  // Every priced thing on the platform, read-only -- see pricing-catalog.ts.
   app.get("/api/admin/pricing", requireRole("admin"), async (_req, res) => {
     const catalog = await storage.getPricingCatalog();
     res.json(catalog);
   });
 
-  app.patch("/api/admin/pricing/:key", requireRole("admin"), async (req, res) => {
-    const key = String(req.params.key);
-    if (!PRICING_CATALOG_KEYS.has(key)) {
-      return res.status(404).json({ message: "Unknown pricing key" });
-    }
-    const parsed = setPricingOverrideSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    await storage.setPricingOverride(key, parsed.data.priceCents);
-    res.status(204).end();
-  });
+  // No PATCH here. See storage.getPricingCatalog: the overrides table it used to
+  // write was read by nothing, so editing a price changed a badge and not a price.
+  // Per-lesson class prices below are editable because classLessons.priceCents is
+  // what createLessonCheckoutSession actually charges.
 
   app.get("/api/admin/pricing/class-lessons", requireRole("admin"), async (_req, res) => {
     const lessons = await storage.getForgeClassLessonPrices();

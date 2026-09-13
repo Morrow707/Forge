@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Ticket, DollarSign, RotateCcw, GraduationCap } from "lucide-react";
+import { Ticket, DollarSign, GraduationCap } from "lucide-react";
 
 type RedeemCode = {
   id: number;
@@ -25,7 +25,6 @@ type PricingItem = {
   description: string;
   defaultCents: number;
   currentCents: number;
-  overridden: boolean;
 };
 
 type ClassLessonPrice = {
@@ -57,22 +56,18 @@ function PriceRow({
   label,
   description,
   currentCents,
-  overridden,
   onSave,
-  onReset,
   saving,
   allowBlank,
 }: {
   label: string;
   description?: string;
   currentCents: number | null;
-  overridden?: boolean;
   onSave: (cents: number | null) => void;
-  onReset?: () => void;
   saving: boolean;
   /** Class lessons: blank means free, so an empty draft is a valid, savable
-   * value. Catalog rows never allow a blank save -- clearing back to the
-   * coded default goes through the explicit Reset button instead. */
+   * value. This is the only caller now -- the platform price catalog above is
+   * read-only, since the table its edits wrote was read by nothing. */
   allowBlank?: boolean;
 }) {
   const [draft, setDraft] = useState(centsToInput(currentCents));
@@ -85,9 +80,7 @@ function PriceRow({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 py-2.5 last:border-b-0">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">
-          {label} {overridden && <Badge variant="outline" className="ml-1 text-[9px]">edited</Badge>}
-        </p>
+        <p className="text-sm font-medium">{label}</p>
         {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
@@ -104,18 +97,15 @@ function PriceRow({
         <Button size="sm" variant="secondary" disabled={!dirty || saving} onClick={() => onSave(draftIsBlank ? null : draftCents)}>
           Save
         </Button>
-        {onReset && overridden && (
-          <Button size="icon" variant="ghost" onClick={onReset} disabled={saving} aria-label="Reset to default">
-            <RotateCcw className="h-3.5 w-3.5" />
-          </Button>
-        )}
       </div>
     </div>
   );
 }
 
-/** Billing-only admin page: create/manage redeem codes, and edit every
- * priced thing on the platform in one place. Per-account tier assignment
+/** Billing-only admin page: create/manage redeem codes, show every priced thing
+ * on the platform (read-only -- the numbers live in code), and edit the per-lesson
+ * class prices, which are the one price on this page that really is charged from a
+ * database row. Per-account tier assignment
  * (org billing tier, Free Agent tier) used to live here too
  * -- pulled out since nothing on this page needs a coach/athlete lookup to
  * just see and edit prices, and the lookup tools weren't finding accounts
@@ -159,17 +149,6 @@ export default function AdminBilling() {
       qc.invalidateQueries({ queryKey: ["/api/admin/redeem-codes"] });
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't create code"),
-  });
-
-  const savePriceMutation = useMutation({
-    mutationFn: async ({ key, priceCents }: { key: string; priceCents: number | null }) => {
-      await apiRequest("PATCH", `/api/admin/pricing/${key}`, { priceCents });
-    },
-    onSuccess: () => {
-      toast.success("Price updated");
-      qc.invalidateQueries({ queryKey: ["/api/admin/pricing"] });
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save price"),
   });
 
   const saveLessonPriceMutation = useMutation({
@@ -260,11 +239,19 @@ export default function AdminBilling() {
               <DollarSign className="h-4 w-4" />
               Pricing
             </CardTitle>
+            {/* Read-only, and honest about it. This card used to offer an editable
+                field per row and claim to be "the source every price shown elsewhere
+                reads from". Nothing read the overrides table it wrote: /pricing,
+                /coach/billing, /athlete/upgrade and every Stripe line item read the
+                two shared tier files, so an operator could change a figure, see
+                "Price updated" and an "edited" badge, and change nothing at all. */}
             <CardDescription>
               Every priced thing on the platform -- the org/coach plan formula, personalization
               add-ons, Free Agent tiers and sport add-ons, video storage, and Skill Bank unlocks.
-              Edit any price here; nothing is charged automatically yet (no live checkout), this
-              is the source every price shown elsewhere reads from.
+              These are set in code (shared/billing-tiers.ts and
+              shared/free-agent-tiers.ts) so the page, the checkout and the invoice cannot
+              disagree; this card is the one screen that says what Forge charges. Per-lesson
+              class prices below ARE editable -- that number is the one actually charged.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -278,16 +265,20 @@ export default function AdminBilling() {
                   {pricing
                     .filter((p) => p.category === cat)
                     .map((p) => (
-                      <PriceRow
+                      <div
                         key={p.key}
-                        label={p.label}
-                        description={p.description}
-                        currentCents={p.currentCents}
-                        overridden={p.overridden}
-                        saving={savePriceMutation.isPending}
-                        onSave={(cents) => savePriceMutation.mutate({ key: p.key, priceCents: cents })}
-                        onReset={() => savePriceMutation.mutate({ key: p.key, priceCents: null })}
-                      />
+                        className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 py-2.5 last:border-b-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">{p.label}</p>
+                          {p.description && (
+                            <p className="text-xs text-muted-foreground">{p.description}</p>
+                          )}
+                        </div>
+                        <p className="shrink-0 font-mono text-sm font-semibold tabular-nums">
+                          {p.currentCents === 0 ? "free" : `$${(p.currentCents / 100).toFixed(2)}`}
+                        </p>
+                      </div>
                     ))}
                 </div>
               </div>

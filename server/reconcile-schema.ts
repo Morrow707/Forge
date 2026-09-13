@@ -2182,9 +2182,13 @@ CREATE TABLE IF NOT EXISTS "sport_coach_messages" (
 );
 CREATE INDEX IF NOT EXISTS "sport_coach_messages_athlete_addon_idx" ON "sport_coach_messages" ("athlete_id", "add_on", "created_at");
 
--- Admin-editable price overrides for the Billing page's pricing catalog -- see
--- pricing-catalog.ts and storage.getPricingCatalog/setPricingOverride. Empty on a fresh
--- database; every price simply falls back to its coded default until an admin actually edits one.
+-- Retired: price overrides for the admin Billing page's pricing catalog. Nothing reads
+-- or writes this table any more. The editor was removed because nothing read it then
+-- either -- /pricing, /coach/billing, /athlete/upgrade and every Stripe line item read
+-- the coded tier tables, so an "edited" price changed a badge and not a price, and it
+-- could never reach the Stripe Prices the charge comes from. Kept because this file is
+-- additive-only by design and an unread empty table costs nothing; see
+-- storage.getPricingCatalog for the full reasoning.
 CREATE TABLE IF NOT EXISTS "pricing_overrides" (
   "key" text PRIMARY KEY,
   "price_cents" integer NOT NULL,

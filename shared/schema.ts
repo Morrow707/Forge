@@ -709,22 +709,29 @@ export const redeemCodeRedemptions = pgTable(
   }),
 );
 
-// One row per admin-edited price -- the defaults live as plain constants in
-// shared/billing-tiers.ts, shared/free-agent-tiers.ts, and
-// shared/video-retention.ts (see server/pricing-catalog.ts's own comment for
-// why); this table only ever holds the keys an admin has actually
-// overridden from this page, so a brand-new deploy with no admin edits yet
-// has an empty table and every price simply falls back to its coded
-// default. Key is the catalog entry's own id (e.g. "org_base_fee",
-// "addon_custom_colors") -- see PRICING_CATALOG.
+// RETIRED. Nothing reads or writes this table any more.
+//
+// It held admin price overrides for the Billing page's pricing catalog, and the
+// editor above it claimed to be "the source every price shown elsewhere reads
+// from". It never was: /pricing, /coach/billing, /athlete/upgrade and every Stripe
+// line item read the coded tables in shared/billing-tiers.ts and
+// shared/free-agent-tiers.ts, so an override changed an "edited" badge and nothing
+// else -- and it could never have reached the Stripe Prices a charge actually comes
+// from. The catalog is now read-only; see storage.getPricingCatalog. The table and
+// its schema stay because reconcile-schema.ts is additive-only by design and an
+// unread empty table costs nothing.
 export const pricingOverrides = pgTable("pricing_overrides", {
   key: text("key").primaryKey(),
   priceCents: integer("price_cents").notNull(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/** Still used by PATCH /api/admin/pricing/class-lessons/:id, which is a real
+ * price: classLessons.priceCents is what createLessonCheckoutSession charges. The
+ * platform price catalog that shared this schema is read-only now (see
+ * pricingOverrides above). */
 export const setPricingOverrideSchema = z.object({
-  // null clears the override, reverting to the coded default.
+  // null means free for a class lesson.
   priceCents: z.number().int().min(0).nullable(),
 });
 

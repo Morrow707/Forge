@@ -72,7 +72,6 @@ import {
   skillProgramChatMessages,
   classes,
   classLessons,
-  pricingOverrides,
   classEnrollments,
   classLessonProgress,
   classLessonQuizQuestions,
@@ -3027,34 +3026,32 @@ export const storage = {
   },
 
   // ---------- Pricing catalog (admin Billing page) ----------
-  // Every priced thing on the platform in one place -- see
-  // pricing-catalog.ts's own comment for why the numbers themselves stay
-  // coded defaults and this table only ever holds the deltas an admin has
-  // actually changed.
-  async getPricingCatalog(): Promise<
-    (PricingCatalogItem & { currentCents: number; overridden: boolean })[]
-  > {
-    const overrides = await db.query.pricingOverrides.findMany();
-    const byKey = new Map(overrides.map((o) => [o.key, o.priceCents]));
-    return PRICING_CATALOG.map((item) => {
-      const override = byKey.get(item.key);
-      return {
-        ...item,
-        currentCents: override ?? item.defaultCents,
-        overridden: override != null,
-      };
-    });
-  },
-
-  async setPricingOverride(key: string, priceCents: number | null): Promise<void> {
-    if (priceCents == null) {
-      await db.delete(pricingOverrides).where(eq(pricingOverrides.key, key));
-      return;
-    }
-    await db
-      .insert(pricingOverrides)
-      .values({ key, priceCents })
-      .onConflictDoUpdate({ target: pricingOverrides.key, set: { priceCents, updatedAt: new Date() } });
+  /**
+   * Every priced thing on the platform, read-only, straight from the coded
+   * defaults.
+   *
+   * It used to merge a pricingOverrides row per key, and the admin page told the
+   * operator "this is the source every price shown elsewhere reads from". It was
+   * not: nothing in the repo read that table except this function. /pricing,
+   * /coach/billing, /athlete/upgrade and every Stripe line item read
+   * shared/billing-tiers.ts and shared/free-agent-tiers.ts, so an admin could edit
+   * a price, see "Price updated" and an "edited" badge, and change nothing at all.
+   *
+   * The editing is gone rather than wired up, deliberately. billing-tiers.ts's own
+   * docblock argues the point: "the numbers are real, typed, committed code, not a
+   * number that only ever existed in a chat transcript". A runtime override table
+   * reintroduces exactly the drift that reasoning exists to prevent, and it cannot
+   * reach the Stripe Prices the charge actually comes from -- so an operator
+   * editing a figure here would change the page and not the invoice, which is worse
+   * than not being able to edit it. This stays as a reference: one screen that says
+   * what Forge charges.
+   *
+   * Per-lesson class prices are a different thing and remain editable --
+   * classLessons.priceCents is read by createLessonCheckoutSession, so that number
+   * really is the one charged.
+   */
+  async getPricingCatalog(): Promise<(PricingCatalogItem & { currentCents: number })[]> {
+    return PRICING_CATALOG.map((item) => ({ ...item, currentCents: item.defaultCents }));
   },
 
   // Every Forge-official class's lessons with their per-lesson price --
