@@ -14,6 +14,7 @@ type RedeemCode = {
   code: string;
   trialDays: number;
   maxRedemptions: number | null;
+  redemptionCount: number;
   expiresAt: string | null;
   createdAt: string;
 };
@@ -227,7 +228,10 @@ export default function AdminBilling() {
                   >
                     <span className="font-mono font-semibold">{c.code}</span>
                     <span className="text-xs text-muted-foreground">
-                      {c.trialDays}d trial{c.maxRedemptions ? ` · max ${c.maxRedemptions} uses` : ""}
+                      {c.trialDays}d trial ·{" "}
+                      {c.maxRedemptions
+                        ? `${c.redemptionCount ?? 0} of ${c.maxRedemptions} used`
+                        : `${c.redemptionCount ?? 0} redeemed`}
                     </span>
                   </div>
                 ))}

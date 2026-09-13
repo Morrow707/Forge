@@ -379,6 +379,19 @@ app.get("/healthz", async (_req, res) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  // An unmatched /api path is a 404, not the app's HTML.
+  //
+  // Everything unmatched falls through to the SPA handler (see vite.ts),
+  // which answers a client route with index.html and a 200. That is right
+  // for /admin/exercises and wrong for /api/anything: a typo'd or removed
+  // endpoint came back 200 with a document where JSON should be, so a
+  // caller's own error handling never fired and the failure surfaced as a
+  // JSON parse error somewhere else entirely. Registered here, after every
+  // API route and before the SPA, so it needs no per-route upkeep.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ message: "Not found" });
+  });
+
   // Reports the error to Sentry, then calls next(err) itself -- doesn't
   // swallow anything, so the existing handler below still runs unchanged
   // and still sends the same response shape it always has. No-ops if

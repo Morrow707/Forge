@@ -2825,11 +2825,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/admin/pricing/class-lessons/:id", requireRole("admin"), async (req, res) => {
+    // Number("abc") is NaN, which reached the query and came back a 500.
+    // Same guard every other :id route in this file already has.
+    const lessonId = Number(req.params.id);
+    if (!Number.isInteger(lessonId)) return res.status(400).json({ message: "Invalid lesson id" });
     const parsed = setPricingOverrideSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const updated = await storage.setForgeClassLessonPrice(Number(req.params.id), parsed.data.priceCents);
+    const updated = await storage.setForgeClassLessonPrice(lessonId, parsed.data.priceCents);
     if (!updated) return res.status(404).json({ message: "Lesson not found (or not a Forge-official class)" });
     res.status(204).end();
   });

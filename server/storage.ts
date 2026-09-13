@@ -3021,8 +3021,20 @@ export const storage = {
     return row;
   },
 
+  // With the redemption count, not just the cap. The admin page showed
+  // "max 2 uses" and nothing else, so a code that had already been spent
+  // looked exactly like a fresh one -- which is the one thing the person
+  // handing codes out actually needs to know.
   async listRedeemCodes() {
-    return db.query.redeemCodes.findMany({ orderBy: desc(redeemCodes.createdAt) });
+    const rows = await db.query.redeemCodes.findMany({ orderBy: desc(redeemCodes.createdAt) });
+    if (rows.length === 0) return [];
+    const counts = await db
+      .select({ codeId: redeemCodeRedemptions.codeId, count: sql<number>`count(*)::int` })
+      .from(redeemCodeRedemptions)
+      .where(inArray(redeemCodeRedemptions.codeId, rows.map((r) => r.id)))
+      .groupBy(redeemCodeRedemptions.codeId);
+    const byCode = new Map(counts.map((c) => [c.codeId, c.count]));
+    return rows.map((row) => ({ ...row, redemptionCount: byCode.get(row.id) ?? 0 }));
   },
 
   // ---------- Pricing catalog (admin Billing page) ----------
