@@ -12,10 +12,11 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, ChevronDown, X } from "lucide-react";
 import { format, addDays, parseISO } from "date-fns";
 import { todayIso } from "@/lib/local-date";
 import { FOOD_LOG_MEALS, FOOD_LOG_MEAL_LABEL, type FoodLogMeal } from "@shared/schema";
+import { NutrientRings } from "@/components/nutrient-rings";
 
 const MICRO_FIELDS = [
   ["calciumMg", "Calcium", "mg"],
@@ -244,15 +245,14 @@ export function FoodLogPanel({
         <div className="h-20 animate-pulse rounded-md bg-surface" />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <ProgressBar label="Calories" value={totals.caloriesKcal} target={targets?.caloriesKcal ?? null} unit="kcal" />
-            <ProgressBar label="Protein" value={totals.proteinG} target={targets?.proteinG ?? null} unit="g" />
-            <ProgressBar label="Carbs" value={totals.carbsG} target={targets?.carbsG ?? null} unit="g" />
-            <ProgressBar label="Fat" value={totals.fatG} target={targets?.fatG ?? null} unit="g" />
-            {/* Fiber was stored on every entry, summed into the day totals and given its own
-                target field, and then never rendered anywhere. It was computed and thrown away. */}
-            <ProgressBar label="Fiber" value={totals.fiberG} target={targets?.fiberG ?? null} unit="g" />
-          </div>
+          <NutrientRings
+            calories={{ value: totals.caloriesKcal, target: targets?.caloriesKcal ?? null }}
+            protein={{ value: totals.proteinG, target: targets?.proteinG ?? null }}
+            carbs={{ value: totals.carbsG, target: targets?.carbsG ?? null }}
+            fat={{ value: totals.fatG, target: targets?.fatG ?? null }}
+            fiber={{ value: totals.fiberG, target: targets?.fiberG ?? null }}
+            water={{ value: waterOz, target: targets?.waterOz ?? null }}
+          />
 
           <WaterSection
             totalOz={waterOz}
@@ -463,7 +463,6 @@ function WaterSection({
 
   return (
     <div className="space-y-2">
-      <ProgressBar label="Water" value={totalOz} target={targetOz} unit="oz" />
       {editable && (
         <div className="flex flex-wrap gap-1.5">
           {WATER_QUICK_ADD_OZ.map((oz) => (
@@ -479,19 +478,38 @@ function WaterSection({
               +{oz} oz
             </Button>
           ))}
-          {entries.length > 0 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2.5 text-xs text-muted-foreground"
-              disabled={removeMutation.isPending}
-              onClick={() => removeMutation.mutate(entries[entries.length - 1].id)}
-            >
-              Undo last ({entries[entries.length - 1].amountOz} oz)
-            </Button>
-          )}
         </div>
+      )}
+      {/* Each pour is its own row with its own delete -- a running total that only ever went up
+          couldn't be corrected without inventing a subtract that could take it negative, and
+          "undo last" only ever reversed the single most recent tap. This removes exactly the
+          entry that was wrong, whichever one that is. */}
+      {entries.length > 0 && (
+        <ul className="space-y-1">
+          {entries.map((entry) => (
+            <li
+              key={entry.id}
+              className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs"
+            >
+              <span>
+                {format(parseISO(entry.loggedAt), "h:mm a")} &middot; {entry.amountOz} oz
+              </span>
+              {editable && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  aria-label={`Remove ${entry.amountOz} oz entry`}
+                  disabled={removeMutation.isPending}
+                  onClick={() => removeMutation.mutate(entry.id)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
