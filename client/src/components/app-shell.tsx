@@ -45,6 +45,7 @@ import {
   KeyRound,
   Pin,
   FileSearch,
+  Search,
   HeartPulse,
   Video,
   type LucideIcon,
@@ -214,6 +215,10 @@ const adminNav: NavItem[] = [
   // log, nightly job run history, the system-event history behind the dashboard
   // badges, and the uploads-disk reconciliation. One page, because they are all the
   // same question -- what has this platform actually been doing.
+  // The 60-field filter builder, CSV export, NLQ front end and saved views were all
+  // built, redacted and access-logged, with no screen anywhere -- so its suppression
+  // floor and per-admin query budget had never been exercised by a real user.
+  { href: "/admin/query-engine", label: "Query Engine", icon: Search, overflow: true },
   { href: "/admin/diagnostics", label: "Data & Diagnostics", icon: FileSearch, overflow: true },
   { href: "/admin/removal-requests", label: "Removal Requests", icon: Trash2, overflow: true },
   { href: "/admin/blocked-athletes", label: "Blocked Athletes", icon: Flag, overflow: true },

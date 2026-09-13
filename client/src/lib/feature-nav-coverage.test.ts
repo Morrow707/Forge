@@ -126,3 +126,37 @@ describe("no component is built and then never mounted", () => {
     expect(unmounted, `components nothing imports: ${unmounted.join(", ")}`).toEqual([]);
   });
 });
+
+// THE QUERY ENGINE'S PRIVACY PROPERTIES HAVE TO BE ON SCREEN.
+//
+// The engine was built, redacted and access-logged with no UI at all, so two
+// invariants it depends on had never been put in front of the person using it. Both
+// change how the results must be read, and an operator who does not know about them
+// will read them wrong:
+//
+//   - a result set below the suppression floor comes back EMPTY, not partial, so
+//     "no rows" means "nothing matched, or too few did to report" and never just the
+//     first of those;
+//   - every run spends one of a rolling-24h budget, which exists because suppression
+//     only ever sees one query at a time and two queries that each pass the floor can
+//     still be subtracted to recover an individual.
+//
+// server/query-engine-anonymity.itest.ts pins the server half. This pins that the
+// screen says so.
+describe("the query engine explains its own suppression and budget", () => {
+  it("tells the admin what an empty result means", async () => {
+    const { readFileSync } = await import("node:fs");
+    const page = readFileSync("client/src/pages/admin/query-engine.tsx", "utf8");
+    expect(page).toMatch(/too few/i);
+    expect(page).toMatch(/budget/i);
+    expect(page).toMatch(/subject code/i);
+  });
+
+  it("handles the budget refusal as its own message rather than a generic failure", async () => {
+    const { readFileSync } = await import("node:fs");
+    const page = readFileSync("client/src/pages/admin/query-engine.tsx", "utf8");
+    // The route answers 429 with the budget attached; a plain "could not run that
+    // query" would read as a bug rather than as a deliberate limit.
+    expect(page).toContain("err.status === 429");
+  });
+});
