@@ -16,15 +16,23 @@ const RING_ORDER: { key: RingKey; label: string; unit: string; color: string }[]
   { key: "fiber", label: "Fiber", unit: "g", color: "#8b6fce" },
 ];
 
+// The innermost radius has to clear the centre readout, not just the ring below it.
+// At r=16/stroke 8 the hole was 12px from centre and a four-digit calorie count is
+// 23.6px half-width (measured in a real browser, not estimated) -- so "2450" and the
+// "kcal today" label both struck through the fiber ring and into fat. It only looked
+// right at a zero or two-digit total, which is exactly what a first render shows.
+// 30px inner radius clears the widest realistic readout with room to spare; the
+// thinner stroke keeps the outermost ring inside the viewBox (70 + 3 < 75) and keeps
+// a 2px gap between bands.
 const RADII: Record<RingKey, number> = {
-  water: 66,
-  calories: 56,
-  protein: 46,
-  carbs: 36,
-  fat: 26,
-  fiber: 16,
+  water: 70,
+  calories: 62,
+  protein: 54,
+  carbs: 46,
+  fat: 38,
+  fiber: 30,
 };
-const STROKE_WIDTH = 8;
+const STROKE_WIDTH = 6;
 const CENTER = 75;
 const VIEWBOX = 150;
 
