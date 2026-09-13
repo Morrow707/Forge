@@ -689,6 +689,12 @@ function requirePaidAiAccess(entitlement: AiEntitlement) {
 // branch on coach status itself rather than assume it.
 async function requireVideoTrackingAccess(req: any, res: any, next: any) {
   const user = currentUser(req);
+  // A coach or admin filming their own training is not a Free Agent deciding
+  // whether to pay for video: they already pay for (or are) the platform, and
+  // /coach/my and /admin/my render the very same workout page with the very same
+  // tracker dialogs. Without this they reached the tracker, recorded, analysed,
+  // and then got "And the video didn't save either: Forbidden".
+  if (user.role === "coach" || user.role === "admin") return next();
   if (await athleteHasCoach(user.id)) return next();
   const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email, "video");
   if (!hasPaid) {
@@ -8795,9 +8801,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // MechanicsTrackerDialog's privacy comment); a session that's never opted
   // into never reaches this route at all. Returns the URL to attach as
   // videoUrl on the skill-session-log POST above.
+  // Same three roles as /api/athlete/form-video above, and for the same reason:
+  // the mechanics and sprint trackers are reachable from coach and admin self
+  // training too.
   app.post(
     "/api/athlete/skill-video",
-    requireRole("athlete"),
+    requireRole(["athlete", "coach", "admin"]),
     requireVideoTrackingAccess,
     requireDiskSpace,
     (req, res) => {
@@ -9021,9 +9030,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // a coached athlete's video is already bounded by their team's retention
   // cap, but an unpaywalled Free Agent could otherwise save and upload
   // unlimited clips regardless of tier.
+  // Open to coach and admin as well as athlete, because /coach/my and /admin/my
+  // mount the same WorkoutPage and the same tracker dialogs, and every tracker
+  // uploads through this one path (uploadOrQueueVideo hardcodes it). A coach
+  // self-training got as far as the analysed capture and then lost the clip to a
+  // 403. The clip is recorded against the uploader's own id either way, so the
+  // retention sweep treats a coach's own lift exactly like an athlete's -- which
+  // is the point: it is the same kind of data, and a second policy for it would be
+  // the complicated answer, not the safe one.
   app.post(
     "/api/athlete/form-video",
-    requireRole("athlete"),
+    requireRole(["athlete", "coach", "admin"]),
     requireVideoTrackingAccess,
     requireDiskSpace,
     (req, res) => {
