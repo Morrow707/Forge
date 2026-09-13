@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { storage } from "./storage";
-import { sendApnsToUser } from "./apns";
+import { sendApnsToUser, apnsEnabled } from "./apns";
 
 const publicKey = process.env.VAPID_PUBLIC_KEY;
 const privateKey = process.env.VAPID_PRIVATE_KEY;
@@ -75,4 +75,33 @@ async function sendWebPushToUser(
     }),
   );
   return results.some(Boolean);
+}
+
+/** One-button answer to "is push actually working for me right now?"
+ *
+ * The admin status card can only say "off" (nothing configured) or, after
+ * twenty real delivery attempts, "failing" -- so a misconfigured keypair or
+ * an expired APNs Auth Key stays invisible until enough real notifications
+ * have silently not arrived. This sends one notification to the caller's own
+ * devices and reports each transport separately, which is what separates the
+ * three states that actually matter: the server has no keys, the caller has
+ * no device registered, or the push service refused it.
+ */
+export async function sendTestPushToSelf(userId: number): Promise<{
+  web: { configured: boolean; devices: number; delivered: boolean };
+  apns: { configured: boolean; devices: number; delivered: boolean };
+}> {
+  const [webSubs, apnsTokens] = await Promise.all([
+    storage.getPushSubscriptionsForUser(userId),
+    storage.getApnsTokensForUser(userId),
+  ]);
+  const results = await sendPushToUser(userId, {
+    title: "Forge test notification",
+    body: "If you can read this, push is working on this device.",
+    url: "/",
+  });
+  return {
+    web: { configured: pushEnabled, devices: webSubs.length, delivered: results.web },
+    apns: { configured: apnsEnabled, devices: apnsTokens.length, delivered: results.apns },
+  };
 }

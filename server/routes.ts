@@ -15,7 +15,7 @@ import { storage, CohortQueryBudgetExceeded } from "./storage";
 import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
 import { PRICING_CATALOG_KEYS } from "./pricing-catalog";
 import { buildIcsFeed } from "./ics";
-import { getVapidPublicKey, pushEnabled } from "./push";
+import { getVapidPublicKey, pushEnabled, sendTestPushToSelf } from "./push";
 import { apnsEnabled } from "./apns";
 import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail, emailEnabled } from "./email";
@@ -482,6 +482,16 @@ const reportProblemLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many reports submitted. Please try again later." },
+});
+
+// A real notification to a real device on every call, so it is bounded --
+// generously, since the whole point is retrying it after changing a setting.
+const pushTestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many test notifications. Try again in a little while." },
 });
 
 function currentUser(req: any) {
@@ -10205,6 +10215,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // token instead of a Web Push subscription. apnsEnabled mirrors
   // getVapidPublicKey()'s already-established "tell the client up front so
   // it doesn't bother registering" pattern.
+  // Deliberately "to me", not "to anyone": this is a configuration check, and
+  // a route that could push arbitrary text to another account would be a
+  // different and much worse thing. Any signed-in role can run it -- a coach
+  // setting up notifications has the same question an admin does.
+  app.post("/api/push/test", requireAuth, pushTestLimiter, async (req, res) => {
+    const user = currentUser(req);
+    res.json(await sendTestPushToSelf(user.id));
+  });
+
   app.get("/api/push/apns-enabled", requireAuth, async (req, res) => {
     res.json({ enabled: apnsEnabled });
   });

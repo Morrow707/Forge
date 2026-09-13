@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Mail, Bell, ScanFace, Watch } from "lucide-react";
+import { Mail, Bell, ScanFace, Watch, Send } from "lucide-react";
 import type { PublicUser } from "@shared/schema";
 import { notificationCategoriesForRole } from "@shared/notification-categories";
 import {
@@ -119,6 +119,38 @@ export function NotificationSettingsDialog({
     }
   }
 
+  // What the admin status card cannot tell anyone: it reads "off" when the
+  // server has no keys and only says "failing" after twenty real delivery
+  // attempts, so a misconfigured keypair or an expired APNs key is silent
+  // until enough notifications have already not arrived. This asks for one,
+  // now, and says which transport took it.
+  const [testBusy, setTestBusy] = useState(false);
+  async function sendTestNotification() {
+    setTestBusy(true);
+    try {
+      const res = await apiRequest("POST", "/api/push/test", {});
+      const result = (await res.json()) as {
+        web: { configured: boolean; devices: number; delivered: boolean };
+        apns: { configured: boolean; devices: number; delivered: boolean };
+      };
+      const describe = (label: string, r: { configured: boolean; devices: number; delivered: boolean }) => {
+        if (!r.configured) return `${label}: not set up on the server`;
+        if (r.devices === 0) return `${label}: no device registered`;
+        return r.delivered ? `${label}: sent` : `${label}: rejected by the push service`;
+      };
+      const lines = [describe("Web", result.web), describe("Apple", result.apns)];
+      if (result.web.delivered || result.apns.delivered) {
+        toast.success(`Test sent -- ${lines.join(", ")}`);
+      } else {
+        toast.error(`Nothing was sent -- ${lines.join(", ")}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send a test notification");
+    } finally {
+      setTestBusy(false);
+    }
+  }
+
   async function togglePush(next: boolean) {
     setPushBusy(true);
     try {
@@ -213,6 +245,22 @@ export function NotificationSettingsDialog({
               })}
             </div>
           )}
+          <div className="ml-6">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={testBusy}
+              onClick={sendTestNotification}
+            >
+              <Send className="mr-1.5 h-3.5 w-3.5" />
+              {testBusy ? "Sending..." : "Send a test notification"}
+            </Button>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Goes to your own devices only, and tells you which of web and Apple push actually
+              took it -- the quickest way to tell "set up wrong" from "nothing has happened yet".
+            </p>
+          </div>
           {bioLockAvailable && (
             <label className="flex items-start gap-2.5 text-sm">
               <Checkbox
