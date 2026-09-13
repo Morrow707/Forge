@@ -149,6 +149,7 @@ export default function CoachDashboard() {
   const [viewingSkill, setViewingSkill] = useState<{
     skillProgramId: number;
     skillProgramDayId: number;
+    skillAssignmentId: number;
     athleteName: string;
   } | null>(null);
 
@@ -246,6 +247,7 @@ export default function CoachDashboard() {
               ? setViewingSkill({
                   skillProgramId: e.programId,
                   skillProgramDayId: e.programDayId,
+                  skillAssignmentId: e.assignmentId,
                   athleteName: e.athleteName!,
                 })
               : setEditing({
@@ -429,6 +431,7 @@ export default function CoachDashboard() {
             skillProgramId: viewingSkill.skillProgramId,
             skillProgramDayId: viewingSkill.skillProgramDayId,
           }}
+          skillAssignmentId={viewingSkill.skillAssignmentId}
         />
       )}
     </AppShell>

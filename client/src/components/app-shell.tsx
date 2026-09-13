@@ -44,6 +44,8 @@ import {
   MonitorSmartphone,
   KeyRound,
   Pin,
+  HeartPulse,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -156,6 +158,17 @@ const athleteNav: NavItem[] = [
   // Overflow, not primary -- same "engagement nicety, not daily-use" call
   // as the coach nav's own Leaderboard entry, which already lives there.
   { href: "/athlete/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
+  // Recovery & Vitals and the Video Bank both had a route and a finished page
+  // and no door of their own. Recovery was linked only from a Progress card
+  // that renders when Apple Health has already synced a vital, and from a
+  // Nutrition card that renders when a body mass exists -- so the page you go
+  // to in order to understand your recovery data was hidden until you had
+  // some. The Video Bank was linked only from a banner that appears when a
+  // capture is still queued OFFLINE, which is a different condition from the
+  // one the page exists for: recovering a clip that uploaded and never
+  // attached to a set.
+  { href: "/athlete/recovery", label: "Recovery", icon: HeartPulse, overflow: true },
+  { href: "/athlete/video-bank", label: "Video Bank", icon: Video, overflow: true },
   { href: "/athlete/about", label: "About", icon: Info },
 ];
 
@@ -873,7 +886,14 @@ export function AppShell({
                 </div>
               )}
             </div>
-            {(user?.role === "coach" || user?.role === "athlete") && <NotificationBell />}
+            {/* Admins get the bell too: reflection-job fans every safety finding and
+                every info finding out to storage.getAdmins() as a notifications row
+                (server/reflection-job.ts), and GET /api/notifications is plain
+                requireAuth, so those rows were being written and then shown to
+                nobody. */}
+            {(user?.role === "coach" || user?.role === "athlete" || user?.role === "admin") && (
+              <NotificationBell />
+            )}
             <button
               type="button"
               onClick={() => setMobileNavOpen((v) => !v)}

@@ -37,6 +37,7 @@ export default function CoachCalendar() {
   const [viewingSkill, setViewingSkill] = useState<{
     skillProgramId: number;
     skillProgramDayId: number;
+    skillAssignmentId: number;
     athleteName: string;
   } | null>(null);
   const [viewingDay, setViewingDay] = useState<{ date: string; entries: CalendarEntry[] } | null>(
@@ -92,6 +93,7 @@ export default function CoachCalendar() {
       setViewingSkill({
         skillProgramId: e.programId,
         skillProgramDayId: e.programDayId,
+        skillAssignmentId: e.assignmentId,
         athleteName: e.athleteName!,
       });
     } else if (e.isSelfAssigned) {
@@ -168,6 +170,7 @@ export default function CoachCalendar() {
             skillProgramId: viewingSkill.skillProgramId,
             skillProgramDayId: viewingSkill.skillProgramDayId,
           }}
+          skillAssignmentId={viewingSkill.skillAssignmentId}
         />
       )}
 

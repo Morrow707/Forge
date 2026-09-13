@@ -8,6 +8,7 @@ import {
 import { getJson } from "@/lib/queryClient";
 import { externalLinkClick } from "@/lib/open-external";
 import { Target, MoonStar, Film } from "lucide-react";
+import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 
 type SkillDayInfo = {
   programName: string;
@@ -37,12 +38,20 @@ export function SkillDayViewDialog({
   onOpenChange,
   athleteName,
   source,
+  skillAssignmentId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Only shown for the coach's roster-wide calendar. */
   athleteName?: string;
   source: { skillProgramId: number; skillProgramDayId: number };
+  /** The athlete's skill assignment this day is being viewed through, when
+   * known. It is what makes the comment thread below possible -- the coach
+   * half of the skill-day form-check conversation (GET/POST
+   * /api/coach/skill-assignments/:assignmentId/days/:dayId/comments) had no
+   * client caller at all, so an athlete could post a video question on a
+   * skill day and the coach could never see or answer it. */
+  skillAssignmentId?: number;
 }) {
   const { data: coachProgram } = useQuery<any>({
     queryKey: ["/api/coach/skill-programs", source.skillProgramId],
@@ -126,6 +135,17 @@ export function SkillDayViewDialog({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {skillAssignmentId != null && (
+          <div className="mt-4 border-t border-border pt-4">
+            <WorkoutCommentThread
+              role="coach"
+              kind="skill"
+              assignmentId={skillAssignmentId}
+              programDayId={source.skillProgramDayId}
+            />
           </div>
         )}
       </DialogContent>

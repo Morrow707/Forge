@@ -84,3 +84,45 @@ describe("no admin page is reachable only by typing the URL", () => {
     expect(orphans, `admin pages with no way in: ${orphans.join(", ")}`).toEqual([]);
   });
 });
+
+// EVERY BUILT COMPONENT IS ACTUALLY MOUNTED.
+//
+// ResearchConsentControl was the whole coach-relayed research-consent flow -- badge, consent
+// text dialog, the required "who gave this answer" field, the PUT behind it -- exported from
+// athlete-status-badges.tsx and imported by nothing. Its five siblings in the same file are all
+// mounted on the coach's athlete-detail page; it was not. Since a minor's research consent can
+// only be recorded this way, the feature was not merely hidden, it was impossible.
+//
+// A component with no importer compiles, typechecks and ships, so nothing but a test catches it.
+describe("no component is built and then never mounted", () => {
+  it("finds an importer outside its own file for every exported component", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const { execSync } = await import("node:child_process");
+
+    // Deliberate exceptions, each with a reason.
+    const UNMOUNTED_ON_PURPOSE = new Set([
+      // A shared button for the photo-import dialogs that each dialog ended up spelling
+      // inline instead. Leftover, not a missing feature -- removing it is a separate call.
+      "AnalyzeButton",
+    ]);
+
+    const files = readdirSync("client/src/components")
+      .filter((f) => f.endsWith(".tsx"))
+      .map((f) => `client/src/components/${f}`);
+
+    const unmounted: string[] = [];
+    for (const file of files) {
+      const src = readFileSync(file, "utf8");
+      for (const m of src.matchAll(/^export function ([A-Z]\w+)/gm)) {
+        const name = m[1];
+        if (UNMOUNTED_ON_PURPOSE.has(name)) continue;
+        const hits = execSync(
+          `grep -rl '\\b${name}\\b' client/src --include=*.tsx --include=*.ts | grep -v '^${file}$' || true`,
+          { encoding: "utf8" },
+        ).trim();
+        if (!hits) unmounted.push(`${name} (${file})`);
+      }
+    }
+    expect(unmounted, `components nothing imports: ${unmounted.join(", ")}`).toEqual([]);
+  });
+});

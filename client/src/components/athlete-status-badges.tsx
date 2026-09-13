@@ -262,16 +262,19 @@ export function TrackingOptOutToggle({
 // coach ticking a box is not consent -- a named guardian saying yes, and
 // the coach recording it, is. Withdrawing is one click, since making it
 // harder to take back than to give would be exactly backwards.
-export function ResearchConsentControl({
-  athleteId,
-  granted,
-}: {
-  athleteId: number;
-  granted: boolean;
-}) {
+export function ResearchConsentControl({ athleteId }: { athleteId: number }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [relayedFrom, setRelayedFrom] = useState("");
+
+  // Reads its own state, the way GuardianNoticeBadge above does, rather than
+  // taking it as a prop: the athlete-detail payload does not carry
+  // researchDataConsent, and a prop the only caller cannot supply is how this
+  // control came to be written, exported and then mounted nowhere.
+  const { data: consent } = useQuery<{ granted: boolean; grantedAt: string | null }>({
+    queryKey: [`/api/coach/roster/${athleteId}/research-consent`],
+  });
+  const granted = consent?.granted ?? false;
 
   const { data: consentText } = useQuery<{ text: string }>({
     queryKey: ["/api/research-consent/text"],

@@ -25,7 +25,7 @@ import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
 import { WellnessHistoryDialog } from "@/components/wellness-history-dialog";
 import { AcwrHistoryDialog } from "@/components/acwr-history-dialog";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
-import { HealthStatusToggle, WellnessBadge, AcwrBadge, GuardianNoticeBadge, TrackingOptOutToggle, type HealthStatus } from "@/components/athlete-status-badges";
+import { HealthStatusToggle, WellnessBadge, AcwrBadge, GuardianNoticeBadge, TrackingOptOutToggle, ResearchConsentControl, type HealthStatus } from "@/components/athlete-status-badges";
 import { formatHeight } from "@/components/profile-fields-form";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
@@ -304,6 +304,7 @@ export default function AthleteDetailPage() {
                   <AcwrBadge entry={acwr} onClick={() => setAcwrOpen(true)} />
                   <GuardianNoticeBadge athleteId={athlete.id} />
                   <TrackingOptOutToggle athleteId={athlete.id} trackingOptOut={athlete.trackingOptOut ?? false} />
+                  <ResearchConsentControl athleteId={athlete.id} />
                 </div>
                 <p className="text-sm text-muted-foreground">{athlete.email}</p>
                 {(athlete.sport || athlete.position) && (
