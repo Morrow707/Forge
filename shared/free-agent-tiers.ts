@@ -48,6 +48,26 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
   },
 };
 
+/**
+ * What a SKU includes, with no environment switches in it at all.
+ *
+ * Separate from server/billing.ts's getFreeAgentEntitlements, which answers a
+ * different question: this one is "what does this tier buy", a property of the
+ * price list above; that one is "what may this account do right now", which also
+ * depends on the beta flag, an active trial and BILLING_ENFORCEMENT_ENABLED.
+ *
+ * Route gating needs this one inside its own BILLING_LIVE branch. Calling the other
+ * there would hand every account unlimited access whenever enforcement is off,
+ * which is a different switch from the one that decides whether checkout exists.
+ */
+export function entitlementsForFreeAgentTier(
+  tier: string | null | undefined,
+): { hasAiChat: boolean; hasVideoFormCheck: boolean } {
+  const def = tier ? FREE_AGENT_TIERS[tier as FreeAgentTierId] : null;
+  if (!def) return { hasAiChat: false, hasVideoFormCheck: false };
+  return { hasAiChat: def.hasAiChat, hasVideoFormCheck: def.hasVideoFormCheck };
+}
+
 // Ordered cheapest-to-priciest, for rendering the /pricing page and the admin assignment
 // dropdown in a sensible order without re-sorting.
 //

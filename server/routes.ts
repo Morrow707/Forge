@@ -67,7 +67,11 @@ import {
   getRecentSystemEvents,
   clearSystemEvent,
 } from "./system-events";
-import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
+import {
+  FREE_AGENT_TIERS,
+  entitlementsForFreeAgentTier,
+  type FreeAgentTierId,
+} from "@shared/free-agent-tiers";
 import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
 import { verifyMediaUrl } from "./media-url-signing";
 import { shouldTouchLastSeen } from "./session-tracking";
@@ -645,7 +649,23 @@ async function hasAthletePaidForAiAccess(
     if (!sub || sub.accountType !== "free_agent") return false;
     if (!["trialing", "active", "past_due"].includes(sub.status)) return false;
     if (sub.status === "trialing") return true;
-    return entitlement === "strengthAi" ? true : sub.tier === "pro";
+
+    // The SKU they actually bought decides this, not the two-value base/pro
+    // column. subscriptions.tier only ever holds "base" or "pro", so the old
+    // `strengthAi ? true : tier === "pro"` handed a $4.99 Basic subscriber the AI
+    // chat coach, the AI program builder and the nutrition Q&A -- the three things
+    // Basic is priced to exclude and whose description says "No AI coach". It also
+    // meant two entitlement models existed for one product, which is how the Stripe
+    // webhook came to write the one nothing reads.
+    //
+    // Skills AI rides with the AI chat entitlement because there is no separate
+    // skills SKU to buy: FREE_AGENT_TIERS has exactly three, and AI Coach's own
+    // description is "AI chat coach and AI program builder", which is what the
+    // skills builder is. Video stays its own upgrade, which is the split the price
+    // list actually sells.
+    const account = await storage.getFreeAgentBillingAccount(athleteId);
+    const entitlements = entitlementsForFreeAgentTier(account?.freeAgentTier ?? null);
+    return entitlement === "video" ? entitlements.hasVideoFormCheck : entitlements.hasAiChat;
   }
   return COMPED_FREE_AGENT_ENTITLEMENTS[email]?.has(entitlement) ?? false;
 }

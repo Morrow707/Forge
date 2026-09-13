@@ -129,9 +129,11 @@ export function tierForAppleProductId(productId: string): FreeAgentTierId | null
 // purpose (Coaches Corner access). Multiple Free Agent SKUs can carry the
 // same entitlement: ai_coach_video includes video form-check (see
 // FREE_AGENT_TIERS), so it grants "pro" here, matching
-// hasAthletePaidForAiAccess's existing sub.tier === "pro" check in
-// routes.ts rather than introducing a second vocabulary for the same
-// column.
+// the subscription row's own base/pro column, which is what the coach-side
+// Coaches Corner gate still reads. Free Agent AI access no longer consults it
+// at all -- hasAthletePaidForAiAccess reads the purchased SKU through
+// entitlementsForFreeAgentTier, since base/pro cannot express three tiers --
+// so this is now only about keeping the column meaningful, not about gating.
 export function entitlementTierForFreeAgentTier(tier: FreeAgentTierId): "base" | "pro" {
   return FREE_AGENT_TIERS[tier].hasVideoFormCheck ? "pro" : "base";
 }

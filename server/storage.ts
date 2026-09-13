@@ -3173,6 +3173,22 @@ export const storage = {
     return row ?? null;
   },
 
+  /** The three columns a Free Agent entitlement decision reads: the SKU they
+   * bought, the beta flag, and any active trial. A narrow select rather than the
+   * whole user row, since this is consulted on every AI-gated route. */
+  async getFreeAgentBillingAccount(athleteId: number) {
+    const [row] = await db
+      .select({
+        freeAgentTier: users.freeAgentTier,
+        isBetaAccount: users.isBetaAccount,
+        trialExpiresAt: users.trialExpiresAt,
+      })
+      .from(users)
+      .where(eq(users.id, athleteId))
+      .limit(1);
+    return row ?? null;
+  },
+
   async getUserByCoachCode(code: string) {
     return db.query.users.findFirst({
       where: eq(users.coachCode, code.toUpperCase()),

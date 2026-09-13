@@ -2,7 +2,11 @@ import Stripe from "stripe";
 import { storage } from "./storage";
 import { coachBasePriceId, freeAgentPriceId } from "./stripe-prices";
 import { BILLING_TIERS, type AddOnId, type BillingTierId } from "@shared/billing-tiers";
-import { FREE_AGENT_TIERS, type FreeAgentTierId } from "@shared/free-agent-tiers";
+import {
+  FREE_AGENT_TIERS,
+  entitlementsForFreeAgentTier,
+  type FreeAgentTierId,
+} from "@shared/free-agent-tiers";
 import { entitlementTierForFreeAgentTier } from "./apple-iap";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON, type VideoRetentionLimits } from "@shared/video-retention";
 
@@ -108,19 +112,16 @@ export interface FreeAgentBillingAccount {
   trialExpiresAt: Date | null;
 }
 
-/** Family resolves identically to ai_coach_video -- Family only changes how
- * many athlete profiles one payment covers (see users.familyGroupId), not
- * what any one member can do. */
+// entitlementsForFreeAgentTier lives in shared/free-agent-tiers.ts, next to the
+// price list it reads -- it is a property of the SKUs, not of this module, and
+// keeping it there lets it be tested without a database.
 export function getFreeAgentEntitlements(account: FreeAgentBillingAccount): FreeAgentEntitlements {
   const trialActive = account.trialExpiresAt != null && account.trialExpiresAt.getTime() > Date.now();
   if (!ENFORCEMENT_ENABLED || account.isBetaAccount || trialActive) {
     return UNLIMITED_FREE_AGENT_ENTITLEMENTS;
   }
 
-  const tier = account.freeAgentTier ? FREE_AGENT_TIERS[account.freeAgentTier as FreeAgentTierId] : null;
-  if (!tier) return NONE_FREE_AGENT_ENTITLEMENTS;
-
-  return { hasAiChat: tier.hasAiChat, hasVideoFormCheck: tier.hasVideoFormCheck };
+  return entitlementsForFreeAgentTier(account.freeAgentTier);
 }
 
 // ---------- Form-check video retention ----------
@@ -469,13 +470,13 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       // who paid for AI Coach + Video would be entitled to the cheapest
       // tier -- the money arrives and the access does not match it.
       //
-      // subscriptions.tier is the column every gate actually reads
-      // (hasAthletePaidForAiAccess and hasCoachesCornerAccess in routes.ts both
-      // test sub.tier === "pro"); users.freeAgentTier is read back by the admin
-      // screens but gates nothing. Writing only freeAgentTier left the whole
-      // Stripe web-checkout path paying money for no access -- the Apple IAP
-      // path has always written both (storage.applyAppleIapVerification), so
-      // this mirrors it rather than inventing a second vocabulary.
+      // users.freeAgentTier is what every Free Agent AI gate reads, through
+      // entitlementsForFreeAgentTier -- base/pro cannot express three SKUs.
+      // subscriptions.tier is still written and still read by the coach-side
+      // Coaches Corner gate, so both go in. Writing neither, which is what this
+      // handler originally did beyond the status flip, left the whole Stripe
+      // web-checkout path paying money for no access; the Apple IAP path has
+      // always written both (storage.applyAppleIapVerification).
       const purchasedFreeAgentTier =
         kind === "free_agent_tier" && session.metadata?.tier && session.metadata.tier in FREE_AGENT_TIERS
           ? (session.metadata.tier as FreeAgentTierId)
