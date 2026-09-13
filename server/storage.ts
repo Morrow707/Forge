@@ -3786,7 +3786,7 @@ export const storage = {
     const tier = derivePrivacyTier(dateOfBirth);
     await db
       .update(users)
-      .set({ dateOfBirth, requiresGuardianNotice: tier === "tier2_teen_13_17" })
+      .set({ dateOfBirth, requiresGuardianNotice: tier !== "tier3_adult_18plus" })
       .where(eq(users.id, userId));
     return { ok: true };
   },
@@ -23965,7 +23965,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       // regardless of which tier the athlete lands in, so this is always
       // true for the claim-code path, not just for Tier 1.
       provisionedViaCoachConsent: true,
-      requiresGuardianNotice: tier === "tier2_teen_13_17",
+      // Any minor, not just 13-17 -- see the same widening in auth.ts's
+      // signup route.
+      requiresGuardianNotice: tier !== "tier3_adult_18plus",
       // A coach's own attestation (coach_coppa_consent, logged just below)
       // is the only consent behind a Tier-1 account -- not a parent's own
       // verified say-so, since there's no verified-parent step in this
@@ -24150,6 +24152,29 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const athlete = await this.getUser(invite.athleteId);
     if (!athlete) return { error: "This athlete's account no longer exists." as const };
 
+    // For an under-13 athlete, the guardian claiming this invite IS the
+    // consent behind the account -- there is no coach attestation on a
+    // self-signup, and the athlete cannot consent for themselves. Logged
+    // against the ATHLETE (whose account it authorises) and attributed to
+    // the guardian, with the Parental Notice they were sent as the document
+    // text, so the record says who agreed to what and when. Best-effort
+    // ordering only in the sense that it runs after the link exists: a
+    // failure here throws and the route reports it, rather than leaving a
+    // Tier 1 account live with no consent row behind it.
+    const logGuardianCoppaConsent = async (guardianId: number) => {
+      if (!athlete.dateOfBirth) return;
+      if (derivePrivacyTier(athlete.dateOfBirth) !== "tier1_under13") return;
+      const notice = await this.getLegalDocument("parental_notice");
+      await this.logConsentRecord({
+        userId: athlete.id,
+        consentType: "guardian_coppa_consent",
+        documentText: notice?.content ?? agreedToTermsText,
+        givenByUserId: guardianId,
+        ipAddress: consentContext?.ipAddress,
+        userAgent: consentContext?.userAgent,
+      });
+    };
+
     const existingUser = await this.getUserByEmail(invite.email);
     if (existingUser) {
       // An existing account of any role can take on a guardian link, because
@@ -24197,6 +24222,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           .set({ claimedAt: new Date() })
           .where(eq(guardianInvites.id, invite.id));
       });
+      await logGuardianCoppaConsent(existingUser.id);
       return { user: existingUser, athleteId: invite.athleteId };
     }
 
@@ -24229,6 +24255,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       ipAddress: consentContext?.ipAddress,
       userAgent: consentContext?.userAgent,
     });
+    await logGuardianCoppaConsent(guardian.id);
 
     return { user: guardian, athleteId: invite.athleteId };
   },
@@ -24793,6 +24820,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       | "terms_of_service"
       | "biometric_waiver"
       | "coach_coppa_consent"
+      | "guardian_coppa_consent"
       | "parental_notice_ack"
       | "institutional_agreement"
       | "research_data_use";

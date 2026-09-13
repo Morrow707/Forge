@@ -4997,6 +4997,11 @@ export const consentTypeEnum = pgEnum("consent_type", [
   "terms_of_service",
   "biometric_waiver",
   "coach_coppa_consent",
+  // The parent/guardian's OWN consent for a Tier 1 (under-13) athlete,
+  // logged against the athlete when the guardian claims their linked
+  // account. Distinct from coach_coppa_consent, which is a coach's
+  // attestation on a provisional slot and is not a parent's own say-so.
+  "guardian_coppa_consent",
   "parental_notice_ack",
   "institutional_agreement",
   // Agreement that this athlete's de-identified data may be included in a

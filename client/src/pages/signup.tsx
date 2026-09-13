@@ -272,8 +272,8 @@ export default function SignupPage() {
                 />
                 {role === "athlete" && (
                   <p className="text-xs text-muted-foreground">
-                    Athletes under 13 can't self-register -- ask your coach or program to set up
-                    your account instead.
+                    Under 18? We'll ask for a parent or guardian's email next -- they set up their
+                    own linked account before you can start training.
                   </p>
                 )}
               </div>

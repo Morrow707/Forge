@@ -511,20 +511,19 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Height and weight are required." });
       }
 
-      // Tier 1 (under 13) athletes can't self-register at all -- see
-      // shared/privacy-tiers.ts's own comment on why this specific gate
-      // exists and what still needs legal review around it. A coach role
-      // signup skips this: a coach account for a 12-year-old isn't a real
-      // case this app needs to handle, so the DOB is collected and stored
-      // either way but only athlete self-serve is actually gated on it.
+      // Under-13 athletes CAN sign themselves up, and are held to exactly
+      // the same rule every other minor is: a guardian email is required
+      // below, the account is locked (see the minor gate in routes.ts) until
+      // that guardian claims their own linked account, and the guardian's
+      // claim is what gets logged as the consent behind a Tier 1 account
+      // (guardian_coppa_consent, see storage.claimGuardianInvite). This
+      // route used to refuse them outright and send them to a coach, which
+      // left a 12-year-old with no coach no way in at all. The two
+      // Tier-1-specific cautions the coach-provisioned path already applies
+      // are applied here too: camera-tracking collection defaults OFF until
+      // a guardian turns it on, and research consent is never self-given.
+      // See shared/privacy-tiers.ts on what still needs legal review.
       const tier = derivePrivacyTier(dateOfBirth);
-      if (role === "athlete" && tier === "tier1_under13") {
-        return res.status(403).json({
-          message:
-            "Athletes under 13 can't create their own account. Ask your coach or program to set one up for you.",
-          code: "coach_provisioning_required",
-        });
-      }
 
       // A minor athlete's profile needs an active guardian account before
       // anything new can be assigned to them (see
@@ -576,7 +575,15 @@ export function setupAuth(app: Express) {
         // own comment for why this never gets touched again even if the
         // athlete's `sport` profile field changes later.
         signupSport: role === "athlete" ? sport : null,
-        requiresGuardianNotice: role === "athlete" && tier === "tier2_teen_13_17",
+        // Every minor, not just 13-17: an under-13 athlete needs the
+        // coach-facing "get a guardian waiver on file" nudge at least as
+        // much as a 15-year-old does.
+        requiresGuardianNotice: role === "athlete" && tier !== "tier3_adult_18plus",
+        // Same caution as the coach-provisioned Tier 1 path (see
+        // storage.claimProvisionalAthlete): nobody with authority to say yes
+        // has said yes to camera capture yet, so it starts off and the
+        // guardian turns it on once they have claimed their account.
+        trackingOptOut: role === "athlete" && tier === "tier1_under13",
         agreedToTermsAt: new Date(),
         agreedToTermsText,
       });

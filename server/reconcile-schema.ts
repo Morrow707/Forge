@@ -3014,6 +3014,14 @@ BEGIN
   END IF;
 END $$;
 
+-- A parent/guardian's own consent for an under-13 athlete, logged when they
+-- claim their linked account (see storage.claimGuardianInvite). Under-13
+-- athletes can self-register now, so the only consent behind such an account
+-- is no longer always a coach's attestation.
+DO $$ BEGIN
+  ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'guardian_coppa_consent';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'weight_unit_lbs_default_2026_09_09') THEN

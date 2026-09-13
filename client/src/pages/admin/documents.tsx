@@ -357,9 +357,10 @@ export default function AdminDocuments() {
               <DraftBadge />
             </CardTitle>
             <CardDescription>
-              Addressed to a parent, not the athlete -- what a Tier 2 (13-17, self-registering) or
-              Tier 1 (under-13, coach-provisioned) athlete's parent/guardian would actually
-              receive. This is the content half of the guardian-notice system (see
+              Addressed to a parent, not the athlete -- what any minor athlete's parent or guardian
+              actually receives, whether the athlete signed themselves up or a coach created the
+              slot. For an under-13 athlete it is also the document their guardian's consent is
+              recorded against. This is the content half of the guardian-notice system (see
               users.requiresGuardianNotice and GUARDIAN_NOTICE_LIVE in shared/privacy-tiers.ts);
               its content is embedded and delivered today in the guardian-invite email sent at
               signup (see issueGuardianInviteIfNeeded in server/auth.ts). Not reviewed by counsel.
