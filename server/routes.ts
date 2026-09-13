@@ -823,6 +823,16 @@ async function assertCoachOwnsProgram(coachId: number, programId: number) {
   return program;
 }
 
+// The Forge library is platform content authored by admins collectively, so one
+// admin has to be able to READ another's rows; editing stays with the author, which
+// is what the PUT/DELETE routes' own assertCoachOwns* guards enforce. Without this,
+// a second admin account saw an empty Forge Library, Forge Skill Bank and Forge
+// Programs, and any direct URL to an existing Forge row 404'd.
+async function adminReadableOwnerIds(adminId: number): Promise<number[]> {
+  const { readableIds } = await storage.libraryOwnerIds(adminId, { includeAllAdmins: true });
+  return readableIds;
+}
+
 async function assertCoachOwnsSkillProgram(coachId: number, skillProgramId: number) {
   const program = await storage.getSkillProgramFull(skillProgramId);
   if (!program) return null;
@@ -1881,7 +1891,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/exercises", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getExercisesByCoach(user.id);
+    const list = await storage.getExercisesByCoach(user.id, { includeAllAdmins: true });
     res.json(list);
   });
 
@@ -1889,7 +1899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const exercise = await storage.getExerciseDetail(id, user.id);
-    if (!exercise || exercise.coachId !== user.id) {
+    if (!exercise || !(await adminReadableOwnerIds(user.id)).includes(exercise.coachId)) {
       return res.status(404).json({ message: "Exercise not found" });
     }
     res.json(exercise);
@@ -1953,7 +1963,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/skill-exercises", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getSkillExercisesByCoach(user.id);
+    const list = await storage.getSkillExercisesByCoach(user.id, { includeAllAdmins: true });
     res.json(list);
   });
 
@@ -1961,7 +1971,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const skillExercise = await storage.getSkillExerciseDetail(id, user.id);
-    if (!skillExercise || skillExercise.coachId !== user.id) {
+    if (
+      !skillExercise ||
+      !(await adminReadableOwnerIds(user.id)).includes(skillExercise.coachId)
+    ) {
       return res.status(404).json({ message: "Skill exercise not found" });
     }
     res.json(skillExercise);
@@ -2006,16 +2019,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/programs", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getProgramsByCoach(user.id);
+    const list = await storage.getProgramsByCoach(user.id, { includeAllAdmins: true });
     res.json(list);
   });
 
   app.get("/api/admin/programs/:id", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
-    const program = await assertCoachOwnsProgram(user.id, id);
-    if (!program) return res.status(404).json({ message: "Program not found" });
-    res.json({ ...program, isForgeOfficial: true, ownerLabel: "FORGE", editable: true });
+    // Readable across admins; editable only by the author, which the PUT/DELETE
+    // routes below still enforce with assertCoachOwnsProgram.
+    const program = await storage.getProgramFull(id);
+    if (!program || !(await adminReadableOwnerIds(user.id)).includes(program.coachId)) {
+      return res.status(404).json({ message: "Program not found" });
+    }
+    res.json({
+      ...program,
+      isForgeOfficial: true,
+      ownerLabel: "FORGE",
+      editable: program.coachId === user.id,
+    });
   });
 
   app.post("/api/admin/programs", requireRole("admin"), async (req, res) => {

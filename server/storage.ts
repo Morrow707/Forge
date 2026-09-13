@@ -9342,14 +9342,39 @@ Hard rules, no exceptions:
   // Exercises owned by a specific user's whole staff -- an admin's own bank
   // is exactly their Forge library, nothing shared in (admins have no
   // staff, so getEffectiveCoachIds is a no-op for them).
-  async getExercisesByCoach(coachId: number) {
-    const coachIds = await this.getEffectiveCoachIds(coachId);
+  /**
+   * The two id sets a library list needs: who owns the rows you may SEE, and
+   * whose rows you may EDIT.
+   *
+   * For a coach they are the same thing -- yourself plus your staff. For an admin
+   * they are not: the Forge library is platform content authored by admins
+   * collectively, so a second admin has to see all of it, while editing stays with
+   * whoever wrote the row. Before this, every admin library list filtered to the
+   * signed-in admin's own effective coach ids, so a newly promoted admin opened
+   * Forge Library, Forge Skill Bank and Forge Programs and saw the empty state --
+   * content coaches could see, and any direct URL to an existing Forge row 404'd.
+   */
+  async libraryOwnerIds(
+    userId: number,
+    opts?: { includeAllAdmins?: boolean },
+  ): Promise<{ readableIds: number[]; editableIds: number[] }> {
+    const editableIds = await this.getEffectiveCoachIds(userId);
+    if (!opts?.includeAllAdmins) return { readableIds: editableIds, editableIds };
+    const admins = await this.getAdmins();
+    return {
+      readableIds: Array.from(new Set([...editableIds, ...admins.map((a) => a.id)])),
+      editableIds,
+    };
+  },
+
+  async getExercisesByCoach(coachId: number, opts?: { includeAllAdmins?: boolean }) {
+    const { readableIds, editableIds } = await this.libraryOwnerIds(coachId, opts);
     const rows = await db.query.exercises.findMany({
-      where: inArray(exercises.coachId, coachIds),
+      where: inArray(exercises.coachId, readableIds),
       orderBy: desc(exercises.createdAt),
       with: { coach: true },
     });
-    return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
+    return rows.map((ex) => this.withOwnership(ex, coachId, editableIds));
   },
 
   async getExerciseDetail(id: number, requestingUserId: number) {
@@ -9616,14 +9641,14 @@ Hard rules, no exceptions:
   // Admin counterpart to getExercisesByCoach -- an admin's own skill bank
   // *is* the Forge skill library, everything in it automatically shared
   // read-only with every coach (see getVisibleSkillExercisesForCoach).
-  async getSkillExercisesByCoach(coachId: number) {
-    const coachIds = await this.getEffectiveCoachIds(coachId);
+  async getSkillExercisesByCoach(coachId: number, opts?: { includeAllAdmins?: boolean }) {
+    const { readableIds, editableIds } = await this.libraryOwnerIds(coachId, opts);
     const rows = await db.query.skillExercises.findMany({
-      where: inArray(skillExercises.coachId, coachIds),
+      where: inArray(skillExercises.coachId, readableIds),
       orderBy: desc(skillExercises.createdAt),
       with: { coach: true },
     });
-    return rows.map((ex) => this.withOwnership(ex, coachId, coachIds));
+    return rows.map((ex) => this.withOwnership(ex, coachId, editableIds));
   },
 
   async getSkillExerciseDetail(id: number, requestingUserId: number) {
@@ -12824,10 +12849,10 @@ Hard rules, no exceptions:
   // A single owner's (and their staff's) own programs -- used by both a
   // coach's private bank and an admin's Forge program library (same query,
   // different owner id; admins have no staff so this is a no-op for them).
-  async getProgramsByCoach(coachId: number) {
-    const coachIds = await this.getEffectiveCoachIds(coachId);
+  async getProgramsByCoach(coachId: number, opts?: { includeAllAdmins?: boolean }) {
+    const { readableIds } = await this.libraryOwnerIds(coachId, opts);
     const progs = await db.query.programs.findMany({
-      where: inArray(programs.coachId, coachIds),
+      where: inArray(programs.coachId, readableIds),
       with: {
         weeks: { with: { days: true } },
         assignments: true,
