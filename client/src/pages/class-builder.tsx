@@ -1115,6 +1115,38 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
     onError: (err: ApiError) => toast.error(err.message || "Could not reset progress"),
   });
 
+  // The coach half of the "Coach unlocks manually" unlock rule. The class builder
+  // has always offered that rule (UNLOCK_RULE_OPTIONS) and the server has always
+  // had the only escape hatch that can open such a lesson -- with no client caller,
+  // so choosing the rule locked the lesson permanently for every athlete.
+  //
+  // Coach-side only: the unlock route is /api/coach/..., and the admin builder
+  // (apiBase "/api/admin") has no twin, same shape as the other coach-only
+  // affordances on this page.
+  const canUnlock = apiBase === "/api/coach";
+  const unlockMutation = useMutation({
+    mutationFn: async ({ athleteId, lessonId }: { athleteId: number; lessonId: number }) => {
+      await apiRequest("POST", `${apiBase}/classes/${classId}/lessons/${lessonId}/unlock`, {
+        athleteId,
+      });
+    },
+    // The route answers with one athlete's progress, not the whole roster, so this
+    // refetches rather than writing the response into the roster cache.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: rosterQueryKey });
+      toast.success("Lesson unlocked");
+      setUnlockTarget(null);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not unlock that lesson"),
+  });
+
+  const [unlockTarget, setUnlockTarget] = useState<{
+    athleteId: number;
+    athleteName: string;
+    lessonId: number;
+    lessonNumber: number;
+    lessonTitle: string;
+  } | null>(null);
   const [resetClassTarget, setResetClassTarget] = useState<{
     athleteId: number;
     athleteName: string;
@@ -1203,11 +1235,17 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
                 <div className="flex flex-wrap gap-1.5">
                   {entry.lessons.map((l) => {
                     const hasProgress = !!(l.contentCompletedAt || l.quizPassedAt || l.quizPerfectAt);
+                    const isLocked = l.state === "locked" || l.state === "locked_preview";
+                    const unlockable = canUnlock && isLocked;
                     return (
                       <button
                         key={l.lessonId}
                         type="button"
-                        disabled={!hasProgress || resetMutation.isPending}
+                        disabled={
+                          (!hasProgress && !unlockable) ||
+                          resetMutation.isPending ||
+                          unlockMutation.isPending
+                        }
                         title={`Lesson ${l.lessonNumber}: ${l.title} — ${
                           l.quizPerfectAt
                             ? "perfect quiz score"
@@ -1216,19 +1254,31 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
                               : l.contentCompletedAt
                                 ? "content read, quiz not yet passed"
                                 : l.state
-                        }${hasProgress ? " (click to reset this lesson)" : ""}`}
-                        onClick={() =>
-                          setResetLessonTarget({
+                        }${
+                          hasProgress
+                            ? " (click to reset this lesson)"
+                            : unlockable
+                              ? " (click to unlock it for them)"
+                              : ""
+                        }`}
+                        onClick={() => {
+                          const target = {
                             athleteId: entry.athleteId,
                             athleteName: entry.athleteName,
                             lessonId: l.lessonId,
                             lessonNumber: l.lessonNumber,
                             lessonTitle: l.title,
-                          })
-                        }
+                          };
+                          // A lesson with progress resets; a locked one unlocks. They
+                          // cannot both apply to the same chip -- a locked lesson has
+                          // no progress to reset by definition.
+                          if (hasProgress) setResetLessonTarget(target);
+                          else if (unlockable) setUnlockTarget(target);
+                        }}
                         className={cn(
                           "relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[10px] font-semibold",
-                          hasProgress ? "cursor-pointer" : "cursor-default",
+                          hasProgress || unlockable ? "cursor-pointer" : "cursor-default",
+                          unlockable && "border-dashed",
                           l.state === "active"
                             ? "border-primary/40 bg-primary/10 text-primary"
                             : l.state === "ready"
@@ -1251,6 +1301,26 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={unlockTarget !== null}
+        onOpenChange={(o) => !o && setUnlockTarget(null)}
+        title="Unlock this lesson?"
+        description={
+          unlockTarget
+            ? `Open Lesson ${unlockTarget.lessonNumber} (${unlockTarget.lessonTitle}) for ${unlockTarget.athleteName} now, ahead of the class's pacing rules. A priced lesson still has to be bought from their own account.`
+            : ""
+        }
+        confirmLabel="Unlock"
+        isPending={unlockMutation.isPending}
+        onConfirm={() =>
+          unlockTarget &&
+          unlockMutation.mutate({
+            athleteId: unlockTarget.athleteId,
+            lessonId: unlockTarget.lessonId,
+          })
+        }
+      />
 
       <ConfirmDialog
         open={resetClassTarget !== null}
