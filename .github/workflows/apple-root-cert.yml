@@ -1,0 +1,219 @@
+name: Fetch Apple root certificate
+
+# Puts server/apple-root-certs/AppleRootCA-G3.cer in the repo, which is the
+# one thing standing between Apple In-App Purchase being wired and being
+# usable: server/apple-iap.ts builds its SignedDataVerifier from that file,
+# and without it verifyAppleTransaction and verifyAppleNotification both fail
+# closed, so every StoreKit purchase and every Server Notification V2 is
+# rejected. See server/apple-root-certs/README.md.
+#
+# It exists as a workflow because the dev/CI sandbox this repo is usually
+# worked on from cannot reach apple.com (the outbound proxy 403s the CONNECT),
+# so the one-line curl in that README needs a machine that can. Run it once;
+# after the file is committed there is nothing to re-run until Apple rotates
+# the root, which for G3 is not until 2039.
+#
+# WHAT MAKES THE COMMITTED BYTES TRUSTWORTHY. The certificate is public and
+# non-secret -- it is the root every Apple device already trusts -- but
+# "download a binary and commit it unread" is still not something CI should
+# do on trust alone, so this job never takes the download's word for it:
+#
+#   1. It reads the SAME certificate out of the macOS runner's own system
+#      trust store, which Apple ships as part of the OS. That copy never
+#      crosses the network.
+#   2. It downloads the published copy from apple.com over TLS.
+#   3. It commits ONLY if those two independent copies are byte-identical,
+#      and then only after checking the certificate is self-signed, carries
+#      Apple's exact distinguished name, and is inside its validity window.
+#
+# A forged download would have to match a file that came off Apple's own
+# operating system to get through. The SHA-256 of what was committed is
+# printed in the log and recorded in the commit message either way, so it can
+# be compared against Apple's published fingerprint after the fact.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha256:
+        description: "Optional. Apple's published SHA-256 fingerprint of the DER certificate, lowercase hex, no colons. If given, the job fails unless both copies match it."
+        required: false
+        type: string
+
+concurrency:
+  group: apple-root-cert
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-and-commit:
+    # macOS specifically, and not to build anything: the runner's own
+    # SystemRootCertificates keychain is the second, offline source this job
+    # checks the download against. A ubuntu runner has no Apple trust store,
+    # which would leave the download unverifiable except against a
+    # fingerprint typed in by hand.
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the certificate out of the runner's own Apple trust store
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/appleroot
+          # -c matches on common name; "Apple Root CA - G3" is distinct from
+          # "Apple Root CA" and "Apple Root CA - G2", but the match is a
+          # substring one, so every hit is re-checked by exact CN below.
+          security find-certificate -a -c "Apple Root CA - G3" -p \
+            /System/Library/Keychains/SystemRootCertificates.keychain \
+            > /tmp/appleroot/keychain.pem
+
+          if [ ! -s /tmp/appleroot/keychain.pem ]; then
+            echo "::error::No 'Apple Root CA - G3' in the runner's system trust store. Not committing anything."
+            exit 1
+          fi
+
+          # Split the PEM bundle and keep only the certificate whose subject
+          # CN is exactly Apple Root CA - G3. awk rather than csplit: BSD
+          # csplit (which is what the macOS runner has) takes neither -z nor
+          # -b, so the GNU spelling would fail here.
+          awk '/-----BEGIN CERTIFICATE-----/{n++} n>0 {print > ("/tmp/appleroot/cert-" n ".pem")}' \
+            /tmp/appleroot/keychain.pem
+
+          found=""
+          for f in /tmp/appleroot/cert-*.pem; do
+            [ -e "$f" ] || continue
+            subj=$(openssl x509 -in "$f" -noout -subject -nameopt rfc2253 2>/dev/null | sed 's/^subject= *//')
+            case "$subj" in
+              *"CN=Apple Root CA - G3,"*)
+                if [ -n "$found" ]; then
+                  echo "::error::More than one 'Apple Root CA - G3' in the trust store. Refusing to guess."
+                  exit 1
+                fi
+                found="$f"
+                ;;
+            esac
+          done
+          if [ -z "$found" ]; then
+            echo "::error::Trust store had no certificate whose subject CN is 'Apple Root CA - G3'."
+            exit 1
+          fi
+
+          openssl x509 -in "$found" -outform DER -out /tmp/appleroot/from-keychain.cer
+          echo "Trust-store copy:"
+          openssl x509 -in "$found" -noout -subject -issuer -dates -nameopt rfc2253
+
+      - name: Download the published copy from apple.com
+        run: |
+          set -euo pipefail
+          # --proto '=https' and no -k: this must be a TLS-verified fetch or
+          # not happen at all. --location is deliberately NOT passed, so a
+          # redirect somewhere else fails rather than being followed.
+          curl --fail --silent --show-error \
+               --proto '=https' --tlsv1.2 \
+               --max-time 60 --retry 3 --retry-delay 5 \
+               -o /tmp/appleroot/downloaded.cer \
+               https://www.apple.com/certificateauthority/AppleRootCA-G3.cer
+
+          if [ ! -s /tmp/appleroot/downloaded.cer ]; then
+            echo "::error::Downloaded file is empty."
+            exit 1
+          fi
+          # Must parse as DER. A captive portal or error page fails here.
+          openssl x509 -inform DER -in /tmp/appleroot/downloaded.cer -noout -subject \
+            || { echo "::error::Downloaded bytes are not a DER certificate."; exit 1; }
+
+      - name: Require the two copies to be identical, and the certificate to be what it claims
+        id: verify
+        run: |
+          set -euo pipefail
+          cd /tmp/appleroot
+
+          keychain_sha=$(shasum -a 256 from-keychain.cer | awk '{print $1}')
+          download_sha=$(shasum -a 256 downloaded.cer | awk '{print $1}')
+          echo "trust store: $keychain_sha"
+          echo "apple.com:   $download_sha"
+
+          if [ "$keychain_sha" != "$download_sha" ]; then
+            echo "::error::The download does not match the copy in the runner's Apple trust store. Committing nothing."
+            exit 1
+          fi
+
+          expected="${{ inputs.expected_sha256 }}"
+          if [ -n "$expected" ]; then
+            expected=$(echo "$expected" | tr 'A-Z' 'a-z' | tr -d ': ')
+            if [ "$expected" != "$download_sha" ]; then
+              echo "::error::Both copies agree on $download_sha, which is not the fingerprint you pinned ($expected)."
+              exit 1
+            fi
+            echo "Matches the pinned fingerprint."
+          fi
+
+          # Self-signed, Apple's own DN, a CA, and currently valid. None of
+          # these is sufficient on its own -- anyone can self-sign a
+          # certificate carrying Apple's name -- but together with the
+          # trust-store match above they rule out committing a stale,
+          # expired or structurally wrong file.
+          subject=$(openssl x509 -inform DER -in downloaded.cer -noout -subject -nameopt rfc2253 | sed 's/^subject=//')
+          issuer=$(openssl x509 -inform DER -in downloaded.cer -noout -issuer -nameopt rfc2253 | sed 's/^issuer=//')
+          echo "subject: $subject"
+          if [ "$subject" != "$issuer" ]; then
+            echo "::error::Not self-signed: issuer is $issuer"
+            exit 1
+          fi
+          case "$subject" in
+            *"CN=Apple Root CA - G3"*"O=Apple Inc."*|*"CN=Apple Root CA - G3"*"O=Apple Inc"*) ;;
+            *) echo "::error::Unexpected subject: $subject"; exit 1 ;;
+          esac
+          openssl x509 -inform DER -in downloaded.cer -noout -checkend 0 \
+            || { echo "::error::Certificate is not currently valid."; exit 1; }
+          # -text, not -ext: the macOS runner's /usr/bin/openssl is LibreSSL,
+          # which has no -ext flag.
+          openssl x509 -inform DER -in downloaded.cer -noout -text | grep -q "CA:TRUE" \
+            || { echo "::error::Certificate is not a CA certificate."; exit 1; }
+
+          echo "sha256=$download_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Commit it, if it is not already what the repo has
+        run: |
+          set -euo pipefail
+          dest="server/apple-root-certs/AppleRootCA-G3.cer"
+          mkdir -p "$(dirname "$dest")"
+
+          if [ -f "$dest" ] && cmp -s "$dest" /tmp/appleroot/downloaded.cer; then
+            echo "The repo already has exactly these bytes. Nothing to do."
+            exit 0
+          fi
+
+          cp /tmp/appleroot/downloaded.cer "$dest"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$dest"
+          # Written line by line into a file rather than passed as one -m
+          # string: a multi-line -m would have to sit inside this block
+          # scalar, and its unindented continuation lines would end the
+          # block. printf keeps the message wrapped like every other commit
+          # in this repo.
+          msg=/tmp/appleroot/commit-msg.txt
+          {
+            echo "Add Apple's G3 root certificate, so IAP verification can run"
+            echo
+            echo "server/apple-iap.ts builds its SignedDataVerifier from this file."
+            echo "Without it verifyAppleTransaction and verifyAppleNotification both"
+            echo "failed closed, so every StoreKit purchase and every Server"
+            echo "Notification V2 was rejected no matter how the rest of the flow was"
+            echo "configured."
+            echo
+            echo "Fetched by .github/workflows/apple-root-cert.yml, which commits the"
+            echo "download only after it matches, byte for byte, the copy of the same"
+            echo "certificate held in the macOS runner's own system trust store."
+            echo
+            echo "SHA-256 (DER): ${{ steps.verify.outputs.sha256 }}"
+            echo
+            echo "The certificate is public and non-secret -- it is the root every"
+            echo "Apple device already trusts -- and belongs in the repo rather than"
+            echo "in a secret store. See server/apple-root-certs/README.md."
+          } > "$msg"
+          git commit -F "$msg"
+          git push
+          echo "Committed. SHA-256 ${{ steps.verify.outputs.sha256 }}"
