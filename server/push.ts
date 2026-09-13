@@ -27,20 +27,24 @@ export function getVapidPublicKey() {
 // don't need to know or care which transport(s) actually apply to this
 // user. A subscription/token the push service reports as gone (410 Gone /
 // 404) is removed so it's not retried forever.
-// Reports whether at least one device accepted the payload. Per-device
-// errors are still swallowed -- one dead subscription should never stop the
-// others -- but "every subscription failed" and "there were no
-// subscriptions" are no longer reported the same way as success, because
-// the retention jobs decide whether to start a deletion clock on this.
+// Reports each transport's own outcome rather than folding them into one
+// boolean. This used to return a single `web || apns` flag, and notify.ts
+// recorded that flag as one "push" delivery attempt regardless of which
+// transport(s) were actually configured or tried -- so an APNs-only
+// deployment (or one where every native token had gone stale) attributed
+// native-push failures to the Web Push badge on the admin dashboard, and a
+// working web subscription could mask a broken native one under the same
+// combined "success". Handing back both halves lets the caller count and
+// report each channel against its own badge.
 export async function sendPushToUser(
   userId: number,
   payload: { title: string; body: string; url?: string; badge?: number },
-): Promise<boolean> {
+): Promise<{ web: boolean; apns: boolean }> {
   const [web, apns] = await Promise.all([
     sendWebPushToUser(userId, payload),
     sendApnsToUser(userId, payload),
   ]);
-  return web || apns;
+  return { web, apns };
 }
 
 async function sendWebPushToUser(

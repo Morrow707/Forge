@@ -89,13 +89,13 @@ export type JobHealth = {
 
 export type HealthSnapshot = {
   integrations: Record<string, ProbeResult>;
-  delivery: { push: DeliveryRate; email: DeliveryRate };
+  delivery: { push: DeliveryRate; email: DeliveryRate; apns: DeliveryRate };
   jobs: JobHealth[];
   storage: { freeBytes: number; totalBytes: number; usedFraction: number; state: ProbeState } | null;
 };
 
 /** Record one notification send attempt against today's counters. */
-export function recordDeliveryAttempt(channel: "push" | "email", delivered: boolean): void {
+export function recordDeliveryAttempt(channel: "push" | "email" | "apns", delivered: boolean): void {
   void withPool((pool) =>
     pool.query(
       `INSERT INTO notification_delivery_daily (channel, day, attempted, delivered)
@@ -111,8 +111,13 @@ export function recordDeliveryAttempt(channel: "push" | "email", delivered: bool
   });
 }
 
-async function getDeliveryRates(): Promise<{ push: DeliveryRate; email: DeliveryRate }> {
+async function getDeliveryRates(): Promise<{
+  push: DeliveryRate;
+  email: DeliveryRate;
+  apns: DeliveryRate;
+}> {
   const empty: DeliveryRate = { attempted: 0, delivered: 0, rate: null };
+  const fallback = { push: empty, email: empty, apns: empty };
   try {
     const { rows } = await withPool((pool) =>
       pool.query(
@@ -122,7 +127,7 @@ async function getDeliveryRates(): Promise<{ push: DeliveryRate; email: Delivery
          GROUP BY channel`,
       ),
     );
-    const byChannel: Record<string, DeliveryRate> = { push: empty, email: empty };
+    const byChannel: Record<string, DeliveryRate> = { push: empty, email: empty, apns: empty };
     for (const row of rows) {
       const attempted = Number(row.attempted) || 0;
       const delivered = Number(row.delivered) || 0;
@@ -132,10 +137,14 @@ async function getDeliveryRates(): Promise<{ push: DeliveryRate; email: Delivery
         rate: attempted > 0 ? delivered / attempted : null,
       };
     }
-    return { push: byChannel.push ?? empty, email: byChannel.email ?? empty };
+    return {
+      push: byChannel.push ?? empty,
+      email: byChannel.email ?? empty,
+      apns: byChannel.apns ?? empty,
+    };
   } catch (err) {
     console.error("Delivery rate lookup failed:", err);
-    return { push: empty, email: empty };
+    return fallback;
   }
 }
 
@@ -267,7 +276,14 @@ export async function getHealthSnapshot(): Promise<HealthSnapshot> {
       ai: configured("ai", aiEnabled),
       email: fromDelivery(emailEnabled, delivery.email, failing.get("email"), "emails"),
       webPush: fromDelivery(pushEnabled, delivery.push, failing.get("webPush"), "push messages"),
-      apns: configured("apns", apnsEnabled),
+      // Judged on its own measured deliveries now, the same way webPush and
+      // email are -- it used to fall back to configured()/fromEvent() only,
+      // which meant a real native-push outage never turned this badge red
+      // unless something had also called recordSystemFailure("apns", ...)
+      // by hand (nothing does). Before this, apns's actual traffic was
+      // folded into the "push" counter and judged under the webPush badge
+      // instead -- see notify.ts and push.ts.
+      apns: fromDelivery(apnsEnabled, delivery.apns, failing.get("apns"), "native push messages"),
       usdaFoodLookup: configured("usdaFoodLookup", usdaFoodLookupEnabled),
       database,
     },

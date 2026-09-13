@@ -5198,7 +5198,11 @@ export const notificationDeliveryDaily = pgTable(
   "notification_delivery_daily",
   {
     id: serial("id").primaryKey(),
-    // "push" or "email".
+    // "push" (Web Push), "apns" (native iOS push), or "email". Three channels,
+    // not two: web and native push have separate keys, separate failure modes
+    // (an expired browser subscription vs. a revoked device token) and separate
+    // badges on the admin dashboard, and folding them into one "push" row meant
+    // either one's outage was reported under the other's name.
     channel: text("channel").notNull(),
     day: date("day").notNull(),
     // Attempted counts only sends where the channel was actually available

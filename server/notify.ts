@@ -61,19 +61,23 @@ export async function notifyUser(
   // switched off -- will never succeed, and retrying forever means the
   // caller never makes progress.
   let attempted = false;
-  let pushCounted = false;
   let emailCounted = false;
 
   let pushDelivered = false;
   if (pushAllowed) {
-    if (pushEnabled || apnsEnabled) {
-      attempted = true;
-      // Counted only when a channel was actually available to try, so an
-      // unconfigured deployment never looks like a failing one.
-      pushCounted = true;
-    }
-    pushDelivered = await sendPushToUser(userId, { title, body, url: link, badge });
-    if (pushCounted) recordDeliveryAttempt("push", pushDelivered);
+    if (pushEnabled || apnsEnabled) attempted = true;
+    const results = await sendPushToUser(userId, { title, body, url: link, badge });
+    pushDelivered = results.web || results.apns;
+    // Recorded per transport, against each transport's own configured flag
+    // -- never folded into one "push" counter. Web Push and native (APNs)
+    // push have independent keys, independent failure modes (an expired
+    // browser subscription vs. a revoked device token), and independent
+    // badges on the admin dashboard (health-probes.ts). Counting only when
+    // that specific transport is configured keeps a deployment that only
+    // ever turned one of them on from ever looking like the other is
+    // failing.
+    if (pushEnabled) recordDeliveryAttempt("push", results.web);
+    if (apnsEnabled) recordDeliveryAttempt("apns", results.apns);
   }
 
   let emailDelivered = false;
