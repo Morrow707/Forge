@@ -57,17 +57,10 @@ describe("copying correctives refreshes the days it wrote to", () => {
   });
 });
 
-describe("unlocking Coaches Corner refreshes what unlocking changed", () => {
-  const block = mutationAt(read("pages/coach/coaches-corner.tsx"), "const unlockMutation");
-
-  it("has a success path at all", () => {
-    // It previously handled only errors, so a successful unlock changed
-    // nothing on screen.
-    expect(block).toContain("onSuccess");
-  });
-
-  it("refreshes both the track list and the entitlement behind it", () => {
-    expect(block).toContain('queryKey: ["/api/coach/academy/tracks"]');
-    expect(block).toContain('queryKey: ["/api/auth/me"]');
-  });
-});
+// The Coaches Corner unlock mutation is gone with the button: every branch of
+// /api/coach/academy/unlock answers 402 and no checkout for it exists anywhere, so
+// the only thing the button could do was fail with a toast. The page now states
+// that it comes with a Pro coaching plan. If a real purchase path is ever built,
+// restore a freshness case here for it -- the two queries it has to invalidate are
+// ["/api/coach/academy/tracks"] and ["/api/auth/me"], since access is an
+// entitlement on the user record rather than a property of the track list.

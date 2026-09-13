@@ -67,32 +67,6 @@ export default function CoachesCorner() {
     enabled: selectedTrackId != null,
   });
 
-  const unlockMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/coach/academy/unlock", {});
-      return res.json();
-    },
-    // There was no success path here at all -- only error handling. Unlocking
-    // changes what this page is allowed to show, and nothing told it to look
-    // again, so a successful unlock left the coach staring at the locked view
-    // they had just paid to leave.
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/coach/academy/tracks"] });
-      if (selectedTrackId != null) {
-        qc.invalidateQueries({ queryKey: [`/api/coach/academy/tracks/${selectedTrackId}`] });
-      }
-      // Access itself is an entitlement on the user record.
-      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-    },
-    onError: (err: ApiError) => {
-      if (err.status === 402) {
-        toast.info(err.message || "Coaches Corner isn't open for purchase yet.");
-      } else {
-        toast.error(err.message || "Could not unlock Coaches Corner");
-      }
-    },
-  });
-
   const completeMutation = useMutation({
     mutationFn: async ({ lessonId, completed }: { lessonId: number; completed: boolean }) => {
       await apiRequest("POST", `/api/coach/academy/lessons/${lessonId}/complete`, { completed });
@@ -213,9 +187,13 @@ export default function CoachesCorner() {
               sport-specific arm care, reading Forge's own analytics, season planning, and team
               culture -- a real coach-education curriculum, for coaches who want to go deeper.
             </p>
-            <Button onClick={() => unlockMutation.mutate()} disabled={unlockMutation.isPending}>
-              Unlock Coaches Corner
-            </Button>
+            {/* Not a button. /api/coach/academy/unlock answers 402 in every branch it
+                has -- there is no checkout for Coaches Corner anywhere -- so the only
+                thing the button could do was fail with a toast. Say what it actually
+                costs and how it is obtained instead. */}
+            <p className="text-sm font-semibold text-amber-500">
+              Included with a Pro coaching plan. Not open for separate purchase yet.
+            </p>
           </CardContent>
         </Card>
       )}

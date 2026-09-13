@@ -4194,7 +4194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (v.status === "scoped" && !v.reason?.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Say why, in your own words -- it is shown to a coach who asks about this guidance.",
+            message: "Say why, in your own words -- it is recorded with the ruling.",
           });
         }
       })

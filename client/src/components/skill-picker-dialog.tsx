@@ -10,7 +10,6 @@ import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import type { SkillExerciseWithOwnership as SkillExercise } from "@/lib/skill-types";
 import { SKILL_TYPES, SKILL_EQUIPMENT } from "@/lib/skill-taxonomy";
 import { SPORTS } from "@shared/exercise-taxonomy";
-import { SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS } from "@shared/free-agent-tiers";
 import { toggleInSet } from "@/components/filter-chip-group";
 import {
   SKILL_FILTER_ACTIVE_CLASS,
@@ -321,8 +320,11 @@ export function SkillPickerDialog({
                 type="button"
                 onClick={() => {
                   if (sk.locked) {
+                    // No price in this toast: nothing in the app sells an additional
+                    // skill sport, so naming a monthly figure here promised a purchase
+                    // that does not exist.
                     toast.info(
-                      `Unlock ${activeSport ?? sk.sports?.[0] ?? "this sport"} drills for $${(SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS / 100).toFixed(2)}/mo to add "${sk.name}."`,
+                      `${activeSport ?? sk.sports?.[0] ?? "This sport"} drills aren't in your plan.`,
                     );
                     return;
                   }

@@ -8,12 +8,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Mail, MessageCircle, Bell, ScanFace, Watch } from "lucide-react";
+import { Mail, Bell, ScanFace, Watch } from "lucide-react";
 import type { PublicUser } from "@shared/schema";
 import { notificationCategoriesForRole } from "@shared/notification-categories";
 import {
@@ -51,9 +49,7 @@ export function NotificationSettingsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const [phone, setPhone] = useState("");
   const [notifyEmail, setNotifyEmail] = useState(true);
-  const [notifySms, setNotifySms] = useState(false);
   // Push is per-device, not part of the account -- tracked separately from
   // the other prefs, read straight from this browser's own subscription
   // state rather than the server.
@@ -82,9 +78,7 @@ export function NotificationSettingsDialog({
 
   useEffect(() => {
     if (open) {
-      setPhone(user.phone ?? "");
       setNotifyEmail(user.notifyEmail);
-      setNotifySms(user.notifySms);
       setCategoryPrefs(user.pushNotificationCategoryPrefs ?? {});
       if (isNativePushSupported()) {
         getNativePushPermissionGranted().then(setPushSubscribed);
@@ -160,9 +154,7 @@ export function NotificationSettingsDialog({
   const saveMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", "/api/notification-prefs", {
-        phone: phone.trim() || null,
         notifyEmail,
-        notifySms,
       });
       return (await res.json()) as PublicUser;
     },
@@ -257,16 +249,6 @@ export function NotificationSettingsDialog({
               </span>
             </label>
           )}
-          <div className="space-y-1.5">
-            <Label htmlFor="notif-phone">Phone number</Label>
-            <Input
-              id="notif-phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Required for text notifications"
-            />
-          </div>
           <label className="flex items-start gap-2.5 text-sm">
             <Checkbox
               checked={notifyEmail}
@@ -281,21 +263,12 @@ export function NotificationSettingsDialog({
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2.5 text-sm">
-            <Checkbox
-              checked={notifySms}
-              disabled={!phone.trim()}
-              onCheckedChange={(checked) => setNotifySms(checked === true)}
-            />
-            <span>
-              <span className="flex items-center gap-1.5 font-semibold">
-                <MessageCircle className="h-3.5 w-3.5" /> Text (SMS) notifications
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {phone.trim() ? "Sent to the phone number above." : "Add a phone number first."}
-              </span>
-            </span>
-          </label>
+          {/* No SMS option. There is no SMS sender in the codebase -- no Twilio, no
+              sendSms, nothing -- so ticking this saved a preference, showed
+              "Notification settings saved", and then silently did nothing forever.
+              The phone-number field went with it: it existed only to feed this, and
+              users.phone is read nowhere else. Both columns are left in place so
+              nothing has to migrate if SMS is ever actually built. */}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

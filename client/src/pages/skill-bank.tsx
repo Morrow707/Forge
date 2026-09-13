@@ -10,7 +10,6 @@ import { SkillFaultThresholdsDialog } from "@/components/skill-fault-thresholds-
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { Plus, Trash2, Target, Search, Video, SlidersHorizontal, Star, Clock, Lock } from "lucide-react";
-import { SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS } from "@shared/free-agent-tiers";
 import { cn } from "@/lib/utils";
 import type { SkillExerciseWithOwnership } from "@/lib/skill-types";
 import { SKILL_TYPES } from "@/lib/skill-taxonomy";
@@ -354,9 +353,13 @@ export function SkillBankPage({
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     {sk.locked ? (
-                      <span className="flex items-center gap-1 font-medium text-amber-500">
+                      // No price here until there is something to tap. There is no
+                      // checkout for an additional skill sport anywhere in the app, so
+                      // quoting a monthly figure on a drill whose only available action
+                      // is "nothing" reads as a broken Buy button.
+                      <span className="flex items-center gap-1 font-medium text-muted-foreground">
                         <Lock className="h-3.5 w-3.5" />
-                        Unlock for ${(SKILL_SPORT_UNLOCK_MONTHLY_PRICE_CENTS / 100).toFixed(2)}/mo
+                        Not in your plan
                       </span>
                     ) : (
                       <>

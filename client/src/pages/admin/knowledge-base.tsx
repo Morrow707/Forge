@@ -338,8 +338,10 @@ export function KnowledgeBaseContent() {
                 {conflicts.length} contradiction{conflicts.length === 1 ? "" : "s"} to rule on
               </CardTitle>
               <CardDescription>
-                Two sources disagree. Nothing picks a winner until you do, and until then the AI is
-                told the guidance here is contested rather than quietly choosing one.
+                Two sources disagree. This is your review queue: a ruling is recorded here for
+                the record, and nothing about it reaches the assistants yet -- retrieval still
+                quotes both passages exactly as before. Wiring a ruling into what the AI says is
+                a separate piece of work.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -567,7 +569,7 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         rows={2}
-        placeholder="Why, in your own words. A coach who asks about this guidance is shown this."
+        placeholder="Why, in your own words. Recorded with the ruling -- not shown to coaches today."
       />
       <Input
         value={scopeSports}

@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FreeAgentGate } from "@/components/free-agent-gate";
 import { useAuth } from "@/hooks/use-auth";
 import { FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
-import { formatCents } from "@shared/billing-tiers";
+import { cn } from "@/lib/utils";
 import { Sparkles, Unlock, Lock } from "lucide-react";
 
 /** Picker for the three sport-specialist AI coaches -- each is its own paid
@@ -28,10 +28,17 @@ export default function AthleteSportCoaches() {
             const addOn = FREE_AGENT_ADD_ONS[id];
             const isOwned = owned.has(id);
             return (
+              // Only an owned coach is clickable. An unowned one navigated to the chat
+              // and landed on the 402 lock card, which is a dead end dressed up as a
+              // destination -- and there is no purchase path for these add-ons anywhere
+              // in the app, so the price badge below went with it.
               <Card
                 key={id}
-                className="flex cursor-pointer flex-col transition-colors hover:border-primary/50"
-                onClick={() => navigate(`/athlete/coach/${id}`)}
+                className={cn(
+                  "flex flex-col transition-colors",
+                  isOwned ? "cursor-pointer hover:border-primary/50" : "opacity-75",
+                )}
+                onClick={isOwned ? () => navigate(`/athlete/coach/${id}`) : undefined}
               >
                 <CardContent className="flex flex-1 flex-col gap-3 p-5">
                   <div className="flex items-start justify-between gap-2">
@@ -46,14 +53,19 @@ export default function AthleteSportCoaches() {
                     ) : (
                       <Badge variant="secondary" className="shrink-0 gap-1 text-[10px]">
                         <Lock className="h-2.5 w-2.5" />
-                        {formatCents(addOn.monthlyPriceCents)}/mo
+                        NOT IN YOUR PLAN
                       </Badge>
                     )}
                   </div>
                   <p className="font-display text-xl font-bold uppercase tracking-wide">{addOn.label}</p>
                   <p className="text-sm text-muted-foreground">{addOn.description}</p>
-                  <Button size="sm" className="mt-auto w-full" variant={isOwned ? "default" : "outline"}>
-                    {isOwned ? "Open chat" : "Learn more"}
+                  <Button
+                    size="sm"
+                    className="mt-auto w-full"
+                    variant={isOwned ? "default" : "outline"}
+                    disabled={!isOwned}
+                  >
+                    {isOwned ? "Open chat" : "Not in your plan"}
                   </Button>
                 </CardContent>
               </Card>
