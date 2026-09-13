@@ -32,7 +32,19 @@ const CHART_HEIGHT_PX = 56;
  * with an explicit height, and the flex column each bar sits in doesn't
  * have one (its height is driven by its children) -- percentages here
  * would silently collapse to nothing. */
-export function NutritionTrendPanel({ fetchUrl }: { fetchUrl: string }) {
+export function NutritionTrendPanel({
+  fetchUrl,
+  selectedDate,
+  onSelectDate,
+}: {
+  fetchUrl: string;
+  /** Both optional so a caller that hasn't wired up FoodLogPanel's date as
+   * controlled state yet still gets the plain read-only chart it had
+   * before -- a bar only becomes a real button once there's somewhere for
+   * the click to go. */
+  selectedDate?: string;
+  onSelectDate?: (date: string) => void;
+}) {
   const { data, isLoading } = useQuery<NutritionTrend>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
@@ -64,22 +76,39 @@ export function NutritionTrendPanel({ fetchUrl }: { fetchUrl: string }) {
             d.loggedEntryCount > 0
               ? Math.max(4, Math.round((d.caloriesKcal / maxCalories) * CHART_HEIGHT_PX))
               : 3;
+          const label = `${format(parseISO(d.date), "EEE M/d")}: ${
+            d.loggedEntryCount > 0 ? `${Math.round(d.caloriesKcal)} kcal` : "nothing logged"
+          }`;
+          const bar = (
+            <div
+              className={cn(
+                "w-full rounded-t-sm transition-all",
+                d.loggedEntryCount === 0
+                  ? "bg-surface-elevated"
+                  : d.hit === false
+                    ? "bg-primary/40"
+                    : "bg-primary/70",
+                d.date === selectedDate && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+              )}
+              style={{ height: `${barHeightPx}px` }}
+            />
+          );
           return (
             <div key={d.date} className="flex flex-1 flex-col items-center justify-end gap-1">
-              <div
-                title={`${format(parseISO(d.date), "EEE M/d")}: ${
-                  d.loggedEntryCount > 0 ? `${Math.round(d.caloriesKcal)} kcal` : "nothing logged"
-                }`}
-                className={cn(
-                  "w-full rounded-t-sm transition-all",
-                  d.loggedEntryCount === 0
-                    ? "bg-surface-elevated"
-                    : d.hit === false
-                      ? "bg-primary/40"
-                      : "bg-primary/70",
-                )}
-                style={{ height: `${barHeightPx}px` }}
-              />
+              {onSelectDate ? (
+                <button
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  aria-current={d.date === selectedDate ? "date" : undefined}
+                  onClick={() => onSelectDate(d.date)}
+                  className="w-full rounded-t-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {bar}
+                </button>
+              ) : (
+                <div title={label}>{bar}</div>
+              )}
               <span className="text-[9px] text-muted-foreground">{format(parseISO(d.date), "EEEEE")}</span>
             </div>
           );

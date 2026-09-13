@@ -150,13 +150,20 @@ export function FoodLogPanel({
   fetchUrl,
   editable,
   targets,
+  date,
+  onDateChange: setDate,
 }: {
   fetchUrl: string;
   editable: boolean;
   targets: Targets;
+  /** Controlled rather than the panel's own state, so a day tapped in
+   * NutritionTrendPanel's 7-day chart (a sibling under NutritionPanel) can
+   * move this panel to that day instead of only the prev/next arrows below
+   * being able to change it. */
+  date: string;
+  onDateChange: (updater: string | ((d: string) => string)) => void;
 }) {
   const qc = useQueryClient();
-  const [date, setDate] = useState(() => todayIso());
   const [scannerOpen, setScannerOpen] = useState(false);
   // Sticky once true -- mounts the lazy dialog (and fetches its chunk) the
   // first time it's actually opened, then leaves it mounted so closing and
@@ -252,6 +259,7 @@ export function FoodLogPanel({
             fat={{ value: totals.fatG, target: targets?.fatG ?? null }}
             fiber={{ value: totals.fiberG, target: targets?.fiberG ?? null }}
             water={{ value: waterOz, target: targets?.waterOz ?? null }}
+            dateLabel={isToday ? "today" : format(parseISO(date), "MMM d")}
           />
 
           <WaterSection

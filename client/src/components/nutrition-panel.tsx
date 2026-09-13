@@ -11,6 +11,7 @@ import { Sparkles, Apple, Target } from "lucide-react";
 import { FoodLogPanel } from "@/components/food-log-panel";
 import { NutritionTrendPanel } from "@/components/nutrition-trend-panel";
 import { NUTRITION_GOALS, NUTRITION_GOAL_LABEL, type NutritionGoal } from "@shared/schema";
+import { todayIso } from "@/lib/local-date";
 
 type NutritionGoalState = { nutritionGoal: NutritionGoal | null; nutritionGoalNote: string | null };
 
@@ -112,6 +113,10 @@ export function NutritionPanel({
 }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<FormState>(emptyForm());
+  // Lifted out of FoodLogPanel so a day tapped in the 7-day trend chart can
+  // move the food log to that day too -- the two used to track the date
+  // independently, which is why the chart's bars couldn't do anything.
+  const [foodLogDate, setFoodLogDate] = useState(() => todayIso());
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
   // A clarifying question the assistant asked instead of answering. Held
@@ -437,12 +442,20 @@ export function NutritionPanel({
         </div>
       )}
 
-      {trendUrl && <NutritionTrendPanel fetchUrl={trendUrl} />}
+      {trendUrl && (
+        <NutritionTrendPanel
+          fetchUrl={trendUrl}
+          selectedDate={foodLogDate}
+          onSelectDate={setFoodLogDate}
+        />
+      )}
 
       {foodLogUrl && (
         <FoodLogPanel
           fetchUrl={foodLogUrl}
           editable={!!foodLogEditable}
+          date={foodLogDate}
+          onDateChange={setFoodLogDate}
           targets={
             data
               ? {

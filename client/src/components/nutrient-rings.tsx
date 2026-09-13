@@ -58,7 +58,14 @@ export function NutrientRings({
   fat,
   fiber,
   water,
-}: Record<RingKey, Metric>) {
+  dateLabel = "today",
+}: Record<RingKey, Metric> & {
+  /** What the center caption calls the day these numbers are for --
+   * "today" by default, but the food log can show any day in its history,
+   * and a ring that always says "kcal today" while showing last Tuesday's
+   * total would just be wrong. */
+  dateLabel?: string;
+}) {
   const metrics: Record<RingKey, Metric> = { calories, protein, carbs, fat, fiber, water };
   const summary = RING_ORDER.map((r) => {
     const m = metrics[r.key];
@@ -109,7 +116,7 @@ export function NutrientRings({
           {Math.round(calories.value)}
         </text>
         <text x={CENTER} y={CENTER + 13} textAnchor="middle" fontSize="8" fill="currentColor" opacity={0.6}>
-          kcal today
+          kcal {dateLabel}
         </text>
       </svg>
 
