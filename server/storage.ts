@@ -23921,7 +23921,14 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return {
       athleteName: athlete?.name ?? "this athlete",
       email: invite.email,
-      accountExists: existingUser?.role === "guardian",
+      // Any existing account, not only a guardian one. claimGuardianInvite's own
+      // comment says an account of any role can take on a guardian link (a parent
+      // who already trains here as a Free Agent keeps their account and gains the
+      // guardian view), and it verifies the existing password to do it. Scoping
+      // this flag to role "guardian" meant such a parent was shown "set a
+      // password for <email>" instead, typed a new one, and got "Incorrect
+      // password for the existing account."
+      accountExists: Boolean(existingUser),
     };
   },
 
@@ -23977,12 +23984,26 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         // check answer yes for someone with no adult involved at all.
         return { error: "An account cannot be its own guardian." as const };
       }
-      if (!existingUser.dateOfBirth || derivePrivacyTier(existingUser.dateOfBirth) !== "tier3_adult_18plus") {
-        // A guardian has to be an adult. Anyone old enough to be a guardian
-        // does not need one themselves, so this is one check rather than
-        // two, and a missing date of birth fails it: the safe assumption
-        // when age is unknown is the one that does not hand a minor
-        // authority over another minor's data.
+      // A guardian has to be an adult. Anyone old enough to be a guardian does
+      // not need one themselves, so this is one check rather than two, and on an
+      // athlete or coach account a missing date of birth fails it: the safe
+      // assumption when age is unknown is the one that does not hand a minor
+      // authority over another minor's data.
+      //
+      // A role "guardian" account is exempt, and has to be: the only place one is
+      // ever created is the branch below, which collects no date of birth, and no
+      // client surface offers a guardian one (the DOB banner renders for athletes
+      // only). So the set of accounts shown the "link my existing account" form
+      // and the set this check would accept were disjoint by construction, and a
+      // parent with two children on Forge could never link the second one --
+      // correct password, "A guardian account must belong to an adult.", no
+      // workaround anywhere in the app. getAthletesForGuardian's own comment says
+      // siblings are meant to work.
+      if (
+        existingUser.role !== "guardian" &&
+        (!existingUser.dateOfBirth ||
+          derivePrivacyTier(existingUser.dateOfBirth) !== "tier3_adult_18plus")
+      ) {
         return { error: "A guardian account must belong to an adult." as const };
       }
       if (!(await comparePasswords(password, existingUser.passwordHash))) {

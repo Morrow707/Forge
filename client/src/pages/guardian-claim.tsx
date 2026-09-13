@@ -90,7 +90,7 @@ export default function GuardianClaimPage() {
           <CardTitle>{preview ? `Guardian access for ${preview.athleteName}` : "Set Up Your Account"}</CardTitle>
           <CardDescription>
             {preview?.accountExists
-              ? `You already have a guardian account for ${preview.email}. Enter your password to also link ${preview.athleteName}.`
+              ? `${preview.email} already has a Forge account. Enter its password to link ${preview.athleteName} to it.`
               : `Set a password for ${preview?.email ?? "your account"} to see ${preview?.athleteName ?? "their"} training activity.`}
           </CardDescription>
         </CardHeader>
