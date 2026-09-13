@@ -70,9 +70,13 @@ const OWNERSHIP_CHECKS = [
 const GLOBAL_BY_DESIGN = new Set([
   // Terms and privacy policy, and only the types on a public allowlist.
   "/api/legal-documents/:type",
-  // A coach's public invite code resolving to their branding, which is the
-  // whole point of an invite code.
-  "/api/public/branding/:code",
+  // A coach or team invite code resolving to that program's public page -- no
+  // account, by design, since the audience is a parent or a recruit who does not have
+  // one. There is no caller to scope against. What it returns is bounded instead: the
+  // program's name, logo and colour, plus the motto, mission and contact email only
+  // when the program is entitled to Team Identity, and never the athlete welcome
+  // message. See the route's own comment.
+  "/api/public/team/:code",
   // Forge-authored movement profiles, identical for every account.
   "/api/movement-profiles/active/:movementType",
 ]);

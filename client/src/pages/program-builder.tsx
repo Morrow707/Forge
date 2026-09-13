@@ -320,15 +320,6 @@ export function ProgramBuilderPage({
   const qc = useQueryClient();
   const programId = Number(id);
 
-  // Handed off by the "New Program" questionnaire (see program-list.tsx) --
-  // read once and cleared immediately so a page refresh never re-sends it.
-  const [initialAiPrompt] = useState(() => {
-    const key = `forge:pendingAiPrompt:${programId}`;
-    const stored = sessionStorage.getItem(key);
-    if (stored) sessionStorage.removeItem(key);
-    return stored ?? undefined;
-  });
-
   const { data: program, isLoading } = useQuery<any>({
     queryKey: [`${apiBase}/programs`, programId],
     queryFn: () => getJson(`${apiBase}/programs/${programId}`),
@@ -856,7 +847,6 @@ export function ProgramBuilderPage({
               apiBase={apiBase}
               programId={programId}
               onApplied={handleChatApplied}
-              initialPrompt={initialAiPrompt}
             />
           </div>
         )}

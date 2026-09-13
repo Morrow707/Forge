@@ -58,7 +58,6 @@ export function SkillProgramListPage({
   libraryTabs,
   showAssign = true,
   showSelfAssign = false,
-  aiFirstCreate = false,
 }: {
   apiBase: string;
   routeBase: string;
@@ -70,12 +69,8 @@ export function SkillProgramListPage({
    * lands the skill program on the caller's own calendar with no roster
    * picker. Only a Free Agent passes this. */
   showSelfAssign?: boolean;
-  /** Skips the name/description dialog -- "New Skill Program" creates a
-   * blank program and lands straight in the builder, where the AI chat
-   * panel starts the conversation. Same rationale as ProgramListPage's
-   * aiFirstCreate: a Free Agent isn't expected to design a skill
-   * progression from a blank editor. */
-  aiFirstCreate?: boolean;
+  /** REMOVED: aiFirstCreate. Nothing ever passed it on either list page -- see
+   * ProgramListPage for the full reasoning and for what rebuilding it would need. */
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -234,12 +229,7 @@ export function SkillProgramListPage({
               AI Assist
             </Button>
           )}
-          <Button
-            onClick={() =>
-              aiFirstCreate ? createMutation.mutate("New Skill Program") : setDialogOpen(true)
-            }
-            disabled={aiFirstCreate && createMutation.isPending}
-          >
+          <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             New Skill Program
           </Button>
@@ -251,12 +241,7 @@ export function SkillProgramListPage({
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Target className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">{emptyStateText}</p>
-            <Button
-              onClick={() =>
-                aiFirstCreate ? createMutation.mutate("New Skill Program") : setDialogOpen(true)
-              }
-              disabled={aiFirstCreate && createMutation.isPending}
-            >
+            <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4" />
               New Skill Program
             </Button>

@@ -24,7 +24,6 @@ import {
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
-import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import {
@@ -41,24 +40,6 @@ import {
 } from "lucide-react";
 import { ProgramPhotoImportDialog } from "@/components/program-photo-import-dialog";
 import { todayIso } from "@/lib/local-date";
-
-const NEW_PROGRAM_GOALS = [
-  "Strength",
-  "Muscle gain",
-  "General fitness",
-  "Sport performance",
-  "Fast, heart-rate-up circuits",
-];
-const NEW_PROGRAM_EXPERIENCE = ["Beginner", "Intermediate", "Advanced"];
-const NEW_PROGRAM_EQUIPMENT = ["Full gym", "Home gym", "Minimal equipment", "Bodyweight only"];
-
-// Session-scoped handoff from the questionnaire below to the AI chat panel
-// once the blank program it describes has been created -- keyed by the
-// fresh program's id since that's not known until the create call returns.
-// A plain prop can't carry this across the navigate() to the builder route.
-function pendingAiPromptKey(programId: number) {
-  return `forge:pendingAiPrompt:${programId}`;
-}
 
 type ProgramSummary = {
   id: number;
@@ -85,7 +66,6 @@ export function ProgramListPage({
   showAssign = true,
   showAiAssist = false,
   showSelfAssign = false,
-  aiFirstCreate = false,
   libraryTabs,
 }: {
   apiBase: string;
@@ -102,26 +82,21 @@ export function ProgramListPage({
    * athlete's self-built program. Separate from showAssign's multi-athlete
    * roster dialog, which doesn't apply to either of those. */
   showSelfAssign?: boolean;
-  /** Skips the name/description dialog entirely -- "New Program" creates a
-   * blank program under a placeholder name and lands straight in the
-   * builder, where the AI chat panel (see ProgramAiChatPanel) is what
-   * actually starts the conversation. Used instead of showAiAssist for a
-   * Free Agent, who isn't expected to design a program from a blank editor
-   * -- there's exactly one path in, and it's AI-first. */
-  /** Coach-side only, deliberately.
+  /** REMOVED: aiFirstCreate, and the "Build Your Program" questionnaire behind it.
    *
-   * This opens a questionnaire, compiles the answers into a prompt, creates an EMPTY program,
-   * stashes the prompt, and navigates to the builder -- where the builder reads the prompt and
-   * DELETES it before handing it to the AI panel. On the athlete side that panel is behind a paid
-   * gate that no free agent has passed, so it answered with "this is a paid upgrade, coming soon".
-   * The athlete had answered four questions about their goals, lost the answers, and was standing
-   * in a program with zero days. It was the worst first-run path in the product, and it was the
-   * one the signup welcome dialog pointed them at.
+   * It asked four questions, compiled them into a prompt, created an EMPTY program,
+   * stashed the prompt in sessionStorage and navigated to the builder, where the AI
+   * panel read it, deleted it, and -- on the athlete side, behind a paid gate nobody
+   * had passed -- answered "this is a paid upgrade, coming soon". The athlete had
+   * answered four questions about their goals, lost the answers, and was standing in a
+   * program with zero days.
    *
-   * The athlete pages now open the ordinary create dialog instead. Restore this there only
-   * alongside a real entitlement check -- the client currently has no way to know whether AI
-   * access exists except by calling the endpoint and getting a 402. */
-  aiFirstCreate?: boolean;
+   * It was pulled from the athlete pages for that reason and then passed by nobody at
+   * all: four call sites across two list pages, none of which supplied it. Parked UI
+   * with live plumbing rots quietly, so it is gone rather than left to be rediscovered
+   * by the next audit. Rebuilding it needs a real entitlement the client can read
+   * BEFORE asking the questions, and it should create the program only once the AI has
+   * actually answered -- never the other way round. */
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -149,36 +124,22 @@ export function ProgramListPage({
   const [selfAssignDate, setSelfAssignDate] = useState(() =>
     todayIso(),
   );
-  const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
-  const [qGoal, setQGoal] = useState("");
-  const [qDaysPerWeek, setQDaysPerWeek] = useState("");
-  const [qExperience, setQExperience] = useState("");
-  const [qEquipment, setQEquipment] = useState("");
 
   const createMutation = useMutation({
-    mutationFn: async (vars?: { name?: string; initialPrompt?: string }) => {
+    mutationFn: async (vars?: { name?: string }) => {
       const res = await apiRequest("POST", `${apiBase}/programs`, {
         name: vars?.name ?? name,
         description,
         weeks: [],
       });
-      return { program: await res.json(), initialPrompt: vars?.initialPrompt };
+      return { program: await res.json() };
     },
-    onSuccess: ({ program, initialPrompt }) => {
+    onSuccess: ({ program }) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      if (initialPrompt) {
-        sessionStorage.setItem(pendingAiPromptKey(program.id), initialPrompt);
-      } else {
-        toast.success("Program created — start adding days");
-      }
+      toast.success("Program created — start adding days");
       setDialogOpen(false);
-      setQuestionnaireOpen(false);
       setName("");
       setDescription("");
-      setQGoal("");
-      setQDaysPerWeek("");
-      setQExperience("");
-      setQEquipment("");
       navigate(`${routeBase}/${program.id}`);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not create program"),
@@ -320,7 +281,7 @@ export function ProgramListPage({
           )}
           <Button
             size="sm"
-            onClick={() => (aiFirstCreate ? setQuestionnaireOpen(true) : setDialogOpen(true))}
+            onClick={() => setDialogOpen(true)}
           >
             <Plus className="h-3.5 w-3.5" />
             New Program
@@ -334,7 +295,7 @@ export function ProgramListPage({
             <ListChecks className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">{emptyStateText}</p>
             <Button
-              onClick={() => (aiFirstCreate ? setQuestionnaireOpen(true) : setDialogOpen(true))}
+              onClick={() => setDialogOpen(true)}
             >
               <Plus className="h-4 w-4" />
               New Program
@@ -472,81 +433,6 @@ export function ProgramListPage({
           </form>
         </DialogContent>
       </Dialog>
-
-      {aiFirstCreate && (
-        <Dialog open={questionnaireOpen} onOpenChange={setQuestionnaireOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                Build Your Program
-              </DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground">
-              A few quick questions -- the AI uses these to start your program, then you can keep
-              chatting with it to refine anything.
-            </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const parts = [
-                  `Build me a training program. My main goal is ${qGoal.toLowerCase()}.`,
-                  qDaysPerWeek.trim()
-                    ? `I can train ${qDaysPerWeek.trim()} days a week.`
-                    : null,
-                  qExperience ? `My experience level is ${qExperience.toLowerCase()}.` : null,
-                  qEquipment ? `Equipment I have access to: ${qEquipment.toLowerCase()}.` : null,
-                ].filter(Boolean);
-                createMutation.mutate({ name: "New Program", initialPrompt: parts.join(" ") });
-              }}
-              className="space-y-4"
-            >
-              <RadioChipGroup
-                label="Main goal"
-                options={NEW_PROGRAM_GOALS}
-                value={qGoal}
-                onChange={setQGoal}
-              />
-              <div className="space-y-1.5">
-                <Label htmlFor="q-days">Days per week you can train</Label>
-                <Input
-                  id="q-days"
-                  type="number"
-                  min={1}
-                  max={7}
-                  value={qDaysPerWeek}
-                  onChange={(e) => setQDaysPerWeek(e.target.value)}
-                  placeholder="e.g. 4"
-                />
-              </div>
-              <RadioChipGroup
-                label="Experience level"
-                options={NEW_PROGRAM_EXPERIENCE}
-                value={qExperience}
-                onChange={setQExperience}
-              />
-              <RadioChipGroup
-                label="Equipment"
-                options={NEW_PROGRAM_EQUIPMENT}
-                value={qEquipment}
-                onChange={setQEquipment}
-              />
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setQuestionnaireOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={!qGoal || createMutation.isPending}>
-                  {createMutation.isPending ? "Creating…" : "Start Building"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
 
       {showAssign && (
         <AssignProgramDialog
