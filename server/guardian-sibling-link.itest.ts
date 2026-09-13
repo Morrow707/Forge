@@ -41,7 +41,7 @@ describe("a guardian can be linked to a second child", () => {
       TERMS,
     );
     expect("user" in claim, JSON.stringify(claim)).toBe(true);
-    if (!("user" in claim)) return;
+    if (!("user" in claim) || !claim.user) throw new Error("no guardian created");
     const guardianId = claim.user.id;
 
     // The second invite's preview has to offer the "link my existing account"
@@ -52,7 +52,7 @@ describe("a guardian can be linked to a second child", () => {
 
     const linked = await storage.claimGuardianInvite(token, "correct-horse", TERMS);
     expect("user" in linked, JSON.stringify(linked)).toBe(true);
-    if (!("user" in linked)) return;
+    if (!("user" in linked) || !linked.user) throw new Error("second link rejected");
     expect(linked.user.id).toBe(guardianId);
 
     const links = await db.query.guardianLinks.findMany({

@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications, type Token, type ActionPerformed } from "@capacitor/push-notifications";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 
 // Native-app twin of push.ts (Web Push) -- same "request permission,
 // register, POST the resulting identifier to the server" shape, but APNs
@@ -62,6 +62,16 @@ export async function getNativePushPermissionGranted() {
 export async function subscribeToNativePush() {
   if (!isNativePushSupported()) {
     throw new Error("Native push isn't supported on this device.");
+  }
+  // Ask the server whether APNs is actually configured before asking the athlete
+  // for a system permission. /api/push/apns-enabled exists for exactly this and
+  // had no caller, so on a deployment with no APNs credentials the toggle asked
+  // for permission, registered a device token the server accepted, and reported
+  // "Push notifications enabled on this device" -- for a channel that can never
+  // send anything. The web path has always been honest about this.
+  const { enabled } = (await getJson("/api/push/apns-enabled")) as { enabled: boolean };
+  if (!enabled) {
+    throw new Error("Push notifications aren't set up on this server yet.");
   }
   const status = await PushNotifications.requestPermissions();
   if (status.receive !== "granted") {
