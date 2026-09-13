@@ -16,6 +16,7 @@ import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-rep
 import { PRICING_CATALOG_KEYS } from "./pricing-catalog";
 import { buildIcsFeed } from "./ics";
 import { getVapidPublicKey, pushEnabled, sendTestPushToSelf } from "./push";
+import { registerNumericParamGuards } from "./numeric-route-params";
 import { apnsEnabled } from "./apns";
 import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail, emailEnabled } from "./email";
@@ -956,6 +957,10 @@ function toMetricSummary(r: any): ResearchMetricSummary {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // One guard for every id-shaped route param, before anything else is
+  // registered -- see server/numeric-route-params.ts for why it lives in one
+  // place rather than at ~250 call sites, and why it answers 404.
+  registerNumericParamGuards(app);
   setupAuth(app);
   // attachNativeTokenAuth is mounted inside setupAuth itself now (before the
   // auth routes it needs to cover) -- see its own comment there for why.
