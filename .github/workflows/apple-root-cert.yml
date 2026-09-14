@@ -27,15 +27,18 @@ name: Fetch Apple root certificate
 #      Apple's exact distinguished name, and is inside its validity window.
 #
 # A forged download would have to match a file that came off Apple's own
-# operating system to get through. The SHA-256 of what was committed is
+# operating system to get through, AND match the fingerprint pinned as the
+# default of expected_sha256 below -- which is the value those two sources
+# agreed on the first time this ran, and is Apple's published one for G3. The SHA-256 of what was committed is
 # printed in the log and recorded in the commit message either way, so it can
 # be compared against Apple's published fingerprint after the fact.
 on:
   workflow_dispatch:
     inputs:
       expected_sha256:
-        description: "Optional. Apple's published SHA-256 fingerprint of the DER certificate, lowercase hex, no colons. If given, the job fails unless both copies match it."
+        description: "SHA-256 of the DER certificate, lowercase hex, no colons. Defaults to the fingerprint the macOS trust store and apple.com both returned on 2026-09-14, which is Apple's published one for the G3 root. Clear it to skip the pin; change it only if Apple has rotated the root."
         required: false
+        default: "63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179"
         type: string
 
 concurrency:
@@ -182,9 +185,17 @@ jobs:
             echo "::error::Not self-signed: issuer is $issuer"
             exit 1
           fi
+          # Two independent contains-tests, not one ordered glob. Run 2
+          # failed here: this openssl prints rfc2253 DNs starting at C=, so a
+          # pattern that expected CN before O could not match, even though
+          # both copies of the certificate had already agreed byte for byte.
           case "$subject" in
-            *"CN=Apple Root CA - G3"*"O=Apple Inc."*|*"CN=Apple Root CA - G3"*"O=Apple Inc"*) ;;
-            *) echo "::error::Unexpected subject: $subject"; exit 1 ;;
+            *"CN=Apple Root CA - G3"*) ;;
+            *) echo "::error::Subject has no CN=Apple Root CA - G3: $subject"; exit 1 ;;
+          esac
+          case "$subject" in
+            *"O=Apple Inc"*) ;;
+            *) echo "::error::Subject is not Apple Inc.: $subject"; exit 1 ;;
           esac
           openssl x509 -inform DER -in downloaded.cer -noout -checkend 0 \
             || { echo "::error::Certificate is not currently valid."; exit 1; }
