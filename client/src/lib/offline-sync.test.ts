@@ -5,11 +5,15 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 class MemoryStorage {
   private map = new Map<string, string>();
   full = false;
+  /** A size ceiling, so a test can make the store refuse only LARGE writes -- which is what a
+   *  real browser does, and what separates "drop the replay" from "drop the whole day". */
+  maxBytes = Infinity;
   get length() { return this.map.size; }
   key(i: number) { return [...this.map.keys()][i] ?? null; }
   getItem(k: string) { return this.map.get(k) ?? null; }
   setItem(k: string, v: string) {
     if (this.full) throw new DOMException("QuotaExceededError");
+    if (v.length > this.maxBytes) throw new DOMException("QuotaExceededError");
     this.map.set(k, v);
   }
   removeItem(k: string) { this.map.delete(k); }
@@ -262,5 +266,56 @@ describe("a queued day is forgotten once a save for it lands", () => {
     m.clearPendingLog("no:such:day");
 
     expect(m.getPendingLogs()).toHaveLength(1);
+  });
+});
+
+// A DAY OF LOGGED NUMBERS IS WORTH MORE THAN A SKELETON REPLAY.
+//
+// queueLog's escalation promised to give up the least valuable thing first and did the reverse:
+// it dropped whole unsynced days BEFORE stripping skeletonFrames off the payload being written.
+// A dropped day loses every rep, load and RPE the athlete typed; a stripped replay loses an
+// overlay they can re-record. Reported from a real session that hit the warning twice in an hour
+// -- a camera-tracked set carries one landmark set per recorded frame, so a few retakes fill a
+// browser's whole localStorage allowance on their own.
+describe("queueLog gives up replays before it gives up days", () => {
+  // The real payload shape buildLogPayload emits -- `entries`, not `sets`. dropHeavyFields
+  // returns null for anything else, so a wrong-shaped fixture would silently test nothing.
+  const heavy = () => ({
+    assignmentId: 1,
+    programDayId: 2,
+    date: "2026-09-14",
+    completed: true,
+    entries: [
+      {
+        exerciseId: 1,
+        sets: [{ setNumber: 1, reps: 5, skeletonFrames: Array(500).fill({ x: 1, y: 2, z: 3 }) }],
+      },
+    ],
+  });
+
+  it("keeps an older queued day and strips the replays instead", async () => {
+    const m = await load();
+    m.queueLog("2026-09-13", URL, heavy());
+    const stored = localStorage.getItem("forge:pending-logs") ?? "";
+    // A ceiling that the one queued heavy day already fills, so adding a second heavy day has
+    // to escalate -- exactly the state a session of camera-tracked retakes reaches.
+    (localStorage as unknown as { maxBytes: number }).maxBytes = stored.length + 200;
+
+    const entry = m.queueLog("2026-09-14", URL, heavy());
+    (localStorage as unknown as { maxBytes: number }).maxBytes = Infinity;
+
+    expect(entry).not.toBeNull();
+    const queued = JSON.parse(localStorage.getItem("forge:pending-logs") ?? "[]");
+    const days = queued.map((p: { dayKey: string }) => p.dayKey);
+    // Both days' logged numbers survive. The replays are what paid for the room.
+    expect(days).toContain("2026-09-13");
+    expect(days).toContain("2026-09-14");
+    for (const p of queued) {
+      // dropHeavyFields nulls the field rather than deleting the key -- the frames are what
+      // cost the space, and a null preserves the shape the server already accepts.
+      expect(p.payload.entries[0].sets[0].skeletonFrames).toBeNull();
+      // The numbers the athlete typed are untouched. That is the whole trade.
+      expect(p.payload.entries[0].sets[0].reps).toBe(5);
+    }
   });
 });

@@ -193,28 +193,66 @@ export function queueLog(dayKey: string, url: string, payload: unknown): Pending
 
   if (evictDayCaches() && trySetQueue([...others, entry])) return entry;
 
-  // Oldest first, so each pass gives up the least recent day still queued.
-  const byAge = [...others].sort((a, b) => a.queuedAt.localeCompare(b.queuedAt));
+  // A REPLAY IS WORTH LESS THAN A DAY OF LOGGED NUMBERS. IT WAS BEING GIVEN UP LAST.
+  //
+  // The order below used to drop whole unsynced days BEFORE stripping the replay detail off
+  // this payload, under a comment promising to give up the least valuable thing first. It was
+  // doing the opposite: a dropped day loses every rep, load and RPE the athlete typed, while
+  // stripping skeletonFrames loses an overlay that can be re-recorded. So the cheap sacrifice
+  // was reserved for after the expensive one had already been made.
+  //
+  // It also under-recovers. skeletonFrames is one landmark set per recorded frame, so a single
+  // camera-tracked set is megabytes and a session's worth of them -- every retake adds another
+  // -- is most of what fills a browser's whole localStorage allowance. Dropping a day that
+  // contains those frees space; dropping one that does not frees almost nothing, and the days
+  // are tried oldest-first rather than largest-first.
+  //
+  // Replay detail now goes first, on this payload and then on every other queued day, and only
+  // if that is still not enough does a whole day get dropped.
+  const trimmed = dropHeavyFields(payload);
+  const trimmedEntry = trimmed ? { ...entry, payload: trimmed } : null;
+  if (trimmedEntry && trySetQueue([...others, trimmedEntry])) {
+    toast.warning(
+      "Ran out of offline storage -- your set was saved, but the skeleton replay for it was dropped.",
+      { duration: 10000 },
+    );
+    return trimmedEntry;
+  }
+
+  // The same trade applied to the days already queued: their numbers are kept, their replays
+  // are not. Nothing an athlete typed is lost at this step either.
+  const othersTrimmed = others.map((p) => {
+    const lighter = dropHeavyFields(p.payload);
+    return lighter ? { ...p, payload: lighter } : p;
+  });
+  const keptEntry = trimmedEntry ?? entry;
+  if (trySetQueue([...othersTrimmed, keptEntry])) {
+    toast.warning(
+      "Ran out of offline storage -- your sets were all saved, but their skeleton replays were dropped.",
+      { duration: 10000 },
+    );
+    return keptEntry;
+  }
+
+  // Only now is a whole day's logged numbers on the table. Oldest first, so each pass gives up
+  // the least recent day still queued.
+  const byAge = [...othersTrimmed].sort((a, b) => a.queuedAt.localeCompare(b.queuedAt));
   for (let drop = 1; drop <= byAge.length; drop++) {
-    if (trySetQueue([...byAge.slice(drop), entry])) {
+    if (trySetQueue([...byAge.slice(drop), keptEntry])) {
       toast.warning(
         "Ran out of offline storage -- an older unsynced day was dropped to make room for this one.",
         { duration: 10000 },
       );
-      return entry;
+      return keptEntry;
     }
   }
 
-  const trimmed = dropHeavyFields(payload);
-  if (trimmed) {
-    const trimmedEntry = { ...entry, payload: trimmed };
-    if (trySetQueue([trimmedEntry])) {
-      toast.warning(
-        "Ran out of offline storage -- your set was saved, but the skeleton replay for it was dropped.",
-        { duration: 10000 },
-      );
-      return trimmedEntry;
-    }
+  if (trimmedEntry && trySetQueue([trimmedEntry])) {
+    toast.warning(
+      "Ran out of offline storage -- your set was saved, but the skeleton replay for it was dropped.",
+      { duration: 10000 },
+    );
+    return trimmedEntry;
   }
 
   toast.error(
