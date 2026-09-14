@@ -50,6 +50,7 @@ import { DigestBanner } from "@/components/digest-banner";
 import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
 import { ExerciseTrendDialog } from "@/components/exercise-trend-dialog";
+import { MuscleHeatMap } from "@/components/muscle-heat-map";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 import { todayIso } from "@/lib/local-date";
 
@@ -337,6 +338,10 @@ export default function AthleteProgress() {
               ))}
             </CardContent>
           </Card>
+
+          <div className="mt-4">
+            <MuscleHeatMap />
+          </div>
 
           <Card className="mt-4">
             <CardHeader>

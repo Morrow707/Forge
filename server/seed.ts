@@ -3090,11 +3090,21 @@ async function main() {
   // living under the demo coach account. Fully idempotent -- both steps
   // no-op on every subsequent deploy once already applied.
   const scott = await storage.getUserByEmail("scott.morrow@live.com");
-  if (scott) {
-    if (scott.role !== "admin") {
-      await storage.setUserRole(scott.id, "admin");
-    }
-    await storage.transferExerciseOwnership(coach.id, scott.id);
+  if (scott && scott.role !== "admin") {
+    await storage.setUserRole(scott.id, "admin");
+  }
+  // scott ?? demoAdmin, the same Forge identity the skill bank, the classes
+  // and the flagship program all fall back to. The handoff used to run only
+  // when scott's account existed, which left every other environment with
+  // the whole library still owned by the demo COACH -- and "Forge-official"
+  // is derived from admin ownership, so a Free Agent (who sees their own
+  // exercises plus admins', never a coach's) got an empty exercise library,
+  // an empty picker in their own program builder, and a 404 from every
+  // /api/athlete/exercises/:id, while still being shown the Forge-official
+  // PROGRAMS that the fallback at the bottom of this file did hand over.
+  const exerciseLibraryOwner = scott ?? demoAdmin;
+  if (exerciseLibraryOwner) {
+    await storage.transferExerciseOwnership(coach.id, exerciseLibraryOwner.id);
   }
 
   // Skills system: seed the Forge official Skill Bank with real

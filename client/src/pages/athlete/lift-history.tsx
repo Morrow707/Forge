@@ -7,6 +7,7 @@ import { getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { Crown } from "lucide-react";
 import { ExerciseTrendDialog } from "@/components/exercise-trend-dialog";
+import { PinnedExercisePicker } from "@/components/pinned-exercise-picker";
 
 type PrEntry = {
   exerciseId: number;
@@ -23,11 +24,20 @@ type PrEntry = {
  * linked from. */
 export default function AthleteLiftHistory() {
   const [trendExercise, setTrendExercise] = useState<{ id: number; name: string } | null>(null);
+  const [liftFilter, setLiftFilter] = useState("");
 
   const { data, isLoading } = useQuery<PrEntry[]>({
     queryKey: ["/api/athlete/pr-history"],
     queryFn: () => getJson("/api/athlete/pr-history"),
   });
+
+  // Same pinned major-lift tabs the coach analytics page uses, driven off
+  // this athlete's own PR history rather than a roster query. The list is
+  // already every exercise they've set a PR on, so it needs no extra
+  // request: a pinned lift with no history renders dimmed (still tappable,
+  // landing on the empty state below) exactly as it does for a coach.
+  const trackedNames = Array.from(new Set((data ?? []).map((pr) => pr.exerciseName)));
+  const visible = liftFilter ? (data ?? []).filter((pr) => pr.exerciseName === liftFilter) : (data ?? []);
 
   return (
     <AppShell title="Full Lift History">
@@ -39,13 +49,24 @@ export default function AthleteLiftHistory() {
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       ) : (
         <Card>
-          <CardContent className="space-y-2 p-4">
+          <CardContent className="space-y-4 p-4">
+            <PinnedExercisePicker
+              options={trackedNames}
+              value={liftFilter}
+              onChange={setLiftFilter}
+            />
             {!data?.length && (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 Log some sets to start tracking PRs.
               </p>
             )}
-            {data?.map((pr, i) => (
+            {!!data?.length && visible.length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No sets logged for {liftFilter} yet.
+              </p>
+            )}
+            <div className="space-y-2">
+              {visible.map((pr, i) => (
               <Button
                 key={i}
                 variant="ghost"
@@ -62,8 +83,9 @@ export default function AthleteLiftHistory() {
                 <p className="font-display text-lg font-bold text-primary">
                   {pr.weight} {pr.unit} × {pr.reps}
                 </p>
-              </Button>
-            ))}
+                </Button>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

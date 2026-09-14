@@ -21584,7 +21584,36 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .select({ id: assignments.id })
       .from(assignments)
       .where(and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId)));
-    const assignmentIds = owned.map((a) => a.id);
+    return this.muscleLoadOverAssignments(
+      athleteId,
+      owned.map((a) => a.id),
+      days,
+    );
+  },
+
+  // The athlete's own view of the same tally. Deliberately NOT
+  // getMuscleLoadForAthlete with the athlete's id passed as the coach: that
+  // scopes to assignments one coach owns, which is right for a coach (you
+  // see the work you programmed) and wrong here -- an athlete's heat map
+  // has to cover everything they actually trained, whether it came from
+  // their coach, a second coach, or their own self-assignment.
+  async getMuscleLoadForOwnTraining(athleteId: number, days = 28): Promise<Record<string, number>> {
+    const owned = await db
+      .select({ id: assignments.id })
+      .from(assignments)
+      .where(eq(assignments.athleteId, athleteId));
+    return this.muscleLoadOverAssignments(
+      athleteId,
+      owned.map((a) => a.id),
+      days,
+    );
+  },
+
+  async muscleLoadOverAssignments(
+    athleteId: number,
+    assignmentIds: number[],
+    days: number,
+  ): Promise<Record<string, number>> {
     if (assignmentIds.length === 0) return {};
 
     // The athlete's own day, same correction as the load windows above --
