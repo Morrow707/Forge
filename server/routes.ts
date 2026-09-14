@@ -2539,8 +2539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserPreferences(user.id, parsed.data);
-    const { passwordHash, healthStatus, ...publicUser } = updated;
-    res.json(publicUser);
+    res.json(toPublicUser(updated));
   });
 
   // Platform-wide, anonymized -- see buildPlatformTrends in storage.ts for
@@ -7279,8 +7278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserPreferences(user.id, parsed.data);
-    const { passwordHash, healthStatus, ...publicUser } = updated;
-    res.json(publicUser);
+    res.json(toPublicUser(updated));
   });
 
   // Self-assignment: coachId and athleteId are both the coach's own id.
@@ -7917,8 +7915,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserPreferences(user.id, parsed.data);
-    const { passwordHash, healthStatus, ...publicUser } = updated;
-    res.json(publicUser);
+    res.json(toPublicUser(updated));
   });
 
   app.patch("/api/athlete/profile", requireRole("athlete"), async (req, res) => {
@@ -7928,8 +7925,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserProfile(user.id, parsed.data);
-    const { passwordHash, healthStatus, ...publicUser } = updated;
-    res.json(publicUser);
+    res.json(toPublicUser(updated));
   });
 
   // Read-only for every athlete -- whoever set these (a coach, or the
@@ -10073,8 +10069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateNotificationPrefs(user.id, parsed.data);
-    const { passwordHash, healthStatus, ...publicUser } = updated;
-    res.json(publicUser);
+    res.json(toPublicUser(updated));
   });
 
   // Push-channel-only category opt-out -- see shared/notification-
@@ -10092,8 +10087,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: `Unknown notification categories: ${unknown.join(", ")}` });
     }
     const updated = await storage.updateNotificationPushCategoryPrefs(user.id, parsed.data.categories);
-    const { passwordHash, healthStatus, ...publicUser } = updated;
-    res.json(publicUser);
+    res.json(toPublicUser(updated));
   });
 
   // ---------------- Account self-service ----------------

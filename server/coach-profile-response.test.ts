@@ -30,7 +30,40 @@ describe("no user-shaped response hand-rolls its own field stripping", () => {
     // tell: it means the author was thinking about passwordHash specifically
     // rather than about which fields are safe to send, and the next secret
     // added to the users table is included by default.
-    expect(routes).not.toMatch(/const \{\s*passwordHash\s*,\s*\.\.\./);
+    //
+    // THIS ASSERTION WAS WRITTEN TOO NARROWLY THE FIRST TIME.
+    //
+    // It used to be /const \{\s*passwordHash\s*,\s*\.\.\./ -- which only matches when
+    // passwordHash is followed IMMEDIATELY by the rest element. Six other routes destructured
+    // `{ passwordHash, healthStatus, ...publicUser }`, with one field in between, and every one
+    // of them sailed past this test while handing the caller their own mfaSecret and
+    // mfaBackupCodeHashes. The regex encoded the shape of the single instance that prompted it
+    // instead of the defect, so it certified five live leaks as absent.
+    //
+    // Now it matches a hand-rolled strip with any number of fields named before the rest
+    // element, which is the actual thing being banned.
+    expect(routes).not.toMatch(/const \{[^}]*\bpasswordHash\b[^}]*\.\.\./);
+  });
+
+  it("the self-serve preference and profile routes return toPublicUser", () => {
+    // The six that were destructuring by hand. Own-account routes, so this was the caller's own
+    // TOTP seed rather than someone else's -- which still reaches browser memory, any proxy
+    // logging bodies, and anything that can run script on the page, each of them a working
+    // second factor.
+    for (const route of [
+      'app.patch("/api/admin/my/preferences"',
+      'app.patch("/api/coach/my/preferences"',
+      'app.patch("/api/athlete/preferences"',
+      'app.patch("/api/athlete/profile"',
+      'app.patch("/api/notification-prefs"',
+      'app.patch("/api/notification-prefs/push-categories"',
+    ]) {
+      const start = routes.indexOf(route);
+      expect(start, `${route} should exist`).toBeGreaterThan(-1);
+      expect(routes.slice(start, start + 2500), `${route} must use toPublicUser`).toContain(
+        "toPublicUser(updated)",
+      );
+    }
   });
 
   it("the coach profile-edit route returns toPublicUser", () => {
