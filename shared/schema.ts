@@ -7834,7 +7834,15 @@ export const logEntryInputSchema = z
     // athlete's account-level preferredWeightUnit, same as before this
     // field existed -- see submitWorkoutLog's own comment.
     weightUnit: z.enum(["lbs", "kg"]).optional().nullable(),
-    rpe: z.number().optional().nullable(),
+    // int, and bounded to the scale the UI actually offers. The column is
+    // integer("rpe"), so a decimal did not fail validation -- it reached
+    // Postgres and took the whole workout save down with a 500, losing
+    // every set in the request. RPE in half steps (7.5, 8.5) is ordinary
+    // practice in strength training, so this is a payload a client will
+    // plausibly send; whether Forge should STORE half steps is a separate
+    // question, and until it is answered the honest answer to one is a 400
+    // rather than a crash. See RPE_SCALE in client/src/pages/workout.tsx.
+    rpe: z.number().int().min(1).max(10).optional().nullable(),
     notes: z.string().optional().nullable(),
     // One entry is one exercise's worth of sets. 100 is far past any real
     // prescription and stops a single entry carrying an unbounded number of
