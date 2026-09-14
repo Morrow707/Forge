@@ -71,6 +71,7 @@ import { ExercisePageThemeDialog } from "@/components/exercise-page-theme-dialog
 import { NavCustomizeDialog } from "@/components/nav-customize-dialog";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { NonIosTrackingNotice } from "@/components/non-ios-tracking-warning";
+import { CameraAccuracyNotice } from "@/components/camera-accuracy-notice";
 import { PoweredByFooter } from "@/components/powered-by-footer";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
@@ -1309,6 +1310,7 @@ export function AppShell({
       {user && <ActiveSessionsDialog open={activeSessionsOpen} onOpenChange={setActiveSessionsOpen} />}
       {user && <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />}
       <NonIosTrackingNotice />
+      <CameraAccuracyNotice />
     </div>
   );
 }

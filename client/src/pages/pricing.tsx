@@ -15,7 +15,7 @@ import {
 } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER, FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
-import { Flame, Check, Video } from "lucide-react";
+import { Flame, Check, Video, AlertTriangle } from "lucide-react";
 
 const ALL_BANDS = BILLING_TIER_ORDER.map((id) => BILLING_TIERS[id]);
 
@@ -56,6 +56,21 @@ export default function PricingPage() {
           <p className="max-w-md text-sm text-muted-foreground">
             One roster-based plan per program. Every tier includes AI coaching, form-check video
             analysis, programming, and nutrition -- personalization scales with you.
+          </p>
+        </div>
+
+        {/* Every tier above claims "form-check video analysis" as a real, working feature, and
+            right now the numbers that analysis produces are not accurate -- see
+            docs/camera-tracking-notes.md for what's actually validated versus still being
+            calibrated. This has to be visible before someone pays for a tier that leads with it,
+            not just disclosed after signup in CameraAccuracyNotice. */}
+        <div className="mx-auto mb-10 flex max-w-3xl items-start gap-3 rounded-md border-2 border-destructive bg-destructive/10 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+          <p className="text-sm font-bold text-destructive">
+            Camera tracking notice: the camera records video normally, but tracked metrics
+            (velocity, range of motion, power, and similar numbers) are not accurate right now.
+            We're actively calibrating the system -- don't make training decisions based on these
+            numbers yet.
           </p>
         </div>
 
@@ -215,6 +230,13 @@ export default function PricingPage() {
                     <div>
                       <p className="text-sm text-muted-foreground">{tier.description}</p>
                     </div>
+                    {tier.hasVideoFormCheck && (
+                      <p className="flex items-start gap-1.5 text-xs font-bold text-destructive">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        Camera records fine, but form-check metrics aren't accurate right now --
+                        we're calibrating.
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               );
