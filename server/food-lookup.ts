@@ -10,6 +10,24 @@
 // email.ts). Manual entry always works regardless of either being
 // configured -- see createFoodLogEntrySchema's "manual" source.
 
+// Neither fetch below had a timeout, and fetch has no default one. A barcode
+// scan is a foreground action an athlete is standing still for, so an Open
+// Food Facts instance that accepts the connection and then stalls used to
+// leave the scan spinning with no way out but killing the app. Eight seconds
+// is generous for a single JSON GET and short enough to fall through to the
+// next source while the athlete is still holding the packet.
+const LOOKUP_TIMEOUT_MS = 8000;
+
+/** Distinguishes "this product is not in the database" from "the database did
+ * not answer". Both used to arrive as null, and the route turned both into
+ * "Couldn't find that product -- try search or enter it manually." -- which
+ * sends an athlete off to retype an entire nutrition label when the real
+ * answer was "try again in a minute". */
+export type FoodLookupOutcome =
+  | { status: "found"; food: FoodCandidate }
+  | { status: "not_found" }
+  | { status: "unavailable" };
+
 const USDA_API_KEY = process.env.USDA_FDC_API_KEY;
 export const usdaFoodLookupEnabled = Boolean(USDA_API_KEY);
 if (!usdaFoodLookupEnabled) {
@@ -179,15 +197,22 @@ function offMicrosMcg(
   return raw == null ? null : round(raw, 1);
 }
 
-async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidate | null> {
+async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodLookupOutcome> {
   try {
     const res = await fetch(
       `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json`,
-      { headers: { "User-Agent": "Forge-Fitness-App/1.0" } },
+      {
+        headers: { "User-Agent": "Forge-Fitness-App/1.0" },
+        signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+      },
     );
-    if (!res.ok) return null;
+    // A 404 from Open Food Facts genuinely means "no such product"; a 5xx or a
+    // rate-limit means the database is having a bad day and says nothing about
+    // whether the product exists.
+    if (res.status === 404) return { status: "not_found" };
+    if (!res.ok) return { status: "unavailable" };
     const data = await res.json();
-    if (data.status !== 1 || !data.product) return null;
+    if (data.status !== 1 || !data.product) return { status: "not_found" };
     const p = data.product;
     const n = p.nutriments ?? {};
     const servingSize = p.serving_size ? String(p.serving_size) : null;
@@ -216,10 +241,13 @@ async function lookupBarcodeOpenFoodFacts(barcode: string): Promise<FoodCandidat
     };
     flagImplausibleValues("Open Food Facts", candidate);
     flagIfNoNutrientsMatched("Open Food Facts", candidate, Object.keys(n));
-    return candidate;
+    return { status: "found", food: candidate };
   } catch (err) {
+    // Network failure, DNS, or the timeout above firing. None of these is
+    // evidence about the product, so do not let the athlete be told it does
+    // not exist.
     console.error("Open Food Facts lookup failed:", err);
-    return null;
+    return { status: "unavailable" };
   }
 }
 
@@ -274,51 +302,82 @@ function usdaFoodToCandidate(food: any, barcode: string | null): FoodCandidate {
   return candidate;
 }
 
-async function lookupBarcodeUsda(barcode: string): Promise<FoodCandidate | null> {
-  if (!usdaFoodLookupEnabled) return null;
+async function lookupBarcodeUsda(barcode: string): Promise<FoodLookupOutcome> {
+  // Not configured is not the same as unreachable: with no key there is
+  // nothing wrong, this source simply is not in play.
+  if (!usdaFoodLookupEnabled) return { status: "not_found" };
   try {
     const res = await fetch(
       `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(
         barcode,
       )}&dataType=Branded&pageSize=1`,
+      { signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS) },
     );
-    if (!res.ok) return null;
+    if (!res.ok) return { status: "unavailable" };
     const data = await res.json();
     const food = data.foods?.[0];
-    if (!food || food.gtinUpc !== barcode) return null;
-    return usdaFoodToCandidate(food, barcode);
+    if (!food || food.gtinUpc !== barcode) return { status: "not_found" };
+    return { status: "found", food: usdaFoodToCandidate(food, barcode) };
   } catch (err) {
     console.error("USDA barcode lookup failed:", err);
-    return null;
+    return { status: "unavailable" };
   }
 }
 
 /** Barcode-first lookup: Open Food Facts, then USDA branded search as a
- * fallback if the former has no match. Null means neither found it -- the
- * client falls back to search-by-name or full manual entry. */
-export async function lookupBarcode(barcode: string): Promise<FoodCandidate | null> {
+ * fallback if the former has no match.
+ *
+ * "unavailable" only survives if BOTH sources failed to answer -- one source
+ * being down while the other returns a real miss is still a real miss, and
+ * the athlete should be told to enter it manually rather than to retry
+ * something that will not start working. */
+export async function lookupBarcode(barcode: string): Promise<FoodLookupOutcome> {
   const off = await lookupBarcodeOpenFoodFacts(barcode);
-  if (off) return off;
-  return lookupBarcodeUsda(barcode);
+  if (off.status === "found") return off;
+
+  // An unconfigured USDA is not a source that answered -- it is a source that
+  // was never asked. Letting its "not_found" count as a vote turned a genuine
+  // Open Food Facts outage back into "no such product" on every deployment
+  // without a USDA key, which is the default one. Caught by the tests below,
+  // not by reading it.
+  if (!usdaFoodLookupEnabled) return off;
+
+  const usda = await lookupBarcodeUsda(barcode);
+  if (usda.status === "found") return usda;
+  // Both were asked and neither could answer.
+  if (off.status === "unavailable" && usda.status === "unavailable") {
+    return { status: "unavailable" };
+  }
+  // At least one gave a real answer and it was a miss. Telling the athlete to
+  // retry would be telling them to wait for something that will not change.
+  return { status: "not_found" };
 }
 
 /** Name search against USDA FoodData Central -- covers generic/raw foods
  * (an Open Food Facts barcode lookup can't help with "grilled chicken
  * breast") as well as branded items. Empty array (not an error) if USDA
  * isn't configured or nothing matches. */
-export async function searchFoodsByName(query: string): Promise<FoodCandidate[]> {
-  if (!usdaFoodLookupEnabled) return [];
+export async function searchFoodsByName(
+  query: string,
+): Promise<{ status: "ok"; foods: FoodCandidate[] } | { status: "unavailable" }> {
+  // The route checks usdaFoodLookupEnabled itself and answers 503 with its own
+  // "not set up on this server" wording, so reaching here means it is on.
+  if (!usdaFoodLookupEnabled) return { status: "ok", foods: [] };
   try {
     const res = await fetch(
       `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(
         query,
       )}&pageSize=10`,
+      { signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS) },
     );
-    if (!res.ok) return [];
+    // Same distinction the barcode path makes: an empty result set is "no such
+    // food", a dead endpoint is not, and telling an athlete their search
+    // matched nothing when USDA is down sends them to retype it by hand.
+    if (!res.ok) return { status: "unavailable" };
     const data = await res.json();
-    return (data.foods ?? []).map((food: any) => usdaFoodToCandidate(food, null));
+    return { status: "ok", foods: (data.foods ?? []).map((food: any) => usdaFoodToCandidate(food, null)) };
   } catch (err) {
     console.error("USDA food search failed:", err);
-    return [];
+    return { status: "unavailable" };
   }
 }

@@ -8113,7 +8113,8 @@ export type InsertGoniometerReading = z.infer<typeof insertGoniometerReadingSche
 // own, see the athlete nutrition routes) can set as many or as few of these
 // as they actually have real numbers for; partial data is normal, not an
 // error state.
-export const updateNutritionTargetsSchema = z.object({
+export const updateNutritionTargetsSchema = z
+  .object({
   caloriesKcal: z.coerce.number().int().min(0).max(20000).optional().nullable(),
   proteinG: z.coerce.number().min(0).max(1000).optional().nullable(),
   carbsG: z.coerce.number().min(0).max(2000).optional().nullable(),
@@ -8129,7 +8130,16 @@ export const updateNutritionTargetsSchema = z.object({
   vitaminB12Mcg: z.coerce.number().min(0).max(5000).optional().nullable(),
   zincMg: z.coerce.number().min(0).max(200).optional().nullable(),
   notes: z.string().trim().max(1000).optional().nullable(),
-});
+  })
+  // Every field is optional, so {} parsed cleanly and the route answered 200
+  // having changed nothing -- and so did a body whose keys were all
+  // misspelled, since unknown keys are stripped before this runs. A client
+  // sending calorieTarget instead of caloriesKcal got a success and a
+  // silently unchanged row. Same guard, and the same reasoning, as
+  // updateNotificationPrefsSchema's.
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Provide at least one target to change",
+  });
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type NutritionTargets = typeof nutritionTargets.$inferSelect;
 

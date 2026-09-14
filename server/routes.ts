@@ -562,13 +562,22 @@ async function athleteHasCoach(athleteId: number): Promise<boolean> {
   return coaches.length > 0;
 }
 
+// Note the wording. This guard sits on 46 routes and only some of them are AI
+// -- the exercise library, the program library, self-assignment, the schedule
+// preview and the nutrition-target editor are all plain CRUD, and the nutrition
+// route's own comment says so in as many words ("manual data entry, not an AI
+// capability"). Calling every one of them an AI feature told a coached athlete
+// trying to edit their own macros that macros are AI, which is both wrong and
+// confusing in a way that invites a support message. What is actually true of
+// all 46 is that having a coach is what closes them, because the coach owns
+// that decision now.
 async function requireFreeAgent(req: any, res: any, next: any) {
   const user = currentUser(req);
   const coaches = await storage.getCoachesForAthlete(user.id);
   if (coaches.length > 0) {
-    return res
-      .status(403)
-      .json({ message: "This AI feature is only available while you don't have a coach yet." });
+    return res.status(403).json({
+      message: "Your coach manages this for you now -- it's only self-serve while you don't have one.",
+    });
   }
   next();
 }
@@ -8072,10 +8081,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const barcode = typeof req.query.barcode === "string" ? req.query.barcode.trim() : "";
     if (!barcode) return res.status(400).json({ message: "barcode query param required" });
     const result = await storage.lookupFoodBarcode(barcode);
-    if (!result) {
+    // 503, not 404, when the food databases did not answer. The two need
+    // different words because they need different actions from the athlete:
+    // a miss means retype the label, an outage means wait a minute. They were
+    // the same response, so an Open Food Facts blip read as "this product does
+    // not exist" and sent people off to enter a whole nutrition panel by hand.
+    if (result.status === "unavailable") {
+      return res.status(503).json({
+        message: "Couldn't reach the food databases just now -- try again in a moment, or enter it manually.",
+      });
+    }
+    if (result.status === "not_found") {
       return res.status(404).json({ message: "Couldn't find that product -- try search or enter it manually." });
     }
-    res.json(result);
+    res.json(result.food);
   });
 
   app.get("/api/athlete/food/search", requireRole("athlete"), async (req, res) => {
@@ -8092,7 +8111,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
     const results = await storage.searchFoods(query);
-    res.json(results);
+    if (results.status === "unavailable") {
+      return res.status(503).json({
+        message: "Couldn't reach the food database just now -- try again in a moment, or enter it manually.",
+      });
+    }
+    res.json(results.foods);
   });
 
   // Photo-based meal logging -- the one AI-driven path in food logging (see
