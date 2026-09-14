@@ -100,7 +100,9 @@ secrets exist; the Play Console internal-testing upload happens only if
   copy, keywords, screenshots, age rating, and (given the age-tier/health
   data this app handles) the App Store's privacy "nutrition label." All
   manual, done directly in each console, and separate from anything these
-  two workflows touch. Ideally done once the legal review of the age-tier
+  two workflows touch. The copy for the camera-accuracy disclosure that has
+  to go in the listing is written out in `docs/app-store-listing-copy.md`,
+  since it is the one disclosure surface no code change can reach. Ideally done once the legal review of the age-tier
   system is finished, since the privacy label has to reflect real,
   reviewed practices, not a guess.
 - **Push notification production certs.** APNs needs the App ID's Push
