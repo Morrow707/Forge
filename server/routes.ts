@@ -4937,6 +4937,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .safeParse(req.body ?? {});
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
 
+    // A SOURCE THAT IS GONE IS NOT A RANGE THAT MATCHED NOTHING.
+    //
+    // This answered 200 {"removed":0} for a source id that does not exist, while the transcribe,
+    // estimate and detect-conflicts routes on the same resource all 404. Two admins is all it
+    // takes: one deletes the source, the other is mid-review and deletes a page range, and is
+    // told the range matched no pages -- which reads as "those pages were already clean" rather
+    // than "the book you are reviewing is gone". Same answer as its neighbours now.
+    const source = await storage.getKnowledgeSource(id);
+    if (!source) {
+      return res
+        .status(404)
+        .json({ message: "That source no longer exists. The list has been refreshed.", gone: true });
+    }
     const removed = await storage.deleteKnowledgePassagesInRange(
       id,
       parsed.data.fromPage,
