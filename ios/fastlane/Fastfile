@@ -168,6 +168,18 @@ platform :ios do
     )
   end
 
+  # GitHub Actions sets an env var to the EMPTY STRING when the underlying
+  # `vars.X`/`secrets.X` was never configured -- it does not leave it unset. So
+  # ENV.fetch(key, default) hands back "" rather than the default, and the
+  # download_metadata lane duly called deliver with --app_identifier '' and
+  # failed. The Appfile next door carries a long comment about this exact trap,
+  # having been bitten by it before; this is the same helper, because the
+  # Appfile's copy is not in scope here.
+  def self.env_or(key, default = nil)
+    val = ENV[key]
+    (val.nil? || val.empty?) ? default : val
+  end
+
   METADATA_DIR = "./fastlane/metadata"
   # deliver's own marker for "this folder came from a real listing, not from
   # someone's guess" -- it is written by download_metadata and by nothing else
@@ -180,8 +192,8 @@ platform :ios do
     # metadata download as a deliver sub-command, not as a Fastfile action.
     sh(
       "bundle exec fastlane deliver download_metadata " \
-      "--api_key_path #{Shellwords.escape(ENV.fetch('APP_STORE_CONNECT_API_KEY_PATH'))} " \
-      "--app_identifier #{Shellwords.escape(ENV.fetch('IOS_BUNDLE_ID', 'com.foreperformancesystems.forge'))} " \
+      "--api_key_path #{Shellwords.escape(env_or('APP_STORE_CONNECT_API_KEY_PATH'))} " \
+      "--app_identifier #{Shellwords.escape(env_or('IOS_BUNDLE_ID', 'com.foreperformancesystems.forge'))} " \
       "--metadata_path #{Shellwords.escape(METADATA_DIR)}",
     )
     UI.success("Live listing downloaded to ios/fastlane/metadata/. Commit it before editing anything.")
