@@ -3910,9 +3910,9 @@ function ExerciseLogContent({
 
           if (item.trackingLevel === "golf_swing" || item.trackingLevel === "baseball_swing") {
             // AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment)
-            // is the only iOS path now -- ArSwingTrackerDialog and the ARKit plugin
-            // underneath stay in the repo untouched as a dead-code fallback (per the plan's
-            // Context section) but nothing routes to them anymore.
+            // is the only iOS path now. ArSwingTrackerDialog and the ARKit plugin
+            // underneath were kept as a dead-code fallback for one release and then
+            // DELETED outright in d6447bd -- there is no ARKit path left to fall back to.
             if (isAvPreviewPlatform()) {
               return (
                 <AvSwingTrackerDialog
@@ -3943,9 +3943,9 @@ function ExerciseLogContent({
           }
 
           // AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
-          // the only iOS path for jump mode now -- ArJumpTrackerDialog and the ARKit plugin
-          // underneath stay in the repo untouched as a dead-code fallback (per the plan's
-          // Context section) but nothing routes to them anymore. Every other mode, and jump
+          // the only iOS path for jump mode now. ArJumpTrackerDialog and the ARKit plugin
+          // underneath were kept as a dead-code fallback for one release and then DELETED
+          // outright in d6447bd -- there is no ARKit path left to fall back to. Every other mode, and jump
           // mode on anything that isn't native iOS, keeps using the existing MediaPipe-based
           // dialog unchanged.
           if (isAvPreviewPlatform() && item.trackingLevel === "jump") {
@@ -3997,9 +3997,9 @@ function ExerciseLogContent({
           }
 
           // AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
-          // the only iOS path for bar_path/full now -- ArBarTrackerDialog and the ARKit plugin
-          // underneath stay in the repo untouched as a dead-code fallback (per the plan's
-          // Context section) but nothing routes to them anymore. See AvBarTrackerDialog's own
+          // the only iOS path for bar_path/full now. ArBarTrackerDialog and the ARKit plugin
+          // underneath were kept as a dead-code fallback for one release and then DELETED
+          // outright in d6447bd -- there is no ARKit path left to fall back to. See AvBarTrackerDialog's own
           // file comment for what's ported vs deliberately still MediaPipe-only.
           if (isAvPreviewPlatform() && (item.trackingLevel === "bar_path" || item.trackingLevel === "full")) {
             return (

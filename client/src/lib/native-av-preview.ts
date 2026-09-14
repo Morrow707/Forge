@@ -14,7 +14,7 @@ export type LensInfo = { id: "wide" | "ultraWide" | "telephoto" | string; label:
 // Y-flip belongs in vision-body-landmarks.ts (Phase 3), not here -- see
 // AvBodyTrackingPlugin.swift's own comment on why it's left raw at the source.
 export type PoseJoint = { name: string; x: number; y: number; confidence: number };
-// Phase 5: object/implement tracking (bar path, thrown ball) -- AvImplementTracker.swift's own
+// Phase 5: object/implement tracking (bar path, thrown ball) -- AvBodyTrackingPlugin.swift's implement tracker's own
 // output, in the exact same raw Vision convention as PoseJoint above (normalized 0-1,
 // bottom-left origin, relative to frameWidth/frameHeight). Omitted (not a zeroed/default
 // point) on a frame with no lock -- see AvBodyTrackingPlugin.swift's own comment on its

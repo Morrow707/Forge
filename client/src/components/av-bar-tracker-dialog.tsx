@@ -89,7 +89,7 @@ import type { Landmark } from "@mediapipe/tasks-vision";
 /** AVFoundation + Vision bar-path/full mode tracking -- the last tracker mode converted off
  * ARKit (see ArBarTrackerDialog for the fallback this replaces, kept completely untouched per
  * the plan's own Context section). Same "needs a held implement, not just a body joint" problem
- * ArBarTrackerDialog solved for ARKit, now solved for this pipeline by AvImplementTracker.swift
+ * ArBarTrackerDialog solved for ARKit, now solved for this pipeline by AvBodyTrackingPlugin.swift's implement tracker
  * -- see that class's own file comment for the algorithm (motion-diff, ported from
  * implement-tracking.ts) and for why it reports a raw Vision-convention point rather than a
  * meters/world position the way both trackers it's descended from do.

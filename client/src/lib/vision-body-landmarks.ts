@@ -165,7 +165,7 @@ export function visionBody3DToWorldLandmarks(frame: NativePoseFrame): Landmark[]
 }
 
 // Phase 5: same pixel-scale + Y-flip transform as visionJointsToWorldLandmarks above, applied
-// to AvImplementTracker.swift's own leftImplement/rightImplement output instead of a body
+// to AvBodyTrackingPlugin.swift's implement tracker's own leftImplement/rightImplement output instead of a body
 // joint -- see native-av-preview.ts's PoseImplement comment for why that's reported in the
 // identical raw Vision convention a joint is. Landing it in this same pixel-space,
 // consistent-sign-convention unit as worldLandmarks' own wrist entry (not yet real-world

@@ -553,8 +553,9 @@ export default function SkillWorkoutPage() {
       </AppShell>
 
       {/* AVFoundation + Vision pipeline (see AvBodyTrackingPlugin.swift's file comment) is
-          the only iOS path now -- ArSprintTrackerDialog and the ARKit plugin underneath stay
-          in the repo untouched as a dead-code fallback but nothing routes to them anymore. */}
+          the only iOS path now. ArSprintTrackerDialog and the ARKit plugin underneath were
+          kept as a dead-code fallback for one release and then DELETED outright in d6447bd --
+          there is no ARKit path left to fall back to. */}
       {sprintExercise && (isAvPreviewPlatform() ? (
         <AvSprintTrackerDialog
           open={!!sprintExercise}

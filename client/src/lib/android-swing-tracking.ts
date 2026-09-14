@@ -4,7 +4,7 @@
 // instruction: retuning one of these two files (after real iOS footage shows TAKEAWAY_TRIGGER_MPS
 // needs to move, say) must never silently also retune the other -- same reasoning
 // implement-tracking.ts's own camera-overlord checks were kept as an independent copy of
-// AvImplementTracker.swift's checks rather than one shared implementation. If the two ever DO
+// AvBodyTrackingPlugin.swift's implement tracker's checks rather than one shared implementation. If the two ever DO
 // need to diverge in actual approach (not just constants), that's fine too -- nothing here is
 // meant to track its iOS twin line-for-line forever, only to start from the same place.
 //

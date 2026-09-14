@@ -257,7 +257,7 @@ function summarizeBodyPose(rawFrames: NativePoseFrame[]): TrackingDiagnostics["b
   };
 }
 
-// Object detection -- AvImplementTracker.swift's own per-frame lock, summarized the same way.
+// Object detection -- AvBodyTrackingPlugin.swift's implement tracker's own per-frame lock, summarized the same way.
 // All-zero on a bar/implement exercise is the single most useful "why did this fail" signal on
 // its own: it means the implement tracker never locked onto anything for the whole clip,
 // independent of how well the body itself tracked.

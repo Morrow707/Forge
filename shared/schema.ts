@@ -201,7 +201,7 @@ export const trackingLevelEnum = pgEnum("tracking_level", [
   // Strength-side, unlike sprint/mechanics above -- a med ball throw is a
   // programExercises movement (see VideoTrackingToggle's own
   // MED_BALL_NAME_PATTERN), not a Skills drill. Unlike bar_path/full it
-  // DOES use AvImplementTracker.swift's object tracking (following the
+  // DOES use AvBodyTrackingPlugin.swift's implement tracker's object tracking (following the
   // ball itself, single-instance since there's only one hand's worth of
   // implement to follow -- see AvImplementTracker's own comment), fused
   // with mechanics-tracking.ts's existing "throw" mode body-joint analysis
@@ -7584,7 +7584,7 @@ export const trackingDiagnosticsSchema = z.object({
     framesWithBody: z.number(),
     avgWristConfidence: z.number().optional().nullable(),
   }),
-  // Object detection -- AvImplementTracker.swift's per-frame bar/implement lock, summarized the
+  // Object detection -- AvBodyTrackingPlugin.swift's implement tracker's per-frame bar/implement lock, summarized the
   // same way. All-zero here on an exercise that uses a bar/implement is the single most useful
   // "why did this fail" signal: it means the implement tracker never found anything to lock
   // onto for the whole clip, regardless of how well the body itself tracked.

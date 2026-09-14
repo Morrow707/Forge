@@ -38,7 +38,7 @@ import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracki
 
 /** AVFoundation + Vision med ball throw tracking -- genuinely new, no ARKit equivalent was ever
  * built for this mode (unlike every other tracker this AV pipeline replaced). It exists at all
- * because AvImplementTracker.swift's motion-diff object tracking (built for bar_path/full --
+ * because AvBodyTrackingPlugin.swift's implement tracker's motion-diff object tracking (built for bar_path/full --
  * see av-bar-tracker-dialog.tsx) generalizes to any held object, not just a barbell: "a caller
  * tracking a single implement (a thrown medicine ball, not a two-handed bar) uses the left
  * instance alone" is that class's own file comment, describing exactly this mode.

@@ -243,10 +243,20 @@ Two routes, both real, neither dependent on the athlete's body being measurable:
 1. **Scale off the equipment instead of the athlete.** computeReferenceObjectScale and
    CALIBRATION_REFERENCES already exist. A bumper plate is 450mm and shows as a full
    circle from the side; a bar is ~2.13m sleeve-to-sleeve and shows unforeshortened from
-   the head or foot of a bench. So every angle has a known-size object in frame -- the
-   detector just is not wired to bench today (av-bar-tracker-dialog only sets
-   coreMlTrackingMode to "plate" for modes that already traded corroboration for it).
-   This is the single highest-value piece of work for "accurate from any angle."
+   the head or foot of a bench. So every angle has a known-size object in frame.
+
+   **This is now wired** (it was not when the paragraph above was first written):
+   av-bar-tracker-dialog sets coreMlTrackingMode to "plate" for every lift where
+   `heightCalibrationUnreliable` is true, which is exactly the lying/seated/supported
+   postures -- bench press included -- and plateScaleFromFrames turns the detection into
+   a scale. The shipped MedBallDetector model really does carry the plate class (its
+   label map is med_ball, plate, baseball, golf_ball, tennis_ball, kettlebell, dumbbell,
+   barbell), and the same retrain that kept the plate class usable regressed barbell to
+   ~0.02 and dumbbell to ~0.14 confidence, both under the gate.
+
+   What is still open is not the wiring but the evidence: the plate class's supporting
+   data is eleven instances from three photos, so a plate-derived bench scale has never
+   been checked against a bar sensor. Do that before treating a bench number as settled.
 2. **Use the real 3D pose.** VNDetectHumanBodyPose3DRequest (iOS 17+) returns joints in
    actual metres, and visionBody3DToWorldLandmarks already bridges it -- the TRACKING
    path prefers it per frame. Calibration does not: av-bar-tracker-dialog builds
