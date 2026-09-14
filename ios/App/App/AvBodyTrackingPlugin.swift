@@ -824,10 +824,23 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Field of view is the property that distinguishes these formats, so it is what is
         // chosen on. Dimensions and frame rate are already pinned by the filters above, so this
         // only ever picks between formats that are otherwise equivalent.
-        func widestFieldOfView(_ formats: [AVCaptureDevice.Format]) -> AVCaptureDevice.Format? {
-            formats.max { a, b in a.videoFieldOfView < b.videoFieldOfView }
+        //
+        // HDR BREAKS THE TIE, BECAUSE TWO FORMATS AT THE SAME FIELD OF VIEW ARE NOT EQUAL.
+        //
+        // A device typically publishes the same 1080p60 geometry twice, once with video HDR
+        // support and once without. Field of view cannot separate those, so without a second
+        // criterion the choice between them is again whatever the array happened to list first.
+        // The HDR one is strictly the better input here: see enableVideoHdr below for why that
+        // matters to tracking and not only to how the preview looks.
+        func bestFormat(_ formats: [AVCaptureDevice.Format]) -> AVCaptureDevice.Format? {
+            formats.max { a, b in
+                if a.videoFieldOfView != b.videoFieldOfView {
+                    return a.videoFieldOfView < b.videoFieldOfView
+                }
+                return !a.isVideoHDRSupported && b.isVideoHDRSupported
+            }
         }
-        guard let chosen = widestFieldOfView(exact) ?? largest(underBudget) ?? largest(anySixty) else {
+        guard let chosen = bestFormat(exact) ?? largest(underBudget) ?? largest(anySixty) else {
             logDiag("WARNING: no format supports \(Int(targetFrameRate))fps -- leaving device default")
             return
         }
@@ -840,6 +853,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             device.activeFormat = chosen
             device.activeVideoMinFrameDuration = frameDuration
             device.activeVideoMaxFrameDuration = frameDuration
+            enableVideoHdr(on: device, format: chosen)
             device.unlockForConfiguration()
             let d = dims(chosen)
             // The field of view goes in the log because it is the number that separates two
@@ -848,11 +862,45 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             logDiag(
                 "activeFormat set: \(d.width)x\(d.height) @ \(Int(targetFrameRate))fps (capped), "
                     + "fov \(String(format: "%.1f", chosen.videoFieldOfView))deg "
+                    + "hdr \(chosen.isVideoHDRSupported ? (device.isVideoHDREnabled ? "on" : "supported-but-off") : "unsupported") "
                     + "of \(exact.count) matching format(s)"
             )
         } catch {
             logDiag("WARNING: failed to set capture format: \(error.localizedDescription)")
         }
+    }
+
+    /// HDR ON, ASKED FOR RATHER THAN LEFT TO THE DEVICE.
+    ///
+    /// The preview was held against the stock Camera app in a gym with two sunlit windows behind
+    /// the rack, and ours was visibly worse: blown highlights across the glass, the bar and the
+    /// plates sunk into shadow against them. Some of that gap is honest -- the Camera app's still
+    /// is a multi-frame Smart HDR composite and a 60fps video stream cannot be -- but extended
+    /// dynamic range within a single frame is available to video capture, and we were not asking
+    /// for it.
+    ///
+    /// This is a tracking change, not a cosmetic one. Every number this pipeline produces starts
+    /// with Vision finding joints and the detector finding a plate, and both are matching on
+    /// local contrast. A backlit lifter crushed toward black in front of a blown window is the
+    /// case where that contrast is thinnest, and it shows in the diagnostics that came back from
+    /// exactly that rack: wrist confidence in the 60s-70s, the implement tracker averaging 51%,
+    /// the plate detector boxing a 10x53px sliver at the frame edge. Recovering shadow detail on
+    /// the athlete's side of the exposure is the input those all read from.
+    ///
+    /// Set explicitly rather than trusted to `automaticallyAdjustsVideoHDREnabled`. That property
+    /// defaults to true and would usually turn HDR on by itself -- but it is the device deciding,
+    /// it can be left off by a format change, and "usually" is not something the log could ever
+    /// show. Turning the automatic behaviour off and stating the value makes it a setting this
+    /// code owns and reports, which is the difference between knowing HDR was on for a take and
+    /// assuming it.
+    ///
+    /// The caller already holds the configuration lock, and this must run AFTER activeFormat is
+    /// assigned: isVideoHDREnabled is a property of the active format, and setting it before the
+    /// format change would be discarded.
+    private func enableVideoHdr(on device: AVCaptureDevice, format: AVCaptureDevice.Format) {
+        guard format.isVideoHDRSupported else { return }
+        device.automaticallyAdjustsVideoHDREnabled = false
+        device.isVideoHDREnabled = true
     }
 
     // Never set anywhere else in this file -- setFocusPoint's .autoFocus/.autoExpose are a
