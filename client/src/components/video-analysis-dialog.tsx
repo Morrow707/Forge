@@ -412,7 +412,19 @@ export function VideoAnalysisDialog({
         return;
       }
       setAnalyzeMessage(
-        "No skeleton data was saved for this set -- older sets tracked before this feature, or a plain form-check clip, don't have it to replay.",
+        // THERE IS A THIRD REASON THIS IS MISSING, AND THE MESSAGE DID NOT NAME IT.
+        //
+        // A phone that ran out of offline storage mid-session drops skeletonFrames to keep the
+        // set's actual numbers (see queueLog in offline-queue.ts -- a replay is the cheapest
+        // thing it can give up). The set is recent, it was tracked, and the athlete saw a
+        // warning about it -- but the coach looking at it later was told the set was either
+        // old or untracked, neither of which is true. A coach who has just been told the clip
+        // predates the feature has no reason to ask the athlete to re-record it, which is the
+        // one action that would actually recover the overlay.
+        "No skeleton replay is stored for this set. Either it was tracked before this feature " +
+          "existed, it's a plain form-check clip with no tracking behind it, or the athlete's " +
+          "phone ran out of storage mid-session and dropped the replay to keep the set's numbers " +
+          "-- a fresh recording would capture it.",
       );
       setShowSkeleton(false);
       return;
