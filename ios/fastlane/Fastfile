@@ -1,5 +1,8 @@
 require "fileutils"
 require "shellwords"
+require "json"
+require "tmpdir"
+require "securerandom"
 
 default_platform(:ios)
 
@@ -190,12 +193,33 @@ platform :ios do
   lane :download_metadata do
     # Run through the deliver CLI rather than an action: fastlane exposes
     # metadata download as a deliver sub-command, not as a Fastfile action.
-    sh(
-      "bundle exec fastlane deliver download_metadata " \
-      "--api_key_path #{Shellwords.escape(env_or('APP_STORE_CONNECT_API_KEY_PATH'))} " \
-      "--app_identifier #{Shellwords.escape(env_or('IOS_BUNDLE_ID', 'com.foreperformancesystems.forge'))} " \
-      "--metadata_path #{Shellwords.escape(METADATA_DIR)}",
-    )
+    #
+    # --api_key_path wants a JSON file describing the key, NOT the .p8 itself.
+    # Handing it the .p8 (which is what the workflow decodes, and what the beta
+    # lane feeds to the app_store_connect_api_key ACTION, where it is the right
+    # input) makes spaceship JSON.parse a PEM and die on "invalid number:
+    # '-----BEGIN'". So build the JSON wrapper here.
+    key_json = {
+      key_id: env_or("APP_STORE_CONNECT_KEY_ID"),
+      issuer_id: env_or("APP_STORE_CONNECT_ISSUER_ID"),
+      key: File.read(env_or("APP_STORE_CONNECT_API_KEY_PATH")),
+      in_house: false,
+    }
+    key_json_path = File.join(Dir.tmpdir, "forge_asc_key_#{SecureRandom.hex(8)}.json")
+    File.write(key_json_path, JSON.generate(key_json))
+    # 0600 and deleted in the ensure below: this file holds the private key in
+    # full, on a runner whose workspace other steps can read.
+    File.chmod(0o600, key_json_path)
+    begin
+      sh(
+        "bundle exec fastlane deliver download_metadata " \
+        "--api_key_path #{Shellwords.escape(key_json_path)} " \
+        "--app_identifier #{Shellwords.escape(env_or('IOS_BUNDLE_ID', 'com.foreperformancesystems.forge'))} " \
+        "--metadata_path #{Shellwords.escape(METADATA_DIR)}",
+      )
+    ensure
+      FileUtils.rm_f(key_json_path)
+    end
     UI.success("Live listing downloaded to ios/fastlane/metadata/. Commit it before editing anything.")
   end
 
