@@ -990,7 +990,7 @@ export default function CoachAnalytics() {
           programming off one of these is the higher-stakes reader of these
           numbers, and the one-time dialog in AppShell is per device, so a coach
           on a laptop they have not used before has never seen it. */}
-      {athleteId && <CameraMetricCaveat className="mb-4" />}
+      {athleteId && <CameraMetricCaveat dismissible className="mb-4" />}
 
       {!athleteId && (
         <Card>

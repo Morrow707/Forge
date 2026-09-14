@@ -92,6 +92,24 @@ describe("the camera-accuracy disclosure reaches every surface that needs it", (
     }
   });
 
+  it("the in-app caveat is acknowledgeable once; the sales surfaces are not", () => {
+    // Scott's call, and the right one for the surfaces someone opens every
+    // session: a permanent red line on every tracked exercise stops being read
+    // by the second day and just costs attention. The price list, the landing
+    // page and the checkout are different -- a prospect sees those once while
+    // deciding whether to pay, and should not be able to clear a material fact
+    // about what they are buying.
+    for (const file of ["client/src/pages/workout.tsx", "client/src/pages/coach/analytics.tsx"]) {
+      expect(read(file)).toMatch(/<CameraMetricCaveat[^>]*\sdismissible/);
+    }
+    for (const file of [
+      "client/src/pages/pricing.tsx",
+      "client/src/pages/athlete/upgrade.tsx",
+    ]) {
+      expect(read(file)).not.toMatch(/<CameraMetricCaveat[^>]*\sdismissible/);
+    }
+  });
+
   it("says the video is fine, not just that the numbers are bad", () => {
     // The distinction is the whole point: athletes are paying for form-check
     // video, which works. A warning that reads as "the camera is broken"

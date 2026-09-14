@@ -3099,7 +3099,7 @@ function ExerciseLogContent({
           on the exercise card rather than on each set row: one honest line per
           exercise reads as information, the same line repeated under four sets
           reads as noise and stops being read at all. */}
-      {item.trackingLevel !== "none" && <CameraMetricCaveat />}
+      {item.trackingLevel !== "none" && <CameraMetricCaveat dismissible />}
 
       {videoRequired && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
