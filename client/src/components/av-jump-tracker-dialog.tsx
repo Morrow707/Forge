@@ -581,7 +581,29 @@ export function AvJumpTrackerDialog({
     // confident box read this take (bestBoxClearanceCm stays null either way) -- same
     // no-number-is-better-than-a-wrong-one restraint as the calibration-failure paths above,
     // not a warning nagging the athlete about a signal that was never available.
-    if (usesBox && metrics.bestBoxClearanceCm != null) {
+    // AND SILENT AGAIN WHEN THE ANSWER IS NOT PHYSICALLY POSSIBLE.
+    //
+    // A real set came back "Did not clear the box -- feet peaked 105.9 cm below the top" on a
+    // 24-inch (61cm) box, from a take whose own jump height was 58.5cm and which ended with the
+    // athlete standing on the box. Feet peaking 106cm below the top of a 61cm box puts them
+    // 45cm underneath the floor they jumped from, so whatever that number measures, it is not
+    // clearance. The neighbouring set on the same box reported clearing it by 17.7cm, so this
+    // is not a consistently-wrong constant either -- it is a read that fails on some takes.
+    //
+    // Both halves of the clearance subtraction come from the same trace, and the floor is a
+    // percentile over ankle positions, which stops being the floor on a clip where the ankles
+    // spend most of their time up on the box. Until that is understood and fixed, the honest
+    // output is no claim: a number this far outside what the athlete's own jump height allows
+    // is withheld, the same restraint the box-not-detected and calibration-failure paths above
+    // already apply. A wrong "did not clear" on a jump the athlete plainly landed is worse than
+    // silence, because it reads as a coaching correction.
+    const clearancePlausible =
+      metrics.bestBoxClearanceCm == null ||
+      // The feet cannot end up below the floor, and they cannot rise further above the box than
+      // the jump itself carried them plus a generous tuck. One box height of slack on each side
+      // is far looser than any real read needs and still catches a metre of impossibility.
+      Math.abs(metrics.bestBoxClearanceCm) <= (boxHeightIn ? boxHeightIn * 2.54 : 100);
+    if (usesBox && metrics.bestBoxClearanceCm != null && clearancePlausible) {
       // Says what was measured, not what it sounds like. This is the ANKLE's peak against the
       // box top, and a box jump tucks the knees hard, so the feet come up well past the height
       // the athlete's body actually travelled -- 47.9cm over a 24-inch box on a jump that only

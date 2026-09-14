@@ -8065,12 +8065,23 @@ export const setTrackingOptOutSchema = z.object({
 });
 export type SetTrackingOptOutInput = z.infer<typeof setTrackingOptOutSchema>;
 
-export const updateCoachFeaturesSchema = z.object(
-  Object.fromEntries(COACH_FEATURES.map((key) => [key, z.boolean().optional()])) as Record<
-    CoachFeature,
-    z.ZodOptional<z.ZodBoolean>
-  >,
-);
+export const updateCoachFeaturesSchema = z
+  .object(
+    Object.fromEntries(COACH_FEATURES.map((key) => [key, z.boolean().optional()])) as Record<
+      CoachFeature,
+      z.ZodOptional<z.ZodBoolean>
+    >,
+  )
+  // AN UPDATE THAT CHANGES NOTHING IS NOT A SUCCESSFUL UPDATE.
+  //
+  // Every field is optional, so zod stripped an unrecognised key and handed the route an empty
+  // object, which it applied and answered 200 with the unchanged state. A misspelled flag and a
+  // saved one were indistinguishable to the caller. Same refusal updateNutritionTargetsSchema
+  // carries, for the same reason: the only body that reaches here with nothing in it is one
+  // whose keys were all wrong.
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "No recognised feature flag in the request",
+  });
 export type UpdateCoachFeaturesInput = z.infer<typeof updateCoachFeaturesSchema>;
 
 export const pushSubscribeSchema = z.object({

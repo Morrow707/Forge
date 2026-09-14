@@ -433,7 +433,21 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             }
             let layerView = UIView(frame: rect)
             let layer = AVCaptureVideoPreviewLayer(session: session)
-            layer.videoGravity = .resizeAspectFill
+            // SHOW THE WHOLE FRAME, NOT A CROP OF IT.
+            //
+            // Capture is 1920x1080 -- 16:9 -- and a modern iPhone screen is about 19.5:9.
+            // resizeAspectFill scales the buffer until it covers that taller rectangle, which
+            // throws away a band down each side. Widening the chosen format to the sensor's full
+            // field of view (see applyHighestFrameRate) correctly reported 74.6deg and the
+            // preview still looked tighter than the stock Camera app, because the extra width was
+            // being cropped away again on the way to the screen.
+            //
+            // resizeAspect letterboxes instead, so what the athlete frames is exactly what the
+            // recording contains. That equivalence is the point: this preview is a framing tool
+            // for a tracker that reads the whole recorded frame, and a preview narrower than the
+            // footage teaches people to stand closer than they need to -- which is how ankles and
+            // the top of the head end up outside the shot the calibration depends on.
+            layer.videoGravity = .resizeAspect
             layer.frame = layerView.bounds
             if let connection = layer.connection, connection.isVideoOrientationSupported {
                 connection.videoOrientation = self.captureOrientation
