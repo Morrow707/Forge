@@ -1,3 +1,4 @@
+import type { MovementProfile } from "@shared/schema";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ export function AvKbSwingTrackerDialog({
   onOpenChange,
   heightIn,
   recordVideo,
+  movementProfile,
   onCapture,
   videoContext,
 }: {
@@ -83,6 +85,11 @@ export function AvKbSwingTrackerDialog({
   onOpenChange: (open: boolean) => void;
   heightIn?: number | null;
   recordVideo?: boolean;
+  /** The active MovementProfile for this capture mode, when an admin has applied one --
+   * see shared/schema.ts's movementProfiles. Null/undefined, and every null field on it,
+   * mean "use this file's own default", so a profile can tune one threshold without
+   * restating the rest. */
+  movementProfile?: MovementProfile | null;
   onCapture: (metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
@@ -269,7 +276,7 @@ export function AvKbSwingTrackerDialog({
       else if (rightBell) bellPoints.push(rightBell);
     }
 
-    const wristMetrics = summarizeKbSwingSet(trace, heightIn);
+    const wristMetrics = summarizeKbSwingSet(trace, heightIn, movementProfile);
     if (!wristMetrics) {
       const message = "Couldn't get a clean read -- make sure both hands and the kettlebell stay in frame throughout the set.";
       await saveEmptyAndWarn(
@@ -303,7 +310,9 @@ export function AvKbSwingTrackerDialog({
         speeds.push(Math.hypot(b.x - a.x, b.y - a.y) / dtSeconds);
       }
       if (speeds.length >= MIN_BELL_SPEED_SAMPLES) {
-        const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_KB_SWING_SPEED_MPS);
+        const plausible = speeds.filter(
+          (v) => v <= (movementProfile?.maxPlausibleSpeedMps ?? MAX_PLAUSIBLE_KB_SWING_SPEED_MPS),
+        );
         const pool = plausible.length > 0 ? plausible : speeds;
         const confidence = confidentBellPoints.reduce((a, p) => a + p.confidence, 0) / confidentBellPoints.length;
         bellSignal = { speedMps: Math.round(percentile(pool, 0.95) * 100) / 100, confidence };

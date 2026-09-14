@@ -1,3 +1,4 @@
+import type { MovementProfile } from "@shared/schema";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -67,12 +68,18 @@ export function KbSwingTrackerDialog({
   open,
   onOpenChange,
   recordVideo,
+  movementProfile,
   onCapture,
   videoContext,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   recordVideo?: boolean;
+  /** The active MovementProfile for this capture mode, when an admin has applied one --
+   * see shared/schema.ts's movementProfiles. Null/undefined, and every null field on it,
+   * mean "use this file's own default", so a profile can tune one threshold without
+   * restating the rest. */
+  movementProfile?: MovementProfile | null;
   onCapture: (metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
@@ -283,7 +290,7 @@ export function KbSwingTrackerDialog({
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     stopCamera();
 
-    const wristMetrics = summarizeKbSwingSet(traceRef.current);
+    const wristMetrics = summarizeKbSwingSet(traceRef.current, null, movementProfile);
 
     async function saveEmptyAndWarn(message: string) {
       if (blob) {
@@ -335,7 +342,9 @@ export function KbSwingTrackerDialog({
         speeds.push(Math.hypot(b.x - a.x, b.y - a.y) / dtSeconds);
       }
       if (speeds.length >= MIN_BELL_SPEED_SAMPLES) {
-        const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_KB_SWING_SPEED_MPS);
+        const plausible = speeds.filter(
+          (v) => v <= (movementProfile?.maxPlausibleSpeedMps ?? MAX_PLAUSIBLE_KB_SWING_SPEED_MPS),
+        );
         const pool = plausible.length > 0 ? plausible : speeds;
         const confidence = confidentBellPoints.reduce((a, p) => a + p.confidence, 0) / confidentBellPoints.length;
         bellSignal = { speedMps: Math.round(percentile(pool, 0.95) * 100) / 100, confidence };

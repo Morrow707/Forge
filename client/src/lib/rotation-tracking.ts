@@ -100,16 +100,27 @@ export function computeSeparationDeg(landmarks: Landmark[]): number | null {
 // Untuned starting values, no real footage to calibrate against yet -- same caveat every
 // heuristic constant in this codebase carries.
 const MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S = 1200;
+
+// Ceilings a "golf_swing"/"baseball_swing" MovementProfile can override -- null/undefined
+// on either keeps this file's own default. See movementProfiles.maxPlausibleSpeedMps and
+// maxPlausibleRotationVelocityDegPerSec in shared/schema.ts.
+export type SwingTrackingProfile = {
+  maxPlausibleSpeedMps?: number | null;
+  maxPlausibleRotationVelocityDegPerSec?: number | null;
+} | null | undefined;
 const SUSTAINED_DRIFT_MIN_RUN = 4;
 
-function cleanRotationTrace(trace: RotationSample[]): RotationSample[] {
+function cleanRotationTrace(
+  trace: RotationSample[],
+  maxVelocityDegPerSec = MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S,
+): RotationSample[] {
   if (trace.length < 3) return trace;
   const flagged = new Array(trace.length).fill(false);
   for (let i = 1; i < trace.length; i++) {
     const dtSec = (trace[i].t - trace[i - 1].t) / 1000;
     if (dtSec <= 0) continue;
     const velocity = Math.abs(angleDiffDeg(trace[i].separationDeg, trace[i - 1].separationDeg)) / dtSec;
-    if (velocity > MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S) flagged[i] = true;
+    if (velocity > maxVelocityDegPerSec) flagged[i] = true;
   }
 
   const cleaned: RotationSample[] = [];
@@ -157,7 +168,10 @@ export type RotationSummary = {
   trust: SetTrustScore;
 };
 
-export function summarizeRotation(frames: PoseFrame[]): RotationSummary | null {
+export function summarizeRotation(
+  frames: PoseFrame[],
+  profile?: SwingTrackingProfile,
+): RotationSummary | null {
   const rawTrace: RotationSample[] = [];
   const spreadTrace: { t: number; spread: number }[] = [];
   for (const f of frames) {
@@ -167,7 +181,7 @@ export function summarizeRotation(frames: PoseFrame[]): RotationSummary | null {
     if (spread != null) spreadTrace.push({ t: f.t, spread });
   }
   // Camera overlord -- see cleanRotationTrace's own comment above.
-  const trace = cleanRotationTrace(rawTrace);
+  const trace = cleanRotationTrace(rawTrace, profile?.maxPlausibleRotationVelocityDegPerSec ?? undefined);
   if (trace.length < 6) return null;
 
   // 95th percentile of |separation|, not a raw max -- same protection

@@ -15,6 +15,7 @@
 // swing-tracker-dialog.tsx's own comment on why this makes the Android path simpler for this one
 // specific piece.
 import type { Landmark } from "@mediapipe/tasks-vision";
+import type { SwingTrackingProfile } from "./rotation-tracking";
 import { POSE_LANDMARKS, percentile, type PoseFrame, type SetTrustScore } from "./pose-tracking";
 import { movingAverage, framesForDuration, type TrackedPoint } from "./bar-tracking";
 
@@ -83,14 +84,17 @@ export function computeSeparationDeg(landmarks: Landmark[]): number | null {
 const MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S = 1200;
 const SUSTAINED_DRIFT_MIN_RUN = 4;
 
-function cleanRotationTrace(trace: RotationSample[]): RotationSample[] {
+function cleanRotationTrace(
+  trace: RotationSample[],
+  maxVelocityDegPerSec = MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S,
+): RotationSample[] {
   if (trace.length < 3) return trace;
   const flagged = new Array(trace.length).fill(false);
   for (let i = 1; i < trace.length; i++) {
     const dtSec = (trace[i].t - trace[i - 1].t) / 1000;
     if (dtSec <= 0) continue;
     const velocity = Math.abs(angleDiffDeg(trace[i].separationDeg, trace[i - 1].separationDeg)) / dtSec;
-    if (velocity > MAX_PLAUSIBLE_ROTATION_VELOCITY_DEG_PER_S) flagged[i] = true;
+    if (velocity > maxVelocityDegPerSec) flagged[i] = true;
   }
 
   const cleaned: RotationSample[] = [];
@@ -128,7 +132,10 @@ export type RotationSummary = {
   trust: SetTrustScore;
 };
 
-export function summarizeRotation(frames: PoseFrame[]): RotationSummary | null {
+export function summarizeRotation(
+  frames: PoseFrame[],
+  profile?: SwingTrackingProfile,
+): RotationSummary | null {
   const rawTrace: RotationSample[] = [];
   const spreadTrace: { t: number; spread: number }[] = [];
   for (const f of frames) {
@@ -138,7 +145,7 @@ export function summarizeRotation(frames: PoseFrame[]): RotationSummary | null {
     if (spread != null) spreadTrace.push({ t: f.t, spread });
   }
   // Camera overlord -- see cleanRotationTrace's own comment above.
-  const trace = cleanRotationTrace(rawTrace);
+  const trace = cleanRotationTrace(rawTrace, profile?.maxPlausibleRotationVelocityDegPerSec ?? undefined);
   if (trace.length < 6) return null;
 
   const magnitudes = trace.map((s) => Math.abs(s.separationDeg));
@@ -239,14 +246,17 @@ function speedsMps(points: TrackedPoint[]): number[] {
 // one file to each declare their own copy of the identical value.
 const MAX_PLAUSIBLE_GRIP_SPEED_MPS = 15;
 
-function cleanGripTrace(points: TrackedPoint[]): TrackedPoint[] {
+function cleanGripTrace(
+  points: TrackedPoint[],
+  maxGripSpeedMps = MAX_PLAUSIBLE_GRIP_SPEED_MPS,
+): TrackedPoint[] {
   if (points.length < 3) return points;
   const flagged = new Array(points.length).fill(false);
   for (let i = 1; i < points.length; i++) {
     const dt = (points[i].t - points[i - 1].t) / 1000;
     if (dt <= 0) continue;
     const dist = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
-    if (dist / dt > MAX_PLAUSIBLE_GRIP_SPEED_MPS) flagged[i] = true;
+    if (dist / dt > maxGripSpeedMps) flagged[i] = true;
   }
 
   const cleaned: TrackedPoint[] = [];
@@ -360,10 +370,10 @@ export type SwingSummary = {
   gripTrace: TrackedPoint[];
 };
 
-export function summarizeSwing(frames: PoseFrame[]): SwingSummary {
+export function summarizeSwing(frames: PoseFrame[], profile?: SwingTrackingProfile): SwingSummary {
   const rawGripTrace = frames.map(gripPoint).filter((p): p is TrackedPoint => p != null);
   // Camera overlord -- see cleanGripTrace's own comment above.
-  const gripTrace = cleanGripTrace(rawGripTrace);
+  const gripTrace = cleanGripTrace(rawGripTrace, profile?.maxPlausibleSpeedMps ?? undefined);
   const phases = detectPhases(gripTrace);
   const headSwayCm = phases ? computeHeadSwayCm(frames, phases.takeawayT, phases.impactT) : null;
   return { phases, headSwayCm, gripTrace };

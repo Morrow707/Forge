@@ -6,6 +6,7 @@ import { Circle, Square, RotateCcw, Upload, AlertTriangle, X, Ruler } from "luci
 import { toast } from "sonner";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { lockCameraExposure } from "@/lib/camera-exposure";
+import { WebCameraChrome } from "@/components/web-camera-chrome";
 import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/native-camera";
 import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
 import {
@@ -53,6 +54,13 @@ export function FormVideoRecorderDialog({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Kept in sync with streamRef's own video track so WebCameraChrome can read it fresh on every
+  // pinch/tap -- same convention every tracker dialog already uses (see bar-tracker-dialog.tsx's
+  // identical pair of refs). This dialog was the one camera surface in the app with no zoom,
+  // tap-to-focus or lens control at all, even though it opens the same kind of MediaStream the
+  // trackers do; an athlete filming a form check had to walk the phone closer instead.
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const cameraChromeContainerRef = useRef<HTMLDivElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
@@ -117,6 +125,7 @@ export function FormVideoRecorderDialog({
   function stopCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    videoTrackRef.current = null;
   }
 
   function resetAll() {
@@ -201,6 +210,7 @@ export function FormVideoRecorderDialog({
             // comment. Same "less blur on a fast movement" reasoning as the
             // frameRate constraint above.
             const videoTrack = stream.getVideoTracks()[0];
+            videoTrackRef.current = videoTrack ?? null;
             if (videoTrack) void lockCameraExposure(videoTrack);
           })
           .catch(() => setCameraError("Camera access denied or unavailable."));
@@ -214,6 +224,7 @@ export function FormVideoRecorderDialog({
       if (stillLive) return;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      videoTrackRef.current = null;
       acquireCamera();
     });
     // See bar-tracker-dialog.tsx's own comment on onAppBackground.
@@ -371,12 +382,20 @@ export function FormVideoRecorderDialog({
       <DialogContent className="inset-0 top-0 left-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-black p-0 overflow-hidden [&>button]:hidden">
         <div className="relative flex h-full w-full flex-col">
           {/* Video / capture surface fills the screen */}
-          <div className="relative flex-1 bg-black">
+          <div ref={cameraChromeContainerRef} className="relative flex-1 overflow-hidden bg-black">
             {step === "preview" && previewUrl ? (
               <video src={previewUrl} controls playsInline className="h-full w-full object-contain" />
             ) : (
               <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-contain" />
             )}
+
+            {/* Only while the live camera is on screen -- the preview step is a recorded file
+                playing back, where a pinch would be zooming nothing. */}
+            <WebCameraChrome
+              containerRef={cameraChromeContainerRef}
+              videoTrackRef={videoTrackRef}
+              active={open && step === "capture"}
+            />
 
             {/* See-through overlay controls float on top of the video itself
                 instead of living in an opaque footer bar below it. Pinned

@@ -1684,6 +1684,26 @@ const askQuestionTool = {
           description:
             "Multiplier (near 1.0) applied to every tracked position for this movement before ROM/velocity/power are computed from them -- e.g. 0.78 to shrink readings that are running consistently high. Only set this from a real reference reading for THIS movementType specifically (a trusted external device's readings for the same set, a tape-measured ROM) -- never guess one, and never carry a number learned for one movement over to another, even a similar one (bench and squat are filmed at different distances/angles and need their own reading).",
         },
+        maxPlausibleSpeedMps: {
+          type: "number",
+          description:
+            "Speed-tracked modes (med ball throw, kettlebell swing, golf/baseball swing): the fastest the tracked point could physically move in this movement, in m/s. Samples above it are discarded as tracking noise. Defaults are 25 (med ball leaving the hand), 8 (kettlebell at the top of its arc), 15 (club/bat grip). Raise it only if a real athlete's genuine reading is being thrown away; lowering it makes the tracker stricter about noise.",
+        },
+        maxPlausibleSprintSpeedYardsPerSec: {
+          type: "number",
+          description:
+            "Checkpoint-timed modes (sled push, loaded carry): the fastest plausible travel speed in yards per second, above which a checkpoint crossing is treated as a mis-detection. Default 15.",
+        },
+        minRepAmplitudeCm: {
+          type: "number",
+          description:
+            "Kettlebell swing: the smallest arc excursion (cm) that counts as a real rep rather than the athlete resettling between them. Default 12. Too low and a shuffle is counted as a rep; too high and a short, sharp swing disappears.",
+        },
+        maxPlausibleRotationVelocityDegPerSec: {
+          type: "number",
+          description:
+            "Rotation modes (golf/baseball swing): degrees per second above which a frame-to-frame hip or shoulder angle jump is landmark noise rather than real rotation. Default 1200.",
+        },
         cameraFramingNotes: {
           type: "string",
           description:
@@ -1706,6 +1726,10 @@ const movementProfileProposalResultSchema = z.object({
   barTiltMaxDeg: z.number().optional(),
   jumpHeightOutlierPercent: z.number().optional(),
   positionScaleCorrection: z.number().optional(),
+  maxPlausibleSpeedMps: z.number().optional(),
+  maxPlausibleSprintSpeedYardsPerSec: z.number().optional(),
+  minRepAmplitudeCm: z.number().optional(),
+  maxPlausibleRotationVelocityDegPerSec: z.number().optional(),
   cameraFramingNotes: z.string().optional(),
   summary: z.string(),
 });
@@ -15104,7 +15128,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       .map((p, i) => `${cite(i)}\n${p.text.slice(0, 1800)}`)
       .join("\n\n---\n\n");
 
-    const system = `You maintain camera-tracker kinematic tracking profiles for "${movementType}" movements on a strength-and-conditioning platform. The pose-tracking pipeline already runs deterministic checks -- knee angle, knee valgus ratio, torso lean, bar-path drift, bar tilt -- against threshold numbers; your job is to refine those numbers and the camera guidance for this movement, not to invent a new kind of check. "jump" is a special movementType with no bar or knee-depth judgment -- only jumpHeightOutlierPercent and cameraFramingNotes apply there.
+    const system = `You maintain camera-tracker kinematic tracking profiles for "${movementType}" movements on a strength-and-conditioning platform. The pose-tracking pipeline already runs deterministic checks -- knee angle, knee valgus ratio, torso lean, bar-path drift, bar tilt -- against threshold numbers; your job is to refine those numbers and the camera guidance for this movement, not to invent a new kind of check. Some movementTypes are not lift patterns at all but the name of a capture mode, and only a subset of fields applies to each: "jump" takes only jumpHeightOutlierPercent and cameraFramingNotes; "med_ball", "kb_swing", "golf_swing" and "baseball_swing" take maxPlausibleSpeedMps (and kb_swing also minRepAmplitudeCm, the two swing modes also maxPlausibleRotationVelocityDegPerSec); "horizontal_load" takes maxPlausibleSprintSpeedYardsPerSec. None of them has a bar or knee-depth judgment, so leave those fields alone there.
 
 You are being handed passages from the platform's own uploaded reference library. Two rules about them:
 - Only propose a value a passage actually supports. Where the material gives a range, coaching cue or explicit figure, use it. Where it does not address a field, LEAVE THAT FIELD ALONE -- an invented number is worse than no number, because the tracker enforces it against every athlete.
@@ -15123,6 +15147,10 @@ Current active profile for ${movementType}${
               barTiltMaxDeg: currentProfile.barTiltMaxDeg,
               jumpHeightOutlierPercent: currentProfile.jumpHeightOutlierPercent,
               positionScaleCorrection: currentProfile.positionScaleCorrection,
+              maxPlausibleSpeedMps: currentProfile.maxPlausibleSpeedMps,
+              maxPlausibleSprintSpeedYardsPerSec: currentProfile.maxPlausibleSprintSpeedYardsPerSec,
+              minRepAmplitudeCm: currentProfile.minRepAmplitudeCm,
+              maxPlausibleRotationVelocityDegPerSec: currentProfile.maxPlausibleRotationVelocityDegPerSec,
               cameraFramingNotes: currentProfile.cameraFramingNotes,
             },
             null,
@@ -15244,7 +15272,7 @@ Propose what these passages support for this movement's tracking profile, or cal
     ]);
 
 
-    const system = `You maintain camera-tracker kinematic tracking profiles for "${movementType}" movements on a strength-and-conditioning platform. The app's pose-tracking pipeline (MediaPipe-based, on-device) already runs deterministic checks -- knee angle, knee valgus ratio, torso lean, bar-path drift, bar tilt -- against threshold numbers; your job is to refine those numbers and camera guidance for this specific movement based on what the admin teaches you, not to invent a new kind of check. "jump" is a special movementType for vertical/broad jump tracking, which has no bar or knee-depth judgment -- only jumpHeightOutlierPercent and cameraFramingNotes apply there.
+    const system = `You maintain camera-tracker kinematic tracking profiles for "${movementType}" movements on a strength-and-conditioning platform. The app's pose-tracking pipeline (MediaPipe-based, on-device) already runs deterministic checks -- knee angle, knee valgus ratio, torso lean, bar-path drift, bar tilt -- against threshold numbers; your job is to refine those numbers and camera guidance for this specific movement based on what the admin teaches you, not to invent a new kind of check. Some movementTypes are not lift patterns at all but the name of a capture mode, and only a subset of fields applies to each: "jump" (vertical/broad jump tracking) takes only jumpHeightOutlierPercent and cameraFramingNotes; "med_ball", "kb_swing", "golf_swing" and "baseball_swing" take maxPlausibleSpeedMps (and kb_swing also minRepAmplitudeCm, the two swing modes also maxPlausibleRotationVelocityDegPerSec); "horizontal_load" takes maxPlausibleSprintSpeedYardsPerSec. None of them has a bar or knee-depth judgment, so leave those fields alone there.
 
 You have two tools, and must pick exactly one every turn:
 - ask_question: for anything that needs clarification, is just a question, or isn't kinematic/coaching guidance at all.
@@ -15261,6 +15289,10 @@ Current active profile for ${movementType}${
               barTiltMaxDeg: currentProfile.barTiltMaxDeg,
               jumpHeightOutlierPercent: currentProfile.jumpHeightOutlierPercent,
               positionScaleCorrection: currentProfile.positionScaleCorrection,
+              maxPlausibleSpeedMps: currentProfile.maxPlausibleSpeedMps,
+              maxPlausibleSprintSpeedYardsPerSec: currentProfile.maxPlausibleSprintSpeedYardsPerSec,
+              minRepAmplitudeCm: currentProfile.minRepAmplitudeCm,
+              maxPlausibleRotationVelocityDegPerSec: currentProfile.maxPlausibleRotationVelocityDegPerSec,
               cameraFramingNotes: currentProfile.cameraFramingNotes,
             },
             null,
@@ -15343,10 +15375,18 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
     proposal: ApplyMovementProfileProposalInput,
   ): Promise<{ profile: MovementProfile; assistantMessage: MovementKnowledgeMessage }> {
     return db.transaction(async (tx) => {
+      // FOR UPDATE, not a plain read. Without the lock two admins publishing the same
+      // movementType at once both see the same (or no) current row, both insert status
+      // "active", and getActiveMovementProfile -- which destructures [row] off an
+      // unordered SELECT -- then serves whichever one Postgres happens to return first.
+      // The thresholds every tracked set of that movement scores against would be
+      // nondeterministic, and nothing in the data would show which profile was applied.
+      // A concurrent publisher now waits here and archives the row this one inserted.
       const [current] = await tx
         .select()
         .from(movementProfiles)
-        .where(and(eq(movementProfiles.movementType, movementType), eq(movementProfiles.status, "active")));
+        .where(and(eq(movementProfiles.movementType, movementType), eq(movementProfiles.status, "active")))
+        .for("update");
 
       if (current) {
         await tx.update(movementProfiles).set({ status: "archived" }).where(eq(movementProfiles.id, current.id));
@@ -15365,6 +15405,10 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
           barTiltMaxDeg: proposal.barTiltMaxDeg ?? null,
           jumpHeightOutlierPercent: proposal.jumpHeightOutlierPercent ?? null,
           positionScaleCorrection: proposal.positionScaleCorrection ?? null,
+          maxPlausibleSpeedMps: proposal.maxPlausibleSpeedMps ?? null,
+          maxPlausibleSprintSpeedYardsPerSec: proposal.maxPlausibleSprintSpeedYardsPerSec ?? null,
+          minRepAmplitudeCm: proposal.minRepAmplitudeCm ?? null,
+          maxPlausibleRotationVelocityDegPerSec: proposal.maxPlausibleRotationVelocityDegPerSec ?? null,
           cameraFramingNotes: proposal.cameraFramingNotes ?? null,
           sourceSummary: proposal.sourceSummary ?? null,
           createdBy: adminId,

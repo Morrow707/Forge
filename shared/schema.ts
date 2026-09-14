@@ -6281,6 +6281,42 @@ export const movementProfiles = pgTable(
     // jump's numbers too. See sourceSummary on the profile that sets this for
     // exactly what reference reading it was calibrated against.
     positionScaleCorrection: real("position_scale_correction"),
+    // ---- Thresholds for the five modes that had no profile at all ----
+    //
+    // bar_path/full and jump have been profile-driven since this table
+    // existed; sprint and mechanics have their own coach-adjustable
+    // thresholds (shared/skill-fault-thresholds.ts, per coach rather than
+    // per movement). That left golf_swing, baseball_swing, med_ball,
+    // kb_swing and horizontal_load scoring against constants nobody could
+    // touch -- and those constants are exactly the kind of per-movement
+    // judgement call the columns above exist for.
+    //
+    // Only the plausibility ceilings and the amplitude floor are exposed,
+    // not each tracker's algorithm internals (pixel motion-diff cutoffs,
+    // lock-drift windows). Those are properties of the tracking method and
+    // mean nothing to someone reasoning about a movement; these are claims
+    // about the movement itself, which is what an admin can actually judge.
+    //
+    // The top speed that is physically possible for this movement, above
+    // which a sample is tracking noise rather than a reading. Serves the
+    // three m/s-scale modes: a med ball leaving the hand (25 default), a
+    // kettlebell at the top of its arc (8), a club/bat grip (15). One
+    // column because a profile is keyed per movement -- a given movement
+    // only ever runs one of these pipelines.
+    maxPlausibleSpeedMps: real("max_plausible_speed_mps"),
+    // The same claim for the checkpoint-timed modes, which work in yards
+    // per second rather than m/s: sled push, loaded carry (horizontal_load,
+    // which reuses sprint-tracking's crossing model unmodified).
+    maxPlausibleSprintSpeedYardsPerSec: real("max_plausible_sprint_speed_yards_per_sec"),
+    // The smallest excursion that counts as a real rep rather than the
+    // athlete resettling between them -- kb_swing's swing-amplitude floor
+    // (12cm default). Set it too low and a shuffle becomes a rep; too high
+    // and a short, sharp swing disappears.
+    minRepAmplitudeCm: real("min_rep_amplitude_cm"),
+    // Rotation-engine ceiling (golf_swing/baseball_swing): degrees per
+    // second above which a hip/shoulder angle jump is landmark noise, not a
+    // real rotation. 1200 default.
+    maxPlausibleRotationVelocityDegPerSec: real("max_plausible_rotation_velocity_deg_per_sec"),
     // Where to put the camera for this movement -- surfaced to the athlete
     // before they start recording, not just used to judge what came out.
     cameraFramingNotes: text("camera_framing_notes"),
@@ -6298,6 +6334,18 @@ export const movementProfiles = pgTable(
       table.movementType,
       table.status,
     ),
+    // At most one ACTIVE profile per movementType, enforced by the database
+    // rather than only by applyMovementProfileProposal's archive-then-insert.
+    // getActiveMovementProfile destructures [row] off an unordered SELECT, so a
+    // second active row would not be an error anywhere -- it would silently make
+    // the thresholds a tracked set scores against depend on planner order. The
+    // transaction now also takes FOR UPDATE, which serializes two publishers once
+    // a row exists; this index is what covers the case where none does yet and
+    // there is nothing to lock. Archived rows are unconstrained: the full version
+    // history is the point.
+    oneActivePerMovementType: uniqueIndex("movement_profiles_one_active_idx")
+      .on(table.movementType)
+      .where(sql`${table.status} = 'active'`),
   }),
 );
 
@@ -6324,6 +6372,15 @@ export const applyMovementProfileProposalSchema = z.object({
   barTiltMaxDeg: z.number().optional().nullable(),
   jumpHeightOutlierPercent: z.number().optional().nullable(),
   positionScaleCorrection: z.number().optional().nullable(),
+  // The five modes that had no profile before -- see the matching columns
+  // on movementProfiles. Bounded rather than bare z.number(): these are
+  // ceilings a tracker filters samples against, so a zero or a negative
+  // would silently throw away every reading and report nothing, which
+  // looks exactly like a capture that failed.
+  maxPlausibleSpeedMps: z.number().positive().max(100).optional().nullable(),
+  maxPlausibleSprintSpeedYardsPerSec: z.number().positive().max(60).optional().nullable(),
+  minRepAmplitudeCm: z.number().positive().max(200).optional().nullable(),
+  maxPlausibleRotationVelocityDegPerSec: z.number().positive().max(5000).optional().nullable(),
   cameraFramingNotes: z.string().trim().max(1000).optional().nullable(),
   sourceSummary: z.string().trim().max(2000).optional().nullable(),
 });

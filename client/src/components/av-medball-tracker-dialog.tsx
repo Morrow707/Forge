@@ -1,3 +1,4 @@
+import type { MovementProfile } from "@shared/schema";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -115,6 +116,7 @@ export function AvMedballTrackerDialog({
   onOpenChange,
   heightIn,
   recordVideo,
+  movementProfile,
   onCapture,
   videoContext,
 }: {
@@ -122,6 +124,11 @@ export function AvMedballTrackerDialog({
   onOpenChange: (open: boolean) => void;
   heightIn?: number | null;
   recordVideo?: boolean;
+  /** The active MovementProfile for this capture mode, when an admin has applied one --
+   * see shared/schema.ts's movementProfiles. Null/undefined, and every null field on it,
+   * mean "use this file's own default", so a profile can tune one threshold without
+   * restating the rest. */
+  movementProfile?: MovementProfile | null;
   onCapture: (metrics: MedballSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
@@ -255,7 +262,9 @@ export function AvMedballTrackerDialog({
       speeds.push(Math.hypot(b.x - a.x, b.y - a.y) / dtSeconds);
     }
     if (speeds.length < MIN_BALL_SPEED_SAMPLES) return null;
-    const plausible = speeds.filter((v) => v <= MAX_PLAUSIBLE_BALL_SPEED_MPS);
+    const plausible = speeds.filter(
+      (v) => v <= (movementProfile?.maxPlausibleSpeedMps ?? MAX_PLAUSIBLE_BALL_SPEED_MPS),
+    );
     const pool = plausible.length > 0 ? plausible : speeds;
     const speedMps = Math.round(percentile(pool, 0.95) * 100) / 100;
     const confidence = confident.reduce((a, p) => a + p.confidence, 0) / confident.length;

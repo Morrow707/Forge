@@ -124,8 +124,18 @@ export type KbSwingSetMetrics = {
 // flat BASE_MIN_SWING_AMPLITUDE_CM when unset. Returns null when there isn't enough signal to
 // say anything meaningful, same "no number is better than a wrong one" stance every other
 // summarize* function in this app takes.
-export function summarizeKbSwingSet(rawPoints: TrackedPoint[], heightIn?: number | null): KbSwingSetMetrics | null {
+export function summarizeKbSwingSet(
+  rawPoints: TrackedPoint[],
+  heightIn?: number | null,
+  // From the active "kb_swing" MovementProfile when one has been applied -- null or
+  // undefined on either field keeps this file's own default, per field, so a profile
+  // that only tunes the speed ceiling never has to restate the amplitude floor. See
+  // movementProfiles.maxPlausibleSpeedMps / minRepAmplitudeCm in shared/schema.ts.
+  profile?: { maxPlausibleSpeedMps?: number | null; minRepAmplitudeCm?: number | null } | null,
+): KbSwingSetMetrics | null {
   if (rawPoints.length < 6) return null;
+  const maxPlausibleSpeedMps = profile?.maxPlausibleSpeedMps ?? MAX_PLAUSIBLE_KB_SWING_SPEED_MPS;
+  const baseMinAmplitudeCm = profile?.minRepAmplitudeCm ?? BASE_MIN_SWING_AMPLITUDE_CM;
 
   const points = rejectImplausible3dAccelerationSpikes(rawPoints);
   const ySmoothed = kalmanSmooth(
@@ -134,7 +144,7 @@ export function summarizeKbSwingSet(rawPoints: TrackedPoint[], heightIn?: number
     points.map((p) => p.confidence ?? 1),
   );
 
-  const minAmplitudeM = heightScaledAmplitudeCm(BASE_MIN_SWING_AMPLITUDE_CM, heightIn) / 100;
+  const minAmplitudeM = heightScaledAmplitudeCm(baseMinAmplitudeCm, heightIn) / 100;
   const phases = segmentPhases(ySmoothed, minAmplitudeM);
   if (phases.length === 0) return null;
 
@@ -190,11 +200,11 @@ export function summarizeKbSwingSet(rawPoints: TrackedPoint[], heightIn?: number
     // Same "fall back to the unfiltered window rather than compute over nothing" stance as
     // bar-tracking.ts's own robustPeakSpeed.
     const pool = confidentSpeeds.length > 0 ? confidentSpeeds : speeds.slice(phase.startIdx, phase.endIdx + 1);
-    const plausible = pool.filter((v) => v <= MAX_PLAUSIBLE_KB_SWING_SPEED_MPS);
+    const plausible = pool.filter((v) => v <= maxPlausibleSpeedMps);
     // Clamp to the ceiling rather than fall back to the raw (possibly-impossible) pool -- same
     // "never report a physically impossible number" fix bar-tracking.ts's own robustPeakSpeed
     // applies.
-    const repPeak = plausible.length > 0 ? Math.max(...plausible) : MAX_PLAUSIBLE_KB_SWING_SPEED_MPS;
+    const repPeak = plausible.length > 0 ? Math.max(...plausible) : maxPlausibleSpeedMps;
     allPlausibleSpeeds.push(...plausible);
 
     let repMinY = Infinity;

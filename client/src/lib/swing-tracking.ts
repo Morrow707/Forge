@@ -10,6 +10,7 @@
 // sway, not for clubhead-specific numbers. See this session's own scoping
 // of that boundary.
 import type { Landmark } from "@mediapipe/tasks-vision";
+import type { SwingTrackingProfile } from "./rotation-tracking";
 import { POSE_LANDMARKS, type PoseFrame } from "./pose-tracking";
 import { movingAverage, framesForDuration, type TrackedPoint } from "./bar-tracking";
 
@@ -75,14 +76,17 @@ function speedsMps(points: TrackedPoint[]): number[] {
 const MAX_PLAUSIBLE_GRIP_SPEED_MPS = 15;
 const SUSTAINED_DRIFT_MIN_RUN = 4;
 
-function cleanGripTrace(points: TrackedPoint[]): TrackedPoint[] {
+function cleanGripTrace(
+  points: TrackedPoint[],
+  maxGripSpeedMps = MAX_PLAUSIBLE_GRIP_SPEED_MPS,
+): TrackedPoint[] {
   if (points.length < 3) return points;
   const flagged = new Array(points.length).fill(false);
   for (let i = 1; i < points.length; i++) {
     const dt = (points[i].t - points[i - 1].t) / 1000;
     if (dt <= 0) continue;
     const dist = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
-    if (dist / dt > MAX_PLAUSIBLE_GRIP_SPEED_MPS) flagged[i] = true;
+    if (dist / dt > maxGripSpeedMps) flagged[i] = true;
   }
 
   const cleaned: TrackedPoint[] = [];
@@ -215,10 +219,10 @@ export type SwingSummary = {
   gripTrace: TrackedPoint[];
 };
 
-export function summarizeSwing(frames: PoseFrame[]): SwingSummary {
+export function summarizeSwing(frames: PoseFrame[], profile?: SwingTrackingProfile): SwingSummary {
   const rawGripTrace = frames.map(gripPoint).filter((p): p is TrackedPoint => p != null);
   // Camera overlord -- see cleanGripTrace's own comment above.
-  const gripTrace = cleanGripTrace(rawGripTrace);
+  const gripTrace = cleanGripTrace(rawGripTrace, profile?.maxPlausibleSpeedMps ?? undefined);
   const phases = detectPhases(gripTrace);
   const headSwayCm = phases ? computeHeadSwayCm(frames, phases.takeawayT, phases.impactT) : null;
   return { phases, headSwayCm, gripTrace };

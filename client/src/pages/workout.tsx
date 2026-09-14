@@ -2640,12 +2640,22 @@ function ExerciseLogContent({
   // "Processing…" indicator below can show real progress instead of a bare spinner for however
   // long analysis+upload takes.
   const [processingProgress, setProcessingProgress] = useState<Record<number, number>>({});
-  // "jump" mode profiles live under the literal movementType "jump" (jump
-  // tracking is its own trackingLevel, not a movementType) -- see
-  // shared/schema.ts's movementProfiles comment. Null/undefined here (no
-  // profile applied yet) just means detectFormFaults/summarizeJumpSet fall
-  // back to their own hardcoded defaults, same as before this existed.
-  const movementTypeForTracking = item.trackingLevel === "jump" ? "jump" : item.movementType;
+  // Which key this exercise's profile lives under. bar_path/full look it up by the
+  // exercise's own movementType, because their thresholds really are lift-pattern
+  // judgments (knee depth, torso lean, bar drift) shared by every squat or every
+  // press. Every other mode looks it up by the MODE NAME instead -- "jump" always
+  // did, and med_ball/kb_swing/horizontal_load/golf_swing/baseball_swing now do
+  // too, because their thresholds are properties of that capture pipeline rather
+  // than of a movement pattern: a med ball throw and a kettlebell swing can share
+  // a movementType and still need completely different speed ceilings, and
+  // resolving both to one profile would have them overwrite each other.
+  //
+  // Null/undefined here (no profile applied yet) just means every tracker falls
+  // back to its own hardcoded defaults, same as before this existed.
+  const movementTypeForTracking =
+    item.trackingLevel === "bar_path" || item.trackingLevel === "full"
+      ? item.movementType
+      : item.trackingLevel;
   const { data: activeMovementProfile } = useQuery<MovementProfile | null>({
     queryKey: ["/api/movement-profiles/active", movementTypeForTracking],
     enabled: item.trackingLevel !== "none" && !!movementTypeForTracking,
@@ -3845,6 +3855,7 @@ function ExerciseLogContent({
                     heightIn={user?.heightIn}
                     recordVideo={mergedTracking}
                     onCapture={handleKbSwingCapture}
+                    movementProfile={activeMovementProfile}
                     videoContext={videoContextFor(trackingSet)}
                   />
                 );
@@ -3855,6 +3866,7 @@ function ExerciseLogContent({
                   onOpenChange={(open) => !open && setTrackingSet(null)}
                   recordVideo={mergedTracking}
                   onCapture={handleHorizontalLoadCapture}
+                  movementProfile={activeMovementProfile}
                   videoContext={videoContextFor(trackingSet)}
                 />
               );
@@ -3866,6 +3878,7 @@ function ExerciseLogContent({
                   onOpenChange={(open) => !open && setTrackingSet(null)}
                   recordVideo={mergedTracking}
                   onCapture={handleKbSwingCapture}
+                  movementProfile={activeMovementProfile}
                   videoContext={videoContextFor(trackingSet)}
                 />
               );
@@ -3876,6 +3889,7 @@ function ExerciseLogContent({
                 onOpenChange={(open) => !open && setTrackingSet(null)}
                 recordVideo={mergedTracking}
                 onCapture={handleHorizontalLoadCapture}
+                movementProfile={activeMovementProfile}
                 videoContext={videoContextFor(trackingSet)}
               />
             );
@@ -3893,6 +3907,7 @@ function ExerciseLogContent({
                   heightIn={user?.heightIn}
                   recordVideo={mergedTracking}
                   onCapture={handleMedballCapture}
+                  movementProfile={activeMovementProfile}
                   videoContext={videoContextFor(trackingSet)}
                 />
               );
@@ -3903,6 +3918,7 @@ function ExerciseLogContent({
                 onOpenChange={(open) => !open && setTrackingSet(null)}
                 recordVideo={mergedTracking}
                 onCapture={handleMedballCapture}
+                movementProfile={activeMovementProfile}
                 videoContext={videoContextFor(trackingSet)}
               />
             );
@@ -3922,6 +3938,7 @@ function ExerciseLogContent({
                   heightIn={user?.heightIn}
                   recordVideo={mergedTracking}
                   onCapture={handleSwingCapture}
+                  movementProfile={activeMovementProfile}
                   videoContext={videoContextFor(trackingSet)}
                 />
               );
@@ -3937,6 +3954,7 @@ function ExerciseLogContent({
                 sport={item.trackingLevel === "golf_swing" ? "golf" : "baseball"}
                 recordVideo={mergedTracking}
                 onCapture={handleSwingCapture}
+                movementProfile={activeMovementProfile}
                 videoContext={videoContextFor(trackingSet)}
               />
             );

@@ -2220,6 +2220,33 @@ ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "set_number" integer;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "manual_result" text;
 CREATE INDEX IF NOT EXISTS "skill_session_logs_day_log_set_idx" ON "skill_session_logs" ("skill_day_log_id", "skill_program_exercise_id", "set_number");
 ALTER TABLE "movement_profiles" ADD COLUMN IF NOT EXISTS "position_scale_correction" real;
+-- Thresholds for the five capture modes that previously had no profile at all
+-- (golf_swing, baseball_swing, med_ball, kb_swing, horizontal_load) -- see the
+-- matching columns in shared/schema.ts for what each one means and its default.
+ALTER TABLE "movement_profiles" ADD COLUMN IF NOT EXISTS "max_plausible_speed_mps" real;
+ALTER TABLE "movement_profiles" ADD COLUMN IF NOT EXISTS "max_plausible_sprint_speed_yards_per_sec" real;
+ALTER TABLE "movement_profiles" ADD COLUMN IF NOT EXISTS "min_rep_amplitude_cm" real;
+ALTER TABLE "movement_profiles" ADD COLUMN IF NOT EXISTS "max_plausible_rotation_velocity_deg_per_sec" real;
+-- At most one ACTIVE profile per movement_type, enforced by the database rather than
+-- only by applyMovementProfileProposal's archive-then-insert. getActiveMovementProfile
+-- takes [row] off an unordered SELECT, so a second active row would silently make the
+-- thresholds a tracked set scores against depend on planner order.
+--
+-- The index cannot be created while a duplicate exists, so archive any first: keep the
+-- highest version per movement_type (ties broken by id, i.e. the most recently inserted)
+-- and archive the rest, which is exactly what the publish path would have done. Archived
+-- rows stay unconstrained -- the full version history is the point.
+UPDATE "movement_profiles" mp
+   SET "status" = 'archived'
+ WHERE mp."status" = 'active'
+   AND EXISTS (
+     SELECT 1 FROM "movement_profiles" other
+      WHERE other."movement_type" = mp."movement_type"
+        AND other."status" = 'active'
+        AND (other."version", other."id") > (mp."version", mp."id")
+   );
+CREATE UNIQUE INDEX IF NOT EXISTS "movement_profiles_one_active_idx"
+  ON "movement_profiles" ("movement_type") WHERE "status" = 'active';
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "mean_eai" real;
 
 -- Real per-frame skeleton positions saved live during an iOS-tracked set's original capture --

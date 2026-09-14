@@ -1,3 +1,4 @@
+import type { MovementProfile } from "@shared/schema";
 import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
@@ -102,11 +103,12 @@ function buildManualResult(
   finishTime: number,
   distanceYards: number,
   coverage: { totalFrames: number; framesWithReferencePoint: number },
+  maxPlausibleSpeedYardsPerSec = MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC,
 ): HorizontalLoadSetMetrics | null {
   const elapsedSeconds = Math.round((finishTime - startTime) * 1000) / 1000;
   if (elapsedSeconds <= 0 || distanceYards <= 0) return null;
   const avgSpeedYardsPerSec = Math.round((distanceYards / elapsedSeconds) * 100) / 100;
-  const likelyGlitch = avgSpeedYardsPerSec > MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC;
+  const likelyGlitch = avgSpeedYardsPerSec > maxPlausibleSpeedYardsPerSec;
   return {
     elapsedSeconds,
     distanceYards,
@@ -152,12 +154,18 @@ export function AvHorizontalLoadTrackerDialog({
   open,
   onOpenChange,
   recordVideo,
+  movementProfile,
   onCapture,
   videoContext,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   recordVideo?: boolean;
+  /** The active MovementProfile for this capture mode, when an admin has applied one --
+   * see shared/schema.ts's movementProfiles. Null/undefined, and every null field on it,
+   * mean "use this file's own default", so a profile can tune one threshold without
+   * restating the rest. */
+  movementProfile?: MovementProfile | null;
   onCapture: (metrics: HorizontalLoadSetMetrics | null, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
@@ -393,7 +401,13 @@ export function AvHorizontalLoadTrackerDialog({
     const startTime = manualStartRef.current;
     if (finishTime == null || startTime == null) return;
     const distanceNum = Number(distanceYards) || 0;
-    const manualResult = buildManualResult(startTime, finishTime, distanceNum, frameCoverageRef.current);
+    const manualResult = buildManualResult(
+      startTime,
+      finishTime,
+      distanceNum,
+      frameCoverageRef.current,
+      movementProfile?.maxPlausibleSprintSpeedYardsPerSec ?? undefined,
+    );
     if (!manualResult) {
       toast.error("Finish must be after start (and distance must be set) -- scrub back and try again");
       return;

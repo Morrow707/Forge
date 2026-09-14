@@ -1,3 +1,4 @@
+import type { MovementProfile } from "@shared/schema";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,7 @@ export function AvSwingTrackerDialog({
   sport,
   heightIn,
   recordVideo,
+  movementProfile,
   onCapture,
   videoContext,
 }: {
@@ -91,6 +93,11 @@ export function AvSwingTrackerDialog({
   sport: "golf" | "baseball";
   heightIn?: number | null;
   recordVideo?: boolean;
+  /** The active MovementProfile for this capture mode, when an admin has applied one --
+   * see shared/schema.ts's movementProfiles. Null/undefined, and every null field on it,
+   * mean "use this file's own default", so a profile can tune one threshold without
+   * restating the rest. */
+  movementProfile?: MovementProfile | null;
   onCapture: (metrics: AvSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
@@ -199,8 +206,8 @@ export function AvSwingTrackerDialog({
       };
     });
 
-    const rotation = summarizeRotation(frames);
-    const swing = summarizeSwing(frames);
+    const rotation = summarizeRotation(frames, movementProfile);
+    const swing = summarizeSwing(frames, movementProfile);
     const metrics: AvSwingSetMetrics | null =
       rotation || swing.phases
         ? {
