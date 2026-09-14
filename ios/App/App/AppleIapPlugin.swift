@@ -44,10 +44,18 @@ public class AppleIapPlugin: CAPPlugin, CAPBridgedPlugin {
     // Store Connect as the wrong product type (Consumable) and deleted --
     // Apple permanently reserves a Product ID once created, even after
     // deletion, so those ids are dead and can never be reused.
+    //
+    // MUST match appleProductIdForFreeAgentTier over FREE_AGENT_TIER_ORDER in
+    // shared/free-agent-tiers.ts -- Swift cannot import that, so a test
+    // (server/apple-product-ids.test.ts) compares the two and fails if they
+    // drift. They had already drifted: this list still offered family_v2,
+    // a tier retired when the Family plan was removed, and omitted basic_v2
+    // entirely, so the $4.99 floor tier was unbuyable on iOS and the app
+    // asked the App Store for a product nobody should ever create.
     private static let productIds = [
+        "com.foreperformancesystems.forge.freeagent.basic_v2",
         "com.foreperformancesystems.forge.freeagent.ai_coach_v2",
-        "com.foreperformancesystems.forge.freeagent.ai_coach_video_v2",
-        "com.foreperformancesystems.forge.freeagent.family_v2"
+        "com.foreperformancesystems.forge.freeagent.ai_coach_video_v2"
     ]
 
     private var updateListenerTask: Task<Void, Never>?

@@ -31,6 +31,15 @@ export default function CoachBilling() {
     queryKey: ["/api/coach/roster"],
     queryFn: () => getJson("/api/coach/roster"),
   });
+
+  // Same beta switch the athlete Upgrade page reads: card checkout is
+  // refused server-side while Forge is in beta, so a Subscribe button here
+  // could only ever produce an error toast.
+  const { data: billingStatus } = useQuery<{ open: boolean }>({
+    queryKey: ["/api/billing/status"],
+    queryFn: () => getJson("/api/billing/status"),
+  });
+  const billingOpen = !!billingStatus?.open;
   // The roster band, not a flat fee. This read ORG_BASE_CENTS, which was the
   // whole bill back when there was a flat account fee; there isn't one now,
   // so that same read would have quoted every coach $0.00 a month.
@@ -104,6 +113,11 @@ export default function CoachBilling() {
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
               Coach plans are managed on the web. Open Forge in a browser to subscribe or change
               your card.
+            </p>
+          ) : !billingOpen ? (
+            <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
+              Free while Forge is in beta. Nothing is charged, and there is nothing to set up --
+              the band above is what this roster would cost once billing opens.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">

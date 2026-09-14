@@ -10357,6 +10357,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ enabled: APPLE_IAP_LIVE });
   });
 
+  // The web twin of apple-iap-enabled: is anything actually for sale by card
+  // right now. The Upgrade page reads it so it can say "free while we're in
+  // beta" instead of rendering a Subscribe button that answers 503.
+  app.get("/api/billing/status", requireAuth, async (_req, res) => {
+    res.json({ open: BILLING_LIVE });
+  });
+
   app.post("/api/push/subscribe-apns", requireAuth, async (req, res) => {
     const user = currentUser(req);
     const parsed = apnsSubscribeSchema.safeParse(req.body);

@@ -72,6 +72,40 @@ services:
       # testingUnlockAllPaywalls's own comment for the exact routes it gates.
       - key: PAYWALLS_DISABLED
         value: "true"
+      # THE TWO SWITCHES THAT DECIDE WHETHER ANYONE CAN BE CHARGED.
+      # Both absent, both therefore off. Declared here as sync:false rather
+      # than left undeclared so that "can Forge take money right now" is a
+      # question the repo answers, instead of one you have to go and look in
+      # a dashboard for.
+      #
+      # BILLING_LIVE is the card rail. Every Stripe entry point refuses
+      # outright while it is off (chargingClosed in server/billing.ts), so a
+      # STRIPE_SECRET_KEY can be configured and tested without opening a
+      # till. Turning this on is the deliberate act that makes real cards
+      # chargeable -- do not set it to run an experiment.
+      #
+      # APPLE_IAP_LIVE only decides whether the app SHOWS its StoreKit
+      # purchase UI. It cannot make a purchase free or paid: that is decided
+      # by where the build came from. A TestFlight build transacts against
+      # Apple's sandbox and moves no real money; a build downloaded from the
+      # public App Store charges for real. So this is safe to turn on while
+      # distribution is TestFlight-only, and is a release-day decision after
+      # that -- along with APPLE_IAP_ENVIRONMENT, which defaults to sandbox
+      # and must become "production" in the same breath as a public release,
+      # or real purchases will be charged by Apple and then refused by our
+      # own verifier (see server/apple-iap.ts).
+      - key: BILLING_LIVE
+        sync: false
+      - key: APPLE_IAP_LIVE
+        sync: false
+      - key: APPLE_IAP_ENVIRONMENT
+        sync: false
+      # Required by Apple's verifier library the moment APPLE_IAP_ENVIRONMENT
+      # is "production" -- it refuses to construct without it. The numeric
+      # "Apple ID" on the app's App Store Connect General Information page.
+      # Unset is correct while the environment is sandbox.
+      - key: APPLE_APP_APPLE_ID
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: forge-db

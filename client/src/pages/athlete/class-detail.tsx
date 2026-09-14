@@ -63,9 +63,19 @@ export default function AthleteClassDetail() {
   // route, which stays comped-only until an in-app product exists for
   // lessons -- a Stripe checkout reachable from the app is exactly what
   // would put a submission at risk, and the server refuses it anyway.
+  // While Forge is in beta the card rail is closed server-side, and the
+  // native app already unlocks a priced lesson through the comped grant
+  // route below. Without this the web would be the only place a beta tester
+  // could not open a lesson -- a Stripe redirect that answers "nothing is
+  // for sale yet". Both platforms take the same path until billing opens.
+  const { data: billingStatus } = useQuery<{ open: boolean }>({
+    queryKey: ["/api/billing/status"],
+    queryFn: () => getJson("/api/billing/status"),
+  });
+
   const purchaseMutation = useMutation({
     mutationFn: async (lessonId: number) => {
-      if (!Capacitor.isNativePlatform()) {
+      if (!Capacitor.isNativePlatform() && billingStatus?.open) {
         const res = await apiRequest("POST", "/api/billing/checkout/class-lesson", {
           classId: Number(classId),
           lessonId,

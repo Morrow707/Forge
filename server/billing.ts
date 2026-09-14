@@ -169,6 +169,33 @@ export function getVideoRetentionLimits(account: VideoRetentionAccount): VideoRe
 // shared/privacy-tiers.ts's GUARDIAN_NOTICE_LIVE.
 export const BILLING_LIVE = process.env.BILLING_LIVE === "true";
 
+/**
+ * The one condition under which anybody can be charged.
+ *
+ * Every Stripe entry point below calls this first. Until this session it was
+ * only the absence of STRIPE_SECRET_KEY that stopped a real card being
+ * charged -- checkout asked getStripeClient() for a client and, if it got
+ * one, created a live session. So pasting a Stripe key into the dashboard to
+ * test some unrelated thing would have opened a real till, with nothing else
+ * to flip and nothing to notice. That is the wrong shape for "we are in
+ * beta, nobody pays": the guarantee should be a switch somebody has to turn
+ * ON deliberately, not a secret nobody has got round to setting.
+ *
+ * BILLING_LIVE is that switch, and it defaults to off. Keys, prices and
+ * products can all be configured and tested while it stays off, and nothing
+ * can take money until it is deliberately turned on.
+ *
+ * It does NOT gate Apple In-App Purchase, and could not: a StoreKit purchase
+ * is made by the device against Apple, and no server flag can intercept it.
+ * What keeps that side free during beta is Apple's own doing -- a TestFlight
+ * build transacts against the StoreKit sandbox, where no real money moves.
+ * See server/apple-iap.ts.
+ */
+function chargingClosed(): { error: string } | null {
+  if (BILLING_LIVE) return null;
+  return { error: "Forge is in beta -- nothing is for sale yet." };
+}
+
 // Lazy -- STRIPE_SECRET_KEY doesn't exist in any environment yet, and
 // importing this module (e.g. from routes.ts) shouldn't throw just because
 // billing isn't configured. Every caller below checks this for null first.
@@ -251,6 +278,8 @@ export async function createFreeAgentTierCheckout(
   successUrl: string,
   cancelUrl: string,
 ): Promise<CheckoutResult> {
+  const closed = chargingClosed();
+  if (closed) return closed;
   const stripe = getStripeClient();
   if (!stripe) return { error: "Billing isn't configured yet." };
   const priceId = freeAgentPriceId(tier);
@@ -296,6 +325,8 @@ export async function createCoachSubscriptionCheckout(
   successUrl: string,
   cancelUrl: string,
 ): Promise<CheckoutResult> {
+  const closed = chargingClosed();
+  if (closed) return closed;
   const stripe = getStripeClient();
   if (!stripe) return { error: "Billing isn't configured yet." };
   const perAthletePrice = coachPerAthletePriceId();
@@ -352,6 +383,8 @@ export async function createLessonCheckout(
   successUrl: string,
   cancelUrl: string,
 ): Promise<CheckoutResult> {
+  const closed = chargingClosed();
+  if (closed) return closed;
   const stripe = getStripeClient();
   if (!stripe) return { error: "Billing isn't configured yet." };
   if (!Number.isInteger(input.priceCents) || input.priceCents <= 0) {
@@ -391,6 +424,8 @@ export async function createBillingPortalSession(
   userId: number,
   returnUrl: string,
 ): Promise<CheckoutResult> {
+  const closed = chargingClosed();
+  if (closed) return closed;
   const stripe = getStripeClient();
   if (!stripe) return { error: "Billing isn't configured yet." };
   const sub = await storage.getSubscriptionForUser(userId);

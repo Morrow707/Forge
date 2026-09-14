@@ -44,6 +44,17 @@ export default function AthleteUpgrade() {
   });
   const live = supported && !!liveConfig?.enabled;
 
+  // The web half's own live switch. Card checkout is refused server-side
+  // while Forge is in beta (see chargingClosed in server/billing.ts), so
+  // without this the page would render a Subscribe button whose only
+  // possible outcome is an error toast.
+  const { data: billingStatus } = useQuery<{ open: boolean }>({
+    queryKey: ["/api/billing/status"],
+    queryFn: () => getJson("/api/billing/status"),
+    enabled: !supported,
+  });
+  const webBillingOpen = !supported && !!billingStatus?.open;
+
   const {
     data: products,
     isLoading,
@@ -130,7 +141,7 @@ export default function AthleteUpgrade() {
               <RotateCcw className="h-4 w-4" />
               {restoring ? "Restoring..." : "Restore Purchases"}
             </Button>
-          ) : !supported ? (
+          ) : webBillingOpen ? (
             <Button variant="outline" size="sm" onClick={openBillingPortal} disabled={openingPortal}>
               <CreditCard className="h-4 w-4" />
               {openingPortal ? "Opening..." : "Manage billing"}
@@ -161,9 +172,15 @@ export default function AthleteUpgrade() {
                       {formatCents(tier.monthlyPriceCents)}
                       <span className="text-sm font-normal text-muted-foreground">/mo</span>
                     </p>
-                    <Button onClick={() => startWebCheckout(id)} disabled={checkoutTier !== null}>
-                      {checkoutTier === id ? "Opening checkout..." : "Subscribe"}
-                    </Button>
+                    {webBillingOpen ? (
+                      <Button onClick={() => startWebCheckout(id)} disabled={checkoutTier !== null}>
+                        {checkoutTier === id ? "Opening checkout..." : "Subscribe"}
+                      </Button>
+                    ) : (
+                      <p className="rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
+                        Free while Forge is in beta -- nothing to pay yet.
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               );

@@ -54,6 +54,19 @@ const APPLE_IAP_ENVIRONMENT: Environment =
 
 const APPLE_ROOT_CERT_PATH = path.join(process.cwd(), "server/apple-root-certs/AppleRootCA-G3.cer");
 
+// The App Store Connect numeric app id ("Apple ID" on the app's General
+// Information page). Only needed in the production environment, where the
+// verifier library requires it -- it throws
+// "appAppleId is required when the environment is Production" from its own
+// constructor otherwise. That throw is the reason this exists: flipping
+// APPLE_IAP_ENVIRONMENT to production without also setting this would leave
+// real, charged purchases unverifiable, which is the one failure mode worse
+// than not selling anything -- the athlete pays Apple and Forge never grants
+// what they paid for.
+const APPLE_APP_APPLE_ID = process.env.APPLE_APP_APPLE_ID
+  ? Number(process.env.APPLE_APP_APPLE_ID)
+  : undefined;
+
 export type VerifiedAppleTransaction = {
   originalTransactionId: string;
   productId: string;
@@ -82,7 +95,28 @@ function getVerifier(): SignedDataVerifier | null {
     );
     return null;
   }
-  cachedVerifier = new SignedDataVerifier([rootCert], true, APPLE_IAP_ENVIRONMENT, APPLE_BUNDLE_ID);
+  // Constructed inside the try for the same reason the file read is: a
+  // misconfiguration must fail closed with something legible in the log, not
+  // throw out of whichever request happened to be the first to verify
+  // anything.
+  try {
+    cachedVerifier = new SignedDataVerifier(
+      [rootCert],
+      true,
+      APPLE_IAP_ENVIRONMENT,
+      APPLE_BUNDLE_ID,
+      APPLE_APP_APPLE_ID,
+    );
+  } catch (err) {
+    console.error(
+      "Apple IAP: could not build the verifier --",
+      err instanceof Error ? err.message : err,
+      APPLE_IAP_ENVIRONMENT === Environment.PRODUCTION && APPLE_APP_APPLE_ID === undefined
+        ? "Set APPLE_APP_APPLE_ID (the numeric App Store Connect app id) -- it is required in the production environment."
+        : "",
+    );
+    return null;
+  }
   return cachedVerifier;
 }
 
