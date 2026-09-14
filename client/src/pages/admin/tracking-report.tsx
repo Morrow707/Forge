@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { DownloadButton } from "@/components/download-button";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { RefreshCw, FileText, Copy, ChevronDown, ChevronUp, BookOpen, AlertTriangle, Download } from "lucide-react";
+import { RefreshCw, FileText, Copy, ChevronDown, ChevronUp, BookOpen, AlertTriangle } from "lucide-react";
 
 type ReportField = { label: string; value: string };
 type TrackingReportEntry = {
@@ -230,38 +231,6 @@ export default function AdminTrackingReport() {
     }
   }
 
-  // THE TRACE ITSELF, NOT THE SUMMARY OF IT.
-  //
-  // Everything else on this page is what the pipeline CONCLUDED about a set. This downloads what
-  // it concluded it from: the stored bar-path trace, in the shape capture-replay.ts already
-  // takes. That harness re-runs segmentation, rep counting, velocity, range of motion and trust
-  // with no device and no camera, and it is the only way to see WHERE a rep boundary landed
-  // rather than inferring it from the numbers a set reports.
-  //
-  // Built because a calibration run against a reference device produced three consecutive reps
-  // matching to within 1% while the same set still miscounted at both ends. The summary can say
-  // a boundary is wrong; only the trace can say where it is.
-  //
-  // A real download rather than a clipboard copy -- a trace is thousands of points, which is a
-  // file, not something anybody pastes.
-  async function downloadCaptures() {
-    try {
-      const res = await apiRequest("GET", `/api/admin/capture-export.json?limit=${appliedLimit}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `forge-captures-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast.success("Downloaded -- this is the file the replay harness reads");
-    } catch {
-      toast.error("Couldn't export the captures");
-    }
-  }
-
   const glossary = new Map<string, string>();
   for (const e of entries ?? []) {
     if (e.methodology && !glossary.has(e.trackingMode)) glossary.set(e.trackingMode, e.methodology);
@@ -310,10 +279,22 @@ export default function AdminTrackingReport() {
                 <Copy className="h-4 w-4" />
                 Copy as text
               </Button>
-              <Button variant="outline" onClick={downloadCaptures}>
-                <Download className="h-4 w-4" />
-                Download traces
-              </Button>
+              {/* THE TRACE ITSELF, NOT THE SUMMARY OF IT.
+                *
+                * Everything else on this page is what the pipeline concluded about a set. This
+                * is what it concluded it from, in the shape capture-replay.ts already reads --
+                * the only way to see WHERE a rep boundary landed rather than inferring it.
+                *
+                * DownloadButton rather than a hand-rolled anchor click: this page is reachable
+                * inside the iOS webview, where a script-driven download is inert and the share
+                * sheet is the only route off the device. Full detail on the Data & Diagnostics
+                * page under Camera captures. */}
+              <DownloadButton
+                url={`/api/admin/capture-export.json?limit=${appliedLimit}`}
+                filename="forge-captures.json"
+                shareTitle="Forge camera captures"
+                label="Download traces"
+              />
             </div>
 
             <div className="flex flex-wrap items-end gap-3 border-t border-border pt-3">

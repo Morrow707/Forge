@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { DownloadButton } from "@/components/download-button";
 import { getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { FileSearch, HardDrive, History, AlertTriangle } from "lucide-react";
+import { FileSearch, HardDrive, History, AlertTriangle, Video } from "lucide-react";
 
 /**
  * Admin Data & Diagnostics.
@@ -35,6 +35,7 @@ export default function AdminDiagnostics() {
           <TabsTrigger value="jobs">Job runs</TabsTrigger>
           <TabsTrigger value="events">System events</TabsTrigger>
           <TabsTrigger value="storage">Storage</TabsTrigger>
+          <TabsTrigger value="captures">Camera captures</TabsTrigger>
         </TabsList>
 
         <TabsContent value="audit">
@@ -48,6 +49,9 @@ export default function AdminDiagnostics() {
         </TabsContent>
         <TabsContent value="storage">
           <StorageTab />
+        </TabsContent>
+        <TabsContent value="captures">
+          <CaptureTracesTab />
         </TabsContent>
       </Tabs>
     </AppShell>
@@ -438,6 +442,67 @@ function StorageTab() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * THE TRACE ITSELF, WHICH NOTHING HAS EVER LET OUT.
+ *
+ * Every other camera surface in Forge shows what the pipeline CONCLUDED about a set -- velocity,
+ * range of motion, rep count, trust. This hands over what it concluded it FROM: the stored
+ * bar-path trace, the per-frame point sequence the tracker produced live.
+ *
+ * capture-replay.ts re-runs segmentation, rep counting, velocity, range of motion and trust over
+ * that trace with no device and no camera, which is the only way to see WHERE a rep boundary
+ * landed rather than inferring it from the summary. Every threshold in that stage is a number
+ * somebody picked rather than measured, and the traces sat in the database unreachable the whole
+ * time -- so they could only ever be tuned against screenshots.
+ *
+ * A calibration run against a reference device is what forced this: three consecutive reps
+ * matched to within 1% while the same set still miscounted at both ends. The summary can say a
+ * boundary is wrong and cannot say where it is.
+ *
+ * Not the video. Apple's Vision framework has no way to re-run against a stored clip, so a
+ * downloaded mp4 could never reproduce what the phone saw -- any re-derivation would be a
+ * different model run with its own noise. The trace is the artifact that survives.
+ */
+function CaptureTracesTab() {
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Video className="h-4 w-4" />
+          Camera captures
+        </CardTitle>
+        <CardDescription>
+          The raw bar-path trace behind each tracked set, as a file. This is the input the replay
+          harness reads -- it re-runs rep segmentation and every metric over a trace with no phone
+          and no camera, so a miscount can be looked at instead of guessed at. Carries no names:
+          sets are grouped under "Athlete 1", "Athlete 2", generated fresh for each download and
+          mapped nowhere.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-muted-foreground">
+          Newest sets first. Only sets that actually ran through the camera pipeline appear -- a
+          hand-logged set has no trace to export.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <DownloadButton
+            url="/api/admin/capture-export.json?limit=20"
+            filename="forge-captures-recent.json"
+            shareTitle="Forge camera captures"
+            label="Last 20 sets"
+          />
+          <DownloadButton
+            url="/api/admin/capture-export.json?limit=200"
+            filename="forge-captures-full.json"
+            shareTitle="Forge camera captures"
+            label="Last 200 sets"
+          />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
