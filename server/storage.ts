@@ -20199,6 +20199,51 @@ ${catalog}`;
     });
   },
 
+  /** THE STORED TRACE, IN THE SHAPE THE REPLAY HARNESS ALREADY EATS.
+   *
+   * capture-replay.ts re-runs the metrics stage -- segmentation, rep counting, velocity, range
+   * of motion, trust -- over a set's own bar-path trace, with no device and no camera. It is the
+   * only way to see WHERE a rep boundary landed rather than inferring it from the summary
+   * numbers a set reports, and every threshold in that stage is a number somebody picked rather
+   * than measured.
+   *
+   * Nothing exposed the trace, so the harness had no real input and the thresholds could only be
+   * tuned against screenshots. That is how a calibration run reached three reps matching a
+   * reference device to within 1% while the set still miscounted at both ends: the summary says
+   * a boundary is wrong and cannot say where it is.
+   *
+   * Carries no name and no user id, same as getRecentTrackedSetsForAdmin above and for the same
+   * reason -- this is a capture-quality diagnostic, it needs to show that several sets belong to
+   * one athlete and never needs to say which. heightIn is here because the replay genuinely
+   * needs it: every scale in the pipeline is derived from it.
+   */
+  async getStoredCapturesForReplay(limit: number) {
+    return db
+      .select({
+        setId: workoutSetEntries.id,
+        athleteId: users.id,
+        date: workoutLogs.date,
+        exerciseName: exercises.name,
+        setNumber: workoutSetEntries.setNumber,
+        heightIn: users.heightIn,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        loggedReps: workoutSetEntries.reps,
+        barPathTrace: workoutSetEntries.barPathTrace,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(users, eq(workoutLogs.athleteId, users.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      // A set with no trace has nothing to replay -- a hand-logged set, or one whose capture
+      // was refused. Filtering here rather than in the caller keeps an export of N rows an
+      // export of N usable rows.
+      .where(isNotNull(workoutSetEntries.barPathTrace))
+      .orderBy(desc(workoutSetEntries.id))
+      .limit(limit);
+  },
+
   // Powers the admin-only /api/admin/tracking-report route -- system-wide (not scoped to one
   // coach's roster, unlike getExerciseAnalyticsForCoach above), most-recent-first, and only
   // program-exercise sets (not correctives -- a much smaller, secondary case less likely to

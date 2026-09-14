@@ -2459,6 +2459,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // JSON counterpart of the route above, for the Tracking Data admin page to render as real
   // cards instead of a single plain-text blob -- same underlying rows and formatting logic.
+  // THE ONE INPUT THE REPLAY HARNESS NEVER HAD.
+  //
+  // capture-replay.ts re-runs segmentation, rep counting, velocity, range of motion and trust
+  // over a set's stored bar-path trace, with no device and no camera -- see its own header. Every
+  // threshold in that stage is a number somebody picked rather than measured, and measuring one
+  // means replaying real captures. The traces have been sitting in the database the whole time
+  // and nothing exposed them, so the harness had no real input and thresholds could only be
+  // tuned against screenshots of the summary a set reports.
+  //
+  // That is not a small gap. A calibration run against a reference device produced three
+  // consecutive reps matching to within 1% while the same set still miscounted at both ends: the
+  // summary numbers say a rep boundary is wrong and cannot say where it is. This returns the
+  // trace itself, so the boundary can be looked at.
+  //
+  // Downloadable as a file because the point is to get it off the device and into the harness.
+  // Carries no name and no user id -- same stance as the tracking report, which this sits beside:
+  // a capture-quality diagnostic needs to show that several sets belong to one athlete and never
+  // needs to say which one.
+  app.get("/api/admin/capture-export.json", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1), 200);
+    const rows = await storage.getStoredCapturesForReplay(limit);
+    // A per-export pseudonym, generated fresh each time and mapped nowhere -- the same treatment
+    // the tracking report gives athlete ids. Stable within one file so a reader can see which
+    // sets came from the same athlete; different across two files so they cannot be joined.
+    const codes = new Map<number, string>();
+    const codeFor = (athleteId: number) => {
+      if (!codes.has(athleteId)) codes.set(athleteId, `Athlete ${codes.size + 1}`);
+      return codes.get(athleteId)!;
+    };
+    const captures = rows.map((r) => ({
+      setId: r.setId,
+      athlete: codeFor(r.athleteId),
+      date: r.date,
+      exerciseName: r.exerciseName,
+      setNumber: r.setNumber,
+      heightIn: r.heightIn,
+      // The replay takes kilograms; sets are logged in whichever unit the athlete uses.
+      loadKg:
+        r.weight == null
+          ? null
+          : r.weightUnit === "kg"
+            ? Number(r.weight)
+            : Number(r.weight) * 0.45359237,
+      loggedReps: r.loggedReps,
+      barPathTrace: r.barPathTrace,
+    }));
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="forge-captures-${new Date().toISOString().slice(0, 10)}.json"`,
+    );
+    res.send(JSON.stringify({ exportedAt: new Date().toISOString(), captures }, null, 2));
+  });
+
   app.get("/api/admin/tracking-report/entries", requireRole("admin"), async (req, res) => {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1), 200);
     const rows = await storage.getRecentTrackedSetsForAdmin(limit);
