@@ -73,29 +73,50 @@ jobs:
             exit 1
           fi
 
-          # Split the PEM bundle and keep only the certificate whose subject
-          # CN is exactly Apple Root CA - G3. awk rather than csplit: BSD
-          # csplit (which is what the macOS runner has) takes neither -z nor
-          # -b, so the GNU spelling would fail here.
-          awk '/-----BEGIN CERTIFICATE-----/{n++} n>0 {print > ("/tmp/appleroot/cert-" n ".pem")}' \
-            /tmp/appleroot/keychain.pem
+          echo "trust-store PEM bytes: $(wc -c < /tmp/appleroot/keychain.pem)"
 
+          # Split the bundle in pure shell. The first attempt used awk and
+          # then csplit; run 1 of this workflow found nothing and could not
+          # say whether the split or the name matching was at fault, so the
+          # split now has no dependency to be wrong about, and every step
+          # below says what it saw.
+          n=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            if [ "$line" = "-----BEGIN CERTIFICATE-----" ]; then
+              n=$((n + 1))
+              : > "/tmp/appleroot/cert-$n.pem"
+            fi
+            if [ "$n" -gt 0 ]; then
+              printf '%s\n' "$line" >> "/tmp/appleroot/cert-$n.pem"
+            fi
+          done < /tmp/appleroot/keychain.pem
+          echo "certificates returned by the trust store: $n"
+          if [ "$n" -eq 0 ]; then
+            echo "::error::The trust store returned no PEM certificate blocks."
+            exit 1
+          fi
+
+          # commonName off a -nameopt multiline dump: one RDN per line, so
+          # this does not depend on the order the DN components print in,
+          # which is what an rfc2253 prefix match did depend on.
           found=""
-          for f in /tmp/appleroot/cert-*.pem; do
-            [ -e "$f" ] || continue
-            subj=$(openssl x509 -in "$f" -noout -subject -nameopt rfc2253 2>/dev/null | sed 's/^subject= *//')
-            case "$subj" in
-              *"CN=Apple Root CA - G3,"*)
-                if [ -n "$found" ]; then
-                  echo "::error::More than one 'Apple Root CA - G3' in the trust store. Refusing to guess."
-                  exit 1
-                fi
-                found="$f"
-                ;;
-            esac
+          i=1
+          while [ "$i" -le "$n" ]; do
+            f="/tmp/appleroot/cert-$i.pem"
+            cn=$(openssl x509 -in "$f" -noout -subject -nameopt multiline 2>/dev/null \
+                 | sed -n 's/^[[:space:]]*commonName[[:space:]]*=[[:space:]]*//p')
+            echo "  cert $i: commonName=${cn:-<could not parse>}"
+            if [ "$cn" = "Apple Root CA - G3" ]; then
+              if [ -n "$found" ]; then
+                echo "::error::More than one 'Apple Root CA - G3' in the trust store. Refusing to guess."
+                exit 1
+              fi
+              found="$f"
+            fi
+            i=$((i + 1))
           done
           if [ -z "$found" ]; then
-            echo "::error::Trust store had no certificate whose subject CN is 'Apple Root CA - G3'."
+            echo "::error::None of those $n certificates has commonName 'Apple Root CA - G3'."
             exit 1
           fi
 
