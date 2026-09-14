@@ -10252,9 +10252,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // whole reason nothing is being charged yet during the beta.
       billingLive: BILLING_LIVE,
       enforcementEnabled: process.env.BILLING_ENFORCEMENT_ENABLED === "true",
-      ready: Boolean(process.env.STRIPE_SECRET_KEY) &&
+      // "Would a purchase actually go through right now", which is what an
+      // operator reads this for -- so BILLING_LIVE counts. It did not, and
+      // that made the answer wrong in both directions: ready could say true
+      // while chargingClosed() was refusing every checkout, and it says
+      // nothing at all about the class-lesson path, which needs no Price id
+      // (createLessonCheckout builds price_data from the lesson's own cents)
+      // and so is unaffected by missingPriceEnvVars being empty or not.
+      ready:
+        BILLING_LIVE &&
+        Boolean(process.env.STRIPE_SECRET_KEY) &&
         Boolean(process.env.STRIPE_WEBHOOK_SECRET) &&
         missingPrices.length === 0,
+      // Split out because it is the one thing missingPriceEnvVars cannot
+      // tell you: a bare secret key is all a paid class lesson ever needed.
+      lessonChargingPossible: BILLING_LIVE && Boolean(process.env.STRIPE_SECRET_KEY),
     });
   });
 
