@@ -1,0 +1,1 @@
+Camera tracking accuracy is now disclosed throughout the app while we calibrate the pipeline. Video recording, playback and coach review are unaffected.

@@ -156,6 +156,73 @@ platform :ios do
     end
   end
 
+  # Shared by both metadata lanes. Same App Store Connect API key the beta
+  # lane authenticates with -- metadata is a different endpoint on the same
+  # credential, so there is nothing extra to configure.
+  private_lane :asc_api_key do
+    app_store_connect_api_key(
+      key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
+      issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
+      key_filepath: ENV.fetch("APP_STORE_CONNECT_API_KEY_PATH"),
+      in_house: false,
+    )
+  end
+
+  METADATA_DIR = "./fastlane/metadata"
+  # deliver's own marker for "this folder came from a real listing, not from
+  # someone's guess" -- it is written by download_metadata and by nothing else
+  # in this repo. See upload_metadata's guard.
+  DOWNLOADED_MARKER = "./fastlane/metadata/en-US/description.txt"
+
+  desc "Pull the CURRENT live App Store listing into ios/fastlane/metadata/. Uploads nothing. Run this first, commit what it produces, and edit from there -- see docs/app-store-listing-copy.md."
+  lane :download_metadata do
+    # Run through the deliver CLI rather than an action: fastlane exposes
+    # metadata download as a deliver sub-command, not as a Fastfile action.
+    sh(
+      "bundle exec fastlane deliver download_metadata " \
+      "--api_key_path #{Shellwords.escape(ENV.fetch('APP_STORE_CONNECT_API_KEY_PATH'))} " \
+      "--app_identifier #{Shellwords.escape(ENV.fetch('IOS_BUNDLE_ID', 'com.foreperformancesystems.forge'))} " \
+      "--metadata_path #{Shellwords.escape(METADATA_DIR)}",
+    )
+    UI.success("Live listing downloaded to ios/fastlane/metadata/. Commit it before editing anything.")
+  end
+
+  desc "Push ios/fastlane/metadata/ to App Store Connect. Metadata only -- no binary, no screenshots, and it does NOT submit for review."
+  lane :upload_metadata do
+    # The guard that makes this lane safe to hand to CI.
+    #
+    # deliver uploads what it finds in the metadata folder. A folder that was
+    # hand-assembled rather than downloaded is a folder whose contents nobody
+    # has compared against the live listing, and running deliver from one is
+    # how a real description gets replaced by a placeholder. Requiring a file
+    # that only download_metadata produces forces the read-before-write.
+    unless File.exist?(DOWNLOADED_MARKER)
+      UI.user_error!(
+        "No downloaded listing found at #{DOWNLOADED_MARKER}. Run the download_metadata lane " \
+        "first, commit what it produces, then edit it -- never upload metadata that has not " \
+        "been reconciled against what is actually live.",
+      )
+    end
+
+    upload_to_app_store(
+      api_key: asc_api_key,
+      metadata_path: METADATA_DIR,
+      # Nothing about a copy change should touch the binary, the screenshots,
+      # or the review queue. Each of these is a separate, deliberate action.
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      overwrite_screenshots: false,
+      submit_for_review: false,
+      # precheck talks to endpoints the API key may not be scoped for, and
+      # there is nothing to pre-check for a submission that is not happening.
+      run_precheck_before_submit: false,
+      precheck_include_in_app_purchases: false,
+      # deliver renders an HTML preview and waits for a keypress otherwise,
+      # which in CI is an indefinite hang rather than a confirmation.
+      force: true,
+    )
+  end
+
   desc "Archive, sign, and ask App Store Connect whether it would accept the binary -- no upload, so it spends none of Apple's rate-limited TestFlight quota. Catches the whole class of rejection (missing purpose strings, entitlement mismatches, bundle problems) that only surfaced at upload time before. Use it on any native or Info.plist change before spending a beta upload."
   lane :verify_build do
     keychain_name = build_only

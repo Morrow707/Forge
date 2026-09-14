@@ -10,13 +10,15 @@ on:
   workflow_dispatch:
     inputs:
       lane:
-        description: "beta uploads to TestFlight (counts against Apple's rate-limited upload quota). verify_build archives, signs, AND asks App Store Connect whether it would accept the binary, without uploading -- use it on any native or Info.plist change before spending an upload."
+        description: "beta uploads to TestFlight (counts against Apple's rate-limited upload quota). verify_build archives, signs, AND asks App Store Connect whether it would accept the binary, without uploading -- use it on any native or Info.plist change before spending an upload. download_metadata / upload_metadata are the App Store LISTING (description, promotional text, release notes) and build nothing -- always download before you upload, see ios/fastlane/metadata/README.md."
         required: false
         default: beta
         type: choice
         options:
           - beta
           - verify_build
+          - download_metadata
+          - upload_metadata
 
 # A superseded build has no value and holds a macOS runner while it proves
 # it. Grouped by lane so a verify_build pre-flight and a real beta upload
@@ -110,7 +112,7 @@ jobs:
           echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$RUNNER_TEMP/profile.mobileprovision"
           echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode -o "$RUNNER_TEMP/app_store_connect_key.p8"
 
-      - name: Build (and upload to TestFlight unless verify_build)
+      - name: Run the selected lane
         working-directory: ios
         run: bundle exec fastlane ${{ inputs.lane || 'beta' }}
         env:
@@ -124,6 +126,19 @@ jobs:
           APP_STORE_CONNECT_API_KEY_PATH: ${{ runner.temp }}/app_store_connect_key.p8
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APP_STORE_CONNECT_TEAM_ID: ${{ secrets.APP_STORE_CONNECT_TEAM_ID }}
+
+      # download_metadata writes into the runner's checkout, which is discarded
+      # with the runner. Without this the lane would succeed and hand back
+      # nothing. Download the artifact, unzip it over ios/fastlane/metadata/,
+      # and commit -- that commit is the reconciled copy every later
+      # upload_metadata run is diffed against.
+      - name: Upload the downloaded listing
+        if: inputs.lane == 'download_metadata'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-store-metadata
+          path: ios/fastlane/metadata
+          if-no-files-found: error
 
       - name: Clean up signing assets
         if: always()
