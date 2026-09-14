@@ -322,11 +322,20 @@ export function AvJumpTrackerDialog({
     // for the same reason: a jump that comes back wrong should say which half was wrong instead
     // of leaving it to be reconstructed from the one number on the card.
     const jumpCalibrationDiagnostics = {
+      // Renamed here for the same reason the three lists below are renamed: the box arrives
+      // under the "plate" slot, and leaving THIS field alone made the report's headline
+      // sentence say "plate was used because it is the most trustworthy of them" on a box jump
+      // with no plate anywhere in frame -- while the very next line listed the sources as
+      // "box" and "height". The reader is left to work out that the two names are the same
+      // measurement, which is precisely the kind of thing a diagnostics page exists to stop.
       scaleSource: (jumpVerdict.agreedSources.length > 1
         ? "both"
-        : (jumpVerdict.agreedSources[0] ?? null)) as
+        : jumpVerdict.agreedSources[0] === "plate"
+          ? "box"
+          : (jumpVerdict.agreedSources[0] ?? null)) as
         | "height"
         | "plate"
+        | "box"
         | "both"
         | "shoulder_width"
         | null,
