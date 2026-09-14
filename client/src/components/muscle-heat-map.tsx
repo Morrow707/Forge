@@ -120,12 +120,18 @@ function BodySvg({
  * so a lightly-training Free Agent and a daily-training athlete each see
  * their own real hot/cold spots rather than one washed out next to the
  * other (see muscleHeatColor). */
-export function MuscleHeatMap({ athleteId }: { athleteId: string }) {
+export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
   const [windowDays, setWindowDays] = useState(28);
+  // Two callers, two endpoints. With an athleteId this is a coach reading one
+  // athlete on their roster; without one it is the athlete reading themselves,
+  // which is a different query (all of their training, not one coach's
+  // assignments) and so a different route -- see /api/athlete/muscle-load.
+  const path = athleteId
+    ? `/api/coach/roster/${athleteId}/muscle-load?days=${windowDays}`
+    : `/api/athlete/muscle-load?days=${windowDays}`;
   const { data: rawByGroup, isLoading } = useQuery<Record<string, number>>({
-    queryKey: ["/api/coach/roster", athleteId, "muscle-load", windowDays],
-    queryFn: () => getJson(`/api/coach/roster/${athleteId}/muscle-load?days=${windowDays}`),
-    enabled: !!athleteId,
+    queryKey: ["muscle-load", athleteId ?? "self", windowDays],
+    queryFn: () => getJson(path),
   });
 
   if (isLoading && !rawByGroup) {
@@ -150,8 +156,8 @@ export function MuscleHeatMap({ athleteId }: { athleteId: string }) {
             <CardTitle>Muscle Load Map</CardTitle>
             <CardDescription>
               Last {windowDays} days of logged sets by muscle group, weighted by primary vs.
-              secondary role in each exercise. Color is relative to this athlete's own busiest
-              region.
+              secondary role in each exercise. Color is relative to{" "}
+              {athleteId ? "this athlete's" : "your"} own busiest region.
             </CardDescription>
           </div>
           <RadioChipGroup

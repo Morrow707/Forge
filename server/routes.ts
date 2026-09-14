@@ -8186,6 +8186,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(history);
   });
 
+  // The athlete's own muscle heat map. Same tally the coach sees on their
+  // analytics page, scoped to this athlete's whole training rather than to
+  // one coach's assignments -- see getMuscleLoadForOwnTraining. No
+  // requireFreeAgent: a coached athlete has more logged work than anyone,
+  // and none of this is programming, just a readback of what they trained.
+  app.get("/api/athlete/muscle-load", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ days: z.coerce.number().min(1).max(180).optional() });
+    const parsed = schema.safeParse(req.query);
+    const tally = await storage.getMuscleLoadForOwnTraining(
+      user.id,
+      parsed.success ? parsed.data.days : undefined,
+    );
+    res.json(tally);
+  });
+
   app.get("/api/athlete/recruiting-profile.pdf", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const [profile, summary] = await Promise.all([
