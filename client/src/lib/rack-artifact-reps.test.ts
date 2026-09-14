@@ -90,3 +90,66 @@ describe("unracking and re-racking are not reps", () => {
     expect(metrics.repBreakdown).toHaveLength(5);
   });
 });
+
+/** The rack move the amplitude gate cannot see: a FULL rep's worth of travel, done slowly.
+ *
+ * The fixture above racks over 12cm, which the amplitude test catches. A real calibration run
+ * produced the other kind: a 135lb five-rep squat reported six reps at 1.12, 1.48, 1.47, 1.47,
+ * 1.35 and 0.17 m/s, where the sixth covered enough ground to clear the amplitude gate and was
+ * still a ninth of the set's own median speed. Nothing an athlete does inside a set moves a
+ * loaded bar that slowly.
+ *
+ * It was not a cosmetic miscount: every set-level mean is built from the rep list, so that one
+ * phase pulled mean concentric velocity and mean power to 0.53x of a reference device on the
+ * same reps -- while reps 2 through 5 averaged 1.44 m/s against the device's 1.39.
+ */
+function squatSetWithSlowFinalMove() {
+  const points: { x: number; y: number; z: number; t: number; confidence: number }[] = [];
+  const fps = 60;
+  let frame = 0;
+  const push = (alongM: number) =>
+    points.push({ x: 0, y: alongM, z: 0, t: (frame++ / fps) * 1000, confidence: 0.9 });
+  const ramp = (from: number, to: number, seconds: number) => {
+    const n = Math.round(seconds * fps);
+    for (let f = 0; f < n; f++) push(from + (to - from) * (f / n));
+  };
+  for (let rep = 0; rep < 5; rep++) {
+    ramp(0, -0.74, 1.6);
+    ramp(-0.74, 0, 1.0);
+  }
+  // Full travel, taken slowly -- the bar lowered and hoisted back into the hooks.
+  ramp(0, -0.7, 5.0);
+  ramp(-0.7, 0, 6.0);
+  return points;
+}
+
+describe("a rack move with a rep's travel but none of its speed", () => {
+  const summarized = summarizeTrackedSet(
+    squatSetWithSlowFinalMove(),
+    61,
+    70,
+    null,
+    [],
+    1,
+    false,
+    "squat",
+    AXIS,
+  )!;
+
+  it("counts five reps, not six", () => {
+    expect(summarized.repBreakdown).toHaveLength(5);
+  });
+
+  it("does not let it drag the set's mean concentric velocity", () => {
+    // Every surviving rep's own mean is the benchmark: the set mean must sit among them rather
+    // than below all of them, which is the signature the field data showed.
+    const repMeans = summarized.repBreakdown.map((r) => r.meanVelocityMps);
+    expect(summarized.meanVelocityMps).toBeGreaterThanOrEqual(Math.min(...repMeans));
+  });
+
+  it("does not report velocity loss measured against the rack", () => {
+    // 76.9% in the field, which was first-rep-to-re-rack rather than fatigue. Five identical
+    // reps should show almost none.
+    expect(Math.abs(summarized.velocityLossPercent ?? 0)).toBeLessThan(25);
+  });
+});

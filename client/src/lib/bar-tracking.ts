@@ -1202,14 +1202,49 @@ export function summarizeTrackedSet(
       ? concentricAmplitudes[Math.floor(concentricAmplitudes.length / 2)]
       : 0;
   const EDGE_PHANTOM_AMPLITUDE_RATIO = 0.5;
+  // AND THE OTHER HALF OF WHAT A RACK ARTIFACT LOOKS LIKE: IT IS SLOW.
+  //
+  // The amplitude test above catches a rack move that is SHORT. It does not catch one that
+  // covers a rep's worth of travel slowly, and that is what a real calibration run produced: a
+  // 135lb five-rep squat reported six reps at 1.12, 1.48, 1.47, 1.47, 1.35 and 0.17 m/s. The
+  // sixth is the bar going back into the hooks -- a ninth of the set's own median speed -- and
+  // it travelled far enough to clear the amplitude gate. Nothing an athlete does inside a set
+  // moves a loaded bar at a ninth of the speed of every other rep.
+  //
+  // It is not a cosmetic miscount. Every set-level mean is built from the rep list, so that one
+  // phase dragged mean concentric velocity to 0.53x and mean power to 0.53x of a reference
+  // device on the same reps -- while reps 2 through 5 averaged 1.44 m/s against the device's
+  // 1.39, meaning the real reps were already measuring correctly. It also made velocity loss
+  // read 76.9%, which is first-rep-to-re-rack, not fatigue.
+  //
+  // 0.4 is deliberately far below anything a set produces. The slowest genuine rep in that run
+  // sat at 0.78 of the median, and a grinding last rep of a true near-limit set is the case this
+  // must never delete -- under-counting is the worse failure, the same stance the amplitude test
+  // and the duration test take. Restricted to the first and last concentric for the same reason
+  // they are: those are the only two positions a rack move can occupy.
+  const EDGE_PHANTOM_VELOCITY_RATIO = 0.4;
   const firstConcentric = concentric[0];
   const lastConcentric = concentric[concentric.length - 1];
 
+  const concentricPeaks = concentric.map((p) => p.peak).sort((a, b) => a - b);
+  const medianConcentricPeak =
+    concentricPeaks.length > 0 ? concentricPeaks[Math.floor(concentricPeaks.length / 2)] : 0;
+
   function isEdgeRackArtifact(phase: (typeof phaseStats)[number]): boolean {
-    if (concentric.length < 3 || medianConcentricAmplitude <= 0) return false;
+    if (concentric.length < 3) return false;
     if (phase !== firstConcentric && phase !== lastConcentric) return false;
-    const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
-    return amplitude < medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO;
+    if (
+      medianConcentricAmplitude > 0 &&
+      Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]) <
+        medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO
+    ) {
+      return true;
+    }
+    // Short OR slow -- see EDGE_PHANTOM_VELOCITY_RATIO. A rack move can be either, and the
+    // amplitude test alone only ever caught the short kind.
+    return (
+      medianConcentricPeak > 0 && phase.peak < medianConcentricPeak * EDGE_PHANTOM_VELOCITY_RATIO
+    );
   }
 
   function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
