@@ -171,6 +171,7 @@ import {
   createTeamGameDaySchema,
   sendMovementKnowledgeChatMessageSchema,
   applyMovementProfileProposalSchema,
+  movementProfileTypeSchema,
   classStructureSchema,
   enrollInClassSchema,
   classCoachSettingsInputSchema,
@@ -3724,11 +3725,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // platform-wide) without this explicit step.
   app.post("/api/admin/movement-knowledge/:movementType/apply", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
+    // The path segment is validated, not cast. It used to go through as a bare string, so
+    // /api/admin/movement-knowledge/banana/apply published an active profile for "banana" --
+    // see PROFILED_MOVEMENT_TYPES. A typo'd movement type is the real cost: it answers 201
+    // while the profile the admin meant to update is untouched.
+    const movementType = movementProfileTypeSchema.safeParse(req.params.movementType);
+    if (!movementType.success) {
+      return res.status(400).json({ message: "Not a movement type that has camera thresholds" });
+    }
     const parsed = applyMovementProfileProposalSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: "Invalid profile" });
+    // The schema's own refusal message explains the empty-proposal case, which is the one an
+    // admin can trip without realising -- pass it through rather than flattening to "Invalid".
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Invalid profile" });
+    }
     const result = await storage.applyMovementProfileProposal(
       user.id,
-      req.params.movementType as string,
+      movementType.data,
       parsed.data,
     );
     res.status(201).json(result);

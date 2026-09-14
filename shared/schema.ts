@@ -6364,6 +6364,25 @@ export const sendMovementKnowledgeChatMessageSchema = z
 
 export type SendMovementKnowledgeChatMessageInput = z.infer<typeof sendMovementKnowledgeChatMessageSchema>;
 
+// THE MOVEMENT TYPES A PROFILE CAN EXIST FOR.
+//
+// The apply route took req.params.movementType straight through as a string, so
+// POST /api/admin/movement-knowledge/banana/apply created an active profile for "banana" --
+// verified against a running server. Harmless only because nothing reads it; it is a table of
+// live camera thresholds accumulating rows no tracker will ever ask for, and a typo in a real
+// movement type ("bar-path", "barpath") silently publishes to nowhere while the admin watches a
+// 201 come back and believes the real profile was updated.
+//
+// Sourced from trackingLevelEnum's own values rather than retyped, minus "none" -- a profile for
+// "no tracking" is not a thing.
+export const PROFILED_MOVEMENT_TYPES = trackingLevelEnum.enumValues.filter(
+  (v) => v !== "none",
+) as Exclude<(typeof trackingLevelEnum.enumValues)[number], "none">[];
+
+export const movementProfileTypeSchema = z.enum(
+  PROFILED_MOVEMENT_TYPES as [string, ...string[]],
+);
+
 export const applyMovementProfileProposalSchema = z.object({
   minKneeAngleDeg: z.number().optional().nullable(),
   valgusRatioMin: z.number().optional().nullable(),
@@ -6383,7 +6402,23 @@ export const applyMovementProfileProposalSchema = z.object({
   maxPlausibleRotationVelocityDegPerSec: z.number().positive().max(5000).optional().nullable(),
   cameraFramingNotes: z.string().trim().max(1000).optional().nullable(),
   sourceSummary: z.string().trim().max(2000).optional().nullable(),
-});
+})
+  // AN EMPTY PROPOSAL IS NOT A PUBLISH, IT IS A WIPE.
+  //
+  // Every field here is optional, so `{}` validated, and applyMovementProfileProposal treats an
+  // absent field as an explicit null. Publishing archives the current active profile and inserts
+  // the new one, so an empty body ARCHIVED A TUNED PROFILE AND INSTALLED ALL NULLS AS ACTIVE --
+  // wiping the camera thresholds for that movement across the platform, with a 201 and no
+  // warning. Verified against a running server: bar_path went from an active profile with a
+  // real bar-path deviation ceiling to an active profile with none, in one request.
+  //
+  // Null is a legitimate VALUE here (it means "fall back to the hardcoded default for this one
+  // threshold"), which is exactly why a body that states nothing at all cannot be allowed to mean
+  // the same as a body that states every field as null. An admin who wants to clear a threshold
+  // sends it explicitly.
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "An empty proposal would archive the active profile and publish nothing in its place",
+  });
 
 export type ApplyMovementProfileProposalInput = z.infer<typeof applyMovementProfileProposalSchema>;
 
