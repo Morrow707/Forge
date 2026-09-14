@@ -84,12 +84,34 @@ Remove all of the above, and delete `shared/camera-accuracy-copy.ts` — `tsc`
 will then name every in-app site that has to come out with it. A stale warning
 still telling athletes their numbers are wrong long after they are not costs
 more trust than never having warned them at all.
+## This is now repo-managed
 
-## Making this repo-managed (not built)
+`fastlane deliver` is wired up. Two lanes in `ios/fastlane/Fastfile`, both
+runnable from the "iOS TestFlight" workflow's lane dropdown, and **the order is
+not optional**:
 
-`fastlane deliver` would let the description, promotional text and release notes
-live in `ios/fastlane/metadata/` and ship from CI, turning this from a paste job
-into a commit. It is not wired up: there is no `deliver`/`upload_to_app_store`
-lane and no metadata directory, and `deliver` can overwrite an entire listing —
-screenshots, keywords and all — if it is misconfigured. Worth doing deliberately
-rather than as a side effect of a copy change.
+1. **`download_metadata`** pulls the current live listing into
+   `ios/fastlane/metadata/` and uploads nothing. The workflow saves the result
+   as an `app-store-metadata` artifact -- download it, unzip over
+   `ios/fastlane/metadata/`, and commit.
+2. Edit the text files, using the copy above.
+3. **`upload_metadata`** pushes them. Metadata only: `skip_binary_upload`,
+   `skip_screenshots`, `overwrite_screenshots: false`, and
+   `submit_for_review: false`. A copy change does not touch the binary, the
+   screenshots, or the review queue.
+
+`upload_metadata` refuses to run until `en-US/description.txt` exists -- a file
+only `download_metadata` produces. That is what stops step 3 happening without
+step 1: deliver uploads whatever it finds, and a hand-assembled folder is one
+nobody has reconciled against the live listing.
+
+Only `promotional_text.txt` and `release_notes.txt` are checked in by hand.
+`description.txt` is deliberately absent, because the live description has never
+been read from this repo and writing one from scratch would mean overwriting
+working copy with a guess.
+
+**Untested against the real console.** Everything above is reasoned from
+deliver's documented behaviour and verified only as far as Ruby and YAML syntax;
+the sandbox this was written in cannot reach apple.com. The first
+`download_metadata` run is the real test, and it is the safe one to fail -- it
+writes nothing to Apple.
