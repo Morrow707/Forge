@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { CAMERA_ACCURACY_RESEARCH_BULLET } from "@shared/camera-accuracy-copy";
 import { injuryRegionLabel, type InjuryRegion } from "@shared/injury-taxonomy";
 
 /**
@@ -298,11 +299,7 @@ export function buildResearchExportPdf(data: ResearchExportData): Promise<Buffer
       "Combine and strength figures are self-reported or coach-entered unless captured by the " +
         "camera pipeline. They are not laboratory measurements.",
     );
-    bullet(
-      "Camera-derived measures carry a trust score reflecting capture conditions. Thresholds for " +
-        "that score are not yet calibrated against instrumented reference footage, so those " +
-        "measures should be treated as relative rather than absolute.",
-    );
+    bullet(CAMERA_ACCURACY_RESEARCH_BULLET);
     bullet(
       "Injuries are recorded when someone chose to record them. Absence of an injury record is not " +
         "evidence that no injury occurred.",

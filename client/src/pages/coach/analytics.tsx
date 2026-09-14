@@ -82,6 +82,7 @@ import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics"
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { ACWR_RISK_CLASSNAME } from "@/components/acwr-history-dialog";
 import { MuscleHeatMap } from "@/components/muscle-heat-map";
+import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { GoalsPanel } from "@/components/goals-panel";
 import { Skeleton } from "@/components/skeleton";
 import { convertWeight } from "@/lib/progression";
@@ -981,6 +982,15 @@ export default function CoachAnalytics() {
           )}
         </div>
       </div>
+
+      {/* Above the charts, not inside one: of the twenty-odd charts in
+          CHART_OPTIONS only "Weight & Est. 1RM" is built from hand-logged
+          numbers -- bar speed, power, path deviation, jump height, ROM and the
+          rest all come off the camera pipeline. A coach changing an athlete's
+          programming off one of these is the higher-stakes reader of these
+          numbers, and the one-time dialog in AppShell is per device, so a coach
+          on a laptop they have not used before has never seen it. */}
+      {athleteId && <CameraMetricCaveat className="mb-4" />}
 
       {!athleteId && (
         <Card>

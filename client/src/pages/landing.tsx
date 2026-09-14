@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
+  AlertTriangle,
   Sparkles,
   Video,
   LineChart,
@@ -23,6 +24,7 @@ import {
 import { ForgeMark } from "@/components/forge-mark";
 import { bandForAthleteCount, formatCents } from "@shared/billing-tiers";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
+import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
 
 /** A screenshot dressed up as a little browser window -- same treatment on
  * every feature screenshot so the marketing page reads as one coherent
@@ -333,6 +335,16 @@ export default function LandingPage() {
             <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Video className="h-4 w-4 shrink-0 text-primary" />
               No wearables, no extra hardware -- just a phone camera.
+            </div>
+            {/* Directly under the claim it qualifies. It first went in the pricing
+                section below, which reads like the right place and is not: that whole
+                section sits behind PRICING_SECTION_LIVE, currently false, so the
+                warning rendered nowhere while the paragraph above -- "bar speed, jump
+                height, and rep-by-rep velocity decay come straight from the camera" --
+                went out unqualified to every visitor. Keep these together. */}
+            <div className="mt-4 flex items-start gap-2 rounded-md border-2 border-destructive bg-destructive/10 p-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <p className="text-sm font-bold text-destructive">{CAMERA_ACCURACY_LONG}</p>
             </div>
           </div>
         </div>

@@ -16,6 +16,8 @@ import {
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER, FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
 import { Flame, Check, Video, AlertTriangle } from "lucide-react";
+import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
+import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 
 const ALL_BANDS = BILLING_TIER_ORDER.map((id) => BILLING_TIERS[id]);
 
@@ -67,10 +69,7 @@ export default function PricingPage() {
         <div className="mx-auto mb-10 flex max-w-3xl items-start gap-3 rounded-md border-2 border-destructive bg-destructive/10 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
           <p className="text-sm font-bold text-destructive">
-            Camera tracking notice: the camera records video normally, but tracked metrics
-            (velocity, range of motion, power, and similar numbers) are not accurate right now.
-            We're actively calibrating the system -- don't make training decisions based on these
-            numbers yet.
+            Camera tracking notice: {CAMERA_ACCURACY_LONG}
           </p>
         </div>
 
@@ -231,11 +230,7 @@ export default function PricingPage() {
                       <p className="text-sm text-muted-foreground">{tier.description}</p>
                     </div>
                     {tier.hasVideoFormCheck && (
-                      <p className="flex items-start gap-1.5 text-xs font-bold text-destructive">
-                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        Camera records fine, but form-check metrics aren't accurate right now --
-                        we're calibrating.
-                      </p>
+                      <CameraMetricCaveat />
                     )}
                   </CardContent>
                 </Card>

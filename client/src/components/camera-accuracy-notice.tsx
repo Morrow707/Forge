@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
+import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
 
 const SEEN_KEY = "forge:camera-accuracy-notice-seen";
 
@@ -41,12 +42,7 @@ export function CameraAccuracyNotice() {
             Camera Tracking Accuracy
           </DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          The camera records and saves your video normally. But right now, the numbers it
-          calculates from that video -- velocity, range of motion, power, and similar tracked
-          metrics -- are not accurate. We're actively calibrating the system. Don't make training
-          decisions based on these numbers until that's done.
-        </p>
+        <p className="text-sm text-muted-foreground">{CAMERA_ACCURACY_LONG}</p>
         <DialogFooter>
           <Button onClick={dismiss}>I understand</Button>
         </DialogFooter>

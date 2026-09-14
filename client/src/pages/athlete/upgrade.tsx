@@ -20,6 +20,7 @@ import type { FreeAgentTierId } from "@shared/free-agent-tiers";
 import { Sparkles, Video, RotateCcw, CreditCard } from "lucide-react";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
 import { apiRequest } from "@/lib/queryClient";
+import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { formatCents } from "@shared/billing-tiers";
 
 /** The purchase surface, which is two surfaces by necessity.
@@ -168,6 +169,7 @@ export default function AthleteUpgrade() {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">{tier.description}</p>
+                    {tier.hasVideoFormCheck && <CameraMetricCaveat variant="inline" />}
                     <p className="mt-auto font-display text-2xl font-bold">
                       {formatCents(tier.monthlyPriceCents)}
                       <span className="text-sm font-normal text-muted-foreground">/mo</span>
@@ -214,6 +216,7 @@ export default function AthleteUpgrade() {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">{p.description}</p>
+                  {p.hasVideoFormCheck && <CameraMetricCaveat variant="inline" />}
                   <p className="mt-auto font-display text-2xl font-bold">
                     {p.displayPrice ?? "--"}
                     <span className="text-sm font-normal text-muted-foreground">/mo</span>

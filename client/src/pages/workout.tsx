@@ -105,6 +105,7 @@ import { format, parseISO } from "date-fns";
 import type { MovementProfile, ExercisePageTheme } from "@shared/schema";
 import { parseProgression, parsePrescribedWeight, convertWeight } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
+import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { ReadinessBanner } from "@/components/readiness-banner";
 import { ExerciseSheetTutorial } from "@/components/exercise-sheet-tutorial";
 import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
@@ -3091,6 +3092,14 @@ function ExerciseLogContent({
       {item.instructions && (
         <p className="text-xs text-muted-foreground">{item.instructions}</p>
       )}
+
+      {/* Every camera-tracked exercise, whether or not a form-check video is also
+          required -- the set rows below report velocity / bar path / jump height
+          straight off the pipeline, and those are the numbers that are wrong. Sits
+          on the exercise card rather than on each set row: one honest line per
+          exercise reads as information, the same line repeated under four sets
+          reads as noise and stops being read at all. */}
+      {item.trackingLevel !== "none" && <CameraMetricCaveat />}
 
       {videoRequired && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
