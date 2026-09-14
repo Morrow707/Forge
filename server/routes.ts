@@ -7,7 +7,7 @@ import fs from "fs";
 import fsPromises from "fs/promises";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
-import { setupAuth, requireAuth, requireRole } from "./auth";
+import { setupAuth, requireAuth, requireRole, toPublicUser } from "./auth";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
@@ -4095,8 +4095,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserProfile(athleteId, parsed.data);
-    const { passwordHash, ...publicUser } = updated;
-    res.json(publicUser);
+    // toPublicUser, not a hand-rolled strip. This route used to destructure
+    // passwordHash off and return everything else, which meant a coach editing
+    // an athlete's position got back that athlete's mfaSecret and
+    // mfaBackupCodeHashes -- the TOTP seed and the hashed recovery codes.
+    // toPublicUser's own comment says those "never belong on the client past
+    // the one-time setup/confirm response", and this was the one place in the
+    // app not going through it.
+    //
+    // Latent rather than live today: MFA setup is coach/admin-only, so an
+    // athlete's secret is always null. That is a fact about who can currently
+    // enrol, not a property of this route -- open MFA to athletes and it
+    // becomes a real credential leak with no code change here. A coach is not
+    // entitled to an athlete's second factor under any configuration.
+    res.json(toPublicUser(updated));
   });
 
   app.delete("/api/coach/roster/:athleteId", requireRole("coach"), async (req, res) => {

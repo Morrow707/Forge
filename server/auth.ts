@@ -193,7 +193,7 @@ const resendVerificationLimiter = rateLimit({
   message: { message: "Too many requests. Please try again later." },
 });
 
-function toPublicUser(user: any): PublicUser {
+export function toPublicUser(user: any): PublicUser {
   // agreedToTermsText is a full snapshot of whatever the agreement said at
   // signup -- potentially long, and not something any client-side UI reads,
   // so it's stripped here the same way passwordHash/healthStatus already
