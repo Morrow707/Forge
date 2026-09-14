@@ -787,6 +787,61 @@ export function segmentPhases(
   return phases;
 }
 
+/** How slow a sample has to be, as a share of its own phase's peak speed, before it counts as the
+ *  bar not really moving yet. A tenth is the usual movement-onset convention in velocity-based
+ *  training and is deliberately generous: it trims standing and pausing, not the slow start of a
+ *  grind. */
+const PHASE_MOVEMENT_ONSET_FRACTION = 0.1;
+
+/**
+ * THE PHASE IS EXTREME-TO-EXTREME. THE REP IS ONLY THE MOVING PART OF IT.
+ *
+ * segmentPhases splits the trace at turning points, so a phase runs from one extreme to the
+ * next. Between reps of a squat the athlete stands at the top, and that standing time sits
+ * INSIDE the phase -- the running extreme keeps creeping forward through the hold, because each
+ * new sample of a noisy plateau is still the highest seen so far. So the phase's endpoints are
+ * right for displacement and wrong for time.
+ *
+ * Measured against a calibrated reference on a 135lb five-rep squat: range of motion came back
+ * at 73.6cm against 74.2cm, within a centimetre, while the concentric read 2.97s against a real
+ * ~0.9s. Both numbers are computed from the same two indices. Distance was right and time was
+ * 3.3x too long, which is exactly the signature of a pause being counted as part of the lift --
+ * and it dragged mean velocity to 0.45x and mean power to 0.46x of the reference, since both
+ * are distance over that time.
+ *
+ * So the timing window is trimmed to where the bar was actually moving, and the displacement
+ * window is left alone. The threshold is a share of the phase's OWN peak, not an absolute speed:
+ * a warm-up single and a near-limit grind have very different peaks, and any fixed m/s gate that
+ * suits one misreads the other.
+ *
+ * Returns the original range when there is nothing to trim or the phase is too short to judge --
+ * a trimmed window is never allowed to be empty.
+ */
+export function trimPhaseToMovement(
+  speeds: number[],
+  startIdx: number,
+  endIdx: number,
+): { startIdx: number; endIdx: number } {
+  if (endIdx - startIdx < 2) return { startIdx, endIdx };
+  let peak = 0;
+  for (let i = startIdx; i <= endIdx; i++) {
+    const v = Math.abs(speeds[i] ?? 0);
+    if (Number.isFinite(v) && v > peak) peak = v;
+  }
+  if (!(peak > 0)) return { startIdx, endIdx };
+  const onset = peak * PHASE_MOVEMENT_ONSET_FRACTION;
+
+  let from = startIdx;
+  while (from < endIdx && Math.abs(speeds[from] ?? 0) < onset) from++;
+  let to = endIdx;
+  while (to > from && Math.abs(speeds[to] ?? 0) < onset) to--;
+
+  // Never collapse the window. A phase whose every sample reads below its own peak/10 is one
+  // where the peak is a single spike in noise, and the untrimmed range is the honest answer.
+  if (to - from < 2) return { startIdx, endIdx };
+  return { startIdx: from, endIdx: to };
+}
+
 const GRAVITY_MPS2 = 9.81;
 
 // Reference height (5'9", a common adult-average baseline) the flat
@@ -1008,15 +1063,31 @@ export function summarizeTrackedSet(
   if (phases.length === 0) return null;
 
   const phaseStats = phases.map((phase) => {
-    const slice = speedsMps.slice(phase.startIdx, phase.endIdx + 1);
-    const confidenceSlice = confidences.slice(phase.startIdx, phase.endIdx + 1);
-    const duration = (points[phase.endIdx].t - points[phase.startIdx].t) / 1000;
+    // Timing comes from the moving part of the phase; displacement still comes from the phase's
+    // own endpoints -- see trimPhaseToMovement for why those are two different windows, and for
+    // the calibration run that separated them. startIdx/endIdx below stay untrimmed on purpose:
+    // every range-of-motion and direction read downstream indexes off them, and range of motion
+    // is the one number already measuring correctly.
+    const moving = trimPhaseToMovement(speedsMps, phase.startIdx, phase.endIdx);
+    const slice = speedsMps.slice(moving.startIdx, moving.endIdx + 1);
+    const confidenceSlice = confidences.slice(moving.startIdx, moving.endIdx + 1);
+    const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
     const mean = plausibleMean(slice, confidenceSlice);
     // peak/peakIdx (index within the whole trace, used to report how long
     // it took to reach peak velocity, a standard VBT metric) come from
     // robustPeakSpeed rather than a raw max -- see its own comment above.
-    const { peak, peakIdx } = robustPeakSpeed(speedsMps, phase.startIdx, phase.endIdx, confidences);
-    return { peak, mean, duration, startIdx: phase.startIdx, endIdx: phase.endIdx, peakIdx };
+    // Measured over the moving window too: time-to-peak-velocity counted from a turning point
+    // the athlete then stood at for two seconds is not time to peak velocity.
+    const { peak, peakIdx } = robustPeakSpeed(speedsMps, moving.startIdx, moving.endIdx, confidences);
+    return {
+      peak,
+      mean,
+      duration,
+      startIdx: phase.startIdx,
+      endIdx: phase.endIdx,
+      movingStartIdx: moving.startIdx,
+      peakIdx,
+    };
   });
 
   // Heuristic: of each pair of adjacent phases, the one with the higher
@@ -1187,7 +1258,12 @@ export function summarizeTrackedSet(
     const pairedEccentric = i > 0 ? phaseStats[i - 1] : null;
     const romCm = Math.round(Math.abs(points[phase.endIdx].y - points[phase.startIdx].y) * 1000) / 10;
 
-    const rawTimeToPeakSeconds = (points[phase.peakIdx].t - points[phase.startIdx].t) / 1000;
+    // From the moment the bar STARTED MOVING, not from the turning point the athlete may have
+    // stood at first -- see trimPhaseToMovement. Time-to-peak-velocity and EAI (peak divided by
+    // this) are both meaningless when the clock starts during a pause: the same rep reads a
+    // longer TPV and a lower EAI purely because the athlete rested longer before it.
+    const rawTimeToPeakSeconds =
+      (points[phase.peakIdx].t - points[phase.movingStartIdx].t) / 1000;
     const timeToPeakVelocitySeconds = Math.round(rawTimeToPeakSeconds * 100) / 100;
     // Divides the RAW (unrounded) peak/time, not the already-rounded display fields above --
     // see this rep's own `eai` field comment for why matching OVR meant reverse-engineering
