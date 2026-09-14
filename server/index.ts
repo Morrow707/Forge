@@ -100,6 +100,10 @@ import { pool } from "./db";
 import { redactForLog } from "./log-redaction";
 import { recordSystemFailure } from "./system-events";
 
+// Opt-in, per process, for the response-body logging further down. See the
+// comment at its call site for why NODE_ENV is not enough on its own.
+const LOG_RESPONSE_BODIES = process.env.LOG_RESPONSE_BODIES === "1";
+
 const app = express();
 // contentSecurityPolicy is report-only, not enforcing -- see its own
 // directives below for why. crossOriginEmbedderPolicy stays off -- this
@@ -310,19 +314,27 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (reqPath.startsWith("/api")) {
       let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
-      // The body goes to the log in development only. Redaction covers keys
-      // that are secrets; it does not and cannot cover the payload itself,
-      // which on this platform is athlete names, health status, injury
-      // history and a minor's date of birth. Truncating at 200 characters
-      // limits the volume, not the exposure -- the first 200 characters of a
-      // profile response are precisely the identifying part. Sentry is
-      // configured to collect no response bodies at all, and stdout was the
-      // one place that undercut it.
+      // The body goes to the log in development, and only when explicitly
+      // asked for. Redaction covers keys that are secrets; it does not and
+      // cannot cover the payload itself, which on this platform is athlete
+      // names, health status, injury history and a minor's date of birth.
+      // Truncating at 200 characters limits the volume, not the exposure --
+      // the first 200 characters of a profile response are precisely the
+      // identifying part. Sentry is configured to collect no response bodies
+      // at all, and stdout was the one place that undercut it.
+      //
+      // NODE_ENV alone used to be the whole condition, which quietly made
+      // "this is a development environment" mean "write athlete personal data
+      // to stdout". Those are not the same decision: a shared or hosted dev
+      // instance runs against real-shaped data with a log collector attached,
+      // and nobody chose that when they set NODE_ENV. Opting in per-process
+      // keeps the debugging affordance for whoever actually wants it and
+      // makes the default quiet.
       //
       // The method, path, status and duration stay in every environment:
       // that is what a log line is actually read for, and none of it is
       // anyone's personal data.
-      if (capturedJsonResponse && app.get("env") === "development") {
+      if (capturedJsonResponse && LOG_RESPONSE_BODIES && app.get("env") === "development") {
         logLine += ` :: ${JSON.stringify(redactForLog(capturedJsonResponse))}`;
       }
       if (logLine.length > 200) {

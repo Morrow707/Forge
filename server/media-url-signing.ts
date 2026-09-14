@@ -35,13 +35,61 @@ import crypto from "crypto";
 // auth.ts uses, so this never breaks an environment that hasn't set
 // MEDIA_URL_SECRET yet -- but a real, separate value should be set in
 // Render (Dashboard -> Environment) once this ships.
-const MEDIA_URL_SECRET = process.env.MEDIA_URL_SECRET || process.env.SESSION_SECRET || "forge-dev-secret";
+// The fallback chain is fine; falling all the way through it in production
+// is not. "forge-dev-secret" is a constant published in this file, so a
+// production boot that reached it would sign every media URL with a value
+// anyone can read here -- forging a signature for any gated upload becomes
+// arithmetic, and the whole scheme is decorative. That was unreachable in
+// practice only because SESSION_SECRET is separately required to boot, which
+// makes this file's safety a side effect of auth.ts's check rather than
+// something this file does. auth.ts's requireSecret refuses to start rather
+// than sign a cookie with a public constant; the same reasoning applies here,
+// so the same thing happens.
+function resolveMediaSecret(): string {
+  const dedicated = process.env.MEDIA_URL_SECRET?.trim();
+  if (dedicated) return dedicated;
+  const shared = process.env.SESSION_SECRET?.trim();
+  if (process.env.NODE_ENV === "production") {
+    if (!shared) {
+      throw new Error(
+        "MEDIA_URL_SECRET is not set, and neither is SESSION_SECRET. Refusing to start in " +
+          "production: media URLs would be signed with a public constant from this file, so " +
+          "anyone could mint a valid signature for any athlete's footage. Set MEDIA_URL_SECRET " +
+          "to a long random value.",
+      );
+    }
+    // Falling back to SESSION_SECRET is safe but is the key-separation
+    // weakness this file's comment above describes, and it is silent. Say so
+    // once at boot so it shows up in the deploy log rather than only here.
+    console.warn(
+      "[media] MEDIA_URL_SECRET is not set -- signing media URLs with SESSION_SECRET. " +
+        "Set a separate value in Render (Dashboard -> Environment) so the two keys can be " +
+        "rotated independently.",
+    );
+    return shared;
+  }
+  return shared || "forge-dev-secret";
+}
+
+const MEDIA_URL_SECRET = resolveMediaSecret();
 
 // Long enough that a single open session/tab never sees a video 403 out
 // from under it (queries refetch on focus/remount well inside this
 // window), short enough that a leaked/screenshotted link stops working
 // within the day rather than forever.
-const TTL_MS = 6 * 60 * 60 * 1000;
+//
+// Was six hours, now one. The signature binds a path and an expiry and
+// nothing about the viewer -- deliberately, because a bare <video src> can
+// carry neither a cookie nor a header, and on iOS WKWebView the session
+// cookie is dropped outright, which is the reason this scheme exists at all.
+// That makes the URL a bearer credential for its whole lifetime, so the
+// lifetime is the only dial there is. The leak paths that remain are a link
+// someone pastes somewhere and a screenshot of the address bar; helmet's
+// no-referrer default already stops the URL escaping through a Referer
+// header. An hour still sits far above the refetch cadence this comment
+// relies on -- React Query refetches these on focus and on remount -- so the
+// tab that stays open all afternoon re-signs long before anything expires.
+const TTL_MS = 60 * 60 * 1000;
 
 // problem-reports: a "report a problem" screenshot can just as easily show
 // an athlete's page/roster/video as any of the other three -- same

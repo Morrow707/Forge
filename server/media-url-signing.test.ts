@@ -7,7 +7,11 @@ import { isGatedUploadPath, signMediaUrl, verifyMediaUrl, signMediaUrlsDeep } fr
 // the dev placeholder -- computed the same way here rather than hardcoded so
 // the tests still hold if the environment does set one.
 const SECRET = process.env.MEDIA_URL_SECRET || process.env.SESSION_SECRET || "forge-dev-secret";
-const TTL_MS = 6 * 60 * 60 * 1000;
+// Mirrors the module's own TTL. A signed URL is a bearer credential for its
+// whole lifetime (the signature binds a path and an expiry, never a viewer),
+// so this number is the only thing bounding a leaked link and is worth having
+// a test notice when it moves.
+const TTL_MS = 60 * 60 * 1000;
 
 function signFor(pathname: string, exp: number): string {
   return crypto.createHmac("sha256", SECRET).update(`${pathname}.${exp}`).digest("hex");

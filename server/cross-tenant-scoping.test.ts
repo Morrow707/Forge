@@ -61,6 +61,16 @@ const OWNERSHIP_CHECKS = [
   "getEffectiveCoachIds",
   "requireReadableClassLesson",
   "guardianRead(",
+  // The remaining resolve-this-id-against-the-caller helpers. They were
+  // missing only because the looser check below them used to pass these
+  // routes on a different call in the same handler, so nothing pointed at
+  // the gate that was actually doing the work.
+  "getProgramIfUsableByCoach",
+  "getAssignmentForCoach",
+  "getAssignmentForAthlete",
+  "getSkillAssignmentForCoach",
+  "getSkillAssignmentForAthlete",
+  "getClassEnrollmentForAthlete",
 ];
 
 // Routes whose path parameter names global Forge content or a deliberately
@@ -116,6 +126,160 @@ describe("every parameterised route resolves its ids against the requester", () 
       ).toBe(true);
     });
   }
+});
+
+/**
+ * Routes where a call takes a URL id that nothing in this file can see being
+ * resolved against the caller, and which were read individually and judged
+ * safe for a reason a pattern cannot express. Keyed by call, not by route, so
+ * adding a second unscoped call to one of these routes still fails.
+ *
+ * This is the list to be suspicious of in review. Every entry is a promise
+ * that someone read the handler and the storage function it calls.
+ */
+const RESOLVED_ANOTHER_WAY = new Map<string, string>([
+  [
+    "GET /api/calendar/:token.ics::getUserByCalendarToken",
+    "The parameter IS the credential, not an id to check against a session -- there is no " +
+      "session, because a calendar client cannot hold one. 192 random bits under a unique " +
+      "index, and the caller is derived from it rather than compared against it.",
+  ],
+  [
+    "GET /api/coach/academy/tracks/:id::getAcademyTrackFull",
+    "academy_tracks has no owner column: Forge-authored Coaches Corner content, identical " +
+      "for every account. hasCoachesCornerAccess on this route is an entitlement gate, not a " +
+      "tenancy one.",
+  ],
+  [
+    "GET /api/athlete/programs/:id::getProgramFull",
+    "Fetch-then-check: the row is loaded unscoped, then the handler 404s unless " +
+      "ownerIds.includes(program.coachId). Safe only because nothing is written to the " +
+      "response between the two, which is why this stays an exception rather than a pattern.",
+  ],
+  [
+    "GET /api/athlete/skill-programs/:id::getSkillProgramFull",
+    "Fetch-then-check, exactly as /api/athlete/programs/:id above.",
+  ],
+  [
+    "DELETE /api/coach/team-challenges/:id::getTeamChallengeById",
+    "Fetch-then-check: the row is loaded unscoped so the handler can read its teamId, then " +
+      "assertOwnsTeam decides. The row itself is never returned -- it exists only to name the " +
+      "team the ownership check runs against.",
+  ],
+  [
+    "DELETE /api/coach/team-game-days/:id::getTeamGameDayById",
+    "Fetch-then-check, exactly as /api/coach/team-challenges/:id above.",
+  ],
+  [
+    "POST /api/athlete/classes/:id/enroll::getClassById",
+    "The row is never returned; the handler 404s unless it is a published Forge-official " +
+      "class, so the reachable set is the public catalogue rather than anyone's own classes.",
+  ],
+]);
+
+/** Identifiers in a handler that carry a value taken out of the URL. */
+function paramDerivedNames(body: string): Set<string> {
+  const names = new Set<string>();
+  for (const m of body.matchAll(/const\s+(\w+)\s*=\s*(?:Number\(\s*)?req\.params\.\w+/g)) {
+    names.add(m[1]);
+  }
+  for (const m of body.matchAll(/const\s*\{([^}]*)\}\s*=\s*req\.params/g)) {
+    for (const part of m[1].split(",")) {
+      const name = part.split(":").pop()?.trim();
+      if (name) names.add(name);
+    }
+  }
+  return names;
+}
+
+/** Every storage.X(...) call in a handler, with its argument text. */
+function storageCalls(body: string): { fn: string; args: string; at: number }[] {
+  const calls: { fn: string; args: string; at: number }[] = [];
+  const re = /storage\.(\w+)\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body))) {
+    let depth = 1;
+    let j = re.lastIndex;
+    while (j < body.length && depth > 0) {
+      if (body[j] === "(") depth++;
+      else if (body[j] === ")") depth--;
+      j++;
+    }
+    calls.push({ fn: m[1], args: body.slice(re.lastIndex, j - 1), at: m.index });
+  }
+  return calls;
+}
+
+/**
+ * The blind spot in the check above, closed.
+ *
+ * That test asks whether a route scopes SOMEWHERE -- any storage call taking
+ * user.id satisfies it. A handler that does two things, one of them scoped
+ * and one of them not, therefore passes while the unscoped half is exactly
+ * the bug the file exists to catch: fetch the caller's own record with
+ * user.id, then hand a second id straight from the URL to a second query.
+ * Nothing in the codebase does this today, which is the moment to nail it
+ * down rather than after something does.
+ *
+ * So this asks the question per CALL instead of per route: every storage call
+ * that receives a value out of the URL must either take user.id itself, or
+ * come after a helper whose job is to resolve that id against the caller.
+ */
+describe("no second, unscoped id slips past a route that scopes somewhere else", () => {
+  const parameterised = routes.filter((r) => /:\w+/.test(r.path));
+
+  for (const route of parameterised) {
+    const head = route.body.split("\n").slice(0, 5).join("\n");
+    if (head.includes('requireRole("admin")')) continue;
+    if (GLOBAL_BY_DESIGN.has(route.path)) continue;
+
+    const names = paramDerivedNames(route.body);
+    const suspect = storageCalls(route.body).filter((call) => {
+      const takesUrlId =
+        /req\.params/.test(call.args) ||
+        [...names].some((n) => new RegExp(`\\b${n}\\b`).test(call.args));
+      if (!takesUrlId) return false;
+      // Scoped in SQL by the same call that takes the id.
+      if (/\buser\.id\b/.test(call.args)) return false;
+      // Gated before the call. Position matters: a check that runs afterwards
+      // has already let the query run.
+      const before = route.body.slice(0, call.at);
+      return !OWNERSHIP_CHECKS.some((c) => before.includes(c));
+    });
+
+    if (suspect.length === 0) continue;
+
+    it(`${route.verb} ${route.path} (routes.ts:${route.line})`, () => {
+      for (const call of suspect) {
+        const key = `${route.verb} ${route.path}::${call.fn}`;
+        expect(
+          RESOLVED_ANOTHER_WAY.has(key),
+          `${route.verb} ${route.path} hands a URL id to storage.${call.fn}() without passing ` +
+            `user.id and without an ownership check before it. The route may well scope some ` +
+            `OTHER call -- that is not the same thing, and is the hole this test exists for. ` +
+            `Either scope this call, gate it with one of the helpers in OWNERSHIP_CHECKS, or ` +
+            `add "${key}" to RESOLVED_ANOTHER_WAY with the reason it is safe.`,
+        ).toBe(true);
+      }
+    });
+  }
+
+  it("keeps the exception list honest", () => {
+    // An entry that no longer matches any route is an entry nobody will
+    // re-read, and it quietly widens the allowlist for whatever path reuses
+    // that name later.
+    const live = new Set<string>();
+    for (const route of routes) {
+      for (const call of storageCalls(route.body)) {
+        live.add(`${route.verb} ${route.path}::${call.fn}`);
+      }
+    }
+    for (const key of RESOLVED_ANOTHER_WAY.keys()) {
+      expect(live.has(key), `RESOLVED_ANOTHER_WAY entry "${key}" no longer matches any route`).toBe(
+        true,
+      );
+    }
+  });
 });
 
 describe("the guardian read surface stays read-only and scoped", () => {

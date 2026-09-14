@@ -347,6 +347,25 @@ const QUERY_ENGINE_MAX_ROWS = 10_000;
 const QUERY_ENGINE_MIN_COHORT = 5;
 
 /**
+ * Mints the per-query pseudonyms that stand in for athlete ids on an admin
+ * analytics surface.
+ *
+ * The salt is generated fresh for each call, which is the whole property:
+ * within one result set a code is stable, so rows can be grouped and counted;
+ * across two result sets the same athlete gets different codes, so an admin
+ * cannot join yesterday's answer to today's into a growing per-athlete
+ * profile. Nothing maps a code back to a user, in this file or anywhere else.
+ *
+ * Shared by every surface that returns individual-level rows, so a new one
+ * cannot accidentally ship with a weaker scheme than the Query Engine's, or
+ * with a salt reused across calls.
+ */
+function newSubjectCoder(): (id: number) => string {
+  const subjectSalt = randomBytes(32);
+  return (id: number) => createHmac("sha256", subjectSalt).update(String(id)).digest("hex").slice(0, 16);
+}
+
+/**
  * How many platform-wide athlete queries one admin may run in a rolling day.
  *
  * The suppression floor above only ever sees one query at a time, and that
@@ -396,45 +415,77 @@ export type CohortQueryContext = {
   requestedFor?: string | null;
 };
 
+/**
+ * Advisory-lock namespace for the budget check below.
+ *
+ * pg_advisory_xact_lock's single-argument form takes one 64-bit key, and
+ * this file already uses it that way with a bare coachId elsewhere. Sharing
+ * that key space would make admin 7's budget check block on coach 7's
+ * unrelated lock for no reason, so this uses the two-argument form with a
+ * namespace of its own. The number is arbitrary and only has to be unlike
+ * any other namespace here.
+ */
+const COHORT_BUDGET_LOCK_NAMESPACE = 8472;
+
 async function consumeCohortQueryBudget(
   adminId: number,
   context: CohortQueryContext = {},
 ): Promise<QueryBudgetResult> {
   const since = new Date(Date.now() - COHORT_QUERY_BUDGET_WINDOW_MS);
-  const [row] = await db
-    .select({ used: count() })
-    .from(aggregateDataAccessLog)
-    .where(and(eq(aggregateDataAccessLog.adminId, adminId), gte(aggregateDataAccessLog.viewedAt, since)));
-  const used = row?.used ?? 0;
 
-  if (used >= COHORT_QUERY_BUDGET_PER_DAY) {
-    // When the budget frees up is when the oldest query in the window ages
-    // out, not an arbitrary hour -- so the answer to "when can I run this"
-    // is a real time rather than "try later".
-    const [oldest] = await db
-      .select({ viewedAt: aggregateDataAccessLog.viewedAt })
+  // The count and the insert have to be one atomic step, not two statements
+  // with a gap between them. Read-then-write was racy in exactly the case
+  // the budget exists for: fire fifty concurrent queries and they can all
+  // read used=49 and all be allowed through, because none of their inserts
+  // has landed yet when the others do their check. The ceiling then bends to
+  // however much concurrency the caller can muster, which is a strange
+  // property for a control whose whole purpose is to bound how many probes
+  // one admin can aim at the same narrow cohort.
+  //
+  // Serialized per admin with a transaction-scoped advisory lock rather than
+  // a unique constraint or a retry loop: the check is "how many rows in the
+  // last 24 hours", which no constraint can express, and the lock is held
+  // for two fast indexed statements against one admin's own rows. Different
+  // admins never contend, and the lock releases on commit or rollback, so a
+  // failed insert cannot strand it.
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${COHORT_BUDGET_LOCK_NAMESPACE}, ${adminId})`);
+
+    const [row] = await tx
+      .select({ used: count() })
       .from(aggregateDataAccessLog)
-      .where(and(eq(aggregateDataAccessLog.adminId, adminId), gte(aggregateDataAccessLog.viewedAt, since)))
-      .orderBy(asc(aggregateDataAccessLog.viewedAt))
-      .limit(1);
-    const freesAt = oldest
-      ? oldest.viewedAt.getTime() + COHORT_QUERY_BUDGET_WINDOW_MS
-      : Date.now() + COHORT_QUERY_BUDGET_WINDOW_MS;
-    return {
-      allowed: false,
-      used,
-      limit: COHORT_QUERY_BUDGET_PER_DAY,
-      retryAfterMinutes: Math.max(1, Math.ceil((freesAt - Date.now()) / 60_000)),
-    };
-  }
+      .where(and(eq(aggregateDataAccessLog.adminId, adminId), gte(aggregateDataAccessLog.viewedAt, since)));
+    const used = row?.used ?? 0;
 
-  await db.insert(aggregateDataAccessLog).values({
-    adminId,
-    queryText: context.queryText ?? null,
-    purpose: context.purpose ?? null,
-    requestedFor: context.requestedFor ?? null,
+    if (used >= COHORT_QUERY_BUDGET_PER_DAY) {
+      // When the budget frees up is when the oldest query in the window ages
+      // out, not an arbitrary hour -- so the answer to "when can I run this"
+      // is a real time rather than "try later".
+      const [oldest] = await tx
+        .select({ viewedAt: aggregateDataAccessLog.viewedAt })
+        .from(aggregateDataAccessLog)
+        .where(and(eq(aggregateDataAccessLog.adminId, adminId), gte(aggregateDataAccessLog.viewedAt, since)))
+        .orderBy(asc(aggregateDataAccessLog.viewedAt))
+        .limit(1);
+      const freesAt = oldest
+        ? oldest.viewedAt.getTime() + COHORT_QUERY_BUDGET_WINDOW_MS
+        : Date.now() + COHORT_QUERY_BUDGET_WINDOW_MS;
+      return {
+        allowed: false,
+        used,
+        limit: COHORT_QUERY_BUDGET_PER_DAY,
+        retryAfterMinutes: Math.max(1, Math.ceil((freesAt - Date.now()) / 60_000)),
+      };
+    }
+
+    await tx.insert(aggregateDataAccessLog).values({
+      adminId,
+      queryText: context.queryText ?? null,
+      purpose: context.purpose ?? null,
+      requestedFor: context.requestedFor ?? null,
+    });
+    return { allowed: true, used: used + 1, limit: COHORT_QUERY_BUDGET_PER_DAY };
   });
-  return { allowed: true, used: used + 1, limit: COHORT_QUERY_BUDGET_PER_DAY };
 }
 
 // Cap on the strength/speed leaderboards -- see getLeaderboardForExercise's
@@ -2279,6 +2330,21 @@ const researchDatasetAthlete = () =>
     eq(users.researchDataConsent, true),
   );
 
+/**
+ * Every athlete whose data is collected at all, consented to research or not.
+ *
+ * Deliberately NOT a dataset predicate: nothing built from this may be shown as a statistic,
+ * exported, or handed to an admin as an answer about a group. It exists for exactly one
+ * question -- "how much of the platform does this consented cohort represent" -- and the only
+ * thing derived from it is a SIZE.
+ *
+ * It has to exist separately because the consent rule was unified. platformDatasetAthlete() and
+ * researchDatasetAthlete() now both require researchDataConsent, so running a filter over either
+ * one and calling the result a platform-wide denominator compares a consented population against
+ * itself and always reports full coverage. See runResearchCohortQuery, which is the one caller.
+ */
+const trackedAthlete = () => and(eq(users.role, "athlete"), eq(users.trackingOptOut, false));
+
 /** Athletes with at least one recorded injury in any of `regions`. */
 async function athletesWithInjuryInRegions(
   athleteIds: number[],
@@ -2304,10 +2370,24 @@ async function athletesWithInjuryInRegions(
 // group under PLATFORM_TRENDS_MIN_COHORT is suppressed (count shown,
 // values withheld) rather than shown small -- same floor, same reasoning,
 // as buildPlatformTrends' own comment.
-async function queryTrackedCohort(
+// Exported for its test only. The routes reach it through runCohortQuery /
+// runResearchCohortQuery, which parse an admin's plain English with a model
+// call first -- so a test that went in the front door would spend real money
+// to arrive at a filter object it could have written by hand.
+export async function queryTrackedCohort(
   filters: CohortQueryFilters,
-  options?: { population?: "platform" | "research" },
+  options?: { population?: "platform" | "research" | "tracked" },
 ) {
+  // "tracked" is the consent-agnostic population and is a denominator only --
+  // see trackedAthlete()'s comment. Nothing summarized from it may be
+  // rendered or exported; runResearchCohortQuery takes cohortSize off it and
+  // discards the rest.
+  const population =
+    options?.population === "research"
+      ? researchDatasetAthlete()
+      : options?.population === "tracked"
+        ? trackedAthlete()
+        : platformDatasetAthlete();
   const athletes = await db
     .select({
       id: users.id,
@@ -2326,7 +2406,7 @@ async function queryTrackedCohort(
       deadliftMaxLbs: users.deadliftMaxLbs,
     })
     .from(users)
-    .where(options?.population === "research" ? researchDatasetAthlete() : platformDatasetAthlete());
+    .where(population);
 
   const genderSet = filters.genders?.length ? new Set(filters.genders) : null;
   const sportSet = filters.sports?.length ? new Set(filters.sports.map((s) => s.toLowerCase())) : null;
@@ -2857,6 +2937,34 @@ type AggregateAthleteRow = {
   squatMaxLbs: number | null;
   deadliftMaxLbs: number | null;
 };
+
+/**
+ * The column list behind AggregateAthleteRow, in one place.
+ *
+ * Shared by the two callers so the paginated admin-facing read and the
+ * background reflection job cannot drift apart in what they select, and so
+ * the admin-facing one can prepend users.id for pseudonymization without
+ * restating sixteen columns.
+ */
+const aggregateAthleteColumns = {
+  age: users.age,
+  gender: users.gender,
+  heightIn: users.heightIn,
+  bodyWeightLbs: users.bodyWeightLbs,
+  sport: users.sport,
+  position: users.position,
+  seasonPhase: users.seasonPhase,
+  trainingStylePreference: users.trainingStylePreference,
+  nutritionGoal: users.nutritionGoal,
+  healthStatus: users.healthStatus,
+  fortyYardDash: users.fortyYardDash,
+  verticalJumpIn: users.verticalJumpIn,
+  broadJumpIn: users.broadJumpIn,
+  proAgilitySeconds: users.proAgilitySeconds,
+  benchMaxLbs: users.benchMaxLbs,
+  squatMaxLbs: users.squatMaxLbs,
+  deadliftMaxLbs: users.deadliftMaxLbs,
+} as const;
 
 type OverwatchFlaw = {
   title: string;
@@ -15644,7 +15752,7 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
     adminId: number,
     limit = 200,
     offset = 0,
-  ): Promise<{ rows: AggregateAthleteRow[]; total: number }> {
+  ): Promise<{ rows: (AggregateAthleteRow & { subjectCode: string })[]; total: number }> {
     // Awaited, and it can refuse. This was a fire-and-forget audit write on
     // the reasoning that logging must never make a query fail; that reasoning
     // no longer holds. The same row
@@ -15653,14 +15761,41 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
     // refuse. The caller turns the refusal into a 429.
     const budget = await consumeCohortQueryBudget(adminId);
     if (!budget.allowed) throw new CohortQueryBudgetExceeded(budget);
+
+    // Carries a subjectCode for the same reason queryAthletesAdvanced does,
+    // and it was an odd gap that this surface did not. Both return
+    // individual-level rows to an admin; the Query Engine pseudonymized its
+    // rows while this one, showing the same class of data about the same
+    // people, returned them bare. Rows here have never carried a name, email
+    // or id, so nothing was resolvable through Forge itself -- but a row of
+    // exact height, weight, age, sport, position and four combine numbers is
+    // a strong quasi-identifier to a reader who already knows an athlete's
+    // measurements, and a stable handle is what lets a set of them be tracked
+    // across pages. A per-query code gives the page something to key rows on
+    // without ever being that handle.
+    //
+    // No suppression floor here, unlike the Query Engine's. That floor exists
+    // because filters can be narrowed until one athlete matches; this surface
+    // takes no filters at all and returns the whole population a page at a
+    // time, so there is no narrowing to stop and a floor would only ever
+    // blank an entire small platform.
+    const codeFor = newSubjectCoder();
     const [rows, [{ count: total }]] = await Promise.all([
-      this.queryAggregateAthleteData({ limit, offset }),
+      db
+        .select({ athleteId: users.id, ...aggregateAthleteColumns })
+        .from(users)
+        .where(platformDatasetAthlete())
+        .limit(limit)
+        .offset(offset),
       // Same predicate the rows themselves use. Counting every athlete here
       // while the rows exclude opted-out ones would leave the pager
       // promising pages that come back empty at the end of the list.
       db.select({ count: count() }).from(users).where(platformDatasetAthlete()),
     ]);
-    return { rows, total };
+    return {
+      rows: rows.map(({ athleteId, ...rest }) => ({ ...rest, subjectCode: codeFor(athleteId) })),
+      total,
+    };
   },
 
   // The actual query behind getAggregateAthleteData, split out so the
@@ -15673,28 +15808,7 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
   // job, not something rendered to a browser, so the DOM-node ceiling that
   // motivates getAggregateAthleteData's default page size doesn't apply.
   async queryAggregateAthleteData(pagination?: { limit: number; offset: number }): Promise<AggregateAthleteRow[]> {
-    const base = db
-      .select({
-        age: users.age,
-        gender: users.gender,
-        heightIn: users.heightIn,
-        bodyWeightLbs: users.bodyWeightLbs,
-        sport: users.sport,
-        position: users.position,
-        seasonPhase: users.seasonPhase,
-        trainingStylePreference: users.trainingStylePreference,
-        nutritionGoal: users.nutritionGoal,
-        healthStatus: users.healthStatus,
-        fortyYardDash: users.fortyYardDash,
-        verticalJumpIn: users.verticalJumpIn,
-        broadJumpIn: users.broadJumpIn,
-        proAgilitySeconds: users.proAgilitySeconds,
-        benchMaxLbs: users.benchMaxLbs,
-        squatMaxLbs: users.squatMaxLbs,
-        deadliftMaxLbs: users.deadliftMaxLbs,
-      })
-      .from(users)
-      .where(platformDatasetAthlete());
+    const base = db.select(aggregateAthleteColumns).from(users).where(platformDatasetAthlete());
     if (!pagination) return base;
     return base.limit(pagination.limit).offset(pagination.offset);
   },
@@ -15899,9 +16013,7 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
 
     // Fresh per query: two runs of the same filters produce different codes
     // for the same athlete, so result sets cannot be joined together.
-    const subjectSalt = randomBytes(32);
-    const codeFor = (id: number) =>
-      createHmac("sha256", subjectSalt).update(String(id)).digest("hex").slice(0, 16);
+    const codeFor = newSubjectCoder();
 
     const rows = await db
       .select({
@@ -23433,8 +23545,21 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     //
     // Only a SIZE crosses over from the live query. Nothing else from `all`
     // reaches the caller, and nothing from it reaches the PDF.
+    //
+    // `all` runs over the "tracked" population -- every athlete whose data is
+    // collected, consented to research or not -- and that choice is the whole
+    // point of the number. It used to take the default population, which was
+    // fine when that meant "opted in to collection"; once the consent rule was
+    // unified, platformDatasetAthlete() started requiring researchDataConsent
+    // too, so `all` and `consented` were drawn from the same consented
+    // population and matchedBeforeConsent silently became equal to
+    // consentedCount. The 409 that quotes it ("N matched the filters overall")
+    // was then telling an admin their cohort represented all of the platform,
+    // whatever the real coverage was -- and the question it exists to answer,
+    // whether a small cohort is rare or merely unconsented, could no longer be
+    // answered at all, since both readings produce the same figure.
     const [all, consented] = await Promise.all([
-      queryTrackedCohort(filters),
+      queryTrackedCohort(filters, { population: "tracked" }),
       queryResearchCohort(filters),
     ]);
     return {

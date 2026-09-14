@@ -75,6 +75,7 @@ import {
 } from "@shared/free-agent-tiers";
 import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
 import { verifyMediaUrl } from "./media-url-signing";
+import { summarizeCspReport } from "./csp-report";
 import { shouldTouchLastSeen } from "./session-tracking";
 import { COACH_SECTIONS } from "@shared/coach-sections";
 import { widgetLayoutSchema } from "@shared/dashboard-widgets";
@@ -298,6 +299,42 @@ fs.mkdirSync(SKILL_VIDEOS_DIR, { recursive: true });
 // that same footage, problem-reports deliberately excluded since a report
 // screenshot isn't training footage of anyone in particular.
 const VIDEO_AUDIT_DIRS = new Set(["form-videos", "skill-videos", "annotations"]);
+
+/**
+ * How long one viewer's repeat requests for the same file collapse into a
+ * single access-audit row.
+ *
+ * Replaces a test on the Range header. Only the request that started playback
+ * used to be logged, identified as one with no Range or a Range beginning at
+ * byte zero, so that a <video> element's own seeking did not turn one review
+ * into dozens of near-duplicate rows. That is the right goal and the wrong
+ * test: the header is chosen by the client, so a coach or admin who did not
+ * want a row recording that they watched someone else's footage could ask for
+ * "bytes=1-" and stream the whole file with nothing written down. The person
+ * the row is about decided whether it existed, which is not a property an
+ * accountability record can have.
+ *
+ * Deduplicating on viewer and path over a short window collapses the same
+ * seek storm without consulting anything the client controls.
+ */
+const STREAM_AUDIT_DEDUPE_MS = 5 * 60 * 1000;
+const recentStreamAudits = new Map<string, number>();
+
+function shouldLogStreamAccess(key: string): boolean {
+  const now = Date.now();
+  const last = recentStreamAudits.get(key);
+  if (last != null && now - last < STREAM_AUDIT_DEDUPE_MS) return false;
+  recentStreamAudits.set(key, now);
+  // Swept opportunistically rather than on a timer: this only grows on staff
+  // viewing athlete footage, so it is small, and an unbounded Map that only
+  // ever grows is a leak however slow.
+  if (recentStreamAudits.size > 5000) {
+    for (const [entry, at] of recentStreamAudits) {
+      if (now - at > STREAM_AUDIT_DEDUPE_MS) recentStreamAudits.delete(entry);
+    }
+  }
+  return true;
+}
 
 const uploadSkillVideo = multer({
   storage: multer.diskStorage({
@@ -1070,7 +1107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/csp-report",
     express.json({ type: ["application/json", "application/csp-report", "application/reports+json"] }),
     (req, res) => {
-      console.warn("CSP violation report:", JSON.stringify(req.body));
+      console.warn("CSP violation report:", JSON.stringify(summarizeCspReport(req.body)));
       res.status(204).end();
     },
   );
@@ -1098,10 +1135,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ever sees an athlete's footage, since it's how every <video src> in the
   // app (set review, skill session review, comment threads) actually loads
   // one. Fire-and-forget, athlete-self-views excluded (this table is
-  // specifically "staff touching someone else's record"), and only the
-  // request that starts playback is logged -- a <video> element's own
-  // range-request seeking would otherwise turn one review into dozens of
-  // near-duplicate rows. Best-effort, not complete: signed media URLs exist
+  // specifically "staff touching someone else's record"), and repeat
+  // requests from one viewer for one file collapse into a single row for a
+  // few minutes -- a <video> element's own range-request seeking would
+  // otherwise turn one review into dozens of near-duplicate rows. That
+  // window lives in this process, so a multi-instance deploy can write one
+  // row per instance for the same review; over-logging is the right
+  // direction for an accountability record to fail in. Best-effort, not
+  // complete: signed media URLs exist
   // precisely because the session cookie doesn't reliably travel with a
   // bare <video src> fetch on iOS native (see media-url-signing.ts's own
   // comment), so a request with no deserializable session here logs
@@ -1110,10 +1151,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const viewer = req.isAuthenticated() ? currentUser(req) : null;
     if (viewer && (viewer.role === "coach" || viewer.role === "admin")) {
       const pathname = `/uploads${req.path}`;
-      const range = req.get("range");
-      const isPlaybackStart = !range || range.startsWith("bytes=0-");
       const match = /^\/uploads\/([^/]+)\/[^/]+$/.exec(pathname);
-      if (isPlaybackStart && match && VIDEO_AUDIT_DIRS.has(match[1])) {
+      // Dedupe is checked last, and only for a request that would actually be
+      // logged, so a request for a public directory never consumes a viewer's
+      // window for a gated one. See STREAM_AUDIT_DEDUPE_MS for why this
+      // replaced the Range-header test.
+      if (match && VIDEO_AUDIT_DIRS.has(match[1]) && shouldLogStreamAccess(`${viewer.id}:${pathname}`)) {
         storage
           .getUploadedFileOwnerId(pathname)
           .then((ownerId) => {

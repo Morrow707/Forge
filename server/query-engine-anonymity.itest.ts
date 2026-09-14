@@ -206,4 +206,83 @@ describe("query budget", () => {
     await pool.query("UPDATE aggregate_data_access_log SET viewed_at = now() - interval '25 hours'");
     await expect(storage.queryAthletesAdvanced(adminId, filters)).resolves.toHaveLength(5);
   });
+
+  it("holds the limit when the queries arrive all at once", async () => {
+    // The sequential tests above pass just as happily against a racy budget,
+    // because a check-then-insert is only wrong when something else inserts
+    // in the gap. Counting and writing used to be two separate statements, so
+    // sixty simultaneous queries could all read a count below the limit and
+    // all be allowed through -- and concurrency is not an exotic thing to ask
+    // of an HTTP endpoint, it is what a script pointed at one does by
+    // default. That failure mode also lands precisely where the budget is
+    // supposed to bite: an operator probing one narrow cohort over and over
+    // is the person most likely to automate it.
+    const attempts = await Promise.allSettled(
+      Array.from({ length: 60 }, () => storage.queryAthletesAdvanced(adminId, filters)),
+    );
+    const allowed = attempts.filter((a) => a.status === "fulfilled");
+    const refused = attempts.filter((a) => a.status === "rejected");
+
+    expect(allowed).toHaveLength(50);
+    expect(refused).toHaveLength(10);
+    for (const attempt of refused) {
+      expect((attempt as PromiseRejectedResult).reason.name).toBe("CohortQueryBudgetExceeded");
+    }
+
+    // The log is the budget counter, so an over-run would show up here too.
+    const { rows } = await pool.query("SELECT count(*)::int AS n FROM aggregate_data_access_log");
+    expect(rows[0].n).toBe(50);
+  });
+});
+
+describe("the aggregate athlete view is de-identified too", () => {
+  let adminId: number;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    const admin = await makeCoach({ role: "admin", name: "Admin" });
+    adminId = admin.id;
+    for (let i = 0; i < 6; i++) {
+      await makeAthlete({
+        sport: "Football",
+        age: 17,
+        name: `Real Name ${i}`,
+        researchDataConsent: true,
+      });
+    }
+  });
+
+  it("returns a subject code and never an athlete id", async () => {
+    // The sibling Query Engine pseudonymized its rows while this surface,
+    // showing the same class of data about the same people to the same
+    // admins, returned them bare.
+    const { rows } = await storage.getAggregateAthleteData(adminId);
+    expect(rows).toHaveLength(6);
+    for (const row of rows) {
+      expect(row.subjectCode).toMatch(/^[0-9a-f]{16}$/);
+      expect(row).not.toHaveProperty("athleteId");
+      expect(row).not.toHaveProperty("id");
+      expect(row).not.toHaveProperty("name");
+      expect(row).not.toHaveProperty("email");
+    }
+    expect(new Set(rows.map((r) => r.subjectCode)).size).toBe(6);
+  });
+
+  it("gives the same athlete different codes across two reads", async () => {
+    const first = await storage.getAggregateAthleteData(adminId);
+    const second = await storage.getAggregateAthleteData(adminId);
+    const seen = new Set(first.rows.map((r) => r.subjectCode));
+    for (const row of second.rows) {
+      expect(seen.has(row.subjectCode)).toBe(false);
+    }
+  });
+
+  it("still pages over the whole population rather than suppressing a small one", async () => {
+    // Deliberately unlike the Query Engine: this surface takes no filters, so
+    // there is nothing to narrow and a cohort floor would only ever blank a
+    // small platform's entire admin page.
+    const { rows, total } = await storage.getAggregateAthleteData(adminId, 2, 0);
+    expect(rows).toHaveLength(2);
+    expect(total).toBe(6);
+  });
 });
