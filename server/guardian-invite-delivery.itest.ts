@@ -19,7 +19,7 @@ async function inviteFor(athleteId: number, email = "parent@example.test") {
 }
 
 async function blockedRowFor(athleteId: number) {
-  const rows = await storage.getAthletesBlockedPendingGuardian();
+  const rows = (await storage.getAthletesBlockedPendingGuardian()).rows;
   const row = rows.find((r) => r.id === athleteId);
   if (!row) throw new Error("athlete missing from the blocked queue");
   return row;

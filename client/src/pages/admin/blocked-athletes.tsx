@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJson } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
@@ -35,12 +36,22 @@ type BlockedAthlete = {
  * the athlete about an email nobody ever received is the one response
  * guaranteed not to work. */
 export default function AdminBlockedAthletesPage() {
-  const { data: athletes, isLoading } = useQuery<BlockedAthlete[]>({
-    queryKey: ["/api/admin/blocked-athletes"],
-    queryFn: () => getJson("/api/admin/blocked-athletes"),
+  // PAGED, BECAUSE THIS LIST IS NOT SMALL.
+  //
+  // The route used to return every blocked athlete in one array. Against a 500k-user load seed
+  // that is 299,108 rows and an 80 MB response, each carrying a minor's name, email and date of
+  // birth -- measured, not estimated. The page is a work queue, so a page at a time is also how
+  // it is actually used; `total` is what lets it say how big the backlog is without shipping it.
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 100;
+  const { data, isLoading } = useQuery<{ total: number; rows: BlockedAthlete[] }>({
+    queryKey: ["/api/admin/blocked-athletes", page],
+    queryFn: () =>
+      getJson(`/api/admin/blocked-athletes?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`),
   });
 
-  const rows = athletes ?? [];
+  const rows = data?.rows ?? [];
+  const total = data?.total ?? 0;
   const noInvite = rows.filter((a) => !a.inviteSentAt);
   const undelivered = rows.filter((a) => a.inviteSentAt && a.inviteDelivered === false);
   const expired = rows.filter(
@@ -160,6 +171,34 @@ export default function AdminBlockedAthletesPage() {
               );
             })}
           </div>
+
+          {/* The backlog is stated rather than shipped -- see the query above. */}
+          {total > PAGE_SIZE && (
+            <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground tabular-nums">
+                {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of{" "}
+                {total.toLocaleString()} blocked
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={(page + 1) * PAGE_SIZE >= total}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
       </div>

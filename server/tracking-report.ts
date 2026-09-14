@@ -920,7 +920,69 @@ function buildEntries(rows: TrackedSetRow[]): TrackingReportEntry[] {
     return label;
   };
 
-  return rows.map((r) => {
+  // ONE UNREADABLE ROW MUST NOT BLIND THE PAGE THAT EXISTS TO READ THEM.
+  //
+  // trackingDiagnostics is a `json` column with no database-level constraint, and its shape has
+  // grown steadily -- bodyPose, objectDetection, trace and calibration were each added after
+  // rows already existed. The insert schema requires them, so anything written through the API
+  // today is complete; anything written before a field existed, or by any path that skips
+  // validation, is not. A row missing bodyPose threw
+  // "Cannot read properties of undefined (reading 'framesWithBody')" and took the WHOLE report
+  // down with a 500 -- found by seeding a set whose diagnostics carried only an outcome.
+  //
+  // That is the wrong failure mode whatever put the row there. This page exists to investigate
+  // captures that went wrong, so a capture that went wrong enough to write a partial row is
+  // precisely when an admin needs the other nineteen entries. The bad row is now reported AS a
+  // bad row -- which is itself a finding worth seeing -- and the rest of the report renders.
+  const readable: TrackingReportEntry[] = [];
+  for (const r of rows) {
+    try {
+      readable.push(buildEntry(r, labelFor));
+    } catch (err) {
+      readable.push({
+        ...minimalEntry(r, labelFor),
+        flags: [
+          `This set's diagnostics could not be read (${
+            err instanceof Error ? err.message : "unknown error"
+          }). The capture data is stored but incomplete -- everything else on this set is still shown.`,
+        ],
+      });
+    }
+  }
+  return readable;
+}
+
+/** The little that can be said about a row whose diagnostics blob is unreadable: the identifying
+ *  columns, which live in real columns rather than the JSON, and nothing derived from it. */
+function minimalEntry(
+  r: TrackedSetRow,
+  labelFor: (athleteId: number) => string,
+): TrackingReportEntry {
+  const mode = (r.trackingLevel ?? "unknown") as string;
+  return {
+    date: typeof r.date === "string" ? r.date : new Date(r.date as never).toISOString().slice(0, 10),
+    athleteLabel: labelFor(r.athleteId),
+    exerciseName: r.exerciseName,
+    setNumber: r.setNumber,
+    reps: r.reps ?? null,
+    weight: r.weight ?? null,
+    weightUnit: r.weightUnit ?? null,
+    trackingMode: mode,
+    methodology: null,
+    dataPoints: [],
+    trust: [],
+    device: [],
+    diagnostics: [],
+    flags: [],
+    overallConfidence: null,
+  } as unknown as TrackingReportEntry;
+}
+
+function buildEntry(
+  r: TrackedSetRow,
+  labelFor: (athleteId: number) => string,
+): TrackingReportEntry {
+  {
     // Guaranteed non-null -- see formatCaptureDeviceInfo's own comment.
     const mode = r.trackingLevel!;
     return {
@@ -941,7 +1003,7 @@ function buildEntries(rows: TrackedSetRow[]): TrackingReportEntry[] {
       flags: computeFlags(r),
       overallConfidence: computeOverallConfidence(r),
     };
-  });
+  }
 }
 
 // JSON counterpart to formatTrackingReport, for the admin UI to render as real cards instead of

@@ -10726,8 +10726,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // the app that can leave a real athlete unable to do anything, through no
   // fault of their own, waiting on a third party who may never have seen the
   // email.
-  app.get("/api/admin/blocked-athletes", requireRole("admin"), async (_req, res) => {
-    res.json(await storage.getAthletesBlockedPendingGuardian());
+  // Paged, and clamped. This used to return every blocked athlete in one array -- 299,108 rows
+  // and 80 MB against a 500k-user load seed, each row carrying a minor's name, email and date of
+  // birth. See getAthletesBlockedPendingGuardian's own comment for why a bounded page matters
+  // here beyond speed.
+  app.get("/api/admin/blocked-athletes", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "100"), 10) || 100, 1), 500);
+    const offset = Math.max(parseInt(String(req.query.offset ?? "0"), 10) || 0, 0);
+    res.json(await storage.getAthletesBlockedPendingGuardian(limit, offset));
   });
 
   app.get("/api/admin/removal-requests", requireRole("admin"), async (_req, res) => {

@@ -101,7 +101,7 @@ describe("the admin's view of who is blocked", () => {
     const guardian = await makeGuardian();
     await db.insert(guardianLinks).values({ athleteId: linkedMinor.id, guardianId: guardian.id });
 
-    const rows = await storage.getAthletesBlockedPendingGuardian();
+    const rows = (await storage.getAthletesBlockedPendingGuardian()).rows;
     expect(rows.map((r) => r.id)).toEqual([blocked.id]);
     // No invite was ever issued for this one, which is the state that
     // cannot clear itself.
@@ -113,7 +113,7 @@ describe("the admin's view of who is blocked", () => {
     const invite = await storage.createGuardianInvite(athlete.id, "parent@example.test");
     expect("token" in invite).toBe(true);
 
-    const rows = await storage.getAthletesBlockedPendingGuardian();
+    const rows = (await storage.getAthletesBlockedPendingGuardian()).rows;
     expect(rows).toHaveLength(1);
     expect(rows[0].inviteEmail).toBe("parent@example.test");
     expect(rows[0].inviteSentAt).not.toBeNull();
@@ -128,16 +128,16 @@ describe("the admin's view of who is blocked", () => {
       .set({ expiresAt: new Date(Date.now() - 1000) })
       .where(eq(guardianInvites.athleteId, athlete.id));
 
-    const rows = await storage.getAthletesBlockedPendingGuardian();
+    const rows = (await storage.getAthletesBlockedPendingGuardian()).rows;
     expect(rows[0].inviteExpired).toBe(true);
   });
 
   it("drops an athlete off the list the moment a guardian links", async () => {
     const athlete = await makeAthlete({ dateOfBirth: isoYearsAgo(15) });
-    expect(await storage.getAthletesBlockedPendingGuardian()).toHaveLength(1);
+    expect((await storage.getAthletesBlockedPendingGuardian()).rows).toHaveLength(1);
     const guardian = await makeGuardian();
     await db.insert(guardianLinks).values({ athleteId: athlete.id, guardianId: guardian.id });
-    expect(await storage.getAthletesBlockedPendingGuardian()).toHaveLength(0);
+    expect((await storage.getAthletesBlockedPendingGuardian()).rows).toHaveLength(0);
   });
 });
 

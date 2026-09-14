@@ -24702,7 +24702,25 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // ForRetentionPurge rather than pulling every athlete into Node to filter:
   // date_of_birth > now - 18 years is a minor, calendar-aware, same as the
   // month/day comparison that function does.
-  async getAthletesBlockedPendingGuardian(): Promise<
+  /** THIS LIST IS NOT SMALL, AND IT IS THE MOST SENSITIVE ONE IN THE APP.
+   *
+   * It had no LIMIT. Every athlete under the guardian age with no confirmed guardian link came
+   * back in one response, with their NAME, EMAIL and DATE OF BIRTH. Against a 500k-user seed
+   * that is 299,108 rows and an 80 MB response -- measured, not estimated. Two separate
+   * failures in one query: the browser will not survive it, and neither will a server holding
+   * the whole result set in memory alongside the JSON it serialises from it.
+   *
+   * The second failure is the one that matters more. Eighty megabytes of minors' identifying
+   * details in a single response is a different kind of object from a page of them -- anywhere
+   * that body is logged, proxied, cached or accidentally persisted, the whole cohort goes with
+   * it. A bounded page is not just a performance fix here.
+   *
+   * Paged, newest-blocked first, with the total alongside so the page can say how many there
+   * are without shipping them all.
+   */
+  async getAthletesBlockedPendingGuardian(limit = 100, offset = 0): Promise<{
+    total: number;
+    rows:
     {
       id: number;
       name: string;
@@ -24721,8 +24739,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       // recorded, or a send still in flight.
       inviteDelivered: boolean | null;
       inviteError: string | null;
-    }[]
-  > {
+    }[];
+  }> {
     const result = await db.execute<{
       id: number;
       name: string;
@@ -24759,9 +24777,29 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         AND u.date_of_birth IS NOT NULL
         AND u.date_of_birth > (current_date - interval '18 years')
         AND NOT EXISTS (SELECT 1 FROM guardian_links gl WHERE gl.athlete_id = u.id)
-      ORDER BY u.created_at
+      ORDER BY u.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
     `);
-    return result.rows.map((r) => ({
+
+    // Counted separately rather than with a window function, so the count query touches no
+    // identifying columns at all -- the page needs "how many", not "which ones", to say
+    // 299,108 without shipping 299,108 names.
+    const countResult = await db.execute<{ count: number }>(sql`
+      SELECT count(*)::int AS count
+      FROM users u
+      WHERE u.role = 'athlete'
+        AND u.date_of_birth IS NOT NULL
+        AND u.date_of_birth > (CURRENT_DATE - INTERVAL '18 years')
+        AND NOT EXISTS (SELECT 1 FROM guardian_links gl WHERE gl.athlete_id = u.id)
+    `);
+    // Read positionally, not by key. db.execute hands back the driver's own row shape, and the
+    // count came through as null when read as `.count` -- which would have shipped a pager
+    // saying "of null" while the rows themselves were correct. The first column of the first
+    // row is the count whatever the driver decides to call it.
+    const countRow = countResult.rows[0] as Record<string, unknown> | undefined;
+    const total = countRow ? Number(Object.values(countRow)[0] ?? 0) : 0;
+
+    const rows = result.rows.map((r) => ({
       id: r.id,
       name: r.name,
       email: r.email,
@@ -24774,6 +24812,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       inviteDelivered: r.invite_delivered === null ? null : Boolean(r.invite_delivered),
       inviteError: r.invite_error,
     }));
+    return { total, rows };
   },
 
   async isAthleteBlockedPendingGuardian(athleteId: number): Promise<boolean> {
