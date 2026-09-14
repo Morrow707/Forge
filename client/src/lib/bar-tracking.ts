@@ -2049,7 +2049,21 @@ export function dropAcrossAxisOutliers(
   trace: TrackedPoint[],
   axis: { x: number; y: number } | null,
 ): { kept: TrackedPoint[]; dropped: number } {
-  if (!axis || trace.length < 8) return { kept: trace, dropped: 0 };
+  // A COPY, NEVER THE CALLER'S OWN ARRAY.
+  //
+  // Every early return here used to hand back the input array itself, and the caller's way of
+  // applying the result is `trace.length = 0; trace.push(...cleanedTrace)`. When kept IS trace,
+  // the first statement empties the array the second one is about to read, so the spread copies
+  // nothing and the trace is annihilated -- in exactly the three cases these guards exist to
+  // protect: no axis, too few points, or too much of the take off-axis to thin safely.
+  //
+  // That is what a real back squat hit. 787 of 856 frames produced a bar point, more than a
+  // third of them sat off the median line, the "never drop more than a third" guard fired as
+  // designed -- and the take came back with 0 tracked points and told the athlete to keep the
+  // bar in frame, which he had. The set before it, with only 79 points off-axis, took the
+  // filtering path below, got a genuinely new array back, and read fine. So the failure
+  // appeared only on the takes the guard was meant to save.
+  if (!axis || trace.length < 8) return { kept: [...trace], dropped: 0 };
   const across = trace.map((p) => -p.x * axis.y + p.y * axis.x);
   const sorted = [...across].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)];
@@ -2059,7 +2073,8 @@ export function dropAcrossAxisOutliers(
     if (Math.abs(across[i] - median) > MAX_ACROSS_AXIS_DEVIATION_M) dropped++;
     else kept.push(trace[i]);
   }
-  if (dropped > trace.length / 3) return { kept: trace, dropped: 0 };
+  // Same aliasing hazard as the guards at the top -- see their comment.
+  if (dropped > trace.length / 3) return { kept: [...trace], dropped: 0 };
   return { kept, dropped };
 }
 

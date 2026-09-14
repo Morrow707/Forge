@@ -805,7 +805,29 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 Int64(dims(a).width) * Int64(dims(a).height) < Int64(dims(b).width) * Int64(dims(b).height)
             }
         }
-        guard let chosen = exact.first ?? largest(underBudget) ?? largest(anySixty) else {
+        // WIDEST OF THE MATCHES, NOT THE FIRST ONE LISTED.
+        //
+        // An iPhone's wide camera publishes SEVERAL 1920x1080 formats that can hold 60fps, and
+        // they do not see the same thing. Some read the full sensor width; others are cropped
+        // from its centre, which AVFoundation reports as a narrower videoFieldOfView. Taking
+        // `exact.first` picked whichever the device happened to list first, with nothing in the
+        // code expressing a preference -- and on a real phone that landed on a cropped one. Held
+        // against the stock Camera app at the same nominal 1x, our preview is visibly tighter:
+        // same lens, same nominal zoom, smaller slice of the sensor.
+        //
+        // That is not only a cosmetic complaint. A narrower field of view is less room for the
+        // bar and the athlete's ankles to stay inside, and the two things this pipeline needs
+        // most -- a bar tracked all the way through the set, and a nose-to-ankle span for scale
+        // -- are exactly what goes missing when the frame is tight. A take that reports
+        // "shoulder-to-ankle fallback on 745 of 856 frames" is a take whose head left the shot.
+        //
+        // Field of view is the property that distinguishes these formats, so it is what is
+        // chosen on. Dimensions and frame rate are already pinned by the filters above, so this
+        // only ever picks between formats that are otherwise equivalent.
+        func widestFieldOfView(_ formats: [AVCaptureDevice.Format]) -> AVCaptureDevice.Format? {
+            formats.max { a, b in a.videoFieldOfView < b.videoFieldOfView }
+        }
+        guard let chosen = widestFieldOfView(exact) ?? largest(underBudget) ?? largest(anySixty) else {
             logDiag("WARNING: no format supports \(Int(targetFrameRate))fps -- leaving device default")
             return
         }
@@ -820,7 +842,14 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             device.activeVideoMaxFrameDuration = frameDuration
             device.unlockForConfiguration()
             let d = dims(chosen)
-            logDiag("activeFormat set: \(d.width)x\(d.height) @ \(Int(targetFrameRate))fps (capped)")
+            // The field of view goes in the log because it is the number that separates two
+            // formats the previous line reports identically -- without it, a tight preview and
+            // a full-width one are indistinguishable in the diagnostics.
+            logDiag(
+                "activeFormat set: \(d.width)x\(d.height) @ \(Int(targetFrameRate))fps (capped), "
+                    + "fov \(String(format: "%.1f", chosen.videoFieldOfView))deg "
+                    + "of \(exact.count) matching format(s)"
+            )
         } catch {
             logDiag("WARNING: failed to set capture format: \(error.localizedDescription)")
         }
