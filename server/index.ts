@@ -229,11 +229,12 @@ app.post(
 // Apple Server Notifications V2 -- the App Store's own equivalent of the
 // Stripe webhook above, same raw-body-before-express.json() requirement
 // (verifyAppleNotification needs the exact signedPayload string, a JWS).
-// Framework only in the exact same sense: nothing is registered as this
-// app's Server Notifications URL in App Store Connect yet, and
-// verifyAppleNotification fails closed (returns null) whenever
-// server/apple-root-certs/AppleRootCA-G3.cer is missing, which it is in
-// every environment today -- see that file's own README.
+// Nothing is registered as this app's Server Notifications URL in App Store
+// Connect yet, so nothing reaches this in practice. It is no longer inert,
+// though: server/apple-root-certs/AppleRootCA-G3.cer IS in the repo now, so
+// verifyAppleNotification builds a real verifier and a genuine signed
+// payload would be accepted. An unsigned or forged one still fails closed
+// (returns null -> 400).
 app.post(
   "/api/webhooks/apple",
   webhookLimiter,

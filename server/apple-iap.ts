@@ -71,6 +71,15 @@ export type VerifiedAppleTransaction = {
   originalTransactionId: string;
   productId: string;
   expiresAt: Date;
+  /** Which StoreKit environment the transaction was actually made in, as
+   * Apple stamped it -- not what this server was configured to expect.
+   * Sandbox means no money changed hands, which is every TestFlight and
+   * simulator purchase. Recorded so a beta-era grant is still
+   * distinguishable from a paid one long after the fact: everything else
+   * written for the two is identical (status "active", a real period end),
+   * and by the time that distinction matters nobody will remember which
+   * rows came from which. */
+  environment: string;
 };
 
 let cachedVerifier: SignedDataVerifier | null = null;
@@ -136,6 +145,7 @@ export async function verifyAppleTransaction(signedTransactionInfo: string): Pro
       originalTransactionId: decoded.originalTransactionId,
       productId: decoded.productId,
       expiresAt: new Date(decoded.expiresDate),
+      environment: String(decoded.environment ?? "unknown"),
     };
   } catch (err) {
     console.error("Apple IAP: transaction verification failed", err);
@@ -231,6 +241,7 @@ export async function verifyAppleNotification(signedPayload: string): Promise<Ve
         originalTransactionId: decodedTx.originalTransactionId,
         productId: decodedTx.productId,
         expiresAt: new Date(decodedTx.expiresDate),
+        environment: String(decodedTx.environment ?? "unknown"),
       },
     };
   } catch (err) {

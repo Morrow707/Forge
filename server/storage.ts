@@ -4207,6 +4207,11 @@ export const storage = {
       originalTransactionId: verified.originalTransactionId,
       productId: verified.productId,
       freeAgentTier,
+      // A Sandbox transaction cost the athlete nothing -- see
+      // VerifiedAppleTransaction.environment. The subscription row this
+      // writes looks the same either way, so the log is where the two stay
+      // told apart.
+      environment: verified.environment,
     });
     return { ok: true };
   },
