@@ -19509,7 +19509,21 @@ ${catalog}`;
           .delete(workoutLogEntries)
           .where(eq(workoutLogEntries.workoutLogId, log.id));
       } else {
-        [log] = await tx
+        // TWO REQUESTS CAN BOTH SEE "NO LOG FOR THIS DAY".
+        //
+        // The read above and this insert are not atomic, so a double-tap on Finish, or the
+        // offline queue flushing at the same moment the athlete reconnects and saves by hand,
+        // both arrive with no row and both try to create one. The unique index on
+        // (assignment_id, program_day_id, date) does its job and rejects the loser -- but the
+        // violation was escaping as a 500. Measured: 40 concurrent identical submissions gave
+        // exactly one log and one set (the data was always correct) and FOUR of them answered
+        // "Something went wrong on our end" for a set that had in fact saved.
+        //
+        // That is the worst possible answer to give an athlete on a bad connection, because it
+        // invites the one action that makes it worse: logging the set again. ON CONFLICT turns
+        // the race into what it actually is -- the row exists, so take it and carry on down the
+        // update path -- and the constraint stays the thing that guarantees there is only one.
+        const inserted = await tx
           .insert(workoutLogs)
           .values({
             assignmentId: input.assignmentId,
@@ -19519,7 +19533,38 @@ ${catalog}`;
             completed: input.completed,
             completedAt: input.completed ? new Date() : null,
           })
+          .onConflictDoNothing()
           .returning();
+
+        if (inserted.length > 0) {
+          [log] = inserted;
+        } else {
+          // The other request won. Re-read its row and clear the entries it wrote, which is
+          // exactly what the update branch above does -- this request's payload is the newer
+          // picture of the day and replaces it.
+          [log] = await tx
+            .select()
+            .from(workoutLogs)
+            .where(
+              and(
+                eq(workoutLogs.assignmentId, input.assignmentId),
+                eq(workoutLogs.programDayId, input.programDayId),
+                eq(workoutLogs.date, input.date),
+              ),
+            )
+            .for("update");
+          if (!log) throw new Error("Workout log vanished between insert and re-read");
+          [log] = await tx
+            .update(workoutLogs)
+            .set({
+              completed: input.completed,
+              completedAt: input.completed ? new Date() : null,
+              revision: log.revision + 1,
+            })
+            .where(eq(workoutLogs.id, log.id))
+            .returning();
+          await tx.delete(workoutLogEntries).where(eq(workoutLogEntries.workoutLogId, log.id));
+        }
       }
 
       // Resolved lazily per entry below, then reused to run retention
