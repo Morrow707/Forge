@@ -1811,6 +1811,19 @@ const platformDatasetAthlete = () =>
     eq(users.researchDataConsent, true),
   );
 
+/** A running sum and count, so a mean can be accumulated without keeping every value. */
+type Pooled = { sum: number; count: number };
+
+/** The pooled counterpart of average() below, and deliberately identical to it in every way that
+ *  shows: the same PLATFORM_TRENDS_MIN_COHORT floor applied to the same thing it always counted
+ *  (VALUES -- which for these series means sets, not athletes), and the same one-decimal
+ *  rounding. Nulls never enter the sum because the SQL FILTER clauses exclude them, which is
+ *  what average()'s own filter step did. */
+function averagePooled(pooled: Pooled | undefined): number | null {
+  if (!pooled || pooled.count < PLATFORM_TRENDS_MIN_COHORT) return null;
+  return Math.round((pooled.sum / pooled.count) * 10) / 10;
+}
+
 function average(values: (number | null | undefined)[]): number | null {
   const nums = values.filter((v): v is number => v != null && !Number.isNaN(v));
   if (nums.length < PLATFORM_TRENDS_MIN_COHORT) return null;
@@ -1928,42 +1941,83 @@ async function buildPlatformTrends() {
   // Strength/velocity/power come from actual tracked sets, platform-wide --
   // same Epley 1RM estimate and CV-tracked fields the coach analytics page
   // uses, just averaged across every athlete instead of charted per-athlete.
-  const setRows =
+  // AGGREGATED IN THE DATABASE, AND SCOPED TO THE COHORT THAT COUNTS.
+  //
+  // This used to select every tracked set on the platform -- no WHERE, no LIMIT -- and reduce
+  // them in JavaScript. Measured against a 500k-user seed: a sequential scan of all three
+  // tables pulling 1,200,031 rows into Node, of which 163,968 were used and 1,036,063 were
+  // fetched and thrown away, because the athlete filter only ever existed in the loop below.
+  // Seven seconds, and growing linearly with every set anyone ever logs.
+  //
+  // Two separate wastes, fixed together. The join now carries the same platformDatasetAthlete()
+  // predicate the athlete query uses, so the discarded 86% is never read; and the arithmetic
+  // happens in Postgres, so one row comes back per athlete rather than one per set.
+  //
+  // SUMS AND COUNTS, NOT AVERAGES. The per-sport figure is a mean over SETS, and the
+  // PLATFORM_TRENDS_MIN_COHORT floor counts sets too (see average() -- it refuses fewer than
+  // five VALUES). Returning a per-athlete average would silently reweight every sport by how
+  // many sets each athlete logged, and returning a per-athlete count would change what the
+  // suppression floor is counting. Sums and counts combine across athletes into exactly the
+  // number the loop produced.
+  const aggregateRows =
     athletes.length > 0
-      ? await db
-          .select({
-            athleteId: workoutLogs.athleteId,
-            weightLbs: workoutSetEntries.weightLbs,
-            repsCount: workoutSetEntries.repsCount,
-            peakVelocityMps: workoutSetEntries.peakVelocityMps,
-            peakPowerWatts: workoutSetEntries.peakPowerWatts,
-          })
-          .from(workoutSetEntries)
-          .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
-          .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      ? (
+          await db.execute<{
+            athlete_id: number;
+            one_rm_sum: string | null;
+            one_rm_count: string | null;
+            velocity_sum: string | null;
+            velocity_count: string | null;
+            power_sum: string | null;
+            power_count: string | null;
+          }>(sql`
+            SELECT
+              wl.athlete_id,
+              -- Epley, identical to the JS it replaces: weight x (1 + reps/30).
+              sum(wse.weight_lbs * (1 + wse.reps_count::numeric / 30))
+                FILTER (WHERE wse.weight_lbs IS NOT NULL AND wse.reps_count > 0) AS one_rm_sum,
+              count(*) FILTER (WHERE wse.weight_lbs IS NOT NULL AND wse.reps_count > 0) AS one_rm_count,
+              sum(wse.peak_velocity_mps) FILTER (WHERE wse.peak_velocity_mps IS NOT NULL) AS velocity_sum,
+              count(*) FILTER (WHERE wse.peak_velocity_mps IS NOT NULL) AS velocity_count,
+              sum(wse.peak_power_watts) FILTER (WHERE wse.peak_power_watts IS NOT NULL) AS power_sum,
+              count(*) FILTER (WHERE wse.peak_power_watts IS NOT NULL) AS power_count
+            FROM workout_set_entries wse
+            JOIN workout_log_entries wle ON wse.log_entry_id = wle.id
+            JOIN workout_logs wl ON wle.workout_log_id = wl.id
+            JOIN users u ON wl.athlete_id = u.id
+            WHERE u.role = 'athlete'
+              AND u.tracking_opt_out = false
+              AND u.research_data_consent = true
+            GROUP BY wl.athlete_id
+          `)
+        ).rows
       : [];
 
-  const oneRmBySport = new Map<string, number[]>();
-  const velocityBySport = new Map<string, number[]>();
-  const powerBySport = new Map<string, number[]>();
-  for (const row of setRows) {
-    const sportKey = sportKeyByAthlete.get(row.athleteId);
+  // Each sport accumulates a running sum and count rather than an array of every value. The
+  // previous loop did `map.set(k, [...(map.get(k) ?? []), v])`, copying the whole array on every
+  // single set -- quadratic in the number of sets in a sport, which on its own is most of the
+  // time this function spent once a sport had a few thousand sets in it.
+  //
+  // Pooled across every athlete on the platform and reported per sport, so the 1RM is the one
+  // number nobody can eyeball for plausibility -- and it used to average kilogram maxes together
+  // with pound ones. weight_lbs is the normalized column, the same one the load series reads;
+  // shared/schema.ts's comment on it names this aggregate specifically.
+  const oneRmBySport = new Map<string, Pooled>();
+  const velocityBySport = new Map<string, Pooled>();
+  const powerBySport = new Map<string, Pooled>();
+  const pool = (m: Map<string, Pooled>, key: string, sum: number, count: number) => {
+    if (count <= 0) return;
+    const current = m.get(key) ?? { sum: 0, count: 0 };
+    current.sum += sum;
+    current.count += count;
+    m.set(key, current);
+  };
+  for (const row of aggregateRows) {
+    const sportKey = sportKeyByAthlete.get(Number(row.athlete_id));
     if (!sportKey || !eligibleSportKeys.has(sportKey)) continue;
-    // Pooled across every athlete on the platform and reported per sport, so
-    // this is the one number nobody can eyeball for plausibility -- and it
-    // was averaging kilogram maxes together with pound ones. The normalized
-    // column is the same one the load series now reads; shared/schema.ts's
-    // comment on it names this aggregate specifically.
-    if (row.weightLbs != null && row.repsCount != null && row.repsCount > 0) {
-      const estimatedOneRm = row.weightLbs * (1 + row.repsCount / 30);
-      oneRmBySport.set(sportKey, [...(oneRmBySport.get(sportKey) ?? []), estimatedOneRm]);
-    }
-    if (row.peakVelocityMps != null) {
-      velocityBySport.set(sportKey, [...(velocityBySport.get(sportKey) ?? []), row.peakVelocityMps]);
-    }
-    if (row.peakPowerWatts != null) {
-      powerBySport.set(sportKey, [...(powerBySport.get(sportKey) ?? []), row.peakPowerWatts]);
-    }
+    pool(oneRmBySport, sportKey, Number(row.one_rm_sum ?? 0), Number(row.one_rm_count ?? 0));
+    pool(velocityBySport, sportKey, Number(row.velocity_sum ?? 0), Number(row.velocity_count ?? 0));
+    pool(powerBySport, sportKey, Number(row.power_sum ?? 0), Number(row.power_count ?? 0));
   }
 
   // Readiness comes from the last 30 days of wellness check-ins, platform-
@@ -1982,7 +2036,12 @@ async function buildPlatformTrends() {
             bodyPainMap: wellnessCheckins.bodyPainMap,
           })
           .from(wellnessCheckins)
-          .where(gte(wellnessCheckins.date, sinceDate))
+          .innerJoin(users, eq(wellnessCheckins.athleteId, users.id))
+          // Same fetch-and-discard the set query had: this was date-bounded but not cohort-
+          // bounded, so every check-in on the platform came back and the loop below dropped the
+          // ones whose athlete is not in the dataset. Cheaper than the set query only because
+          // thirty days is a smaller window, not because it was scoped.
+          .where(and(gte(wellnessCheckins.date, sinceDate), platformDatasetAthlete()))
       : [];
   const readinessBySport = new Map<string, number[]>();
   for (const row of wellnessRows) {
@@ -2007,9 +2066,9 @@ async function buildPlatformTrends() {
       avgBenchMaxLbs: average(profiles.map((p) => p.benchMaxLbs)),
       avgSquatMaxLbs: average(profiles.map((p) => p.squatMaxLbs)),
       avgDeadliftMaxLbs: average(profiles.map((p) => p.deadliftMaxLbs)),
-      avgEstimatedOneRm: average(oneRmBySport.get(key) ?? []),
-      avgPeakVelocityMps: average(velocityBySport.get(key) ?? []),
-      avgPeakPowerWatts: average(powerBySport.get(key) ?? []),
+      avgEstimatedOneRm: averagePooled(oneRmBySport.get(key)),
+      avgPeakVelocityMps: averagePooled(velocityBySport.get(key)),
+      avgPeakPowerWatts: averagePooled(powerBySport.get(key)),
       avgReadinessScore: average(readinessBySport.get(key) ?? []),
     };
   });
