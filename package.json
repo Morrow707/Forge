@@ -17,7 +17,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "db:check-drift": "tsx server/check-schema-drift.ts",
     "export:captures": "tsx scripts/export-captures.ts",
-    "eval": "tsx server/ai-eval/run.ts"
+    "eval": "tsx server/ai-eval/run.ts",
+    "pii:backfill": "tsx server/scripts/run-pii-backfill.ts"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

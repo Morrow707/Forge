@@ -99,6 +99,13 @@ import { NATIVE_APP_ORIGINS } from "./native-app-origins";
 import { pool } from "./db";
 import { redactForLog } from "./log-redaction";
 import { recordSystemFailure } from "./system-events";
+import { assertFieldEncryptionReady } from "./field-encryption";
+
+// Fails the boot rather than the first signup. Encrypted identity columns are
+// written on every account create and update, so a missing PII_ENCRYPTION_KEY
+// would surface as users unable to register against a deploy that otherwise
+// looked healthy. Failing here leaves the previous version serving.
+assertFieldEncryptionReady();
 
 // Opt-in, per process, for the response-body logging further down. See the
 // comment at its call site for why NODE_ENV is not enough on its own.
