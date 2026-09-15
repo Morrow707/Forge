@@ -91,6 +91,24 @@ export type ReplayResult = {
  * and reports a squat with several metres of range of motion. Divide on the way back in. */
 const TRACE_CM_PER_METRE = 100;
 
+/** A stored trace is already in world coordinates, so its y is the vertical. The live path
+ * measures this axis from the two ends of the bar; a replay has only the averaged point, so it
+ * supplies the vertical, which is the honest answer for every lift this harness replays.
+ *
+ * NEGATIVE y, because worldLandmarks are y-DOWN: vision-body-landmarks.ts flips Vision's own
+ * bottom-up normalized y on the way in, so a larger y is LOWER and the concentric of a squat or a
+ * press makes y decrease. Getting this backwards does not fail loudly -- it silently swaps every
+ * concentric with its eccentric, so mean velocity, velocity loss, EAI and power all come back as
+ * the other half of the rep.
+ *
+ * Checked both ways against the corpus rather than taken from the comment alone. On the five
+ * clean back squats, this sign gives a negative velocity loss on 1 of 7 takes and the opposite
+ * sign gives 5 of 7 -- a negative velocity loss meaning the last rep outran the first, which is
+ * what reading a set's eccentrics as its concentrics produces. The bench takes cannot vote: they
+ * are segmented badly enough that they split about evenly either way, which is itself the tell
+ * that their numbers are noise. */
+const VERTICAL_AXIS = { x: 0, y: -1 };
+
 function toTrackedPoints(trace: PathTracePoint[]): TrackedPoint[] {
   return trace.map((p) => ({
     t: p.t,
@@ -146,6 +164,26 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
     capture.loadKg ?? undefined,
     capture.heightIn ?? undefined,
     hint,
+    // No rejection events and no scale correction survive into a stored trace.
+    [],
+    1,
+    false,
+    // THE LAST TWO ARGUMENTS DECIDE WHICH HALF OF A REP IS THE LIFT, and leaving them off is not
+    // a small omission. Without them summarizeTrackedSet cannot know which way is up, so it falls
+    // back to "whichever of two adjacent phases is faster is the concentric" -- and measured
+    // against this corpus that heuristic is a coin flip: the DESCENT is faster on 10 of 20 real
+    // barbell sets, and where the ascent wins it is usually by under 10%, which is noise.
+    //
+    // The live path does not rely on it. It passes the movement's range-of-motion kind and an
+    // axis measured from the bar itself, so direction is known rather than inferred. A replay
+    // that omits both is therefore not reproducing the app -- it is exercising a fallback the app
+    // only reaches when the bar pair never held -- and every concentric-derived number it
+    // produces (mean velocity, velocity loss, EAI, power) is decided by that tiebreak.
+    //
+    // A stored trace can supply the axis honestly: buildPathTrace writes world coordinates, so
+    // its y IS the vertical, and the movement's own kind comes from the exercise name.
+    romBucketForExercise(capture.exerciseName),
+    VERTICAL_AXIS,
   );
   const repCount = metrics?.repBreakdown.length ?? 0;
   const loggedReps = capture.loggedReps ?? null;
