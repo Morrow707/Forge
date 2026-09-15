@@ -25,7 +25,7 @@ import {
   type TrackedPoint,
 } from "./bar-tracking";
 import { firstMoveForExercise, romBucketForExercise } from "./exercise-camera-profile";
-import { implausibleRangeOfMotion } from "./bar-tracking";
+import { implausibleRangeOfMotion, implausibleBarPathDeviation } from "./bar-tracking";
 
 /** One stored set, as much of it as a replay needs. Shaped to match what the set row already
  * holds so an export needs no transformation. */
@@ -93,12 +93,19 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
     repCount,
     loggedReps,
     repCountError: loggedReps != null ? repCount - loggedReps : null,
+    // Either way of showing the same wrong scale. Reported under one field because the caller's
+    // question is "can this take's numbers be trusted", not "which check objected".
     romProblem: metrics
-      ? implausibleRangeOfMotion(
+      ? (implausibleRangeOfMotion(
           metrics.romCm,
           capture.heightIn,
           romBucketForExercise(capture.exerciseName),
-        )
+        ) ??
+        implausibleBarPathDeviation(
+          metrics.barPathDeviationCm,
+          capture.heightIn,
+          romBucketForExercise(capture.exerciseName),
+        ))
       : null,
   };
 }

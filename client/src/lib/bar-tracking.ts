@@ -1923,6 +1923,63 @@ export function implausibleRangeOfMotion(
   );
 }
 
+// The same "is this answer possible for a human body" question, asked of bar path deviation.
+//
+// Range of motion had this check and deviation had nothing, so a take could be rejected for
+// travelling too far up and accepted while reporting that the bar wandered a metre sideways.
+// The stored corpus has exactly that: bar path deviations of 108cm and 78cm on bench sets, next
+// to 24cm as the worst a back squat ever produced.
+//
+// Deviation is bounded by anatomy in a way that needs no movement-specific reasoning for most
+// lifts: the bar is held in two hands attached to one torso, so how far it can wander sideways
+// or forward is a fraction of the athlete's own frame, not an open number. The exception is the
+// Olympic lifts, where the bar loops around the knees by design and a deviation that would be
+// alarming on a squat is the correct shape -- see docs/camera-tracking-notes.md on why those
+// need their own path model at all.
+//
+// Set deliberately loose. This is a last-resort "the scale is wrong" detector, not a coaching
+// threshold: a 30cm drift on a squat is bad lifting and the athlete should see it. In the corpus
+// the worst genuine take runs 0.12 of standing height, so 0.20 is most of a factor of two clear
+// of anything real while still catching the metre-wide readings, which are scale failures
+// wearing a form fault's clothing.
+const MAX_DEVIATION_FRACTION_OF_HEIGHT: Record<string, number> = {
+  olympic: 0.3,
+};
+
+const DEFAULT_MAX_DEVIATION_FRACTION = 0.2;
+
+/**
+ * Whether a computed bar path deviation is physically possible for this athlete and movement.
+ * Returns null when it is fine, or when there is not enough information to judge, otherwise a
+ * human-readable reason the caller should surface INSTEAD of the metrics -- the same contract
+ * implausibleRangeOfMotion has, and for the same reason: a deviation this large does not mean
+ * the athlete moved that way, it means the take's scale is wrong and every number on it is
+ * wrong by the same factor.
+ *
+ * There is no floor to match the range-of-motion one. A deviation of zero is what a perfect rep
+ * looks like, so a small number here is good news rather than evidence of a bad scale.
+ */
+export function implausibleBarPathDeviation(
+  deviationCm: number | null,
+  heightIn: number | null | undefined,
+  movementPattern: string | null | undefined,
+): string | null {
+  if (!heightIn || heightIn <= 0) return null;
+  if (deviationCm == null || !Number.isFinite(deviationCm) || deviationCm <= 0) return null;
+  const heightCm = heightIn * 2.54;
+  const fraction = movementPattern
+    ? (MAX_DEVIATION_FRACTION_OF_HEIGHT[movementPattern] ?? DEFAULT_MAX_DEVIATION_FRACTION)
+    : DEFAULT_MAX_DEVIATION_FRACTION;
+  const ceilingCm = heightCm * fraction;
+  if (deviationCm <= ceilingCm) return null;
+  const overBy = Math.round((deviationCm / ceilingCm) * 10) / 10;
+  return (
+    `Bar path drifted ${Math.round(deviationCm)}cm off line, about ${overBy}x further than this ` +
+    `movement can drift for your height. That means the camera's real-world scale was misread, ` +
+    `so every number from this take would be wrong by the same factor.`
+  );
+}
+
 // Fraction of a take's own typical rep size that a reversal must clear to count as a rep.
 //
 // The existing rep gate is BASE_MIN_REP_AMPLITUDE_CM, an absolute 20cm. That is a good gate

@@ -62,6 +62,7 @@ import {
   computeArmDriveAsymmetry,
   computeRepTrustScores,
   implausibleRangeOfMotion,
+  implausibleBarPathDeviation,
   movementAxisFromGrip,
   dropAcrossAxisOutliers,
   toScaleFreeMetrics,
@@ -1403,14 +1404,15 @@ export function AvBarTrackerDialog({
     // possible for a human body. A calibration off by 4x cannot hide from it, whatever the
     // camera was doing. Routed through the same saveEmptyAndWarn path a failed calibration
     // already uses -- the clip is still saved for the coach, only the numbers are withheld.
-    const romProblem = implausibleRangeOfMotion(
-      metrics.romCm,
-      heightIn,
-      // Not expectedPatternFromName: that one's answers also drive the pattern-mismatch trust
-      // penalty, which only means anything across the four patterns guessMovementPattern can
-      // return. See romBucketForExercise's own comment.
-      romBucketForExercise(exerciseName),
-    );
+    // Not expectedPatternFromName: that one's answers also drive the pattern-mismatch trust
+    // penalty, which only means anything across the four patterns guessMovementPattern can
+    // return. See romBucketForExercise's own comment.
+    const romBucket = romBucketForExercise(exerciseName);
+    // Two ways the same wrong scale shows itself, and a take only had to survive one of them.
+    // A bar reported as drifting a metre off line is the scale talking, not the athlete.
+    const romProblem =
+      implausibleRangeOfMotion(metrics.romCm, heightIn, romBucket) ??
+      implausibleBarPathDeviation(metrics.barPathDeviationCm, heightIn, romBucket);
     if (romProblem) {
       const message = `${romProblem} Film this lift square to the side, with the camera level with the bar, and make sure you're fully in frame.`;
       // The scale is what's wrong here, not the trace -- rep count, tempo and velocity loss are
