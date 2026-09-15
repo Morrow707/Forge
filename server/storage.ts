@@ -146,7 +146,6 @@ import {
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { scrubUserForAdmin } from "./admin-identity";
 import { encryptField, decryptField, isEncryptedField } from "./field-encryption";
-import { identityColumns } from "./pii-identity";
 import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
 import { KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain, knowledgeDomainLabel } from "@shared/knowledge-domains";
 import { answerStyleInstruction, isAnswerRegister, isAnswerLength } from "@shared/answer-style";
@@ -3632,18 +3631,7 @@ export const storage = {
   },
 
   async createUser(data: Omit<InsertUser, "coachCode" | "staffInviteCode">) {
-    // Every account on the platform is created here -- auth.ts's signup, the
-    // claim-code path and the free-agent path all funnel through it -- so one
-    // spread covers creation entirely.
-    const values: InsertUser = {
-      ...data,
-      email: data.email.toLowerCase(),
-      ...identityColumns({
-        name: data.name,
-        email: data.email,
-        dateOfBirth: data.dateOfBirth ?? null,
-      }),
-    };
+    const values: InsertUser = { ...data, email: data.email.toLowerCase() };
     if (data.role === "coach") {
       let code = generateCoachCode();
       // ensure uniqueness
@@ -3668,7 +3656,7 @@ export const storage = {
   async updateUserName(userId: number, name: string) {
     const [row] = await db
       .update(users)
-      .set({ name, ...identityColumns({ name }) })
+      .set({ name })
       .where(eq(users.id, userId))
       .returning({ id: users.id, name: users.name });
     return row ?? null;
@@ -3691,11 +3679,7 @@ export const storage = {
     // fixing now rather than the day something does.
     const [row] = await db
       .update(users)
-      .set({
-        email: newEmail.toLowerCase(),
-        emailVerified: false,
-        ...identityColumns({ email: newEmail }),
-      })
+      .set({ email: newEmail.toLowerCase(), emailVerified: false })
       .where(eq(users.id, userId))
       .returning({ id: users.id, email: users.email });
     await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.userId, userId));
@@ -4197,11 +4181,7 @@ export const storage = {
     const tier = derivePrivacyTier(dateOfBirth);
     await db
       .update(users)
-      .set({
-        dateOfBirth,
-        requiresGuardianNotice: tier !== "tier3_adult_18plus",
-        ...identityColumns({ dateOfBirth }),
-      })
+      .set({ dateOfBirth, requiresGuardianNotice: tier !== "tier3_adult_18plus" })
       .where(eq(users.id, userId));
     return { ok: true };
   },
@@ -24995,11 +24975,6 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           passwordHash,
           name: `${athlete.name}'s guardian`,
           role: "guardian",
-          // The one account insert that does not go through createUser.
-          ...identityColumns({
-            name: `${athlete.name}'s guardian`,
-            email: invite.email,
-          }),
           emailVerified: true, // clicking the emailed invite link already proves inbox control
           agreedToTermsAt: new Date(),
           agreedToTermsText,

@@ -247,46 +247,6 @@ export const users = pgTable(
     // client past the one-time setup/confirm response.
     mfaEnabled: boolean("mfa_enabled").notNull().default(false),
     mfaSecret: text("mfa_secret"),
-
-    // ---- Encrypted identity (migration in progress) ----
-    //
-    // Ciphertext copies of the four columns that name a person, written
-    // alongside the plaintext while the migration runs. Nothing reads these
-    // yet; the plaintext columns are still the source of truth. See
-    // server/field-encryption.ts for the scheme and server/pii-backfill.ts
-    // for how existing rows are filled.
-    //
-    // They exist because volume encryption -- which Render already does --
-    // only stops someone stealing a physical disk. It does nothing about the
-    // ways a database actually leaves: a leaked connection string, a pg_dump
-    // on a laptop, provider-side access. Roughly three in five accounts here
-    // belong to a minor, so what a stolen copy says about them is the whole
-    // question.
-    nameEnc: text("name_enc"),
-    emailEnc: text("email_enc"),
-    dateOfBirthEnc: text("date_of_birth_enc"),
-
-    // Deterministic HMAC of the lowercased address, so getUserByEmail still
-    // works once email_enc is the source of truth -- a random-IV ciphertext
-    // cannot be matched on. Unique for the same reason the plaintext index
-    // is: it is what stops two accounts sharing an address.
-    emailBidx: text("email_bidx"),
-
-    // The band, derived from the date of birth and stored in the clear.
-    //
-    // Encrypting date_of_birth breaks six SQL comparisons across two
-    // functions -- the minors-pending-guardian queue and the video retention
-    // purge -- both of which were deliberately pushed into SQL for scale
-    // (~299k matching rows, a ~670k-row join). A band keeps those queries in
-    // SQL while the date itself stops being readable.
-    //
-    // A BAND, not a derived date. "Turns 18 on" would answer the same
-    // queries and is the birthdate plus a constant, so it would hand the
-    // birthdate straight back. research_subjects.isMinor is the existing
-    // precedent for storing the classification rather than the input.
-    //
-    // Recomputed nightly, because a tier changes on a birthday.
-    privacyTier: text("privacy_tier"),
     mfaBackupCodeHashes: json("mfa_backup_code_hashes").$type<string[]>(),
     // Nothing in the app is actually gated on this yet (no route checks
     // it, no feature is blocked by it) -- same "flag, don't decide"
@@ -685,7 +645,6 @@ export const users = pgTable(
   },
   (table) => ({
     emailIdx: uniqueIndex("users_email_idx").on(table.email),
-    emailBidxIdx: uniqueIndex("users_email_bidx_idx").on(table.emailBidx),
     coachCodeIdx: uniqueIndex("users_coach_code_idx").on(table.coachCode),
     staffInviteCodeIdx: uniqueIndex("users_staff_invite_code_idx").on(table.staffInviteCode),
     calendarTokenIdx: uniqueIndex("users_calendar_token_idx").on(table.calendarToken),
@@ -880,9 +839,6 @@ export const guardianInvites = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     email: text("email").notNull(),
-    // Ciphertext copy of a parent's address. Looked up by token hash, never
-    // by the address, so no blind index is needed here.
-    emailEnc: text("email_enc"),
     tokenHash: text("token_hash").notNull(),
     expiresAt: timestamp("expires_at").notNull(),
     claimedAt: timestamp("claimed_at"),
@@ -3593,12 +3549,6 @@ export const provisionalAthletes = pgTable(
     // since a real DOB is required to derive a privacy tier before the
     // account is created.
     dateOfBirth: date("date_of_birth"),
-    // A child's name and birthdate, entered by a coach before that child has
-    // any account at all -- so they had no say in it being stored. Resolved
-    // by claim code, never by name, so no blind index here either.
-    nameEnc: text("name_enc"),
-    dateOfBirthEnc: text("date_of_birth_enc"),
-    privacyTier: text("privacy_tier"),
     heightIn: integer("height_in"),
     bodyWeightLbs: real("body_weight_lbs"),
     age: integer("age"),
