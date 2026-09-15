@@ -55,7 +55,6 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [coachCode, setCoachCode] = useState(prefilledCode.toUpperCase());
-  const [phone, setPhone] = useState("");
   // Required for athletes -- this is the pair that gates the Skill Bank
   // sport-paywall (see users.signupSport). Sport is a dropdown, not free
   // text, so it lands on the exact SPORTS taxonomy string the skill
@@ -142,7 +141,6 @@ export default function SignupPage() {
       password,
       role,
       coachCode: role === "athlete" ? coachCode || undefined : undefined,
-      phone: phone.trim() || undefined,
       dateOfBirth,
       guardianEmail: isMinorAthlete ? guardianEmail.trim() || undefined : undefined,
       sport: role === "athlete" ? sport : undefined,
@@ -360,17 +358,6 @@ export default function SignupPage() {
                   </p>
                 </div>
               )}
-              <div className="space-y-1.5">
-                <Label htmlFor="phone">Phone number (optional)</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  autoComplete="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="For text notifications, if you turn them on"
-                />
-              </div>
               {role === "athlete" && (
                 <div className="space-y-1.5">
                   <Label htmlFor="coachCode">Invite code (optional)</Label>

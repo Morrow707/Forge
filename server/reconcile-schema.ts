@@ -3057,6 +3057,33 @@ BEGIN
     INSERT INTO "applied_backfills" ("key") VALUES ('weight_unit_lbs_default_2026_09_09');
   END IF;
 END $$;
+
+-- Erase every stored phone number.
+--
+-- users.phone was collected at signup and read by nothing. There is no SMS
+-- sender in this codebase -- no Twilio, no sendSms -- so the column existed
+-- only to feed a notification channel that was never built, and the field
+-- has now been taken off the signup form and out of both write paths.
+--
+-- Unlike the two backfills above, this one DESTROYS data, and deliberately.
+-- An unused phone number is not harmless storage: it is a direct identifier
+-- for a population that is roughly three in five minors, sitting in a
+-- database whose whole exposure question is what a leaked dump would say
+-- about those children. The cheapest way to stop a column leaking is to not
+-- have anything in it.
+--
+-- The column itself stays. This file is additive-only by policy, because it
+-- runs against production on every deploy and a DROP here would be
+-- unrecoverable if it were ever wrong. An empty column costs nothing, and if
+-- SMS is ever genuinely built the collection path is a small amount of code
+-- to restore -- with fresh consent, which is the right way round anyway.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN
+    UPDATE "users" SET "phone" = NULL WHERE "phone" IS NOT NULL;
+    INSERT INTO "applied_backfills" ("key") VALUES ('erase_unused_phone_numbers_2026_09_15');
+  END IF;
+END $$;
 `;
 
 async function main() {
