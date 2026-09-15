@@ -134,7 +134,7 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     expect(section).not.toContain("updateProfileSchema");
   });
 
-  it("leaves exactly three guardian writes, all deliberate", () => {
+  it("leaves exactly four guardian writes, all deliberate", () => {
     // Camera tracking off, which is prospective and is the parental control the feature exists
     // for; asking for a removal, which somebody else answers; and signing off a research-consent
     // change the ATHLETE asked for.
@@ -150,12 +150,23 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     //
     // The shape still respects the rule: the guardian cannot ORIGINATE it. There is no route for
     // a guardian to set consent -- only to approve or decline something the athlete asked for.
+    //
+    // The fourth is withdrawing consent, and it is the one write here that DESTROYS something --
+    // every video on the account, and the child's access to Forge. It does not breach rule 3 for
+    // the same reason the third does not: it is not information about the child, it is the
+    // permission the account stands on, which was the guardian's to give and is therefore theirs
+    // to take back. Rule 4 still holds beside it untouched -- a parent asking for ONE video to
+    // come down is still a request somebody answers, because that video is the coach's and the
+    // athlete's record too. Taking back the permission itself is not a request, because a
+    // permission somebody else can refuse to release was never really theirs.
+    //
     // Anything else appearing here is a regression.
     const guardianWrites = [...routes.matchAll(/app\.(post|patch|put|delete)\(\s*\n?\s*"\/api\/guardian\/[^"]*"/g)];
     const paths = guardianWrites.map((m) => m[0].split('"')[1]);
     expect(paths.sort()).toEqual([
       "/api/guardian/athletes/:athleteId/removal-requests",
       "/api/guardian/athletes/:athleteId/tracking-opt-out",
+      "/api/guardian/athletes/:athleteId/withdraw-consent",
       "/api/guardian/research-consent-requests/:id",
     ]);
   });
