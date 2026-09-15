@@ -863,8 +863,30 @@ export const guardianInvites = pgTable(
 );
 export type GuardianInvite = typeof guardianInvites.$inferSelect;
 
+// Claiming this invite is the moment a parent's consent is actually given, so what the parent
+// affirmed has to travel with it. It used to carry a password and nothing else: the claim page
+// showed a mandatory terms checkbox, the checkbox was never sent, and the server wrote a consent
+// record naming the terms text regardless. A record of an act that was never transmitted is not a
+// record of consent -- a scripted POST with a password alone produced the same row.
+//
+// Three separate literals rather than one combined "I agree", because they are three different
+// permissions and a parent is entitled to see them as such: the terms they are bound by, what is
+// collected about their child and who sees it, and -- the one specific to a minor on a camera
+// platform -- that their child will be filmed and measured from that footage. Each is logged as
+// its own consent record against its own document text.
 export const claimGuardianInviteSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
+  agreedToTerms: z.literal(true, {
+    errorMap: () => ({ message: "You must agree to the terms to create an account" }),
+  }),
+  agreedToPrivacyPolicy: z.literal(true, {
+    errorMap: () => ({ message: "You must agree to the privacy policy to create an account" }),
+  }),
+  agreedToMinorMediaRelease: z.literal(true, {
+    errorMap: () => ({
+      message: "A parent or guardian has to agree to the video and biometric release",
+    }),
+  }),
 });
 export type ClaimGuardianInviteInput = z.infer<typeof claimGuardianInviteSchema>;
 

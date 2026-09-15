@@ -24892,27 +24892,71 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const athlete = await this.getUser(invite.athleteId);
     if (!athlete) return { error: "This athlete's account no longer exists." as const };
 
-    // For an under-13 athlete, the guardian claiming this invite IS the
-    // consent behind the account -- there is no coach attestation on a
-    // self-signup, and the athlete cannot consent for themselves. Logged
-    // against the ATHLETE (whose account it authorises) and attributed to
-    // the guardian, with the Parental Notice they were sent as the document
-    // text, so the record says who agreed to what and when. Best-effort
-    // ordering only in the sense that it runs after the link exists: a
-    // failure here throws and the route reports it, rather than leaving a
-    // Tier 1 account live with no consent row behind it.
-    const logGuardianCoppaConsent = async (guardianId: number) => {
-      if (!athlete.dateOfBirth) return;
-      if (derivePrivacyTier(athlete.dateOfBirth) !== "tier1_under13") return;
-      const notice = await this.getLegalDocument("parental_notice");
-      await this.logConsentRecord({
+    // Claiming this invite is the moment the parent's consent is actually given, and it is the
+    // only moment a minor's account becomes usable -- the minor gate in routes.ts refuses
+    // everything until the link exists. So this is the consent vehicle, and what gets written
+    // here is the whole record of what a parent agreed to.
+    //
+    // Logged against the ATHLETE, whose account each one authorises, and attributed to the
+    // guardian who gave it, with the exact document text as it stood at that moment -- a consent
+    // record that names a document by type alone is worthless once the document is edited.
+    //
+    // Not best-effort: a failure throws and the route reports it, rather than leaving an account
+    // live with no consent behind it.
+    const logGuardianConsents = async (guardianId: number) => {
+      const context = {
         userId: athlete.id,
-        consentType: "guardian_coppa_consent",
-        documentText: notice?.content ?? agreedToTermsText,
         givenByUserId: guardianId,
         ipAddress: consentContext?.ipAddress,
         userAgent: consentContext?.userAgent,
+      };
+      const [privacy, biometric, notice] = await Promise.all([
+        this.getLegalDocument("privacy_policy"),
+        this.getLegalDocument("biometric_waiver"),
+        this.getLegalDocument("parental_notice"),
+      ]);
+
+      await this.logConsentRecord({
+        ...context,
+        consentType: "terms_of_service",
+        documentText: agreedToTermsText,
       });
+
+      // EVERY MINOR, not only the under-13s. The COPPA record below is specific to Tier 1, but
+      // being filmed and measured from that footage is the same act at 14 as at 12, and the gate
+      // that makes this claim the price of using Forge covers everyone under 18. Logging the
+      // release only for the youngest left the teenagers consented-to by nobody.
+      const isMinor =
+        athlete.dateOfBirth && derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus";
+      if (isMinor) {
+        await this.logConsentRecord({
+          ...context,
+          consentType: "biometric_waiver",
+          documentText: biometric?.content ?? notice?.content ?? agreedToTermsText,
+        });
+      }
+
+      // For an under-13 athlete, the guardian claiming this invite IS the consent behind the
+      // account -- there is no coach attestation on a self-signup, and the athlete cannot consent
+      // for themselves.
+      if (athlete.dateOfBirth && derivePrivacyTier(athlete.dateOfBirth) === "tier1_under13") {
+        await this.logConsentRecord({
+          ...context,
+          consentType: "guardian_coppa_consent",
+          documentText: notice?.content ?? agreedToTermsText,
+        });
+      }
+
+      // Recorded last and unconditionally: the privacy policy governs what is collected about
+      // this athlete and who may see it, which is a question for a guardian of a 17-year-old as
+      // much as of a 9-year-old.
+      if (privacy?.content) {
+        await this.logConsentRecord({
+          ...context,
+          consentType: "terms_of_service",
+          documentText: privacy.content,
+        });
+      }
     };
 
     const existingUser = await this.getUserByEmail(invite.email);
@@ -24962,7 +25006,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           .set({ claimedAt: new Date() })
           .where(eq(guardianInvites.id, invite.id));
       });
-      await logGuardianCoppaConsent(existingUser.id);
+      await logGuardianConsents(existingUser.id);
       return { user: existingUser, athleteId: invite.athleteId };
     }
 
@@ -24995,7 +25039,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       ipAddress: consentContext?.ipAddress,
       userAgent: consentContext?.userAgent,
     });
-    await logGuardianCoppaConsent(guardian.id);
+    await logGuardianConsents(guardian.id);
 
     return { user: guardian, athleteId: invite.athleteId };
   },

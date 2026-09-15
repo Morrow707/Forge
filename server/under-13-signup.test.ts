@@ -34,7 +34,11 @@ describe("under-13 self-signup", () => {
 
   it("records the guardian's own consent when they claim, attributed to them", () => {
     expect(storage).toContain('consentType: "guardian_coppa_consent"');
-    expect(storage).toContain("logGuardianCoppaConsent");
+    expect(storage).toContain("logGuardianConsents");
+    // The COPPA record stays specific to Tier 1 -- it is a claim about a particular legal regime,
+    // and widening it to every minor would make the record say something it does not mean. The
+    // video and biometric release is the one that widened; see logGuardianConsents.
+    expect(storage).toContain('=== "tier1_under13"');
     expect(consentTypeEnum.enumValues).toContain("guardian_coppa_consent");
     expect(reconcile).toContain(`ADD VALUE IF NOT EXISTS 'guardian_coppa_consent'`);
   });

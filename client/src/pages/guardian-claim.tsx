@@ -31,7 +31,15 @@ export default function GuardianClaimPage() {
   const { user, isLoading } = useAuth();
   const qc = useQueryClient();
   const [password, setPassword] = useState("");
+  // Three separate boxes, not one. They are three different permissions -- what the guardian is
+  // bound by, what is collected about their child, and that their child will be filmed and
+  // measured from that footage -- and the third is the one specific to putting a minor on a
+  // camera platform. Bundling them behind a single "I agree" hides the one a parent is most
+  // entitled to read before ticking.
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToPrivacyPolicy, setAgreedToPrivacyPolicy] = useState(false);
+  const [agreedToMinorMediaRelease, setAgreedToMinorMediaRelease] = useState(false);
+  const allAgreed = agreedToTerms && agreedToPrivacyPolicy && agreedToMinorMediaRelease;
 
   const { data: preview, isLoading: previewLoading, isError: previewError } = useQuery<InvitePreview>({
     queryKey: [`/api/guardian-invites/${token}`],
@@ -41,7 +49,14 @@ export default function GuardianClaimPage() {
 
   const claimMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/guardian-invites/${token}/claim`, { password });
+      // The agreements travel with the request. They used to stay on this page, which meant the
+      // server wrote a consent record for an act it had never been told about.
+      const res = await apiRequest("POST", `/api/guardian-invites/${token}/claim`, {
+        password,
+        agreedToTerms,
+        agreedToPrivacyPolicy,
+        agreedToMinorMediaRelease,
+      });
       return (await res.json()) as PublicUser & { nativeToken?: string };
     },
     onSuccess: ({ nativeToken, ...claimedUser }) => {
@@ -78,7 +93,7 @@ export default function GuardianClaimPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!agreedToTerms) return;
+    if (!allAgreed) return;
     claimMutation.mutate();
   }
 
@@ -107,12 +122,10 @@ export default function GuardianClaimPage() {
                 autoComplete={preview?.accountExists ? "current-password" : "new-password"}
               />
             </div>
+            {/* Every box links its own document, because a mandatory checkbox over text the
+                person cannot reach is not a clickwrap. /legal is public and carries all three. */}
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
               <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
-              {/* A link, because the checkbox is mandatory and the page carried no
-                  terms text and no way to reach any -- agreeing to something you
-                  cannot read is not a clickwrap. /legal is public and is the same
-                  agreement signup shows inline. */}
               <span>
                 I agree to the{" "}
                 <a
@@ -125,7 +138,43 @@ export default function GuardianClaimPage() {
                 </a>
               </span>
             </label>
-            <Button type="submit" className="w-full" disabled={!agreedToTerms || claimMutation.isPending}>
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={agreedToPrivacyPolicy}
+                onCheckedChange={(c) => setAgreedToPrivacyPolicy(c === true)}
+              />
+              <span>
+                I have read the{" "}
+                <a
+                  href="/legal"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  privacy policy
+                </a>{" "}
+                and understand what Forge collects about my child and who can see it
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={agreedToMinorMediaRelease}
+                onCheckedChange={(c) => setAgreedToMinorMediaRelease(c === true)}
+              />
+              <span>
+                I consent to my child being recorded on video for coaching, and to measurements
+                being taken from that footage, as set out in the{" "}
+                <a
+                  href="/legal"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  video and biometric release
+                </a>
+              </span>
+            </label>
+            <Button type="submit" className="w-full" disabled={!allAgreed || claimMutation.isPending}>
               {claimMutation.isPending
                 ? preview?.accountExists
                   ? "Linking…"
