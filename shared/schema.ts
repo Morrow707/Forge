@@ -8085,6 +8085,12 @@ export type PublicUser = Omit<
   // refuses everything they try. The client uses it to show them why rather
   // than a screen of controls that all fail.
   guardianLinkRequired?: boolean;
+  // Athletes only, and the OTHER reason the same gate holds someone: no date of birth on file, so
+  // their tier cannot be derived and nobody can say whether they need a guardian at all. Separate
+  // from guardianLinkRequired because the two need different screens -- waiting on a parent is
+  // nothing the athlete can act on, while a missing birthdate is one field they fill in
+  // themselves, and showing them the wrong one hands them an instruction they cannot follow.
+  dateOfBirthRequired?: boolean;
   // True when this account has at least one guardian link, whatever its role
   // -- guardianship is a relationship, so a Free Agent parent or a coach who
   // is also a parent both get the guardian view. UI convenience only;

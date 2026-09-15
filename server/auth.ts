@@ -225,7 +225,9 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
     // full of controls that all answer 403 -- see the guardian gate in
     // routes.ts, which is the thing actually enforcing this. This flag is a
     // convenience for the UI and is never the enforcement.
-    publicUser.guardianLinkRequired = await storage.isAthleteBlockedPendingGuardian(user.id);
+    const gate = await storage.athleteGateStatus(user.id);
+    publicUser.guardianLinkRequired = gate === "needs_guardian";
+    publicUser.dateOfBirthRequired = gate === "needs_date_of_birth";
   }
   // Not gated on role, deliberately. Guardianship is a relationship, so any
   // account can hold links -- a parent training as a Free Agent, a coach who

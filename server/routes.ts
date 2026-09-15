@@ -1040,15 +1040,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // will be missed on the next one, which is exactly how five athlete AI
   // routes ended up ungated.
   //
-  // Fails OPEN on an unknown date of birth, deliberately and consistently
-  // with assertMinorHasActiveGuardian: an athlete with no dateOfBirth is
-  // "tier unknown", and guessing would lock out every account predating that
-  // column. Both signup paths require a date of birth today, so this only
-  // leaves accounts created before it existed.
+  // Fails CLOSED on an unknown date of birth. It used to pass, on the reasoning that an athlete
+  // with no dateOfBirth is tier-unknown and guessing would lock out every account predating that
+  // column. The rule now is that every minor has a guardian however they arrived -- free agent,
+  // coach-provisioned, transferred between rosters -- and an athlete whose age nobody knows is
+  // precisely the case that rule cannot afford to wave through. "Both signup paths require a
+  // birthdate" was true of those two callers, not of the data: createUser itself does not ask for
+  // the column, so any future path that forgets inherits a free pass through this gate.
+  //
+  // Nobody is stranded. The backfill route is allowed through below, so an athlete held for this
+  // reason is one field away from clearing it, and an adult who supplies it is past the gate in
+  // the same request.
   const GUARDIAN_GATE_ALLOWED_PREFIXES = [
     // Everything needed to sign in, see who you are, sign out, verify an
     // email, or supply a missing date of birth.
     "/api/auth/",
+    // The one field that clears a needs_date_of_birth hold. Without this in the list, failing
+    // closed on an unknown birthdate would be a trap rather than a gate.
+    "/api/account/backfill-date-of-birth",
     // How the blocked athlete sees their own status, and nudges the parent.
     "/api/account/guardian-link",
     "/api/account/guardian-invite/resend",
@@ -1061,7 +1070,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = req.isAuthenticated?.() ? (req.user as any) : null;
       if (!user || user.role !== "athlete") return next();
       if (GUARDIAN_GATE_ALLOWED_PREFIXES.some((p) => req.path.startsWith(p))) return next();
-      if (!(await storage.isAthleteBlockedPendingGuardian(user.id))) return next();
+      const status = await storage.athleteGateStatus(user.id);
+      if (status === "ok") return next();
+      // Two holds, two answers. Telling an athlete whose birthdate is missing to go and ask their
+      // parent is an instruction they cannot follow; the thing they need is one field.
+      if (status === "needs_date_of_birth") {
+        return res.status(403).json({
+          message:
+            "We need your date of birth before you can use Forge. Add it on your account page -- if you are under 18 we will also need a parent or guardian to set up their own linked account.",
+          code: "date_of_birth_required",
+        });
+      }
       return res.status(403).json({
         message:
           "A parent or guardian has to finish setting up their linked account before you can use Forge. We emailed them when you signed up -- ask them to open that link, or send it again from your account page.",

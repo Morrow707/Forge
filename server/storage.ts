@@ -25451,11 +25451,36 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return { total, rows };
   },
 
-  async isAthleteBlockedPendingGuardian(athleteId: number): Promise<boolean> {
+  /** Why an athlete is held at the minor gate, or "ok" if they are not.
+   *
+   * Two different reasons, because they need two different answers from the athlete. Waiting on a
+   * parent is nothing they can act on except by nudging; a missing birthdate is something they
+   * fix themselves in one field. Telling someone in the second case to go and ask their parent
+   * is an instruction that cannot be followed.
+   *
+   * UNKNOWN BIRTHDATE NOW BLOCKS. It used to pass, deliberately: an athlete with no dateOfBirth
+   * is tier-unknown, and guessing would have locked out every account predating that column. But
+   * the rule is that EVERY minor has a guardian regardless of how they got here, and an athlete
+   * whose age nobody knows is exactly the case that rule cannot afford to wave through --
+   * createUser does not require the column, only its two callers do, so "both signup paths ask
+   * for it" is a property of those callers rather than of the data.
+   *
+   * Nobody is stranded by this. The gate lets the backfill route through, so the way out is the
+   * one field they are being asked for, and an adult who fills it in is past the gate in the same
+   * request.
+   */
+  async athleteGateStatus(
+    athleteId: number,
+  ): Promise<"ok" | "needs_date_of_birth" | "needs_guardian"> {
     const athlete = await this.getUser(athleteId);
-    if (!athlete?.dateOfBirth) return false;
-    if (derivePrivacyTier(athlete.dateOfBirth) === "tier3_adult_18plus") return false;
-    return (await this.getGuardianLinkForAthlete(athleteId)) === null;
+    if (!athlete) return "ok";
+    if (!athlete.dateOfBirth) return "needs_date_of_birth";
+    if (derivePrivacyTier(athlete.dateOfBirth) === "tier3_adult_18plus") return "ok";
+    return (await this.getGuardianLinkForAthlete(athleteId)) === null ? "needs_guardian" : "ok";
+  },
+
+  async isAthleteBlockedPendingGuardian(athleteId: number): Promise<boolean> {
+    return (await this.athleteGateStatus(athleteId)) !== "ok";
   },
 
   async getGuardianLinkForAthlete(athleteId: number) {

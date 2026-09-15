@@ -58,11 +58,48 @@ describe("rule 1: the minor gate", () => {
     expect(await storage.isAthleteBlockedPendingGuardian(athlete.id)).toBe(false);
   });
 
-  it("never blocks an athlete whose age it does not know", async () => {
-    // Accounts predating the dateOfBirth column. Guessing here would lock
-    // out every one of them.
+  // USED TO PASS, AND WAS THE HOLE IN "EVERY MINOR HAS A GUARDIAN".
+  //
+  // The old rule waved through any athlete whose age was unknown, on the reasoning that guessing
+  // would lock out every account predating the dateOfBirth column. But an athlete nobody can age
+  // is exactly the case that rule cannot afford to trust: createUser does not require the column,
+  // only its two callers do, so any future path that forgets one inherits a free pass.
+  //
+  // They are held under their own reason rather than the guardian one, because the answer differs
+  // -- a missing birthdate is one field they fill in themselves, and the gate lets the backfill
+  // route through so it is never a trap.
+  it("holds an athlete whose age it does not know, under its own reason", async () => {
     const athlete = await makeAthlete({ dateOfBirth: null });
-    expect(await storage.isAthleteBlockedPendingGuardian(athlete.id)).toBe(false);
+    expect(await storage.athleteGateStatus(athlete.id)).toBe("needs_date_of_birth");
+    expect(await storage.isAthleteBlockedPendingGuardian(athlete.id)).toBe(true);
+  });
+
+  it("separates the two holds, so each can be explained differently", async () => {
+    const noDob = await makeAthlete({ dateOfBirth: null });
+    const minor = await makeAthlete({ dateOfBirth: isoYearsAgo(15) });
+    const adult = await makeAthlete({ dateOfBirth: isoYearsAgo(22) });
+    expect(await storage.athleteGateStatus(noDob.id)).toBe("needs_date_of_birth");
+    expect(await storage.athleteGateStatus(minor.id)).toBe("needs_guardian");
+    expect(await storage.athleteGateStatus(adult.id)).toBe("ok");
+  });
+
+  // Supplying the birthdate is the way out, and it resolves to the truth rather than to "ok":
+  // an adult clears the gate entirely, a minor moves to the guardian hold.
+  it("resolves the hold to whatever the birthdate turns out to mean", async () => {
+    const willBeAdult = await makeAthlete({ dateOfBirth: null });
+    await storage.backfillDateOfBirth(willBeAdult.id, isoYearsAgo(22));
+    expect(await storage.athleteGateStatus(willBeAdult.id)).toBe("ok");
+
+    const willBeMinor = await makeAthlete({ dateOfBirth: null });
+    await storage.backfillDateOfBirth(willBeMinor.id, isoYearsAgo(14));
+    expect(await storage.athleteGateStatus(willBeMinor.id)).toBe("needs_guardian");
+  });
+
+  // The rule is about the athlete, not about how they arrived. A free agent with no coach is held
+  // exactly as a rostered athlete is -- the gate reads role and age, and nothing about membership.
+  it("holds a minor free agent the same as a rostered one", async () => {
+    const freeAgent = await makeAthlete({ dateOfBirth: isoYearsAgo(12) });
+    expect(await storage.athleteGateStatus(freeAgent.id)).toBe("needs_guardian");
   });
 
   it("will not let a guardian unlink from a minor and lock them out", async () => {

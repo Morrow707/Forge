@@ -26,6 +26,7 @@ import ClaimPage from "@/pages/claim";
 import PublicTeamPage from "@/pages/public-team";
 import GuardianClaimPage from "@/pages/guardian-claim";
 import GuardianPendingPage from "@/pages/guardian-pending";
+import DateOfBirthRequiredPage from "@/pages/date-of-birth-required";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import VerifyEmailPage from "@/pages/verify-email";
@@ -188,6 +189,12 @@ function ProtectedRoute({
   // server/routes.ts); doing it here too is what turns a wall of 403s into a
   // sentence explaining what they're waiting for. One place rather than per
   // page, for the same reason the server check is one middleware.
+  // Checked before the guardian hold, because it comes first in fact: until there is a birthdate
+  // nobody knows whether a guardian is even required. Filling it in re-evaluates the gate, so a
+  // minor falls through to the screen below on the same response.
+  if (user.role === "athlete" && user.dateOfBirthRequired) {
+    return <DateOfBirthRequiredPage />;
+  }
   if (user.role === "athlete" && user.guardianLinkRequired) {
     return <GuardianPendingPage />;
   }
