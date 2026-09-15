@@ -20714,7 +20714,23 @@ ${catalog}`;
       // A set with no trace has nothing to replay -- a hand-logged set, or one whose capture
       // was refused. Filtering here rather than in the caller keeps an export of N rows an
       // export of N usable rows.
-      .where(isNotNull(workoutSetEntries.barPathTrace))
+      //
+      // NOT NULL is not enough, and an export of 29 sets that arrived with four empty arrays in
+      // it is how that was found. A capture the tracker could not read is not discarded: the
+      // clip is saved for the coach and the row is written with an EMPTY trace and a
+      // trackingDiagnostics record saying why (see saveEmptyAndWarn in the tracker dialogs). An
+      // empty array is not null, so every one of those rows passed this filter and spent a slot
+      // in the export while carrying nothing to replay. Length is the real test.
+      //
+      // Those rows are still worth reading -- they are the only record of a capture that failed
+      // outright -- but through the tracking report, which is built to show them, rather than
+      // through a replay export that cannot do anything with them.
+      .where(
+        and(
+          isNotNull(workoutSetEntries.barPathTrace),
+          sql`json_array_length(${workoutSetEntries.barPathTrace}::json) > 0`,
+        ),
+      )
       .orderBy(desc(workoutSetEntries.id))
       .limit(limit);
   },
