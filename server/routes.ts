@@ -2563,13 +2563,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       movementType: r.movementType,
       setNumber: r.setNumber,
       heightIn: r.heightIn,
-      // The replay takes kilograms; sets are logged in whichever unit the athlete uses.
+      // The replay takes kilograms; sets are logged in whichever unit the athlete preferred at
+      // the time. weightUnit is null on bodyweight and band sets and on anything logged before
+      // the column existed, and this used to fall through to the pounds branch on all of them --
+      // so a row whose unit was simply unknown came out multiplied by 0.4536 and presented as a
+      // measured kilogram figure. Power is computed straight off this, so the guess propagated.
+      //
+      // Unknown unit now exports as null, and the raw pair travels alongside so the ambiguity is
+      // visible rather than resolved by assumption. The divisor is bar-tracking.ts's LBS_PER_KG,
+      // which is the same conversion the app itself applies when it computes power on device;
+      // the server cannot import that module, so the value is repeated here and must not drift.
       loadKg:
-        r.weight == null
+        r.weight == null || !Number.isFinite(Number(r.weight)) || r.weightUnit == null
           ? null
           : r.weightUnit === "kg"
             ? Number(r.weight)
-            : Number(r.weight) * 0.45359237,
+            : Number(r.weight) / 2.20462,
+      loadRaw: r.weight == null ? null : Number(r.weight),
+      loadUnit: r.weightUnit ?? null,
       // Reps are stored as free text, because a coach can prescribe "AMRAP" or "8-10" as readily
       // as "5". The replay compares against a count, so anything that isn't one exports as null
       // rather than a string the consumer has to guess at -- same coercion-at-the-boundary

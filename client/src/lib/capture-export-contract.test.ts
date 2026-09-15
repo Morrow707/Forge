@@ -22,6 +22,8 @@ describe("the admin capture export feeds the replay harness unchanged", () => {
     setNumber: 1,
     heightIn: 70,
     loadKg: 61.2,
+    loadRaw: 135,
+    loadUnit: "lbs",
     loggedReps: 5,
     boxHeightIn: null,
     movementType: "Squat",
@@ -116,5 +118,25 @@ describe("the admin capture export feeds the replay harness unchanged", () => {
     for (const leak of ["identifierForVendor", "serial", "udid", "@", "deviceId"]) {
       expect(serialised).not.toContain(leak);
     }
+  });
+
+  // A set whose unit was never recorded -- a bodyweight or band row, or anything logged before
+  // the column existed. The export used to fall through to the pounds branch on all of them, so
+  // an unknown unit came out multiplied by 0.4536 and presented as a measured kilogram figure.
+  // Power is computed straight off that number, so the guess did not stay contained.
+  it("exports no load in kilograms when the unit was never recorded", () => {
+    // What the route now emits for weight "135" with weightUnit null.
+    const row = { loadKg: null, loadRaw: 135, loadUnit: null };
+    expect(row.loadKg).toBeNull();
+    // The raw pair still travels, so a reader can see that a weight WAS recorded and that its
+    // unit is the missing part. That is a different fact from "no load".
+    expect(row.loadRaw).toBe(135);
+    expect(row.loadUnit).toBeNull();
+  });
+
+  it("leaves a replay reporting no power rather than a fabricated one", () => {
+    const metrics = replayCapture({ ...(exportedRow as StoredCapture), loadKg: null }).metrics!;
+    expect(metrics.peakPowerWatts).toBeNull();
+    expect(metrics.meanPowerWatts).toBeNull();
   });
 });
