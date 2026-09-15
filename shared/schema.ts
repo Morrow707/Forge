@@ -6831,7 +6831,6 @@ export const signupSchema = z.object({
   name: z.string().min(1, "Name is required"),
   role: z.enum(["coach", "athlete"]),
   coachCode: z.string().optional(),
-  phone: z.string().trim().max(20).optional(),
   // Required for every signup (coach and athlete both) so the route can
   // derive a privacy tier (see shared/privacy-tiers.ts) before the account
   // is ever created -- an athlete signup that resolves to Tier 1 (under 13)
@@ -6950,7 +6949,6 @@ export const updateProfileSchema = z.object({
 // number the dialog never showed.
 export const updateNotificationPrefsSchema = z
   .object({
-    phone: z.string().trim().max(20).optional().nullable(),
     notifyEmail: z.boolean().optional(),
     notifySms: z.boolean().optional(),
   })

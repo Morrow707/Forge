@@ -61,6 +61,24 @@ services:
       # value on every deploy going forward.
       - key: MEDIA_URL_SECRET
         generateValue: true
+      # Encrypts column values whose plaintext must not survive a database
+      # leaving the database -- users.mfa_secret today, athlete identity next.
+      #
+      # sync: false, NOT generateValue, and the difference is the whole point.
+      # generateValue mints a fresh value on every deploy, which is correct
+      # for a signing secret (old signatures simply stop verifying) and
+      # catastrophic for an encryption key: a new key does not invalidate the
+      # old data, it makes it permanently unreadable. Set this once, by hand,
+      # to `openssl rand -hex 32`, and keep an offline copy somewhere that is
+      # not this platform. Losing it destroys what it protects.
+      #
+      # Its own key rather than reusing SESSION_SECRET, following the same
+      # separation this file already keeps between the session, media and
+      # native-token secrets: rotating one for a real reason must not take
+      # the others with it -- and this is the one that can never be rotated
+      # casually at all.
+      - key: PII_ENCRYPTION_KEY
+        sync: false
       # Master switch for every "no real billing yet" paywall stub in
       # server/routes.ts (testingUnlockAllPaywalls) -- Free Agent AI access
       # (strengthAi/skillsAi entitlements), Coaches Corner content, and Class

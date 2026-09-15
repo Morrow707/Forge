@@ -145,6 +145,7 @@ import {
 } from "@shared/privacy-tiers";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { scrubUserForAdmin } from "./admin-identity";
+import { encryptField, decryptField, isEncryptedField } from "./field-encryption";
 import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
 import { KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain, knowledgeDomainLabel } from "@shared/knowledge-domains";
 import { answerStyleInstruction, isAnswerRegister, isAnswerLength } from "@shared/answer-style";
@@ -4195,14 +4196,45 @@ export const storage = {
   // secret; nothing is "enabled" until confirmed regardless.
   async startMfaSetup(userId: number): Promise<{ secret: string }> {
     const secret = generateTotpSecret();
-    await db.update(users).set({ mfaSecret: secret }).where(eq(users.id, userId));
+    // Encrypted at rest. A TOTP seed is a second factor in the same sense a
+    // password is a first one: whoever holds it can mint valid codes forever,
+    // so a leaked database used to hand over the MFA of every coach and admin
+    // who had enabled it, defeating the control entirely rather than
+    // weakening it. It cannot be hashed the way a password is, because the
+    // server has to recompute codes from it -- which is exactly the case
+    // encryption exists for.
+    await db.update(users).set({ mfaSecret: encryptField(secret) }).where(eq(users.id, userId));
     return { secret };
+  },
+
+  /**
+   * Reads a stored TOTP seed, and quietly upgrades it.
+   *
+   * Seeds written before encryption are plaintext, and decryptField passes
+   * those through unchanged so nobody is locked out by the rollout. A
+   * successful read re-writes the value encrypted, so the column migrates
+   * itself as people log in rather than needing a backfill job for a handful
+   * of rows.
+   *
+   * Best-effort on the re-write: failing to upgrade a seed must never fail
+   * the login it was read for.
+   */
+  async readMfaSecret(userId: number, stored: string): Promise<string> {
+    const secret = decryptField(stored)!;
+    if (!isEncryptedField(stored)) {
+      void db
+        .update(users)
+        .set({ mfaSecret: encryptField(secret) })
+        .where(eq(users.id, userId))
+        .catch(() => {});
+    }
+    return secret;
   },
 
   async confirmMfaSetup(userId: number, code: string): Promise<{ backupCodes: string[] } | null> {
     const user = await this.getUser(userId);
     if (!user?.mfaSecret) return null;
-    if (!(await verifyTotpCode(user.mfaSecret, code))) return null;
+    if (!(await verifyTotpCode(await this.readMfaSecret(userId, user.mfaSecret), code))) return null;
     const { plain, hashes } = await generateBackupCodes();
     await db
       .update(users)
@@ -4216,7 +4248,7 @@ export const storage = {
   async verifyMfaLogin(userId: number, code: string): Promise<boolean> {
     const user = await this.getUser(userId);
     if (!user?.mfaEnabled || !user.mfaSecret) return false;
-    if (await verifyTotpCode(user.mfaSecret, code)) return true;
+    if (await verifyTotpCode(await this.readMfaSecret(userId, user.mfaSecret), code)) return true;
     if (user.mfaBackupCodeHashes?.length) {
       const remaining = await consumeBackupCode(user.mfaBackupCodeHashes, code);
       if (remaining) {
@@ -18041,7 +18073,6 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
   // that shows one toggle can't clear a value it never rendered.
   async updateNotificationPrefs(userId: number, input: UpdateNotificationPrefsInput) {
     const set: Partial<typeof users.$inferInsert> = {};
-    if ("phone" in input) set.phone = input.phone ?? null;
     if (input.notifyEmail !== undefined) set.notifyEmail = input.notifyEmail;
     if (input.notifySms !== undefined) set.notifySms = input.notifySms;
     if (Object.keys(set).length === 0) return (await this.getUser(userId))!;
@@ -21443,6 +21474,19 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .orderBy(desc(skillSessionLogs.createdAt));
   },
 
+  // Counts only -- no name, no email.
+  //
+  // This joined users and selected u.name and u.email, and its result is
+  // JSON.stringify'd straight into the boot log by index.ts. So every deploy
+  // wrote a list of athlete names and email addresses into a plain-text log,
+  // for a check whose entire question is whether two COUNTS agree. The
+  // identity was never used by anything; it was there because the query was
+  // written to answer "which accounts" and kept running after it had.
+  //
+  // It also sits outside the response-body redaction in index.ts, which only
+  // sweeps what goes through res.json -- a direct log() call like this one
+  // was never covered by it.
+  //
   // One-time, read-only diagnostic for the video-storage total that won't
   // move: rather than guess again at a scope/cutoff for a *deleting*
   // function, this just reports the truth -- which real athlete accounts
@@ -21457,52 +21501,50 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   async diagnoseVideoBacklog(): Promise<{
     rawCounts: { set: number; skill: number; comment: number };
     byAthlete: {
-      set: { athleteId: number; athleteName: string; athleteEmail: string; count: number; oldest: string | null; newest: string | null }[];
-      skill: { athleteId: number; athleteName: string; athleteEmail: string; count: number; oldest: string | null; newest: string | null }[];
-      comment: { athleteId: number; athleteName: string; athleteEmail: string; count: number; oldest: string | null; newest: string | null }[];
+      set: { athleteId: number; count: number; oldest: string | null; newest: string | null }[];
+      skill: { athleteId: number; count: number; oldest: string | null; newest: string | null }[];
+      comment: { athleteId: number; count: number; oldest: string | null; newest: string | null }[];
     };
   }> {
     const [rawSet, rawSkill, rawComment, bySet, bySkill, byComment] = await Promise.all([
       db.execute<{ count: string }>(sql`SELECT count(*) FROM workout_set_entries WHERE form_check_video_url IS NOT NULL`),
       db.execute<{ count: string }>(sql`SELECT count(*) FROM skill_session_logs WHERE video_url IS NOT NULL`),
       db.execute<{ count: string }>(sql`SELECT count(*) FROM workout_comments WHERE video_url IS NOT NULL`),
-      db.execute<{ athlete_id: number; athlete_name: string; athlete_email: string; count: string; oldest: string | null; newest: string | null }>(sql`
-        SELECT u.id AS athlete_id, u.name AS athlete_name, u.email AS athlete_email,
+      db.execute<{ athlete_id: number; count: string; oldest: string | null; newest: string | null }>(sql`
+        SELECT u.id AS athlete_id,
           count(*) AS count, min(wl.date)::text AS oldest, max(wl.date)::text AS newest
         FROM workout_set_entries wse
         JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
         JOIN workout_logs wl ON wl.id = wle.workout_log_id
         JOIN users u ON u.id = wl.athlete_id
         WHERE wse.form_check_video_url IS NOT NULL
-        GROUP BY u.id, u.name, u.email
+        GROUP BY u.id
         ORDER BY count(*) DESC
       `),
-      db.execute<{ athlete_id: number; athlete_name: string; athlete_email: string; count: string; oldest: string | null; newest: string | null }>(sql`
-        SELECT u.id AS athlete_id, u.name AS athlete_name, u.email AS athlete_email,
+      db.execute<{ athlete_id: number; count: string; oldest: string | null; newest: string | null }>(sql`
+        SELECT u.id AS athlete_id,
           count(*) AS count, min(ssl.created_at)::text AS oldest, max(ssl.created_at)::text AS newest
         FROM skill_session_logs ssl
         JOIN users u ON u.id = ssl.athlete_id
         WHERE ssl.video_url IS NOT NULL
-        GROUP BY u.id, u.name, u.email
+        GROUP BY u.id
         ORDER BY count(*) DESC
       `),
-      db.execute<{ athlete_id: number; athlete_name: string; athlete_email: string; count: string; oldest: string | null; newest: string | null }>(sql`
-        SELECT u.id AS athlete_id, u.name AS athlete_name, u.email AS athlete_email,
+      db.execute<{ athlete_id: number; count: string; oldest: string | null; newest: string | null }>(sql`
+        SELECT u.id AS athlete_id,
           count(*) AS count, min(wc.created_at)::text AS oldest, max(wc.created_at)::text AS newest
         FROM workout_comments wc
         JOIN assignments a ON a.id = wc.assignment_id
         JOIN users u ON u.id = a.athlete_id
         WHERE wc.video_url IS NOT NULL
-        GROUP BY u.id, u.name, u.email
+        GROUP BY u.id
         ORDER BY count(*) DESC
       `),
     ]);
 
-    const mapRows = (rows: { athlete_id: number; athlete_name: string; athlete_email: string; count: string; oldest: string | null; newest: string | null }[]) =>
+    const mapRows = (rows: { athlete_id: number; count: string; oldest: string | null; newest: string | null }[]) =>
       rows.map((r) => ({
         athleteId: r.athlete_id,
-        athleteName: r.athlete_name,
-        athleteEmail: r.athlete_email,
         count: Number(r.count),
         oldest: r.oldest,
         newest: r.newest,
