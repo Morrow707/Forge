@@ -1902,6 +1902,25 @@ const MIN_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
 const DEFAULT_MIN_ROM_FRACTION = 0.05;
 
 /**
+ * How far the tracked point travelled along the lift across a whole take, end to end.
+ *
+ * Exists to tell a scale that is too small apart from reps that could not be separated -- see the
+ * floor branch of implausibleRangeOfMotion, which is the only thing that reads it. Works on a
+ * stored trace (centimetres) and on a live one (metres) alike, since the caller is comparing it
+ * against a threshold in its own units either way.
+ */
+export function traceSpanAlongLift(points: { y: number }[]): number | null {
+  if (points.length === 0) return null;
+  let lo = points[0].y;
+  let hi = points[0].y;
+  for (const p of points) {
+    if (p.y < lo) lo = p.y;
+    if (p.y > hi) hi = p.y;
+  }
+  return hi - lo;
+}
+
+/**
  * Whether a computed range of motion is physically possible for this athlete and movement.
  * Returns null when it is fine (or when there is not enough information to judge), otherwise a
  * human-readable reason the caller should surface INSTEAD of the metrics.
@@ -1915,6 +1934,10 @@ export function implausibleRangeOfMotion(
   romCm: number | null,
   heightIn: number | null | undefined,
   movementPattern: string | null | undefined,
+  // How far the tracked point travelled across the WHOLE take, end to end. Optional, because a
+  // caller that does not have the trace in hand is no worse off than before this existed -- it
+  // just gets the old, sometimes-wrong attribution on the floor branch below.
+  traceSpanCm?: number | null,
 ): string | null {
   if (!heightIn || heightIn <= 0) return null;
   if (romCm == null || !Number.isFinite(romCm) || romCm <= 0) return null;
@@ -1929,6 +1952,41 @@ export function implausibleRangeOfMotion(
   const floorCm = heightCm * floorFraction;
   if (romCm < floorCm) {
     const underBy = Math.round((floorCm / romCm) * 10) / 10;
+    // A range of motion under the floor has two causes that look identical in this number alone,
+    // and telling the athlete the wrong one sends them to do the wrong thing about it.
+    //
+    // If the SCALE is too small, everything shrinks together -- each rep and the whole take with
+    // it. If the scale is fine and the segmenter split one rep into several, each rep shrinks
+    // while the take's total travel stays exactly where it should be. So the trace's end-to-end
+    // span tells them apart, and it needs no new threshold: the same floor this branch already
+    // applies, asked of the whole take instead of one rep.
+    //
+    // Three real bench captures are why. They reported 7 to 9cm of range of motion and were told
+    // the scale was misread; their traces span 30, 36 and 53cm, which for a bench press that
+    // travels about 40 and returns to the same place each rep is what a CORRECT scale looks
+    // like. Segmentation cut roughly one rep's worth of travel into fourteen to nineteen pieces,
+    // and the athlete was sent to re-film a camera setup that was fine.
+    //
+    // THE SPLIT IS SUGGESTIVE, NOT DECISIVE, and the wording below is deliberately hedged to
+    // match. A clean set whose scale is moderately wrong shrinks its span along with its reps,
+    // but only by the same factor: at the ~2.6x error needed to push a bench press under this
+    // floor at all, the span lands near 23cm, which is above the floor and would be read here as
+    // a splitting problem. The span-to-rep RATIO was tried instead and separates worse -- honest
+    // takes in the corpus run 1.5 to 3.3 and the three bad ones 4.1 to 6.5, which is not a gap
+    // to put a threshold in. So this says which cause is more likely and says that re-filming
+    // may not help, rather than asserting a cause it cannot actually establish from one number.
+    // Three captures from one athlete is not enough to do better, and pretending otherwise is
+    // how a confident wrong diagnosis gets shipped a second time.
+    if (traceSpanCm != null && Number.isFinite(traceSpanCm) && traceSpanCm >= floorCm) {
+      return (
+        `Range of motion came out as ${Math.round(romCm)}cm per rep, about ${underBy}x SHORTER ` +
+        `than this movement can travel for your height -- but the bar covered ` +
+        `${Math.round(traceSpanCm)}cm across the whole set, which is a plausible distance for ` +
+        `it. That points at the reps being split rather than the camera's scale being wrong, so ` +
+        `re-filming may not change it. Either way the rep count and every number built on it ` +
+        `are wrong for this take.`
+      );
+    }
     return (
       `Range of motion came out as ${Math.round(romCm)}cm, about ${underBy}x SHORTER than this ` +
       `movement can travel for your height. That means the camera's real-world scale was ` +
@@ -1994,10 +2052,17 @@ export function implausibleBarPathDeviation(
   const ceilingCm = heightCm * fraction;
   if (deviationCm <= ceilingCm) return null;
   const overBy = Math.round((deviationCm / ceilingCm) * 10) / 10;
+  // "about 1x further than it can drift" is not a sentence that says anything -- it rounds to 1
+  // for anything just over the ceiling, and reads as "no further at all". Say how far over it is
+  // in centimetres instead, which is the part an athlete can picture.
+  const byHowMuch =
+    overBy > 1
+      ? `about ${overBy}x further than this movement can drift for your height`
+      : `further than the ${Math.round(ceilingCm)}cm this movement can drift for your height`;
   return (
-    `Bar path drifted ${Math.round(deviationCm)}cm off line, about ${overBy}x further than this ` +
-    `movement can drift for your height. That means the camera's real-world scale was misread, ` +
-    `so every number from this take would be wrong by the same factor.`
+    `Bar path drifted ${Math.round(deviationCm)}cm off line, ${byHowMuch}. That means the ` +
+    `camera's real-world scale was misread, so every number from this take would be wrong by ` +
+    `the same factor.`
   );
 }
 

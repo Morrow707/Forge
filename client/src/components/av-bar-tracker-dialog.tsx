@@ -63,6 +63,7 @@ import {
   computeRepTrustScores,
   implausibleRangeOfMotion,
   implausibleBarPathDeviation,
+  traceSpanAlongLift,
   movementAxisFromGrip,
   dropAcrossAxisOutliers,
   toScaleFreeMetrics,
@@ -1411,7 +1412,14 @@ export function AvBarTrackerDialog({
     // Two ways the same wrong scale shows itself, and a take only had to survive one of them.
     // A bar reported as drifting a metre off line is the scale talking, not the athlete.
     const romProblem =
-      implausibleRangeOfMotion(metrics.romCm, heightIn, romBucket) ??
+      implausibleRangeOfMotion(
+        metrics.romCm,
+        heightIn,
+        romBucket,
+        // The live trace is in metres; every threshold this is compared against is in
+        // centimetres, so convert on the way in.
+        (traceSpanAlongLift(trace) ?? 0) * 100,
+      ) ??
       implausibleBarPathDeviation(metrics.barPathDeviationCm, heightIn, romBucket);
     if (romProblem) {
       const message = `${romProblem} Film this lift square to the side, with the camera level with the bar, and make sure you're fully in frame.`;

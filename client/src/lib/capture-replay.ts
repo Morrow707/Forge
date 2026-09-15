@@ -25,7 +25,11 @@ import {
   type TrackedPoint,
 } from "./bar-tracking";
 import { firstMoveForExercise, romBucketForExercise } from "./exercise-camera-profile";
-import { implausibleRangeOfMotion, implausibleBarPathDeviation } from "./bar-tracking";
+import {
+  implausibleRangeOfMotion,
+  implausibleBarPathDeviation,
+  traceSpanAlongLift,
+} from "./bar-tracking";
 
 /** One stored set, as much of it as a replay needs. Shaped to match what the set row already
  * holds so an export needs no transformation. */
@@ -100,6 +104,8 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
           metrics.romCm,
           capture.heightIn,
           romBucketForExercise(capture.exerciseName),
+          // Already centimetres -- a stored trace is written in them.
+          traceSpanAlongLift(capture.barPathTrace),
         ) ??
         implausibleBarPathDeviation(
           metrics.barPathDeviationCm,
