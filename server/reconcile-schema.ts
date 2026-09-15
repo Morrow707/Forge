@@ -2982,34 +2982,6 @@ ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "purpose" text;
 ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "requested_for" text;
 ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "matched_athlete_ids" integer[];
 
--- Encrypted identity, phase 1: the columns, empty.
---
--- Additive and inert. Nothing reads them, the plaintext columns remain the
--- source of truth, and a deploy that lands these changes no behaviour at all
--- -- which is the point of doing it as its own step. See
--- server/field-encryption.ts and server/pii-backfill.ts.
-ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "name_enc" text;
-ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email_enc" text;
-ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "date_of_birth_enc" text;
-ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email_bidx" text;
-ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "privacy_tier" text;
-
--- Unique, for the same reason users_email_idx is: it is what stops two
--- accounts sharing an address once the blind index is what lookups use.
--- Nullable while the backfill runs, and Postgres does not treat NULLs as
--- equal, so a half-filled column does not trip it.
-CREATE UNIQUE INDEX IF NOT EXISTS "users_email_bidx_idx" ON "users" ("email_bidx");
-
--- Answering "is this athlete a minor" in SQL without the birthdate being
--- readable. The two functions that need it scan large: the minors-pending-
--- guardian queue matches ~299k rows and the retention purge joins ~670k.
-CREATE INDEX IF NOT EXISTS "users_privacy_tier_idx" ON "users" ("privacy_tier");
-
-ALTER TABLE "guardian_invites" ADD COLUMN IF NOT EXISTS "email_enc" text;
-ALTER TABLE "provisional_athletes" ADD COLUMN IF NOT EXISTS "name_enc" text;
-ALTER TABLE "provisional_athletes" ADD COLUMN IF NOT EXISTS "date_of_birth_enc" text;
-ALTER TABLE "provisional_athletes" ADD COLUMN IF NOT EXISTS "privacy_tier" text;
-
 -- An admin clears a problem report by hand; nothing ages one out. Kept, not deleted, so a
 -- cleared report is still findable.
 ALTER TABLE "problem_reports" ADD COLUMN IF NOT EXISTS "resolved_at" timestamp;
