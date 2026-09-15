@@ -1268,13 +1268,6 @@ export function summarizeTrackedSet(
     ) {
       return true;
     }
-    // Too far to be a rep -- see EDGE_PHANTOM_OVERSHOOT_RATIO. This is the walkout.
-    if (
-      medianConcentricAmplitude > 0 &&
-      amplitude > medianConcentricAmplitude * EDGE_PHANTOM_OVERSHOOT_RATIO
-    ) {
-      return true;
-    }
     // Too slow to be a rep -- see EDGE_PHANTOM_DURATION_RATIO. This is the re-rack.
     if (
       medianConcentricDuration > 0 &&
@@ -1289,8 +1282,36 @@ export function summarizeTrackedSet(
     );
   }
 
+  // The one phantom test that is NOT restricted to the edges, and the asymmetry is deliberate.
+  //
+  // Every other test here looks for a phase that falls SHORT -- too small, too slow, too brief --
+  // and every one of them is edge-only, because a shallow rep in the middle of a set is a real
+  // rep an athlete should see rather than one this file quietly deletes. That reasoning is about
+  // the SHORT side and does not carry to the long one. A rep cannot be twice the size of every
+  // other rep in its own set, wherever it sits: the athlete's range of motion does not double
+  // and halve mid-set. A phase that large is the bar being moved, not lifted -- a walkout at the
+  // edges, and in the middle a rerack between clusters, a drop and reset, or the tracker losing
+  // the bar and finding it somewhere else.
+  //
+  // Seventeen stored bench captures are what forced this. They over-count by two to fourteen reps
+  // apiece, and rescaling their traces to what a correct calibration would have produced barely
+  // moves the count, so the extra phases are not a scale artifact -- they are real excursions in
+  // the trace, running up to 2.2x the set's own median with genuine reps clustered near 1.0.
+  //
+  // Same 2.0 the edge test used, for the same measured reason: across the calibration sets no
+  // genuine rep exceeded about 1.1x its set's median while the artifacts started at 2.45x, and
+  // nothing at all sits in between.
+  const PHANTOM_OVERSHOOT_RATIO = 2;
+
+  function isOversizedPhantom(phase: (typeof phaseStats)[number]): boolean {
+    if (concentric.length < 3 || medianConcentricAmplitude <= 0) return false;
+    const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
+    return amplitude > medianConcentricAmplitude * PHANTOM_OVERSHOOT_RATIO;
+  }
+
   function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
     if (isEdgeRackArtifact(phase)) return true;
+    if (isOversizedPhantom(phase)) return true;
     // Fewer than 3 concentric phases isn't enough of a sample to call
     // anything "anomalously short" relative to the rest of the set with
     // any confidence -- skip the filter entirely rather than risk a bad

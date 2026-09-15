@@ -53,3 +53,42 @@ describe("walkout phases in real captures", () => {
     expect(metrics.romCm).toBeLessThan(100);
   });
 });
+
+// The one phantom test that is not edge-only. A rep cannot be twice the size of every other rep
+// in its own set, wherever it sits, so the long side of the filter runs over the whole take --
+// unlike the short side, which stays at the edges because a shallow rep mid-set is a real rep.
+describe("oversized phases in the middle of a set", () => {
+  it("drops a mid-set excursion at twice the set's own rep size", () => {
+    // Six reps of 60cm with one 150cm excursion sitting in the middle of them: a rerack between
+    // clusters, a drop and reset, or the tracker losing the bar and finding it somewhere else.
+    const trace: { t: number; x: number; y: number }[] = [];
+    let t = 0;
+    const addReversal = (amplitudeCm: number, samples: number) => {
+      for (let i = 0; i < samples; i++) {
+        const phase = i / samples;
+        const y = phase < 0.5 ? -amplitudeCm * (phase / 0.5) : -amplitudeCm * (1 - (phase - 0.5) / 0.5);
+        trace.push({ t, x: 0, y });
+        t += 33;
+      }
+    };
+    for (let rep = 0; rep < 3; rep++) addReversal(60, 40);
+    addReversal(150, 40);
+    for (let rep = 0; rep < 3; rep++) addReversal(60, 40);
+
+    const result = replayCapture({
+      exerciseName: "Back Squat",
+      heightIn: 70,
+      loadKg: 100,
+      loggedReps: 6,
+      barPathTrace: trace,
+    });
+    // The claim is that the 150cm excursion is not reported as a rep, and it isn't: every rep
+    // that survives is the real 60cm size. The count comes back 5 rather than 6 because the
+    // excursion also disturbs the phase next to it -- a reversal that large changes where the
+    // neighbouring one is judged to start. Worth knowing, and not something this filter can fix:
+    // the damage is in the trace, and all a filter downstream can do is stop it being counted.
+    expect(result.repCount).toBe(5);
+    expect(result.metrics!.repBreakdown.every((r) => r.romCm < 100)).toBe(true);
+    expect(result.metrics!.repBreakdown.every((r) => r.romCm > 50)).toBe(true);
+  });
+});
