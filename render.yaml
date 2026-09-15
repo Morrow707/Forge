@@ -106,6 +106,39 @@ services:
       # Unset is correct while the environment is sandbox.
       - key: APPLE_APP_APPLE_ID
         sync: false
+      # The Stripe side of the card rail BILLING_LIVE gates. Declared here,
+      # sync:false, for the same reason as everything else in this block --
+      # so the set of keys billing actually needs is answered by the repo,
+      # not rediscovered from server/stripe-prices.ts one env var at a time.
+      # Safe to set and test with Stripe TEST-mode keys (fake cards, no real
+      # money) even with BILLING_LIVE on; swap in LIVE-mode keys only when
+      # actually ready to charge real cards, without touching anything else
+      # here.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      # Signs/verifies the webhook Stripe calls at /api/billing/webhook
+      # (server/index.ts) -- comes from that specific webhook endpoint's
+      # "Signing secret" in the Stripe Dashboard, not the API key.
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # One Price id per Free Agent tier (shared/free-agent-tiers.ts) --
+      # see freeAgentPriceEnvVar in server/stripe-prices.ts for how each name
+      # is derived from the tier id.
+      - key: STRIPE_PRICE_FREE_AGENT_BASIC
+        sync: false
+      - key: STRIPE_PRICE_FREE_AGENT_AI_COACH
+        sync: false
+      - key: STRIPE_PRICE_FREE_AGENT_AI_COACH_VIDEO
+        sync: false
+      # The coach org per-athlete rate (shared/billing-tiers.ts,
+      # ORG_PER_ATHLETE_CENTS) -- one recurring Price, charged with
+      # quantity = the roster band's ceiling. STRIPE_PRICE_COACH_BASE
+      # (the flat account fee) is deliberately NOT declared here:
+      # ORG_BASE_CENTS is 0 today, and stripe-prices.ts's own
+      # missingPriceEnvVars only requires that var while there is a fee to
+      # charge -- add it back the same way if that ever changes.
+      - key: STRIPE_PRICE_COACH_PER_ATHLETE
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: forge-db
