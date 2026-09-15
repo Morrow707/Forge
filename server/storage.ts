@@ -20697,6 +20697,12 @@ ${catalog}`;
         date: workoutLogs.date,
         exerciseName: exercises.name,
         movementType: exercises.movementType,
+        // WHICH PIPELINE PRODUCED THIS TRACE. Not decoration: "jump" mode stores its ankle-height
+        // trace in barPathTrace rather than adding a second trace column, so a jump capture and a
+        // barbell capture are indistinguishable by shape. A replay that does not know which it is
+        // will happily run the barbell model over a jump and report a peak bar velocity for a
+        // movement that has no bar.
+        trackingLevel: programExercises.trackingLevel,
         setNumber: workoutSetEntries.setNumber,
         heightIn: users.heightIn,
         weight: workoutSetEntries.weight,
@@ -20742,6 +20748,9 @@ ${catalog}`;
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(users, eq(workoutLogs.athleteId, users.id))
       .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      // Left, and one row per entry: workoutLogEntries holds a single programExerciseId, so this
+      // cannot multiply rows. Null for a corrective, which carries no program exercise.
+      .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       // A set with no trace has nothing to replay -- a hand-logged set, or one whose capture
       // was refused. Filtering here rather than in the caller keeps an export of N rows an
       // export of N usable rows.

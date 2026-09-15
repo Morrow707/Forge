@@ -25,6 +25,7 @@ import {
   type TrackedPoint,
 } from "./bar-tracking";
 import { firstMoveForExercise, romBucketForExercise } from "./exercise-camera-profile";
+import { summarizeJumpSet, type JumpSetMetrics } from "./jump-tracking";
 import {
   implausibleRangeOfMotion,
   implausibleBarPathDeviation,
@@ -41,14 +42,35 @@ export type StoredCapture = {
   loadKg?: number | null;
   /** What the athlete said they did, for comparison against what the analysis found. */
   loggedReps?: number | null;
+  /** Which pipeline produced this trace, and the reason a replay cannot guess.
+   *
+   * Jump mode stores its ankle-height trace in `barPathTrace` rather than adding a second trace
+   * column, so a jump capture and a barbell capture are the same shape and nothing in the points
+   * themselves distinguishes them. Without this the barbell model runs over both, and a box jump
+   * comes back reporting a peak BAR velocity for a movement with no bar, a range of motion that
+   * is really an ankle excursion, and a velocity loss computed across jumps.
+   *
+   * Optional, because exports written before it existed do not carry it. Absent means "assume
+   * barbell", which is what the harness did for its whole life -- wrong for jumps, and no more
+   * wrong than it already was. */
+  trackingLevel?: string | null;
   barPathTrace: PathTracePoint[];
 };
+
+/** Jump mode is its own pipeline end to end -- see jump-tracking.ts. Nothing it produces is
+ * comparable to a barbell metric, so the two are never mixed in one result. */
+export function isJumpCapture(capture: StoredCapture): boolean {
+  return capture.trackingLevel === "jump";
+}
 
 export type ReplayResult = {
   setId?: number | string;
   exerciseName: string;
-  /** Null when the trace was too short or held no detectable rep. */
+  /** Null when the trace was too short or held no detectable rep -- and ALSO null for a jump
+   * capture, which has no barbell metrics to report. Read `jumpMetrics` for those. */
   metrics: RepMetrics | null;
+  /** Set only for a jump capture, from the same summarizeJumpSet the app itself runs. */
+  jumpMetrics: JumpSetMetrics | null;
   repCount: number;
   loggedReps: number | null;
   /** Positive when the analysis found more reps than the athlete logged. */
@@ -81,6 +103,43 @@ function toTrackedPoints(trace: PathTracePoint[]): TrackedPoint[] {
 
 export function replayCapture(capture: StoredCapture): ReplayResult {
   const points = toTrackedPoints(capture.barPathTrace);
+
+  // A jump goes through its own pipeline, and running the barbell one over it does not produce a
+  // worse number -- it produces a number of a different KIND, presented in the same fields. Peak
+  // "bar" velocity on a movement with no bar, a range of motion that is really an ankle
+  // excursion, a velocity loss computed across jumps. Every one of those reads as a normal
+  // metric and none of them is one.
+  // AND A JUMP REPLAY IS MUCH WEAKER THAN A BARBELL ONE, which is worth knowing before anyone
+  // calibrates a jump threshold against this harness the way the barbell thresholds now are.
+  //
+  // buildPathTrace decimates to about 200 points, so a stored trace samples at 10-15Hz where the
+  // live run saw 60. Most barbell metrics survive that: range of motion is a position difference
+  // and mean velocity is an average, and neither cares much about the samples in between. Jump
+  // height does not survive it. It is v^2/(2g) off the takeoff velocity -- one instantaneous
+  // reading, during a takeoff lasting about 0.15s, SQUARED. At 15Hz a takeoff is two or three
+  // samples, and whatever error that leaves is doubled by the square.
+  //
+  // Replaying the corpus shows it: five box jumps by one athlete come back at 63, 64, 77, 87 and
+  // 178cm. The last is a seventy-inch vertical. Treat a replayed jump height as evidence the
+  // pipeline RAN, not as a measurement.
+  if (isJumpCapture(capture)) {
+    const jumpMetrics = summarizeJumpSet(points, capture.heightIn);
+    const jumpReps = jumpMetrics?.repBreakdown.length ?? 0;
+    const jumpLogged = capture.loggedReps ?? null;
+    return {
+      setId: capture.setId,
+      exerciseName: capture.exerciseName,
+      metrics: null,
+      jumpMetrics,
+      repCount: jumpReps,
+      loggedReps: jumpLogged,
+      repCountError: jumpLogged != null ? jumpReps - jumpLogged : null,
+      // Both plausibility gates are anthropometric limits on a BAR's travel. A jump has its own
+      // outlier check inside summarizeJumpSet, so there is nothing honest to say here.
+      romProblem: null,
+    };
+  }
+
   const hint: FirstPhaseHint = firstMoveForExercise(capture.exerciseName);
   const metrics = summarizeTrackedSet(
     points,
@@ -94,6 +153,7 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
     setId: capture.setId,
     exerciseName: capture.exerciseName,
     metrics,
+    jumpMetrics: null,
     repCount,
     loggedReps,
     repCountError: loggedReps != null ? repCount - loggedReps : null,
