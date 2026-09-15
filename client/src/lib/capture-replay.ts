@@ -25,7 +25,7 @@ import {
   type TrackedPoint,
 } from "./bar-tracking";
 import { firstMoveForExercise, romBucketForExercise } from "./exercise-camera-profile";
-import { implausibleRangeOfMotion } from "./bar-tracking";
+import { implausibleRangeOfMotion, implausibleBarPathDeviation } from "./bar-tracking";
 
 /** One stored set, as much of it as a replay needs. Shaped to match what the set row already
  * holds so an export needs no transformation. */
@@ -55,9 +55,24 @@ export type ReplayResult = {
 /** A stored trace carries no confidence per point (it is the smoothed output, not the raw
  * reading), so replay assumes full confidence. That makes the replay slightly more permissive
  * than the live run, which is the safe direction: it will not invent a rejection the live
- * pipeline did not make. */
+ * pipeline did not make.
+ *
+ * The units matter and are easy to get wrong. `buildPathTrace` stores the trace in CENTIMETRES
+ * relative to the first point, because that is what the on-screen path drawing wants.
+ * Everything downstream of tracking -- `summarizeTrackedSet` and every threshold it reads --
+ * works in METRES, because that is what Vision hands over. Feeding the stored numbers back in
+ * unconverted multiplies every distance by 100, which clears the rep-amplitude floor on noise
+ * and reports a squat with several metres of range of motion. Divide on the way back in. */
+const TRACE_CM_PER_METRE = 100;
+
 function toTrackedPoints(trace: PathTracePoint[]): TrackedPoint[] {
-  return trace.map((p) => ({ t: p.t, x: p.x, y: p.y, z: 0, confidence: 1 }));
+  return trace.map((p) => ({
+    t: p.t,
+    x: p.x / TRACE_CM_PER_METRE,
+    y: p.y / TRACE_CM_PER_METRE,
+    z: 0,
+    confidence: 1,
+  }));
 }
 
 export function replayCapture(capture: StoredCapture): ReplayResult {
@@ -78,12 +93,19 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
     repCount,
     loggedReps,
     repCountError: loggedReps != null ? repCount - loggedReps : null,
+    // Either way of showing the same wrong scale. Reported under one field because the caller's
+    // question is "can this take's numbers be trusted", not "which check objected".
     romProblem: metrics
-      ? implausibleRangeOfMotion(
+      ? (implausibleRangeOfMotion(
           metrics.romCm,
           capture.heightIn,
           romBucketForExercise(capture.exerciseName),
-        )
+        ) ??
+        implausibleBarPathDeviation(
+          metrics.barPathDeviationCm,
+          capture.heightIn,
+          romBucketForExercise(capture.exerciseName),
+        ))
       : null,
   };
 }

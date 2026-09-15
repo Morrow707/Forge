@@ -2522,8 +2522,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // a capture-quality diagnostic needs to show that several sets belong to one athlete and never
   // needs to say which one.
   app.get("/api/admin/capture-export.json", requireRole("admin"), async (req, res) => {
-    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1), 200);
-    const rows = await storage.getStoredCapturesForReplay(limit);
+    // Two shapes, because the two uses want different things. `traces=none` drops the per-point
+    // paths and returns the metrics alone, which is what a survey of "what is the fleet actually
+    // reporting" reads -- 200 sets of that is a file somebody can open, 200 sets WITH traces is
+    // megabytes of numbers the survey never looks at. `skeleton=1` is the other direction: one
+    // set's skeleton frames run to a couple of megabytes on their own, so it caps the row count
+    // at five regardless of what was asked for, rather than letting a stray query build a
+    // half-gigabyte response.
+    const includeTraces = String(req.query.traces ?? "all") !== "none";
+    const includeSkeleton = String(req.query.skeleton ?? "") === "1";
+    const requested = Math.min(
+      Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1),
+      200,
+    );
+    const limit = includeSkeleton ? Math.min(requested, 5) : requested;
+    const rows = await storage.getStoredCapturesForReplay(limit, {
+      includeTraces,
+      includeSkeleton,
+    });
     // A per-export pseudonym, generated fresh each time and mapped nowhere -- the same treatment
     // the tracking report gives athlete ids. Stable within one file so a reader can see which
     // sets came from the same athlete; different across two files so they cannot be joined.
@@ -2544,17 +2560,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
       athlete: codeFor(r.athleteId),
       date: r.date,
       exerciseName: r.exerciseName,
+      movementType: r.movementType,
       setNumber: r.setNumber,
       heightIn: r.heightIn,
-      // The replay takes kilograms; sets are logged in whichever unit the athlete uses.
+      // The replay takes kilograms; sets are logged in whichever unit the athlete preferred at
+      // the time. weightUnit is null on bodyweight and band sets and on anything logged before
+      // the column existed, and this used to fall through to the pounds branch on all of them --
+      // so a row whose unit was simply unknown came out multiplied by 0.4536 and presented as a
+      // measured kilogram figure. Power is computed straight off this, so the guess propagated.
+      //
+      // Unknown unit now exports as null, and the raw pair travels alongside so the ambiguity is
+      // visible rather than resolved by assumption. The divisor is bar-tracking.ts's LBS_PER_KG,
+      // which is the same conversion the app itself applies when it computes power on device;
+      // the server cannot import that module, so the value is repeated here and must not drift.
       loadKg:
-        r.weight == null
+        r.weight == null || !Number.isFinite(Number(r.weight)) || r.weightUnit == null
           ? null
           : r.weightUnit === "kg"
             ? Number(r.weight)
-            : Number(r.weight) * 0.45359237,
-      loggedReps: r.loggedReps,
-      barPathTrace: r.barPathTrace,
+            : Number(r.weight) / 2.20462,
+      loadRaw: r.weight == null ? null : Number(r.weight),
+      loadUnit: r.weightUnit ?? null,
+      // Reps are stored as free text, because a coach can prescribe "AMRAP" or "8-10" as readily
+      // as "5". The replay compares against a count, so anything that isn't one exports as null
+      // rather than a string the consumer has to guess at -- same coercion-at-the-boundary
+      // treatment loadKg gets just above.
+      loggedReps: Number.isFinite(Number(r.loggedReps)) && String(r.loggedReps ?? "").trim() !== ""
+        ? Number(r.loggedReps)
+        : null,
+      // Same coercion, and the box height is a scale reference a jump replay can check itself
+      // against: a box clearance that disagrees with the box the athlete stood on is a scale
+      // error, not an athletic one.
+      boxHeightIn:
+        r.boxHeight == null || !Number.isFinite(Number(r.boxHeight))
+          ? null
+          : r.boxHeightUnit === "m"
+            ? Number(r.boxHeight) * 39.3700787
+            : Number(r.boxHeight),
+
+      // What the app published for this set. The replay's own output is compared against this,
+      // which is the only way to tell a threshold change that fixed something from one that moved
+      // the error somewhere nobody was looking.
+      reported: {
+        peakVelocityMps: r.reportedPeakVelocityMps,
+        meanVelocityMps: r.reportedMeanVelocityMps,
+        eccentricMeanVelocityMps: r.reportedEccentricMeanVelocityMps,
+        concentricSeconds: r.reportedConcentricSeconds,
+        eccentricSeconds: r.reportedEccentricSeconds,
+        barPathDeviationCm: r.reportedBarPathDeviationCm,
+        romCm: r.reportedRomCm,
+        meanEai: r.reportedMeanEai,
+        velocityLossPercent: r.reportedVelocityLossPercent,
+        peakPowerWatts: r.reportedPeakPowerWatts,
+        meanPowerWatts: r.reportedMeanPowerWatts,
+        jumpHeightCm: r.reportedJumpHeightCm,
+        jumpDistanceCm: r.reportedJumpDistanceCm,
+        groundContactSeconds: r.reportedGroundContactSeconds,
+        reactiveStrengthIndex: r.reportedReactiveStrengthIndex,
+        repBreakdown: r.reportedRepBreakdown,
+        formFaults: r.reportedFormFaults,
+      },
+
+      // The capture conditions. Without these a bad number cannot be told apart from a bad take.
+      trustScores: r.trustScores,
+      trackingDiagnostics: r.trackingDiagnostics,
+      captureDeviceInfo: r.captureDeviceInfo,
+
+      ...("barPathTrace" in r
+        ? { barPathTrace: r.barPathTrace, armPathTrace: r.armPathTrace }
+        : {}),
+      ...("skeletonFrames" in r ? { skeletonFrames: r.skeletonFrames } : {}),
     }));
     res.setHeader("Content-Type", "application/json");
     res.setHeader(

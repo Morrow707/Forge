@@ -1171,10 +1171,39 @@ const MAX_SUPINE_VERTICAL_FRACTION = 0.35;
 // straight away from the lens, and foreshorteningPlausible rejects it -- correctly, since
 // there is no information in that frame about how long the body really is.
 //
-// UNVALIDATED against real footage (this environment has no camera). The geometry is sound
-// and the foreshortening guard is the same one the upright path uses, but treat the numbers
-// it produces as provisional until a side-on set has been shot against a bar sensor -- see
-// docs/camera-tracking-notes.md.
+// It is no longer unvalidated, and what validation found is the branch below it.
+//
+// Nose-to-ankle is the body's full length ONLY when the legs are straight. On a bench press
+// they are not: feet planted on the floor, knees near a right angle, which is how every
+// coaching cue in the app tells an athlete to set up. That folds the shin out of the segment
+// entirely and drops nose-to-ankle to roughly three quarters of standing height, so mapping
+// the athlete's real height onto it inflates every distance downstream by about a third.
+//
+// Replaying the seventeen stored bench captures is what surfaced it: range of motion came back
+// anywhere from 7cm to 277cm on a movement that travels about 40, with no take in the corpus
+// landing right. Back squat and box jump, whose calibration never goes down this path, sat
+// inside their plausible band on every take.
+const NOSE_TO_ANKLE_FRACTION = 1;
+
+// Nose to hip joint, as a fraction of standing height: roughly 0.93 down to the nose and 0.53
+// to the greater trochanter on the standard segment tables, so about 0.40 between them.
+//
+// The point of this segment is that it ends ABOVE the knee, so it is the same length whether
+// the athlete's legs are straight, planted, or in the air. It is the shorter of the two
+// measurements and therefore the noisier one -- a given error in locating either landmark is a
+// bigger share of 0.40 of a body than of a whole one -- which is why it is the fallback rather
+// than the default. Both numbers are population averages; an athlete with unusual proportions
+// calibrates slightly off through either branch, the same caveat the shoulder path carries.
+const NOSE_TO_HIP_FRACTION = 0.4;
+
+// How far the two measurements may disagree before the longer one is treated as folded.
+//
+// Straight legs put them within a few percent of each other. A bench setup puts nose-to-ankle
+// about 25% below what nose-to-hip implies, so 0.12 sits with a comfortable margin on either
+// side of anything the corpus shows. Erring toward the fallback is the safe direction: the hip
+// segment is noisier but it is never WRONG about the legs, whereas the ankle segment is exactly
+// right until it is badly wrong.
+const MAX_SUPINE_SEGMENT_DISAGREEMENT = 0.12;
 function supineInPlaneHeightPixels(
   worldLandmarks: Landmark[],
   ankleX: number,
@@ -1183,10 +1212,28 @@ function supineInPlaneHeightPixels(
 ): number | null {
   const nose = worldLandmarks[POSE_LANDMARKS.NOSE];
   if (!visible(nose)) return null;
-  const totalLength = Math.hypot(nose.x - ankleX, nose.y - ankleY, nose.z - ankleZ);
-  if (!(totalLength > 0)) return null;
-  const verticalFraction = Math.abs(nose.y - ankleY) / totalLength;
+  const noseToAnkle = Math.hypot(nose.x - ankleX, nose.y - ankleY, nose.z - ankleZ);
+  if (!(noseToAnkle > 0)) return null;
+  const verticalFraction = Math.abs(nose.y - ankleY) / noseToAnkle;
   if (verticalFraction > MAX_SUPINE_VERTICAL_FRACTION) return null;
+
+  // Cross-check the full-length reading against a segment the knees cannot shorten, and take
+  // the hip one when they disagree. Falling through with nose-to-ankle when the hips are not
+  // visible keeps this no worse than it was before the check existed.
+  const totalLength = (() => {
+    const lHip = worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
+    const rHip = worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
+    if (!visible(lHip) || !visible(rHip)) return noseToAnkle;
+    const hipX = (lHip.x + rHip.x) / 2;
+    const hipY = (lHip.y + rHip.y) / 2;
+    const hipZ = (lHip.z + rHip.z) / 2;
+    const noseToHip = Math.hypot(nose.x - hipX, nose.y - hipY, nose.z - hipZ);
+    if (!(noseToHip > 0)) return noseToAnkle;
+    const impliedFromHip = noseToHip / NOSE_TO_HIP_FRACTION;
+    const impliedFromAnkle = noseToAnkle / NOSE_TO_ANKLE_FRACTION;
+    const disagreement = Math.abs(impliedFromAnkle - impliedFromHip) / impliedFromHip;
+    return disagreement > MAX_SUPINE_SEGMENT_DISAGREEMENT ? impliedFromHip : impliedFromAnkle;
+  })();
   // Same anatomical check as every other branch, and here it is doing the whole job: it is
   // what separates a body lying ACROSS the frame at true length (side-on, ratio ~4) from one
   // pointing AWAY from the lens (end-on, ratio ~1).

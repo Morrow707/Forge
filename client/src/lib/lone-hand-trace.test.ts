@@ -82,7 +82,13 @@ describe("a hand that comes and goes is not a rep", () => {
     for (const tiltDeg of TILTS) {
       for (const pattern of PATTERNS) {
         const old = summarize(benchSet({ ...pattern, tiltDeg, useMidpointFix: false }));
-        expect(old.repBreakdown.length, `tilt ${tiltDeg}, ${JSON.stringify(pattern)}`).toBeGreaterThan(15);
+        // Was >15 when this was written. The oversized-phantom filter catches some of what the
+        // lone-hand swap invents -- a swap moves the traced point most of a grip width along the
+        // lift, which lands well over twice a real rep -- so the worst corner of this grid now
+        // comes back at 14 rather than 20. That is the filter working, not the bug going away:
+        // 14 against 10 real presses is still the same failure, and the midpoint fix below is
+        // what actually resolves it.
+        expect(old.repBreakdown.length, `tilt ${tiltDeg}, ${JSON.stringify(pattern)}`).toBeGreaterThan(12);
       }
     }
   });

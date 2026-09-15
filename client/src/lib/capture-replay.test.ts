@@ -2,14 +2,15 @@ import { describe, it, expect } from "vitest";
 import { replayCapture, replayCaptureScaleFree, replayAll, type StoredCapture } from "./capture-replay";
 import type { PathTracePoint } from "./bar-tracking";
 
-// A stored trace in real-world metres, the way a calibrated set saves it: reps of a given range
-// of motion, each slightly shorter than the last the way a real set fatigues.
-function storedTrace(repCount: number, romMetres: number, repSeconds = 2): PathTracePoint[] {
+// A stored trace in CENTIMETRES relative to its first point, which is the way `buildPathTrace`
+// actually saves one -- see the unit note in capture-replay.ts. Reps of a given range of motion,
+// each slightly shorter than the last the way a real set fatigues.
+function storedTrace(repCount: number, romCm: number, repSeconds = 2): PathTracePoint[] {
   const trace: PathTracePoint[] = [];
   const samplesPerRep = 60;
   let t = 0;
   for (let rep = 0; rep < repCount; rep++) {
-    const thisRep = romMetres * (1 - rep * 0.03);
+    const thisRep = romCm * (1 - rep * 0.03);
     for (let i = 0; i < samplesPerRep; i++) {
       const phase = i / samplesPerRep;
       const y = phase < 0.5 ? phase * 2 * thisRep : (1 - phase) * 2 * thisRep;
@@ -26,7 +27,7 @@ const squatSet: StoredCapture = {
   heightIn: 70,
   loadKg: 100,
   loggedReps: 5,
-  barPathTrace: storedTrace(5, 0.5),
+  barPathTrace: storedTrace(5, 50),
 };
 
 describe("replayCapture", () => {
@@ -48,7 +49,7 @@ describe("replayCapture", () => {
 
   // The check that catches a scale several times wrong, run here without a camera.
   it("flags a range of motion that is impossible for the athlete's height", () => {
-    const absurd: StoredCapture = { ...squatSet, barPathTrace: storedTrace(5, 3.0) };
+    const absurd: StoredCapture = { ...squatSet, barPathTrace: storedTrace(5, 300) };
     expect(replayCapture(absurd).romProblem).not.toBeNull();
     expect(replayCapture(squatSet).romProblem).toBeNull();
   });
@@ -96,7 +97,7 @@ describe("replayAll", () => {
     const summary = replayAll([
       squatSet,
       { ...squatSet, setId: 2, loggedReps: 99 },
-      { ...squatSet, setId: 3, barPathTrace: storedTrace(5, 3.0) },
+      { ...squatSet, setId: 3, barPathTrace: storedTrace(5, 300) },
     ]);
     expect(summary.captureCount).toBe(3);
     expect(summary.analysed).toBe(3);

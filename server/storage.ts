@@ -20636,19 +20636,75 @@ ${catalog}`;
    * one athlete and never needs to say which. heightIn is here because the replay genuinely
    * needs it: every scale in the pipeline is derived from it.
    */
-  async getStoredCapturesForReplay(limit: number) {
+  // Three groups of columns, and the split is the point.
+  //
+  // The INPUT group (the traces) is what a replay re-analyses. The REPORTED group is what the app
+  // actually published for the same set, and it is the reason this is worth widening: without it
+  // a replay can only be checked against what the athlete logged, which answers "did the rep
+  // count come out right" and nothing else. With it, a threshold change can be diffed against
+  // every number the set already shows -- velocity, power, range of motion, velocity loss, EAI --
+  // so a change that fixes rep counting while quietly moving mean velocity is visible rather than
+  // invisible. The CONTEXT group (trust, diagnostics, device) says what the capture conditions
+  // were, which is what separates "this threshold is wrong" from "this take was filmed from the
+  // wrong angle".
+  //
+  // `includeTraces` exists because the two uses want different shapes. Calibrating a threshold
+  // needs full traces over a handful of sets; surveying what the fleet is actually reporting
+  // needs the metrics over hundreds, and two hundred traces is a payload measured in megabytes
+  // for data the survey never reads. `includeSkeleton` is separate and far more expensive again
+  // -- one set's skeleton frames run to a couple of megabytes -- so it is opt-in, and the caller
+  // is expected to clamp the row count hard when it asks.
+  async getStoredCapturesForReplay(
+    limit: number,
+    opts: { includeTraces?: boolean; includeSkeleton?: boolean } = {},
+  ) {
+    const { includeTraces = true, includeSkeleton = false } = opts;
     return db
       .select({
         setId: workoutSetEntries.id,
         athleteId: users.id,
         date: workoutLogs.date,
         exerciseName: exercises.name,
+        movementType: exercises.movementType,
         setNumber: workoutSetEntries.setNumber,
         heightIn: users.heightIn,
         weight: workoutSetEntries.weight,
         weightUnit: workoutSetEntries.weightUnit,
         loggedReps: workoutSetEntries.reps,
-        barPathTrace: workoutSetEntries.barPathTrace,
+        boxHeight: workoutSetEntries.boxHeight,
+        boxHeightUnit: workoutSetEntries.boxHeightUnit,
+
+        // What the app reported at capture time, to diff a replay against.
+        reportedPeakVelocityMps: workoutSetEntries.peakVelocityMps,
+        reportedMeanVelocityMps: workoutSetEntries.meanVelocityMps,
+        reportedEccentricMeanVelocityMps: workoutSetEntries.eccentricMeanVelocityMps,
+        reportedConcentricSeconds: workoutSetEntries.concentricSeconds,
+        reportedEccentricSeconds: workoutSetEntries.eccentricSeconds,
+        reportedBarPathDeviationCm: workoutSetEntries.barPathDeviationCm,
+        reportedRomCm: workoutSetEntries.romCm,
+        reportedMeanEai: workoutSetEntries.meanEai,
+        reportedVelocityLossPercent: workoutSetEntries.velocityLossPercent,
+        reportedPeakPowerWatts: workoutSetEntries.peakPowerWatts,
+        reportedMeanPowerWatts: workoutSetEntries.meanPowerWatts,
+        reportedJumpHeightCm: workoutSetEntries.jumpHeightCm,
+        reportedJumpDistanceCm: workoutSetEntries.jumpDistanceCm,
+        reportedGroundContactSeconds: workoutSetEntries.groundContactSeconds,
+        reportedReactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
+        reportedRepBreakdown: workoutSetEntries.repBreakdown,
+        reportedFormFaults: workoutSetEntries.formFaults,
+
+        // What the capture conditions were.
+        trustScores: workoutSetEntries.trustScores,
+        trackingDiagnostics: workoutSetEntries.trackingDiagnostics,
+        captureDeviceInfo: workoutSetEntries.captureDeviceInfo,
+
+        ...(includeTraces
+          ? {
+              barPathTrace: workoutSetEntries.barPathTrace,
+              armPathTrace: workoutSetEntries.armPathTrace,
+            }
+          : {}),
+        ...(includeSkeleton ? { skeletonFrames: workoutSetEntries.skeletonFrames } : {}),
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -20658,7 +20714,23 @@ ${catalog}`;
       // A set with no trace has nothing to replay -- a hand-logged set, or one whose capture
       // was refused. Filtering here rather than in the caller keeps an export of N rows an
       // export of N usable rows.
-      .where(isNotNull(workoutSetEntries.barPathTrace))
+      //
+      // NOT NULL is not enough, and an export of 29 sets that arrived with four empty arrays in
+      // it is how that was found. A capture the tracker could not read is not discarded: the
+      // clip is saved for the coach and the row is written with an EMPTY trace and a
+      // trackingDiagnostics record saying why (see saveEmptyAndWarn in the tracker dialogs). An
+      // empty array is not null, so every one of those rows passed this filter and spent a slot
+      // in the export while carrying nothing to replay. Length is the real test.
+      //
+      // Those rows are still worth reading -- they are the only record of a capture that failed
+      // outright -- but through the tracking report, which is built to show them, rather than
+      // through a replay export that cannot do anything with them.
+      .where(
+        and(
+          isNotNull(workoutSetEntries.barPathTrace),
+          sql`json_array_length(${workoutSetEntries.barPathTrace}::json) > 0`,
+        ),
+      )
       .orderBy(desc(workoutSetEntries.id))
       .limit(limit);
   },

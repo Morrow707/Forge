@@ -1223,6 +1223,34 @@ export function summarizeTrackedSet(
   // and the duration test take. Restricted to the first and last concentric for the same reason
   // they are: those are the only two positions a rack move can occupy.
   const EDGE_PHANTOM_VELOCITY_RATIO = 0.4;
+
+  // The third shape a rack artifact takes, and the one the two tests above are blind to by
+  // construction: too BIG. Walking a bar out of the rack, or walking it back in, moves it the
+  // height of the rack pins plus the walk itself -- two to three times the range of the reps
+  // either side of it, at a speed nothing flags as slow. The amplitude test only catches phases
+  // that fall SHORT of the median and the velocity test only catches phases that fall slow, so a
+  // walkout sails past both and is reported as rep 1.
+  //
+  // Replaying real captures shows how clean the separation is. Across six calibration sets (back
+  // squat and box jump, five logged reps each), every genuine rep landed within about 1.1x of its
+  // set's median amplitude, while the leading walkout phases came in at 2.45x, 2.65x, 2.9x, 3.0x
+  // and 3.2x. Nothing sits between 1.3 and 2.4. At 2.0 the gate has roughly a 2x margin on both
+  // sides, so a deep first rep after a shallower set cannot trip it -- under-counting is still
+  // the worse failure, the same stance the other two tests take, and this stays restricted to the
+  // first and last concentric for the same reason they are.
+  const EDGE_PHANTOM_OVERSHOOT_RATIO = 2;
+
+  // The same artifact measured on the clock instead of the tape. Racking and un-racking is a
+  // deliberate, careful movement -- the athlete is finding the hooks, or stepping down off a box
+  // -- so it takes far longer than a rep does, and a walkout that happens to travel less than
+  // twice the median still drags out well past one. The general duration filter below only ever
+  // catches phases that are anomalously SHORT, so nothing looked at the long side.
+  //
+  // In the replayed captures the trailing rack phases ran about 4x their set's median concentric
+  // duration, while the slowest genuine rep at an edge reached 2x. 2.5 sits in that gap, nearer
+  // the real reps than the artifacts so that a grinding final rep of a near-limit set survives --
+  // under-counting is the worse failure here too.
+  const EDGE_PHANTOM_DURATION_RATIO = 2.5;
   const firstConcentric = concentric[0];
   const lastConcentric = concentric[concentric.length - 1];
 
@@ -1233,10 +1261,17 @@ export function summarizeTrackedSet(
   function isEdgeRackArtifact(phase: (typeof phaseStats)[number]): boolean {
     if (concentric.length < 3) return false;
     if (phase !== firstConcentric && phase !== lastConcentric) return false;
+    const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
     if (
       medianConcentricAmplitude > 0 &&
-      Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]) <
-        medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO
+      amplitude < medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO
+    ) {
+      return true;
+    }
+    // Too slow to be a rep -- see EDGE_PHANTOM_DURATION_RATIO. This is the re-rack.
+    if (
+      medianConcentricDuration > 0 &&
+      phase.duration > medianConcentricDuration * EDGE_PHANTOM_DURATION_RATIO
     ) {
       return true;
     }
@@ -1247,8 +1282,36 @@ export function summarizeTrackedSet(
     );
   }
 
+  // The one phantom test that is NOT restricted to the edges, and the asymmetry is deliberate.
+  //
+  // Every other test here looks for a phase that falls SHORT -- too small, too slow, too brief --
+  // and every one of them is edge-only, because a shallow rep in the middle of a set is a real
+  // rep an athlete should see rather than one this file quietly deletes. That reasoning is about
+  // the SHORT side and does not carry to the long one. A rep cannot be twice the size of every
+  // other rep in its own set, wherever it sits: the athlete's range of motion does not double
+  // and halve mid-set. A phase that large is the bar being moved, not lifted -- a walkout at the
+  // edges, and in the middle a rerack between clusters, a drop and reset, or the tracker losing
+  // the bar and finding it somewhere else.
+  //
+  // Seventeen stored bench captures are what forced this. They over-count by two to fourteen reps
+  // apiece, and rescaling their traces to what a correct calibration would have produced barely
+  // moves the count, so the extra phases are not a scale artifact -- they are real excursions in
+  // the trace, running up to 2.2x the set's own median with genuine reps clustered near 1.0.
+  //
+  // Same 2.0 the edge test used, for the same measured reason: across the calibration sets no
+  // genuine rep exceeded about 1.1x its set's median while the artifacts started at 2.45x, and
+  // nothing at all sits in between.
+  const PHANTOM_OVERSHOOT_RATIO = 2;
+
+  function isOversizedPhantom(phase: (typeof phaseStats)[number]): boolean {
+    if (concentric.length < 3 || medianConcentricAmplitude <= 0) return false;
+    const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
+    return amplitude > medianConcentricAmplitude * PHANTOM_OVERSHOOT_RATIO;
+  }
+
   function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
     if (isEdgeRackArtifact(phase)) return true;
+    if (isOversizedPhantom(phase)) return true;
     // Fewer than 3 concentric phases isn't enough of a sample to call
     // anything "anomalously short" relative to the rest of the set with
     // any confidence -- skip the filter entirely rather than risk a bad
@@ -1878,6 +1941,63 @@ export function implausibleRangeOfMotion(
     `Range of motion came out as ${Math.round(romCm)}cm, about ${overBy}x further than this ` +
     `movement can physically travel for your height. That means the camera's real-world scale ` +
     `was misread, so every number from this take would be wrong by the same factor.`
+  );
+}
+
+// The same "is this answer possible for a human body" question, asked of bar path deviation.
+//
+// Range of motion had this check and deviation had nothing, so a take could be rejected for
+// travelling too far up and accepted while reporting that the bar wandered a metre sideways.
+// The stored corpus has exactly that: bar path deviations of 108cm and 78cm on bench sets, next
+// to 24cm as the worst a back squat ever produced.
+//
+// Deviation is bounded by anatomy in a way that needs no movement-specific reasoning for most
+// lifts: the bar is held in two hands attached to one torso, so how far it can wander sideways
+// or forward is a fraction of the athlete's own frame, not an open number. The exception is the
+// Olympic lifts, where the bar loops around the knees by design and a deviation that would be
+// alarming on a squat is the correct shape -- see docs/camera-tracking-notes.md on why those
+// need their own path model at all.
+//
+// Set deliberately loose. This is a last-resort "the scale is wrong" detector, not a coaching
+// threshold: a 30cm drift on a squat is bad lifting and the athlete should see it. In the corpus
+// the worst genuine take runs 0.12 of standing height, so 0.20 is most of a factor of two clear
+// of anything real while still catching the metre-wide readings, which are scale failures
+// wearing a form fault's clothing.
+const MAX_DEVIATION_FRACTION_OF_HEIGHT: Record<string, number> = {
+  olympic: 0.3,
+};
+
+const DEFAULT_MAX_DEVIATION_FRACTION = 0.2;
+
+/**
+ * Whether a computed bar path deviation is physically possible for this athlete and movement.
+ * Returns null when it is fine, or when there is not enough information to judge, otherwise a
+ * human-readable reason the caller should surface INSTEAD of the metrics -- the same contract
+ * implausibleRangeOfMotion has, and for the same reason: a deviation this large does not mean
+ * the athlete moved that way, it means the take's scale is wrong and every number on it is
+ * wrong by the same factor.
+ *
+ * There is no floor to match the range-of-motion one. A deviation of zero is what a perfect rep
+ * looks like, so a small number here is good news rather than evidence of a bad scale.
+ */
+export function implausibleBarPathDeviation(
+  deviationCm: number | null,
+  heightIn: number | null | undefined,
+  movementPattern: string | null | undefined,
+): string | null {
+  if (!heightIn || heightIn <= 0) return null;
+  if (deviationCm == null || !Number.isFinite(deviationCm) || deviationCm <= 0) return null;
+  const heightCm = heightIn * 2.54;
+  const fraction = movementPattern
+    ? (MAX_DEVIATION_FRACTION_OF_HEIGHT[movementPattern] ?? DEFAULT_MAX_DEVIATION_FRACTION)
+    : DEFAULT_MAX_DEVIATION_FRACTION;
+  const ceilingCm = heightCm * fraction;
+  if (deviationCm <= ceilingCm) return null;
+  const overBy = Math.round((deviationCm / ceilingCm) * 10) / 10;
+  return (
+    `Bar path drifted ${Math.round(deviationCm)}cm off line, about ${overBy}x further than this ` +
+    `movement can drift for your height. That means the camera's real-world scale was misread, ` +
+    `so every number from this take would be wrong by the same factor.`
   );
 }
 
