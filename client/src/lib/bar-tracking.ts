@@ -205,8 +205,34 @@ export type RepMetrics = {
   trackingDiagnostics?: TrackingDiagnostics | null;
 };
 
-// Decimates a raw world-space (meters) trace to at most ~200 points and
-// converts it to cm relative to `origin` -- shared by the averaged bar-path
+// How many points a stored trace may hold before it gets decimated on the way in.
+//
+// Was 200, which was chosen for a trace whose only job was drawing a path on screen. It has a
+// second job now: capture-replay.ts re-runs segmentation, rep counting and velocity over these
+// stored points, and that is where every threshold in this file gets calibrated. At 200 the two
+// jobs disagree badly. The pose stage runs near 30Hz (60fps recording, halved by
+// use-av-body-tracking.ts's ANALYSIS_SAMPLE_STRIDE), so a 20s set arrives with about 600 points
+// and a 28s set with 840 -- and the old cap threw away two thirds of them. Measured across the
+// stored corpus, replays were seeing 7-15Hz, with the rate set by CLIP LENGTH rather than by
+// anything about the capture: the longer the set, the coarser its own record of itself.
+//
+// That made every threshold calibrated against a replay a threshold calibrated against a signal
+// three times coarser than the one that ships. 1000 keeps a full-rate record of any set up to
+// about 33 seconds, which covers the working range, and anything longer still degrades the same
+// graceful way it always did.
+//
+// The cost is real but small next to what sits beside it. A full-rate 20s trace is about 20KB
+// against 13KB today, and a bar set stores three of them (the averaged bar path plus a left and
+// right arm path). That is tens of kilobytes per set, in a row that can also carry a couple of
+// MEGABYTES of skeletonFrames -- and it is the skeleton frames, not these, that the offline
+// queue drops first when a phone runs out of room.
+const TRACE_MAX_POINTS = 1000;
+
+// Decimates a raw world-space (meters) trace toward TRACE_MAX_POINTS points and
+// converts it to cm relative to `origin`. The stride is a floor division, so the
+// real ceiling is just under twice the target -- 3600 raw points take stride 3 and
+// come back as 1200. That has always been true of this function; only the target
+// changed. -- shared by the averaged bar-path
 // trace and the independent left/right arm-path traces so all three use the
 // same coordinate convention.
 export function buildPathTrace(
@@ -214,11 +240,15 @@ export function buildPathTrace(
   origin: { x: number; y: number },
 ): PathTracePoint[] {
   if (rawPoints.length === 0) return [];
-  const stride = Math.max(1, Math.floor(rawPoints.length / 200));
+  const stride = Math.max(1, Math.floor(rawPoints.length / TRACE_MAX_POINTS));
   return rawPoints
     .filter((_, i) => i % stride === 0)
     .map((p) => ({
-      t: p.t,
+      // Whole milliseconds. These arrive as frame presentation times and land on values like
+      // 2233.3333333333335 -- seventeen characters to place a sample inside a 33ms window, which
+      // is most of a point's storage spent on precision nothing downstream can use. Rounding here
+      // pays for a third of the extra points this file now keeps.
+      t: Math.round(p.t),
       x: Math.round((p.x - origin.x) * 1000) / 10,
       y: Math.round((p.y - origin.y) * 1000) / 10,
     }));
