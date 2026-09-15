@@ -25562,6 +25562,93 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * (an adult paying for themselves, which is almost every payment) without it looking like a
    * failure.
    */
+  /** A guardian withdrawing the consent that lets their child use Forge.
+   *
+   * THIS IS THE ONE THING A GUARDIAN CAN DESTROY, and it is deliberately not the same shape as
+   * the removal-request table beside it. A parent asking for one video to come down is a request
+   * a person answers, because that video is the coach's and the athlete's training record as much
+   * as it is footage of a child. Withdrawing consent is not a request about one artefact -- it is
+   * taking back the permission the whole account stands on, and a permission somebody else gets
+   * to refuse to release is not a permission that was ever really theirs.
+   *
+   * So it does three things, in an order chosen so a failure part-way leaves the safer state:
+   *
+   *   1. Writes a dated WITHDRAWN record for every consent this guardian gave for this athlete,
+   *      quoting the text that was withdrawn. Append-only, exactly like a research withdrawal --
+   *      the record that a parent consented on a date, and withdrew on a later one, is the
+   *      history, and rewriting the original row would destroy it.
+   *   2. Purges the athlete's stored video through the same path the retention job uses. Derived
+   *      metrics are untouched, the same way a retention purge leaves them: the consent withdrawn
+   *      here is the video and biometric release.
+   *   3. Removes the guardian link LAST, which is what re-locks the account -- the minor gate
+   *      refuses everything for a minor with no linked guardian, so this returns the child to
+   *      exactly the state they were in before the parent ever claimed.
+   *
+   * Step 3 deliberately does what removeGuardianLink refuses to do. That guard exists so a parent
+   * cannot strand a child by casually giving up access, which is the right answer for "step
+   * away". Here locking the account is not a side effect to be avoided, it is the point.
+   */
+  async withdrawGuardianConsent(input: {
+    guardianId: number;
+    athleteId: number;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<{ ok: true; videosPurged: number; recordsWritten: number } | { ok: false; error: string }> {
+    const link = await db.query.guardianLinks.findFirst({
+      where: and(
+        eq(guardianLinks.athleteId, input.athleteId),
+        eq(guardianLinks.guardianId, input.guardianId),
+      ),
+    });
+    if (!link) return { ok: false, error: "Not found." };
+
+    const withdrawnAt = new Date().toISOString();
+    const priorConsents = await db.query.consentRecords.findMany({
+      where: and(
+        eq(consentRecords.userId, input.athleteId),
+        eq(consentRecords.givenByUserId, input.guardianId),
+      ),
+    });
+    // Only the consents this guardian actually gave, and each one quoted back. A withdrawal that
+    // named consent types without their text would be a record of nothing in particular.
+    const toWithdraw = priorConsents.filter(
+      (r) => !r.documentText.startsWith("WITHDRAWN "),
+    );
+    let recordsWritten = 0;
+    for (const prior of toWithdraw) {
+      await this.logConsentRecord({
+        userId: input.athleteId,
+        consentType: prior.consentType,
+        documentText:
+          `WITHDRAWN ${withdrawnAt}\n\nConsent previously given under the following text was ` +
+          `withdrawn by the linked guardian:\n\n${prior.documentText}`,
+        givenByUserId: input.guardianId,
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+      });
+      recordsWritten += 1;
+    }
+
+    // Everything this athlete has on file, not only what is past a retention window -- and the
+    // same query that powers the guardian's own video list, so a parent purges exactly what they
+    // were shown rather than some other set the UI never told them about.
+    const videos = await this.getVideosForAthlete(input.athleteId);
+    let videosPurged = 0;
+    for (const row of videos) {
+      try {
+        const result = await this.deleteAdminVideo(row.source, row.id);
+        if (result.deleted) videosPurged += 1;
+      } catch (err) {
+        // Per-item isolation, same as the retention job: one bad file path must not leave the
+        // rest of a withdrawn child's footage in place.
+        console.error("withdrawGuardianConsent: failed to purge video", row, err);
+      }
+    }
+
+    await db.delete(guardianLinks).where(eq(guardianLinks.id, link.id));
+    return { ok: true, videosPurged, recordsWritten };
+  },
+
   async recordPaymentAsParentalVerification(input: {
     payerId: number;
     reference: string;

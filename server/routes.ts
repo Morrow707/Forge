@@ -108,6 +108,7 @@ import {
   updatePreferencesSchema,
   updateProfileSchema,
   createMediaRemovalRequestSchema,
+  withdrawGuardianConsentSchema,
   resolveMediaRemovalRequestSchema,
   updateNotificationPrefsSchema,
   updatePushCategoryPrefsSchema,
@@ -10876,6 +10877,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   guardianRead("/removal-requests", async (athleteId, _req, res) => {
     res.json(await storage.getMediaRemovalRequestsForAthlete(athleteId));
   });
+
+  // Withdrawing the consent the child's account stands on. Deliberately a different thing from
+  // the removal-request route below it, which asks a person to take one video down: this is the
+  // parent taking back the permission itself, and a permission somebody else can refuse to
+  // release was never really theirs. See storage.withdrawGuardianConsent for what it does and the
+  // order it does it in.
+  //
+  // Requires the athlete's name typed back. Not theatre -- this purges every video on the account
+  // and locks the child out of Forge until a guardian claims again, and it is reachable from a
+  // dashboard a parent opens to look at a calendar.
+  app.post(
+    "/api/guardian/athletes/:athleteId/withdraw-consent",
+    requireGuardianAccess,
+    async (req, res) => {
+      const user = currentUser(req);
+      const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
+      if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+      const parsed = withdrawGuardianConsentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      if (parsed.data.confirmAthleteName.trim().toLowerCase() !== athlete.name.trim().toLowerCase()) {
+        return res.status(400).json({
+          message: `Type ${athlete.name}'s name exactly to confirm.`,
+        });
+      }
+      const result = await storage.withdrawGuardianConsent({
+        guardianId: user.id,
+        athleteId: athlete.id,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") ?? undefined,
+      });
+      if (!result.ok) return res.status(400).json({ message: result.error });
+      res.json({
+        withdrawn: true,
+        videosPurged: result.videosPurged,
+        consentRecordsWritten: result.recordsWritten,
+      });
+    },
+  );
 
   app.post(
     "/api/guardian/athletes/:athleteId/removal-requests",

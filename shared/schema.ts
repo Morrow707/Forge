@@ -874,6 +874,16 @@ export type GuardianInvite = typeof guardianInvites.$inferSelect;
 // collected about their child and who sees it, and -- the one specific to a minor on a camera
 // platform -- that their child will be filmed and measured from that footage. Each is logged as
 // its own consent record against its own document text.
+// Withdrawing guardian consent purges every video on the athlete's account and locks them out of
+// Forge until a guardian claims again. It is reachable from a dashboard a parent opens to look at
+// a training calendar, so it asks for the athlete's name typed back -- the same shape as every
+// other irreversible confirmation in this app, and for the same reason: a destructive action one
+// tap away from a read-only screen is one somebody reaches by accident.
+export const withdrawGuardianConsentSchema = z.object({
+  confirmAthleteName: z.string().min(1, "Type the athlete's name to confirm"),
+});
+export type WithdrawGuardianConsentInput = z.infer<typeof withdrawGuardianConsentSchema>;
+
 export const claimGuardianInviteSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
   agreedToTerms: z.literal(true, {
