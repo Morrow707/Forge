@@ -130,12 +130,20 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
   // AND A JUMP REPLAY IS MUCH WEAKER THAN A BARBELL ONE, which is worth knowing before anyone
   // calibrates a jump threshold against this harness the way the barbell thresholds now are.
   //
-  // The reason is the sample rate, and it is NOT this file's decimation -- an earlier version of
-  // this comment blamed buildPathTrace, wrongly. Every trace in the stored corpus is under 400
-  // points, so its stride is 1 and nothing was decimated at all. The rates are what the pose
-  // analysis actually produced, and they are clean, quantised and low: one calibration squat runs
-  // 282 of its 285 intervals at exactly 67ms (15Hz) and the next set the same day runs 260 at
-  // exactly 100ms (10Hz). Across the corpus the effective rate is 7-15Hz, median 10.
+  // The reason is the sample rate, and the rate a stored trace carries is NOT the rate the app
+  // analysed at. Recording is pinned to 60fps, use-av-body-tracking.ts's ANALYSIS_SAMPLE_STRIDE
+  // halves that, and the pose stage therefore runs near 30Hz. Then buildPathTrace decimates to
+  // about 200 points on the way into the column, and THAT is what a replay sees: 15Hz on a 20s
+  // clip, 10Hz on a 28s one, 7Hz on the longest in the corpus.
+  //
+  // The giveaway is that the stored rate tracks clip LENGTH rather than anything about the
+  // capture -- two back squats from the same session come back at exactly 67ms and exactly 100ms
+  // per sample, and their durations are 20.3s and 27.5s, which is precisely the stride floor(n/200)
+  // picks. Every set in the corpus resolves to 25-33Hz before decimation.
+  //
+  // So this is a limit on the HARNESS, not evidence about the app: the live pipeline had three
+  // times the samples a replay does, and any threshold calibrated here is calibrated against a
+  // coarser signal than the one that shipped.
   //
   // Most barbell metrics survive that. Range of motion is a position difference and mean velocity
   // is an average, and neither cares much about the samples in between. Jump height does not
