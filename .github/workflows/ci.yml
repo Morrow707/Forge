@@ -65,13 +65,10 @@ jobs:
         run: npm run eval
 
       # Blocking, and deliberately scoped to what actually runs in
-      # production. The full tree currently reports a critical and several
-      # highs, all of them in build tooling (tar via the Capacitor CLI,
-      # sharp, esbuild) -- real, but a different risk with a different
-      # response, and making this step fail on them would mean it gets
-      # ignored or removed. Production runtime is at zero, so this holds a
-      # bar that is currently met rather than one that needs a backlog
-      # cleared first.
+      # production. It is kept separate from the build-tooling audit below
+      # even though both are now blocking at the same level: the two answer
+      # different questions, and if the build tree ever has to be relaxed
+      # again, that must not quietly relax the production bar along with it.
       #
       # moderate, not high: the two qs advisories this step exists to keep
       # fixed are both rated moderate, so a `high` bar would have sat there
@@ -88,17 +85,31 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=moderate
 
-      # Non-blocking counterpart for the build tooling. It runs on a runner
-      # holding distribution certificates and an App Store Connect key, so a
-      # compromised build dependency has a worse blast radius than a
-      # moderate in production -- but a red CI over a transitive dev
-      # advisory nobody can fix today teaches people to ignore red CI.
-      - name: Audit build tooling (warning only)
-        run: |
-          if ! npm audit --audit-level=critical > /tmp/dev-audit.txt 2>&1; then
-            echo "::warning title=Build-tooling vulnerabilities::npm audit reports critical advisories in the dev/build dependency tree. These do not run in production, but they do run in CI alongside the signing certificates and App Store key. See the step log."
-          fi
-          tail -40 /tmp/dev-audit.txt || true
+      # The build tooling, and now blocking rather than a warning.
+      #
+      # It was a warning because the tree genuinely could not go green: a
+      # critical in tar and highs in sharp and esbuild, all transitive, none
+      # fixable at the time. A red CI nobody can act on is one people learn
+      # to scroll past, which costs more than it catches.
+      #
+      # That is no longer true. @capacitor/assets was the source of most of
+      # it and was removed (nothing invoked it -- see
+      # docs/dependency-overrides.md), and the two that remained are pinned
+      # by overrides. The whole tree reports zero, so this holds a bar that
+      # is currently met -- the same rule the production audit above is set
+      # by, and the only kind of bar worth making blocking.
+      #
+      # Same moderate level as production, not a laxer one, because the
+      # blast radius here is arguably worse: this tree runs on a runner
+      # holding the distribution certificate and the App Store Connect key.
+      # A dev-only advisory is not automatically the lesser problem.
+      #
+      # If this goes red on something genuinely unfixable, prefer an
+      # override with its reasoning in docs/dependency-overrides.md. Drop it
+      # back to a warning only if that is impossible, and say why here --
+      # going back quietly loses the ratchet.
+      - name: Audit build tooling
+        run: npm audit --audit-level=moderate
 
       - name: Build (web + server)
         run: npm run build

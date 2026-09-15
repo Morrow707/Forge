@@ -388,6 +388,56 @@ function newSubjectCoder(): (id: number) => string {
 const COHORT_QUERY_BUDGET_PER_DAY = 50;
 const COHORT_QUERY_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * How different two of one admin's result sets have to be from each other.
+ *
+ * QUERY_ENGINE_MIN_COHORT says a group of four is not a group. This says the
+ * same thing about the DIFFERENCE between two groups, and it exists because
+ * the floor alone does not survive subtraction.
+ *
+ * The attack takes two queries and no cleverness. Ask for football athletes
+ * aged 17 and 18 and get six rows; ask for the 17-year-olds and get five;
+ * the row present in the first answer and absent from the second is the only
+ * 18-year-old's complete record -- height, weight, every max, health status,
+ * wellness. Both queries cleared the floor. Neither was a small group. The
+ * budget never came into it: fifty probes were never needed, two were
+ * enough, which is why a budget was the wrong control to be relying on here
+ * and why the per-query floor never saw it.
+ *
+ * Randomizing subjectCode per query does not help against this, and it is
+ * worth being clear why, because it looks like it should. It stops an admin
+ * joining two result sets BY CODE. It cannot stop them joining by value: the
+ * rows are exact, so a row is its own join key, and two answers can be
+ * subtracted whatever the codes on them say.
+ *
+ * Same number as the cohort floor, deliberately -- it is the same judgement
+ * about the same thing, applied to a set arrived at by subtraction rather
+ * than by filtering. An identical repeat of a query differs by nothing and
+ * is allowed; that is a re-run, not a probe.
+ *
+ * One refusal reads like a false positive and is not, so it is worth naming
+ * before someone "fixes" it: an admin runs a query on Monday, two athletes
+ * join over the week, and the SAME query on Friday is refused because it now
+ * matches two more people. Nothing about their intent changed. But the two
+ * answers still subtract to those two athletes' complete rows, and the check
+ * cannot tell an admin who noticed that from one who planned it -- which is
+ * the point, because neither can anyone else afterwards. Widening the
+ * filters or waiting out the window both clear it.
+ */
+const QUERY_ENGINE_MIN_DIFFERENCE = QUERY_ENGINE_MIN_COHORT;
+
+export class CohortQueryDifferencingRefused extends Error {
+  constructor(readonly overlap: { differsBy: number; minimum: number }) {
+    super(
+      `This query differs from one you ran recently by only ${overlap.differsBy} athlete(s). ` +
+        `Two results that differ by fewer than ${overlap.minimum} can be subtracted to single out ` +
+        `individuals, so this one is not run. Widen the filters, or come back when the ` +
+        `earlier query has aged out.`,
+    );
+    this.name = "CohortQueryDifferencingRefused";
+  }
+}
+
 export class CohortQueryBudgetExceeded extends Error {
   constructor(readonly budget: { used: number; limit: number; retryAfterMinutes: number }) {
     super(
@@ -399,7 +449,7 @@ export class CohortQueryBudgetExceeded extends Error {
 }
 
 export type QueryBudgetResult =
-  | { allowed: true; used: number; limit: number }
+  | { allowed: true; used: number; limit: number; logId: number }
   | { allowed: false; used: number; limit: number; retryAfterMinutes: number };
 
 /**
@@ -478,14 +528,76 @@ async function consumeCohortQueryBudget(
       };
     }
 
-    await tx.insert(aggregateDataAccessLog).values({
-      adminId,
-      queryText: context.queryText ?? null,
-      purpose: context.purpose ?? null,
-      requestedFor: context.requestedFor ?? null,
-    });
-    return { allowed: true, used: used + 1, limit: COHORT_QUERY_BUDGET_PER_DAY };
+    const [logged] = await tx
+      .insert(aggregateDataAccessLog)
+      .values({
+        adminId,
+        queryText: context.queryText ?? null,
+        purpose: context.purpose ?? null,
+        requestedFor: context.requestedFor ?? null,
+      })
+      .returning({ id: aggregateDataAccessLog.id });
+    return { allowed: true, used: used + 1, limit: COHORT_QUERY_BUDGET_PER_DAY, logId: logged.id };
   });
+}
+
+/**
+ * Refuses a result set that can be subtracted against a recent one, and
+ * otherwise records it so later queries can be checked against it.
+ *
+ * See QUERY_ENGINE_MIN_DIFFERENCE for the attack. Called after the query has
+ * run, because the matched set is the thing being judged and there is no way
+ * to know it in advance -- the budget row is already written by then, so a
+ * refusal here still costs the admin a query. That is the right way round:
+ * an attempt to difference is exactly the thing worth counting, and making
+ * refusals free would let someone search for an unrefused pair.
+ *
+ * Only successful queries are recorded. A refused one is not part of the
+ * comparison baseline, or a single unlucky query would cascade into refusing
+ * everything near it for the rest of the window.
+ *
+ * Symmetric difference, not subset size: two sets that differ by three in
+ * one direction and two in the other still isolate five people between them,
+ * and neither one-directional count would notice.
+ */
+async function guardCohortDifferencing(
+  adminId: number,
+  logId: number,
+  matchedIds: number[],
+): Promise<void> {
+  const since = new Date(Date.now() - COHORT_QUERY_BUDGET_WINDOW_MS);
+  const recent = await db
+    .select({ ids: aggregateDataAccessLog.matchedAthleteIds })
+    .from(aggregateDataAccessLog)
+    .where(
+      and(
+        eq(aggregateDataAccessLog.adminId, adminId),
+        gte(aggregateDataAccessLog.viewedAt, since),
+        isNotNull(aggregateDataAccessLog.matchedAthleteIds),
+        ne(aggregateDataAccessLog.id, logId),
+      ),
+    );
+
+  const current = new Set(matchedIds);
+  for (const row of recent) {
+    const previous = new Set(row.ids ?? []);
+    let differsBy = 0;
+    for (const id of current) if (!previous.has(id)) differsBy++;
+    for (const id of previous) if (!current.has(id)) differsBy++;
+    // Zero is an identical re-run, which reveals nothing the first answer
+    // did not already give them.
+    if (differsBy > 0 && differsBy < QUERY_ENGINE_MIN_DIFFERENCE) {
+      throw new CohortQueryDifferencingRefused({
+        differsBy,
+        minimum: QUERY_ENGINE_MIN_DIFFERENCE,
+      });
+    }
+  }
+
+  await db
+    .update(aggregateDataAccessLog)
+    .set({ matchedAthleteIds: matchedIds })
+    .where(eq(aggregateDataAccessLog.id, logId));
 }
 
 // Cap on the strength/speed leaderboards -- see getLeaderboardForExercise's
@@ -16065,6 +16177,18 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
     // the honest answer to "tell me about this group" when the group is too
     // small to be a group.
     if (rows.length < QUERY_ENGINE_MIN_COHORT) return [];
+
+    // The floor above judges this result on its own. That is not enough, and
+    // the gap between the two checks is the whole reason this one exists:
+    // two result sets that each clear the floor can still be subtracted from
+    // one another to leave a single athlete's complete row. A suppressed
+    // result is deliberately not passed through here -- it returned nothing,
+    // so there is nothing to subtract it against and nothing worth recording.
+    await guardCohortDifferencing(
+      adminId,
+      budget.logId,
+      rows.map((r) => r.athleteId),
+    );
 
     return rows.map(({ athleteId, ...rest }) => ({ ...rest, subjectCode: codeFor(athleteId) }));
   },

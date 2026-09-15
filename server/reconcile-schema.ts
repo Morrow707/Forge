@@ -2980,6 +2980,7 @@ ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_to_page" in
 ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "query_text" text;
 ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "purpose" text;
 ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "requested_for" text;
+ALTER TABLE "aggregate_data_access_log" ADD COLUMN IF NOT EXISTS "matched_athlete_ids" integer[];
 
 -- An admin clears a problem report by hand; nothing ages one out. Kept, not deleted, so a
 -- cleared report is still findable.

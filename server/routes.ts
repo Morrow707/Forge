@@ -11,7 +11,7 @@ import { setupAuth, requireAuth, requireRole, toPublicUser } from "./auth";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
-import { storage, CohortQueryBudgetExceeded } from "./storage";
+import { storage, CohortQueryBudgetExceeded, CohortQueryDifferencingRefused } from "./storage";
 import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
 import { PRICING_CATALOG_KEYS } from "./pricing-catalog";
 import { buildIcsFeed } from "./ics";
@@ -2690,6 +2690,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (err instanceof CohortQueryBudgetExceeded) {
         return res.status(429).json({ message: err.message, budget: err.budget });
       }
+      // 409, not 403: the admin is allowed this data, and would have been
+      // given it had they asked first. What is refused is this query's
+      // relationship to one they already ran -- a conflict with the earlier
+      // answer, not a permission they lack. See QUERY_ENGINE_MIN_DIFFERENCE.
+      if (err instanceof CohortQueryDifferencingRefused) {
+        return res.status(409).json({ message: err.message, overlap: err.overlap });
+      }
       throw err;
     }
     if (!result) {
@@ -2732,6 +2739,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       if (err instanceof CohortQueryBudgetExceeded) {
         return res.status(429).json({ message: err.message, budget: err.budget });
+      }
+      // 409, not 403: the admin is allowed this data, and would have been
+      // given it had they asked first. What is refused is this query's
+      // relationship to one they already ran -- a conflict with the earlier
+      // answer, not a permission they lack. See QUERY_ENGINE_MIN_DIFFERENCE.
+      if (err instanceof CohortQueryDifferencingRefused) {
+        return res.status(409).json({ message: err.message, overlap: err.overlap });
       }
       throw err;
     }
@@ -3520,6 +3534,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (err instanceof CohortQueryBudgetExceeded) {
         return res.status(429).json({ message: err.message, budget: err.budget });
       }
+      // 409, not 403: the admin is allowed this data, and would have been
+      // given it had they asked first. What is refused is this query's
+      // relationship to one they already ran -- a conflict with the earlier
+      // answer, not a permission they lack. See QUERY_ENGINE_MIN_DIFFERENCE.
+      if (err instanceof CohortQueryDifferencingRefused) {
+        return res.status(409).json({ message: err.message, overlap: err.overlap });
+      }
       throw err;
     }
     if (req.query.format === "csv") {
@@ -3554,6 +3575,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       if (err instanceof CohortQueryBudgetExceeded) {
         return res.status(429).json({ message: err.message, budget: err.budget });
+      }
+      // 409, not 403: the admin is allowed this data, and would have been
+      // given it had they asked first. What is refused is this query's
+      // relationship to one they already ran -- a conflict with the earlier
+      // answer, not a permission they lack. See QUERY_ENGINE_MIN_DIFFERENCE.
+      if (err instanceof CohortQueryDifferencingRefused) {
+        return res.status(409).json({ message: err.message, overlap: err.overlap });
       }
       throw err;
     }

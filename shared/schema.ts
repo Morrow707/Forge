@@ -5727,6 +5727,18 @@ export const aggregateDataAccessLog = pgTable("aggregate_data_access_log", {
   queryText: text("query_text"),
   purpose: text("purpose"),
   requestedFor: text("requested_for"),
+  // WHICH ATHLETES THE QUERY MATCHED.
+  //
+  // Not for the audit trail -- for the suppression rule that needs it. A minimum cohort size
+  // is checked against one result set at a time, which is exactly the blind spot differencing
+  // walks through: ask for 17-and-18-year-old football athletes, then for the 17-year-olds,
+  // and subtract. Both results clear the floor, neither is a small group, and the difference
+  // between them is one athlete's complete row. Detecting that needs the previous result sets
+  // to compare against, and an id set is the smallest thing that answers it.
+  //
+  // Server-side only and never returned by any route. It is the same fact the log row already
+  // implies (this admin ran this query), made explicit so the check above it can be made.
+  matchedAthleteIds: integer("matched_athlete_ids").array(),
 });
 
 export type AggregateDataAccessLogEntry = typeof aggregateDataAccessLog.$inferSelect;
