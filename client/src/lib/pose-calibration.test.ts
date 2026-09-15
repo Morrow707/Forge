@@ -29,6 +29,12 @@ const HEIGHT_M = HEIGHT_IN * 0.0254;
 // Biacromial breadth is ~0.245 of standing height (Drillis & Contini), so a body seen at
 // its true length runs ~4.1 on the height-to-shoulder ratio, well clear of the 2.5 floor.
 const SHOULDER_HALF = 0.1225;
+// Nose to hip joint is ~0.40 of standing height (nose ~0.93, greater trochanter ~0.53 on the
+// standard segment tables). Every fixture below places the hips at that fraction along its own
+// body rather than at a tidy half, because supineInPlaneHeightPixels cross-checks nose-to-ankle
+// against nose-to-hip to decide whether the legs are folded -- a body with anatomically wrong
+// hips reads as folded when it isn't.
+const NOSE_TO_HIP = 0.4;
 
 // Standing, head above ankles: the case that has always worked and must not change.
 function standingFrame() {
@@ -36,8 +42,8 @@ function standingFrame() {
     [POSE_LANDMARKS.NOSE]: [0, 0],
     [POSE_LANDMARKS.LEFT_SHOULDER]: [-SHOULDER_HALF, 0.15],
     [POSE_LANDMARKS.RIGHT_SHOULDER]: [SHOULDER_HALF, 0.15],
-    [POSE_LANDMARKS.LEFT_HIP]: [-0.1, 0.5],
-    [POSE_LANDMARKS.RIGHT_HIP]: [0.1, 0.5],
+    [POSE_LANDMARKS.LEFT_HIP]: [-0.1, NOSE_TO_HIP],
+    [POSE_LANDMARKS.RIGHT_HIP]: [0.1, NOSE_TO_HIP],
     [POSE_LANDMARKS.LEFT_ANKLE]: [-0.1, 1.0],
     [POSE_LANDMARKS.RIGHT_ANKLE]: [0.1, 1.0],
   });
@@ -51,10 +57,28 @@ function supineSideOnFrame() {
     [POSE_LANDMARKS.NOSE]: [0, 0],
     [POSE_LANDMARKS.LEFT_SHOULDER]: [0.15, -SHOULDER_HALF],
     [POSE_LANDMARKS.RIGHT_SHOULDER]: [0.15, SHOULDER_HALF],
-    [POSE_LANDMARKS.LEFT_HIP]: [0.5, -0.1],
-    [POSE_LANDMARKS.RIGHT_HIP]: [0.5, 0.1],
+    [POSE_LANDMARKS.LEFT_HIP]: [NOSE_TO_HIP, -0.1],
+    [POSE_LANDMARKS.RIGHT_HIP]: [NOSE_TO_HIP, 0.1],
     [POSE_LANDMARKS.LEFT_ANKLE]: [1.0, -0.1],
     [POSE_LANDMARKS.RIGHT_ANKLE]: [1.0, 0.1],
+  });
+}
+
+// Bench, camera square to the side, set up the way the app's own coaching cues tell an athlete
+// to set up: feet planted on the floor, knees near a right angle. The ankles come back UNDER the
+// body instead of extending past it, so nose-to-ankle spans 0.75 where the body is really 1.0.
+// Reading the athlete's height onto that segment inflates every distance downstream by a third,
+// which is what seventeen stored bench captures were doing.
+function supineBentKneeFrame() {
+  return frameFrom({
+    [POSE_LANDMARKS.NOSE]: [0, 0],
+    [POSE_LANDMARKS.LEFT_SHOULDER]: [0.15, -SHOULDER_HALF],
+    [POSE_LANDMARKS.RIGHT_SHOULDER]: [0.15, SHOULDER_HALF],
+    [POSE_LANDMARKS.LEFT_HIP]: [NOSE_TO_HIP, -0.1],
+    [POSE_LANDMARKS.RIGHT_HIP]: [NOSE_TO_HIP, 0.1],
+    // Knees out past the hips, shins folded back so the feet land short of full extension.
+    [POSE_LANDMARKS.LEFT_ANKLE]: [0.75, -0.1],
+    [POSE_LANDMARKS.RIGHT_ANKLE]: [0.75, 0.1],
   });
 }
 
@@ -67,8 +91,8 @@ function supineEndOnFrame() {
     [POSE_LANDMARKS.NOSE]: [0, 0],
     [POSE_LANDMARKS.LEFT_SHOULDER]: [-SHOULDER_HALF, 0.05],
     [POSE_LANDMARKS.RIGHT_SHOULDER]: [SHOULDER_HALF, 0.05],
-    [POSE_LANDMARKS.LEFT_HIP]: [-0.1, 0.18],
-    [POSE_LANDMARKS.RIGHT_HIP]: [0.1, 0.18],
+    [POSE_LANDMARKS.LEFT_HIP]: [-0.1, 0.3 * NOSE_TO_HIP],
+    [POSE_LANDMARKS.RIGHT_HIP]: [0.1, 0.3 * NOSE_TO_HIP],
     [POSE_LANDMARKS.LEFT_ANKLE]: [-0.1, 0.3],
     [POSE_LANDMARKS.RIGHT_ANKLE]: [0.1, 0.3],
   });
@@ -81,8 +105,8 @@ function supineObliqueFrame() {
     [POSE_LANDMARKS.NOSE]: [0, 0],
     [POSE_LANDMARKS.LEFT_SHOULDER]: [0.06, 0.02],
     [POSE_LANDMARKS.RIGHT_SHOULDER]: [0.14, 0.14],
-    [POSE_LANDMARKS.LEFT_HIP]: [0.2, 0.2],
-    [POSE_LANDMARKS.RIGHT_HIP]: [0.28, 0.28],
+    [POSE_LANDMARKS.LEFT_HIP]: [0.35 * NOSE_TO_HIP, 0.35 * NOSE_TO_HIP],
+    [POSE_LANDMARKS.RIGHT_HIP]: [0.42 * NOSE_TO_HIP, 0.42 * NOSE_TO_HIP],
     [POSE_LANDMARKS.LEFT_ANKLE]: [0.35, 0.35],
     [POSE_LANDMARKS.RIGHT_ANKLE]: [0.42, 0.42],
   });
@@ -94,6 +118,17 @@ describe("height calibration", () => {
   it("calibrates a standing athlete", () => {
     // Head-to-ankle spans exactly 1.0 unit, so the scale is the athlete's height in metres.
     expect(calibrateFromFrames(take(standingFrame), HEIGHT_IN)).toBeCloseTo(HEIGHT_M, 5);
+  });
+
+  // The bug seventeen stored bench captures were carrying. Nose-to-ankle is the body's full
+  // length only when the legs are straight; a bench setup folds the shin out of it. Calibrating
+  // off the folded segment scales everything downstream by 1/0.75, so a 40cm bench press reports
+  // about 53 -- and compounds with any other error, which is how the corpus produced takes at
+  // 7cm and at 277cm.
+  it("is not fooled by a bench setup's bent knees", () => {
+    // The same 1.0-unit body as every other fixture, so a correct answer is the same scale the
+    // standing and straight-legged supine cases produce.
+    expect(calibrateFromFrames(take(supineBentKneeFrame), HEIGHT_IN)).toBeCloseTo(HEIGHT_M, 5);
   });
 
   it("calibrates a side-on bench set off the body's full length", () => {
