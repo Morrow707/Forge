@@ -2553,7 +2553,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : r.weightUnit === "kg"
             ? Number(r.weight)
             : Number(r.weight) * 0.45359237,
-      loggedReps: r.loggedReps,
+      // Reps are stored as free text, because a coach can prescribe "AMRAP" or "8-10" as readily
+      // as "5". The replay compares against a count, so anything that isn't one exports as null
+      // rather than a string the consumer has to guess at -- same coercion-at-the-boundary
+      // treatment loadKg gets just above.
+      loggedReps: Number.isFinite(Number(r.loggedReps)) && String(r.loggedReps ?? "").trim() !== ""
+        ? Number(r.loggedReps)
+        : null,
       barPathTrace: r.barPathTrace,
     }));
     res.setHeader("Content-Type", "application/json");

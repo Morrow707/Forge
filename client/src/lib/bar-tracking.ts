@@ -1223,6 +1223,34 @@ export function summarizeTrackedSet(
   // and the duration test take. Restricted to the first and last concentric for the same reason
   // they are: those are the only two positions a rack move can occupy.
   const EDGE_PHANTOM_VELOCITY_RATIO = 0.4;
+
+  // The third shape a rack artifact takes, and the one the two tests above are blind to by
+  // construction: too BIG. Walking a bar out of the rack, or walking it back in, moves it the
+  // height of the rack pins plus the walk itself -- two to three times the range of the reps
+  // either side of it, at a speed nothing flags as slow. The amplitude test only catches phases
+  // that fall SHORT of the median and the velocity test only catches phases that fall slow, so a
+  // walkout sails past both and is reported as rep 1.
+  //
+  // Replaying real captures shows how clean the separation is. Across six calibration sets (back
+  // squat and box jump, five logged reps each), every genuine rep landed within about 1.1x of its
+  // set's median amplitude, while the leading walkout phases came in at 2.45x, 2.65x, 2.9x, 3.0x
+  // and 3.2x. Nothing sits between 1.3 and 2.4. At 2.0 the gate has roughly a 2x margin on both
+  // sides, so a deep first rep after a shallower set cannot trip it -- under-counting is still
+  // the worse failure, the same stance the other two tests take, and this stays restricted to the
+  // first and last concentric for the same reason they are.
+  const EDGE_PHANTOM_OVERSHOOT_RATIO = 2;
+
+  // The same artifact measured on the clock instead of the tape. Racking and un-racking is a
+  // deliberate, careful movement -- the athlete is finding the hooks, or stepping down off a box
+  // -- so it takes far longer than a rep does, and a walkout that happens to travel less than
+  // twice the median still drags out well past one. The general duration filter below only ever
+  // catches phases that are anomalously SHORT, so nothing looked at the long side.
+  //
+  // In the replayed captures the trailing rack phases ran about 4x their set's median concentric
+  // duration, while the slowest genuine rep at an edge reached 2x. 2.5 sits in that gap, nearer
+  // the real reps than the artifacts so that a grinding final rep of a near-limit set survives --
+  // under-counting is the worse failure here too.
+  const EDGE_PHANTOM_DURATION_RATIO = 2.5;
   const firstConcentric = concentric[0];
   const lastConcentric = concentric[concentric.length - 1];
 
@@ -1233,10 +1261,24 @@ export function summarizeTrackedSet(
   function isEdgeRackArtifact(phase: (typeof phaseStats)[number]): boolean {
     if (concentric.length < 3) return false;
     if (phase !== firstConcentric && phase !== lastConcentric) return false;
+    const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
     if (
       medianConcentricAmplitude > 0 &&
-      Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]) <
-        medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO
+      amplitude < medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO
+    ) {
+      return true;
+    }
+    // Too far to be a rep -- see EDGE_PHANTOM_OVERSHOOT_RATIO. This is the walkout.
+    if (
+      medianConcentricAmplitude > 0 &&
+      amplitude > medianConcentricAmplitude * EDGE_PHANTOM_OVERSHOOT_RATIO
+    ) {
+      return true;
+    }
+    // Too slow to be a rep -- see EDGE_PHANTOM_DURATION_RATIO. This is the re-rack.
+    if (
+      medianConcentricDuration > 0 &&
+      phase.duration > medianConcentricDuration * EDGE_PHANTOM_DURATION_RATIO
     ) {
       return true;
     }
