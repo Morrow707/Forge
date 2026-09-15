@@ -20636,19 +20636,75 @@ ${catalog}`;
    * one athlete and never needs to say which. heightIn is here because the replay genuinely
    * needs it: every scale in the pipeline is derived from it.
    */
-  async getStoredCapturesForReplay(limit: number) {
+  // Three groups of columns, and the split is the point.
+  //
+  // The INPUT group (the traces) is what a replay re-analyses. The REPORTED group is what the app
+  // actually published for the same set, and it is the reason this is worth widening: without it
+  // a replay can only be checked against what the athlete logged, which answers "did the rep
+  // count come out right" and nothing else. With it, a threshold change can be diffed against
+  // every number the set already shows -- velocity, power, range of motion, velocity loss, EAI --
+  // so a change that fixes rep counting while quietly moving mean velocity is visible rather than
+  // invisible. The CONTEXT group (trust, diagnostics, device) says what the capture conditions
+  // were, which is what separates "this threshold is wrong" from "this take was filmed from the
+  // wrong angle".
+  //
+  // `includeTraces` exists because the two uses want different shapes. Calibrating a threshold
+  // needs full traces over a handful of sets; surveying what the fleet is actually reporting
+  // needs the metrics over hundreds, and two hundred traces is a payload measured in megabytes
+  // for data the survey never reads. `includeSkeleton` is separate and far more expensive again
+  // -- one set's skeleton frames run to a couple of megabytes -- so it is opt-in, and the caller
+  // is expected to clamp the row count hard when it asks.
+  async getStoredCapturesForReplay(
+    limit: number,
+    opts: { includeTraces?: boolean; includeSkeleton?: boolean } = {},
+  ) {
+    const { includeTraces = true, includeSkeleton = false } = opts;
     return db
       .select({
         setId: workoutSetEntries.id,
         athleteId: users.id,
         date: workoutLogs.date,
         exerciseName: exercises.name,
+        movementType: exercises.movementType,
         setNumber: workoutSetEntries.setNumber,
         heightIn: users.heightIn,
         weight: workoutSetEntries.weight,
         weightUnit: workoutSetEntries.weightUnit,
         loggedReps: workoutSetEntries.reps,
-        barPathTrace: workoutSetEntries.barPathTrace,
+        boxHeight: workoutSetEntries.boxHeight,
+        boxHeightUnit: workoutSetEntries.boxHeightUnit,
+
+        // What the app reported at capture time, to diff a replay against.
+        reportedPeakVelocityMps: workoutSetEntries.peakVelocityMps,
+        reportedMeanVelocityMps: workoutSetEntries.meanVelocityMps,
+        reportedEccentricMeanVelocityMps: workoutSetEntries.eccentricMeanVelocityMps,
+        reportedConcentricSeconds: workoutSetEntries.concentricSeconds,
+        reportedEccentricSeconds: workoutSetEntries.eccentricSeconds,
+        reportedBarPathDeviationCm: workoutSetEntries.barPathDeviationCm,
+        reportedRomCm: workoutSetEntries.romCm,
+        reportedMeanEai: workoutSetEntries.meanEai,
+        reportedVelocityLossPercent: workoutSetEntries.velocityLossPercent,
+        reportedPeakPowerWatts: workoutSetEntries.peakPowerWatts,
+        reportedMeanPowerWatts: workoutSetEntries.meanPowerWatts,
+        reportedJumpHeightCm: workoutSetEntries.jumpHeightCm,
+        reportedJumpDistanceCm: workoutSetEntries.jumpDistanceCm,
+        reportedGroundContactSeconds: workoutSetEntries.groundContactSeconds,
+        reportedReactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
+        reportedRepBreakdown: workoutSetEntries.repBreakdown,
+        reportedFormFaults: workoutSetEntries.formFaults,
+
+        // What the capture conditions were.
+        trustScores: workoutSetEntries.trustScores,
+        trackingDiagnostics: workoutSetEntries.trackingDiagnostics,
+        captureDeviceInfo: workoutSetEntries.captureDeviceInfo,
+
+        ...(includeTraces
+          ? {
+              barPathTrace: workoutSetEntries.barPathTrace,
+              armPathTrace: workoutSetEntries.armPathTrace,
+            }
+          : {}),
+        ...(includeSkeleton ? { skeletonFrames: workoutSetEntries.skeletonFrames } : {}),
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))

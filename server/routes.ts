@@ -2522,8 +2522,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // a capture-quality diagnostic needs to show that several sets belong to one athlete and never
   // needs to say which one.
   app.get("/api/admin/capture-export.json", requireRole("admin"), async (req, res) => {
-    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1), 200);
-    const rows = await storage.getStoredCapturesForReplay(limit);
+    // Two shapes, because the two uses want different things. `traces=none` drops the per-point
+    // paths and returns the metrics alone, which is what a survey of "what is the fleet actually
+    // reporting" reads -- 200 sets of that is a file somebody can open, 200 sets WITH traces is
+    // megabytes of numbers the survey never looks at. `skeleton=1` is the other direction: one
+    // set's skeleton frames run to a couple of megabytes on their own, so it caps the row count
+    // at five regardless of what was asked for, rather than letting a stray query build a
+    // half-gigabyte response.
+    const includeTraces = String(req.query.traces ?? "all") !== "none";
+    const includeSkeleton = String(req.query.skeleton ?? "") === "1";
+    const requested = Math.min(
+      Math.max(parseInt(String(req.query.limit ?? "20"), 10) || 20, 1),
+      200,
+    );
+    const limit = includeSkeleton ? Math.min(requested, 5) : requested;
+    const rows = await storage.getStoredCapturesForReplay(limit, {
+      includeTraces,
+      includeSkeleton,
+    });
     // A per-export pseudonym, generated fresh each time and mapped nowhere -- the same treatment
     // the tracking report gives athlete ids. Stable within one file so a reader can see which
     // sets came from the same athlete; different across two files so they cannot be joined.
@@ -2544,6 +2560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       athlete: codeFor(r.athleteId),
       date: r.date,
       exerciseName: r.exerciseName,
+      movementType: r.movementType,
       setNumber: r.setNumber,
       heightIn: r.heightIn,
       // The replay takes kilograms; sets are logged in whichever unit the athlete uses.
@@ -2560,7 +2577,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       loggedReps: Number.isFinite(Number(r.loggedReps)) && String(r.loggedReps ?? "").trim() !== ""
         ? Number(r.loggedReps)
         : null,
-      barPathTrace: r.barPathTrace,
+      // Same coercion, and the box height is a scale reference a jump replay can check itself
+      // against: a box clearance that disagrees with the box the athlete stood on is a scale
+      // error, not an athletic one.
+      boxHeightIn:
+        r.boxHeight == null || !Number.isFinite(Number(r.boxHeight))
+          ? null
+          : r.boxHeightUnit === "m"
+            ? Number(r.boxHeight) * 39.3700787
+            : Number(r.boxHeight),
+
+      // What the app published for this set. The replay's own output is compared against this,
+      // which is the only way to tell a threshold change that fixed something from one that moved
+      // the error somewhere nobody was looking.
+      reported: {
+        peakVelocityMps: r.reportedPeakVelocityMps,
+        meanVelocityMps: r.reportedMeanVelocityMps,
+        eccentricMeanVelocityMps: r.reportedEccentricMeanVelocityMps,
+        concentricSeconds: r.reportedConcentricSeconds,
+        eccentricSeconds: r.reportedEccentricSeconds,
+        barPathDeviationCm: r.reportedBarPathDeviationCm,
+        romCm: r.reportedRomCm,
+        meanEai: r.reportedMeanEai,
+        velocityLossPercent: r.reportedVelocityLossPercent,
+        peakPowerWatts: r.reportedPeakPowerWatts,
+        meanPowerWatts: r.reportedMeanPowerWatts,
+        jumpHeightCm: r.reportedJumpHeightCm,
+        jumpDistanceCm: r.reportedJumpDistanceCm,
+        groundContactSeconds: r.reportedGroundContactSeconds,
+        reactiveStrengthIndex: r.reportedReactiveStrengthIndex,
+        repBreakdown: r.reportedRepBreakdown,
+        formFaults: r.reportedFormFaults,
+      },
+
+      // The capture conditions. Without these a bad number cannot be told apart from a bad take.
+      trustScores: r.trustScores,
+      trackingDiagnostics: r.trackingDiagnostics,
+      captureDeviceInfo: r.captureDeviceInfo,
+
+      ...("barPathTrace" in r
+        ? { barPathTrace: r.barPathTrace, armPathTrace: r.armPathTrace }
+        : {}),
+      ...("skeletonFrames" in r ? { skeletonFrames: r.skeletonFrames } : {}),
     }));
     res.setHeader("Content-Type", "application/json");
     res.setHeader(
