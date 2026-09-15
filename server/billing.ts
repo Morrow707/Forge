@@ -14,7 +14,8 @@ import {
   type FreeAgentTierId,
 } from "@shared/free-agent-tiers";
 import { entitlementTierForFreeAgentTier } from "./apple-iap";
-import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON, type VideoRetentionLimits } from "@shared/video-retention";
+import { derivePrivacyTier } from "@shared/privacy-tiers";
+import { resolveVideoRetentionLimits, type VideoRetentionLimits } from "@shared/video-retention";
 
 // ---------- Entitlements (what an account is allowed to do) ----------
 // Resolves what a primary coach's org / Free Agent / video-retention track
@@ -131,30 +132,33 @@ export function getFreeAgentEntitlements(account: FreeAgentBillingAccount): Free
 }
 
 // ---------- Form-check video retention ----------
-// Independent of both billing tracks above -- applies to ANY athlete
-// (coached or Free Agent), keyed off the athlete's own row. Unlike a
-// paywall, this actively deletes data once active, so it stays fully
-// unlimited (no eviction at all) under the exact same "don't restrict by
-// accident" conditions as everything else: enforcement off, still beta, or
-// an active redeemed trial.
-
-const UNLIMITED_VIDEO_RETENTION: VideoRetentionLimits = {
-  favoritedCap: Infinity,
-  totalCap: Infinity,
-};
+// Independent of both billing tracks above -- applies to ANY athlete (coached or Free Agent),
+// keyed off the athlete's own row. Unlike a paywall, this actively deletes data once active, so
+// an ADULT stays fully unlimited under the same "don't restrict by accident" conditions as
+// everything else: enforcement off, still beta, or an active redeemed trial. A MINOR does not --
+// see resolveVideoRetentionLimits for why a data-minimisation promise is not an entitlement.
 
 export interface VideoRetentionAccount {
   hasVideoStorageAddOn: boolean;
   isBetaAccount: boolean;
   trialExpiresAt: Date | null;
+  /** Null for an account with no birthdate on file, which is treated as an adult here -- the
+   * minor gate refuses those accounts outright, so one cannot be accumulating video anyway. */
+  dateOfBirth?: string | Date | null;
 }
 
 export function getVideoRetentionLimits(account: VideoRetentionAccount): VideoRetentionLimits {
-  const trialActive = account.trialExpiresAt != null && account.trialExpiresAt.getTime() > Date.now();
-  if (!ENFORCEMENT_ENABLED || account.isBetaAccount || trialActive) {
-    return UNLIMITED_VIDEO_RETENTION;
-  }
-  return account.hasVideoStorageAddOn ? VIDEO_STORAGE_ADD_ON : VIDEO_RETENTION;
+  // The decision itself lives in shared/video-retention.ts beside the numbers, so it can be
+  // tested without a database. This supplies the env switch and the age derivation.
+  return resolveVideoRetentionLimits({
+    hasVideoStorageAddOn: account.hasVideoStorageAddOn,
+    isBetaAccount: account.isBetaAccount,
+    trialExpiresAt: account.trialExpiresAt,
+    isMinor:
+      account.dateOfBirth != null &&
+      derivePrivacyTier(account.dateOfBirth) !== "tier3_adult_18plus",
+    enforcementEnabled: ENFORCEMENT_ENABLED,
+  });
 }
 
 // ---------- Stripe integration (how someone actually pays) ----------

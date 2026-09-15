@@ -19795,6 +19795,7 @@ ${catalog}`;
       hasVideoStorageAddOn: athlete?.hasVideoStorageAddOn ?? false,
       isBetaAccount: athlete?.isBetaAccount ?? true,
       trialExpiresAt: athlete?.trialExpiresAt ?? null,
+      dateOfBirth: athlete?.dateOfBirth ?? null,
     });
     // This whole save is a delete-then-reinsert of every set entry (see the
     // workoutLogEntries delete below, cascading to workoutSetEntries) --
@@ -25827,6 +25828,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         hasVideoStorageAddOn: users.hasVideoStorageAddOn,
         isBetaAccount: users.isBetaAccount,
         trialExpiresAt: users.trialExpiresAt,
+        // Without this the beta unlock would swallow every minor here too, and the sweep would
+        // skip the accounts it matters most for -- see getVideoRetentionLimits.
+        dateOfBirth: users.dateOfBirth,
       })
       .from(users)
       .where(eq(users.role, "athlete"));
