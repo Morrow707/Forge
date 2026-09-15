@@ -15,6 +15,7 @@ import { buildNewDeviceLoginEmail } from "./new-device-login-email";
 import { buildPasswordChangedEmail } from "./password-changed-email";
 import { buildVerifyEmailEmail } from "./verify-email-email";
 import { buildGuardianInviteEmail } from "./guardian-invite-email";
+import { buildGuardianConsentConfirmationEmail } from "./guardian-consent-confirmation-email";
 import { reportJobFailure } from "./job-errors";
 import { apiLimiter } from "./rate-limiters";
 import { totpOtpauthUri } from "./mfa";
@@ -791,6 +792,14 @@ export function setupAuth(app: Express) {
       );
       if ("error" in result) return res.status(400).json({ message: result.error });
       const { user } = result;
+      // The "plus" in email-plus: a second, separate message to the same address, after the
+      // consent rather than before it. A child who got hold of the first email has to still hold
+      // the parent's inbox now, and a parent who did not consent finds out that somebody did it
+      // in their name. Fire-and-forget for the same reason every other send here is -- a slow
+      // mail provider must not hold up the response that unlocks a child's account -- but a
+      // failure is logged loudly, because an unsent confirmation is a missing half of the
+      // verification rather than a missing nicety.
+      sendGuardianConsentConfirmation(req, user, result.athleteId);
       loginWithFreshSession(req, user, async (err: any) => {
         if (err) return next(err);
         // Same try/catch as the two signup routes above, for the same reason -- an unhandled
@@ -832,6 +841,32 @@ export function setupAuth(app: Express) {
   // email it's sent alongside. See request-password-reset's own comment
   // for why RENDER_EXTERNAL_URL takes priority over the request's own
   // Host header (Host-header link-poisoning).
+  function sendGuardianConsentConfirmation(
+    req: any,
+    guardian: { id: number; email: string },
+    athleteId: number,
+  ) {
+    const origin = process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+    storage
+      .getUser(athleteId)
+      .then((athlete) => {
+        const athleteName = athlete?.name ?? "your athlete";
+        return sendEmail({
+          to: guardian.email,
+          subject: `You approved ${athleteName}'s Forge account`,
+          html: buildGuardianConsentConfirmationEmail(
+            athleteName,
+            guardian.email,
+            new Date(),
+            `${origin}/guardian`,
+          ),
+        });
+      })
+      .catch((err) =>
+        console.error("guardian consent confirmation (email-plus) failed to send:", err),
+      );
+  }
+
   function sendVerificationEmail(req: any, user: { id: number; email: string }) {
     storage
       .createEmailVerificationToken(user.id)
