@@ -130,12 +130,18 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
   // AND A JUMP REPLAY IS MUCH WEAKER THAN A BARBELL ONE, which is worth knowing before anyone
   // calibrates a jump threshold against this harness the way the barbell thresholds now are.
   //
-  // buildPathTrace decimates to about 200 points, so a stored trace samples at 10-15Hz where the
-  // live run saw 60. Most barbell metrics survive that: range of motion is a position difference
-  // and mean velocity is an average, and neither cares much about the samples in between. Jump
-  // height does not survive it. It is v^2/(2g) off the takeoff velocity -- one instantaneous
-  // reading, during a takeoff lasting about 0.15s, SQUARED. At 15Hz a takeoff is two or three
-  // samples, and whatever error that leaves is doubled by the square.
+  // The reason is the sample rate, and it is NOT this file's decimation -- an earlier version of
+  // this comment blamed buildPathTrace, wrongly. Every trace in the stored corpus is under 400
+  // points, so its stride is 1 and nothing was decimated at all. The rates are what the pose
+  // analysis actually produced, and they are clean, quantised and low: one calibration squat runs
+  // 282 of its 285 intervals at exactly 67ms (15Hz) and the next set the same day runs 260 at
+  // exactly 100ms (10Hz). Across the corpus the effective rate is 7-15Hz, median 10.
+  //
+  // Most barbell metrics survive that. Range of motion is a position difference and mean velocity
+  // is an average, and neither cares much about the samples in between. Jump height does not
+  // survive it: it is v^2/(2g) off the takeoff velocity -- one instantaneous reading, during a
+  // takeoff lasting about 0.15s, SQUARED. At 10Hz that takeoff is one or two samples, and
+  // whatever error that leaves is doubled by the square.
   //
   // Replaying the corpus shows it: five box jumps by one athlete come back at 63, 64, 77, 87 and
   // 178cm. The last is a seventy-inch vertical. Treat a replayed jump height as evidence the
