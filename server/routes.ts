@@ -2532,8 +2532,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!codes.has(athleteId)) codes.set(athleteId, `Athlete ${codes.size + 1}`);
       return codes.get(athleteId)!;
     };
-    const captures = rows.map((r) => ({
-      setId: r.setId,
+    const captures = rows.map((r, index) => ({
+      // setId deliberately absent. It is workoutSetEntries.id, stable
+      // forever, and it was sitting next to a per-export athlete code whose
+      // whole promise is that two exports cannot be joined. They joined on
+      // this: same set id, therefore same person, therefore every other row
+      // under that code in both files is the same person too. A per-export
+      // sequence number keeps rows addressable within the file it came from
+      // without carrying an identity between files.
+      seq: index + 1,
       athlete: codeFor(r.athleteId),
       date: r.date,
       exerciseName: r.exerciseName,
@@ -2988,10 +2995,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!athlete || athlete.role !== "athlete") {
       return res.status(404).json({ message: "No athlete with that email" });
     }
+
+    // The one identity-adjacent action left to an admin, so it is the one
+    // that gets written down. It resolves an email an admin was GIVEN (a
+    // support request, a parent asking for a deletion) into the account it
+    // belongs to, which is a thing an operator genuinely has to be able to
+    // do. What it must not be is a browsing tool, so: it takes a full email
+    // and never a partial, it echoes back neither the name nor the address
+    // it was handed, and every call leaves a row naming the admin who made
+    // it. An admin guessing at addresses now leaves a trail of guesses.
+    const admin = currentUser(req);
+    await storage.logRecordAccess({
+      userId: admin.id,
+      targetAthleteId: athlete.id,
+      actionType: "viewed",
+      resourceType: "admin:athlete-lookup",
+      detail: "resolved an email address to an athlete account",
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
+
     res.json({
       id: athlete.id,
-      name: athlete.name,
-      email: athlete.email,
       freeAgentTier: athlete.freeAgentTier,
       freeAgentAddOns: athlete.freeAgentAddOns ?? [],
       isBetaAccount: athlete.isBetaAccount,
@@ -3184,14 +3209,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/audit-log.csv", requireRole("admin"), async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 1000, 5000);
     const rows = await storage.getRecordAccessAuditLog(limit);
-    const header = ["Timestamp", "Staff", "Athlete", "Action", "Resource", "Detail", "Justification", "IP"];
+    const header = ["Timestamp", "Staff", "Athlete (code)", "Action", "Resource", "Detail", "Justification", "IP"];
     const lines = [header.join(",")];
     for (const r of rows) {
       lines.push(
         [
           csvField(r.createdAt.toISOString()),
           csvField(r.userName ?? `user #${r.userId}`),
-          csvField(r.targetAthleteName ?? (r.targetAthleteId ? `user #${r.targetAthleteId}` : "")),
+          csvField(r.targetAthleteCode ?? ""),
           csvField(r.actionType),
           csvField(r.resourceType),
           csvField(r.detail),

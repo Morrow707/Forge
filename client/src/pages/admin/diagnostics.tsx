@@ -61,9 +61,9 @@ export default function AdminDiagnostics() {
 type AuditRow = {
   id: number;
   userId: number;
-  userName: string | null;
+  userRole: string | null;
   targetAthleteId: number | null;
-  targetAthleteName: string | null;
+  targetAthleteCode: string | null;
   actionType: string;
   resourceType: string;
   resourceId: number | null;
@@ -111,7 +111,7 @@ function RecordAccessTab() {
           {rows.map((r) => (
             <div key={r.id} className="rounded-md border border-border/60 p-2.5 text-xs">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="font-semibold">{r.userName ?? `user #${r.userId}`}</span>
+                <span className="font-semibold">{r.userRole ? `${r.userRole} #${r.userId}` : `user #${r.userId}`}</span>
                 <Badge variant="outline" className="text-[10px]">
                   {r.actionType}
                 </Badge>
@@ -119,7 +119,7 @@ function RecordAccessTab() {
                 {r.targetAthleteId != null && (
                   <>
                     <span className="text-muted-foreground">&rarr;</span>
-                    <span>{r.targetAthleteName ?? `user #${r.targetAthleteId}`}</span>
+                    <span>{r.targetAthleteCode ? `athlete ${r.targetAthleteCode.slice(0, 8)}` : "--"}</span>
                   </>
                 )}
                 <span className="ml-auto font-mono text-[10px] text-muted-foreground">

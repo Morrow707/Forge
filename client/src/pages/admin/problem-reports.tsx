@@ -9,7 +9,7 @@ import { Flag, Check } from "lucide-react";
 type ProblemReport = {
   id: number;
   userId: number;
-  userName: string | null;
+  userRole: string | null;
   message: string;
   imageUrl: string | null;
   path: string | null;
@@ -75,7 +75,7 @@ export function ProblemReportsContent() {
             <div key={report.id} className="rounded-md border border-border p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground">
-                  {report.userName ?? "Unknown user"}
+                  {report.userRole ? `${report.userRole} #${report.userId}` : "Unknown user"}
                 </span>
                 <span className="flex items-center gap-3">
                   <span>{new Date(report.createdAt).toLocaleString()}</span>

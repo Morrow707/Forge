@@ -144,6 +144,7 @@ import {
   type PrivacyTier,
 } from "@shared/privacy-tiers";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { scrubUserForAdmin } from "./admin-identity";
 import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
 import { KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain, knowledgeDomainLabel } from "@shared/knowledge-domains";
 import { answerStyleInstruction, isAnswerRegister, isAnswerLength } from "@shared/answer-style";
@@ -276,6 +277,7 @@ import {
   and,
   or,
   inArray,
+  notInArray,
   asc,
   desc,
   lt,
@@ -3255,9 +3257,27 @@ export const storage = {
   async getUsersForAdmin(params: { search?: string; role?: "coach" | "athlete" | "admin" | "guardian" }) {
     const conditions = [];
     if (params.role) conditions.push(eq(users.role, params.role));
+
+    // A name/email search is only ever run against roles whose identity an
+    // admin is allowed to hold. Pointing it at athletes would be the whole
+    // policy undone by a text box: "is this particular child on the platform,
+    // and which account are they" answered in one request, which is worse
+    // than the list it replaces rather than a lesser version of it. See
+    // searchableRolesFor in admin-identity.ts.
+    //
+    // The clause is written as a role restriction rather than as "ignore the
+    // search", so an admin searching without a role filter still finds the
+    // coaches they were looking for and simply never matches an athlete --
+    // silently dropping the term would look like a broken search box and
+    // invite someone to "fix" it.
     if (params.search?.trim()) {
       const q = `%${params.search.trim()}%`;
-      conditions.push(or(ilike(users.name, q), ilike(users.email, q)));
+      conditions.push(
+        and(
+          notInArray(users.role, ["athlete", "guardian"]),
+          or(ilike(users.name, q), ilike(users.email, q)),
+        ),
+      );
     }
     const rows = await db
       .select({
@@ -3270,12 +3290,21 @@ export const storage = {
         emailVerified: users.emailVerified,
         mfaEnabled: users.mfaEnabled,
         sport: users.sport,
+        position: users.position,
+        gender: users.gender,
+        dateOfBirth: users.dateOfBirth,
+        trackingOptOut: users.trackingOptOut,
       })
       .from(users)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(users.createdAt))
       .limit(this.USER_SEARCH_LIMIT);
-    return rows;
+
+    // dateOfBirth is selected and then never returned: the scrubber needs it
+    // to derive an age and a privacy tier, which is the whole point of
+    // deriving them server-side rather than handing over the birthday and
+    // letting a client work it out.
+    return rows.map((row) => scrubUserForAdmin(row));
   },
 
   // Fuller single-account view for the admin user-management page's detail
@@ -3285,8 +3314,12 @@ export const storage = {
   async getUserDetailForAdmin(id: number) {
     const user = await this.getUser(id);
     if (!user) return null;
-    const { passwordHash, mfaSecret, mfaBackupCodeHashes, agreedToTermsText, ...rest } = user;
-    return rest;
+    // Was a denylist of four secret fields with everything else returned,
+    // which published every column added to `users` afterwards by default --
+    // date of birth, phone and health status all reached admins that way
+    // without anyone choosing it. scrubUserForAdmin names what may be seen
+    // instead, per role.
+    return scrubUserForAdmin(user);
   },
 
   // Admin-only (see /api/admin/coaches* in routes.ts) -- the only way a
@@ -21731,12 +21764,42 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // notably iOS native, where the session cookie doesn't reliably travel
   // with a bare <video src> fetch (see media-url-signing.ts). That's a real
   // remaining gap, not silently assumed closed.
+  /**
+   * The accountability log: which staff member touched whose record.
+   *
+   * The staff side is named, and must be -- a log that cannot say who did
+   * something is not an accountability record. The athlete side is a code.
+   *
+   * Both sides used to be named, and the pair is what made this a problem.
+   * Rows are written whenever a coach or admin streams footage belonging to
+   * someone else, and a coach only ever streams their own roster, so a
+   * download of this log sorted by staff name IS that coach's roster, by
+   * name, with timestamps. Coaches are frequently public figures -- a school
+   * team page names its strength coach -- so "these fourteen children are
+   * coached by Dana Whitfield at Lincoln High" was available as a CSV to any
+   * admin session, and would have become the ONLY admin surface still handing
+   * out athlete names once the account pages stopped.
+   *
+   * A per-request code keeps everything the log is read for: how many
+   * distinct athletes a staff member accessed, how often, when, from which
+   * address, and whether a pattern looks wrong. What it stops is the bulk
+   * export of a named roster of minors. An investigation that has to reach a
+   * specific athlete goes through a route that logs the fact -- which is the
+   * same standard this log exists to hold everyone else to.
+   *
+   * Fresh salt per call, so two downloads cannot be stitched into a stable
+   * per-athlete handle. Within one response a code is stable, which is what
+   * grouping a staff member's accesses actually needs.
+   */
   async getRecordAccessAuditLog(limit = 200): Promise<
-    (RecordAccessAuditLog & { userName: string | null; targetAthleteName: string | null })[]
+    (Omit<RecordAccessAuditLog, "targetAthleteId"> & {
+      userName: string | null;
+      targetAthleteCode: string | null;
+    })[]
   > {
+    const codeFor = newSubjectCoder();
     const staff = alias(users, "staff");
-    const target = alias(users, "target_athlete");
-    return db
+    const rows = await db
       .select({
         id: recordAccessAuditLogs.id,
         userId: recordAccessAuditLogs.userId,
@@ -21750,13 +21813,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         userAgent: recordAccessAuditLogs.userAgent,
         createdAt: recordAccessAuditLogs.createdAt,
         userName: staff.name,
-        targetAthleteName: target.name,
       })
       .from(recordAccessAuditLogs)
       .leftJoin(staff, eq(recordAccessAuditLogs.userId, staff.id))
-      .leftJoin(target, eq(recordAccessAuditLogs.targetAthleteId, target.id))
       .orderBy(desc(recordAccessAuditLogs.createdAt))
       .limit(limit);
+
+    return rows.map(({ targetAthleteId, ...rest }) => ({
+      ...rest,
+      targetAthleteCode: targetAthleteId == null ? null : codeFor(targetAthleteId),
+    }));
   },
 
   async createProblemReport(
@@ -21773,10 +21839,25 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // Open reports only by default. Nothing ages out -- an admin clears each one by hand (see
   // resolveProblemReport), and includeResolved is how the cleared ones are read back, since
   // they are kept rather than deleted.
+  /**
+   * Problem reports for the admin triage page.
+   *
+   * Carries the reporter's ROLE, not their name. It used to join users.name,
+   * which quietly made this an identity surface: an athlete who reports a bug
+   * should not thereby tell an admin who they are. An admin who has to reach
+   * the reporter still has userId, and every route that turns an id into a
+   * person is now either scrubbed or logged.
+   *
+   * The message body is the part this cannot fix. It is free text a person
+   * typed, and people sign their own bug reports -- there is no reliable way
+   * to scrub a name out of a sentence, and guessing at it would be worse than
+   * not trying. Worth knowing when reading this page rather than assuming the
+   * whole surface is clean.
+   */
   async listProblemReports(
     limit = 100,
     includeResolved = false,
-  ): Promise<(ProblemReport & { userName: string | null })[]> {
+  ): Promise<(ProblemReport & { userRole: string | null })[]> {
     const query = db
       .select({
         id: problemReports.id,
@@ -21787,7 +21868,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         createdAt: problemReports.createdAt,
         resolvedAt: problemReports.resolvedAt,
         resolvedBy: problemReports.resolvedBy,
-        userName: users.name,
+        userRole: users.role,
       })
       .from(problemReports)
       .leftJoin(users, eq(problemReports.userId, users.id));
@@ -24979,22 +25060,29 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // Open requests first and oldest-first within that, because this is a
   // queue somebody works through, not a log they browse.
   async getOpenMediaRemovalRequests(): Promise<
-    (MediaRemovalRequest & { athleteName: string; guardianName: string })[]
+    (MediaRemovalRequest & { guardianName: string })[]
   > {
     const athlete = alias(users, "removal_athlete");
     const guardian = alias(users, "removal_guardian");
     const rows = await db
       .select({
         request: mediaRemovalRequests,
-        athleteName: athlete.name,
         guardianName: guardian.name,
       })
       .from(mediaRemovalRequests)
+      // Still joined, so a request whose athlete row has gone is still
+      // excluded the way it always was -- the join is doing referential work
+      // here, not supplying a name.
       .innerJoin(athlete, eq(mediaRemovalRequests.athleteId, athlete.id))
       .innerJoin(guardian, eq(mediaRemovalRequests.guardianId, guardian.id))
       .where(eq(mediaRemovalRequests.status, "open"))
       .orderBy(mediaRemovalRequests.createdAt);
-    return rows.map((r) => ({ ...r.request, athleteName: r.athleteName, guardianName: r.guardianName }));
+    // The guardian is named and the athlete is not. A removal request is
+    // filed BY an adult who an admin has to write back to, so their name is
+    // the working detail; the child it concerns is reachable by id, and
+    // naming them here would have made a parent's request to delete their
+    // kid's video the thing that told an admin the kid's name.
+    return rows.map((r) => ({ ...r.request, guardianName: r.guardianName }));
   },
 
   // Approving actually deletes, through the one deletion path the retention
@@ -25071,14 +25159,35 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * Paged, newest-blocked first, with the total alongside so the page can say how many there
    * are without shipping them all.
    */
+  /**
+   * Minors waiting on a guardian link, for the admin page that chases them.
+   *
+   * Carries no name, no email address and no birthdate. It used to carry all
+   * three, plus the parent's address, 500 rows a page with an unbounded
+   * offset -- a complete, enumerable register of exactly the children on this
+   * platform who have no guardian watching their account yet. Of everything
+   * an admin could read, that was the worst single page, and the fix applied
+   * when it was last looked at was PAGINATION: the volume was treated as the
+   * problem and the contents were never questioned.
+   *
+   * What the page is actually for still works. The triage it supports is
+   * "was the parent emailed and has not acted" versus "no invite was ever
+   * issued or the send failed", and answering that needs the INVITE's state
+   * and the guardian address the invite went to -- not the child's identity.
+   * An admin can still act on the account, because the id is still here.
+   *
+   * privacyTier rather than the date of birth: under-13 and 13-to-17 route
+   * differently for consent and retention, which is the only reason this page
+   * ever needed an age, and a band answers it without handing over a
+   * birthday. A birthdate is a direct identifier for a child and the join key
+   * any outside list would use.
+   */
   async getAthletesBlockedPendingGuardian(limit = 100, offset = 0): Promise<{
     total: number;
     rows:
     {
       id: number;
-      name: string;
-      email: string;
-      dateOfBirth: string;
+      privacyTier: string | null;
       createdAt: string;
       inviteEmail: string | null;
       inviteSentAt: string | null;
@@ -25096,8 +25205,6 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   }> {
     const result = await db.execute<{
       id: number;
-      name: string;
-      email: string;
       date_of_birth: string;
       created_at: string;
       invite_email: string | null;
@@ -25107,7 +25214,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       invite_delivered: boolean | null;
       invite_error: string | null;
     }>(sql`
-      SELECT u.id, u.name, u.email, u.date_of_birth, u.created_at,
+      SELECT u.id, u.date_of_birth, u.created_at,
         i.email AS invite_email,
         i.created_at AS invite_sent_at,
         i.expires_at AS invite_expires_at,
@@ -25154,10 +25261,15 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
 
     const rows = result.rows.map((r) => ({
       id: r.id,
-      name: r.name,
-      email: r.email,
-      dateOfBirth: String(r.date_of_birth),
+      // The birthdate is read from the database and converted to a band right
+      // here, so the only thing that ever leaves this function is which of
+      // the three consent-and-retention tiers the account falls in.
+      privacyTier: r.date_of_birth ? derivePrivacyTier(String(r.date_of_birth)) : null,
       createdAt: String(r.created_at),
+      // The guardian's address stays: it is the address the invite was sent
+      // to, it is what an admin needs to see to tell a bad address from an
+      // ignored email, and it belongs to the adult who was written to rather
+      // than to the child.
       inviteEmail: r.invite_email,
       inviteSentAt: r.invite_sent_at ? String(r.invite_sent_at) : null,
       inviteExpiresAt: r.invite_expires_at ? String(r.invite_expires_at) : null,

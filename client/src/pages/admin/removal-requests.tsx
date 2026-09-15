@@ -13,7 +13,7 @@ import { AppShell } from "@/components/app-shell";
 type RemovalRequest = {
   id: number;
   athleteId: number;
-  athleteName: string;
+
   guardianName: string;
   source: string;
   sourceId: number;
@@ -94,7 +94,7 @@ export default function AdminRemovalRequestsPage() {
                   <div className="min-w-0">
                     <CardTitle className="text-base">{r.label}</CardTitle>
                     <CardDescription>
-                      {r.guardianName} asked, on behalf of {r.athleteName}
+                      {r.guardianName} asked, on behalf of athlete #{r.athleteId}
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="shrink-0">

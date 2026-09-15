@@ -36,21 +36,38 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+/**
+ * Athlete and guardian rows arrive without a name or an email -- the server
+ * withholds them (see server/admin-identity.ts) rather than this page
+ * choosing not to draw them. So both are optional here, and
+ * `identityWithheld` is what the server sets to say the absence is the policy
+ * working rather than a row that failed to load.
+ */
 type UserRow = {
   id: number;
-  name: string;
-  email: string;
+  name?: string | null;
+  email?: string | null;
+  identityWithheld?: boolean;
   role: "coach" | "athlete" | "admin" | "guardian";
   createdAt: string;
   lastActivityAt: string | null;
   emailVerified: boolean;
   mfaEnabled: boolean;
   sport: string | null;
+  position?: string | null;
+  gender?: string | null;
+  age?: number | null;
+  privacyTier?: string | null;
 };
+
+/** What to show where a name would go, for an account that has no name to show. */
+function displayLabel(u: { id: number; role: string; name?: string | null }): string {
+  return u.name ?? `${u.role} #${u.id}`;
+}
 
 type UserDetail = UserRow & {
   coachCode: string | null;
-  staffInviteCode: string | null;
+  staffInviteCode?: string | null;
   freeAgentTier: string | null;
   billingTier: string | null;
   isBetaAccount: boolean;
@@ -195,7 +212,7 @@ export default function AdminUsers() {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="truncate text-sm font-semibold">{u.name}</span>
+                        <span className="truncate text-sm font-semibold">{displayLabel(u)}</span>
                         <Badge className={cn("border-none text-[10px] capitalize", ROLE_BADGE_CLASS[u.role])}>
                           {u.role}
                         </Badge>
@@ -206,7 +223,9 @@ export default function AdminUsers() {
                           <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-success" aria-label="MFA enabled" />
                         )}
                       </div>
-                      <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {u.email ?? "identity withheld from admins"}
+                      </p>
                     </div>
                     <div className="hidden shrink-0 text-right text-xs text-muted-foreground sm:block">
                       <p>Joined {new Date(u.createdAt).toLocaleDateString()}</p>
@@ -230,7 +249,11 @@ export default function AdminUsers() {
                             {detail.role === "coach" && (
                               <>
                                 <DetailField label="Coach code" value={detail.coachCode ?? "--"} mono />
-                                <DetailField label="Staff invite code" value={detail.staffInviteCode ?? "--"} mono />
+                                <DetailField
+                                  label="Staff invite code"
+                                  value={detail.staffInviteCode ?? "withheld"}
+                                  mono
+                                />
                                 <DetailField label="Billing tier" value={detail.billingTier ?? "none"} />
                               </>
                             )}
@@ -261,7 +284,7 @@ export default function AdminUsers() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => setMfaResetTarget({ id: detail.id, name: detail.name })}
+                              onClick={() => setMfaResetTarget({ id: detail.id, name: displayLabel(detail) })}
                               disabled={!detail.mfaEnabled}
                             >
                               <KeyRound className="h-3.5 w-3.5" />
@@ -273,7 +296,7 @@ export default function AdminUsers() {
                                 <Select
                                   value=""
                                   onValueChange={(role) =>
-                                    setRoleChangeTarget({ id: detail.id, name: detail.name, role })
+                                    setRoleChangeTarget({ id: detail.id, name: displayLabel(detail), role })
                                   }
                                 >
                                   <SelectTrigger className="h-8 w-32 text-xs">
@@ -296,7 +319,7 @@ export default function AdminUsers() {
                           {(detail.role === "coach" || detail.role === "athlete") && (
                             <AdminBillingAssignment
                               userId={detail.id}
-                              email={detail.email}
+                              email={detail.email ?? ""}
                               role={detail.role}
                             />
                           )}
