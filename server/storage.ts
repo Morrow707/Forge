@@ -121,6 +121,7 @@ import {
   adminSavedViews,
   adminAthleteQueryFiltersSchema,
   consentRecords,
+  consentTypeEnum,
   recordAccessAuditLogs,
   legalDocuments,
   problemReports,
@@ -4627,6 +4628,27 @@ export const storage = {
       // told apart.
       environment: verified.environment,
     });
+    // A card charged through the App Store is the same FTC verification method as one charged
+    // through Stripe, so it is recorded the same way -- corroboration, never a replacement for
+    // the guardian's signed agreement at claim time.
+    //
+    // PRODUCTION ONLY. Sandbox means no money changed hands, which is every TestFlight and
+    // simulator purchase; a consent record claiming payment verification off a transaction that
+    // cost nobody anything would be a record asserting something that did not happen. That
+    // matters more here than anywhere else in this file, because this is the row somebody would
+    // later rely on.
+    if (verified.environment.toLowerCase() === "production") {
+      try {
+        await this.recordPaymentAsParentalVerification({
+          payerId: userId,
+          reference: verified.originalTransactionId,
+          source: "apple_iap",
+        });
+      } catch (err) {
+        // The purchase already succeeded; losing a corroborating record is not worth failing it.
+        console.error("failed to record Apple IAP as parental verification:", err);
+      }
+    }
     return { ok: true };
   },
 
@@ -25514,6 +25536,88 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * one field they are being asked for, and an adult who fills it in is past the gate in the same
    * request.
    */
+  /** Record a card transaction as corroborating evidence of verifiable parental consent.
+   *
+   * The FTC treats a payment that notifies the cardholder of each discrete transaction as one of
+   * its approved verification methods: holding an adult's payment instrument, and receiving the
+   * statement, is something a child cannot fake for long.
+   *
+   * CORROBORATING, NOT A SUBSTITUTE, and the distinction is the whole reason this writes what it
+   * writes. The consent itself is the guardian claiming their linked account and signing, which
+   * is also the only thing that unlocks a minor's account at all. This says an adult's card was
+   * additionally charged, and each row's text states which of two very different situations was
+   * actually observed:
+   *
+   *   - a GUARDIAN paid, on an account linked to this athlete. Attributable to a named adult who
+   *     has already signed. The strong case.
+   *   - the minor's OWN account was charged. Somebody's card was used and it was not the child's
+   *     own, but nothing here identifies whose, so the row says that rather than implying a
+   *     guardian was at the keyboard.
+   *
+   * Flattening those two into one row would make the weaker case read like the stronger one,
+   * which is the failure mode that matters in a consent record: a record that overclaims is worse
+   * than no record, because it is the thing someone later relies on.
+   *
+   * Returns how many rows it wrote, so a caller can log a payment that corroborated nothing
+   * (an adult paying for themselves, which is almost every payment) without it looking like a
+   * failure.
+   */
+  async recordPaymentAsParentalVerification(input: {
+    payerId: number;
+    reference: string;
+    amountCents?: number | null;
+    source: "stripe" | "apple_iap";
+  }): Promise<number> {
+    const payer = await this.getUser(input.payerId);
+    if (!payer) return 0;
+
+    const describe = (whose: string) =>
+      `Payment verification (${input.source}): ${whose}. Reference ${input.reference}` +
+      (input.amountCents != null ? `, amount ${input.amountCents} cents` : "") +
+      `. Recorded as corroborating evidence of verifiable parental consent; the consent of record ` +
+      `is the guardian's signed agreement at account claim.`;
+
+    // The strong case: a guardian paid, and we know exactly which minors they are responsible
+    // for. One row per linked minor -- a parent of two athletes verified for both.
+    const linkedAthletes = await this.getAthletesForGuardian(input.payerId);
+    let written = 0;
+    for (const athlete of linkedAthletes) {
+      if (!athlete.dateOfBirth) continue;
+      if (derivePrivacyTier(athlete.dateOfBirth) === "tier3_adult_18plus") continue;
+      await this.logConsentRecord({
+        userId: athlete.id,
+        consentType: "guardian_payment_verification",
+        documentText: describe(
+          `paid by ${payer.name} (user ${payer.id}), a linked guardian of this athlete`,
+        ),
+        givenByUserId: payer.id,
+      });
+      written += 1;
+    }
+    if (written > 0) return written;
+
+    // The weaker case: the payer IS a minor athlete, so an adult's card was used on their own
+    // account. Worth recording -- a child does not hold a card -- but not worth dressing up.
+    if (
+      payer.role === "athlete" &&
+      payer.dateOfBirth &&
+      derivePrivacyTier(payer.dateOfBirth) !== "tier3_adult_18plus"
+    ) {
+      await this.logConsentRecord({
+        userId: payer.id,
+        consentType: "guardian_payment_verification",
+        documentText: describe(
+          "charged to this minor athlete's own account, so an adult payment instrument was used; " +
+            "this record does not identify who presented it",
+        ),
+        givenByUserId: payer.id,
+      });
+      return 1;
+    }
+
+    return 0;
+  },
+
   async athleteGateStatus(
     athleteId: number,
   ): Promise<"ok" | "needs_date_of_birth" | "needs_guardian"> {
@@ -25696,14 +25800,11 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
 
   async logConsentRecord(input: {
     userId: number;
-    consentType:
-      | "terms_of_service"
-      | "biometric_waiver"
-      | "coach_coppa_consent"
-      | "guardian_coppa_consent"
-      | "parental_notice_ack"
-      | "institutional_agreement"
-      | "research_data_use";
+    // Derived from the enum rather than restated. The hand-written union this replaces had
+    // already drifted: every value was listed by hand, so adding one to the schema left this
+    // signature silently rejecting it, and the error surfaced at the new call site rather than
+    // at the declaration that was actually stale.
+    consentType: (typeof consentTypeEnum.enumValues)[number];
     documentText: string;
     givenByUserId?: number;
     ipAddress?: string;

@@ -3050,6 +3050,13 @@ DO $$ BEGIN
   ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'guardian_coppa_consent';
 EXCEPTION WHEN undefined_object THEN NULL; END $$;
 
+-- A card transaction on an account tied to a minor athlete, recorded as corroborating evidence of
+-- verifiable parental consent (see shared/schema.ts's own comment on the value). Corroborating
+-- rather than a substitute: the consent is still the guardian's signature at claim time.
+DO $$ BEGIN
+  ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'guardian_payment_verification';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'weight_unit_lbs_default_2026_09_09') THEN

@@ -495,6 +495,30 @@ function mapStripeStatus(status: Stripe.Subscription.Status): "trialing" | "acti
   }
 }
 
+/** Shared by every payment completion path, so a new one cannot quietly skip it.
+ *
+ * Never throws into the caller: a payment has already succeeded by the time this runs, and
+ * failing the webhook would make Stripe retry a transaction that went through. A failure here
+ * loses a corroborating record, which is worth a loud log and not worth re-charging anybody.
+ */
+async function recordPaymentVerification(
+  payerId: number,
+  reference: string,
+  amountCents: number | null | undefined,
+  source: "stripe" | "apple_iap",
+): Promise<void> {
+  try {
+    await storage.recordPaymentAsParentalVerification({
+      payerId,
+      reference,
+      amountCents: amountCents ?? null,
+      source,
+    });
+  } catch (err) {
+    console.error("failed to record payment as parental verification:", err);
+  }
+}
+
 export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<void> {
   // Stripe's own delivery guarantee is at-least-once, not exactly-once --
   // a redelivered event (a slow response, a retry after a transient 5xx,
@@ -540,6 +564,9 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
           { sessionId: session.id, enrollmentId, lessonId },
           event.id,
         );
+        // Same reasoning as the subscription branch below. A one-off lesson purchase is still a
+        // card transaction, and this branch returns before reaching that call.
+        await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
         break;
       }
 
@@ -575,6 +602,11 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         await storage.updateFreeAgentBilling(userId, { freeAgentTier: purchasedFreeAgentTier });
       }
       await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind }, event.id);
+      // A card was charged on an account that may belong to, or be responsible for, a minor.
+      // The FTC counts that as one of its verifiable-parental-consent methods, so it is recorded
+      // -- as corroboration, never as a replacement for the guardian's signed agreement at claim
+      // time. Writes nothing for the ordinary case of an adult paying for themselves.
+      await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
       break;
     }
     case "customer.subscription.updated": {

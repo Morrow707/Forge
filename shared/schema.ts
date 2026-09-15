@@ -5024,6 +5024,18 @@ export const consentTypeEnum = pgEnum("consent_type", [
   // account. Distinct from coach_coppa_consent, which is a coach's
   // attestation on a provisional slot and is not a parent's own say-so.
   "guardian_coppa_consent",
+  // A card transaction on an account tied to a minor athlete, recorded as corroborating evidence
+  // of verifiable parental consent -- the FTC treats a payment that notifies the cardholder of
+  // each discrete transaction as one of its approved verification methods, on the reasoning that
+  // holding an adult's payment instrument, and receiving the statement, is something a child
+  // cannot fake for long.
+  //
+  // CORROBORATING, not a substitute. The consent itself is still the guardian claiming their
+  // linked account and signing (see claimGuardianInvite); this records that an adult's card was
+  // also charged. The documentText on each row says exactly what was observed and by whom,
+  // because a payment made ON a minor's own account proves less than one made BY a linked
+  // guardian, and a record that flattened the two would overclaim.
+  "guardian_payment_verification",
   "parental_notice_ack",
   "institutional_agreement",
   // Agreement that this athlete's de-identified data may be included in a
