@@ -23,13 +23,17 @@ import { cn } from "@/lib/utils";
 
 type LeaderboardExercise = { id: number; name: string };
 type LeaderboardEntry = {
-  id: number;
+  // No athlete id, and no height or body weight for anyone but you -- the
+  // server withholds them from this view (see projectLeaderboardForAthlete).
+  // isYou is how the server says which row is the viewer's, since there is no
+  // id left to compare against.
+  isYou: boolean;
   name: string;
   sport: string | null;
   position: string | null;
   age: number | null;
-  heightIn: number | null;
-  bodyWeightLbs: number | null;
+  heightIn?: number | null;
+  bodyWeightLbs?: number | null;
   estimatedOneRm: number;
   weight: number;
   reps: number;
@@ -41,13 +45,13 @@ type LeaderboardEntry = {
 };
 
 type SpeedLeaderboardEntry = {
-  id: number;
+  isYou: boolean;
   name: string;
   sport: string | null;
   position: string | null;
   age: number | null;
-  heightIn: number | null;
-  bodyWeightLbs: number | null;
+  heightIn?: number | null;
+  bodyWeightLbs?: number | null;
   elapsedSeconds: number;
   distanceYards: number | null;
   date: string;
@@ -245,15 +249,15 @@ function StrengthLeaderboard({ myId }: { myId: number }) {
           <CardContent className="divide-y divide-border p-0">
             {entries.map((entry) => (
               <RosterRow
-                key={entry.id}
+                key={`${entry.rank}-${entry.name}`}
                 rank={entry.rank}
-                isYou={entry.id === myId}
+                isYou={entry.isYou}
                 name={entry.name}
                 sport={entry.sport}
                 position={entry.position}
                 age={entry.age}
-                heightIn={entry.heightIn}
-                bodyWeightLbs={entry.bodyWeightLbs}
+                heightIn={entry.heightIn ?? null}
+                bodyWeightLbs={entry.bodyWeightLbs ?? null}
                 currentStreak={entry.currentStreak}
                 totalCompleted={entry.totalCompleted}
                 statValue={`${entry.estimatedOneRm} ${entry.weightUnit}`}
@@ -392,15 +396,15 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
           <CardContent className="divide-y divide-border p-0">
             {entries.map((entry) => (
               <RosterRow
-                key={entry.id}
+                key={`${entry.rank}-${entry.name}`}
                 rank={entry.rank}
-                isYou={entry.id === myId}
+                isYou={entry.isYou}
                 name={entry.name}
                 sport={entry.sport}
                 position={entry.position}
                 age={entry.age}
-                heightIn={entry.heightIn}
-                bodyWeightLbs={entry.bodyWeightLbs}
+                heightIn={entry.heightIn ?? null}
+                bodyWeightLbs={entry.bodyWeightLbs ?? null}
                 currentStreak={entry.currentStreak}
                 totalCompleted={entry.totalCompleted}
                 statValue={`${entry.elapsedSeconds.toFixed(2)}s`}

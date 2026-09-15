@@ -608,6 +608,52 @@ async function guardCohortDifferencing(
 // as a single unbounded list a client component renders with no
 // virtualization, for both the coach dashboard and every individual
 // athlete's own leaderboard tab.
+/**
+ * A teammate, as another athlete may see them.
+ *
+ * A team leaderboard is meant to be seen by the team, and a coach's own view
+ * is untouched. The problem is who counts as the team. coachCode is the
+ * signup code a coach posts publicly -- on flyers, on a QR link, on a team
+ * page -- and signing up with it links the new account to that coach's roster
+ * immediately, with no coach approval, because the athlete is the one
+ * initiating. So anyone who photographs a poster can hold a roster seat
+ * minutes later, and the leaderboard would then hand them up to a hundred
+ * children's full names, each with age, height, body weight, sport and
+ * position attached. At a named club that is a dossier per child, assembled
+ * by a stranger, from a public code.
+ *
+ * Three things change for everyone who is not the viewer. The full name
+ * becomes a first name and a last initial, which is how youth results have
+ * always been published and is what a teammate needs to recognise someone
+ * they already train with. The user id goes, because it is a handle that
+ * addresses the same person on other routes. Height and body weight go,
+ * because they are the fields that turn a partial name into an identification
+ * and they are nobody's business on a leaderboard.
+ *
+ * None of this makes a posted code safe -- a stranger on the roster is still
+ * a stranger on the roster, and the fix for that is an approval step in
+ * onboarding rather than anything here. It removes what they can walk away
+ * with.
+ */
+function leaderboardDisplayName(fullName: string | null | undefined): string {
+  const parts = String(fullName ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "Athlete";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+}
+
+function projectLeaderboardForAthlete<T extends { id: number; name: string }>(
+  entries: T[],
+  viewerId: number,
+): (Omit<T, "id" | "heightIn" | "bodyWeightLbs"> & { isYou: boolean })[] {
+  return entries.map((entry) => {
+    const { id, ...rest } = entry as T & { heightIn?: unknown; bodyWeightLbs?: unknown };
+    if (id === viewerId) return { ...rest, isYou: true } as any;
+    const { heightIn, bodyWeightLbs, ...withoutBody } = rest as any;
+    return { ...withoutBody, name: leaderboardDisplayName(entry.name), isYou: false };
+  });
+}
+
 const LEADERBOARD_MAX_ROWS = 100;
 
 function jointLabelFor(jointKey: string): string {
@@ -22982,9 +23028,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     if (coaches.length === 0) return null;
     const full = await this.getFullLeaderboardForExercise(coaches[0].id, exerciseId);
     const top = full.slice(0, LEADERBOARD_MAX_ROWS);
-    if (top.some((e) => e.id === athleteId)) return top;
-    const own = full.find((e) => e.id === athleteId);
-    return own ? [...top, own] : top;
+    const withOwn = top.some((e) => e.id === athleteId)
+      ? top
+      : [...top, full.find((e) => e.id === athleteId)].filter(Boolean as any as (v: any) => v is any);
+    return projectLeaderboardForAthlete(withOwn, athleteId);
   },
 
   async getSpeedLeaderboardExercisesForAthlete(athleteId: number) {
@@ -23012,9 +23059,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       distanceYards,
     );
     const top = full.slice(0, LEADERBOARD_MAX_ROWS);
-    if (top.some((e) => e.id === athleteId)) return top;
-    const own = full.find((e) => e.id === athleteId);
-    return own ? [...top, own] : top;
+    const withOwn = top.some((e) => e.id === athleteId)
+      ? top
+      : [...top, full.find((e) => e.id === athleteId)].filter(Boolean as any as (v: any) => v is any);
+    return projectLeaderboardForAthlete(withOwn, athleteId);
   },
 
   // ---------- Platform trends (admin-only, anonymized) ----------
