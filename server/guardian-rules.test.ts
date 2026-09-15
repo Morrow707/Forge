@@ -21,7 +21,7 @@ describe("rule 1: a minor is blocked until a guardian is linked", () => {
     // Ahead of every route, so the next athlete route added is covered by
     // construction. Five AI routes were missed the last time a rule had to
     // be remembered at each call site.
-    const gateAt = routes.indexOf("isAthleteBlockedPendingGuardian(user.id)");
+    const gateAt = routes.indexOf("storage.athleteGateStatus(user.id)");
     const firstRoute = routes.indexOf('app.get("/api/');
     expect(gateAt).toBeGreaterThan(-1);
     expect(gateAt).toBeLessThan(firstRoute);
@@ -30,6 +30,7 @@ describe("rule 1: a minor is blocked until a guardian is linked", () => {
   it("never traps the athlete in an account they cannot leave or explain", () => {
     for (const allowed of [
       '"/api/auth/"',
+      '"/api/account/backfill-date-of-birth"',
       '"/api/account/guardian-link"',
       '"/api/account/guardian-invite/resend"',
       '"/api/account/delete"',
@@ -45,15 +46,27 @@ describe("rule 1: a minor is blocked until a guardian is linked", () => {
     expect(body).toContain("503");
   });
 
-  it("blocks a known minor, and only a known minor", () => {
-    // The gate's own predicate, stated as the three cases it has to get
-    // right. An unknown date of birth is not a minor -- guessing would lock
-    // out every account created before that column existed.
-    const fn = storage.slice(storage.indexOf("async isAthleteBlockedPendingGuardian"));
+  it("holds every athlete it cannot clear, not only the ones it can age", () => {
+    // The gate's own predicate, stated as the cases it has to get right. An unknown date of birth
+    // USED to clear it -- the reasoning being that guessing would lock out every account created
+    // before that column existed -- which left the rule with an exception at exactly its
+    // worst-case member. It is now held under its own reason, and the way out is allow-listed.
+    const fn = storage.slice(storage.indexOf("async athleteGateStatus"));
     const body = fn.slice(0, fn.indexOf("\n  },"));
-    expect(body).toContain("if (!athlete?.dateOfBirth) return false;");
-    expect(body).toContain('=== "tier3_adult_18plus") return false;');
+    expect(body).toContain('if (!athlete.dateOfBirth) return "needs_date_of_birth";');
+    expect(body).toContain('=== "tier3_adult_18plus") return "ok";');
     expect(body).toContain("getGuardianLinkForAthlete");
+    expect(body).not.toContain("return false");
+  });
+
+  it("answers the two holds differently, so each can be acted on", () => {
+    // Telling an athlete whose birthdate is missing to go and ask their parent is an instruction
+    // they cannot follow. The gate says which hold applies and the client shows the matching
+    // screen; collapsing them back into one message is the regression this catches.
+    const gate = routes.slice(routes.indexOf("const GUARDIAN_GATE_ALLOWED_PREFIXES"));
+    const body = gate.slice(0, gate.indexOf("Apple's Shared Web Credentials"));
+    expect(body).toContain('code: "date_of_birth_required"');
+    expect(body).toContain('code: "guardian_link_required"');
   });
 
   it("agrees with derivePrivacyTier about who is a minor", () => {
