@@ -105,6 +105,7 @@ import { format, parseISO } from "date-fns";
 import type { MovementProfile, ExercisePageTheme } from "@shared/schema";
 import { parseProgression, parsePrescribedWeight, convertWeight } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
+import { BiometricReleaseDialog } from "@/components/biometric-release-dialog";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { ReadinessBanner } from "@/components/readiness-banner";
 import { ExerciseSheetTutorial } from "@/components/exercise-sheet-tutorial";
@@ -2623,6 +2624,22 @@ function ExerciseLogContent({
   const isCorrective = item.kind === "corrective";
   const [distanceUnit] = useDistanceUnit();
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
+  // The set the athlete was trying to track when we stopped to ask for the biometric release.
+  // Held so that agreeing carries them straight into it -- being asked a question should not cost
+  // them the tap that prompted it.
+  const [releaseAskedForSet, setReleaseAskedForSet] = useState<number | null>(null);
+
+  // Adults only, and only where nothing is on file: a minor's release comes from their guardian at
+  // claim time. The server refuses to store skeleton frames or path traces without it regardless
+  // of this (see the capture gate in submitWorkoutLog); asking here is what makes that refusal a
+  // question somebody answered rather than a set that silently came back empty.
+  const startTracking = (setNumber: number) => {
+    if (user?.biometricReleaseRequired) {
+      setReleaseAskedForSet(setNumber);
+      return;
+    }
+    setTrackingSet(setNumber);
+  };
   // Set numbers whose AvBarTrackerDialog recording has stopped and is analyzing/uploading in
   // the background -- see AvBarTrackerDialog's own onAnalysisStarted/onProcessingSettled prop
   // comments. Lets the set's own row show an inline spinner instead of the athlete being stuck
@@ -3100,6 +3117,19 @@ function ExerciseLogContent({
           exercise reads as information, the same line repeated under four sets
           reads as noise and stops being read at all. */}
       {item.trackingLevel !== "none" && <CameraMetricCaveat dismissible />}
+      {/* Rendered beside the sets rather than at the dialog stack below, because it has to open
+          BEFORE any tracker does -- it is the question asked instead of starting the camera. */}
+      <BiometricReleaseDialog
+        open={releaseAskedForSet !== null}
+        onOpenChange={(open) => !open && setReleaseAskedForSet(null)}
+        onAgreed={() => {
+          // Straight into the set they were reaching for. Declining leaves releaseAskedForSet
+          // cleared and trackingSet untouched, so nothing opens and the set logs as normal.
+          const pending = releaseAskedForSet;
+          setReleaseAskedForSet(null);
+          if (pending !== null) setTrackingSet(pending);
+        }}
+      />
 
       {videoRequired && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
@@ -3302,7 +3332,7 @@ function ExerciseLogContent({
                     {item.trackingLevel !== "none" && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
                       <button
                         type="button"
-                        onClick={() => setTrackingSet(set.setNumber)}
+                        onClick={() => startTracking(set.setNumber)}
                         // Recording a new set while a DIFFERENT set's analysis is still running
                         // in the background is intentionally allowed, not guarded -- recording
                         // is hardware video encoding, a different chip from the Neural Engine/
