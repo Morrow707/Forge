@@ -789,6 +789,25 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     private let targetWidth: Int32 = 1920
     private let targetHeight: Int32 = 1080
 
+    /// MATCH THE STOCK CAMERA APP'S SHAPE, WHICH IS 4:3 AND NOT 16:9.
+    ///
+    /// Held side by side at the same nominal 1x, ours looked tighter than the Camera app and
+    /// stayed that way after the field-of-view work. The reason is the aspect ratio, not the
+    /// zoom. An iPhone's sensor is natively 4:3, which is what the Camera app shows in photo
+    /// mode; a 1920x1080 video format is a 16:9 SLICE of that sensor, so it gives up the top and
+    /// bottom of the frame before anything else happens. Same lens, same 1x, less picture.
+    ///
+    /// It is not only how it looks. Scale calibration wants the athlete's full height in frame --
+    /// calibrateFromFrames measures nose to ankle, and a bar-path take framed to include the bar
+    /// is exactly where a 16:9 crop cuts the head or the feet. Every implausible-scale refusal
+    /// this pipeline has produced is that measurement failing, so the taller frame is the fix
+    /// pointed at the actual problem rather than at the complaint.
+    ///
+    /// Aspect is preferred, never required: a device that cannot hold 60fps at 4:3 falls through
+    /// to the 16:9 path below unchanged, which is what every build before this one used.
+    private let targetAspect: Double = 4.0 / 3.0
+    private let aspectTolerance: Double = 0.02
+
     private func applyHighestFrameRate(to device: AVCaptureDevice) {
         func dims(_ format: AVCaptureDevice.Format) -> CMVideoDimensions {
             CMVideoFormatDescriptionGetDimensions(format.formatDescription)
@@ -797,6 +816,21 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             format.videoSupportedFrameRateRanges.contains {
                 $0.minFrameRate <= targetFrameRate && $0.maxFrameRate >= targetFrameRate
             }
+        }
+        func aspect(_ format: AVCaptureDevice.Format) -> Double {
+            let d = dims(format)
+            return d.height == 0 ? 0 : Double(d.width) / Double(d.height)
+        }
+        func isFourThree(_ format: AVCaptureDevice.Format) -> Bool {
+            abs(aspect(format) - targetAspect) <= aspectTolerance
+        }
+        // FIRST CHOICE: the sensor's own 4:3 shape, at 60fps, no smaller than 1080 tall.
+        //
+        // 1440x1080 is the format every recent iPhone publishes here. The height floor is what
+        // stops a device with an odd format list quietly handing back a 640x480 that happens to
+        // be 4:3 -- this trades the 16:9 crop away for frame, not for resolution.
+        let fourThree = device.formats.filter { f in
+            isFourThree(f) && dims(f).height >= targetHeight && canRun60(f)
         }
         // Exactly 1080p, which every iPhone rear camera offers at 60fps. Not "<= 1080p": a
         // range would let a device with an unusual format list quietly land somewhere smaller,
@@ -854,7 +888,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 return !a.isVideoHDRSupported && b.isVideoHDRSupported
             }
         }
-        guard let chosen = bestFormat(exact) ?? largest(underBudget) ?? largest(anySixty) else {
+        guard let chosen = bestFormat(fourThree) ?? bestFormat(exact) ?? largest(underBudget) ?? largest(anySixty) else {
             logDiag("WARNING: no format supports \(Int(targetFrameRate))fps -- leaving device default")
             return
         }
@@ -886,6 +920,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             let widestAnyRate = device.formats.map(\.videoFieldOfView).max() ?? chosen.videoFieldOfView
             logDiag(
                 "activeFormat set: \(d.width)x\(d.height) @ \(Int(targetFrameRate))fps (capped), "
+                    + "aspect \(String(format: "%.2f", Double(d.width) / Double(max(d.height, 1))))"
+                    + "\(isFourThree(chosen) ? " (4:3, matches Camera app)" : " (16:9 fallback)") "
                     + "fov \(String(format: "%.1f", chosen.videoFieldOfView))deg "
                     + "(widest this lens offers at any rate: \(String(format: "%.1f", widestAnyRate))deg) "
                     + "hdr \(chosen.isVideoHDRSupported ? (device.isVideoHDREnabled ? "on" : "supported-but-off") : "unsupported") "
