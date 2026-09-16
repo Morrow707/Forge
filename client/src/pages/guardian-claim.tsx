@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiRequest, ApiError, getJson, setNativeToken } from "@/lib/queryClient";
 import { ForgeMark } from "@/components/forge-mark";
+import { LegalDocumentReader } from "@/components/legal-document-reader";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 
@@ -127,74 +128,78 @@ export default function GuardianClaimPage() {
                 logged as a separate consent record snapshotting different text, could read one
                 of the three. All four pages are public: this page is reached from an emailed
                 invite, before there is a session to authenticate. */}
-            <label className="flex items-start gap-2 text-xs text-muted-foreground">
-              <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
-              <span>
-                I agree to the{" "}
-                <a
-                  href="/terms"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-primary hover:underline"
-                >
-                  terms of service
-                </a>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-xs text-muted-foreground">
-              <Checkbox
-                checked={agreedToPrivacyPolicy}
-                onCheckedChange={(c) => setAgreedToPrivacyPolicy(c === true)}
+            {/* Each document reads in place, under the box that agrees to it.
+                All four were target="_blank" links, which open nothing inside
+                WKWebView -- so a guardian consenting on an iPhone, on behalf of
+                a child, could not open a single one of the four documents they
+                were ticking. See LegalDocumentReader.
+
+                The reader sits BESIDE the label rather than inside it, because a
+                <button> inside a <label> toggles that label's checkbox: opening
+                the release to read it would have silently ticked "I consent." */}
+            <div className="space-y-1">
+              <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
+                <span>I agree to the terms of service</span>
+              </label>
+              <LegalDocumentReader
+                docType="terms_of_service"
+                label="Read the terms of service"
+                className="pl-6 text-xs"
               />
-              <span>
-                I have read the{" "}
-                <a
-                  href="/privacy"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-primary hover:underline"
-                >
-                  privacy policy
-                </a>{" "}
-                and understand what Forge collects about my child and who can see it
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-xs text-muted-foreground">
-              <Checkbox
-                checked={agreedToMinorMediaRelease}
-                onCheckedChange={(c) => setAgreedToMinorMediaRelease(c === true)}
+            </div>
+            <div className="space-y-1">
+              <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={agreedToPrivacyPolicy}
+                  onCheckedChange={(c) => setAgreedToPrivacyPolicy(c === true)}
+                />
+                <span>
+                  I have read the privacy policy and understand what Forge collects about my child
+                  and who can see it
+                </span>
+              </label>
+              <LegalDocumentReader
+                docType="privacy_policy"
+                label="Read the privacy policy"
+                className="pl-6 text-xs"
               />
-              <span>
-                I consent to my child being recorded on video for coaching, and to measurements
-                being taken from that footage, as set out in the{" "}
-                <a
-                  href="/biometric-release"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-primary hover:underline"
-                >
-                  video and biometric release
-                </a>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-xs text-muted-foreground">
-              <Checkbox
-                checked={agreedToAssumptionOfRisk}
-                onCheckedChange={(c) => setAgreedToAssumptionOfRisk(c === true)}
+            </div>
+            <div className="space-y-1">
+              <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={agreedToMinorMediaRelease}
+                  onCheckedChange={(c) => setAgreedToMinorMediaRelease(c === true)}
+                />
+                <span>
+                  I consent to my child being recorded on video for coaching, and to measurements
+                  being taken from that footage, as set out in the video and biometric release
+                </span>
+              </label>
+              <LegalDocumentReader
+                docType="biometric_waiver"
+                label="Read the video and biometric release"
+                className="pl-6 text-xs"
               />
-              <span>
-                I understand that athletic training carries a risk of injury, that nobody at Forge
-                supervises my child's training, and I accept those risks as set out in the{" "}
-                <a
-                  href="/assumption-of-risk"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-primary hover:underline"
-                >
+            </div>
+            <div className="space-y-1">
+              <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={agreedToAssumptionOfRisk}
+                  onCheckedChange={(c) => setAgreedToAssumptionOfRisk(c === true)}
+                />
+                <span>
+                  I understand that athletic training carries a risk of injury, that nobody at
+                  Forge supervises my child's training, and I accept those risks as set out in the
                   assumption of risk and release
-                </a>
-              </span>
-            </label>
+                </span>
+              </label>
+              <LegalDocumentReader
+                docType="assumption_of_risk"
+                label="Read the assumption of risk and release"
+                className="pl-6 text-xs"
+              />
+            </div>
             <Button type="submit" className="w-full" disabled={!allAgreed || claimMutation.isPending}>
               {claimMutation.isPending
                 ? preview?.accountExists

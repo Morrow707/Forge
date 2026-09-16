@@ -762,17 +762,20 @@ export function AppShell({
                       the dashboard is how it reaches people; this is so it can be found again,
                       which a document you were shown once and can never re-open is not. */}
                   {user?.role === "athlete" && (
-                    <a
+                    /* Routed in-app rather than opened in a new window: WKWebView
+                       has no second window to open one in, so this menu item did
+                       nothing at all on iOS -- which is precisely the "can never
+                       re-open it" failure the comment above says this exists to
+                       prevent. */
+                    <Link
                       href="/assumption-of-risk"
-                      target="_blank"
-                      rel="noreferrer"
                       role="menuitem"
                       onClick={() => setAccountMenuOpen(false)}
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <ShieldAlert className="h-4 w-4" />
                       Training risks
-                    </a>
+                    </Link>
                   )}
                   <button
                     type="button"

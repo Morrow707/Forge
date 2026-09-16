@@ -61,8 +61,8 @@ describe("collecting the assumption-of-risk release", () => {
     // Four separate agreements now, four separate documents, four links. A mandatory checkbox
     // over text the person cannot reach is not a clickwrap.
     const claim = read("client/src/pages/guardian-claim.tsx");
-    expect(claim).toContain('href="/assumption-of-risk"');
-    expect(claim).toMatch(/nobody at Forge\s*\n?\s*supervises my child's training/);
+    expect(claim).toContain('docType="assumption_of_risk"');
+    expect(claim).toMatch(/nobody at\s+Forge\s+supervises my child's training/);
   });
 
   it("blocks the claim button until all four are ticked", () => {

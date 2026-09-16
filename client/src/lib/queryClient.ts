@@ -94,6 +94,34 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/** A fetch() that never reached the server at all.
+ *
+ * fetch() rejects with a bare TypeError for every transport-level failure --
+ * WebKit's wording is "Load failed", Chrome's is "Failed to fetch" -- and
+ * neither says anything an athlete can act on. It reached a user as
+ * "Request failed (POST /api/account/biometric-release): TypeError: Load
+ * failed" on the one dialog standing between them and tracking a set.
+ *
+ * Worth separating from an HTTP error, because it means something different:
+ * the server did not refuse, it was not asked. The request can be retried
+ * unchanged, which is why this carries status 0 rather than a 4xx -- see
+ * isPermanentUploadRejection, which must not treat an unreachable server as
+ * a rejection to give up on.
+ *
+ * The technical detail is kept, after the sentence rather than instead of
+ * it. There is no console to check on an iPhone-only device (the same reason
+ * alertOnFirstQueryFailure below exists), so the only place a diagnostic can
+ * go is the screen.
+ */
+function transportError(method: string, url: string, err: unknown): ApiError {
+  const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return new ApiError(
+    0,
+    `Can't reach Forge right now -- check your connection and try again. (${method} ${url}: ${detail})`,
+    "network_unreachable",
+  );
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -115,10 +143,7 @@ export async function apiRequest(
       credentials: "include",
     });
   } catch (err) {
-    // Surfacing the raw fetch()-level failure (name + message + which
-    // request) instead of letting it bubble up as-is.
-    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    throw new Error(`Request failed (${method} ${url}): ${detail}`);
+    throw transportError(method, url, err);
   }
   await throwIfResNotOk(res);
   return res;
@@ -161,7 +186,8 @@ export function uploadWithProgress(
         reject(new ApiError(xhr.status, data?.message || xhr.statusText || "Upload failed"));
       }
     };
-    xhr.onerror = () => reject(new Error(`Request failed (POST ${url}): network error`));
+    // Same class of failure as apiRequest's own catch, reported the same way.
+    xhr.onerror = () => reject(transportError("POST", url, new Error("network error")));
     xhr.send(formData);
   });
 }
@@ -186,8 +212,7 @@ export const getQueryFn: <T>(options?: {
     try {
       res = await fetch(resolveApiUrl(url), { credentials: "include", headers: authHeaders() });
     } catch (err) {
-      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      throw new Error(`Request failed (GET ${url}): ${detail}`);
+      throw transportError("GET", url, err);
     }
 
     if (options.on401 === "returnNull" && res.status === 401) {

@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiRequest, ApiError, setNativeToken } from "@/lib/queryClient";
 import { ForgeMark } from "@/components/forge-mark";
+import { LegalDocumentReader } from "@/components/legal-document-reader";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
 import {
@@ -245,22 +246,19 @@ export default function ClaimPage() {
             </div>
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
               <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
-              {/* A link, because the checkbox is mandatory and the page carried no
-                  terms text and no way to reach any -- agreeing to something you
-                  cannot read is not a clickwrap. /legal is public and is the same
-                  agreement signup shows inline. */}
-              <span>
-                I agree to the{" "}
-                <a
-                  href="/legal"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-primary hover:underline"
-                >
-                  terms of service
-                </a>
-              </span>
+              <span>I agree to the terms of service</span>
             </label>
+            {/* The checkbox is mandatory and this page carried no terms text --
+                agreeing to something you cannot read is not a clickwrap. It was a
+                link to /legal, which opens nothing inside WKWebView, so on iOS the
+                text was still unreachable. Read in place instead, and outside the
+                label: a button inside one toggles that label's checkbox, so
+                opening the terms would have ticked "I agree" by itself. */}
+            <LegalDocumentReader
+              docType="signup_agreement"
+              label="Read the terms of service"
+              className="pl-6 text-xs"
+            />
             <Button
               type="submit"
               className="w-full"

@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { LegalDocumentReader } from "@/components/legal-document-reader";
 import type { PublicUser } from "@shared/schema";
 
 /** Asked once, before an adult athlete's first tracked set.
@@ -77,16 +78,15 @@ export function BiometricReleaseDialog({
                 You can train without this. Say no and your sets still log normally — you just
                 won't get the camera measurements.
               </p>
-              <p>
-                <a
-                  href="/biometric-release"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-primary hover:underline"
-                >
-                  Read the full video and biometric release
-                </a>
-              </p>
+              {/* Opens in place. This was a new-window link to
+                  /biometric-release, which does nothing inside WKWebView --
+                  see LegalDocumentReader's own comment. An athlete on iOS was
+                  being asked to agree to a document the app gave them no way
+                  to read. */}
+              <LegalDocumentReader
+                docType="biometric_waiver"
+                label="Read the full video and biometric release"
+              />
             </div>
           </DialogDescription>
         </DialogHeader>

@@ -10,6 +10,10 @@ const dialog = readFileSync(
   join(__dirname, "..", "components", "biometric-release-dialog.tsx"),
   "utf8",
 );
+const reader_component = readFileSync(
+  join(__dirname, "..", "components", "legal-document-reader.tsx"),
+  "utf8",
+);
 
 // ASKING IS WHAT TURNS A SILENT REFUSAL INTO A CHOICE.
 //
@@ -52,13 +56,23 @@ describe("the biometric release prompt", () => {
     expect(dialog).toMatch(/runs on your own device/i);
   });
 
-  it("links the release rather than asking them to agree to something unreadable", () => {
-    // This asserted href="/legal" when it was written, which was the bug rather than the rule:
-    // /legal renders only the signup clickwrap, so the link promising "the full video and
-    // biometric release" opened the Terms of Use. The test pinned the defect in place, which is
-    // what a test asserting the CURRENT string rather than the INTENDED behaviour does.
-    expect(dialog).toContain('href="/biometric-release"');
+  it("lets them actually read the release rather than agree to something unreadable", () => {
+    // Asserted href="/biometric-release" when it was written, which was the bug rather than the
+    // rule for the SECOND time on this one line. The first version asserted href="/legal", which
+    // opened the signup clickwrap instead of the release; the fix pointed the href at the right
+    // page and the test pinned the new string. Both times what got asserted was the markup that
+    // happened to be there, and the second one was broken in a way no string comparison could
+    // see: the link carried target="_blank", which opens nothing at all inside WKWebView, so on
+    // an iPhone the release was unreadable again -- passing test, unopenable document.
+    //
+    // So this asserts the PROPERTY that has been wrong twice: the athlete can get the release's
+    // real text from inside the dialog, without leaving it and without a new window.
+    const reader = dialog.slice(dialog.indexOf("<LegalDocumentReader"));
+    expect(reader).toContain('docType="biometric_waiver"');
+    expect(dialog).not.toContain('target="_blank"');
     expect(dialog).not.toContain('href="/legal"');
+    // And the reader it delegates to fetches that document rather than restating it.
+    expect(reader_component).toContain("/api/legal-documents/${docType}");
   });
 
   it("does not ask again once they have agreed", () => {

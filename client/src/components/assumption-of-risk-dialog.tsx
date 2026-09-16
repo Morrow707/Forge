@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { LegalDocumentReader } from "@/components/legal-document-reader";
 import type { PublicUser } from "@shared/schema";
 
 /** Shown once to an athlete, the first time they open their dashboard.
@@ -89,16 +90,13 @@ export function AssumptionOfRiskDialog({
               <p className="font-semibold text-foreground">
                 Stop if something hurts, even when the program says keep going.
               </p>
-              <p>
-                <a
-                  href="/assumption-of-risk"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-primary hover:underline"
-                >
-                  Read the full assumption of risk and release
-                </a>
-              </p>
+              {/* In place, for the same reason the biometric release is -- a
+                  new-window link opens nothing inside WKWebView, so on iOS this
+                  was a release nobody could read before accepting it. */}
+              <LegalDocumentReader
+                docType="assumption_of_risk"
+                label="Read the full assumption of risk and release"
+              />
             </div>
           </DialogDescription>
         </DialogHeader>

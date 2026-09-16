@@ -3135,9 +3135,28 @@ function ExerciseLogContent({
         <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
           <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
             {videoCheckMode === "ai" && <Sparkles className="h-3.5 w-3.5 shrink-0" />}
+            {/* Both lines used to end "Weight unlocks once the video's in," which
+                described a lock that does not exist -- the weight Input below has
+                never been disabled or read-only -- and described it BACKWARDS. The
+                real dependency runs the other way: loadKg is read off the set row's
+                entered weight at the moment a tracker dialog opens (see the
+                trackedWeight/loadKg block further down), and power is mass * g *
+                velocity, so a set recorded before its weight is typed reports
+                peakPowerWatts/meanPowerWatts of null and nothing recomputes them
+                afterwards. Weight is not part of calibration in either tracker --
+                the web path needs no scale factor at all (MediaPipe worldLandmarks
+                are already metric) and the native path scales off a known-size
+                reference, a 45cm plate or the athlete's own height. So: weight
+                first, then record, and only where there are metrics to be had. */}
             {videoCheckMode === "ai"
-              ? "Record each set for full AI analytics -- velocity, bar path, and form. Weight unlocks once the video's in."
-              : "Your coach wants a video -- record each set below. Weight unlocks once the video's in."}
+              ? "Record each set for full AI analytics -- velocity, bar path, and form."
+              : "Your coach wants a video -- record each set below."}
+            {/* Only where there are tracked numbers to lose. A video check with
+                trackingLevel "none" computes no metrics at all, so weight order
+                genuinely does not matter there and saying otherwise is noise. */}
+            {mergedTracking && item.materials.usesWeight
+              ? " Enter the weight before you record, or power can't be calculated."
+              : ""}
           </span>
           {flaggedSetVideos.length > 1 && (
             <Button size="sm" variant="secondary" onClick={() => setCompareOpen(true)}>

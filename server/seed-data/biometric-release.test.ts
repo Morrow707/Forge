@@ -108,9 +108,10 @@ describe("every document a user is asked to accept is reachable", () => {
 
   it("points the capture-time prompt at the release rather than the signup agreement", () => {
     // The regression: the dialog said "Read the full video and biometric release" and linked
-    // /legal, which renders only the clickwrap.
+    // /legal, which renders only the clickwrap. It then linked the right document in a new
+    // window, which opens nothing on native -- so the document is read in place now.
     const dialog = read("client/src/components/biometric-release-dialog.tsx");
-    expect(dialog).toContain('href="/biometric-release"');
+    expect(dialog).toContain('docType="biometric_waiver"');
     expect(dialog).not.toContain('href="/legal"');
   });
 
@@ -118,9 +119,9 @@ describe("every document a user is asked to accept is reachable", () => {
     // Three consent records, each snapshotting different text, used to offer one link between
     // them.
     const claim = read("client/src/pages/guardian-claim.tsx");
-    expect(claim).toContain('href="/terms"');
-    expect(claim).toContain('href="/privacy"');
-    expect(claim).toContain('href="/biometric-release"');
+    expect(claim).toContain('docType="terms_of_service"');
+    expect(claim).toContain('docType="privacy_policy"');
+    expect(claim).toContain('docType="biometric_waiver"');
     expect(claim).not.toContain('href="/legal"');
   });
 });

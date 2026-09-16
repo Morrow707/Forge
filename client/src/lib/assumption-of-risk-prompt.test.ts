@@ -22,8 +22,12 @@ describe("the athlete's risk acknowledgment", () => {
     expect(dialog).toMatch(/Stop if something hurts/);
   });
 
-  it("links the full document", () => {
-    expect(dialog).toContain('href="/assumption-of-risk"');
+  it("lets them read the full document without leaving the dialog", () => {
+    // Asserted href="/assumption-of-risk" until that link turned out to open nothing inside
+    // WKWebView -- correct markup, real page, unreachable on the only platform Forge ships to.
+    // See consent-documents-readable.test.ts.
+    expect(dialog).toContain("<LegalDocumentReader");
+    expect(dialog).toContain('docType="assumption_of_risk"');
   });
 
   it("cannot be dismissed without answering", () => {
@@ -46,9 +50,11 @@ describe("the athlete's risk acknowledgment", () => {
   });
 
   it("can be found again from the account menu, athletes only", () => {
-    // A document somebody was shown once and can never reopen is not available to them.
+    // A document somebody was shown once and can never reopen is not available to them --
+    // which is what a new-window link amounted to on native, so this is an in-app route now.
     expect(shell).toContain('href="/assumption-of-risk"');
-    expect(shell).toMatch(/user\?\.role === "athlete" && \(\s*\n?\s*<a/);
+    expect(shell).not.toMatch(/href="\/assumption-of-risk"[\s\S]{0,120}_blank/);
+    expect(shell).toMatch(/user\?\.role === "athlete" && \([\s\S]{0,400}?<Link/);
   });
 
   it("writes the answer into the cache so it does not reappear", () => {
