@@ -93,16 +93,26 @@ public class PasswordPickerPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             let vc = NativeLoginViewController(
                 prefillUsername: call.getString("prefillUsername"),
-                onSubmit: { username, password in
-                    call.resolve(["username": username, "password": password])
-                },
-                onCancel: {
-                    // Cancelling is ordinary: the athlete falls back to the web form, which still
-                    // logs in fine, it just cannot offer to save.
-                    call.reject("cancelled")
+                onOutcome: { outcome in
+                    // One resolve per outcome, and the controller's own `finished` guard is what
+                    // stops a second one -- resolving a CAPPluginCall twice is a crash, and
+                    // submit, a link tap and a swipe-away all arrive here.
+                    switch outcome {
+                    case let .signIn(username, password):
+                        call.resolve(["action": "signIn", "username": username, "password": password])
+                    case let .navigate(path):
+                        // The links on the screen are web routes; the web layer owns routing, so
+                        // this reports where to go rather than trying to draw another screen.
+                        call.resolve(["action": "navigate", "path": path])
+                    case .dismissed:
+                        // Ordinary, not a failure: the athlete falls back to the web form, which
+                        // still logs in fine -- it just cannot be offered a save.
+                        call.resolve(["action": "dismissed"])
+                    }
                 }
             )
-            vc.modalPresentationStyle = .formSheet
+            // The controller sets its own presentation style (.fullScreen, not dismissible):
+            // it is the login screen, not a sheet over one.
             host.present(vc, animated: true)
         }
     }
@@ -171,119 +181,370 @@ public class PasswordPickerPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 }
-
-/// The native sign-in sheet behind `presentNativeLogin`.
+/// Forge's login screen, drawn natively.
 ///
-/// Small on purpose. Everything here exists to satisfy AutoFill's requirements and nothing else:
-/// two real UITextFields carrying `.username` and `.password` content types, inside a view
-/// controller that is DISMISSED after the credentials are handed back. That dismissal is what
-/// makes iOS offer "Save Password?" -- it is the OS's own heuristic for "a sign-in just happened",
-/// and there is no API to ask for it directly.
+/// WHY IT IS NATIVE AT ALL, since this is otherwise a web app and duplicating a screen is a cost.
+/// iOS AutoFill decides which saved password to offer by the PAGE ORIGIN, and the web bundle is
+/// served from capacitor://localhost -- WKWebView reserves http and https, so a Capacitor app can
+/// never serve its own files under forge-ebhd.onrender.com (see the iosScheme note in
+/// @capacitor/cli's declarations). No Apple Passwords entry can match a page at that address, so
+/// the web form is never filled and never offered a save, however it is marked up -- and its
+/// autocomplete attributes were already correct.
 ///
-/// It does not authenticate anything. The credentials go straight back to the web layer, which
-/// calls the same login endpoint the web form calls, so there remains exactly one authentication
-/// path in this app. This replaces the keyboard, not the login.
+/// A native UITextField is matched differently: the Associated Domains entitlement ties the APP to
+/// the domain, so `.username` and `.password` content types resolve to the credential the webview
+/// cannot reach. Those two lines are the entire reason this file exists. Everything else here is
+/// making it look like the screen it replaces.
+///
+/// MATCHED TO client/src/pages/login.tsx AND client/src/index.css, not to a screenshot. The colour
+/// values below are the same tokens the web screen resolves, converted from HSL, and the artwork
+/// is the very same icon-192.png the web ForgeMark renders, read out of the bundled web assets --
+/// one source of truth, so the two cannot drift apart silently.
+///
+/// It authenticates nothing. Credentials go back to the web layer, which calls the same
+/// loginMutation the web form calls, so there is still exactly one auth path in this app.
 final class NativeLoginViewController: UIViewController {
-    private let usernameField = UITextField()
-    private let passwordField = UITextField()
-    private let onSubmit: (String, String) -> Void
-    private let onCancel: () -> Void
+
+    // MARK: - Design tokens (client/src/index.css, dark theme)
+
+    /// UIColor's own initialiser takes HSB; CSS gives HSL. Converting here rather than
+    /// hand-picking approximate RGB keeps these honestly tied to the stylesheet.
+    private static func hsl(_ h: CGFloat, _ s: CGFloat, _ l: CGFloat) -> UIColor {
+        let hue = h / 360, sat = s / 100, lum = l / 100
+        let c = (1 - abs(2 * lum - 1)) * sat
+        let x = c * (1 - abs((hue * 6).truncatingRemainder(dividingBy: 2) - 1))
+        let m = lum - c / 2
+        let (r, g, b): (CGFloat, CGFloat, CGFloat)
+        switch hue * 6 {
+        case ..<1: (r, g, b) = (c, x, 0)
+        case ..<2: (r, g, b) = (x, c, 0)
+        case ..<3: (r, g, b) = (0, c, x)
+        case ..<4: (r, g, b) = (0, x, c)
+        case ..<5: (r, g, b) = (x, 0, c)
+        default:   (r, g, b) = (c, 0, x)
+        }
+        return UIColor(red: r + m, green: g + m, blue: b + m, alpha: 1)
+    }
+
+    private static let neutralHue: CGFloat = 222                      // --neutral-hue
+    private static let background = hsl(neutralHue, 20, 5)            // --background
+    private static let card = hsl(neutralHue, 17, 16)                 // --card
+    private static let cardForeground = hsl(0, 0, 97)                 // --card-foreground
+    private static let foreground = hsl(0, 0, 96)                     // --foreground
+    private static let primary = hsl(14, 85, 42)                      // --primary
+    private static let mutedForeground = hsl(220, 9, 64)              // --muted-foreground
+    private static let border = hsl(neutralHue, 17, 24)               // --border / --input
+    private static let radius: CGFloat = 9.6                          // --radius: 0.6rem
+
+    // MARK: - Callbacks
+
+    enum Outcome {
+        case signIn(username: String, password: String)
+        /// A link on the screen -- the web layer navigates, since these are web routes.
+        case navigate(path: String)
+        case dismissed
+    }
+
+    private let onOutcome: (Outcome) -> Void
     private let prefillUsername: String?
-    // Guards the two callbacks: presenting code holds a CAPPluginCall, and resolving OR rejecting
-    // it twice is a crash. Dismissal can arrive from the button or from a swipe-down, and both
-    // land here.
+    /// The presenting code holds a CAPPluginCall, and resolving or rejecting one twice is a crash.
+    /// Submit, a link and a swipe-away all land here, so the guard is shared.
     private var finished = false
 
-    init(prefillUsername: String?, onSubmit: @escaping (String, String) -> Void, onCancel: @escaping () -> Void) {
+    private let usernameField = UITextField()
+    private let passwordField = UITextField()
+    private let scrollView = UIScrollView()
+    private let signInButton = UIButton(type: .system)
+
+    init(prefillUsername: String?, onOutcome: @escaping (Outcome) -> Void) {
         self.prefillUsername = prefillUsername
-        self.onSubmit = onSubmit
-        self.onCancel = onCancel
+        self.onOutcome = onOutcome
         super.init(nibName: nil, bundle: nil)
+        // Full screen and not dismissible by swipe: this IS the login screen, not a sheet over
+        // one. A pull-to-dismiss here would drop the athlete onto a web form behind it.
+        modalPresentationStyle = .fullScreen
+        isModalInPresentation = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    // MARK: - Layout
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = Self.background
 
-        let title = UILabel()
-        title.text = "Sign in to Forge"
-        title.font = .preferredFont(forTextStyle: .title2)
-        title.adjustsFontForContentSizeCategory = true
+        let mark = UIImageView(image: Self.forgeMark())
+        mark.contentMode = .scaleAspectFill
+        mark.clipsToBounds = true
+        mark.layer.cornerRadius = 12
+        mark.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            mark.widthAnchor.constraint(equalToConstant: 56),   // h-14 w-14
+            mark.heightAnchor.constraint(equalToConstant: 56),
+        ])
 
-        // .username and .password are the whole point. Without them AutoFill does not recognise
-        // this as a sign-in form, offers nothing on focus, and never proposes saving afterwards.
+        let wordmark = UILabel()
+        wordmark.text = "FORGE"
+        wordmark.textColor = Self.foreground
+        wordmark.font = .systemFont(ofSize: 34, weight: .heavy)
+        // tracking-wider on the web mark.
+        wordmark.attributedText = NSAttributedString(
+            string: "FORGE",
+            attributes: [
+                .kern: 3.0,
+                .font: UIFont.systemFont(ofSize: 34, weight: .heavy),
+                .foregroundColor: Self.foreground,
+            ]
+        )
+
+        let tagline = Self.label("Coach. Program. Perform.", size: 13, color: Self.mutedForeground)
+
+        let header = UIStackView(arrangedSubviews: [mark, wordmark, tagline])
+        header.axis = .vertical
+        header.alignment = .center
+        header.spacing = 12
+
+        // ---- Card ----
+        let cardTitle = Self.label("Log In", size: 20, color: Self.cardForeground, weight: .semibold)
+        let cardDescription = Self.label(
+            "Welcome back. Enter your credentials to continue.",
+            size: 13,
+            color: Self.mutedForeground
+        )
+        cardDescription.numberOfLines = 0
+
+        let emailLabel = Self.label("Email", size: 13, color: Self.cardForeground, weight: .medium)
+        Self.style(usernameField, placeholder: "you@example.com")
         usernameField.textContentType = .username
         usernameField.keyboardType = .emailAddress
         usernameField.autocapitalizationType = .none
         usernameField.autocorrectionType = .no
-        usernameField.placeholder = "Email"
-        usernameField.borderStyle = .roundedRect
         usernameField.text = prefillUsername
         usernameField.returnKeyType = .next
         usernameField.delegate = self
 
+        let passwordLabel = Self.label("Password", size: 13, color: Self.cardForeground, weight: .medium)
+        let forgot = Self.linkButton("Forgot password?", size: 12)
+        forgot.addTarget(self, action: #selector(forgotTapped), for: .touchUpInside)
+        let passwordRow = UIStackView(arrangedSubviews: [passwordLabel, UIView(), forgot])
+        passwordRow.axis = .horizontal
+        passwordRow.alignment = .center
+
+        Self.style(passwordField, placeholder: "••••••••")
         passwordField.textContentType = .password
         passwordField.isSecureTextEntry = true
-        passwordField.placeholder = "Password"
-        passwordField.borderStyle = .roundedRect
         passwordField.returnKeyType = .go
         passwordField.delegate = self
+        addRevealToggle(to: passwordField)
 
-        let signIn = UIButton(type: .system)
-        signIn.setTitle("Sign In", for: .normal)
-        signIn.titleLabel?.font = .preferredFont(forTextStyle: .headline)
-        signIn.addTarget(self, action: #selector(submit), for: .touchUpInside)
+        signInButton.setTitle("Log In", for: .normal)
+        signInButton.setTitleColor(.white, for: .normal)
+        signInButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        signInButton.backgroundColor = Self.primary
+        signInButton.layer.cornerRadius = Self.radius
+        signInButton.addTarget(self, action: #selector(submit), for: .touchUpInside)
+        signInButton.heightAnchor.constraint(equalToConstant: 48).isActive = true
 
-        let cancel = UIButton(type: .system)
-        cancel.setTitle("Cancel", for: .normal)
-        cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+        let signUp = Self.footerRow(
+            "Don't have an account? ", link: "Sign up", target: self, action: #selector(signUpTapped)
+        )
+        let adminLogin = Self.footerRow(
+            "Are you an admin? ", link: "Log in here", target: self, action: #selector(adminTapped)
+        )
 
-        let stack = UIStackView(arrangedSubviews: [title, usernameField, passwordField, signIn, cancel])
-        stack.axis = .vertical
-        stack.spacing = 16
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
+        let cardStack = UIStackView(arrangedSubviews: [
+            cardTitle, cardDescription,
+            emailLabel, usernameField,
+            passwordRow, passwordField,
+            signInButton, signUp, adminLogin,
         ])
+        cardStack.axis = .vertical
+        cardStack.spacing = 10
+        cardStack.setCustomSpacing(20, after: cardDescription)
+        cardStack.setCustomSpacing(16, after: usernameField)
+        cardStack.setCustomSpacing(20, after: passwordField)
+        cardStack.setCustomSpacing(18, after: signInButton)
+        cardStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let cardView = UIView()
+        cardView.backgroundColor = Self.card
+        cardView.layer.cornerRadius = Self.radius
+        cardView.layer.borderWidth = 1
+        cardView.layer.borderColor = Self.border.cgColor
+        cardView.addSubview(cardStack)
+        NSLayoutConstraint.activate([
+            cardStack.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 22),
+            cardStack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -22),
+            cardStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 20),
+            cardStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -20),
+        ])
+
+        let page = UIStackView(arrangedSubviews: [header, cardView])
+        page.axis = .vertical
+        page.spacing = 32
+        page.translatesAutoresizingMaskIntoConstraints = false
+
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.keyboardDismissMode = .interactive
+        scrollView.addSubview(page)
+        view.addSubview(scrollView)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+            page.topAnchor.constraint(greaterThanOrEqualTo: scrollView.contentLayoutGuide.topAnchor, constant: 48),
+            page.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -48),
+            page.centerXAnchor.constraint(equalTo: scrollView.contentLayoutGuide.centerXAnchor),
+            page.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: 16),
+            page.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -16),
+            // max-w-md on the web screen.
+            page.widthAnchor.constraint(lessThanOrEqualToConstant: 448),
+        ])
+
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(keyboardChanged(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification, object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(keyboardHidden),
+            name: UIResponder.keyboardWillHideNotification, object: nil
+        )
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // Focus the field AutoFill keys off, so the Passwords suggestion appears above the
-        // keyboard without the athlete having to know to tap anything.
+        // Focusing a field is what surfaces the Passwords suggestion above the keyboard, so the
+        // athlete does not have to know the key icon exists.
         (prefillUsername?.isEmpty == false ? passwordField : usernameField).becomeFirstResponder()
     }
 
-    @objc private func submit() {
-        let username = usernameField.text ?? ""
-        let password = passwordField.text ?? ""
-        guard !username.isEmpty, !password.isEmpty else { return }
-        guard !finished else { return }
-        finished = true
-        // Resign first so the fields commit their values, then dismiss: iOS evaluates whether to
-        // offer "Save Password?" as this controller goes away.
-        view.endEditing(true)
-        dismiss(animated: true) { [onSubmit] in onSubmit(username, password) }
+    // MARK: - Helpers
+
+    /// The same artwork the web ForgeMark renders. Capacitor copies dist/public into the app
+    /// bundle, so this is literally the same file rather than a second copy that can drift.
+    private static func forgeMark() -> UIImage? {
+        if let url = Bundle.main.url(forResource: "icon-192", withExtension: "png", subdirectory: "public"),
+           let data = try? Data(contentsOf: url) {
+            return UIImage(data: data)
+        }
+        return UIImage(named: "AppIcon")
     }
 
-    @objc private func cancelTapped() {
+    private static func label(
+        _ text: String, size: CGFloat, color: UIColor, weight: UIFont.Weight = .regular
+    ) -> UILabel {
+        let l = UILabel()
+        l.text = text
+        l.textColor = color
+        l.font = .systemFont(ofSize: size, weight: weight)
+        l.adjustsFontForContentSizeCategory = true
+        return l
+    }
+
+    private static func linkButton(_ title: String, size: CGFloat) -> UIButton {
+        let b = UIButton(type: .system)
+        b.setTitle(title, for: .normal)
+        b.setTitleColor(primary, for: .normal)
+        b.titleLabel?.font = .systemFont(ofSize: size, weight: .semibold)
+        return b
+    }
+
+    private static func footerRow(
+        _ prefix: String, link: String, target: Any, action: Selector
+    ) -> UIStackView {
+        let text = label(prefix, size: 13, color: mutedForeground)
+        let button = linkButton(link, size: 13)
+        button.addTarget(target, action: action, for: .touchUpInside)
+        let row = UIStackView(arrangedSubviews: [UIView(), text, button, UIView()])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 4
+        return row
+    }
+
+    private static func style(_ field: UITextField, placeholder: String) {
+        field.backgroundColor = .clear
+        field.textColor = foreground
+        field.font = .systemFont(ofSize: 16)
+        field.layer.cornerRadius = radius
+        field.layer.borderWidth = 1
+        field.layer.borderColor = border.cgColor
+        field.attributedPlaceholder = NSAttributedString(
+            string: placeholder,
+            attributes: [.foregroundColor: mutedForeground]
+        )
+        // Inset the text so it does not sit against the border, matching the web input padding.
+        field.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
+        field.leftViewMode = .always
+        field.heightAnchor.constraint(equalToConstant: 46).isActive = true
+    }
+
+    /// The eye toggle the web PasswordInput has.
+    private func addRevealToggle(to field: UITextField) {
+        let toggle = UIButton(type: .system)
+        toggle.setImage(UIImage(systemName: "eye"), for: .normal)
+        toggle.tintColor = Self.mutedForeground
+        toggle.frame = CGRect(x: 0, y: 0, width: 40, height: 46)
+        toggle.addTarget(self, action: #selector(toggleReveal(_:)), for: .touchUpInside)
+        field.rightView = toggle
+        field.rightViewMode = .always
+    }
+
+    @objc private func toggleReveal(_ sender: UIButton) {
+        passwordField.isSecureTextEntry.toggle()
+        sender.setImage(
+            UIImage(systemName: passwordField.isSecureTextEntry ? "eye" : "eye.slash"),
+            for: .normal
+        )
+    }
+
+    @objc private func keyboardChanged(_ note: Notification) {
+        guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+        let overlap = max(0, view.bounds.maxY - view.convert(frame, from: nil).minY)
+        scrollView.contentInset.bottom = overlap
+        scrollView.verticalScrollIndicatorInsets.bottom = overlap
+    }
+
+    @objc private func keyboardHidden() {
+        scrollView.contentInset.bottom = 0
+        scrollView.verticalScrollIndicatorInsets.bottom = 0
+    }
+
+    // MARK: - Outcomes
+
+    @objc private func submit() {
+        let username = usernameField.text?.trimmingCharacters(in: .whitespaces) ?? ""
+        let password = passwordField.text ?? ""
+        guard !username.isEmpty, !password.isEmpty, !finished else { return }
+        finish(.signIn(username: username, password: password))
+    }
+
+    @objc private func forgotTapped() { finish(.navigate(path: "/forgot-password")) }
+    @objc private func signUpTapped() { finish(.navigate(path: "/signup")) }
+    @objc private func adminTapped() { finish(.navigate(path: "/admin/login")) }
+
+    private func finish(_ outcome: Outcome) {
         guard !finished else { return }
         finished = true
-        dismiss(animated: true) { [onCancel] in onCancel() }
+        // Resign first so the fields commit, then dismiss: iOS evaluates whether to offer
+        // "Save Password?" as this controller goes away, and that dismissal is the only signal
+        // there is -- no API asks for the prompt directly.
+        view.endEditing(true)
+        dismiss(animated: true) { [onOutcome] in onOutcome(outcome) }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        // Swiped away rather than answered. Treated as a cancel so the promise never dangles.
         guard !finished else { return }
         finished = true
-        onCancel()
+        onOutcome(.dismissed)
     }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
 }
 
 extension NativeLoginViewController: UITextFieldDelegate {
