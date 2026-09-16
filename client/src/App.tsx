@@ -578,16 +578,26 @@ export default function App() {
             offset={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
             mobileOffset={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
           />
-          {/* Not mounted -- the login issue this was built to diagnose
-              turned out to be transient, not a real bug (confirmed once
-              the site was working normally again). Left commented out
-              rather than deleted: debug-console.tsx, lib/debug-console.ts,
-              and the logDebug() calls in login.tsx/use-auth.tsx all still
-              capture AUTH/NAV events into the in-memory buffer exactly as
-              before -- only the on-screen bug-icon toggle and its panel
-              are off. Uncomment this one line to bring the console back
-              for a future login/session issue. */}
-          {/* <DebugConsole /> */}
+          {/* Back on for the keychain-save investigation, and NATIVE ONLY.
+              
+              The save into Apple Passwords fails with no visible moment of its
+              own -- iOS shows nothing when SecAddSharedWebCredential is
+              declined -- so the on-screen log is the only way to read what it
+              actually returned from a TestFlight build, with no Mac in the
+              loop. A toast covers the failure path, but a SUCCESS is silent,
+              and "resolved but nothing saved" is one of the outcomes we are
+              trying to tell apart.
+
+              Gated on the native platform because this is the only place the
+              question exists: the browser has no keychain to write to, and a
+              floating bug icon on the web app is a debugging tool shipped to
+              people who are not debugging. import.meta.env.DEV keeps it for
+              local work.
+
+              TEMPORARY. Goes back to commented-out (or deleted outright, along
+              with debug-console.tsx and lib/debug-console.ts) once the save is
+              diagnosed -- this is a tool, not a feature. */}
+          {(Capacitor.isNativePlatform() || import.meta.env.DEV) && <DebugConsole />}
         </BiometricLockGate>
       </AuthProvider>
     </PersistQueryClientProvider>
