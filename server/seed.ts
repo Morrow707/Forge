@@ -19,6 +19,7 @@ import { eq, isNull, and, asc } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT, PARENTAL_NOTICE_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT } from "./seed-data/legal-documents-draft";
+import { nextSignupAgreement, UNCONFIGURED_FALLBACK } from "./seed-data/signup-agreement";
 
 // We don't have live web access from this environment to verify specific
 // YouTube video IDs are real and still online, so hand-picking exact links
@@ -6149,23 +6150,29 @@ async function main() {
     }
   }
 
-  // Placeholder clickwrap agreement -- only seeded if the singleton row
-  // doesn't already have real content, so an admin's own edit (via
-  // PUT /api/admin/legal-agreement) is never clobbered by a later
-  // redeploy re-running this script. Generic, honest starter language, not
-  // a substitute for actual legal review -- flagged as such inline so
-  // nobody mistakes it for a reviewed document.
+  // The clickwrap agreement shown at signup. Seeded on a fresh install, and
+  // migrated once on an install still carrying the placeholder this replaced
+  // -- see server/seed-data/signup-agreement.ts for what it says and the
+  // standing caveat that counsel has not reviewed it.
+  //
+  // Both guards exist to protect the same thing: an admin's own edit via
+  // PUT /api/admin/legal-agreement must never be clobbered by a redeploy. The
+  // migration therefore matches the placeholder EXACTLY rather than testing for
+  // a prefix or a marker -- an installation carrying anything else is carrying
+  // somebody's deliberate wording, including a hand-edited variant of the
+  // placeholder, and is left alone.
+  //
+  // The healthcare notice below is appended, not included here, so this runs
+  // before it and both paths converge on the same final document: a fresh
+  // install gets terms-then-notice, and a migrated one keeps the notice it was
+  // already carrying with the real terms now in front of it.
   const existingAgreement = await storage.getLegalAgreement();
-  if (existingAgreement === "No agreement has been configured yet.") {
-    await storage.updateLegalAgreement(
-      `PLACEHOLDER -- replace with your own reviewed terms before relying on this.
-
-By creating an account, you agree to use Forge to support, not replace, sound judgment about your own or your athletes' training and health. Forge's tracking, analytics, and AI-generated suggestions are informational aids for coaches and athletes; they are never a substitute for professional medical, athletic training, or coaching judgment, and nothing in the app should be treated as medical advice.
-
-You're responsible for the accuracy of what you or your athletes log, and for stopping any exercise that causes pain or feels unsafe. Coaches are responsible for appropriately supervising and modifying training for their own athletes.
-
-Forge stores the training, health-status, and performance data you provide in order to run the features you use (programming, analytics, camera-based tracking, nutrition logging). Don't enter anyone else's personal information without their permission to do so.`,
-    );
+  const agreement = nextSignupAgreement(existingAgreement);
+  if (agreement !== null) {
+    await storage.updateLegalAgreement(agreement);
+    if (existingAgreement !== UNCONFIGURED_FALLBACK) {
+      console.log("Replaced the placeholder signup agreement with the real terms.");
+    }
   }
 
   // Healthcare-provider HIPAA-transparency notice -- appended to whatever
