@@ -5727,7 +5727,17 @@ export const legalDocumentTypeEnum = pgEnum("legal_document_type", [
   "biometric_waiver",
   "parental_notice",
   "institutional_agreement",
+  // The app's end-user licence. Distinct from terms_of_service: the Terms
+  // govern the Forge SERVICE (accounts, coaching, data), the EULA governs the
+  // SOFTWARE licence and carries the clauses Apple requires of any app that
+  // replaces the standard licence with its own -- Apple as a third-party
+  // beneficiary of it, and Apple disclaiming maintenance and warranty.
+  "eula",
 ]);
+
+/** The document types, derived so a new one cannot be added to the enum above
+ * and silently missed by a hand-written union somewhere else. */
+export type LegalDocumentType = (typeof legalDocumentTypeEnum.enumValues)[number];
 
 export const legalDocuments = pgTable("legal_documents", {
   id: serial("id").primaryKey(),

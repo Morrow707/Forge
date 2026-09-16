@@ -252,3 +252,67 @@ This Agreement is in effect for as long as the Institution's account remains on 
 
 7. GOVERNING LAW
 Same as the Terms of Service: the laws of the State of Arizona, without regard to its conflict-of-laws provisions, with exclusive jurisdiction and venue in the state and federal courts located in Maricopa County, Arizona.`;
+
+// The app's end-user licence, kept separate from TERMS_OF_SERVICE_DRAFT above
+// because the two answer different questions: the Terms govern the Forge
+// SERVICE (your account, your coach, your data), this governs the SOFTWARE
+// licence. Apple requires that distinction to carry specific clauses whenever
+// an app supplies its own licence instead of using the standard one -- the
+// acknowledgement that the licence is with Forge and not Apple, Apple's
+// disclaimer of maintenance and warranty, and Apple as a third-party
+// beneficiary entitled to enforce it. Those are sections 1, 5, 6 and 11 below,
+// and their absence is the kind of thing that gets a submission rejected long
+// after the binary itself is fine.
+//
+// Forge already HAS an externally drafted EULA, which is where the address
+// legal@forgeperformance.com came from -- a domain matching nothing Forge owns.
+// Seeding this draft does not overwrite it: paste the real document into the
+// admin Documents tab and the seed leaves it alone from then on, the same
+// guard every other document here has.
+export const EULA_DRAFT = `${DRAFT_NOTICE}
+
+FORGE -- END USER LICENSE AGREEMENT (DRAFT)
+
+This Agreement is between you and Forge Performance Systems LLC ("Forge"). It covers the Forge application software (the "Application"). Your use of the Forge service, your account, and your data is governed separately by the Terms of Service and the Privacy Policy.
+
+1. THIS AGREEMENT IS WITH FORGE, NOT APPLE
+You acknowledge that this Agreement is between you and Forge alone, and not with Apple Inc. Forge, not Apple, is solely responsible for the Application and its content. This Agreement does not provide for usage rules for the Application that conflict with the Apple Media Services Terms and Conditions; in the event of a conflict, those terms govern to the extent of the conflict.
+
+2. LICENSE GRANTED
+Forge grants you a personal, limited, non-exclusive, non-transferable, revocable licence to use the Application on any Apple-branded device that you own or control, as permitted by the Usage Rules in the Apple Media Services Terms and Conditions, or on any other device for which the Application is distributed. The Application is licensed to you, not sold.
+
+3. WHAT YOU MAY NOT DO
+You may not copy, modify, reverse engineer, decompile, or disassemble the Application except where that restriction is prohibited by applicable law; rent, lease, lend, sell, or sublicense it; remove any proprietary notice from it; use it to build a competing product; or use automated means to extract data from it. You may not use the Application to reach data belonging to another person, or to attempt to re-identify an individual from any aggregated or de-identified figure it displays.
+
+4. PURCHASES AND SUBSCRIPTIONS
+Where the Application offers a subscription or in-app purchase, it is billed through the app store or payment processor identified at the point of purchase, on the interval stated there, and renews until cancelled. Cancellation and refunds for an app store purchase are handled under that store's rules, not by Forge.
+
+5. MAINTENANCE AND SUPPORT
+Forge is solely responsible for providing any maintenance and support for the Application, to the extent it chooses to offer any. Apple has no obligation whatsoever to furnish any maintenance or support services for the Application.
+
+6. WARRANTY
+The Application is provided as is, without warranty of any kind to the fullest extent permitted by applicable law. In the event of any failure of the Application to conform to any applicable warranty, you may notify Apple, and Apple will refund the purchase price for the Application to you, if any. To the maximum extent permitted by applicable law, Apple will have no other warranty obligation whatsoever with respect to the Application. Any other claims, losses, liabilities, damages, costs, or expenses attributable to any failure to conform to any warranty are Forge's sole responsibility.
+
+7. TRAINING CARRIES RISK
+The Application supports strength and athletic training, which can cause injury, including serious injury. Its measurements, analytics, and AI-generated suggestions are informational aids and are not medical advice, a diagnosis, or a treatment plan, and are not a substitute for the judgment of a physician, physical therapist, athletic trainer, dietitian, or coach. You decide whether an exercise is appropriate for you and you stop if something causes pain. Camera-derived measurements depend on filming conditions and are estimates, not instrument readings. This section does not replace the assumption of risk in the Terms of Service; it restates it because the Application can be installed by someone who has not read them.
+
+8. PRODUCT CLAIMS
+Forge, not Apple, is responsible for addressing any claim by you or a third party relating to the Application or your possession and use of it, including: (a) product liability claims; (b) any claim that the Application fails to conform to any applicable legal or regulatory requirement; and (c) claims arising under consumer protection, privacy, or similar legislation, including in connection with the Application's use of any health or biometric data. This Agreement does not limit Forge's liability beyond what applicable law permits.
+
+9. INTELLECTUAL PROPERTY
+In the event of any third-party claim that the Application or your possession and use of it infringes that third party's intellectual property rights, Forge, not Apple, will be solely responsible for the investigation, defence, settlement, and discharge of that claim.
+
+10. LEGAL COMPLIANCE
+You represent that you are not located in a country subject to a United States Government embargo or designated as a "terrorist supporting" country, and that you are not listed on any United States Government list of prohibited or restricted parties.
+
+11. APPLE AS THIRD-PARTY BENEFICIARY
+You acknowledge and agree that Apple, and Apple's subsidiaries, are third-party beneficiaries of this Agreement, and that upon your acceptance of it Apple will have the right (and will be deemed to have accepted the right) to enforce this Agreement against you as a third-party beneficiary of it.
+
+12. TERMINATION
+This licence is effective until terminated by you or by Forge. It terminates automatically if you breach it, and you must then stop using the Application and remove it from your devices. Deleting your Forge account is governed by the Terms of Service.
+
+13. GOVERNING LAW
+[Placeholder -- counsel to specify the governing law and venue, and to confirm they are consistent with the Terms of Service's dispute-resolution section, including that section's carve-out for athletes under 18.]
+
+14. CONTACT
+Questions about this Agreement: ${FORGE_CONTACT_EMAIL}`;

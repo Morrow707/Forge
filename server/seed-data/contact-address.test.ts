@@ -7,6 +7,7 @@ import {
   BIOMETRIC_WAIVER_DRAFT,
   PARENTAL_NOTICE_DRAFT,
   INSTITUTIONAL_AGREEMENT_DRAFT,
+  EULA_DRAFT,
 } from "./legal-documents-draft";
 
 /** Three documents once gave three different contact addresses, one of them on a domain that
@@ -20,6 +21,7 @@ const DOCUMENTS: Array<[string, string]> = [
   ["biometric waiver", BIOMETRIC_WAIVER_DRAFT],
   ["parental notice", PARENTAL_NOTICE_DRAFT],
   ["institutional agreement", INSTITUTIONAL_AGREEMENT_DRAFT],
+  ["eula", EULA_DRAFT],
 ];
 
 describe("contact address across the published documents", () => {

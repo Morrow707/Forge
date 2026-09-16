@@ -233,6 +233,7 @@ import type {
   ConsentRecord,
   RecordAccessAuditLog,
   LegalDocument,
+  LegalDocumentType,
 } from "@shared/schema";
 import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
@@ -15251,24 +15252,14 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
   },
 
   async getLegalDocument(
-    docType:
-      | "terms_of_service"
-      | "privacy_policy"
-      | "biometric_waiver"
-      | "parental_notice"
-      | "institutional_agreement",
+    docType: LegalDocumentType,
   ): Promise<LegalDocument | null> {
     const [row] = await db.select().from(legalDocuments).where(eq(legalDocuments.docType, docType));
     return row ?? null;
   },
 
   async updateLegalDocument(
-    docType:
-      | "terms_of_service"
-      | "privacy_policy"
-      | "biometric_waiver"
-      | "parental_notice"
-      | "institutional_agreement",
+    docType: LegalDocumentType,
     content: string,
   ): Promise<LegalDocument> {
     const [row] = await db

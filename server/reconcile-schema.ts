@@ -1763,6 +1763,7 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'biometric_waiver';
 ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'parental_notice';
 ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'institutional_agreement';
+ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'eula';
 
 CREATE TABLE IF NOT EXISTS "legal_documents" (
   "id" serial PRIMARY KEY,

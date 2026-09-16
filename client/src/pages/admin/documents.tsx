@@ -11,12 +11,7 @@ import { DownloadButton } from "@/components/download-button";
 import { toast } from "sonner";
 import { ShieldAlert, Save, Mail } from "lucide-react";
 
-type LegalDocType =
-  | "terms_of_service"
-  | "privacy_policy"
-  | "biometric_waiver"
-  | "parental_notice"
-  | "institutional_agreement";
+import type { LegalDocumentType as LegalDocType } from "@shared/schema";
 type LegalDocument = { docType: LegalDocType; content: string; updatedAt: string };
 
 type ComplianceReportData = {
@@ -43,6 +38,7 @@ const DOC_LABEL: Record<LegalDocType, string> = {
   biometric_waiver: "Biometric Waiver",
   parental_notice: "Notice to Parent or Guardian",
   institutional_agreement: "Institutional Agreement",
+  eula: "End User License Agreement",
 };
 
 const CONSENT_LABEL: Record<string, string> = {
@@ -388,6 +384,7 @@ export default function AdminDocuments() {
           </CardHeader>
           <CardContent>
             <LegalDocEditor docType="institutional_agreement" />
+            <LegalDocEditor docType="eula" />
           </CardContent>
         </Card>
       </div>
