@@ -5215,6 +5215,27 @@ export const externalWaivers = pgTable(
     // Why it was rejected, shown back to whoever uploaded it. A rejection with
     // no reason just produces the same upload again.
     reviewNote: text("review_note"),
+    // "ai" or "admin". Who made the call, kept because they are not the same
+    // kind of evidence and a later reader must be able to tell them apart.
+    reviewSource: text("review_source"),
+    // What the model read off the page: the kind it thinks this is, whether it
+    // found a signature and a date, the issuer, and its own confidence. Kept
+    // after the file is gone, because once the file is gone this IS the record.
+    aiVerdict: json("ai_verdict"),
+    // THE FILE ONLY EXISTS WHILE A DECISION IS PENDING.
+    //
+    // Set the moment a document is decided, either way, and the file is deleted
+    // from disk at the same time. What Forge needed from a child's signed
+    // medical form was the answer to "does one exist, for the right thing,
+    // signed" -- and it has that answer in the columns beside this one. Keeping
+    // the scan afterwards stores a named minor's medical and guardian-signature
+    // detail forever in exchange for nothing, and hands every future admin,
+    // every backup and every breach a copy of it.
+    //
+    // So an accepted document is unreachable by anybody, including an admin,
+    // rather than merely hidden from one screen. A rejected one goes too: the
+    // reason is what the uploader needs, and they still hold the original.
+    filePurgedAt: timestamp("file_purged_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({

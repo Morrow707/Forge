@@ -3153,6 +3153,14 @@ CREATE INDEX IF NOT EXISTS "external_waivers_athlete_idx"
 CREATE INDEX IF NOT EXISTS "external_waivers_status_idx"
   ON "external_waivers" ("review_status", "created_at");
 
+-- The file exists only while a decision is pending. On accept or reject it is deleted from disk
+-- and file_purged_at is stamped -- see shared/schema.ts for why an accepted document is
+-- unreachable by everyone rather than merely hidden from the admin screen. ai_verdict is what
+-- the model read off the page, and once the file is gone it IS the record.
+ALTER TABLE "external_waivers" ADD COLUMN IF NOT EXISTS "review_source" text;
+ALTER TABLE "external_waivers" ADD COLUMN IF NOT EXISTS "ai_verdict" json;
+ALTER TABLE "external_waivers" ADD COLUMN IF NOT EXISTS "file_purged_at" timestamp;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN

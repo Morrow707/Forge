@@ -147,6 +147,9 @@ import {
   type PrivacyTier,
 } from "@shared/privacy-tiers";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { promises as fsPromises } from "node:fs";
+import path from "node:path";
+import { UPLOADS_ROOT } from "./uploaded-files";
 import { scrubUserForAdmin } from "./admin-identity";
 import { encryptField, decryptField, isEncryptedField } from "./field-encryption";
 import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
@@ -25476,10 +25479,95 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       })
       .from(externalWaivers)
       .innerJoin(users, eq(externalWaivers.athleteId, users.id))
-      .where(status === "all" ? undefined : eq(externalWaivers.reviewStatus, "pending_review"))
+      // A DECIDED DOCUMENT IS NOT IN THIS QUEUE, EVEN UNDER "show everything".
+      //
+      // Its file is destroyed on decision, so "all" could only ever render a row with a dead
+      // link -- and a screen that lists a named child's accepted medical form, link or no link,
+      // is the thing this design exists to prevent. "all" widens to rejected and expired, which
+      // still have something an admin might need to act on, and stops there.
+      .where(
+        status === "all"
+          ? ne(externalWaivers.reviewStatus, "accepted")
+          : eq(externalWaivers.reviewStatus, "pending_review"),
+      )
       .orderBy(desc(externalWaivers.createdAt))
       .limit(500);
     return rows;
+  },
+
+  /** Destroys the uploaded file and stamps the row. Called on EVERY decision, accept or reject.
+   *
+   * The file exists only while a decision is pending -- see shared/schema.ts's own comment on
+   * filePurgedAt. What Forge needed from a child's signed medical form was "does one exist, for
+   * the right thing, signed", and after a decision that answer is in the columns. Keeping the
+   * scan past that stores a named minor's medical and guardian-signature detail forever in
+   * exchange for nothing, and hands it to every future admin, every backup and every breach.
+   *
+   * Best-effort on the unlink and deliberately so: if the file is already gone, or the disk
+   * refuses, the ROW still records that it was purged, because a row claiming the file survives
+   * when it does not is the less useful of the two lies. A leftover file with no row pointing at
+   * it is unreachable through the app regardless -- every path here reads fileUrl from the row.
+   */
+  async purgeExternalWaiverFile(waiverId: number): Promise<void> {
+    const [row] = await db
+      .select({ fileUrl: externalWaivers.fileUrl })
+      .from(externalWaivers)
+      .where(eq(externalWaivers.id, waiverId));
+    if (row?.fileUrl) {
+      try {
+        const rel = row.fileUrl.replace(/^\/uploads\//, "");
+        // Refuses anything that escapes the uploads root -- fileUrl is written by this server,
+        // but a path join that trusts a stored string is the shape of bug worth never writing.
+        if (!rel.includes("..")) {
+          await fsPromises.unlink(path.join(UPLOADS_ROOT, rel));
+        }
+      } catch {
+        // Already gone, or the disk said no. The stamp below is what matters.
+      }
+    }
+    await db
+      .update(externalWaivers)
+      .set({ fileUrl: "", filePurgedAt: new Date() })
+      .where(eq(externalWaivers.id, waiverId));
+  },
+
+  /** The model's own decision, applied immediately. No queue, no human.
+   *
+   * Only ever called with decision "accepted" -- readUploadedWaiver sends everything else to a
+   * person. Kept separate from reviewExternalWaiver rather than folded into it with a flag,
+   * because who decided is the difference between two kinds of evidence and a shared function
+   * with a boolean is how that distinction gets lost. */
+  async acceptExternalWaiverFromAi(input: {
+    waiverId: number;
+    verdict: unknown;
+    issuingOrganization?: string | null;
+    signedOn?: string | null;
+    expiresOn?: string | null;
+  }): Promise<void> {
+    await db
+      .update(externalWaivers)
+      .set({
+        reviewStatus: "accepted",
+        reviewSource: "ai",
+        reviewedAt: new Date(),
+        aiVerdict: input.verdict as never,
+        // Only fills a blank. Whatever the person typed is what they meant, and a model reading
+        // a smudged date off a scan is not grounds to overwrite it.
+        ...(input.issuingOrganization ? { issuingOrganization: input.issuingOrganization } : {}),
+        ...(input.signedOn ? { signedOn: input.signedOn } : {}),
+        ...(input.expiresOn ? { expiresOn: input.expiresOn } : {}),
+      })
+      .where(eq(externalWaivers.id, input.waiverId));
+    await this.purgeExternalWaiverFile(input.waiverId);
+  },
+
+  /** Records that the model could not clear it, so a person will. The verdict is kept even
+   * though it decided nothing -- it is what tells the admin what to look at. */
+  async flagExternalWaiverForHuman(waiverId: number, verdict: unknown, reason: string): Promise<void> {
+    await db
+      .update(externalWaivers)
+      .set({ aiVerdict: verdict as never, reviewNote: reason })
+      .where(eq(externalWaivers.id, waiverId));
   },
 
   async reviewExternalWaiver(input: {
@@ -25494,13 +25582,18 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .update(externalWaivers)
       .set({
         reviewStatus: input.decision,
+        reviewSource: "admin",
         reviewedByUserId: input.reviewerId,
         reviewedAt: new Date(),
         reviewNote: input.note?.trim() || null,
       })
       .where(eq(externalWaivers.id, input.waiverId))
       .returning();
-    return row ?? null;
+    if (!row) return null;
+    // Decided, so the file goes -- the same rule the model's own acceptances follow. An admin
+    // who has just read it cannot open it again, and neither can the next one.
+    await this.purgeExternalWaiverFile(input.waiverId);
+    return row;
   },
 
   /** What an athlete has on file, as one line per kind, for a coach's roster view and the

@@ -310,9 +310,11 @@ export default function DocumentsPage() {
             />
             {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              PDF, or a photo of the signed page. We check that it arrived and is readable. We
-              can't confirm a form signed with someone else covers Forge, so the agreements you
-              accepted here still apply.
+              PDF, or a photo of the signed page. It's read automatically as soon as you upload
+              it -- we check it's the document you picked and that it's actually signed, then the
+              file is deleted. Nobody at Forge keeps a copy or reads it unless the check can't
+              clear it. We can't confirm a form signed with someone else covers Forge, so the
+              agreements you accepted here still apply.
             </p>
           </CardContent>
         </Card>
@@ -330,14 +332,22 @@ export default function DocumentsPage() {
                       {DOCUMENT_LABEL[w.kind]} · {new Date(w.createdAt).toLocaleDateString()} ·{" "}
                       {w.reviewStatus.replace("_", " ")}
                     </span>
-                    <a
-                      href={resolveApiUrl(w.fileUrl)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="shrink-0 font-semibold text-primary hover:underline"
-                    >
-                      Open
-                    </a>
+                    {/* THE FILE IS DESTROYED THE MOMENT A DOCUMENT IS DECIDED, so there is
+                        nothing to link to and saying "file deleted" is the honest thing to show.
+                        See shared/schema.ts's filePurgedAt: Forge needed to know a signed form
+                        exists, not to keep a copy of a child's medical record forever. */}
+                    {w.fileUrl ? (
+                      <a
+                        href={resolveApiUrl(w.fileUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 font-semibold text-primary hover:underline"
+                      >
+                        Open
+                      </a>
+                    ) : (
+                      <span className="shrink-0 text-muted-foreground">file deleted</span>
+                    )}
                   </li>
                 ))}
               </ul>

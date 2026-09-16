@@ -186,6 +186,8 @@ import {
   emailLegalDocumentSchema,
   externalWaiverKindEnum,
 } from "@shared/schema";
+import { readUploadedWaiver } from "./waiver-reader";
+import { promises as fsp } from "node:fs";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
 import { startOfWeek, addWeeks, formatISO } from "date-fns";
@@ -6764,7 +6766,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
           signedOn: typeof req.body?.signedOn === "string" ? req.body.signedOn || null : null,
           expiresOn: typeof req.body?.expiresOn === "string" ? req.body.expiresOn || null : null,
         });
-        res.status(201).json(waiver);
+        // READ IT NOW, DECIDE NOW. No queue.
+        //
+        // The model is asked three visual questions -- right kind, signed, legible -- and if all
+        // three land confidently the document is accepted in this request and the file is
+        // destroyed before the response is written. The parent sees a green check, and no member
+        // of staff has opened their child's medical form. Anything the model cannot clear goes
+        // to a person WITH the file still on disk, which is the only case where one exists.
+        //
+        // Awaited rather than backgrounded: the whole point is that the answer is in the reply.
+        // A failure here must not lose the upload, so the row is already written above and the
+        // worst case is the document sitting as pending_review, which is where it would have
+        // been anyway.
+        try {
+          const read = await readUploadedWaiver({
+            declaredKind: parsed.data,
+            mimeType: req.file.mimetype,
+            bytes: await fsp.readFile(req.file.path),
+          });
+          if (read.decision === "accepted") {
+            await storage.acceptExternalWaiverFromAi({
+              waiverId: waiver.id,
+              verdict: read.verdict,
+              issuingOrganization: read.verdict.issuingOrganization ?? null,
+              signedOn: read.verdict.signedOn ?? null,
+              expiresOn: read.verdict.expiresOn ?? null,
+            });
+            return res.status(201).json({ ...waiver, reviewStatus: "accepted", reviewSource: "ai" });
+          }
+          await storage.flagExternalWaiverForHuman(waiver.id, read.verdict, read.reason);
+          return res.status(201).json({ ...waiver, reviewNote: read.reason });
+        } catch (readErr) {
+          // The upload survived; only the automatic read did not. Left pending for a person.
+          console.error("waiver auto-read failed:", readErr);
+          return res.status(201).json(waiver);
+        }
       } catch (err) {
         next(err);
       }

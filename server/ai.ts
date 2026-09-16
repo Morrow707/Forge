@@ -268,6 +268,49 @@ export async function askClaudeVisionStructured<T>(
   return (toolUse?.input as T) ?? null;
 }
 
+/** Structured extraction from an uploaded FILE -- a PDF or a photograph of one.
+ *
+ * askClaudeVisionStructured above only takes images, which covers a meal photo and not the
+ * thing people actually upload when you ask them for a signed form. Half arrive as a phone
+ * snap and half as a multi-page scan, and a PDF is a `document` content block rather than an
+ * `image` one -- same position in the message, different shape, and no beta header either way.
+ *
+ * Both go BEFORE the text block, which is what the API asks for and also what reads correctly:
+ * the instruction is about the thing above it.
+ */
+export async function askClaudeFileStructured<T>(
+  system: SystemPrompt,
+  text: string,
+  file:
+    | { kind: "pdf"; data: string }
+    | { kind: "image"; mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; data: string },
+  tool: { name: string; description: string; input_schema: Record<string, unknown> },
+  { maxTokens = 1024, model, feature }: CallOptions = {},
+): Promise<T | null> {
+  if (!aiEnabled) return null;
+  const fileBlock =
+    file.kind === "pdf"
+      ? {
+          type: "document",
+          source: { type: "base64", media_type: "application/pdf", data: file.data },
+        }
+      : {
+          type: "image",
+          source: { type: "base64", media_type: file.mediaType, data: file.data },
+        };
+  const data = await callAnthropic({
+    model: model || defaultModel,
+    max_tokens: maxTokens,
+    system: buildSystemField(system),
+    messages: [{ role: "user", content: [fileBlock, { type: "text", text }] }],
+    tools: [tool],
+    tool_choice: { type: "tool", name: tool.name },
+  }, feature);
+  if (!data) return null;
+  const toolUse = data.content?.find((b: any) => b.type === "tool_use");
+  return (toolUse?.input as T) ?? null;
+}
+
 /** Like askClaudeStructured, but offers Claude a choice between multiple
  * tools (tool_choice: "auto") instead of forcing exactly one -- lets the
  * model genuinely just reply/ask a question via a no-op tool on a turn
