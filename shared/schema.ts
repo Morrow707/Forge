@@ -5061,6 +5061,17 @@ export const consentTypeEnum = pgEnum("consent_type", [
   // WAIVER -- it asks somebody to give up a right rather than to accept how a service works --
   // and separate from biometric_waiver because declining that one still leaves you training.
   "assumption_of_risk",
+  // A GUARDIAN'S ACCEPTANCE OF THE PRIVACY POLICY, WHICH USED TO BE FILED AS TERMS OF SERVICE.
+  //
+  // logGuardianConsents recorded the privacy policy under consentType "terms_of_service" -- the
+  // right thing happened (the acceptance was recorded, with the policy's own text snapshotted)
+  // under the wrong name. So a terms_of_service row could be the signup clickwrap OR the privacy
+  // policy, and nothing but reading the documentText told them apart. That is the one question a
+  // consent record exists to answer, and counting rows by type gave the wrong answer for it.
+  //
+  // Existing rows are left where they are: their documentText says what was agreed to, and
+  // rewriting history in a consent log to make a report tidier is not a trade worth making.
+  "privacy_policy",
 ]);
 
 export const consentRecords = pgTable(
@@ -5094,6 +5105,108 @@ export const consentRecords = pgTable(
   }),
 );
 export type ConsentRecord = typeof consentRecords.$inferSelect;
+
+// ---------- External waivers (a school's own forms, uploaded here) ----------
+//
+// FORGE'S OWN DOCUMENTS ARE THE FALLBACK, NOT THE ONLY OPTION.
+//
+// Most athletes reach Forge through a school or club that already runs its own
+// participation waiver, medical clearance and emergency-treatment
+// authorization -- paper, signed at the start of a season, sitting in a filing
+// cabinet. Asking a parent to sign Forge's versions of the same three
+// documents a second time is friction for no gain, and the school's are
+// usually the more thoroughly reviewed of the two.
+//
+// So this stores the school's. An athlete (or their guardian, or their coach)
+// uploads the signed form, an admin reviews it, and once accepted it stands as
+// the record for that athlete. Forge's own clickwrap documents keep working
+// untouched for everyone who has nothing to upload.
+//
+// WHAT THIS IS NOT. A waiver an athlete signed WITH THEIR SCHOOL is an
+// agreement between those two parties. Forge is not a party to it and is not
+// named in it, so accepting a copy here does not transfer its protection to
+// Forge -- that would take the document itself naming Forge, or a separate
+// agreement with the institution (see legalDocuments' institutional_agreement).
+// What this genuinely provides is evidence: that a guardian was informed, that
+// medical clearance exists, and who to call in an emergency. Worth having on
+// its own terms. The status field is called `reviewStatus` and never
+// `verified` for the same reason -- an admin can confirm a document was
+// received and is legible, not that it is enforceable.
+export const externalWaiverKindEnum = pgEnum("external_waiver_kind", [
+  // The school/club's participation waiver and release of liability.
+  "participation_waiver",
+  // A physician's clearance to participate. The gap Forge's own documents do
+  // not cover at all: nothing in the signup flow asks whether an athlete is
+  // medically cleared to train.
+  "medical_clearance",
+  // Emergency contact details and authorization to seek treatment for a minor.
+  "emergency_authorization",
+  // Permission to use an athlete's likeness. Deliberately distinct from the
+  // biometric release, which covers video captured FOR TRACKING and grants
+  // nothing for publicity.
+  "photo_media_release",
+  "other",
+]);
+
+export const externalWaiverStatusEnum = pgEnum("external_waiver_status", [
+  "pending_review",
+  "accepted",
+  "rejected",
+  // Superseded by a newer upload of the same kind for the same athlete, or
+  // past its expiry date. Kept rather than deleted: which document was on
+  // file on a given date is exactly what somebody will need to establish
+  // later, and a row that vanishes when it stops being current cannot answer
+  // that.
+  "expired",
+]);
+
+export const externalWaivers = pgTable(
+  "external_waivers",
+  {
+    id: serial("id").primaryKey(),
+    // The athlete the document is ABOUT, always -- never the uploader. A coach
+    // uploading for a roster athlete and a guardian uploading for their child
+    // produce the same row.
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    uploadedByUserId: integer("uploaded_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "set null" }),
+    kind: externalWaiverKindEnum("kind").notNull(),
+    // Who issued it -- "Lincoln High School Athletics", "Dr Raman, Northside
+    // Sports Medicine". Free text on purpose: there is no list of every school
+    // and clinic, and a dropdown that does not contain yours is worse than a box.
+    issuingOrganization: text("issuing_organization"),
+    // Gated upload path (see media-url-signing.ts's GATED_UPLOAD_DIRS). A
+    // signed participation waiver carries a minor's name, a guardian's
+    // signature and often medical detail -- strictly more sensitive than the
+    // form-check video sitting next to it, so it is never a public URL.
+    fileUrl: text("file_url").notNull(),
+    originalFilename: text("original_filename"),
+    mimeType: text("mime_type"),
+    sizeBytes: integer("size_bytes"),
+    // When the document was signed and when it stops being current. Both
+    // nullable: a scanned form does not always say, and an admin should record
+    // what is on the page rather than guess.
+    signedOn: text("signed_on"),
+    expiresOn: text("expires_on"),
+    reviewStatus: externalWaiverStatusEnum("review_status").notNull().default("pending_review"),
+    reviewedByUserId: integer("reviewed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at"),
+    // Why it was rejected, shown back to whoever uploaded it. A rejection with
+    // no reason just produces the same upload again.
+    reviewNote: text("review_note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("external_waivers_athlete_idx").on(table.athleteId, table.createdAt),
+    statusIdx: index("external_waivers_status_idx").on(table.reviewStatus, table.createdAt),
+  }),
+);
+export type ExternalWaiver = typeof externalWaivers.$inferSelect;
 
 // ---------- Record access audit log ----------
 // Immutable, insert-only log of a staff member (coach or admin) touching

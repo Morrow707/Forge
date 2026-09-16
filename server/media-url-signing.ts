@@ -94,7 +94,17 @@ const TTL_MS = 60 * 60 * 1000;
 // problem-reports: a "report a problem" screenshot can just as easily show
 // an athlete's page/roster/video as any of the other three -- same
 // treatment, same reasoning.
-const GATED_UPLOAD_DIRS = new Set(["form-videos", "skill-videos", "annotations", "problem-reports"]);
+// waivers: a signed participation waiver or medical clearance carries a
+// minor's name, a guardian's signature and often medical detail -- strictly
+// more sensitive than the form-check video in the directory above it, and the
+// one kind of upload here that is a legal document about a named child.
+const GATED_UPLOAD_DIRS = new Set([
+  "form-videos",
+  "skill-videos",
+  "annotations",
+  "problem-reports",
+  "waivers",
+]);
 
 // Matches only a bare, freshly-stored path with no query string yet --
 // exactly the shape every one of these URLs has in the database. Deliberately

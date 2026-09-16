@@ -3060,6 +3060,15 @@ DO $$ BEGIN
   ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'guardian_payment_verification';
 EXCEPTION WHEN undefined_object THEN NULL; END $$;
 
+-- A guardian accepting the privacy policy was being logged as 'terms_of_service' -- the right
+-- acceptance recorded under the wrong name, so counting consents by type could not tell the
+-- signup clickwrap from the privacy policy. Existing rows keep their type; their documentText
+-- already says which document it was, and rewriting a consent log to tidy a report is not a
+-- trade worth making.
+DO $$ BEGIN
+  ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'privacy_policy';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'weight_unit_lbs_default_2026_09_09') THEN
@@ -3087,6 +3096,47 @@ END $$;
 -- unrecoverable if it were ever wrong. An empty column costs nothing, and if
 -- SMS is ever genuinely built the collection path is a small amount of code
 -- to restore -- with fresh consent, which is the right way round anyway.
+-- ---------- External waivers: a school's own signed forms, uploaded here ----------
+-- Forge's clickwrap documents stay exactly as they are and remain the fallback for anyone with
+-- nothing to upload. See shared/schema.ts's externalWaivers comment for what accepting one of
+-- these does and does not do -- in short, it is evidence that a document exists and was seen,
+-- not a transfer of the school's protection onto Forge.
+DO $$ BEGIN
+  CREATE TYPE "external_waiver_kind" AS ENUM (
+    'participation_waiver', 'medical_clearance', 'emergency_authorization',
+    'photo_media_release', 'other'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "external_waiver_status" AS ENUM (
+    'pending_review', 'accepted', 'rejected', 'expired'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "external_waivers" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "uploaded_by_user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE SET NULL,
+  "kind" external_waiver_kind NOT NULL,
+  "issuing_organization" text,
+  "file_url" text NOT NULL,
+  "original_filename" text,
+  "mime_type" text,
+  "size_bytes" integer,
+  "signed_on" text,
+  "expires_on" text,
+  "review_status" external_waiver_status NOT NULL DEFAULT 'pending_review',
+  "reviewed_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "reviewed_at" timestamp,
+  "review_note" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "external_waivers_athlete_idx"
+  ON "external_waivers" ("athlete_id", "created_at");
+CREATE INDEX IF NOT EXISTS "external_waivers_status_idx"
+  ON "external_waivers" ("review_status", "created_at");
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN

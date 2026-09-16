@@ -4,6 +4,8 @@ import {
   coachAthletes,
   coachAthleteRequests,
   guardianLinks,
+  externalWaivers,
+  externalWaiverKindEnum,
   guardianInvites,
   coachStaff,
   teams,
@@ -234,6 +236,7 @@ import type {
   RecordAccessAuditLog,
   LegalDocument,
   LegalDocumentType,
+  ExternalWaiver,
 } from "@shared/schema";
 import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
@@ -24203,7 +24206,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       requiresGuardianNoticeCount: guardianNoticeCount,
       notYetBuilt: [
         "Parental Notice content is delivered today, embedded in the guardian-invite email sent at signup (issueGuardianInviteIfNeeded in server/auth.ts) -- but check whether RESEND_FROM_EMAIL is set to a verified sending domain in production; while it's on Resend's sandbox default, that email silently fails to reach any address other than the Resend account's own verified inbox (see server/email.ts's own startup warning for this).",
-        "Biometric waiver consent copy exists as a draft now (see /admin/documents), but hasn't been reviewed by counsel and isn't wired into any live consent-collection flow yet -- consentRecords has no real rows of this type until both of those happen.",
+        "The video and biometric release IS collected today -- an adult ticks it at signup or agrees at the camera (recordBiometricRelease), and a guardian agrees for a minor at claim time (logGuardianConsents) -- so consentRecords carries real rows of this type. It has still not been reviewed by counsel. This line previously said the opposite, that the document was an unwired draft, and stayed that way after three flows started writing it: a report that understates its own coverage is worse than one that says nothing, because it is what gets handed to a lawyer.",
         "Institutional Service Agreement (org billing customers) exists as a draft and is now presented for acceptance to a primary coach's account on an org billing tier, but its substantive liability-shifting language hasn't been drafted or reviewed by counsel -- do not present it to a real institution as binding yet.",
         "Legal review confirming the tier thresholds, retention windows, and coach-consent mechanism actually satisfy COPPA, any state Age-Appropriate Design Code, BIPA, or other applicable law.",
         "Any accounts created before dateOfBirth existed remain tier \"unknown\" until that field is backfilled.",
@@ -25037,10 +25040,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       // Recorded last and unconditionally: the privacy policy governs what is collected about
       // this athlete and who may see it, which is a question for a guardian of a 17-year-old as
       // much as of a 9-year-old.
+      //
+      // Under its OWN type since 2026-09-16. This logged consentType "terms_of_service", so a
+      // guardian claim wrote two rows of that type carrying two different documents -- the
+      // signup clickwrap and the privacy policy -- and nothing short of reading the snapshotted
+      // text told them apart. Which document somebody agreed to is the question a consent record
+      // exists to answer.
       if (privacy?.content) {
         await this.logConsentRecord({
           ...context,
-          consentType: "terms_of_service",
+          consentType: "privacy_policy",
           documentText: privacy.content,
         });
       }
@@ -25361,6 +25370,162 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
 
   // Open requests first and oldest-first within that, because this is a
   // queue somebody works through, not a log they browse.
+  // ---------- External waivers (a school's own signed forms) ----------
+  //
+  // See shared/schema.ts's externalWaivers comment for what these are and, more importantly,
+  // what accepting one does NOT do. Forge's own clickwrap documents are untouched by any of
+  // this and remain the fallback for anyone with nothing to upload.
+
+  /** Can this account act for this athlete's paperwork?
+   *
+   * Three answers, and they are not the same relationship:
+   * - the athlete themselves, for their own documents;
+   * - a guardian, for a child whose account they are linked to;
+   * - a coach, for an athlete on their roster (effective coach ids, so a staff coach counts).
+   *
+   * An admin is deliberately NOT here. An admin reviews what has been uploaded; letting the
+   * reviewer also be the uploader collapses the only separation this flow has.
+   */
+  async canManageWaiversFor(actorId: number, athleteId: number): Promise<boolean> {
+    if (actorId === athleteId) return true;
+    const actor = await this.getUser(actorId);
+    if (!actor) return false;
+    if (actor.role === "coach") {
+      const coachIds = await this.getEffectiveCoachIds(actorId);
+      const link = await db.query.coachAthletes.findFirst({
+        where: and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)),
+      });
+      if (link) return true;
+    }
+    const guardianLink = await db.query.guardianLinks.findFirst({
+      where: and(
+        eq(guardianLinks.guardianId, actorId),
+        eq(guardianLinks.athleteId, athleteId),
+      ),
+    });
+    return !!guardianLink;
+  },
+
+  async listExternalWaiversForAthlete(athleteId: number): Promise<ExternalWaiver[]> {
+    return db
+      .select()
+      .from(externalWaivers)
+      .where(eq(externalWaivers.athleteId, athleteId))
+      .orderBy(desc(externalWaivers.createdAt));
+  },
+
+  async createExternalWaiver(input: {
+    athleteId: number;
+    uploadedByUserId: number;
+    kind: (typeof externalWaiverKindEnum.enumValues)[number];
+    fileUrl: string;
+    issuingOrganization?: string | null;
+    originalFilename?: string | null;
+    mimeType?: string | null;
+    sizeBytes?: number | null;
+    signedOn?: string | null;
+    expiresOn?: string | null;
+  }): Promise<ExternalWaiver> {
+    // A NEW UPLOAD OF THE SAME KIND RETIRES THE OLD ONE RATHER THAN DELETING IT.
+    //
+    // Which document was on file on a given date is exactly the question somebody will ask
+    // later, and a row that disappears when it stops being current cannot answer it. Only
+    // accepted/pending rows are retired -- a rejected one is already not in force, and marking
+    // it expired would lose the fact that it was refused and why.
+    await db
+      .update(externalWaivers)
+      .set({ reviewStatus: "expired" })
+      .where(
+        and(
+          eq(externalWaivers.athleteId, input.athleteId),
+          eq(externalWaivers.kind, input.kind),
+          inArray(externalWaivers.reviewStatus, ["pending_review", "accepted"]),
+        ),
+      );
+    const [row] = await db
+      .insert(externalWaivers)
+      .values({
+        athleteId: input.athleteId,
+        uploadedByUserId: input.uploadedByUserId,
+        kind: input.kind,
+        fileUrl: input.fileUrl,
+        issuingOrganization: input.issuingOrganization ?? null,
+        originalFilename: input.originalFilename ?? null,
+        mimeType: input.mimeType ?? null,
+        sizeBytes: input.sizeBytes ?? null,
+        signedOn: input.signedOn ?? null,
+        expiresOn: input.expiresOn ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  /** Everything waiting on an admin, newest first. Carries the athlete's NAME on purpose.
+   *
+   * The admin analytics surfaces in this file are anonymous by invariant (see CLAUDE.md), and
+   * this is not one of them. Accepting a legal document about a named child without knowing
+   * which child is not a weaker version of review, it is not review -- the identity IS the
+   * thing being checked. Kept off every aggregate and export path for that reason, and it is
+   * an operational queue, never a report. */
+  async listExternalWaiversForReview(status: "pending_review" | "all" = "pending_review") {
+    const rows = await db
+      .select({
+        waiver: externalWaivers,
+        athleteName: users.name,
+        athleteId: users.id,
+      })
+      .from(externalWaivers)
+      .innerJoin(users, eq(externalWaivers.athleteId, users.id))
+      .where(status === "all" ? undefined : eq(externalWaivers.reviewStatus, "pending_review"))
+      .orderBy(desc(externalWaivers.createdAt))
+      .limit(500);
+    return rows;
+  },
+
+  async reviewExternalWaiver(input: {
+    waiverId: number;
+    reviewerId: number;
+    decision: "accepted" | "rejected";
+    note?: string | null;
+  }): Promise<ExternalWaiver | null> {
+    // A rejection has to say why, or the same file comes straight back.
+    if (input.decision === "rejected" && !input.note?.trim()) return null;
+    const [row] = await db
+      .update(externalWaivers)
+      .set({
+        reviewStatus: input.decision,
+        reviewedByUserId: input.reviewerId,
+        reviewedAt: new Date(),
+        reviewNote: input.note?.trim() || null,
+      })
+      .where(eq(externalWaivers.id, input.waiverId))
+      .returning();
+    return row ?? null;
+  },
+
+  /** What an athlete has on file, as one line per kind, for a coach's roster view and the
+   * athlete's own account page. Says nothing about enforceability -- see the schema comment. */
+  async externalWaiverSummary(athleteId: number) {
+    const rows = await this.listExternalWaiversForAthlete(athleteId);
+    const today = new Date().toISOString().slice(0, 10);
+    return externalWaiverKindEnum.enumValues.map((kind) => {
+      const current = rows.find(
+        (r) => r.kind === kind && (r.reviewStatus === "accepted" || r.reviewStatus === "pending_review"),
+      );
+      // Expiry is read here rather than written by a nightly job: the date is on the row, the
+      // question is only ever asked when somebody looks, and a job that rewrites rows on a
+      // schedule is a second thing that can be wrong about them.
+      const lapsed = !!current?.expiresOn && current.expiresOn < today;
+      return {
+        kind,
+        status: current ? (lapsed ? ("expired" as const) : current.reviewStatus) : ("missing" as const),
+        issuingOrganization: current?.issuingOrganization ?? null,
+        expiresOn: current?.expiresOn ?? null,
+        waiverId: current?.id ?? null,
+      };
+    });
+  },
+
   async getOpenMediaRemovalRequests(): Promise<
     (MediaRemovalRequest & { guardianName: string })[]
   > {

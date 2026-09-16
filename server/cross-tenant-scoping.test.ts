@@ -71,6 +71,11 @@ const OWNERSHIP_CHECKS = [
   "getSkillAssignmentForCoach",
   "getSkillAssignmentForAthlete",
   "getClassEnrollmentForAthlete",
+  // Answers "may this account act for this athlete's paperwork" -- the athlete themselves, a
+  // linked guardian, or a coach whose effective roster they are on. Deliberately excludes an
+  // admin, who reviews these rather than uploading them, so the waiver routes gate on it plus
+  // an explicit admin branch where reading is allowed.
+  "canManageWaiversFor",
 ];
 
 // Routes whose path parameter names global Forge content or a deliberately

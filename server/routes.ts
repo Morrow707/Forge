@@ -184,6 +184,7 @@ import {
   createAdminSavedViewSchema,
   updateLegalDocumentSchema,
   emailLegalDocumentSchema,
+  externalWaiverKindEnum,
 } from "@shared/schema";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
@@ -506,6 +507,41 @@ const uploadProblemReportPhoto = multer({
   fileFilter: (_req, file, cb) => {
     if (!TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
       return cb(new Error("Unsupported image format -- use PNG, JPEG, or WebP"));
+    }
+    cb(null, true);
+  },
+});
+
+// ---------- External waivers: a school's own signed forms ----------
+//
+// PDF or a photograph of a paper form, because that is what a school actually hands back.
+// Half of these arrive as a phone snap of a signed sheet rather than a scan.
+const WAIVERS_DIR = path.join(UPLOADS_ROOT, "waivers");
+fs.mkdirSync(WAIVERS_DIR, { recursive: true });
+
+const WAIVER_EXTENSION_BY_MIME: Record<string, string> = {
+  "application/pdf": ".pdf",
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+  "image/heic": ".heic",
+};
+
+const uploadWaiverFile = multer({
+  storage: multer.diskStorage({
+    destination: WAIVERS_DIR,
+    filename: (_req, file, cb) => {
+      const ext = WAIVER_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()];
+      cb(null, `${crypto.randomUUID()}${ext ?? ""}`);
+    },
+  }),
+  // Generous next to the 8MB photo limit above: a multi-page participation packet scanned at
+  // whatever the school office's copier defaults to is routinely bigger than a screenshot, and
+  // bouncing a parent's upload for being a 12MB scan is how a form never arrives at all.
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!WAIVER_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
+      return cb(new Error("Upload a PDF or a photo of the signed form (PNG, JPEG, WebP or HEIC)"));
     }
     cb(null, true);
   },
@@ -6669,6 +6705,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // requireAuth rather than requireRole. Single-step: the photo (if any)
   // and the message land together, no separate upload-then-attach dance
   // like the video routes need.
+  // ---------- External waivers ----------
+  //
+  // Forge's own clickwrap documents are unchanged and remain what everyone accepts at signup.
+  // These routes are for the school/club forms an athlete has ALREADY signed elsewhere -- see
+  // shared/schema.ts's externalWaivers comment, including the part about what accepting one
+  // does not do.
+
+  const waiverKindSchema = z.enum(externalWaiverKindEnum.enumValues);
+
+  /** Read: the athlete's own documents, or a coach's/guardian's view of theirs. */
+  app.get("/api/waivers/:athleteId", requireAuth, async (req, res, next) => {
+    try {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      if (!Number.isInteger(athleteId)) return res.status(400).json({ message: "Bad athlete id" });
+      // An admin can read to review; everyone else needs a real relationship to the athlete.
+      const allowed =
+        user.role === "admin" || (await storage.canManageWaiversFor(user.id, athleteId));
+      if (!allowed) return res.status(403).json({ message: "Not your athlete." });
+      res.json({
+        waivers: await storage.listExternalWaiversForAthlete(athleteId),
+        summary: await storage.externalWaiverSummary(athleteId),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** Upload. The athlete themselves, their guardian, or their coach -- never an admin, who is
+   * the one reviewing it (see canManageWaiversFor's own comment on that separation). */
+  app.post(
+    "/api/waivers/:athleteId",
+    requireAuth,
+    uploadWaiverFile.single("file"),
+    async (req, res, next) => {
+      try {
+        const user = currentUser(req);
+        const athleteId = Number(req.params.athleteId);
+        if (!Number.isInteger(athleteId)) return res.status(400).json({ message: "Bad athlete id" });
+        if (!(await storage.canManageWaiversFor(user.id, athleteId))) {
+          return res.status(403).json({ message: "Not your athlete." });
+        }
+        if (!req.file) return res.status(400).json({ message: "No file received." });
+        const parsed = waiverKindSchema.safeParse(req.body?.kind);
+        if (!parsed.success) return res.status(400).json({ message: "Pick what kind of form this is." });
+        const waiver = await storage.createExternalWaiver({
+          athleteId,
+          uploadedByUserId: user.id,
+          kind: parsed.data,
+          fileUrl: `/uploads/waivers/${req.file.filename}`,
+          issuingOrganization: typeof req.body?.issuingOrganization === "string"
+            ? req.body.issuingOrganization.trim().slice(0, 200) || null
+            : null,
+          originalFilename: req.file.originalname?.slice(0, 200) ?? null,
+          mimeType: req.file.mimetype,
+          sizeBytes: req.file.size,
+          signedOn: typeof req.body?.signedOn === "string" ? req.body.signedOn || null : null,
+          expiresOn: typeof req.body?.expiresOn === "string" ? req.body.expiresOn || null : null,
+        });
+        res.status(201).json(waiver);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  /** The admin review queue. Carries athlete names, deliberately -- accepting a legal document
+   * about a named child without knowing which child is not review. See
+   * listExternalWaiversForReview's own comment on why this is not an analytics surface. */
+  app.get("/api/admin/waivers", requireRole("admin"), async (req, res, next) => {
+    try {
+      const status = req.query.status === "all" ? "all" : "pending_review";
+      res.json(await storage.listExternalWaiversForReview(status));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/admin/waivers/:id/review", requireRole("admin"), async (req, res, next) => {
+    try {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const schema = z.object({
+        decision: z.enum(["accepted", "rejected"]),
+        note: z.string().max(1000).optional(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!Number.isInteger(id) || !parsed.success) {
+        return res.status(400).json({ message: "Bad review request." });
+      }
+      const updated = await storage.reviewExternalWaiver({
+        waiverId: id,
+        reviewerId: user.id,
+        decision: parsed.data.decision,
+        note: parsed.data.note,
+      });
+      if (!updated) {
+        // reviewExternalWaiver returns null for a rejection with no reason, which is the one
+        // way this fails that is worth its own sentence: the same file comes straight back
+        // otherwise.
+        return res.status(400).json({ message: "Say why it was rejected -- they will see it." });
+      }
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.post("/api/report-problem", requireAuth, reportProblemLimiter, (req, res) => {
     uploadProblemReportPhoto.single("photo")(req, res, async (err: unknown) => {
       if (err) {
