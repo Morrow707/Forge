@@ -12,6 +12,14 @@ import { ForgeMark } from "@/components/forge-mark";
  * page anyone could actually visit until now. Still a draft -- the content
  * itself carries its own "not reviewed by a lawyer" notice as its first
  * paragraph, unedited here.
+ *
+ * The EULA and the video and biometric release are served the same way, for two
+ * different reasons. App Store Connect asks for a licence URL when an app
+ * supplies its own EULA. The release is here because it is LIVE: an adult agrees
+ * to it at the camera and a guardian agrees to it while claiming a minor's
+ * account, and both were being asked to accept a document whose only link went
+ * to a page showing something else. Its own text is not a draft -- see
+ * server/seed-data/biometric-release.ts.
  */
 function LegalDocumentPage({
   docType,
@@ -19,7 +27,7 @@ function LegalDocumentPage({
   otherHref,
   otherLabel,
 }: {
-  docType: "terms_of_service" | "privacy_policy";
+  docType: "terms_of_service" | "privacy_policy" | "eula" | "biometric_waiver";
   title: string;
   otherHref: string;
   otherLabel: string;
@@ -78,6 +86,28 @@ export function PrivacyPolicyPage() {
       title="Privacy Policy"
       otherHref="/terms"
       otherLabel="Terms of Service →"
+    />
+  );
+}
+
+export function EulaPage() {
+  return (
+    <LegalDocumentPage
+      docType="eula"
+      title="End User License Agreement"
+      otherHref="/terms"
+      otherLabel="Terms of Service →"
+    />
+  );
+}
+
+export function BiometricReleasePage() {
+  return (
+    <LegalDocumentPage
+      docType="biometric_waiver"
+      title="Video and Biometric Consent and Release"
+      otherHref="/privacy"
+      otherLabel="Privacy Policy →"
     />
   );
 }

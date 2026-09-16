@@ -21,6 +21,7 @@ import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT, PARENTAL_NOTICE_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT } from "./seed-data/legal-documents-draft";
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchContactPlaceholders } from "./seed-data/signup-agreement";
+import { nextBiometricRelease } from "./seed-data/biometric-release";
 
 const LEGAL_DOC_TYPES = legalDocumentTypeEnum.enumValues;
 
@@ -6235,8 +6236,16 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   if (!(await storage.getLegalDocument("privacy_policy"))) {
     await storage.updateLegalDocument("privacy_policy", PRIVACY_POLICY_DRAFT);
   }
-  if (!(await storage.getLegalDocument("biometric_waiver"))) {
-    await storage.updateLegalDocument("biometric_waiver", BIOMETRIC_WAIVER_DRAFT);
+  // The video and biometric release. Unlike the four documents around it this one is LIVE --
+  // recordBiometricRelease and logGuardianConsents snapshot it into a consent record as the
+  // thing the person agreed to -- so it gets the same treatment the signup agreement got: seeded
+  // on a fresh install, and migrated once on an install still carrying the draft, which told its
+  // reader not to rely on it while being relied on. An admin's own release is left alone.
+  const storedRelease = await storage.getLegalDocument("biometric_waiver");
+  const nextRelease = nextBiometricRelease(storedRelease?.content ?? null);
+  if (nextRelease) {
+    await storage.updateLegalDocument("biometric_waiver", nextRelease);
+    if (storedRelease) console.log("Replaced the draft biometric release with the real one.");
   }
 
   // The drafts above are only written when ABSENT, so a correction to their source text never

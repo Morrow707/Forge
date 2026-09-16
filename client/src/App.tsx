@@ -31,7 +31,12 @@ import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import VerifyEmailPage from "@/pages/verify-email";
 import LegalPage from "@/pages/legal";
-import { TermsOfServicePage, PrivacyPolicyPage } from "@/pages/legal-document";
+import {
+  TermsOfServicePage,
+  PrivacyPolicyPage,
+  EulaPage,
+  BiometricReleasePage,
+} from "@/pages/legal-document";
 import DeleteAccountPage from "@/pages/delete-account";
 import NotFound from "@/pages/not-found";
 const AvPreviewTestPage = lazy(withLoadTimeout(() => import("@/pages/dev/av-preview-test")));
@@ -278,6 +283,11 @@ function Router() {
         <Route path="/legal" component={LegalPage} />
         <Route path="/terms" component={TermsOfServicePage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />
+        <Route path="/eula" component={EulaPage} />
+        {/* Linked from the capture-time release prompt and from all three guardian-claim
+            checkboxes. Public because the claim is reached from an emailed invite, before
+            there is a session to authenticate. */}
+        <Route path="/biometric-release" component={BiometricReleasePage} />
         <Route path="/delete-account" component={DeleteAccountPage} />
         <Route path="/dev/av-preview-test">
           <ProtectedRoute role="admin" component={AvPreviewTestPage} />

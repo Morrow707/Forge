@@ -53,7 +53,12 @@ describe("the biometric release prompt", () => {
   });
 
   it("links the release rather than asking them to agree to something unreadable", () => {
-    expect(dialog).toContain('href="/legal"');
+    // This asserted href="/legal" when it was written, which was the bug rather than the rule:
+    // /legal renders only the signup clickwrap, so the link promising "the full video and
+    // biometric release" opened the Terms of Use. The test pinned the defect in place, which is
+    // what a test asserting the CURRENT string rather than the INTENDED behaviour does.
+    expect(dialog).toContain('href="/biometric-release"');
+    expect(dialog).not.toContain('href="/legal"');
   });
 
   it("does not ask again once they have agreed", () => {

@@ -79,7 +79,7 @@ export function BiometricReleaseDialog({
               </p>
               <p>
                 <a
-                  href="/legal"
+                  href="/biometric-release"
                   target="_blank"
                   rel="noreferrer"
                   className="font-semibold text-primary hover:underline"

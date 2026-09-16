@@ -122,14 +122,18 @@ export default function GuardianClaimPage() {
                 autoComplete={preview?.accountExists ? "current-password" : "new-password"}
               />
             </div>
-            {/* Every box links its own document, because a mandatory checkbox over text the
-                person cannot reach is not a clickwrap. /legal is public and carries all three. */}
+            {/* Every box links ITS OWN document, because a mandatory checkbox over text the
+                person cannot reach is not a clickwrap. These all used to point at /legal, which
+                renders only the signup agreement -- so a guardian ticking three boxes, each
+                logged as a separate consent record snapshotting different text, could read one
+                of the three. All four pages are public: this page is reached from an emailed
+                invite, before there is a session to authenticate. */}
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
               <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
               <span>
                 I agree to the{" "}
                 <a
-                  href="/legal"
+                  href="/terms"
                   target="_blank"
                   rel="noreferrer"
                   className="font-semibold text-primary hover:underline"
@@ -146,7 +150,7 @@ export default function GuardianClaimPage() {
               <span>
                 I have read the{" "}
                 <a
-                  href="/legal"
+                  href="/privacy"
                   target="_blank"
                   rel="noreferrer"
                   className="font-semibold text-primary hover:underline"
@@ -165,7 +169,7 @@ export default function GuardianClaimPage() {
                 I consent to my child being recorded on video for coaching, and to measurements
                 being taken from that footage, as set out in the{" "}
                 <a
-                  href="/legal"
+                  href="/biometric-release"
                   target="_blank"
                   rel="noreferrer"
                   className="font-semibold text-primary hover:underline"

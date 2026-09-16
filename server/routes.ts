@@ -3779,14 +3779,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     eula: "End User License Agreement",
   };
 
-  // Publicly browsable (App Store Connect and any visitor need a working
-  // unauthenticated URL for these three -- see the public route below). The
-  // EULA is here because App Store Connect asks for a licence URL when an app
-  // supplies its own, and a link that 404s is a review finding. The
+  // Publicly browsable -- see the public route below. App Store Connect needs
+  // working unauthenticated URLs for the privacy policy and, because Forge
+  // supplies its own licence rather than Apple's standard one, the EULA; a link
+  // that 404s there is a review finding.
+  //
+  // The biometric release is here for a different reason, and it used to be
+  // deliberately excluded: "a signable release, not a general policy page, and
+  // nothing collects a real signature against it yet". The second half stopped
+  // being true. It is now snapshotted into a consent record every time an adult
+  // agrees at the camera and every time a guardian claims a minor's account, and
+  // a mandatory agreement to text the person cannot open is not an agreement.
+  // The guardian claim in particular is reached from an emailed invite, before
+  // there is any session to authenticate, so it has to be public rather than
+  // merely logged-in. The
   // biometric waiver is deliberately NOT in this set: it's a signable
   // release, not a general policy page, and nothing collects a real
   // signature against it yet -- see BIOMETRIC_WAIVER_DRAFT's own comment.
-  const PUBLIC_LEGAL_DOC_TYPES = ["terms_of_service", "privacy_policy", "eula"] as const;
+  const PUBLIC_LEGAL_DOC_TYPES = ["terms_of_service", "privacy_policy", "eula", "biometric_waiver"] as const;
   const isPublicLegalDocType = (v: string): v is (typeof PUBLIC_LEGAL_DOC_TYPES)[number] =>
     (PUBLIC_LEGAL_DOC_TYPES as readonly string[]).includes(v);
 
