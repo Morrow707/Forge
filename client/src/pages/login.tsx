@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ForgeMark } from "@/components/forge-mark";
 import { MfaLoginStep } from "@/components/mfa-login-step";
 import { isNativeLoginAvailable, presentNativeLogin } from "@/lib/native-auth";
+import { logDebug } from "@/lib/debug-console";
 
 export default function LoginPage() {
   const { user, isLoading, loginMutation } = useAuth();
@@ -31,7 +32,12 @@ export default function LoginPage() {
   emailRef.current = email;
 
   const present = useCallback(() => {
+    // Logged because the failure mode is invisible: if the plugin call rejects, the web form
+    // renders and looks exactly like a build that never had the native screen in it. Build 418
+    // could not be told apart from build 416 from a screenshot for precisely this reason.
+    logDebug("AUTH", `presenting native login (available=${isNativeLoginAvailable()})`);
     presentNativeLogin(emailRef.current || undefined).then((outcome) => {
+      logDebug("AUTH", `native login outcome: ${outcome ? outcome.action : "unavailable/failed"}`);
       // null is web/unavailable/native failure; dismissed is the athlete swiping it away. Both
       // mean the same thing here: fall back to the form, which still logs in.
       if (!outcome || outcome.action === "dismissed") {
