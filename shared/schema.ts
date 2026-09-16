@@ -8148,6 +8148,12 @@ export type PublicUser = Omit<
   // nothing the athlete can act on, while a missing birthdate is one field they fill in
   // themselves, and showing them the wrong one hands them an instruction they cannot follow.
   dateOfBirthRequired?: boolean;
+  // Athletes only. True for an ADULT athlete who has not agreed to the biometric release -- a
+  // minor's comes from their guardian at claim time. While true, the capture gate in
+  // submitWorkoutLog refuses to store new skeleton frames or path traces for them, so this is
+  // what lets the client ask before they film rather than dropping what they filmed afterwards.
+  // Never a substitute for that gate: a client flag is a convenience, not a rule.
+  biometricReleaseRequired?: boolean;
   // True when this account has at least one guardian link, whatever its role
   // -- guardianship is a relationship, so a Free Agent parent or a coach who
   // is also a parent both get the guardian view. UI convenience only;

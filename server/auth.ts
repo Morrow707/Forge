@@ -226,6 +226,14 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
     // full of controls that all answer 403 -- see the guardian gate in
     // routes.ts, which is the thing actually enforcing this. This flag is a
     // convenience for the UI and is never the enforcement.
+    // Whether to ask this athlete for the biometric release. True only where it would actually
+    // change anything: an adult (a minor's comes from their guardian) who has not agreed. The
+    // capture gate in submitWorkoutLog is the enforcement; this is what lets the client ask
+    // rather than silently dropping what they film.
+    publicUser.biometricReleaseRequired =
+      user.dateOfBirth != null &&
+      derivePrivacyTier(user.dateOfBirth) === "tier3_adult_18plus" &&
+      !(await storage.hasBiometricConsent(user.id));
     const gate = await storage.athleteGateStatus(user.id);
     publicUser.guardianLinkRequired = gate === "needs_guardian";
     publicUser.dateOfBirthRequired = gate === "needs_date_of_birth";
@@ -1359,6 +1367,30 @@ export function setupAuth(app: Express) {
   // coach account is just as real a case; the compliance-relevant
   // population (privacy tiers) is athlete-only, but there's no reason to
   // block a coach from fixing the same gap on their own profile.
+  // Agreeing to the biometric release after the fact.
+  //
+  // Every athlete who signed up before the release was wired into signup has nothing on file, and
+  // there is no way to ask them at a signup they already passed. Until they agree, the capture
+  // gate in submitWorkoutLog refuses to store new skeleton frames or path traces for them.
+  //
+  // No body: this is one affirmative act with one meaning, and there is nothing to configure. The
+  // request IS the agreement, which is why it is a POST and not a PUT of a boolean -- a flag that
+  // can be set false would invite "unagreeing" here, and withdrawal is a different act with
+  // different consequences that belongs with the guardian flow.
+  app.post("/api/account/biometric-release", requireAuth, async (req, res, next) => {
+    try {
+      const user = req.user as any;
+      const result = await storage.recordBiometricRelease(user.id, {
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") ?? undefined,
+      });
+      if (!result.ok) return res.status(400).json({ message: result.error });
+      res.json(await toPublicUserWithSections(await storage.getUser(user.id)));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.post("/api/account/backfill-date-of-birth", requireAuth, async (req, res, next) => {
     try {
       const parsed = backfillDateOfBirthSchema.safeParse(req.body);

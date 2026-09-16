@@ -19872,6 +19872,11 @@ ${catalog}`;
       // Keyed by (exercise, set number) since row ids don't survive a
       // resubmission but that pair does.
       const priorVideoByKey = new Map<string, { url: string; uploadedAt: Date | null }>();
+      // Resolved once for the whole save rather than per set -- see captureField below for what it
+      // gates and why it carries prior values forward instead of clearing them. A minor's consent
+      // comes from their guardian at claim time and is recorded against the athlete, so this one
+      // check answers for both.
+      const biometricConsentOnFile = await this.hasBiometricConsent(athleteId);
       // The same snapshot, on the same key, for the frame-by-frame capture columns.
       //
       // It exists so a client can OMIT these columns from a save without destroying them. One
@@ -20041,13 +20046,33 @@ ${catalog}`;
           // clears it. `in` is the test that separates them -- `?? null` cannot, because it
           // collapses undefined and null to the same thing, which is exactly how a save that
           // simply left the field out used to erase it. See priorCaptureByKey above.
+          // THE CAPTURE-TIME CONSENT GATE, and the one point all three biometric columns pass
+          // through on the way into the database.
+          //
+          // Skeleton frames and the bar/arm path traces ARE the biometric identifier -- skeletal
+          // joint coordinates derived from video of a person. An athlete who has not agreed to the
+          // biometric release must not have them stored, and signup consent alone does not cover
+          // that: every athlete who joined before the release was wired in has nothing on file and
+          // cannot be asked at a signup they already passed.
+          //
+          // Carries the stored value forward rather than nulling. Nulling would mean an athlete
+          // who never consented LOSES their existing capture history the first time they edit a
+          // weight on an old day -- destroying data as a side effect of an unrelated save, which
+          // is not what withholding consent should do. New capture never lands; nothing existing
+          // is touched.
+          //
+          // Server-side backstop, not the whole mechanism. What stops the capture happening at all
+          // is the client refusing to offer camera tracking until the release is agreed; this is
+          // what makes that refusal true rather than cosmetic.
           const captureField = (
             set: Record<string, unknown>,
             setNumber: number,
             field: "skeletonFrames" | "barPathTrace" | "armPathTrace",
           ) => {
+            const prior = priorCaptureByKey.get(`${exerciseKey}:${setNumber}`)?.[field] ?? null;
+            if (!biometricConsentOnFile) return prior;
             if (field in set) return set[field] ?? null;
-            return priorCaptureByKey.get(`${exerciseKey}:${setNumber}`)?.[field] ?? null;
+            return prior;
           };
           // This exercise's own unit -- see logEntryInputSchema's comment.
           // Falls back to the athlete's account-level default only when
@@ -25588,6 +25613,63 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * cannot strand a child by casually giving up access, which is the right answer for "step
    * away". Here locking the account is not a side effect to be avoided, it is the point.
    */
+  /** Whether this athlete has agreed to the biometric release and not withdrawn it.
+   *
+   * The consent table is append-only, so a withdrawal is a later row whose text begins WITHDRAWN
+   * rather than an edit to the original -- see withdrawGuardianConsent. "Has consent" therefore
+   * means at least one biometric_waiver row that is not itself a withdrawal, and no withdrawal
+   * after the most recent grant.
+   */
+  async hasBiometricConsent(athleteId: number): Promise<boolean> {
+    const rows = await db.query.consentRecords.findMany({
+      where: and(
+        eq(consentRecords.userId, athleteId),
+        eq(consentRecords.consentType, "biometric_waiver"),
+      ),
+    });
+    if (rows.length === 0) return false;
+    const ordered = [...rows].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    let granted = false;
+    for (const row of ordered) {
+      granted = !row.documentText.startsWith("WITHDRAWN ");
+    }
+    return granted;
+  },
+
+  /** An adult athlete agreeing to the biometric release after the fact.
+   *
+   * Every athlete who signed up before the release was wired into signup has nothing on file, and
+   * asking them at a signup they have already passed is not an option. This is the same consent,
+   * recorded the same way, taken at the point they are actually asked.
+   *
+   * Clears trackingOptOut on success, because for an adult that flag is how "has not agreed" is
+   * expressed -- see the signup handler. It is deliberately NOT set on failure or on decline:
+   * an athlete who has independently chosen to keep tracking off should not have that reversed by
+   * agreeing to a release.
+   */
+  async recordBiometricRelease(
+    athleteId: number,
+    context?: { ipAddress?: string; userAgent?: string },
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const athlete = await this.getUser(athleteId);
+    if (!athlete || athlete.role !== "athlete") return { ok: false, error: "Not found." };
+    // A minor cannot give this for themselves; their guardian gives it at claim time. Checked
+    // here and not only at the route, for the same reason every other consent check is.
+    if (!athlete.dateOfBirth || derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus") {
+      return { ok: false, error: "A parent or guardian gives this consent for an athlete under 18." };
+    }
+    const release = await this.getLegalDocument("biometric_waiver");
+    await this.logConsentRecord({
+      userId: athleteId,
+      consentType: "biometric_waiver",
+      documentText: release?.content ?? "Biometric Information Consent and Release",
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
+    await db.update(users).set({ trackingOptOut: false }).where(eq(users.id, athleteId));
+    return { ok: true };
+  },
+
   async withdrawGuardianConsent(input: {
     guardianId: number;
     athleteId: number;
