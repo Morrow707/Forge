@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import UIKit
 import Capacitor
 
 // The "Choose a saved password to use" sheet you get from tapping the
@@ -31,8 +32,67 @@ public class PasswordPickerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "PasswordPickerPlugin"
     public let jsName = "PasswordPicker"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "requestSavedPassword", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "requestSavedPassword", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "savePassword", returnType: CAPPluginReturnPromise)
     ]
+
+
+    // The save half, moved here from @capawesome/capacitor-password-autofill.
+    //
+    // WHY OWN IT. That plugin calls the same SecAddSharedWebCredential this does, and reports a
+    // failure as `localizedDescription` alone -- which for a Security-framework OSStatus is
+    // usually the useless "The operation couldn't be completed." The save has been failing
+    // silently on-device for weeks with no way to tell WHICH precondition was missing, and that
+    // string is why. This reports the error domain and numeric code, so the next on-device run
+    // produces something that can actually be looked up.
+    //
+    // IT PRESENTS SYSTEM UI. SecAddSharedWebCredential shows Apple's own "Do you want to save
+    // this password?" alert. That has two consequences the old call site got wrong: it needs the
+    // app to be FOREGROUND AND ACTIVE, and it needs a stable presentation context. It was being
+    // fired the instant login succeeded, while the web layer was already tearing the login screen
+    // down and navigating -- a prompt asked for mid-transition is exactly the kind iOS declines
+    // to present. So this refuses up front when the app is not active, with a distinct message,
+    // rather than letting that look like a keychain failure.
+    //
+    // THE API IS DEPRECATED (iOS 14) AND HAS NO REPLACEMENT for the save side. Apple's position
+    // is that WebKit's own AutoFill should offer to save when a form is submitted -- which never
+    // fires here, because the bundle is served from capacitor://localhost and AutoFill matches on
+    // origin. If this turns out to be a no-op on current iOS rather than a fixable failure, the
+    // remaining honest option is a native login screen, and the diagnostics below are what will
+    // tell us which of those two we are in.
+    @objc func savePassword(_ call: CAPPluginCall) {
+        guard let domain = call.getString("domain"),
+              let username = call.getString("username"),
+              let password = call.getString("password") else {
+            call.reject("domain, username and password are all required")
+            return
+        }
+        DispatchQueue.main.async {
+            guard UIApplication.shared.applicationState == .active else {
+                // Named distinctly on purpose: "not active" and "the keychain refused" want
+                // opposite fixes, and the old code could not tell them apart.
+                call.reject("App wasn't active, so iOS wouldn't show the save prompt")
+                return
+            }
+            SecAddSharedWebCredential(domain as CFString, username as CFString, password as CFString) { error in
+                DispatchQueue.main.async {
+                    guard let error = error else {
+                        call.resolve()
+                        return
+                    }
+                    let ns = error as NSError
+                    // Domain + code, not just the description. errSecItemNotFound, a failed
+                    // associated-domain check and a user-declined prompt all read the same
+                    // otherwise.
+                    call.reject(
+                        "\(ns.localizedDescription) [\(ns.domain) \(ns.code)]",
+                        String(ns.code),
+                        error
+                    )
+                }
+            }
+        }
+    }
 
     @objc func requestSavedPassword(_ call: CAPPluginCall) {
         // nil/nil (not this app's specific domain/account) so the system picks up every

@@ -1,8 +1,12 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { PasswordAutofill } from "@capawesome/capacitor-password-autofill";
 
 interface PasswordPickerPlugin {
   requestSavedPassword(): Promise<{ username: string; password: string }>;
+  savePassword(options: {
+    domain: string;
+    username: string;
+    password: string;
+  }): Promise<void>;
 }
 
 const PasswordPicker = registerPlugin<PasswordPickerPlugin>("PasswordPicker");
@@ -35,7 +39,14 @@ const CREDENTIAL_DOMAIN = "forge-ebhd.onrender.com";
  */
 export async function savePasswordToKeychain(username: string, password: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  await PasswordAutofill.savePassword({ domain: CREDENTIAL_DOMAIN, username, password });
+  // Waits for the app to be settled before asking. SecAddSharedWebCredential presents a system
+  // alert, and this used to fire the instant login resolved -- while the web layer was already
+  // unmounting the login screen and navigating -- which is exactly when iOS declines to present
+  // one. Two frames is enough for the navigation to commit; the native side refuses outright if
+  // the app still isn't active, so a genuine keychain failure and a badly-timed ask no longer
+  // read the same.
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await PasswordPicker.savePassword({ domain: CREDENTIAL_DOMAIN, username, password });
 }
 
 /**
