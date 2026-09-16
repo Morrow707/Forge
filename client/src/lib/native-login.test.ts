@@ -56,6 +56,22 @@ describe("the native login screen", () => {
     expect(loginPage).toMatch(/useState\(isNativeLoginAvailable\)/);
   });
 
+  it("does not behave like a scrolling web page", () => {
+    // A login screen that rubber-bands under a thumb reads as a page in a browser. The scroll
+    // view exists only to lift a field clear of the keyboard, so it has nothing to scroll until
+    // the keyboard is up.
+    expect(plugin).toMatch(/scrollView\.alwaysBounceVertical = false/);
+    expect(plugin).toMatch(/container\.heightAnchor\.constraint\(greaterThanOrEqualTo: view\.safeAreaLayoutGuide\.heightAnchor\)/);
+  });
+
+  it("puts the keyboard away without covering the Passwords suggestion", () => {
+    // A "Done" accessory bar would sit exactly where iOS shows the AutoFill suggestion, which is
+    // the one thing this screen exists to surface. Tap-off dismisses instead.
+    expect(plugin).toMatch(/UITapGestureRecognizer\(target: self, action: #selector\(dismissKeyboard\)\)/);
+    expect(plugin).toMatch(/dismissTap\.cancelsTouchesInView = false/);
+    expect(plugin).not.toMatch(/inputAccessoryView/);
+  });
+
   it("uses the same colour tokens as the web screen rather than hand-picked values", () => {
     // Converted from HSL in Swift so the two cannot drift: if the stylesheet changes, this fails.
     for (const [token, swift] of [

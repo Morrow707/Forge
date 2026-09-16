@@ -274,7 +274,10 @@ final class NativeLoginViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = Self.background
 
-        let mark = UIImageView(image: Self.forgeMark())
+        let markImage = Self.forgeMark()
+        let mark = UIImageView(image: markImage)
+        // No silent 56pt hole above the wordmark if the artwork cannot be read out of the bundle.
+        mark.isHidden = markImage == nil
         mark.contentMode = .scaleAspectFill
         mark.clipsToBounds = true
         mark.layer.cornerRadius = 12
@@ -364,7 +367,8 @@ final class NativeLoginViewController: UIViewController {
         cardStack.setCustomSpacing(20, after: cardDescription)
         cardStack.setCustomSpacing(16, after: usernameField)
         cardStack.setCustomSpacing(20, after: passwordField)
-        cardStack.setCustomSpacing(18, after: signInButton)
+        cardStack.setCustomSpacing(20, after: signInButton)   // mt-5
+        cardStack.setCustomSpacing(8, after: signUp)          // mt-2
         cardStack.translatesAutoresizingMaskIntoConstraints = false
 
         let cardView = UIView()
@@ -387,8 +391,26 @@ final class NativeLoginViewController: UIViewController {
 
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.keyboardDismissMode = .interactive
-        scrollView.addSubview(page)
+        // It should NOT behave like a scrolling page. The screen fits, and a login screen that
+        // rubber-bands under your thumb reads as a web page rather than the app. The scroll view
+        // stays only so the fields can be lifted clear of the keyboard, and the container below
+        // is pinned to at least the visible height so there is nothing to scroll until then.
+        scrollView.alwaysBounceVertical = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.contentInsetAdjustmentBehavior = .always
+
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(page)
+        scrollView.addSubview(container)
         view.addSubview(scrollView)
+
+        let content = scrollView.contentLayoutGuide
+        let frame = scrollView.frameLayoutGuide
+        // Centred when it fits, top-anchored with 48pt of air when the keyboard makes it taller
+        // than the space left -- hence the >= pair against a centring constraint that yields.
+        let centred = page.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        centred.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -396,14 +418,30 @@ final class NativeLoginViewController: UIViewController {
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
-            page.topAnchor.constraint(greaterThanOrEqualTo: scrollView.contentLayoutGuide.topAnchor, constant: 48),
-            page.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -48),
-            page.centerXAnchor.constraint(equalTo: scrollView.contentLayoutGuide.centerXAnchor),
-            page.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: 16),
-            page.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -16),
+            container.topAnchor.constraint(equalTo: content.topAnchor),
+            container.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            container.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            container.widthAnchor.constraint(equalTo: frame.widthAnchor),
+            container.heightAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.heightAnchor),
+
+            page.topAnchor.constraint(greaterThanOrEqualTo: container.topAnchor, constant: 48),
+            page.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -48),
+            centred,
+            page.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            page.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 16),
+            page.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16),
             // max-w-md on the web screen.
             page.widthAnchor.constraint(lessThanOrEqualToConstant: 448),
         ])
+
+        // Tapping anywhere off the fields puts the keyboard away. Deliberately NOT a "Done" bar
+        // above the keyboard: that is the strip iOS puts the Passwords suggestion in, and
+        // covering it would hide the one thing this whole screen exists to surface.
+        // cancelsTouchesInView false so the buttons underneath still receive their taps.
+        let dismissTap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        dismissTap.cancelsTouchesInView = false
+        view.addGestureRecognizer(dismissTap)
 
         NotificationCenter.default.addObserver(
             self, selector: #selector(keyboardChanged(_:)),
@@ -450,6 +488,9 @@ final class NativeLoginViewController: UIViewController {
         b.setTitle(title, for: .normal)
         b.setTitleColor(primary, for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: size, weight: .semibold)
+        // A system button pads its title, which on the web is one inline <a> sitting directly
+        // after the sentence. Without this the footer reads as two separated columns.
+        b.contentEdgeInsets = .zero
         return b
     }
 
@@ -461,8 +502,9 @@ final class NativeLoginViewController: UIViewController {
         button.addTarget(target, action: action, for: .touchUpInside)
         let row = UIStackView(arrangedSubviews: [UIView(), text, button, UIView()])
         row.axis = .horizontal
-        row.alignment = .center
-        row.spacing = 4
+        row.alignment = .firstBaseline
+        // One space, as the sentence has on the web -- the prefix string already ends in one.
+        row.spacing = 0
         return row
     }
 
@@ -488,7 +530,10 @@ final class NativeLoginViewController: UIViewController {
         let toggle = UIButton(type: .system)
         toggle.setImage(UIImage(systemName: "eye"), for: .normal)
         toggle.tintColor = Self.mutedForeground
-        toggle.frame = CGRect(x: 0, y: 0, width: 40, height: 46)
+        // Wider than the glyph and nudged inward, so the eye is not sitting against the border
+        // while the tap target stays a comfortable size.
+        toggle.frame = CGRect(x: 0, y: 0, width: 46, height: 46)
+        toggle.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 12)
         toggle.addTarget(self, action: #selector(toggleReveal(_:)), for: .touchUpInside)
         field.rightView = toggle
         field.rightViewMode = .always
@@ -501,6 +546,8 @@ final class NativeLoginViewController: UIViewController {
             for: .normal
         )
     }
+
+    @objc private func dismissKeyboard() { view.endEditing(true) }
 
     @objc private func keyboardChanged(_ note: Notification) {
         guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
