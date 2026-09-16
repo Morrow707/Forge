@@ -162,8 +162,11 @@ here:
   consistent across the Xcode project, `render.yaml` and the in-app purchase product
   identifiers. It needs replacing with the address above.
 - **The Rocket Lawyer privacy policy PDF** gives `forgeperformancesystems.com`, the right email,
-  and a phone number left as `__________`. The blank needs filling or the line removing; a
-  published policy with a blank contact field is worse than one with fewer channels.
+  and a phone number left as `__________`. **Decided 2026-09-16 (Scott): no phone number.** The
+  line comes out rather than being filled. Email is the only published channel, which is
+  consistent with every other document and honest about how Forge is actually reachable -- a
+  published number nobody answers is worse than no number at all. Nothing in the software
+  collects or depends on a support phone number, so this is a document edit only.
 
 Whichever address is chosen it should be one that is actually monitored. A rights request under
 a privacy statute that reaches nobody is a compliance failure, not a typo — which is the reason
