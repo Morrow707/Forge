@@ -358,6 +358,20 @@ export function MedballTrackerDialog({
         } catch (err) {
           const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
           toast.error(`${message} And the video didn't save either: ${detail}`);
+          // THE TAKE STILL HAPPENED, EVEN IF ITS CLIP DID NOT ARRIVE.
+          //
+          // This used to toast and stop: no onCapture, no close. The metrics AND the
+          // trackingDiagnostics blob -- the only record of WHY this capture was refused -- were
+          // dropped on the floor because a separate thing, the video upload, failed. The set
+          // kept its typed reps and weight and nothing anywhere said a camera had ever been
+          // pointed at it, so the take vanished from the tracking report too.
+          //
+          // The asymmetry is the tell: finishWithRecording's own catch (the SUCCESS path) has
+          // always called onCapture here and closed. So a good capture survived a failed upload
+          // and a refused one did not -- exactly backwards, since the refused take is the one
+          // whose diagnostics somebody needs to read.
+          onCapture(EMPTY_MEDBALL_METRICS);
+          onOpenChange(false);
         } finally {
           setSaving(false);
         }
