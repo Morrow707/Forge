@@ -29,7 +29,23 @@ describe("under-13 self-signup", () => {
   });
 
   it("defaults camera-tracking collection off for a Tier 1 self-signup", () => {
-    expect(auth).toContain('trackingOptOut: role === "athlete" && tier === "tier1_under13"');
+    // Off for an under-13 because nobody with authority to say yes has said yes -- and, since
+    // biometric consent was wired into adult signup, also off for an ADULT who declined the
+    // release. Both are the same rule: camera tracking is what derives skeletal coordinates, and
+    // deriving them from someone who has not agreed is the collection the statutes are about.
+    expect(auth).toContain('tier === "tier1_under13" ||');
+    expect(auth).toContain(
+      '(tier === "tier3_adult_18plus" && agreedToBiometricRelease !== true)',
+    );
+  });
+
+  it("records an adult's biometric release as its own consent, with the document text", () => {
+    // Only when actually ticked, and only for an athlete old enough to answer for themselves --
+    // the same two conditions research consent carries, for the same reasons. A minor's answer
+    // comes from their guardian at claim time.
+    expect(auth).toContain('consentType: "biometric_waiver"');
+    expect(auth).toContain('getLegalDocument("biometric_waiver")');
+    expect(auth).toContain('tier === "tier3_adult_18plus"');
   });
 
   it("records the guardian's own consent when they claim, attributed to them", () => {

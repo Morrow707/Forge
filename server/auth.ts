@@ -493,6 +493,7 @@ export function setupAuth(app: Express) {
         heightIn,
         bodyWeightLbs,
         researchDataConsent,
+        agreedToBiometricRelease,
       } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
@@ -584,7 +585,15 @@ export function setupAuth(app: Express) {
         // storage.claimProvisionalAthlete): nobody with authority to say yes
         // has said yes to camera capture yet, so it starts off and the
         // guardian turns it on once they have claimed their account.
-        trackingOptOut: role === "athlete" && tier === "tier1_under13",
+        // Off for an under-13 because nobody with authority has said yes yet, and off for an ADULT
+        // who did not agree to the biometric release -- camera tracking is the thing that derives
+        // skeletal coordinates, and deriving them from somebody who has not agreed is the
+        // collection biometric-privacy statutes are about. Declining is a real option here rather
+        // than a dead end: the rest of the app works, and agreeing later turns tracking on.
+        trackingOptOut:
+          role === "athlete" &&
+          (tier === "tier1_under13" ||
+            (tier === "tier3_adult_18plus" && agreedToBiometricRelease !== true)),
         agreedToTermsAt: new Date(),
         agreedToTermsText,
       });
@@ -607,6 +616,28 @@ export function setupAuth(app: Express) {
           athleteId: user.id,
           granted: true,
           grantedByUserId: user.id,
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent") ?? undefined,
+        });
+      }
+
+      // The biometric release, on the same terms as research consent above and for the same
+      // reasons: only when actually ticked, and only for an athlete old enough to answer for
+      // themselves. A coach is not the one being filmed. For a minor the question goes to their
+      // guardian at claim time, and a minor ticking it in a crafted request is ignored here.
+      //
+      // The document text is snapshotted the way every other consent record's is -- a record
+      // naming a document by type alone is worthless once an admin edits the document.
+      if (
+        agreedToBiometricRelease === true &&
+        role === "athlete" &&
+        tier === "tier3_adult_18plus"
+      ) {
+        const release = await storage.getLegalDocument("biometric_waiver");
+        await storage.logConsentRecord({
+          userId: user.id,
+          consentType: "biometric_waiver",
+          documentText: release?.content ?? agreedToTermsText,
           ipAddress: req.ip,
           userAgent: req.get("user-agent") ?? undefined,
         });

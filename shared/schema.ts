@@ -6917,6 +6917,19 @@ export const signupSchema = z.object({
   // decision, and for a minor this is ignored and the question is put to a
   // guardian instead.
   researchDataConsent: z.boolean().optional(),
+  // Consent to the biometric release -- that Forge may derive skeletal joint coordinates and
+  // movement measurements from video of this athlete. Optional and z.boolean(), for exactly the
+  // reason researchDataConsent above is: an agreement you cannot decline is not an agreement, and
+  // biometric-privacy statutes are specifically about consent given freely and before collection.
+  //
+  // Declining is a real option with a real consequence rather than a dead end. The app works
+  // without camera tracking; the athlete simply starts with tracking off, and can turn it on later
+  // by agreeing then. What they cannot do is be tracked without having agreed at some point.
+  //
+  // Only meaningful for an adult athlete. A coach is not the one being filmed, and a minor cannot
+  // answer this for themselves -- their guardian gives it when claiming their linked account, and
+  // a minor ticking it in a crafted request is ignored by the route.
+  agreedToBiometricRelease: z.boolean().optional(),
 });
 
 export const loginSchema = z.object({
