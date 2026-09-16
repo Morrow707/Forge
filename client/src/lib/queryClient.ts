@@ -102,23 +102,41 @@ async function throwIfResNotOk(res: Response) {
  * "Request failed (POST /api/account/biometric-release): TypeError: Load
  * failed" on the one dialog standing between them and tracking a set.
  *
- * Worth separating from an HTTP error, because it means something different:
- * the server did not refuse, it was not asked. The request can be retried
- * unchanged, which is why this carries status 0 rather than a 4xx -- see
- * isPermanentUploadRejection, which must not treat an unreachable server as
- * a rejection to give up on.
+ * DELIBERATELY NOT AN ApiError, AND THAT IS THE WHOLE POINT OF THIS CLASS.
+ *
+ * It was one, briefly, carrying status 0 on the reasoning that 0 reads as
+ * "no HTTP response" and every status check would fall through harmlessly.
+ * They did not. The workout autosave classifies a failure as permanent with
+ * `err instanceof ApiError && err.status !== 401 && err.status < 500` -- and
+ * 0 satisfies both halves. So every save that failed because the phone
+ * briefly could not reach the server was classified as a payload the server
+ * would keep refusing, thrown instead of queued, and never retried. The
+ * offline rescue that exists precisely for this case could not run, and a
+ * logged set was gone.
+ *
+ * A transport failure is the most retryable thing there is: the server never
+ * saw the request. It must not be able to impersonate a rejection, and the
+ * cheapest way to guarantee that is for it not to be an ApiError at all --
+ * every `instanceof ApiError` branch in the app then behaves exactly as it
+ * did before this function existed.
  *
  * The technical detail is kept, after the sentence rather than instead of
  * it. There is no console to check on an iPhone-only device (the same reason
  * alertOnFirstQueryFailure below exists), so the only place a diagnostic can
  * go is the screen.
  */
-function transportError(method: string, url: string, err: unknown): ApiError {
+export class NetworkError extends Error {
+  readonly code = "network_unreachable";
+  constructor(message: string) {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
+function transportError(method: string, url: string, err: unknown): NetworkError {
   const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  return new ApiError(
-    0,
+  return new NetworkError(
     `Can't reach Forge right now -- check your connection and try again. (${method} ${url}: ${detail})`,
-    "network_unreachable",
   );
 }
 

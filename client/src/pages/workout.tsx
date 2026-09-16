@@ -106,6 +106,7 @@ import type { MovementProfile, ExercisePageTheme } from "@shared/schema";
 import { parseProgression, parsePrescribedWeight, convertWeight } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { BiometricReleaseDialog } from "@/components/biometric-release-dialog";
+import { logDebug } from "@/lib/debug-console";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { ReadinessBanner } from "@/components/readiness-banner";
 import { ExerciseSheetTutorial } from "@/components/exercise-sheet-tutorial";
@@ -1347,8 +1348,21 @@ export function WorkoutPage({
     }) => {
       try {
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
+        logDebug("SAVE", `log POST ok (${payload.entries?.length ?? 0} exercises)`);
         return { synced: true as const, data: await res.json(), silent };
       } catch (err) {
+        // WHETHER A SET REACHED THE SERVER IS THE FIRST QUESTION AND THERE WAS NO WAY TO ASK IT.
+        //
+        // The debug console logs AUTH and NAV. A save that silently failed showed up in neither,
+        // so "my set disappeared" and "the capture never reached the tracking report" both had
+        // to be diagnosed by reasoning rather than by looking -- and the actual cause (a
+        // transport failure being misfiled as a permanent rejection, see NetworkError) sat
+        // undetected for four builds. One line per save outcome is the cheapest instrument that
+        // would have shown it immediately.
+        logDebug(
+          "SAVE",
+          `log POST FAILED: ${err instanceof ApiError ? `${err.status} ${err.message}` : String(err)}`,
+        );
         // A genuine rejection of the payload itself (bad data, forbidden,
         // not found) should surface as an error same as always -- retrying
         // it later won't change the outcome. Everything else -- a raw
@@ -1368,10 +1382,12 @@ export function WorkoutPage({
         // athlete then sees "A workout you logged offline was rejected by the server and
         // can't be synced" for a save that had already failed in front of them.
         if (isPermanentRejection) {
+          logDebug("SAVE", `classified PERMANENT (${(err as ApiError).status}) -- not queued`);
           lastPermanentRejectionRef.current = (err as ApiError).status;
           throw err;
         }
         lastPermanentRejectionRef.current = null;
+        logDebug("SAVE", "queued for retry");
         queueLog(dayKey, `${apiBase}/log`, payload);
         return { synced: false as const, data: null, silent };
       }

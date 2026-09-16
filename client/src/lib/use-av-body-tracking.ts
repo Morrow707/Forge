@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as Sentry from "@sentry/react";
+import { logDebug } from "@/lib/debug-console";
 import {
   isAvBodyTrackingSupported,
   startAvPreview,
@@ -68,6 +69,9 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   const [cameraPermission, setCameraPermission] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [diagLog, setDiagLog] = useState<string[]>([]);
+  /** Lines already mirrored to the debug console -- the native log is polled whole and
+   * re-delivered every tick, so without this each line would repeat forever. */
+  const mirroredDiagRef = useRef<Set<string>>(new Set());
   const [recording, setRecording] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzedFrames, setAnalyzedFrames] = useState(0);
@@ -217,7 +221,26 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
 
   useEffect(() => {
     if (!active) return;
-    return pollAvDiagnosticLog(setDiagLog);
+    return pollAvDiagnosticLog((lines) => {
+      setDiagLog(lines);
+      // THE ONE LINE THAT ANSWERS "WHY IS OURS MORE ZOOMED IN THAN THE CAMERA APP".
+      //
+      // The native log already carries the chosen capture format, its field of view, and the
+      // widest field of view the lens offers at any frame rate -- the three numbers that decide
+      // whether pinning 60fps is costing frame. Reaching them meant recording a set, saving it,
+      // and finding it in an admin report served off a different deploy, which is three ways for
+      // the answer to go missing before anyone reads it.
+      //
+      // Mirrored into the debug console instead, where it is one tap on the camera screen.
+      // Deliberately narrow: this is the capture geometry and the white-balance/focus modes
+      // beside it, not the per-frame telemetry, which would bury the console in seconds.
+      for (const line of lines) {
+        if (!/^(activeFormat set:|focus\/exposure mode set:)/.test(line)) continue;
+        if (mirroredDiagRef.current.has(line)) continue;
+        mirroredDiagRef.current.add(line);
+        logDebug("CAM", line);
+      }
+    });
   }, [active]);
 
   // Defense-in-depth against a lingering native temp file -- see
