@@ -95,4 +95,27 @@ describe("the native login screen", () => {
     expect(indexCss).toMatch(/--primary:\s*14 85% 42%/);
     expect(indexCss).toMatch(/--radius:\s*0\.6rem/);
   });
+
+  it("never lets a label be what gives way when the keyboard is up", () => {
+    // WHAT THIS PINS. With the keyboard up the page carried two REQUIRED constraints that could
+    // not both hold -- centred in the safe area, and no higher than 12pt below its top. Auto
+    // Layout resolved the conflict by crushing whatever had the weakest say, and in a stack of
+    // labels and fields that is every label: "Email" disappeared outright, "Password" drew
+    // clipped through the field beneath it, "Welcome back" went, and both footer links vanished
+    // while the plain-text half of the same sentence stayed. The fields kept their shape only
+    // because they carry required height constraints of their own.
+    //
+    // Two halves, and both matter. Labels refuse to compress, and centring is allowed to lose.
+    // Raising the labels alone would have left the conflict unresolved somewhere else.
+    expect(plugin).toMatch(
+      /l\.setContentCompressionResistancePriority\(\.required, for: \.vertical\)/,
+    );
+    expect(plugin).toMatch(
+      /b\.setContentCompressionResistancePriority\(\.required, for: \.vertical\)/,
+    );
+    expect(plugin).toMatch(/pageCenterY\.priority = \.defaultHigh - 1/);
+    // The top margin stays required -- it is what keeps the card out from under the status bar,
+    // and it is the constraint centring is supposed to yield to.
+    expect(plugin).toMatch(/page\.topAnchor\.constraint\(greaterThanOrEqualTo/);
+  });
 });

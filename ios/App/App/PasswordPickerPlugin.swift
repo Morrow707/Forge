@@ -397,6 +397,18 @@ final class NativeLoginViewController: UIViewController {
         view.addSubview(page)
 
         pageCenterY = page.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor)
+        // CENTRING IS A PREFERENCE. THE TOP EDGE AND THE CONTENT ARE NOT.
+        //
+        // This was required, alongside a required `page.top >= safeArea.top + 12` below. Two
+        // required constraints that cannot both hold once the keyboard takes half the screen:
+        // centring wants the page somewhere the top constraint forbids. Auto Layout resolved it
+        // by crushing whatever had the weakest say, which was every label in the card.
+        //
+        // Dropped below the labels' compression resistance so the order of sacrifice is the
+        // right way round: the page stops being centred, then it sits against its top margin,
+        // and the footer links slide under the keyboard before a single word is squeezed out of
+        // shape. Nothing above the Log In button can be reached that way.
+        pageCenterY.priority = .defaultHigh - 1
         // Fills the width up to max-w-md. Without this the card has no width of its own and
         // collapses to the widest label in it.
         let fullWidth = page.widthAnchor.constraint(
@@ -477,11 +489,23 @@ final class NativeLoginViewController: UIViewController {
         l.textColor = color
         l.font = .systemFont(ofSize: size, weight: weight)
         l.adjustsFontForContentSizeCategory = true
+        // A LABEL IS NEVER THE THING THAT GIVES WAY.
+        //
+        // Default vertical compression resistance is 750, which loses to a required constraint.
+        // With the keyboard up the page was over-constrained (see pageCenterY below), and what
+        // Auto Layout squeezed to nothing to resolve it was every label in the card: "Email"
+        // vanished outright, "Password" drew clipped through the field under it, "Welcome back"
+        // and both footer links went. The fields kept their shape because they carry required
+        // height constraints; the labels had nothing.
+        l.setContentCompressionResistancePriority(.required, for: .vertical)
         return l
     }
 
     private static func linkButton(_ title: String, size: CGFloat) -> UIButton {
         let b = UIButton(type: .system)
+        // Same reasoning as label() above -- "Sign up" and "Log in here" disappeared out of
+        // their rows while the plain-text half of the same sentence stayed.
+        b.setContentCompressionResistancePriority(.required, for: .vertical)
         b.setTitle(title, for: .normal)
         b.setTitleColor(primary, for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: size, weight: .semibold)
