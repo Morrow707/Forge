@@ -55,6 +55,8 @@ export function shippedPrefixLength(
 export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
   // The first real terms, replacing the PLACEHOLDER text (600c9c1).
   "947e8481794b56764889857299e9c486c4f4e3c66c251b07fe6dbe18c739acb2",
+  // Gained governing law, the business address and the healthcare-notice split (f0adc47).
+  "1f1710bd22aa595ef58e1f9754a22bfd2dda120ec720d97072d76b3ce981a25f",
 ] as const;
 
 /** Character length of each entry in SIGNUP_AGREEMENT_PRIOR_SHIPPED, same order.
@@ -64,10 +66,12 @@ export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
  * than derived, since deriving it would mean keeping the full prior texts -- which is the thing
  * hashes exist to avoid. A wrong length simply fails to match and the document is left alone,
  * which is the safe direction. */
-export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274] as const;
+export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274, 11937] as const;
 
 /** PREVIOUS versions of the video and biometric release, oldest first. See above. */
 export const BIOMETRIC_RELEASE_PRIOR_SHIPPED = [
   // The first real release, replacing BIOMETRIC_WAIVER_DRAFT (9539965).
   "b1a705d735bedc0f2b2f5c3522fc2882500cfcc4f95e7618dc788fe38f31f6c5",
+  // Gained the business address (f0adc47).
+  "906fc9ad5600aa550f8b475d04c64ef1c8faa1c10a763ceff500906d6fdb5893",
 ] as const;

@@ -1717,6 +1717,7 @@ DO $$ BEGIN
   CREATE TYPE "consent_type" AS ENUM ('terms_of_service', 'biometric_waiver', 'coach_coppa_consent', 'parental_notice_ack');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'institutional_agreement';
+ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'assumption_of_risk';
 
 CREATE TABLE IF NOT EXISTS "consent_records" (
   "id" serial PRIMARY KEY,

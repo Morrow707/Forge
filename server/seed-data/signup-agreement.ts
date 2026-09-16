@@ -176,7 +176,9 @@ You accept the risks described in section 2 as risks of training, which exist in
 
 16. CHANGES
 
-These terms can change. The current version is always the one shown at signup and available in the app, and the version you agreed to is recorded with the date you agreed to it. Material changes will be notified; continuing to use Forge after that means the new version applies.
+These terms can change. The current version is always the one shown at signup and available in the app, and the exact version you agreed to is recorded with the date you agreed to it, so you can always establish what you accepted and when.
+
+Forge does not currently send a notice when these terms change. Rather than promise one it does not send, this says so: check this page for the current version. Continuing to use Forge means the current version applies.
 
 17. GOVERNING LAW AND DISPUTES
 
@@ -238,6 +240,14 @@ export const UNCONFIGURED_FALLBACK = "No agreement has been configured yet.";
  * Only the ADDRESS placeholders are listed. The counsel-question placeholders in those documents
  * are deliberate and stay until counsel answers them. */
 export const CONTACT_PLACEHOLDER_PATCHES: ReadonlyArray<readonly [string, string]> = [
+  // The address went out without its unit number. Narrow and exact: only the wrong form of
+  // Forge's own address is touched, so a document quoting an address for any other reason is
+  // unaffected. Must come FIRST -- the patches below write the corrected address, and a document
+  // that already has it must not then be matched by this one.
+  [
+    "5145 North 7th Street, Phoenix, Arizona 85014",
+    "5145 North 7th Street, D-237, Phoenix, Arizona 85014",
+  ],
   // --- The business address and governing law, added once the software licence agreement
   // supplied both. Same exact-match discipline as the contact patches below: these replace text
   // Forge seeded, and an admin who has rewritten the sentence keeps their version.

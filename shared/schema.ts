@@ -897,6 +897,11 @@ export const claimGuardianInviteSchema = z.object({
       message: "A parent or guardian has to agree to the video and biometric release",
     }),
   }),
+  agreedToAssumptionOfRisk: z.literal(true, {
+    errorMap: () => ({
+      message: "A parent or guardian has to accept the risks of athletic training",
+    }),
+  }),
 });
 export type ClaimGuardianInviteInput = z.infer<typeof claimGuardianInviteSchema>;
 
@@ -5052,6 +5057,10 @@ export const consentTypeEnum = pgEnum("consent_type", [
   // dataset extract prepared for an outside party. Distinct from the
   // biometric waiver, which covers collection, not onward use.
   "research_data_use",
+  // Acceptance of the assumption-of-risk release. Separate from terms_of_service because it is a
+  // WAIVER -- it asks somebody to give up a right rather than to accept how a service works --
+  // and separate from biometric_waiver because declining that one still leaves you training.
+  "assumption_of_risk",
 ]);
 
 export const consentRecords = pgTable(
@@ -6943,6 +6952,7 @@ export const signupSchema = z.object({
   // answer this for themselves -- their guardian gives it when claiming their linked account, and
   // a minor ticking it in a crafted request is ignored by the route.
   agreedToBiometricRelease: z.boolean().optional(),
+  agreedToAssumptionOfRisk: z.boolean().optional(),
 });
 
 export const loginSchema = z.object({

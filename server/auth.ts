@@ -502,6 +502,7 @@ export function setupAuth(app: Express) {
         bodyWeightLbs,
         researchDataConsent,
         agreedToBiometricRelease,
+        agreedToAssumptionOfRisk,
       } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
@@ -649,6 +650,31 @@ export function setupAuth(app: Express) {
           ipAddress: req.ip,
           userAgent: req.get("user-agent") ?? undefined,
         });
+      }
+
+      // The assumption-of-risk release, same shape and same reasoning as the biometric release
+      // above -- only when actually ticked, only for an adult athlete answering for themselves.
+      // It is recorded SEPARATELY from the terms rather than folded into them, because it is the
+      // one document that asks somebody to give up a right, and a waiver buried inside a general
+      // terms box is the pattern the last several commits took the biometric consent out of.
+      //
+      // Skipped silently when the document does not exist rather than substituting the terms
+      // text: a release is either what the person read or it is not evidence of anything.
+      if (
+        agreedToAssumptionOfRisk === true &&
+        role === "athlete" &&
+        tier === "tier3_adult_18plus"
+      ) {
+        const risk = await storage.getLegalDocument("assumption_of_risk");
+        if (risk?.content) {
+          await storage.logConsentRecord({
+            userId: user.id,
+            consentType: "assumption_of_risk",
+            documentText: risk.content,
+            ipAddress: req.ip,
+            userAgent: req.get("user-agent") ?? undefined,
+          });
+        }
       }
 
       if (coach) {

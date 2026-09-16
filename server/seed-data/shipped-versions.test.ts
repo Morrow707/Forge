@@ -21,13 +21,13 @@ import { BIOMETRIC_RELEASE, nextBiometricRelease } from "./biometric-release";
 describe("the pinned current versions", () => {
   it("signup agreement", () => {
     expect(sha256(SIGNUP_AGREEMENT)).toBe(
-      "1f1710bd22aa595ef58e1f9754a22bfd2dda120ec720d97072d76b3ce981a25f",
+      "6c195eafbf7c4b884f4664756aec7d74444db12024e90bb5574b7e071efc9d5e",
     );
   });
 
   it("biometric release", () => {
     expect(sha256(BIOMETRIC_RELEASE)).toBe(
-      "906fc9ad5600aa550f8b475d04c64ef1c8faa1c10a763ceff500906d6fdb5893",
+      "e2f21ac408046074dfe8278ee6cceeece1b544b334d42582f17be023f4fe064f",
     );
   });
 });

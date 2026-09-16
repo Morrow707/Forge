@@ -21,8 +21,12 @@ export const FORGE_CONTACT_EMAIL = "forgeperformancesystems@outlook.com";
 
 /** Forge's registered business address.
  *
- * From the executed software licence agreement, which is where it was first
- * written down anywhere. None of the user-facing documents carried a postal
+ * The unit number matters and was missing at first: the software licence
+ * agreement gives the street without it, the liability waiver gives "D-237", and
+ * the waiver is right (confirmed by Scott, 2026-09-16). Mail to the street alone
+ * reaches a building, not Forge. Since these documents exist so somebody can
+ * actually make a request or serve a notice, an address that nearly works is the
+ * failure this constant was created to prevent. None of the user-facing documents carried a postal
  * address before, and two things want one: Apple expects a developer name and
  * address in a custom EULA, and a privacy policy that names only an inbox gives
  * a reader no way to serve anything or verify who they are dealing with.
@@ -31,7 +35,7 @@ export const FORGE_CONTACT_EMAIL = "forgeperformancesystems@outlook.com";
  * text with no layout, so a block address would need its own line breaks in
  * every place it appears.
  */
-export const FORGE_POSTAL_ADDRESS = "5145 North 7th Street, Phoenix, Arizona 85014";
+export const FORGE_POSTAL_ADDRESS = "5145 North 7th Street, D-237, Phoenix, Arizona 85014";
 
 /** The legal entity. Spelled once so a document cannot quietly disagree with the
  * others about who the counterparty is. */

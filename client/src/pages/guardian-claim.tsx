@@ -39,7 +39,9 @@ export default function GuardianClaimPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacyPolicy, setAgreedToPrivacyPolicy] = useState(false);
   const [agreedToMinorMediaRelease, setAgreedToMinorMediaRelease] = useState(false);
-  const allAgreed = agreedToTerms && agreedToPrivacyPolicy && agreedToMinorMediaRelease;
+  const [agreedToAssumptionOfRisk, setAgreedToAssumptionOfRisk] = useState(false);
+  const allAgreed =
+    agreedToTerms && agreedToPrivacyPolicy && agreedToMinorMediaRelease && agreedToAssumptionOfRisk;
 
   const { data: preview, isLoading: previewLoading, isError: previewError } = useQuery<InvitePreview>({
     queryKey: [`/api/guardian-invites/${token}`],
@@ -56,6 +58,7 @@ export default function GuardianClaimPage() {
         agreedToTerms,
         agreedToPrivacyPolicy,
         agreedToMinorMediaRelease,
+        agreedToAssumptionOfRisk,
       });
       return (await res.json()) as PublicUser & { nativeToken?: string };
     },
@@ -175,6 +178,24 @@ export default function GuardianClaimPage() {
                   className="font-semibold text-primary hover:underline"
                 >
                   video and biometric release
+                </a>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={agreedToAssumptionOfRisk}
+                onCheckedChange={(c) => setAgreedToAssumptionOfRisk(c === true)}
+              />
+              <span>
+                I understand that athletic training carries a risk of injury, that nobody at Forge
+                supervises my child's training, and I accept those risks as set out in the{" "}
+                <a
+                  href="/assumption-of-risk"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  assumption of risk and release
                 </a>
               </span>
             </label>

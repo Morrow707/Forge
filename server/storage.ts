@@ -24949,10 +24949,11 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         ipAddress: consentContext?.ipAddress,
         userAgent: consentContext?.userAgent,
       };
-      const [privacy, biometric, notice] = await Promise.all([
+      const [privacy, biometric, notice, risk] = await Promise.all([
         this.getLegalDocument("privacy_policy"),
         this.getLegalDocument("biometric_waiver"),
         this.getLegalDocument("parental_notice"),
+        this.getLegalDocument("assumption_of_risk"),
       ]);
 
       await this.logConsentRecord({
@@ -24983,6 +24984,18 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           ...context,
           consentType: "guardian_coppa_consent",
           documentText: notice?.content ?? agreedToTermsText,
+        });
+      }
+
+      // The risks of training, accepted by the guardian for the athlete. Recorded for every
+      // minor and not only the under-13s, on the same reasoning as the release above: a barbell
+      // is no safer at 17. Only recorded where the document exists, because a consent record
+      // whose documentText is a stand-in is evidence of nothing.
+      if (isMinor && risk?.content) {
+        await this.logConsentRecord({
+          ...context,
+          consentType: "assumption_of_risk",
+          documentText: risk.content,
         });
       }
 
