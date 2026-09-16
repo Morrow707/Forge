@@ -719,10 +719,32 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
 // tracking probably failed" -- e.g. the reader not completing explains everything else about
 // to be true of the same set, so it's checked (and returned alone, via the early `else`) ahead
 // of a duration mismatch that's really the same underlying symptom read a different way.
+// The fastest a loaded barbell actually moves, from published velocity-based-training data --
+// roughly 1.5-2.2 m/s at the top end, for deliberately explosive empty-bar or speed work. Sits
+// well BELOW bar-tracking.ts's MAX_PLAUSIBLE_LIFT_VELOCITY_MPS (3), and that gap is the point:
+// that constant is a per-frame glitch filter tuned not to throw away real data, this one is a
+// statement about the sport. Nothing is filtered or rescaled against this -- it only decides
+// whether an entry gets a line saying its numbers are not physically reachable.
+const PUBLISHED_BARBELL_PEAK_CEILING_MPS = 2.2;
+
 function computeFlags(r: TrackedSetRow): string[] {
   const flags: string[] = [];
   const d = r.trackingDiagnostics as TrackingDiagnostics | null | undefined;
   const mode = r.trackingLevel;
+
+  // FIRST, BECAUSE IT EXPLAINS EVERY OTHER SILENCE BELOW.
+  //
+  // Almost every check in this function reads `d`. A set that arrived without diagnostics
+  // therefore fails none of them, and used to be excluded from the report entirely -- so a
+  // capture that ran, produced numbers, and lost its own explanation looked exactly like a
+  // capture that never happened. Now it is here, and it says which one it is, so nobody reads
+  // an entry with no flags on it as an entry with nothing wrong.
+  if (!d) {
+    flags.push(
+      "No pipeline diagnostics were saved for this set -- the numbers below are all that " +
+        "survived, and nothing here can say how they were arrived at",
+    );
+  }
 
   if (d?.recording?.readerStatus && d.recording.readerStatus !== "completed") {
     flags.push(
@@ -773,10 +795,16 @@ function computeFlags(r: TrackedSetRow): string[] {
   // Logged rep count vs. how many reps tracking actually produced -- the single most direct
   // "did this set undercount" signal there is. Only checked on modes that report discrete reps
   // (bar_path/full via repBreakdown, jump via jumpBreakdown) and only when the athlete actually
-  // logged a rep count to compare against. Under-counting only, deliberately -- over-counting
-  // is a different failure mode (summarizeTrackedSet/summarizeJumpSet's own phantom-phase
-  // filtering already leans conservative against it) and flagging it here risks a false
-  // positive on a set the athlete simply logged wrong.
+  // logged a rep count to compare against.
+  //
+  // BOTH DIRECTIONS NOW. This used to say "under-counting only, deliberately," on the reasoning
+  // that summarizeTrackedSet's phantom-phase filtering already leans conservative against
+  // over-counting and that flagging it risks a false positive on a set the athlete logged
+  // wrong. A bench set logged at 10 came back with 15 and carried no flag, which settles the
+  // first half; and the second half has the cost backwards. A false positive here is one line
+  // in an admin diagnostics report that a human reads and dismisses. A missed over-count is
+  // five phantom reps averaged into the set's velocity, range of motion and velocity loss, with
+  // nothing anywhere saying so.
   // Skipped entirely when the pipeline DELIBERATELY withheld its numbers. Those outcomes
   // store an all-zero metrics row, so this check would read zero tracked reps and report
   // "Logged 10 reps but tracking only found 0" -- which points at the wrong thing. Tracking
@@ -807,6 +835,52 @@ function computeFlags(r: TrackedSetRow): string[] {
     if (trackedReps != null && trackedReps < loggedReps) {
       flags.push(`Logged ${loggedReps} reps but tracking only found ${trackedReps}`);
     }
+    // THE OTHER DIRECTION, WHICH WAS NEVER CHECKED AND IS THE WORSE ONE.
+    //
+    // Only the short case was flagged. Finding MORE reps than were logged is the case that
+    // corrupts the set: every phantom rep is averaged into the set's mean velocity, its range
+    // of motion and its velocity loss, so a take that split noise into extra reps reports a
+    // quietly wrong number for the whole set rather than an obviously missing one. A bench set
+    // logged at 10 came back with 15 and carried no flag at all.
+    //
+    // Not an error. Going two past the prescription is a normal thing to do, and the athlete is
+    // the only one who knows. The size of the gap is what makes it worth reading.
+    if (trackedReps != null && trackedReps > loggedReps) {
+      flags.push(
+        `Logged ${loggedReps} reps but tracking found ${trackedReps} -- the set's averages are ` +
+          `built from all ${trackedReps}`,
+      );
+    }
+  }
+
+  // A REPORTED SPEED NO BARBELL LIFT REACHES.
+  //
+  // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS (3 m/s, in bar-tracking.ts) is a per-FRAME spike filter,
+  // set deliberately generous so it only ever throws out obvious glitch samples. It is not a
+  // claim about what a rep can do, and its own comment says so: published VBT data tops out
+  // around 1.5-2.2 m/s even for deliberate empty-bar speed work. So a set can report a peak of
+  // 2.8 m/s -- every frame under the spike ceiling, every filter satisfied, and the number
+  // still impossible for the movement.
+  //
+  // That is what a scale factor read too large looks like from here: every distance, and so
+  // every speed, inflated by the same factor, with nothing downstream able to tell. Flagged
+  // rather than corrected, because which of the three scale sources went wrong is a question
+  // for the calibration section of this same entry, and because no number here is trustworthy
+  // enough yet to correct another one with.
+  //
+  // Bar modes only. A medicine-ball throw, a kettlebell swing and a golf swing all legitimately
+  // move faster than this and have their own ceilings.
+  if (
+    (mode === "bar_path" || mode === "full") &&
+    r.peakVelocityMps != null &&
+    r.peakVelocityMps > PUBLISHED_BARBELL_PEAK_CEILING_MPS
+  ) {
+    flags.push(
+      `Reported peak bar speed ${r.peakVelocityMps} m/s is above anything a loaded barbell lift ` +
+        `reaches (published VBT tops out near ${PUBLISHED_BARBELL_PEAK_CEILING_MPS} m/s) -- ` +
+        `check the calibration section below, an over-large scale inflates every distance and ` +
+        `speed by the same factor`,
+    );
   }
 
   if (d?.bodyPose.avgWristConfidence != null && d.bodyPose.avgWristConfidence < 0.3) {

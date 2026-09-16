@@ -20913,9 +20913,27 @@ ${catalog}`;
           //
           // What the old condition was really for is still covered: an athlete who logs a
           // tracked exercise by hand (types reps and weight, never taps Record & Analyze)
-          // leaves trackingDiagnostics null and is still excluded, which is what keeps this
+          // leaves every one of these null and is still excluded, which is what keeps this
           // report from filling with untouched sets.
-          isNotNull(workoutSetEntries.trackingDiagnostics),
+          //
+          // A SET WITH NO DIAGNOSTICS IS THE CASE THIS REPORT MOST NEEDS TO SHOW.
+          //
+          // Membership used to be the diagnostics blob alone. That makes the report blind in
+          // exactly the direction that matters: a capture that produced numbers but whose
+          // diagnostics never got written is invisible here, and "invisible" is indistinguishable
+          // from "never happened" for whoever is trying to find out why a take went wrong. The
+          // report exists to explain failures, so a set whose failure was that it lost its own
+          // explanation cannot be the one kind it drops.
+          //
+          // Any camera-derived column is enough to say the pipeline ran. computeFlags marks the
+          // ones that arrived without diagnostics so they read as a gap rather than as a set
+          // nothing can be said about.
+          or(
+            isNotNull(workoutSetEntries.trackingDiagnostics),
+            isNotNull(workoutSetEntries.peakVelocityMps),
+            isNotNull(workoutSetEntries.barPathDeviationCm),
+            isNotNull(workoutSetEntries.jumpHeightCm),
+          ),
           // Still excluded where the program row IS present and says tracking is off: that
           // is a real "this exercise is not camera-tracked" statement, unlike a missing row.
           or(
