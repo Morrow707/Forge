@@ -22,6 +22,7 @@ import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content"
 import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT, PARENTAL_NOTICE_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT } from "./seed-data/legal-documents-draft";
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchContactPlaceholders } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
+import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
 
 const LEGAL_DOC_TYPES = legalDocumentTypeEnum.enumValues;
 
@@ -6268,6 +6269,9 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   }
   if (!(await storage.getLegalDocument("eula"))) {
     await storage.updateLegalDocument("eula", EULA_DRAFT);
+  }
+  if (!(await storage.getLegalDocument("assumption_of_risk"))) {
+    await storage.updateLegalDocument("assumption_of_risk", ASSUMPTION_OF_RISK_RELEASE);
   }
 
   console.log("Seed complete.");

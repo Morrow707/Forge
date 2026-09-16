@@ -27,7 +27,7 @@ function LegalDocumentPage({
   otherHref,
   otherLabel,
 }: {
-  docType: "terms_of_service" | "privacy_policy" | "eula" | "biometric_waiver";
+  docType: "terms_of_service" | "privacy_policy" | "eula" | "biometric_waiver" | "assumption_of_risk";
   title: string;
   otherHref: string;
   otherLabel: string;
@@ -108,6 +108,17 @@ export function BiometricReleasePage() {
       title="Video and Biometric Consent and Release"
       otherHref="/privacy"
       otherLabel="Privacy Policy →"
+    />
+  );
+}
+
+export function AssumptionOfRiskPage() {
+  return (
+    <LegalDocumentPage
+      docType="assumption_of_risk"
+      title="Assumption of Risk and Release"
+      otherHref="/terms"
+      otherLabel="Terms of Service →"
     />
   );
 }

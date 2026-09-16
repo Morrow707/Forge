@@ -9,6 +9,7 @@ import {
   INSTITUTIONAL_AGREEMENT_DRAFT,
   EULA_DRAFT,
 } from "./legal-documents-draft";
+import { ASSUMPTION_OF_RISK_RELEASE } from "./assumption-of-risk";
 
 /** Three documents once gave three different contact addresses, one of them on a domain that
  * doesn't match the registered application identity. The failure mode is quiet: somebody
@@ -22,6 +23,7 @@ const DOCUMENTS: Array<[string, string]> = [
   ["parental notice", PARENTAL_NOTICE_DRAFT],
   ["institutional agreement", INSTITUTIONAL_AGREEMENT_DRAFT],
   ["eula", EULA_DRAFT],
+  ["assumption of risk", ASSUMPTION_OF_RISK_RELEASE],
 ];
 
 describe("contact address across the published documents", () => {

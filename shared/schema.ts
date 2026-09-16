@@ -5733,6 +5733,9 @@ export const legalDocumentTypeEnum = pgEnum("legal_document_type", [
   // replaces the standard licence with its own -- Apple as a third-party
   // beneficiary of it, and Apple disclaiming maintenance and warranty.
   "eula",
+  // The assumption-of-risk release. Forge's only document that asks somebody to
+  // give up a right, rather than granting a licence or taking a consent.
+  "assumption_of_risk",
 ]);
 
 /** The document types, derived so a new one cannot be added to the enum above

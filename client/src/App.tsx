@@ -36,6 +36,7 @@ import {
   PrivacyPolicyPage,
   EulaPage,
   BiometricReleasePage,
+  AssumptionOfRiskPage,
 } from "@/pages/legal-document";
 import DeleteAccountPage from "@/pages/delete-account";
 import NotFound from "@/pages/not-found";
@@ -288,6 +289,7 @@ function Router() {
             checkboxes. Public because the claim is reached from an emailed invite, before
             there is a session to authenticate. */}
         <Route path="/biometric-release" component={BiometricReleasePage} />
+        <Route path="/assumption-of-risk" component={AssumptionOfRiskPage} />
         <Route path="/delete-account" component={DeleteAccountPage} />
         <Route path="/dev/av-preview-test">
           <ProtectedRoute role="admin" component={AvPreviewTestPage} />

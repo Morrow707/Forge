@@ -39,6 +39,7 @@ const DOC_LABEL: Record<LegalDocType, string> = {
   parental_notice: "Notice to Parent or Guardian",
   institutional_agreement: "Institutional Agreement",
   eula: "End User License Agreement",
+  assumption_of_risk: "Assumption of Risk and Release",
 };
 
 const CONSENT_LABEL: Record<string, string> = {
@@ -385,6 +386,7 @@ export default function AdminDocuments() {
           <CardContent>
             <LegalDocEditor docType="institutional_agreement" />
             <LegalDocEditor docType="eula" />
+            <LegalDocEditor docType="assumption_of_risk" />
           </CardContent>
         </Card>
       </div>

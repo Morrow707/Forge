@@ -3767,6 +3767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "parental_notice",
     "institutional_agreement",
     "eula",
+    "assumption_of_risk",
   ] as const;
   type LegalDocType = (typeof LEGAL_DOC_TYPES)[number];
   const isLegalDocType = (v: string): v is LegalDocType => (LEGAL_DOC_TYPES as readonly string[]).includes(v);
@@ -3777,6 +3778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     parental_notice: "Notice to Parent or Guardian",
     institutional_agreement: "Institutional Service Agreement",
     eula: "End User License Agreement",
+    assumption_of_risk: "Assumption of Risk and Release",
   };
 
   // Publicly browsable -- see the public route below. App Store Connect needs
@@ -3796,7 +3798,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // biometric waiver is deliberately NOT in this set: it's a signable
   // release, not a general policy page, and nothing collects a real
   // signature against it yet -- see BIOMETRIC_WAIVER_DRAFT's own comment.
-  const PUBLIC_LEGAL_DOC_TYPES = ["terms_of_service", "privacy_policy", "eula", "biometric_waiver"] as const;
+  const PUBLIC_LEGAL_DOC_TYPES = [
+    "terms_of_service",
+    "privacy_policy",
+    "eula",
+    "biometric_waiver",
+    "assumption_of_risk",
+  ] as const;
   const isPublicLegalDocType = (v: string): v is (typeof PUBLIC_LEGAL_DOC_TYPES)[number] =>
     (PUBLIC_LEGAL_DOC_TYPES as readonly string[]).includes(v);
 
