@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { App } from "@capacitor/app";
 import { useMutation, useQuery, useQueryClient, useIsRestoring } from "@tanstack/react-query";
 import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
-import { savePasswordToKeychain } from "@/lib/native-auth";
 import { logDebug } from "@/lib/debug-console";
 import { flushPendingLogs } from "@/lib/offline-queue";
 import { toast } from "sonner";
@@ -66,19 +65,6 @@ function applyLoginSuccess(
   // on a full app reload or a network 'online' event that might never fire
   // again.
   flushPendingLogs();
-  logDebug("AUTH", "calling savePasswordToKeychain()...");
-  // Temporary visible surfacing while this is being debugged on-device
-  // (see native-auth.ts's own comment) -- a TestFlight tester has no way
-  // to see the console.error there, and this has been silently failing,
-  // so a toast is the only way to find out why without a Mac/Xcode in
-  // hand.
-  savePasswordToKeychain(credentials.email, credentials.password)
-    .then(() => logDebug("AUTH", "savePasswordToKeychain() resolved"))
-    .catch((err) => {
-      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      logDebug("AUTH", `savePasswordToKeychain() rejected: ${detail}`);
-      toast.error(err instanceof Error ? `Couldn't save password: ${err.message}` : "Couldn't save password");
-    });
 }
 
 function useLoginMutation() {
