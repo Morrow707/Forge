@@ -15,8 +15,10 @@ describe("saving a credential to Apple Passwords", () => {
     // for a declined prompt, a failed associated-domain check and nothing-saved-yet.
     expect(nativeAuth).not.toContain("@capawesome/capacitor-password-autofill");
     expect(nativeAuth).toMatch(/PasswordPicker\.savePassword/);
-    expect(plugin).toMatch(/ns\.domain/);
-    expect(plugin).toMatch(/ns\.code/);
+    // Through the CoreFoundation accessors: the completion hands back a CFError, which does not
+    // bridge to NSError (verify_build rejected that outright).
+    expect(plugin).toMatch(/CFErrorGetCode/);
+    expect(plugin).toMatch(/CFErrorGetDomain/);
   });
 
   it("saves and reads through the same API family", () => {
