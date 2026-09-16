@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { trackingDiagnosticsSchema } from "./schema";
 
 /**
@@ -155,5 +157,45 @@ describe("tracking diagnostics survive the trip into the database", () => {
     const parsed = trackingDiagnosticsSchema.parse(FULL_PAYLOAD) as typeof FULL_PAYLOAD;
     expect(parsed.scaleFree.repCount).toBe(31);
     expect(parsed.scaleFree.reps[0].relativePeakVelocity).toBe(1.18);
+  });
+});
+
+/**
+ * AND THE LIST ABOVE CANNOT BE THE GUARD ON ITS OWN.
+ *
+ * FULL_PAYLOAD is hand-written, so it only catches a field somebody remembered to add to it.
+ * The failure mode it is defending against is precisely somebody adding a field in one place and
+ * not another -- which is also exactly how a field goes missing from FULL_PAYLOAD.
+ *
+ * So this derives the expectation instead of stating it: every top-level key the client's
+ * TrackingDiagnostics type declares must be declared in the zod schema too. A new field added to
+ * tracking-diagnostics.ts fails here on the next run, whether or not anyone thought to extend the
+ * payload above.
+ *
+ * Top-level only, deliberately. Nesting is where a source-text scan stops being trustworthy, and
+ * every real instance of this bug so far has been a whole branch dropped, not one leaf.
+ */
+describe("the schema declares every field the client can produce", () => {
+  const source = readFileSync(
+    join(__dirname, "..", "client", "src", "lib", "tracking-diagnostics.ts"),
+    "utf8",
+  );
+
+  // The body of `export type TrackingDiagnostics = { ... }`, then its top-level keys: the ones
+  // at exactly one level of indentation inside that block.
+  const start = source.indexOf("export type TrackingDiagnostics = {");
+  const body = source.slice(start, source.indexOf("\n};", start));
+  const clientKeys = [...body.matchAll(/^ {2}([a-zA-Z][a-zA-Z0-9_]*)\??:/gm)].map((m) => m[1]);
+
+  it("found the client's field list at all", () => {
+    // Guards the guard: a refactor that renames or restructures the type would otherwise leave
+    // this scanning an empty string and passing forever.
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(clientKeys.length).toBeGreaterThanOrEqual(6);
+    expect(clientKeys).toContain("outcome");
+  });
+
+  it.each(clientKeys)("declares %s", (key) => {
+    expect(Object.keys(trackingDiagnosticsSchema.shape)).toContain(key);
   });
 });

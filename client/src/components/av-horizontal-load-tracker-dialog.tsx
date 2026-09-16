@@ -342,8 +342,18 @@ export function AvHorizontalLoadTrackerDialog({
           onOpenChange(false);
           return;
         } catch {
-          // Genuinely nothing left to salvage -- fall through to send the coach back to
-          // calibrate, same as the no-upload-in-flight case below.
+          // "Nothing left to salvage" was wrong: THE FAILURE IS THE THING TO SALVAGE.
+          //
+          // This caught an upload failure on top of an analysis failure and did nothing at all, so a
+          // set where the camera ran, the analysis fell over AND the clip did not make it came out
+          // identical to a set nobody ever pointed a camera at. That is the exact case the tracking
+          // report exists for, and it was the one case guaranteed never to reach it.
+          //
+          // Handing up the empty metrics with no video URL records that a capture was attempted and
+          // came back with nothing. The report flags it as a set whose diagnostics are missing, which
+          // is a fact somebody can act on, rather than an absence nobody can see.
+          onCapture(null, undefined, null);
+          onOpenChange(false);
         } finally {
           setSaving(false);
         }

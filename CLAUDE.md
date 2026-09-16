@@ -93,6 +93,52 @@
 - Only back squat, Pendlay row, bench press and box jump have been tested
   against real lifts. Everything else is unvalidated.
 
+## Capture diagnostics
+
+Added 2026-09-16, after a bench set that failed three separate ways left no
+record of any of them. These are invariants, not preferences -- the same
+standing as the athlete-data ones below. If a change makes one false, the
+change is wrong.
+
+- **A capture that fails is the one whose record matters most.** When a
+  tracker cannot trust its numbers it does not discard the take: it writes an
+  empty or scale-free metrics row, a `trackingDiagnostics` blob saying why,
+  and saves the clip for the coach. That blob is the only account of what went
+  wrong, and the admin tracking report over those blobs is the entire feedback
+  loop for this pipeline. Nobody can fix a camera problem from a set that
+  silently came back empty, so losing the explanation costs more than the
+  failed capture did.
+- **Every exit from a save path hands the metrics up.** Ten tracker dialogs
+  shared one shape: if the video upload threw, the catch toasted and stopped --
+  no `onCapture`, no close -- so a failure in a separate concern took the
+  diagnostics with it and left a set indistinguishable from one where record
+  was never pressed. Six more did the same thing under a comment reading
+  "genuinely nothing left to salvage", which was backwards: the failure IS the
+  thing to salvage. `client/src/lib/refused-capture-survives.test.ts` enforces
+  it -- if a `try` calls `onCapture`, its `catch` must too. The one escape is
+  writing `diagnostics-exempt: <why>` in the catch, which costs a sentence of
+  justification and shows up in a grep.
+- **The test scans the directory; it never holds a list.** That file began as
+  a hand-written list of the eight dialogs known to have the bug. Rerun as a
+  scan over `*tracker-dialog.tsx` it immediately found six more. There are
+  fifteen and the next one will not be on anybody's list.
+- **A field the client sends must be declared in `trackingDiagnosticsSchema`.**
+  A zod object strips what it does not declare, silently, with no error
+  anywhere -- three takes were filmed specifically to read the scale-source
+  diagnostics and the insert had already dropped them. This has happened
+  twice. `shared/tracking-diagnostics-roundtrip.test.ts` derives the field
+  list from the client type rather than restating it, for the same reason the
+  dialog test scans rather than lists.
+- **The report never drops a set for lacking diagnostics.** Membership in
+  `getRecentTrackedSetsForAdmin` is any camera-derived column, not the
+  diagnostics blob, and an entry that arrived without one says so. A capture
+  that lost its own explanation has to be visible AS that, because "invisible"
+  and "never happened" are the same thing to whoever is reading the page.
+- **The tracking report is server-side.** It is served from `storage.ts`
+  through `/api/admin/tracking-report/entries`, so a fix to that query ships on
+  a Render deploy, not in a TestFlight build. Worth saying out loud when
+  someone is testing report changes by installing a build.
+
 ## The AI knowledge library
 
 - **Domain tags live on the PASSAGE, not the source.** A strength and
