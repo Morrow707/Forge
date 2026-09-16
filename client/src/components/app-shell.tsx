@@ -49,6 +49,7 @@ import {
   Search,
   HeartPulse,
   Video,
+  FileCheck2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -119,6 +120,9 @@ const coachNav: NavItem[] = [
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare, overflow: true },
   { href: "/coach/my", label: "My Training", icon: UserCircle, overflow: true },
   { href: "/coach/billing", label: "Billing", icon: CreditCard, overflow: true },
+  // Same page for every role, different checklist -- see shared/required-documents.ts. A coach
+  // is asked for credentials (background check, certification, CPR), not for a waiver.
+  { href: "/documents", label: "Documents", icon: FileCheck2, overflow: true },
   { href: "/coach/about", label: "About", icon: Info, overflow: true },
 ];
 
@@ -173,6 +177,7 @@ const athleteNav: NavItem[] = [
   // attached to a set.
   { href: "/athlete/recovery", label: "Recovery", icon: HeartPulse, overflow: true },
   { href: "/athlete/video-bank", label: "Video Bank", icon: Video, overflow: true },
+  { href: "/documents", label: "Documents", icon: FileCheck2, overflow: true },
   { href: "/athlete/about", label: "About", icon: Info },
 ];
 
@@ -224,6 +229,9 @@ const adminNav: NavItem[] = [
   { href: "/admin/diagnostics", label: "Data & Diagnostics", icon: FileSearch, overflow: true },
   { href: "/admin/removal-requests", label: "Removal Requests", icon: Trash2, overflow: true },
   { href: "/admin/blocked-athletes", label: "Blocked Athletes", icon: Flag, overflow: true },
+  // The review queue. A compliance queue with no door is the same as no queue -- the comment
+  // above this list already learned that once.
+  { href: "/admin/waivers", label: "Uploaded Documents", icon: FileCheck2, overflow: true },
 ];
 
 export function AppShell({

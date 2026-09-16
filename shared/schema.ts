@@ -5145,6 +5145,22 @@ export const externalWaiverKindEnum = pgEnum("external_waiver_kind", [
   // biometric release, which covers video captured FOR TRACKING and grants
   // nothing for publicity.
   "photo_media_release",
+  // ---- A COACH'S OWN CREDENTIALS, WHICH ARE NOT WAIVERS AT ALL ----
+  //
+  // Same table, same upload-and-review mechanics, entirely different question.
+  // An athlete's row answers "was this person cleared to participate"; a
+  // coach's answers "is this person fit to supervise children". Sharing the
+  // plumbing is right -- a file, an issuer, an expiry, a reviewer -- and
+  // sharing the vocabulary would not be, which is why these are their own
+  // values rather than "other" with a note.
+  //
+  // The expiry column earns its place here: a coaching certification and a CPR
+  // card both lapse on a date, and a lapsed one is the specific thing anybody
+  // asking about supervision wants to know.
+  "coaching_certification",
+  "background_check",
+  "cpr_first_aid",
+  "liability_insurance",
   "other",
 ]);
 

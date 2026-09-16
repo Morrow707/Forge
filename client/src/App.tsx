@@ -96,6 +96,10 @@ const AdminDashboard = lazy(withLoadTimeout(() => import("@/pages/admin/dashboar
 const AdminExercises = lazy(withLoadTimeout(() => import("@/pages/admin/exercises")));
 const AdminCoachExercises = lazy(withLoadTimeout(() => import("@/pages/admin/coach-exercises")));
 const AdminRemovalRequests = lazy(withLoadTimeout(() => import("@/pages/admin/removal-requests")));
+const AdminWaivers = lazy(withLoadTimeout(() => import("@/pages/admin/waivers")));
+// One page for every role -- the upload mechanics are shared and the checklist is not.
+// See shared/required-documents.ts.
+const DocumentsPage = lazy(withLoadTimeout(() => import("@/pages/documents")));
 const AdminDiagnostics = lazy(withLoadTimeout(() => import("@/pages/admin/diagnostics")));
 const AdminQueryEngine = lazy(withLoadTimeout(() => import("@/pages/admin/query-engine")));
 const AdminBlockedAthletes = lazy(withLoadTimeout(() => import("@/pages/admin/blocked-athletes")));
@@ -164,6 +168,22 @@ function ConnectionProblem() {
       </button>
     </div>
   );
+}
+
+/** Signed in, any role.
+ *
+ * ProtectedRoute below takes exactly one role, which is right for every screen that belongs to
+ * one. /documents belongs to all of them: an athlete, a coach and a free agent upload different
+ * paperwork through the same page, and listing the page three times under three roles would be
+ * three places for the route to drift. Same isError-before-!user ordering as ProtectedRoute --
+ * a failed check is not a logged-out user.
+ */
+function AuthedRoute({ component: Component }: { component: ComponentType }) {
+  const { user, isLoading, isError } = useAuth();
+  if (isLoading) return <FullScreenSpinner />;
+  if (isError) return <ConnectionProblem />;
+  if (!user) return <Redirect to="/login" />;
+  return <Component />;
 }
 
 function ProtectedRoute({
@@ -461,6 +481,12 @@ function Router() {
         </Route>
         <Route path="/admin/removal-requests">
           <ProtectedRoute role="admin" component={AdminRemovalRequests} />
+        </Route>
+        <Route path="/admin/waivers">
+          <ProtectedRoute role="admin" component={AdminWaivers} />
+        </Route>
+        <Route path="/documents">
+          <AuthedRoute component={DocumentsPage} />
         </Route>
         <Route path="/admin/query-engine">
           <ProtectedRoute role="admin" component={AdminQueryEngine} />

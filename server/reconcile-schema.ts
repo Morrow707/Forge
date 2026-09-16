@@ -3114,6 +3114,22 @@ DO $$ BEGIN
   );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- A coach's own credentials ride the same table: same file/issuer/expiry/review mechanics, a
+-- different question (fit to supervise children, not cleared to participate). Added as their own
+-- enum values rather than 'other' with a note, so a checklist can ask for them by name.
+DO $$ BEGIN
+  ALTER TYPE "external_waiver_kind" ADD VALUE IF NOT EXISTS 'coaching_certification';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TYPE "external_waiver_kind" ADD VALUE IF NOT EXISTS 'background_check';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TYPE "external_waiver_kind" ADD VALUE IF NOT EXISTS 'cpr_first_aid';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TYPE "external_waiver_kind" ADD VALUE IF NOT EXISTS 'liability_insurance';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+
 CREATE TABLE IF NOT EXISTS "external_waivers" (
   "id" serial PRIMARY KEY,
   "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,

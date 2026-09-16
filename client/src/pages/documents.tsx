@@ -1,0 +1,350 @@
+import { useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Check, X, Minus, Clock, Upload, FileWarning } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAuth } from "@/hooks/use-auth";
+import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
+import { ApiError, resolveApiUrl, uploadWithProgress } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
+import {
+  DOCUMENT_LABEL,
+  REQUIRED_DOCUMENTS,
+  documentAudienceFor,
+  type DocumentKind,
+} from "@shared/required-documents";
+
+/** ONE PAGE, THREE CHECKLISTS.
+ *
+ * The upload mechanics are identical for an athlete, a free agent and a coach -- a file, who
+ * issued it, when it expires, a review -- and the paperwork is not. A rostered athlete has a
+ * school's participation waiver; a free agent has no institution to have issued one; a coach is
+ * not being cleared to participate at all, they are being cleared to supervise children. The
+ * list is chosen by audience (see shared/required-documents.ts) so nobody is shown a row they
+ * can never satisfy.
+ *
+ * A red cross means "not on file", a green check means "on file and reviewed", and both are
+ * links into the upload form below rather than dead icons -- the point of a checklist is to be
+ * one tap from the thing it is complaining about.
+ */
+type Summary = {
+  kind: DocumentKind;
+  status: "accepted" | "pending_review" | "rejected" | "expired" | "missing";
+  issuingOrganization: string | null;
+  expiresOn: string | null;
+  waiverId: number | null;
+};
+
+type Waiver = {
+  id: number;
+  kind: DocumentKind;
+  reviewStatus: string;
+  issuingOrganization: string | null;
+  originalFilename: string | null;
+  fileUrl: string;
+  signedOn: string | null;
+  expiresOn: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+};
+
+function StatusMark({ status, required }: { status: Summary["status"]; required: boolean }) {
+  if (status === "accepted") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs font-semibold text-success">
+        <Check className="h-4 w-4" /> On file
+      </span>
+    );
+  }
+  if (status === "pending_review") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
+        <Clock className="h-4 w-4" /> In review
+      </span>
+    );
+  }
+  if (status === "expired") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
+        <FileWarning className="h-4 w-4" /> Out of date
+      </span>
+    );
+  }
+  if (status === "rejected") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
+        <X className="h-4 w-4" /> Rejected
+      </span>
+    );
+  }
+  // Missing. A required row is a red cross; an optional one is a muted dash, because a list
+  // where half the rows are permanently red teaches people to ignore all of it.
+  return required ? (
+    <span className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
+      <X className="h-4 w-4" /> Not uploaded
+    </span>
+  ) : (
+    <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+      <Minus className="h-4 w-4" /> Optional
+    </span>
+  );
+}
+
+export default function DocumentsPage() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLDivElement>(null);
+  const [kind, setKind] = useState<DocumentKind>("participation_waiver");
+  const [org, setOrg] = useState("");
+  const [signedOn, setSignedOn] = useState("");
+  const [expiresOn, setExpiresOn] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  // undefined while the roster answer is still in flight -- treated as "has a coach" so the
+  // participation-waiver row does not flicker out from under a rostered athlete on first load.
+  // See useIsFreeAgent's own comment on why undefined is not "no".
+  const isFreeAgent = useIsFreeAgent();
+  const audience = documentAudienceFor({
+    role: user?.role ?? "athlete",
+    hasCoach: isFreeAgent !== true,
+  });
+  const checklist = REQUIRED_DOCUMENTS[audience];
+
+  const key = [`/api/waivers/${user?.id ?? 0}`];
+  const { data, isLoading } = useQuery<{ waivers: Waiver[]; summary: Summary[] }>({
+    queryKey: key,
+    enabled: !!user?.id,
+  });
+
+  const byKind = new Map((data?.summary ?? []).map((s) => [s.kind, s]));
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("kind", kind);
+      if (org.trim()) form.append("issuingOrganization", org.trim());
+      if (signedOn) form.append("signedOn", signedOn);
+      if (expiresOn) form.append("expiresOn", expiresOn);
+      // uploadWithProgress, not apiRequest: a scanned multi-page packet over gym wifi is slow
+      // enough that a bare spinner reads as hung.
+      return uploadWithProgress(`/api/waivers/${user!.id}`, form);
+    },
+    onSuccess: () => {
+      toast.success("Uploaded. It'll show as on file once we've checked it.");
+      setOrg("");
+      setSignedOn("");
+      setExpiresOn("");
+      if (fileRef.current) fileRef.current.value = "";
+      qc.invalidateQueries({ queryKey: key });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't upload that"),
+    onSettled: () => setUploading(false),
+  });
+
+  /** Pick the row's kind and jump to the form, so a red cross is one tap from being fixed. */
+  function startUpload(k: DocumentKind) {
+    setKind(k);
+    uploadRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  const outstanding = checklist.filter(
+    (d) => d.required && (byKind.get(d.kind)?.status ?? "missing") !== "accepted",
+  ).length;
+
+  return (
+    <AppShell title="Documents">
+      <div className="mx-auto max-w-2xl space-y-4 p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {audience === "coach" ? "Your coaching credentials" : "Your forms"}
+            </CardTitle>
+            <CardDescription>
+              {audience === "coach"
+                ? "Certifications and clearances you already hold. Upload a copy so it's on file."
+                : audience === "athlete_rostered"
+                  ? "If your school or club already had these signed, upload those instead of filling in ours again."
+                  : "You train without a coach on Forge, so there's no school waiver to upload. These two still matter."}{" "}
+              Nothing here replaces the agreements you accepted when you signed up -- this is a
+              copy of what was signed elsewhere, so we know it exists.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : (
+              <>
+                <ul className="space-y-1.5">
+                  {checklist.map((doc) => {
+                    const row = byKind.get(doc.kind);
+                    const status = row?.status ?? "missing";
+                    return (
+                      <li key={doc.kind}>
+                        <button
+                          type="button"
+                          onClick={() => startUpload(doc.kind)}
+                          className={cn(
+                            "flex w-full items-start justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors hover:border-primary/50",
+                            status === "accepted" ? "border-success/30" : "border-border",
+                          )}
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium">{doc.label}</span>
+                            <span className="block text-xs text-muted-foreground">{doc.why}</span>
+                            {row?.issuingOrganization && (
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {row.issuingOrganization}
+                                {row.expiresOn ? ` · expires ${row.expiresOn}` : ""}
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 pt-0.5">
+                            <StatusMark status={status} required={doc.required} />
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {outstanding === 0
+                    ? "Everything required is on file."
+                    : `${outstanding} still to upload. Tap a row to add it.`}
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {(data?.waivers ?? [])
+          .filter((w) => w.reviewStatus === "rejected" && w.reviewNote)
+          .slice(0, 3)
+          .map((w) => (
+            <p
+              key={w.id}
+              className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs"
+            >
+              <span className="font-semibold">{DOCUMENT_LABEL[w.kind]} was rejected:</span>{" "}
+              {w.reviewNote}
+            </p>
+          ))}
+
+        <Card ref={uploadRef}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Upload className="h-4 w-4 text-primary" />
+              Upload a document
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">What is it?</Label>
+              <Select value={kind} onValueChange={(v) => setKind(v as DocumentKind)}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {checklist.map((d) => (
+                    <SelectItem key={d.kind} value={d.kind}>
+                      {d.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="other">{DOCUMENT_LABEL.other}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Who issued it? (optional)</Label>
+              <Input
+                value={org}
+                onChange={(e) => setOrg(e.target.value)}
+                placeholder={audience === "coach" ? "USA Weightlifting" : "Lincoln High School Athletics"}
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Signed / issued</Label>
+                <Input
+                  type="date"
+                  value={signedOn}
+                  onChange={(e) => setSignedOn(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Expires</Label>
+                <Input
+                  type="date"
+                  value={expiresOn}
+                  onChange={(e) => setExpiresOn(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+            {/* A photo of a signed page is accepted on purpose -- that is how most of these
+                actually arrive, and a flow that only takes a clean scan is one that stays empty. */}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,image/png,image/jpeg,image/webp,image/heic"
+              className="block w-full text-xs file:mr-3 file:rounded-md file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-semibold"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploading(true);
+                upload.mutate(file);
+              }}
+            />
+            {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              PDF, or a photo of the signed page. We check that it arrived and is readable. We
+              can't confirm a form signed with someone else covers Forge, so the agreements you
+              accepted here still apply.
+            </p>
+          </CardContent>
+        </Card>
+
+        {(data?.waivers ?? []).length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Everything uploaded</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-1.5 text-xs">
+                {data!.waivers.map((w) => (
+                  <li key={w.id} className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-muted-foreground">
+                      {DOCUMENT_LABEL[w.kind]} · {new Date(w.createdAt).toLocaleDateString()} ·{" "}
+                      {w.reviewStatus.replace("_", " ")}
+                    </span>
+                    <a
+                      href={resolveApiUrl(w.fileUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 font-semibold text-primary hover:underline"
+                    >
+                      Open
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </AppShell>
+  );
+}
