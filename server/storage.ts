@@ -20896,15 +20896,32 @@ ${catalog}`;
       .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       .where(
         and(
-          isNotNull(programExercises.trackingLevel),
-          sql`${programExercises.trackingLevel} != 'none'`,
-          // trackingLevel being set only means the EXERCISE is configured for camera
-          // tracking -- an athlete can still log a set for it by hand (typing reps/weight,
-          // never tapping Record & Analyze), which leaves trackingDiagnostics null and
-          // every CV column empty. Without this, this report fills up with exactly those
-          // untouched sets alongside the ones that actually ran through the pipeline,
-          // burying the real (and real-failure) entries the report exists to surface.
+          // THE CAPTURE ITSELF IS THE EVIDENCE, NOT THE PROGRAM ROW BESIDE IT.
+          //
+          // trackingDiagnostics is written by the native pipeline and by nothing else, so a
+          // row that has one ran through the camera. That is the whole membership test, and
+          // it does not need corroborating.
+          //
+          // It used to also require programExercises.trackingLevel to be present and not
+          // 'none'. That join is a LEFT join for a stated reason -- a later program-day edit
+          // leaves programExerciseId null without touching the set's data (see the join's own
+          // comment) -- and requiring isNotNull on the joined column threw away exactly those
+          // rows. A set that captured cleanly, wrote full diagnostics, and then had its
+          // program day edited underneath it disappeared from the one report that exists to
+          // show capture failures. Silently, and most often for the sets under active
+          // iteration, which are the ones being edited.
+          //
+          // What the old condition was really for is still covered: an athlete who logs a
+          // tracked exercise by hand (types reps and weight, never taps Record & Analyze)
+          // leaves trackingDiagnostics null and is still excluded, which is what keeps this
+          // report from filling with untouched sets.
           isNotNull(workoutSetEntries.trackingDiagnostics),
+          // Still excluded where the program row IS present and says tracking is off: that
+          // is a real "this exercise is not camera-tracked" statement, unlike a missing row.
+          or(
+            isNull(programExercises.trackingLevel),
+            sql`${programExercises.trackingLevel} != 'none'`,
+          ),
         ),
       )
       .orderBy(desc(workoutSetEntries.id))

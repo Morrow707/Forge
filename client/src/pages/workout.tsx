@@ -3227,6 +3227,22 @@ function ExerciseLogContent({
             const complete = isSetComplete(item, set);
             const tracked =
               set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
+            // POWER NEEDS THE LOAD, AND IT IS READ AT THE MOMENT THE TRACKER OPENS.
+            //
+            // loadKg comes off this row's weight when the tracker dialog mounts (see the
+            // trackedWeight block below), and power is mass * g * velocity. Record before the
+            // weight is typed and peakPowerWatts/meanPowerWatts come back null for that set --
+            // permanently, since nothing recomputes them when the weight lands afterwards. The
+            // athlete gets a set that tracked "fine" and is quietly missing two of its numbers.
+            //
+            // So the button is unavailable rather than merely discouraged. A banner asking
+            // people to do things in the right order is a banner; this is the order.
+            //
+            // Only where there is a load to miss: a bodyweight or band exercise has no external
+            // load, loadKg is undefined by design there, and gating on a weight box that does
+            // not exist would lock the camera for good.
+            const weightMissingForTracking =
+              item.materials.usesWeight && !(parseFloat(set.weight) > 0);
             const historyMatch = findHistoryForReps(item.setHistory, set.reps);
             const earlierSetsThisSession = item.sets.filter((s) => s.setNumber < set.setNumber);
             const isPR =
@@ -3351,6 +3367,7 @@ function ExerciseLogContent({
                     {item.trackingLevel !== "none" && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
                       <button
                         type="button"
+                        disabled={weightMissingForTracking}
                         onClick={() => startTracking(set.setNumber)}
                         // Recording a new set while a DIFFERENT set's analysis is still running
                         // in the background is intentionally allowed, not guarded -- recording
@@ -3362,13 +3379,19 @@ function ExerciseLogContent({
                         // for a client-side lock to protect here that isn't already handled.
                         className={cn(
                           "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                          tracked
-                            ? "border-success/40 bg-success/10 text-success"
-                            : "border-primary/40 text-primary hover:bg-primary/10",
+                          weightMissingForTracking
+                            ? "cursor-not-allowed border-border text-muted-foreground opacity-60"
+                            : tracked
+                              ? "border-success/40 bg-success/10 text-success"
+                              : "border-primary/40 text-primary hover:bg-primary/10",
                         )}
                       >
                         <Camera className="h-3 w-3" />
-                        {tracked
+                        {weightMissingForTracking
+                          ? // Says what to do, not just that it is off. A greyed control with
+                            // its usual label reads as broken.
+                            `Enter ${unit} to record`
+                          : tracked
                           ? item.trackingLevel === "jump" && set.jumpHeightCm != null
                             ? `${formatDistanceCm(set.jumpHeightCm, distanceUnit)} jump — retake`
                             : item.trackingLevel === "full" && set.meanVelocityMps != null

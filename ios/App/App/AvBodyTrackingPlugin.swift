@@ -873,9 +873,21 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // The field of view goes in the log because it is the number that separates two
             // formats the previous line reports identically -- without it, a tight preview and
             // a full-width one are indistinguishable in the diagnostics.
+            // WHAT 60fps COSTS IN FIELD OF VIEW, STATED RATHER THAN INFERRED.
+            //
+            // bestFormat picks the widest format that can hold 60fps, which is the widest we
+            // can have -- but not necessarily the widest the LENS has. A device's full-sensor
+            // formats often top out at 30fps, so pinning 60 can quietly hand back a narrower
+            // frame than the stock Camera app shows at the same nominal 1x. That is a real
+            // trade (60fps is what the velocity numbers are sampled from) and worth making,
+            // but it is not worth making invisibly: "ours looks more zoomed in than Apple's"
+            // is unanswerable without both numbers side by side, and this is the only place
+            // that knows them.
+            let widestAnyRate = device.formats.map(\.videoFieldOfView).max() ?? chosen.videoFieldOfView
             logDiag(
                 "activeFormat set: \(d.width)x\(d.height) @ \(Int(targetFrameRate))fps (capped), "
                     + "fov \(String(format: "%.1f", chosen.videoFieldOfView))deg "
+                    + "(widest this lens offers at any rate: \(String(format: "%.1f", widestAnyRate))deg) "
                     + "hdr \(chosen.isVideoHDRSupported ? (device.isVideoHDREnabled ? "on" : "supported-but-off") : "unsupported") "
                     + "of \(exact.count) matching format(s)"
             )
@@ -941,8 +953,29 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if device.isExposureModeSupported(.continuousAutoExposure) {
                 device.exposureMode = .continuousAutoExposure
             }
+            // WHITE BALANCE, FOR THE SAME REASON AND WITH THE SAME TIMING.
+            //
+            // This function re-affirmed focus and exposure after a format change and left white
+            // balance to whatever the device happened to be in, which is the identical gap one
+            // property over. Held against the stock Camera app in a gym lit by fluorescents and
+            // a bank of daylight windows, our preview came back visibly warm -- the yellow cast
+            // is a white balance stuck at a colour temperature the scene stopped having.
+            //
+            // Not only how it looks. The plate detector and Vision's joint matching both read
+            // local contrast, and a global warm cast compresses the separation between a
+            // chrome bar, a black rubber plate and a skin tone -- the three things this
+            // pipeline most needs to tell apart. Same argument enableVideoHdr makes above.
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            } else if device.isWhiteBalanceModeSupported(.autoWhiteBalance) {
+                device.whiteBalanceMode = .autoWhiteBalance
+            }
             device.unlockForConfiguration()
-            logDiag("focus/exposure mode set: focus=\(device.focusMode.rawValue) exposure=\(device.exposureMode.rawValue)")
+            logDiag(
+                "focus/exposure mode set: focus=\(device.focusMode.rawValue) "
+                    + "exposure=\(device.exposureMode.rawValue) "
+                    + "whiteBalance=\(device.whiteBalanceMode.rawValue)"
+            )
         } catch {
             logDiag("WARNING: failed to set continuous focus/exposure: \(error.localizedDescription)")
         }
