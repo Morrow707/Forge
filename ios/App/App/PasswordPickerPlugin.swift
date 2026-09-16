@@ -253,8 +253,16 @@ final class NativeLoginViewController: UIViewController {
 
     private let usernameField = UITextField()
     private let passwordField = UITextField()
-    private let scrollView = UIScrollView()
+    /// Pinned to the top of the keyboard when it is up. App content, not an inputAccessoryView:
+    /// an accessory view sits inside the keyboard's own stack and risks covering the strip iOS
+    /// shows the Passwords suggestion in, which is the one thing this screen exists for.
+    private let keyboardBar = UIView()
+    private var keyboardBarBottom: NSLayoutConstraint!
+    private var pageCenterY: NSLayoutConstraint!
+    private let header = UIStackView()
     private let signInButton = UIButton(type: .system)
+    /// Held so the keyboard handler can measure it.
+    private var page: UIStackView!
 
     init(prefillUsername: String?, onOutcome: @escaping (Outcome) -> Void) {
         self.prefillUsername = prefillUsername
@@ -303,19 +311,13 @@ final class NativeLoginViewController: UIViewController {
 
         let tagline = Self.label("Coach. Program. Perform.", size: 13, color: Self.mutedForeground)
 
-        let header = UIStackView(arrangedSubviews: [mark, wordmark, tagline])
+        for sub in [mark, wordmark, tagline] { header.addArrangedSubview(sub) }
         header.axis = .vertical
         header.alignment = .center
         header.spacing = 12
 
         // ---- Card ----
-        let cardTitle = Self.label("Log In", size: 20, color: Self.cardForeground, weight: .semibold)
-        let cardDescription = Self.label(
-            "Welcome back. Enter your credentials to continue.",
-            size: 13,
-            color: Self.mutedForeground
-        )
-        cardDescription.numberOfLines = 0
+        let cardTitle = Self.label("Welcome back", size: 20, color: Self.cardForeground, weight: .semibold)
 
         let emailLabel = Self.label("Email", size: 13, color: Self.cardForeground, weight: .medium)
         Self.style(usernameField, placeholder: "you@example.com")
@@ -357,14 +359,14 @@ final class NativeLoginViewController: UIViewController {
         )
 
         let cardStack = UIStackView(arrangedSubviews: [
-            cardTitle, cardDescription,
+            cardTitle,
             emailLabel, usernameField,
             passwordRow, passwordField,
             signInButton, signUp, adminLogin,
         ])
         cardStack.axis = .vertical
         cardStack.spacing = 10
-        cardStack.setCustomSpacing(20, after: cardDescription)
+        cardStack.setCustomSpacing(20, after: cardTitle)
         cardStack.setCustomSpacing(16, after: usernameField)
         cardStack.setCustomSpacing(20, after: passwordField)
         cardStack.setCustomSpacing(20, after: signInButton)   // mt-5
@@ -384,61 +386,56 @@ final class NativeLoginViewController: UIViewController {
             cardStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -20),
         ])
 
-        let page = UIStackView(arrangedSubviews: [header, cardView])
+        page = UIStackView(arrangedSubviews: [header, cardView])
         page.axis = .vertical
         page.spacing = 32
         page.translatesAutoresizingMaskIntoConstraints = false
 
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.keyboardDismissMode = .interactive
-        // It should NOT behave like a scrolling page. The screen fits, and a login screen that
-        // rubber-bands under your thumb reads as a web page rather than the app. The scroll view
-        // stays only so the fields can be lifted clear of the keyboard, and the container below
-        // is pinned to at least the visible height so there is nothing to scroll until then.
-        scrollView.alwaysBounceVertical = false
-        scrollView.showsVerticalScrollIndicator = false
-        scrollView.contentInsetAdjustmentBehavior = .always
+        // NO SCROLL VIEW. A login screen that rubber-bands under a thumb reads as a web page in
+        // a browser, which is exactly what this screen exists to stop looking like. It fits, so
+        // it is simply centred; the keyboard is handled by moving it, not by scrolling it.
+        view.addSubview(page)
 
-        let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(page)
-        scrollView.addSubview(container)
-        view.addSubview(scrollView)
-
-        let content = scrollView.contentLayoutGuide
-        let frame = scrollView.frameLayoutGuide
-        // Centred when it fits, top-anchored with 48pt of air when the keyboard makes it taller
-        // than the space left -- hence the >= pair against a centring constraint that yields.
-        let centred = page.centerYAnchor.constraint(equalTo: container.centerYAnchor)
-        centred.priority = .defaultHigh
-
+        pageCenterY = page.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor)
+        // Fills the width up to max-w-md. Without this the card has no width of its own and
+        // collapses to the widest label in it.
+        let fullWidth = page.widthAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.widthAnchor, constant: -32
+        )
+        fullWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-
-            container.topAnchor.constraint(equalTo: content.topAnchor),
-            container.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-            container.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            container.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            container.widthAnchor.constraint(equalTo: frame.widthAnchor),
-            container.heightAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.heightAnchor),
-
-            page.topAnchor.constraint(greaterThanOrEqualTo: container.topAnchor, constant: 48),
-            page.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -48),
-            centred,
-            page.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            page.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 16),
-            page.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16),
+            fullWidth,
+            pageCenterY,
+            page.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            page.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            page.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            page.topAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
             // max-w-md on the web screen.
             page.widthAnchor.constraint(lessThanOrEqualToConstant: 448),
         ])
 
-        // Tapping anywhere off the fields puts the keyboard away. Deliberately NOT a "Done" bar
-        // above the keyboard: that is the strip iOS puts the Passwords suggestion in, and
-        // covering it would hide the one thing this whole screen exists to surface.
-        // cancelsTouchesInView false so the buttons underneath still receive their taps.
+        // A visible way to put the keyboard away, which tapping off the fields alone was not --
+        // with the card filling the screen there is barely any "off the fields" left to tap.
+        keyboardBar.backgroundColor = Self.background
+        keyboardBar.isHidden = true
+        keyboardBar.translatesAutoresizingMaskIntoConstraints = false
+        let done = Self.linkButton("Done", size: 15)
+        done.addTarget(self, action: #selector(dismissKeyboard), for: .touchUpInside)
+        done.translatesAutoresizingMaskIntoConstraints = false
+        keyboardBar.addSubview(done)
+        view.addSubview(keyboardBar)
+        keyboardBarBottom = keyboardBar.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        NSLayoutConstraint.activate([
+            keyboardBarBottom,
+            keyboardBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            keyboardBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            keyboardBar.heightAnchor.constraint(equalToConstant: 40),
+            done.trailingAnchor.constraint(equalTo: keyboardBar.trailingAnchor, constant: -20),
+            done.centerYAnchor.constraint(equalTo: keyboardBar.centerYAnchor),
+        ])
+
+        // Tapping off the fields also works. cancelsTouchesInView false so the buttons under it
+        // still receive their taps.
         let dismissTap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         dismissTap.cancelsTouchesInView = false
         view.addGestureRecognizer(dismissTap)
@@ -448,7 +445,7 @@ final class NativeLoginViewController: UIViewController {
             name: UIResponder.keyboardWillChangeFrameNotification, object: nil
         )
         NotificationCenter.default.addObserver(
-            self, selector: #selector(keyboardHidden),
+            self, selector: #selector(keyboardHidden(_:)),
             name: UIResponder.keyboardWillHideNotification, object: nil
         )
     }
@@ -530,10 +527,10 @@ final class NativeLoginViewController: UIViewController {
         let toggle = UIButton(type: .system)
         toggle.setImage(UIImage(systemName: "eye"), for: .normal)
         toggle.tintColor = Self.mutedForeground
-        // Wider than the glyph and nudged inward, so the eye is not sitting against the border
-        // while the tap target stays a comfortable size.
-        toggle.frame = CGRect(x: 0, y: 0, width: 46, height: 46)
-        toggle.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 12)
+        // The glyph is drawn at its natural size -- image insets shrink it, which is what made
+        // it look squashed. Widening the container is what moves it in off the border, since the
+        // button centres its image and the container is right-aligned in the field.
+        toggle.frame = CGRect(x: 0, y: 0, width: 52, height: 46)
         toggle.addTarget(self, action: #selector(toggleReveal(_:)), for: .touchUpInside)
         field.rightView = toggle
         field.rightViewMode = .always
@@ -547,19 +544,39 @@ final class NativeLoginViewController: UIViewController {
         )
     }
 
-    @objc private func dismissKeyboard() { view.endEditing(true) }
-
     @objc private func keyboardChanged(_ note: Notification) {
         guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
         let overlap = max(0, view.bounds.maxY - view.convert(frame, from: nil).minY)
-        scrollView.contentInset.bottom = overlap
-        scrollView.verticalScrollIndicatorInsets.bottom = overlap
+        apply(keyboardOverlap: overlap, note: note)
     }
 
-    @objc private func keyboardHidden() {
-        scrollView.contentInset.bottom = 0
-        scrollView.verticalScrollIndicatorInsets.bottom = 0
+    @objc private func keyboardHidden(_ note: Notification) {
+        apply(keyboardOverlap: 0, note: note)
     }
+
+    private func apply(keyboardOverlap overlap: CGFloat, note: Notification) {
+        keyboardBar.isHidden = overlap == 0
+        keyboardBarBottom.constant = -overlap
+        // Centre in what is left rather than in the whole screen. The greaterThanOrEqualTo top
+        // constraint above is what keeps the card from being pushed under the status bar when
+        // there is not enough room; the header gives up its space first, below.
+        pageCenterY.constant = -(overlap + (overlap > 0 ? 40 : 0)) / 2
+
+        // On a short screen the card plus the mark cannot both fit above the keyboard. The mark
+        // is decoration and the fields are not, so the mark goes.
+        let available = view.safeAreaLayoutGuide.layoutFrame.height - overlap - 40
+        let needed = page.systemLayoutSizeFitting(
+            CGSize(width: min(view.bounds.width - 32, 448), height: UIView.layoutFittingCompressedSize.height),
+            withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+        ).height + 24
+        header.isHidden = overlap > 0 && needed > available
+
+        let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+        UIView.animate(withDuration: duration) { self.view.layoutIfNeeded() }
+    }
+
+    @objc private func dismissKeyboard() { view.endEditing(true) }
 
     // MARK: - Outcomes
 

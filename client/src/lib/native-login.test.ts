@@ -56,20 +56,29 @@ describe("the native login screen", () => {
     expect(loginPage).toMatch(/useState\(isNativeLoginAvailable\)/);
   });
 
-  it("does not behave like a scrolling web page", () => {
-    // A login screen that rubber-bands under a thumb reads as a page in a browser. The scroll
-    // view exists only to lift a field clear of the keyboard, so it has nothing to scroll until
-    // the keyboard is up.
-    expect(plugin).toMatch(/scrollView\.alwaysBounceVertical = false/);
-    expect(plugin).toMatch(/container\.heightAnchor\.constraint\(greaterThanOrEqualTo: view\.safeAreaLayoutGuide\.heightAnchor\)/);
+  it("cannot be scrolled at all", () => {
+    // A login screen that rubber-bands under a thumb reads as a page in a browser. There is no
+    // scroll view: the screen is centred, and the keyboard is handled by moving it.
+    expect(plugin).not.toMatch(/UIScrollView/);
+    expect(plugin).toMatch(/pageCenterY\.constant =/);
   });
 
   it("puts the keyboard away without covering the Passwords suggestion", () => {
-    // A "Done" accessory bar would sit exactly where iOS shows the AutoFill suggestion, which is
-    // the one thing this screen exists to surface. Tap-off dismisses instead.
+    // The dismiss control is app content pinned above the keyboard, NOT an inputAccessoryView:
+    // an accessory view sits inside the keyboard's own stack, where iOS draws the AutoFill
+    // suggestion -- the one thing this screen exists to surface.
+    expect(plugin).not.toMatch(/\.inputAccessoryView\s*=/);
+    expect(plugin).toMatch(/keyboardBarBottom\.constant = -overlap/);
     expect(plugin).toMatch(/UITapGestureRecognizer\(target: self, action: #selector\(dismissKeyboard\)\)/);
     expect(plugin).toMatch(/dismissTap\.cancelsTouchesInView = false/);
-    expect(plugin).not.toMatch(/inputAccessoryView/);
+  });
+
+  it("says the same thing as the web screen", () => {
+    // The two are meant to be one screen. Copy drifting apart is how that claim quietly stops
+    // being true, so the heading is asserted on both sides.
+    expect(plugin).toMatch(/Self\.label\("Welcome back"/);
+    expect(loginPage).toMatch(/<CardTitle>Welcome back<\/CardTitle>/);
+    expect(loginPage).not.toMatch(/Enter your credentials to continue/);
   });
 
   it("uses the same colour tokens as the web screen rather than hand-picked values", () => {

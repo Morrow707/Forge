@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ForgeMark } from "@/components/forge-mark";
 import { MfaLoginStep } from "@/components/mfa-login-step";
 import { isNativeLoginAvailable, presentNativeLogin } from "@/lib/native-auth";
@@ -137,8 +137,7 @@ export default function LoginPage() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>Log In</CardTitle>
-              <CardDescription>Welcome back. Enter your credentials to continue.</CardDescription>
+              <CardTitle>Welcome back</CardTitle>
             </CardHeader>
             <CardContent>
               {/* noValidate: WKWebView's native HTML5 constraint-validation UI
