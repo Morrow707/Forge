@@ -15,6 +15,7 @@ import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
 import { StatTile } from "@/components/stat-tile";
 import { ReadinessBanner } from "@/components/readiness-banner";
+import { AssumptionOfRiskDialog } from "@/components/assumption-of-risk-dialog";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { resolveWidgetOrder } from "@/lib/widget-layout";
@@ -235,6 +236,14 @@ export default function AthleteDashboard() {
   };
 
   return (
+    <>
+    {/* Once, on the athlete's own first dashboard. Here rather than at the camera, which the
+        biometric prompt already owns -- two dialogs in the same moment teaches people to dismiss
+        both -- and rather than at signup, where for a minor it is their guardian reading it. */}
+    <AssumptionOfRiskDialog
+      open={user?.role === "athlete" && user?.assumptionOfRiskRequired === true}
+      onOpenChange={() => {}}
+    />
     <AppShell
       title={`Welcome, ${user?.name?.split(" ")[0] ?? "Athlete"}`}
       actions={
@@ -356,6 +365,7 @@ export default function AthleteDashboard() {
       </div>
       </div>
     </AppShell>
+    </>
   );
 }
 

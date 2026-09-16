@@ -234,6 +234,12 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
       user.dateOfBirth != null &&
       derivePrivacyTier(user.dateOfBirth) === "tier3_adult_18plus" &&
       !(await storage.hasBiometricConsent(user.id));
+    // Whether to show this athlete the risk terms themselves. EVERY athlete, not only adults --
+    // that is the whole point. For a minor the guardian's agreement is the legal instrument and
+    // this changes nothing about it; what it changes is that the person actually lifting has
+    // seen what they are being asked to accept, which a guardian ticking a box on another
+    // screen does not accomplish.
+    publicUser.assumptionOfRiskRequired = !(await storage.hasAcknowledgedAssumptionOfRisk(user.id));
     const gate = await storage.athleteGateStatus(user.id);
     publicUser.guardianLinkRequired = gate === "needs_guardian";
     publicUser.dateOfBirthRequired = gate === "needs_date_of_birth";
@@ -1403,6 +1409,26 @@ export function setupAuth(app: Express) {
   // request IS the agreement, which is why it is a POST and not a PUT of a boolean -- a flag that
   // can be set false would invite "unagreeing" here, and withdrawal is a different act with
   // different consequences that belongs with the guardian flow.
+  // The athlete's own acknowledgment of the risk terms. Not a waiver they are giving -- for a
+  // minor that came from their guardian, and the document's own section 8 says a guardian cannot
+  // give up the child's claim. This records that THEY read it.
+  app.post("/api/account/assumption-of-risk", requireAuth, async (req, res) => {
+    const user = req.user as any;
+    if (user.role !== "athlete") {
+      return res.status(400).json({ message: "Only an athlete acknowledges this." });
+    }
+    const ok = await storage.recordAssumptionOfRiskAcknowledgment(user.id, {
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
+    if (!ok) {
+      // No document configured. Better a visible failure than a consent record pointing at
+      // nothing, which is what the biometric release used to do before it was rewritten.
+      return res.status(503).json({ message: "That document isn't available right now." });
+    }
+    res.json(await toPublicUserWithSections(await storage.getUser(user.id)));
+  });
+
   app.post("/api/account/biometric-release", requireAuth, async (req, res, next) => {
     try {
       const user = req.user as any;

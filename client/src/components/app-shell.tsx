@@ -42,6 +42,7 @@ import {
   Flag,
   Copy,
   MonitorSmartphone,
+  ShieldAlert,
   KeyRound,
   Pin,
   FileSearch,
@@ -755,6 +756,24 @@ export function AppShell({
                     <Flag className="h-4 w-4" />
                     Report a problem
                   </button>
+                  {/* Athletes only: it is their own risk statement, and a coach or admin reading
+                      it here would be reading somebody else's. Tucked down beside the other
+                      rarely-needed items rather than given prominence -- the one-time dialog on
+                      the dashboard is how it reaches people; this is so it can be found again,
+                      which a document you were shown once and can never re-open is not. */}
+                  {user?.role === "athlete" && (
+                    <a
+                      href="/assumption-of-risk"
+                      target="_blank"
+                      rel="noreferrer"
+                      role="menuitem"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
+                    >
+                      <ShieldAlert className="h-4 w-4" />
+                      Training risks
+                    </a>
+                  )}
                   <button
                     type="button"
                     role="menuitem"

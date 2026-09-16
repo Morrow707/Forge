@@ -25624,6 +25624,48 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * means at least one biometric_waiver row that is not itself a withdrawal, and no withdrawal
    * after the most recent grant.
    */
+  /** Has THIS ATHLETE personally acknowledged the assumption-of-risk release?
+   *
+   * Deliberately not "is there a record for this athlete": a guardian's agreement at claim time
+   * writes a record for the same athlete and the same consent type, and that is the legal
+   * instrument -- but it is not the athlete having read anything. The person under the bar
+   * seeing the risks is a different fact, and conflating them would mean every minor whose
+   * guardian consented is treated as having read it themselves, which is the exact gap this
+   * acknowledgment exists to close.
+   *
+   * givenByUserId is what separates them: null when somebody answered for themselves, the
+   * guardian's id when they answered for a child.
+   */
+  async hasAcknowledgedAssumptionOfRisk(athleteId: number): Promise<boolean> {
+    const rows = await db.query.consentRecords.findMany({
+      where: and(
+        eq(consentRecords.userId, athleteId),
+        eq(consentRecords.consentType, "assumption_of_risk"),
+        isNull(consentRecords.givenByUserId),
+      ),
+    });
+    return rows.length > 0;
+  },
+
+  /** Records the athlete's own acknowledgment. Returns false when there is no document to show
+   * them -- a record naming a document that does not exist is evidence of nothing, and the
+   * client needs to know not to claim it succeeded. */
+  async recordAssumptionOfRiskAcknowledgment(
+    athleteId: number,
+    context?: { ipAddress?: string; userAgent?: string },
+  ): Promise<boolean> {
+    const doc = await this.getLegalDocument("assumption_of_risk");
+    if (!doc?.content) return false;
+    await this.logConsentRecord({
+      userId: athleteId,
+      consentType: "assumption_of_risk",
+      documentText: doc.content,
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
+    return true;
+  },
+
   async hasBiometricConsent(athleteId: number): Promise<boolean> {
     const rows = await db.query.consentRecords.findMany({
       where: and(

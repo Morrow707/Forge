@@ -8177,6 +8177,9 @@ export type PublicUser = Omit<
   // what lets the client ask before they film rather than dropping what they filmed afterwards.
   // Never a substitute for that gate: a client flag is a convenience, not a rule.
   biometricReleaseRequired?: boolean;
+  /** True until the athlete has personally acknowledged the assumption-of-risk release. A
+   * guardian having agreed for them does not clear it -- see hasAcknowledgedAssumptionOfRisk. */
+  assumptionOfRiskRequired?: boolean;
   // True when this account has at least one guardian link, whatever its role
   // -- guardianship is a relationship, so a Free Agent parent or a coach who
   // is also a parent both get the guardian view. UI convenience only;
