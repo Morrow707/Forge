@@ -33,6 +33,8 @@
 // behaviour is a bug in this file, the same rule docs/privacy-policy-facts.md
 // states about itself.
 
+import { FORGE_CONTACT_EMAIL } from "@shared/contact";
+
 /** The exact text seeded before real terms existed. Kept verbatim and only for
  * the one-time migration in seed.ts to recognise -- an installation still
  * carrying this got the placeholder, an installation carrying anything else got
@@ -168,7 +170,7 @@ These terms can change. The current version is always the one shown at signup an
 
 17. CONTACT
 
-Questions about these terms, a request about your data, or a request to withdraw a consent: forgeperformancesystems@outlook.com`;
+Questions about these terms, a request about your data, or a request to withdraw a consent: ${FORGE_CONTACT_EMAIL}`;
 
 /** What the signup agreement should become, given whatever is currently live.
  * `null` means leave it alone.
@@ -195,3 +197,41 @@ export function nextSignupAgreement(current: string): string | null {
  * database connection behind it) to be testable. A mismatch would make the
  * fresh-install branch above dead, so a test asserts the two agree. */
 export const UNCONFIGURED_FALLBACK = "No agreement has been configured yet.";
+
+/** The unfilled contact placeholders that shipped in the drafted legal documents, paired with
+ * what each should now say.
+ *
+ * These live in the database once seeded, and the seed only writes a draft when one is ABSENT --
+ * so correcting the source text in legal-documents-draft.ts fixes new installations and leaves
+ * every existing one carrying "[Placeholder -- add a real contact email once one exists.]" in the
+ * copy an admin actually edits and prints. Same shape as the placeholder-agreement migration
+ * above and the Sentry correction in seed.ts: match exactly, replace in place, touch nothing
+ * else, and be a permanent no-op afterwards.
+ *
+ * Only the ADDRESS placeholders are listed. The counsel-question placeholders in those documents
+ * are deliberate and stay until counsel answers them. */
+export const CONTACT_PLACEHOLDER_PATCHES: ReadonlyArray<readonly [string, string]> = [
+  [
+    "[Placeholder -- add a real support/contact email once one exists.]",
+    `Questions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`,
+  ],
+  [
+    "[Placeholder -- add a real privacy-contact email once one exists.]",
+    `Questions about this Policy, or to make a request about your data: ${FORGE_CONTACT_EMAIL}`,
+  ],
+  [
+    "[Placeholder -- add a real contact email once one exists, the same one referenced in the Terms of Service and Privacy Policy.]",
+    `Questions, or to act on anything described above: ${FORGE_CONTACT_EMAIL}`,
+  ],
+  [
+    "unless a specific request for further deletion is made. [Placeholder -- confirm this matches what BIPA",
+    `unless a specific request for further deletion is made. Either request can be made at ${FORGE_CONTACT_EMAIL}. [Placeholder -- confirm this matches what BIPA`,
+  ],
+];
+
+/** Applies the patches above to one stored document. Returns null when nothing changed. */
+export function patchContactPlaceholders(content: string): string | null {
+  let next = content;
+  for (const [from, to] of CONTACT_PLACEHOLDER_PATCHES) next = next.split(from).join(to);
+  return next === content ? null : next;
+}

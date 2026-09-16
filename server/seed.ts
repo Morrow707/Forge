@@ -19,7 +19,9 @@ import { eq, isNull, and, asc } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT, PARENTAL_NOTICE_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT } from "./seed-data/legal-documents-draft";
-import { nextSignupAgreement, UNCONFIGURED_FALLBACK } from "./seed-data/signup-agreement";
+import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchContactPlaceholders } from "./seed-data/signup-agreement";
+
+const LEGAL_DOC_TYPES = ["terms_of_service", "privacy_policy", "biometric_waiver", "parental_notice", "institutional_agreement"] as const;
 
 // We don't have live web access from this environment to verify specific
 // YouTube video IDs are real and still online, so hand-picking exact links
@@ -6234,6 +6236,19 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   }
   if (!(await storage.getLegalDocument("biometric_waiver"))) {
     await storage.updateLegalDocument("biometric_waiver", BIOMETRIC_WAIVER_DRAFT);
+  }
+
+  // The drafts above are only written when ABSENT, so a correction to their source text never
+  // reaches an installation that already seeded them -- and what needed correcting was the
+  // contact address, in documents whose whole job is telling somebody how to make a request.
+  // Exact-match, replace in place, no-op on every redeploy after the first.
+  for (const docType of LEGAL_DOC_TYPES) {
+    const stored = await storage.getLegalDocument(docType);
+    const patched = stored && patchContactPlaceholders(stored.content);
+    if (patched) {
+      await storage.updateLegalDocument(docType, patched);
+      console.log(`Filled the contact address in the stored ${docType} document.`);
+    }
   }
   if (!(await storage.getLegalDocument("parental_notice"))) {
     await storage.updateLegalDocument("parental_notice", PARENTAL_NOTICE_DRAFT);

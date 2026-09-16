@@ -89,8 +89,9 @@ describe("the terms themselves", () => {
     expect(SIGNUP_AGREEMENT).toMatch(/separate video and biometric consent and release/);
   });
 
-  it("gives one contact address, matching the other documents", () => {
-    const addresses = SIGNUP_AGREEMENT.match(/[\w.+-]+@[\w.-]+/g) ?? [];
-    expect(new Set(addresses)).toEqual(new Set(["forgeperformancesystems@outlook.com"]));
+  it("gives one contact address", () => {
+    // Which address, and that every other document agrees with it, is contact-address.test.ts.
+    const addresses = new Set(SIGNUP_AGREEMENT.match(/[\w.+-]+@[\w.-]+/g) ?? []);
+    expect(addresses.size).toBe(1);
   });
 });

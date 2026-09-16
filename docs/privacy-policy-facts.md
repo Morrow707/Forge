@@ -145,16 +145,26 @@ Separately consented, opt-in, and not mentioned in the current policy at all:
   (`RESEARCH_EXPORT_MIN_CELL`).
 - Withdrawal removes the athlete from the mirror and writes its own dated consent record.
 
-## 8. Contact details do not agree across documents
+## 8. Contact details — settled, except in the two documents outside this repo
 
-Three documents currently give three answers, and one field is an unfilled blank:
+`shared/contact.ts` now holds the single address, `forgeperformancesystems@outlook.com`, and
+every document generated from this repository interpolates it: the live signup agreement, and
+the drafted terms, privacy policy, biometric waiver and parental notice. A test asserts no
+document carries any other address and that each one a user is shown carries this one, so a
+fourth address cannot appear quietly. The biometric waiver's rights section also gained the
+address — it stated a right to ask what data Forge holds while giving no way to ask.
 
-- Privacy policy: `forgeperformancesystems.com`, `forgeperformancesystems@outlook.com`, phone
-  `__________`
-- EULA: `legal@forgeperformance.com`
-- Video consent and release: `forgeperformancesystems@outlook.com`
+**Two documents are not in this repository and still disagree**, and neither can be fixed from
+here:
 
-The registered application identity is `com.foreperformancesystems.forge` — note **fore**, not
-**forge** — consistent across the Xcode project, `render.yaml` and the in-app purchase product
-identifiers. Whichever address is chosen, it should be one that exists and the same one
-everywhere.
+- **The EULA** says `legal@forgeperformance.com`. That domain matches nothing: the registered
+  application identity is `com.foreperformancesystems.forge` — note **fore**, not **forge** —
+  consistent across the Xcode project, `render.yaml` and the in-app purchase product
+  identifiers. It needs replacing with the address above.
+- **The Rocket Lawyer privacy policy PDF** gives `forgeperformancesystems.com`, the right email,
+  and a phone number left as `__________`. The blank needs filling or the line removing; a
+  published policy with a blank contact field is worse than one with fewer channels.
+
+Whichever address is chosen it should be one that is actually monitored. A rights request under
+a privacy statute that reaches nobody is a compliance failure, not a typo — which is the reason
+this section exists rather than being a note about tidiness.

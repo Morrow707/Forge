@@ -13,6 +13,8 @@
 // for were unwritten until now, and this is a first pass, not a decision
 // that either is ready to go live.
 
+import { FORGE_CONTACT_EMAIL } from "@shared/contact";
+
 const DRAFT_NOTICE =
   "DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.";
 
@@ -76,7 +78,7 @@ These Terms and any action related to them are governed by the laws of the State
 We may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.
 
 18. CONTACT
-[Placeholder -- add a real support/contact email once one exists.]`;
+Questions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`;
 
 export const PRIVACY_POLICY_DRAFT = `${DRAFT_NOTICE}
 
@@ -131,7 +133,7 @@ You can review and correct your profile information in the app, and permanently 
 We may update this Policy as the Service changes; material changes will be reflected here with an updated date once this document has real version tracking.
 
 11. CONTACT
-[Placeholder -- add a real privacy-contact email once one exists.]`;
+Questions about this Policy, or to make a request about your data: ${FORGE_CONTACT_EMAIL}`;
 
 // A biometric waiver is its own legal instrument, separate from the general
 // Privacy Policy section that just mentions this data exists (see Section 4
@@ -162,7 +164,7 @@ Raw video for Tier 1 (under 13) accounts is automatically deleted 30 days after 
 Forge does not sell, lease, trade, or otherwise profit from data that identifies an individual athlete. De-identified group statistics may be provided to a research organisation, including for payment, but only for athletes whose guardian (or who themselves, if 18 or over) has separately agreed to that specific use, and only in the form described in Section 7 of the Privacy Policy: group figures with any group under ten withheld, and no identifiers, video, or free text of any kind. It is shared only with the athlete's own coach (as the core function of the Service) and with the service providers named in the Privacy Policy's "How We Share Information" section, solely to operate the Service.
 
 6. YOUR RIGHTS
-You (or, for a minor, their parent/guardian) may ask what biometric data Forge holds for that athlete, and may request its deletion by deleting the athlete's account, which removes stored video immediately -- tracked numeric metrics already logged as part of training history are retained the same way any other workout record is, unless a specific request for further deletion is made. [Placeholder -- confirm this matches what BIPA and any other applicable state law actually requires before this is treated as a complete rights statement.]
+You (or, for a minor, their parent/guardian) may ask what biometric data Forge holds for that athlete, and may request its deletion by deleting the athlete's account, which removes stored video immediately -- tracked numeric metrics already logged as part of training history are retained the same way any other workout record is, unless a specific request for further deletion is made. Either request can be made at ${FORGE_CONTACT_EMAIL}. [Placeholder -- confirm this matches what BIPA and any other applicable state law actually requires before this is treated as a complete rights statement.]
 
 7. CONSENT
 By signing, you confirm you've read and understood this release and consent to the collection, use, and retention described above, for as long as the associated Forge account remains active or until consent is withdrawn by deleting the account.
@@ -206,7 +208,7 @@ You don't need to do anything for the account to keep working. If you'd rather r
 If you don't want the account deleted but also don't want any new camera-tracked video or movement metrics collected going forward, you can turn that off without affecting anything else about the account -- your teen's programs, workout logs, and everything else keep working normally. If you set up your own guardian account through the link in this email, you can turn it off yourself at any time from your dashboard; otherwise, ask your teen's coach to do it on your behalf.
 
 6. QUESTIONS
-[Placeholder -- add a real contact email once one exists, the same one referenced in the Terms of Service and Privacy Policy.]`;
+Questions, or to act on anything described above: ${FORGE_CONTACT_EMAIL}`;
 
 // Distinct from the four documents above in one important way: those are
 // aimed at an individual coach or athlete and (mostly) just describe what
