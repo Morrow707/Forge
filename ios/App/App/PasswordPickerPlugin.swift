@@ -80,15 +80,17 @@ public class PasswordPickerPlugin: CAPPlugin, CAPBridgedPlugin {
                         call.resolve()
                         return
                     }
-                    let ns = error as NSError
+                    // Read through the CoreFoundation accessors rather than bridging to
+                    // NSError: this completion hands back a CFError, and `as NSError` does not
+                    // compile against it ("'CFError' is not convertible to 'NSError'").
+                    //
                     // Domain + code, not just the description. errSecItemNotFound, a failed
-                    // associated-domain check and a user-declined prompt all read the same
-                    // otherwise.
-                    call.reject(
-                        "\(ns.localizedDescription) [\(ns.domain) \(ns.code)]",
-                        String(ns.code),
-                        error
-                    )
+                    // associated-domain check and a user-declined prompt all produce the same
+                    // useless description otherwise, which is the whole reason this moved here.
+                    let code = CFErrorGetCode(error)
+                    let domain = CFErrorGetDomain(error) as String? ?? "unknown"
+                    let description = CFErrorCopyDescription(error) as String? ?? "no description"
+                    call.reject("\(description) [\(domain) \(code)]", String(code), nil)
                 }
             }
         }
