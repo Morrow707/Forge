@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { requestSavedPassword } from "@/lib/native-auth";
+import { presentNativeLogin } from "@/lib/native-auth";
 import { logDebug } from "@/lib/debug-console";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,23 +16,32 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Proactively offers the iOS "Choose a saved password to use" sheet the
-  // instant this page loads, instead of leaving it undiscoverable behind the
-  // key icon above the keyboard -- see requestSavedPassword's own comment
-  // for why WKWebView never does this on its own the way a real Safari page
-  // load would. Fires once per mount; a cancel or no-saved-credential result
-  // both resolve null and just leave the fields empty for normal typing.
+  // Offers the NATIVE sign-in sheet the instant this page loads, on iOS only.
+  //
+  // This replaced requestSavedPassword(), which asked the Shared Web Credentials store for a
+  // saved password and always came back empty -- because the matching save API turned out to be
+  // a no-op on current iOS, so there was never anything in that store to find. Both halves are
+  // native now: AutoFill fills the sheet's fields from Apple Passwords, and iOS offers to save
+  // when it is dismissed after signing in. See presentNativeLogin's own comment.
+  //
+  // Cancel, swipe-away and web all resolve null, and all mean the same thing: leave the web form
+  // alone. It still logs in; it just cannot offer to save, which is the whole reason the sheet
+  // exists.
   useEffect(() => {
-    logDebug("AUTH", "requesting saved password on login mount...");
-    requestSavedPassword().then((credential) => {
+    logDebug("AUTH", "presenting native login sheet...");
+    presentNativeLogin().then((credential) => {
       if (!credential) {
-        logDebug("AUTH", "requestSavedPassword: none chosen/available");
+        logDebug("AUTH", "presentNativeLogin: cancelled/unavailable");
         return;
       }
-      logDebug("AUTH", `requestSavedPassword: got credential for ${credential.username}`);
+      logDebug("AUTH", `presentNativeLogin: got credential for ${credential.username}`);
+      // Straight into the SAME mutation the form's own submit uses. The sheet collects
+      // credentials; it does not authenticate. One auth path, not two.
       setEmail(credential.username);
       setPassword(credential.password);
+      loginMutation.mutate({ email: credential.username, password: credential.password });
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per mount, deliberately
   }, []);
 
   if (!isLoading && user) {

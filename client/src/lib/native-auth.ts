@@ -7,6 +7,9 @@ interface PasswordPickerPlugin {
     username: string;
     password: string;
   }): Promise<void>;
+  presentNativeLogin(options: {
+    prefillUsername?: string;
+  }): Promise<{ username: string; password: string }>;
 }
 
 const PasswordPicker = registerPlugin<PasswordPickerPlugin>("PasswordPicker");
@@ -16,60 +19,50 @@ const PasswordPicker = registerPlugin<PasswordPickerPlugin>("PasswordPicker");
 // routes.ts) -- savePassword's domain option must match that entry exactly.
 const CREDENTIAL_DOMAIN = "forge-ebhd.onrender.com";
 
-/**
- * Explicitly saves a just-used credential to the platform keychain after a
- * successful login/signup. WKWebView-based apps never trigger iOS's native
- * "Save password?" prompt on their own the way Safari does -- not a bug in
- * this app, a documented WebKit limitation that applies to every
- * Capacitor/Cordova-style app -- so this deterministic call is what stands
- * in for that prompt. No-op on web (the plugin rejects there as
- * unimplemented; native-only gate here avoids that reject reaching a
- * caller that doesn't expect it).
+/** REMOVED, and deliberately left as a no-op rather than deleted outright.
  *
- * Rejects (rather than silently swallowing) a failure -- this has been
- * reported as still not saving on-device after the Associated Domains
- * entitlement/AASA setup that should make SecAddSharedWebCredential work,
- * and a bare .catch(() => {}) here was making that undiagnosable: iOS never
- * shows anything for this failing (there's no visible "couldn't save"
- * moment the way there is for a network error), so the caller surfacing
- * this (see use-auth.tsx) is the only way to actually see what
- * SecAddSharedWebCredential is rejecting with. Otherwise still best-effort:
- * never blocks or retries around the login flow that already succeeded
- * before this runs, just reports.
+ * This used to call SecAddSharedWebCredential through a Capacitor plugin. Build 415 settled what
+ * that actually does on current iOS: it resolves with no error and saves nothing. The on-device
+ * log read `savePasswordToKeychain() resolved`, and twenty-one seconds later iOS's own picker
+ * said "You don't have any passwords saved for this app". The API was deprecated in iOS 14 and
+ * its behaviour has since been removed; it does not prompt, does not store, and does not fail.
+ *
+ * A function that always reports success while doing nothing is worse than no function: it is
+ * what kept this looking like a configuration problem for weeks. Saving is now done the way iOS
+ * actually supports -- native text fields, see presentNativeLogin below -- and this stays only so
+ * that any caller still invoking it is harmless rather than broken.
  */
-export async function savePasswordToKeychain(username: string, password: string): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
-  // Waits for the app to be settled before asking. SecAddSharedWebCredential presents a system
-  // alert, and this used to fire the instant login resolved -- while the web layer was already
-  // unmounting the login screen and navigating -- which is exactly when iOS declines to present
-  // one. Two frames is enough for the navigation to commit; the native side refuses outright if
-  // the app still isn't active, so a genuine keychain failure and a badly-timed ask no longer
-  // read the same.
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  await PasswordPicker.savePassword({ domain: CREDENTIAL_DOMAIN, username, password });
+export async function savePasswordToKeychain(_username: string, _password: string): Promise<void> {
+  return;
 }
 
-/**
- * Proactively surfaces the iOS "Choose a saved password to use" sheet on
- * login-page mount, reading from the same iCloud Keychain shared-web-
- * credentials store savePasswordToKeychain above already writes into.
+/** The native sign-in sheet, and the thing that actually makes Apple Passwords work.
  *
- * This exists because that store turned out to genuinely work (confirmed via
- * the debug console: savePasswordToKeychain() resolves, and the credentials
- * really do show up under iOS's "Passwords" source) -- the actual gap was
- * that nothing ever surfaces them without the athlete knowing to tap the key
- * icon above the keyboard first. WKWebView's implicit "just appears already
- * filled in" AutoFill matching keys off the page's real origin, which a
- * bundled capacitor://localhost page never has -- Shared Web Credentials
- * (ASAuthorizationPasswordProvider, see PasswordPickerPlugin.swift) is
- * Apple's own workaround for exactly that gap, meant to be triggered
- * explicitly by the app rather than relying on implicit field-focus autofill.
+ * Two real UITextFields with textContentType .username and .password (see
+ * NativeLoginViewController). AutoFill fills them from Apple Passwords on focus, and iOS offers
+ * its own "Save Password?" prompt when the sheet is dismissed after signing in. Both halves are
+ * the OS's; nothing writes to the keychain, because an app is not meant to.
  *
- * Resolves null (never rejects) on cancel, no saved credential, or any other
- * native failure -- all three should look identical to the login page: just
- * fall back to the athlete typing their own credentials normally, with
- * nothing surfaced as an error for what's a completely ordinary outcome.
+ * The web form cannot do this however it is marked up. AutoFill matches on page ORIGIN, and this
+ * bundle is served from capacitor://localhost, which matches nothing saved for
+ * forge-ebhd.onrender.com. The Associated Domains entitlement ties the APP to that domain, so a
+ * native field inside it resolves to the right credential where a webview field cannot.
+ *
+ * Resolves null on cancel, on a swipe-away, on web, and on any native failure. All of those mean
+ * the same thing to the login page -- fall back to the form, which still logs in perfectly well,
+ * it just cannot offer to save.
  */
+export async function presentNativeLogin(
+  prefillUsername?: string,
+): Promise<{ username: string; password: string } | null> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "ios") return null;
+  try {
+    return await PasswordPicker.presentNativeLogin({ prefillUsername });
+  } catch {
+    return null;
+  }
+}
+
 export async function requestSavedPassword(): Promise<{ username: string; password: string } | null> {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "ios") return null;
   try {

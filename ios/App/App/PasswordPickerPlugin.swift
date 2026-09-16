@@ -33,7 +33,8 @@ public class PasswordPickerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "PasswordPicker"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "requestSavedPassword", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "savePassword", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "savePassword", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "presentNativeLogin", returnType: CAPPluginReturnPromise)
     ]
 
 
@@ -60,6 +61,52 @@ public class PasswordPickerPlugin: CAPPlugin, CAPBridgedPlugin {
     // origin. If this turns out to be a no-op on current iOS rather than a fixable failure, the
     // remaining honest option is a native login screen, and the diagnostics below are what will
     // tell us which of those two we are in.
+
+    // A NATIVE sign-in sheet, which is the only thing on current iOS that makes Apple Passwords
+    // both fill AND save.
+    //
+    // WHY THIS EXISTS. The evidence from build 415: savePasswordToKeychain() resolved with no
+    // error, and 21 seconds later iOS's own picker said "You don't have any passwords saved for
+    // this app". SecAddSharedWebCredential is deprecated since iOS 14 and is now a no-op that
+    // reports success -- it does not prompt, does not store, and does not fail. No amount of
+    // fixing the call site changes that, which is what the last two commits established.
+    //
+    // WHAT DOES WORK is what every native app does: real UITextFields carrying
+    // textContentType .username and .password. AutoFill fills them from Apple Passwords on
+    // focus, and iOS offers its own "Save Password?" prompt when the view controller is
+    // dismissed after a sign-in. Both halves come from the OS; nothing here writes to the
+    // keychain, because an app is not supposed to.
+    //
+    // The webview form cannot do this no matter how it is marked up: AutoFill matches on page
+    // ORIGIN, and the bundle is served from capacitor://localhost, which matches no saved entry
+    // for forge-ebhd.onrender.com. The Associated Domains entitlement is what ties THIS APP to
+    // that domain, so a native field inside it resolves to the right credential.
+    //
+    // Deliberately only collects credentials. The actual login still goes through the same API
+    // call the web form uses, so there is one authentication path, not two -- this replaces the
+    // keyboard, not the login.
+    @objc func presentNativeLogin(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [weak self] in
+            guard let host = self?.bridge?.viewController else {
+                call.reject("No view controller to present from")
+                return
+            }
+            let vc = NativeLoginViewController(
+                prefillUsername: call.getString("prefillUsername"),
+                onSubmit: { username, password in
+                    call.resolve(["username": username, "password": password])
+                },
+                onCancel: {
+                    // Cancelling is ordinary: the athlete falls back to the web form, which still
+                    // logs in fine, it just cannot offer to save.
+                    call.reject("cancelled")
+                }
+            )
+            vc.modalPresentationStyle = .formSheet
+            host.present(vc, animated: true)
+        }
+    }
+
     @objc func savePassword(_ call: CAPPluginCall) {
         guard let domain = call.getString("domain"),
               let username = call.getString("username"),
@@ -122,5 +169,130 @@ public class PasswordPickerPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.resolve(["username": username, "password": password])
             }
         }
+    }
+}
+
+/// The native sign-in sheet behind `presentNativeLogin`.
+///
+/// Small on purpose. Everything here exists to satisfy AutoFill's requirements and nothing else:
+/// two real UITextFields carrying `.username` and `.password` content types, inside a view
+/// controller that is DISMISSED after the credentials are handed back. That dismissal is what
+/// makes iOS offer "Save Password?" -- it is the OS's own heuristic for "a sign-in just happened",
+/// and there is no API to ask for it directly.
+///
+/// It does not authenticate anything. The credentials go straight back to the web layer, which
+/// calls the same login endpoint the web form calls, so there remains exactly one authentication
+/// path in this app. This replaces the keyboard, not the login.
+final class NativeLoginViewController: UIViewController {
+    private let usernameField = UITextField()
+    private let passwordField = UITextField()
+    private let onSubmit: (String, String) -> Void
+    private let onCancel: () -> Void
+    private let prefillUsername: String?
+    // Guards the two callbacks: presenting code holds a CAPPluginCall, and resolving OR rejecting
+    // it twice is a crash. Dismissal can arrive from the button or from a swipe-down, and both
+    // land here.
+    private var finished = false
+
+    init(prefillUsername: String?, onSubmit: @escaping (String, String) -> Void, onCancel: @escaping () -> Void) {
+        self.prefillUsername = prefillUsername
+        self.onSubmit = onSubmit
+        self.onCancel = onCancel
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+
+        let title = UILabel()
+        title.text = "Sign in to Forge"
+        title.font = .preferredFont(forTextStyle: .title2)
+        title.adjustsFontForContentSizeCategory = true
+
+        // .username and .password are the whole point. Without them AutoFill does not recognise
+        // this as a sign-in form, offers nothing on focus, and never proposes saving afterwards.
+        usernameField.textContentType = .username
+        usernameField.keyboardType = .emailAddress
+        usernameField.autocapitalizationType = .none
+        usernameField.autocorrectionType = .no
+        usernameField.placeholder = "Email"
+        usernameField.borderStyle = .roundedRect
+        usernameField.text = prefillUsername
+        usernameField.returnKeyType = .next
+        usernameField.delegate = self
+
+        passwordField.textContentType = .password
+        passwordField.isSecureTextEntry = true
+        passwordField.placeholder = "Password"
+        passwordField.borderStyle = .roundedRect
+        passwordField.returnKeyType = .go
+        passwordField.delegate = self
+
+        let signIn = UIButton(type: .system)
+        signIn.setTitle("Sign In", for: .normal)
+        signIn.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        signIn.addTarget(self, action: #selector(submit), for: .touchUpInside)
+
+        let cancel = UIButton(type: .system)
+        cancel.setTitle("Cancel", for: .normal)
+        cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+
+        let stack = UIStackView(arrangedSubviews: [title, usernameField, passwordField, signIn, cancel])
+        stack.axis = .vertical
+        stack.spacing = 16
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
+            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
+        ])
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Focus the field AutoFill keys off, so the Passwords suggestion appears above the
+        // keyboard without the athlete having to know to tap anything.
+        (prefillUsername?.isEmpty == false ? passwordField : usernameField).becomeFirstResponder()
+    }
+
+    @objc private func submit() {
+        let username = usernameField.text ?? ""
+        let password = passwordField.text ?? ""
+        guard !username.isEmpty, !password.isEmpty else { return }
+        guard !finished else { return }
+        finished = true
+        // Resign first so the fields commit their values, then dismiss: iOS evaluates whether to
+        // offer "Save Password?" as this controller goes away.
+        view.endEditing(true)
+        dismiss(animated: true) { [onSubmit] in onSubmit(username, password) }
+    }
+
+    @objc private func cancelTapped() {
+        guard !finished else { return }
+        finished = true
+        dismiss(animated: true) { [onCancel] in onCancel() }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        // Swiped away rather than answered. Treated as a cancel so the promise never dangles.
+        guard !finished else { return }
+        finished = true
+        onCancel()
+    }
+}
+
+extension NativeLoginViewController: UITextFieldDelegate {
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        if textField === usernameField {
+            passwordField.becomeFirstResponder()
+        } else {
+            submit()
+        }
+        return true
     }
 }
