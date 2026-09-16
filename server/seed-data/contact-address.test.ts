@@ -84,3 +84,26 @@ describe("patching the stored documents", () => {
     expect(patchContactPlaceholders(stored)).toBeNull();
   });
 });
+
+describe("patching an already-seeded installation twice", () => {
+  it("does not stack the address up once per deploy", () => {
+    // The address patches PREPEND to a contact sentence they match on, so the sentence survives
+    // the replacement and a naive re-run matches it again. The seed runs on every deploy, so
+    // "applies twice" means "applies two hundred times" on a long-lived installation.
+    const seeded = `18. CONTACT\n\nQuestions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`;
+    const once = patchContactPlaceholders(seeded);
+    expect(once).not.toBeNull();
+    expect(once).toContain("5145 North 7th Street");
+    expect(patchContactPlaceholders(once!)).toBeNull();
+    expect((once!.match(/5145 North 7th Street/g) ?? []).length).toBe(1);
+  });
+
+  it("fills the EULA's governing-law placeholder once", () => {
+    const seeded =
+      "13. GOVERNING LAW\n[Placeholder -- counsel to specify the governing law and venue, and to confirm they are consistent with the Terms of Service's dispute-resolution section, including that section's carve-out for athletes under 18.]";
+    const once = patchContactPlaceholders(seeded);
+    expect(once).toContain("Maricopa County");
+    expect(once).not.toContain("[Placeholder -- counsel to specify the governing law");
+    expect(patchContactPlaceholders(once!)).toBeNull();
+  });
+});

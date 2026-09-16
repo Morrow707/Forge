@@ -33,7 +33,17 @@
 // behaviour is a bug in this file, the same rule docs/privacy-policy-facts.md
 // states about itself.
 
-import { FORGE_CONTACT_EMAIL } from "@shared/contact";
+import {
+  FORGE_CONTACT_EMAIL,
+  FORGE_POSTAL_ADDRESS,
+  FORGE_LEGAL_ENTITY,
+  GOVERNING_LAW_CLAUSE,
+} from "@shared/contact";
+import {
+  shippedPrefixLength,
+  SIGNUP_AGREEMENT_PRIOR_SHIPPED,
+  SIGNUP_AGREEMENT_PRIOR_LENGTHS,
+} from "./shipped-versions";
 
 /** The exact text seeded before real terms existed. Kept verbatim and only for
  * the one-time migration in seed.ts to recognise -- an installation still
@@ -168,7 +178,13 @@ You accept the risks described in section 2 as risks of training, which exist in
 
 These terms can change. The current version is always the one shown at signup and available in the app, and the version you agreed to is recorded with the date you agreed to it. Material changes will be notified; continuing to use Forge after that means the new version applies.
 
-17. CONTACT
+17. GOVERNING LAW AND DISPUTES
+
+${GOVERNING_LAW_CLAUSE}
+
+18. CONTACT
+
+Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
 
 Questions about these terms, a request about your data, or a request to withdraw a consent: ${FORGE_CONTACT_EMAIL}`;
 
@@ -187,8 +203,19 @@ Questions about these terms, a request about your data, or a request to withdraw
  */
 export function nextSignupAgreement(current: string): string | null {
   if (current === UNCONFIGURED_FALLBACK) return SIGNUP_AGREEMENT;
-  if (!current.startsWith(PLACEHOLDER_AGREEMENT)) return null; // somebody's own wording
-  const appended = current.slice(PLACEHOLDER_AGREEMENT.length).trim();
+  if (current === SIGNUP_AGREEMENT) return null;
+  // Whatever prefix this document was last shipped as, keeping anything appended after it. Two
+  // separate cases, and both have to handle the append: the PLACEHOLDER this first replaced, and
+  // an earlier version of the real terms -- see shipped-versions.ts for why the second exists.
+  const shippedLen = shippedPrefixLength(
+    current,
+    SIGNUP_AGREEMENT_PRIOR_SHIPPED,
+    SIGNUP_AGREEMENT_PRIOR_LENGTHS,
+  );
+  const prefixLen =
+    shippedLen >= 0 ? shippedLen : current.startsWith(PLACEHOLDER_AGREEMENT) ? PLACEHOLDER_AGREEMENT.length : -1;
+  if (prefixLen < 0) return null; // somebody's own wording
+  const appended = current.slice(prefixLen).trim();
   return appended ? `${SIGNUP_AGREEMENT}\n\n${appended}` : SIGNUP_AGREEMENT;
 }
 
@@ -211,6 +238,29 @@ export const UNCONFIGURED_FALLBACK = "No agreement has been configured yet.";
  * Only the ADDRESS placeholders are listed. The counsel-question placeholders in those documents
  * are deliberate and stay until counsel answers them. */
 export const CONTACT_PLACEHOLDER_PATCHES: ReadonlyArray<readonly [string, string]> = [
+  // --- The business address and governing law, added once the software licence agreement
+  // supplied both. Same exact-match discipline as the contact patches below: these replace text
+  // Forge seeded, and an admin who has rewritten the sentence keeps their version.
+  [
+    `Questions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`,
+    `Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.\n\nQuestions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`,
+  ],
+  [
+    `Questions about this Policy, or to make a request about your data: ${FORGE_CONTACT_EMAIL}`,
+    `Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.\n\nQuestions about this Policy, or to make a request about your data: ${FORGE_CONTACT_EMAIL}`,
+  ],
+  [
+    `Questions about this Agreement: ${FORGE_CONTACT_EMAIL}`,
+    `This Application is provided by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.\n\nQuestions about this Agreement: ${FORGE_CONTACT_EMAIL}`,
+  ],
+  [
+    "[Placeholder -- counsel to specify the governing law and venue, and to confirm they are consistent with the Terms of Service's dispute-resolution section, including that section's carve-out for athletes under 18.]",
+    `${GOVERNING_LAW_CLAUSE}\n\nThe Terms of Service propose binding arbitration with a class-action waiver for disputes about the Service. That proposal has not been adopted and does not apply to this Agreement; if it is ever adopted, this section and that one are to be read together and this Agreement updated to match.`,
+  ],
+  [
+    "These Terms and any action related to them are governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. Exclusive jurisdiction and venue for any dispute not subject to arbitration under Section 15 lie in the state and federal courts located in Maricopa County, Arizona.",
+    `${GOVERNING_LAW_CLAUSE}\n\n[Placeholder -- Section 15's arbitration and class-action waiver are a PROPOSAL and are not in the live signup agreement, which carries the paragraph above and nothing more. Two live documents describing two different dispute paths is ambiguity a counterparty gets to pick between, so either Section 15 is adopted and added to the live agreement, or it is dropped. It should not stay half-applied.]`,
+  ],
   [
     "[Placeholder -- add a real support/contact email once one exists.]",
     `Questions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`,
@@ -232,6 +282,14 @@ export const CONTACT_PLACEHOLDER_PATCHES: ReadonlyArray<readonly [string, string
 /** Applies the patches above to one stored document. Returns null when nothing changed. */
 export function patchContactPlaceholders(content: string): string | null {
   let next = content;
-  for (const [from, to] of CONTACT_PLACEHOLDER_PATCHES) next = next.split(from).join(to);
+  for (const [from, to] of CONTACT_PLACEHOLDER_PATCHES) {
+    // Skip a patch whose result is already there. Several of these replacements CONTAIN the text
+    // they match on -- prepending an address line to a contact sentence leaves that sentence
+    // intact -- so a naive replace applies again on the next deploy and stacks the address up
+    // once per run. Checked here rather than by rewriting the patterns to be self-excluding,
+    // because that only has to be got wrong once to corrupt a live document.
+    if (next.includes(to)) continue;
+    next = next.split(from).join(to);
+  }
   return next === content ? null : next;
 }

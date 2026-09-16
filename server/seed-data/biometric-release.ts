@@ -1,4 +1,5 @@
-import { FORGE_CONTACT_EMAIL } from "@shared/contact";
+import { FORGE_CONTACT_EMAIL, FORGE_POSTAL_ADDRESS, FORGE_LEGAL_ENTITY } from "@shared/contact";
+import { isShippedVersion, BIOMETRIC_RELEASE_PRIOR_SHIPPED } from "./shipped-versions";
 
 // The video and biometric release actually agreed to, and snapshotted into every
 // biometric_waiver consent record (storage.recordBiometricRelease for an adult,
@@ -106,6 +107,8 @@ Declining is a real choice and carries no penalty. Sets still log, with reps and
 
 9. CONTACT
 
+Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
+
 Questions, a request about what Forge holds, or a withdrawal: ${FORGE_CONTACT_EMAIL}`;
 
 /** The draft text as the seed originally wrote it, reassembled exactly. */
@@ -126,6 +129,8 @@ FORGE -- BIOMETRIC INFORMATION CONSENT AND RELEASE (DRAFT)`;
  * either. */
 export function nextBiometricRelease(current: string | null): string | null {
   if (current === null) return BIOMETRIC_RELEASE;
+  if (current === BIOMETRIC_RELEASE) return null;
+  if (isShippedVersion(current, BIOMETRIC_RELEASE_PRIOR_SHIPPED)) return BIOMETRIC_RELEASE;
   if (!current.startsWith(BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX)) return null;
   return BIOMETRIC_RELEASE;
 }

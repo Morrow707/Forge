@@ -13,7 +13,12 @@
 // for were unwritten until now, and this is a first pass, not a decision
 // that either is ready to go live.
 
-import { FORGE_CONTACT_EMAIL } from "@shared/contact";
+import {
+  FORGE_CONTACT_EMAIL,
+  FORGE_POSTAL_ADDRESS,
+  FORGE_LEGAL_ENTITY,
+  GOVERNING_LAW_CLAUSE,
+} from "@shared/contact";
 
 const DRAFT_NOTICE =
   "DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.";
@@ -72,12 +77,16 @@ Class Action Waiver: Any arbitration or proceeding will be conducted only on an 
 Minors: This arbitration and class-action-waiver section applies only to a user who is 18 or older at the time a dispute arises. For a dispute involving an athlete under 18, this section does not apply, and the dispute may instead be brought in a court of competent jurisdiction, unless a parent or legal guardian separately and knowingly agrees to arbitration on the athlete's behalf in a signed writing. [Placeholder -- confirm this carve-out with counsel; state law on arbitration involving minors varies and this approach has not been reviewed.]
 
 16. GOVERNING LAW
-These Terms and any action related to them are governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. Exclusive jurisdiction and venue for any dispute not subject to arbitration under Section 15 lie in the state and federal courts located in Maricopa County, Arizona.
+${GOVERNING_LAW_CLAUSE}
+
+[Placeholder -- Section 15's arbitration and class-action waiver are a PROPOSAL and are not in the live signup agreement, which carries the paragraph above and nothing more. Two live documents describing two different dispute paths is ambiguity a counterparty gets to pick between, so either Section 15 is adopted and added to the live agreement, or it is dropped. It should not stay half-applied.]
 
 17. CHANGES TO THESE TERMS
 We may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.
 
 18. CONTACT
+Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
+
 Questions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`;
 
 export const PRIVACY_POLICY_DRAFT = `${DRAFT_NOTICE}
@@ -133,6 +142,8 @@ You can review and correct your profile information in the app, and permanently 
 We may update this Policy as the Service changes; material changes will be reflected here with an updated date once this document has real version tracking.
 
 11. CONTACT
+Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
+
 Questions about this Policy, or to make a request about your data: ${FORGE_CONTACT_EMAIL}`;
 
 // A biometric waiver is its own legal instrument, separate from the general
@@ -312,7 +323,11 @@ You acknowledge and agree that Apple, and Apple's subsidiaries, are third-party 
 This licence is effective until terminated by you or by Forge. It terminates automatically if you breach it, and you must then stop using the Application and remove it from your devices. Deleting your Forge account is governed by the Terms of Service.
 
 13. GOVERNING LAW
-[Placeholder -- counsel to specify the governing law and venue, and to confirm they are consistent with the Terms of Service's dispute-resolution section, including that section's carve-out for athletes under 18.]
+${GOVERNING_LAW_CLAUSE}
+
+The Terms of Service propose binding arbitration with a class-action waiver for disputes about the Service. That proposal has not been adopted and does not apply to this Agreement; if it is ever adopted, this section and that one are to be read together and this Agreement updated to match.
 
 14. CONTACT
+This Application is provided by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
+
 Questions about this Agreement: ${FORGE_CONTACT_EMAIL}`;
