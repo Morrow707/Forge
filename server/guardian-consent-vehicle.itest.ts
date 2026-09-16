@@ -99,6 +99,7 @@ describe("the guardian claim as the consent vehicle", () => {
         agreedToTerms: true,
         agreedToPrivacyPolicy: true,
         agreedToMinorMediaRelease: true,
+        agreedToAssumptionOfRisk: true,
       },
     );
     expect(res.status).toBe(201);
@@ -127,6 +128,7 @@ describe("the guardian claim as the consent vehicle", () => {
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
       agreedToMinorMediaRelease: true,
+        agreedToAssumptionOfRisk: true,
     });
     expect(await consentTypesFor(athlete.id)).toContain("biometric_waiver");
   });
@@ -140,6 +142,7 @@ describe("the guardian claim as the consent vehicle", () => {
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
       agreedToMinorMediaRelease: true,
+        agreedToAssumptionOfRisk: true,
     });
     expect(await consentTypesFor(young.athlete.id)).toContain("guardian_coppa_consent");
 
@@ -149,6 +152,7 @@ describe("the guardian claim as the consent vehicle", () => {
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
       agreedToMinorMediaRelease: true,
+        agreedToAssumptionOfRisk: true,
     });
     expect(await consentTypesFor(teen.athlete.id)).not.toContain("guardian_coppa_consent");
   });
@@ -162,6 +166,7 @@ describe("the guardian claim as the consent vehicle", () => {
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
       agreedToMinorMediaRelease: true,
+        agreedToAssumptionOfRisk: true,
     });
     expect(await storage.athleteGateStatus(athlete.id)).toBe("ok");
   });
