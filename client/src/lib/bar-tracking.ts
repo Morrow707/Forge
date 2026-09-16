@@ -87,7 +87,10 @@ export type RepBreakdown = {
   // duration): a rep that reaches its peak early and decelerates for the
   // rest of the lift reads very differently from one that's still
   // accelerating right up to lockout, even at the same total duration.
-  timeToPeakVelocitySeconds: number;
+  /** Null when the trace was too coarse to locate the peak -- see MIN_SAMPLES_TO_PEAK. Not the
+   * same as zero, which used to be reported for exactly this case and read as "peaked
+   * instantly". A consumer must render the absence, not substitute a zero. */
+  timeToPeakVelocitySeconds: number | null;
   // OVR (the matched commercial VBT device referenced throughout this file's own calibration
   // work) shows a per-rep "EAI" column alongside Peak/TPV with no formula documented anywhere
   // public -- reverse-engineered here by cross-checking OVR's own displayed EAI against its own
@@ -99,7 +102,9 @@ export type RepBreakdown = {
   // ultimately got there. Named to match OVR's own label since that's what a coach comparing
   // the two devices side by side is looking for; the literal acronym expansion isn't publicly
   // documented anywhere this could be sourced from, so it isn't guessed at here.
-  eai: number;
+  /** Null whenever timeToPeakVelocitySeconds is -- it is that value's divisor, so it cannot be
+   * better-founded than the number it divides by. */
+  eai: number | null;
   startT: number;
   endT: number;
   depthDeg?: number | null;
@@ -156,7 +161,8 @@ export type RepMetrics = {
   // Average of repBreakdown's own eai across the set -- same "whole-set number is the average
   // of the per-rep ones" pattern as romCm above, matching the average row OVR's own per-set
   // table shows under this same column.
-  meanEai: number;
+  /** Null when no rep in the set had a resolvable time-to-peak. */
+  meanEai: number | null;
   // Populated by the caller from this module's own computeArmDriveAsymmetry
   // -- only for a shared-bar press/pull (see bar-tracker-dialog.tsx's gate),
   // same "caller fills it in" pattern as legDriveAsymmetry above. Null when
@@ -330,6 +336,29 @@ export function interpolateOcclusionGap(
 // wall-clock terms regardless of what frame rate a given device actually
 // negotiated.
 const TARGET_SMOOTHING_MS = 165;
+
+// Below this many samples between the bar starting to move and peak velocity, time-to-peak (and
+// the EAI computed from it) stop being measurements and become a read-off of the sample grid.
+//
+// Measured, not guessed. Replaying the 13 stored bench captures -- 186 reps -- against a bar
+// sensor's 0.26s reference: those traces sit at 6.9-14.1Hz, which puts a MEDIAN OF 5 velocity
+// samples in a concentric phase and a minimum of 2. Every time-to-peak they produce is a
+// multiple of the sample interval (0, 0.1, 0.2, 0.3...), 0.26 is not on that grid at all, and
+// 31 of the 186 reps report exactly 0 -- which does not mean the bar peaked instantly, it means
+// peak velocity landed on the first sample of the phase. A phase boundary reported as a
+// measurement.
+//
+// 4 is the floor because it is the fewest samples that can place a peak with a sample either
+// side of it AND resolve the interval to better than a third of the phase. It is not a claim
+// that 4 is GOOD -- a 260ms time-to-peak wants 15Hz or better to carry two significant figures,
+// which the 1000-point TRACE_MAX_POINTS cap now allows and the old 200-point cap did not. It is
+// the point below which the number is certainly meaningless rather than merely coarse.
+//
+// EAI goes with it rather than being computed separately: it is peak velocity DIVIDED by
+// time-to-peak, so a one-sample denominator inflates it by whatever the quantisation error
+// happens to be. Withholding the numerator's partner and keeping the quotient would publish the
+// same error with the evidence removed.
+const MIN_SAMPLES_TO_PEAK = 4;
 
 // Exported for jump-tracking.ts, which needs the same fps-independent
 // window sizing for its own smoothing pass and landing-settle detection.
@@ -1392,11 +1421,16 @@ export function summarizeTrackedSet(
     // longer TPV and a lower EAI purely because the athlete rested longer before it.
     const rawTimeToPeakSeconds =
       (points[phase.peakIdx].t - points[phase.movingStartIdx].t) / 1000;
-    const timeToPeakVelocitySeconds = Math.round(rawTimeToPeakSeconds * 100) / 100;
+    // How much of the sample grid this rep's acceleration actually got. Counted from the moment
+    // the bar started moving (the same origin the time itself uses), so a rep preceded by a long
+    // pause is not credited with samples spent standing still.
+    const samplesToPeak = phase.peakIdx - phase.movingStartIdx + 1;
+    const resolvable = samplesToPeak >= MIN_SAMPLES_TO_PEAK && rawTimeToPeakSeconds > 0;
+    const timeToPeakVelocitySeconds = resolvable ? Math.round(rawTimeToPeakSeconds * 100) / 100 : null;
     // Divides the RAW (unrounded) peak/time, not the already-rounded display fields above --
     // see this rep's own `eai` field comment for why matching OVR meant reverse-engineering
     // against its full-precision internal values, not its 2-decimal display.
-    const eai = rawTimeToPeakSeconds > 0 ? Math.round((phase.peak / rawTimeToPeakSeconds) * 100) / 100 : 0;
+    const eai = resolvable ? Math.round((phase.peak / rawTimeToPeakSeconds) * 100) / 100 : null;
 
     repBreakdown.push({
       repNumber: repBreakdown.length + 1,
@@ -1539,10 +1573,15 @@ export function summarizeTrackedSet(
             (repBreakdown.reduce((a, r) => a + r.romCm, 0) / repBreakdown.length) * 10,
           ) / 10
         : 0,
-    meanEai:
-      repBreakdown.length > 0
-        ? Math.round((repBreakdown.reduce((a, r) => a + r.eai, 0) / repBreakdown.length) * 100) / 100
-        : 0,
+    // Averaged over the reps that HAVE an EAI, not over every rep with the withheld ones counted
+    // as zero -- that would drag the set's mean down in proportion to how coarse its trace was,
+    // which is the same wrong number the withholding exists to prevent, laundered through a
+    // divisor. Null when no rep survived, since a mean of nothing is not zero.
+    meanEai: (() => {
+      const measured = repBreakdown.map((r) => r.eai).filter((v): v is number => v !== null);
+      if (measured.length === 0) return null;
+      return Math.round((measured.reduce((a, v) => a + v, 0) / measured.length) * 100) / 100;
+    })(),
     velocityLossPercent:
       repBreakdown.length > 1 && repBreakdown[0].meanVelocityMps > 0
         ? Math.round(
@@ -1668,8 +1707,10 @@ export function fuseSideVelocity(
       // has no raw (unrounded) time-to-peak available the way the primary computation does, so
       // this divides by the already-rounded timeToPeakVelocitySeconds -- a small precision loss
       // that's immaterial next to the fusion blend itself being an approximation.
+      // Stays null when the rep's time-to-peak was withheld: the fused peak is a better
+      // numerator, but there is still no trustworthy denominator to divide it by.
       eai:
-        rep.timeToPeakVelocitySeconds > 0
+        rep.timeToPeakVelocitySeconds !== null && rep.timeToPeakVelocitySeconds > 0
           ? Math.round((peakVelocityMps / rep.timeToPeakVelocitySeconds) * 100) / 100
           : rep.eai,
     };
@@ -2208,7 +2249,10 @@ export type ScaleFreeRep = {
   repNumber: number;
   concentricSeconds: number;
   eccentricSeconds: number | null;
-  timeToPeakVelocitySeconds: number;
+  /** Null when the trace was too coarse to locate the peak -- see MIN_SAMPLES_TO_PEAK. Not the
+   * same as zero, which used to be reported for exactly this case and read as "peaked
+   * instantly". A consumer must render the absence, not substitute a zero. */
+  timeToPeakVelocitySeconds: number | null;
   /** This rep's peak speed as a share of the set's fastest rep. The fastest rep is 1. */
   relativePeakVelocity: number;
   /** Knee/hip angle at the bottom, in degrees. An angle is a ratio of two lengths, so it needs

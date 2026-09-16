@@ -364,8 +364,10 @@ function plateScaleFromFrames(
 // plot it, coaches read it"). This constant is exactly the case those comments warn about: a
 // refused take (failed calibration, implausible range of motion, no clean read) with nothing
 // to report. The fields the type keeps non-nullable (concentricSeconds/eccentricSeconds/
-// meanEai/eccentricMeanVelocityMps) stay 0, since scale-free timing values are legitimately
-// zero for a take with no reps, and the type does not offer null for them.
+// eccentricMeanVelocityMps) stay 0, since scale-free timing values are legitimately zero for a
+// take with no reps, and the type does not offer null for them. meanEai USED to sit in that
+// list for exactly that reason; it is nullable now (a set whose trace was too coarse has no
+// EAI to average), so it follows the rule above rather than the exception.
 const EMPTY_REP_METRICS: RepMetrics = {
   peakVelocityMps: null,
   meanVelocityMps: null,
@@ -374,7 +376,7 @@ const EMPTY_REP_METRICS: RepMetrics = {
   barPathDeviationCm: null,
   barPathTrace: [],
   repBreakdown: [],
-  meanEai: 0,
+  meanEai: null,
   formFaults: [],
   peakPowerWatts: null,
   meanPowerWatts: null,

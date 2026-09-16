@@ -28,7 +28,7 @@ export type ScaleFreeSummary = {
     repNumber: number;
     concentricSeconds: number;
     eccentricSeconds: number | null;
-    timeToPeakVelocitySeconds: number;
+    timeToPeakVelocitySeconds: number | null;
     relativePeakVelocity: number;
     depthDeg?: number | null;
   }[];

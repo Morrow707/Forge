@@ -118,7 +118,7 @@ type AnalyticsPoint = {
         peakPowerWatts?: number | null;
         meanPowerWatts?: number | null;
         depthDeg?: number | null;
-        timeToPeakVelocitySeconds?: number;
+        timeToPeakVelocitySeconds?: number | null;
       }[]
     | null;
   armPathTrace: {
