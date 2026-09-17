@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { ReadFailed } from "@/components/read-failed";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
@@ -35,7 +36,7 @@ export function ExerciseTrendDialog({
   exercise: { id: number; name: string } | null;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { data: history = [], isLoading } = useQuery<ExerciseHistoryPoint[]>({
+  const { data: history = [], isLoading, isError, refetch } = useQuery<ExerciseHistoryPoint[]>({
     queryKey: ["/api/athlete/exercise-history", exercise?.id],
     queryFn: () => getJson(`/api/athlete/exercise-history?exerciseId=${exercise!.id}`),
     enabled: exercise != null,
@@ -71,6 +72,12 @@ export function ExerciseTrendDialog({
         </DialogHeader>
         {isLoading ? (
           <div className="h-64 animate-pulse rounded-md bg-surface" />
+        ) : isError ? (
+          <ReadFailed
+            what={`${exercise?.name ?? "this exercise"}'s history`}
+            onRetry={() => void refetch()}
+            className="flex flex-col items-center gap-2 py-10 text-center"
+          />
         ) : chartData.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             Not enough logged sets yet to show a trend.

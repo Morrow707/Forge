@@ -2,16 +2,27 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getJson } from "@/lib/queryClient";
 import { Trophy } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 import { format, parseISO } from "date-fns";
 import { CHALLENGE_METRIC_LABEL, type TeamChallenge } from "@/lib/team-challenges";
 
 /** Read-only for athletes -- team challenges are created and removed by the
  * coach only. Shows every quest for every team the athlete belongs to. */
 export function SquadQuests() {
-  const { data: challenges = [] } = useQuery<TeamChallenge[]>({
+  const { data: challenges = [], isError, refetch } = useQuery<TeamChallenge[]>({
     queryKey: ["/api/athlete/team-challenges"],
     queryFn: () => getJson("/api/athlete/team-challenges"),
   });
+
+  if (isError) {
+    return (
+      <Card className="mb-4">
+        <CardContent className="p-4">
+          <ReadFailed what="your team's quests" onRetry={() => void refetch()} />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (challenges.length === 0) return null;
 

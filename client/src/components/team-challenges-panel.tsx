@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { ReadFailed } from "@/components/read-failed";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,7 +41,7 @@ export function TeamChallengesSection({
 }) {
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { data: challenges = [] } = useQuery<TeamChallenge[]>({
+  const { data: challenges = [], isError, refetch } = useQuery<TeamChallenge[]>({
     queryKey: ["/api/coach/team-challenges"],
     queryFn: () => getJson("/api/coach/team-challenges"),
   });
@@ -66,7 +67,13 @@ export function TeamChallengesSection({
           New Quest
         </Button>
       </div>
-      {teamChallenges.length === 0 ? (
+      {isError ? (
+        <ReadFailed
+          what="this team's quests"
+          onRetry={() => void refetch()}
+          className="flex flex-col items-start gap-2 text-left"
+        />
+      ) : teamChallenges.length === 0 ? (
         <p className="text-xs text-muted-foreground">No active quests for this team yet.</p>
       ) : (
         <div className="space-y-2">

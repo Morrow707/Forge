@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearch } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ReadFailed } from "@/components/read-failed";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -117,7 +118,7 @@ export default function AdminUsers() {
   );
   const [mfaResetTarget, setMfaResetTarget] = useState<{ id: number; name: string } | null>(null);
 
-  const { data, isLoading } = useQuery<{ users: UserRow[]; limit: number }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ users: UserRow[]; limit: number }>({
     queryKey: ["/api/admin/users", appliedSearch, roleFilter],
     queryFn: () =>
       getJson(
@@ -197,6 +198,11 @@ export default function AdminUsers() {
         <CardContent className="divide-y divide-border p-0">
           {isLoading ? (
             <div className="h-40 animate-pulse bg-surface" />
+          ) : isError ? (
+            // "No accounts match that search" off a failed request is how an admin
+            // concludes an account does not exist -- and the next thing they do is
+            // create a duplicate of it.
+            <ReadFailed what="the account list" onRetry={() => void refetch()} className="flex flex-col items-center gap-2 py-16 text-center" />
           ) : users.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
               <UsersIcon className="h-10 w-10 text-muted-foreground" />

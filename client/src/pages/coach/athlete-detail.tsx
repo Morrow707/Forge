@@ -36,6 +36,7 @@ import type { AcwrRiskLevel } from "@shared/load";
 import { TESTING_METRICS } from "@shared/testing-metrics";
 import type { PublicUser } from "@shared/schema";
 import { toast } from "sonner";
+import { ReadFailed } from "@/components/read-failed";
 import {
   ArrowLeft,
   Pencil,
@@ -91,12 +92,13 @@ const SEASON_PHASE_LABEL: Record<string, string> = {
  * just the fetch the old TrophyCaseDialog used to do plus the shared
  * TrophyCase renderer. */
 function AthleteTrophiesTab({ fetchUrl }: { fetchUrl: string }) {
-  const { data = [], isLoading } = useQuery<AthleteTrophyView[]>({
+  const { data = [], isLoading, isError, refetch } = useQuery<AthleteTrophyView[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
   });
 
   if (isLoading) return <div className="h-24 animate-pulse rounded-lg bg-surface" />;
+  if (isError) return <ReadFailed what="this athlete's trophies" onRetry={() => void refetch()} />;
   return <TrophyCase trophies={data} emptyHint="No trophies unlocked yet." />;
 }
 
@@ -120,11 +122,11 @@ export default function AthleteDetailPage() {
   const initialTab = new URLSearchParams(useSearch()).get("tab") || "metrics";
   const [activeTab, setActiveTab] = useState(initialTab);
 
-  const { data: athlete, isLoading } = useQuery<Athlete>({
+  const { data: athlete, isLoading, isError, refetch } = useQuery<Athlete>({
     queryKey: [`/api/coach/roster/${id}`],
   });
 
-  const { data: wellnessToday = [] } = useQuery<
+  const { data: wellnessToday = [], isError: wellnessFailed } = useQuery<
     { athleteId: number; score: number; level: ReadinessLevel }[]
   >({
     queryKey: ["/api/coach/roster-wellness"],
@@ -132,7 +134,7 @@ export default function AthleteDetailPage() {
   });
   const wellness = wellnessToday.find((w) => w.athleteId === id);
 
-  const { data: acwrToday = [] } = useQuery<
+  const { data: acwrToday = [], isError: acwrFailed } = useQuery<
     { athleteId: number; ratio: number | null; level: AcwrRiskLevel }[]
   >({
     queryKey: ["/api/coach/roster-acwr"],
@@ -227,6 +229,20 @@ export default function AthleteDetailPage() {
     );
   }
 
+  // A failed read is NOT "not on your roster". Saying so would tell a coach an
+  // athlete had been removed on the strength of a dropped request.
+  if (isError) {
+    return (
+      <AppShell title="Athlete">
+        <Card>
+          <CardContent className="py-12">
+            <ReadFailed what="this athlete's profile" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      </AppShell>
+    );
+  }
+
   if (!athlete) {
     return (
       <AppShell title="Athlete Not Found">
@@ -302,8 +318,12 @@ export default function AthleteDetailPage() {
               <CardContent className="flex flex-col gap-3 p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <HealthStatusToggle athleteId={athlete.id} status={athlete.healthStatus ?? "healthy"} />
-                  <WellnessBadge entry={wellness} onClick={() => setWellnessOpen(true)} />
-                  <AcwrBadge entry={acwr} onClick={() => setAcwrOpen(true)} />
+                  <WellnessBadge
+                    entry={wellness}
+                    unavailable={wellnessFailed}
+                    onClick={() => setWellnessOpen(true)}
+                  />
+                  <AcwrBadge entry={acwr} unavailable={acwrFailed} onClick={() => setAcwrOpen(true)} />
                   <GuardianNoticeBadge athleteId={athlete.id} />
                   <TrackingOptOutToggle athleteId={athlete.id} trackingOptOut={athlete.trackingOptOut ?? false} />
                   <ResearchConsentControl athleteId={athlete.id} />
@@ -703,7 +723,7 @@ function SuggestedCorrectives({ athleteId }: { athleteId: number }) {
  * Renders nothing when there is nothing to show, so it costs a quiet roster no
  * space at all. */
 function ExerciseRegressionsCard({ athleteId }: { athleteId: number }) {
-  const { data: regressions = [] } = useQuery<
+  const { data: regressions = [], isError: regressionsFailed, refetch: refetchRegressions } = useQuery<
     {
       id: number;
       date: string;
@@ -719,6 +739,22 @@ function ExerciseRegressionsCard({ athleteId }: { athleteId: number }) {
   >({
     queryKey: [`/api/coach/roster/${athleteId}/regressions`],
   });
+
+  // Unlike the empty case, a failed read still takes space: "no regressions logged"
+  // is a claim about how an athlete has been training, and this card is the only
+  // place a coach would see the three-weeks-running pattern it exists to surface.
+  if (regressionsFailed) {
+    return (
+      <Card>
+        <CardContent className="p-5">
+          <ReadFailed
+            what="whether this athlete has asked for something easier"
+            onRetry={() => void refetchRegressions()}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (regressions.length === 0) return null;
 

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Copy, Check, Trash2, UserPlus } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 type ProvisionalAthlete = {
   id: number;
@@ -27,7 +28,7 @@ export function ProvisionalRosterPanel() {
   const qc = useQueryClient();
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
-  const { data: provisional = [] } = useQuery<ProvisionalAthlete[]>({
+  const { data: provisional = [], isError, refetch } = useQuery<ProvisionalAthlete[]>({
     queryKey: ["/api/coach/roster/provisional"],
   });
 
@@ -41,6 +42,18 @@ export function ProvisionalRosterPanel() {
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not remove"),
   });
+
+  // Vanishing silently reads as "everybody claimed their code", which is the one
+  // thing this panel exists to tell a coach is not true yet.
+  if (isError) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="p-4">
+          <ReadFailed what="pending claim codes" onRetry={() => void refetch()} />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (provisional.length === 0) return null;
 

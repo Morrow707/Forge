@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { AthleteAvatar } from "@/components/athlete-avatar";
 import { cn } from "@/lib/utils";
 import { ArrowRightLeft, Search } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 // Only the fields this needs -- the real `/api/coach/roster` response (see
 // roster.tsx's RosterEntry) carries a lot more, but id + name is all a
@@ -30,7 +31,7 @@ export function AthleteSwitcher({ currentAthleteId }: { currentAthleteId: number
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { data: roster = [] } = useQuery<RosterEntry[]>({
+  const { data: roster = [], isError, refetch } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
 
@@ -113,7 +114,13 @@ export function AthleteSwitcher({ currentAthleteId }: { currentAthleteId: number
           </div>
         </div>
         <div role="listbox" aria-label="Athletes" className="max-h-72 overflow-y-auto p-1">
-          {filtered.length === 0 ? (
+          {isError ? (
+            <ReadFailed
+              what="your roster"
+              onRetry={() => void refetch()}
+              className="flex flex-col items-center gap-2 px-2 py-4 text-center"
+            />
+          ) : filtered.length === 0 ? (
             <p className="px-2 py-4 text-center text-xs text-muted-foreground">
               {roster.length <= 1 ? "No other athletes on your roster" : "No matches"}
             </p>

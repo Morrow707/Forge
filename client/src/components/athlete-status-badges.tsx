@@ -23,16 +23,33 @@ import { toast } from "sonner";
 
 export type HealthStatus = "healthy" | "hurt";
 
+/** The badge equivalent of <ReadFailed>: says the reading could not be fetched,
+ * in the place the reading would have been, rather than rendering nothing and
+ * letting its absence read as "no flag". */
+function StatusUnavailable({ label }: { label: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+      <ShieldAlert className="h-3 w-3" />
+      {label}
+    </span>
+  );
+}
+
 // Read-only -- reflects the athlete's own mandatory daily check-in. Absent
 // entirely (not "red") when they haven't checked in yet today, since that's
 // a different fact than a real low score.
 export function WellnessBadge({
   entry,
   onClick,
+  unavailable,
 }: {
   entry?: { score: number; level: ReadinessLevel };
   onClick: () => void;
+  /** The read failed. Absent-because-no-check-in and absent-because-we-could-not-ask
+   * look identical to a coach otherwise, and only one of them means "no flag today". */
+  unavailable?: boolean;
 }) {
+  if (unavailable) return <StatusUnavailable label="Readiness unavailable" />;
   if (!entry) return null;
   return (
     <button
@@ -60,10 +77,15 @@ export function WellnessBadge({
 export function AcwrBadge({
   entry,
   onClick,
+  unavailable,
 }: {
   entry?: { ratio: number | null; level: AcwrRiskLevel };
   onClick: () => void;
+  /** See WellnessBadge: a load badge that is missing because the request failed is
+   * not the same as one missing because the ratio could not be computed. */
+  unavailable?: boolean;
 }) {
+  if (unavailable) return <StatusUnavailable label="Training load unavailable" />;
   if (!entry || entry.ratio == null) return null;
   return (
     <button
