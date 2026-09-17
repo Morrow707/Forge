@@ -11,6 +11,7 @@ import type { SkillExerciseWithOwnership as SkillExercise } from "@/lib/skill-ty
 import { SKILL_TYPES, SKILL_EQUIPMENT } from "@/lib/skill-taxonomy";
 import { SPORTS } from "@shared/exercise-taxonomy";
 import { toggleInSet } from "@/components/filter-chip-group";
+import { ReadFailed } from "@/components/read-failed";
 import {
   SKILL_FILTER_ACTIVE_CLASS,
   SPORT_FILTER_ACTIVE_CLASS,
@@ -38,7 +39,7 @@ export function SkillPickerDialog({
   onSelect: (skill: SkillExercise) => void;
   apiBase?: string;
 }) {
-  const { data: skills = [] } = useQuery<SkillExercise[]>({
+  const { data: skills = [], isError, refetch } = useQuery<SkillExercise[]>({
     queryKey: [`${apiBase}/skill-exercises`],
     enabled: open,
   });
@@ -308,7 +309,14 @@ export function SkillPickerDialog({
             </div>
           )}
           <div className="space-y-1 border-t border-border pt-4">
-            {displayed.length === 0 && (
+            {isError && (
+              <ReadFailed
+                what="the skill drill library"
+                onRetry={() => void refetch()}
+                className="flex flex-col items-center gap-2 py-10 text-center"
+              />
+            )}
+            {!isError && displayed.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                 <Target className="h-8 w-8" />
                 No skill drills found matching these filters.

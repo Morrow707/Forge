@@ -24,6 +24,7 @@ import { RadioChipGroup } from "@/components/filter-chip-group";
 import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 import { getJson } from "@/lib/queryClient";
 import { Video as VideoIcon, TrendingUp } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 /** "none" is a real, common value: skillProgramExercises.trackingLevel defaults to it,
  * and it is exactly the case the athlete's free-text "Result" box serves. Typing it as
@@ -109,7 +110,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
   const [mechanicsMetric, setMechanicsMetric] = useState<MechanicsMetric>("hipShoulderSeparationDeg");
   const [analyzing, setAnalyzing] = useState<{ url: string; title: string } | null>(null);
 
-  const { data: sessions = [], isLoading } = useQuery<SkillSessionRow[]>({
+  const { data: sessions = [], isLoading, isError, refetch } = useQuery<SkillSessionRow[]>({
     queryKey: ["/api/coach/roster", athleteId, "skill-session-history"],
     queryFn: () => getJson(`/api/coach/roster/${athleteId}/skill-session-history`),
     enabled: !!athleteId,
@@ -141,6 +142,16 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
   const chartRows = [...rows].reverse();
 
   if (isLoading) return <div className="h-24 animate-pulse rounded-md bg-surface" />;
+
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="py-16">
+          <ReadFailed what="this athlete's skill sessions" onRetry={() => void refetch()} />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (exerciseOptions.length === 0) {
     return (

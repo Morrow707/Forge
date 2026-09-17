@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { ReadFailed } from "@/components/read-failed";
 import { X, Plus } from "lucide-react";
 import { DEFAULT_ROSTER_GROUPS, resolveRosterGroups, type RosterGroup } from "@shared/roster-groups";
 
@@ -36,7 +37,7 @@ export function ManageRosterGroupsDialog({
   const [groups, setGroups] = useState<RosterGroup[]>(DEFAULT_ROSTER_GROUPS);
   const [newLabel, setNewLabel] = useState("");
 
-  const { data } = useQuery<RosterGroupsResponse>({
+  const { data, isError, refetch } = useQuery<RosterGroupsResponse>({
     queryKey: ["/api/coach/roster-groups"],
     queryFn: () => getJson("/api/coach/roster-groups"),
     enabled: open,
@@ -91,6 +92,14 @@ export function ManageRosterGroupsDialog({
             already assigned to it; removing one just leaves those athletes Unassigned.
           </DialogDescription>
         </DialogHeader>
+        {/* WORSE THAN AN EMPTY STATE HERE. On a failed read `groups` stays at
+            DEFAULT_ROSTER_GROUPS, so the dialog shows Group A/B/C as if that were the
+            coach's setup -- and the first rename or add PATCHes that default list over
+            whatever they actually had. The editor does not open until the read lands. */}
+        {isError ? (
+          <ReadFailed what="your roster groups" onRetry={() => void refetch()} />
+        ) : (
+        <>
         <div className="space-y-2">
           {groups.map((g) => (
             <div key={g.id} className="flex items-center gap-2">
@@ -147,6 +156,8 @@ export function ManageRosterGroupsDialog({
             Add
           </Button>
         </div>
+        </>
+        )}
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
           Done
         </Button>

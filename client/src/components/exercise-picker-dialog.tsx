@@ -29,6 +29,7 @@ import {
   type ExerciseFamily,
 } from "@shared/exercise-family";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
+import { ReadFailed } from "@/components/read-failed";
 import {
   CATEGORY_FILTER_ACTIVE_CLASS,
   MOVEMENT_FILTER_ACTIVE_CLASS,
@@ -67,7 +68,7 @@ export function ExercisePickerDialog({
   title?: string;
   apiBase?: string;
 }) {
-  const { data: exercises = [] } = useQuery<Exercise[]>({
+  const { data: exercises = [], isError, refetch } = useQuery<Exercise[]>({
     queryKey: [`${apiBase}/exercises`],
     enabled: open,
   });
@@ -521,7 +522,17 @@ export function ExercisePickerDialog({
             </div>
           )}
           <div className="space-y-1 border-t border-border pt-4">
-            {displayed.length === 0 && search.trim() && (
+            {isError && (
+              // Ahead of both empty states below: a failed library read otherwise
+              // reads as "no exercise matches that", and the suggestion to try AI
+              // search sends a coach chasing a search that cannot succeed either.
+              <ReadFailed
+                what="the exercise library"
+                onRetry={() => void refetch()}
+                className="flex flex-col items-center gap-2 py-10 text-center"
+              />
+            )}
+            {!isError && displayed.length === 0 && search.trim() && (
               // A plain keyword miss on real typed text is the exact moment
               // the AI search button is for -- pointing at it here beats
               // the generic empty state, which just reads as "broken" when
@@ -536,7 +547,7 @@ export function ExercisePickerDialog({
                 </p>
               </div>
             )}
-            {displayed.length === 0 && !search.trim() && (
+            {!isError && displayed.length === 0 && !search.trim() && (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                 <Dumbbell className="h-8 w-8" />
                 No exercises found matching these filters.

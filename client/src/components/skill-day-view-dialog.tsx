@@ -9,6 +9,7 @@ import { getJson } from "@/lib/queryClient";
 import { externalLinkClick } from "@/lib/open-external";
 import { Target, MoonStar, Film } from "lucide-react";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
+import { ReadFailed } from "@/components/read-failed";
 
 type SkillDayInfo = {
   programName: string;
@@ -53,7 +54,7 @@ export function SkillDayViewDialog({
    * skill day and the coach could never see or answer it. */
   skillAssignmentId?: number;
 }) {
-  const { data: coachProgram } = useQuery<any>({
+  const { data: coachProgram, isError, refetch } = useQuery<any>({
     queryKey: ["/api/coach/skill-programs", source.skillProgramId],
     queryFn: () => getJson(`/api/coach/skill-programs/${source.skillProgramId}`),
     enabled: open,
@@ -95,6 +96,9 @@ export function SkillDayViewDialog({
           </DialogTitle>
         </DialogHeader>
         {athleteName && <p className="-mt-2 text-sm text-muted-foreground">{athleteName}</p>}
+        {/* Without this the dialog opens to a bare title and nothing else, which reads
+            as a session with no drills in it rather than one we could not fetch. */}
+        {isError && <ReadFailed what="this skill session" onRetry={() => void refetch()} />}
         {day && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">{day.programName}</p>
