@@ -283,6 +283,57 @@ export const CONTACT_PLACEHOLDER_PATCHES: ReadonlyArray<readonly [string, string
     "[Placeholder -- add a real contact email once one exists, the same one referenced in the Terms of Service and Privacy Policy.]",
     `Questions, or to act on anything described above: ${FORGE_CONTACT_EMAIL}`,
   ],
+  // --- The arbitration proposal, dropped rather than adopted.
+  //
+  // Section 15 of the terms draft proposed binding arbitration and a class-action waiver, with
+  // its own note that either it gets adopted into the live agreement or it gets dropped, and
+  // that it should not stay half-applied. Half-applied is what it was: /terms is now a PUBLIC
+  // page serving this document, so the note's own premise -- "a proposal in a document nobody
+  // has been shown" -- stopped being true the day that route shipped. Since then a reader of
+  // /terms was told disputes go to arbitration while every other Forge document, including the
+  // one they actually accept at signup, said Maricopa County courts. A counterparty gets to
+  // pick between two live documents that disagree, so this is the direction the contradiction
+  // gets resolved in: drop it, because adopting a consumer's waiver of court access and of
+  // class participation -- on a platform whose users include minors -- is counsel's call, not
+  // a consistency edit. Adopting it later means adding it to BOTH documents at once.
+  //
+  // The text below is the text being removed, so it is spelled out here rather than imported:
+  // the drafts no longer contain it, and an installation that took the old version does.
+  [
+    `15. DISPUTE RESOLUTION AND BINDING ARBITRATION
+Except as set out below, any dispute, claim, or controversy arising out of or relating to these Terms or your use of the Service will be resolved by binding arbitration administered by the American Arbitration Association under its Consumer Arbitration Rules, instead of in court, except that either party may bring an individual claim in small-claims court where eligible. You and Forge each waive any right to a jury trial.
+
+Class Action Waiver: Any arbitration or proceeding will be conducted only on an individual basis, not as a class, collective, or representative action, to the fullest extent the law allows.
+
+Minors: This arbitration and class-action-waiver section applies only to a user who is 18 or older at the time a dispute arises. For a dispute involving an athlete under 18, this section does not apply, and the dispute may instead be brought in a court of competent jurisdiction, unless a parent or legal guardian separately and knowingly agrees to arbitration on the athlete's behalf in a signed writing. [Placeholder -- confirm this carve-out with counsel; state law on arbitration involving minors varies and this approach has not been reviewed.]
+
+16. GOVERNING LAW
+${GOVERNING_LAW_CLAUSE}
+
+[Placeholder -- Section 15's arbitration and class-action waiver are a PROPOSAL and are not in the live signup agreement, which carries the paragraph above and nothing more. Two live documents describing two different dispute paths is ambiguity a counterparty gets to pick between, so either Section 15 is adopted and added to the live agreement, or it is dropped. It should not stay half-applied.]
+
+17. CHANGES TO THESE TERMS`,
+    `15. GOVERNING LAW
+${GOVERNING_LAW_CLAUSE}
+
+16. CHANGES TO THESE TERMS`,
+  ],
+  // Renumbering the section after it. Anchored on the line below the heading so this cannot
+  // touch another document's section 18.
+  [
+    "18. CONTACT\nForge is operated by",
+    "17. CONTACT\nForge is operated by",
+  ],
+  // The EULA and the licence agreement each carried a paragraph explaining that the terms
+  // PROPOSE arbitration and that the proposal does not apply here. With the proposal gone there
+  // is nothing to disclaim, and a paragraph describing a section that no longer exists is worse
+  // than no paragraph at all.
+  [
+    `${GOVERNING_LAW_CLAUSE}
+
+The Terms of Service propose binding arbitration with a class-action waiver for disputes about the Service. That proposal has not been adopted and does not apply to this Agreement; if it is ever adopted, this section and that one are to be read together and this Agreement updated to match.`,
+    GOVERNING_LAW_CLAUSE,
+  ],
   [
     "unless a specific request for further deletion is made. [Placeholder -- confirm this matches what BIPA",
     `unless a specific request for further deletion is made. Either request can be made at ${FORGE_CONTACT_EMAIL}. [Placeholder -- confirm this matches what BIPA`,
@@ -298,7 +349,12 @@ export function patchContactPlaceholders(content: string): string | null {
     // intact -- so a naive replace applies again on the next deploy and stacks the address up
     // once per run. Checked here rather than by rewriting the patterns to be self-excluding,
     // because that only has to be got wrong once to corrupt a live document.
-    if (next.includes(to)) continue;
+    // ...but only for a patch whose RESULT still matches its own pattern. A patch that REMOVES
+    // text -- the arbitration ones above -- has a result that is a piece of what it matched, so
+    // the stored document contains `to` before the patch runs and this guard would skip it
+    // forever. Those are self-guarding instead: once the removal has happened, `from` is no
+    // longer in the document and the replace is a no-op.
+    if (to.includes(from) && next.includes(to)) continue;
     next = next.split(from).join(to);
   }
   return next === content ? null : next;

@@ -69,22 +69,13 @@ Athletic training -- including weightlifting, sprinting, jumping, and other move
 14. INDEMNIFICATION
 You agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. [Placeholder -- confirm with counsel whether and how this section can apply where the person being asked to indemnify is a minor athlete or their parent/guardian; several states limit or void an indemnification obligation imposed on a minor.]
 
-15. DISPUTE RESOLUTION AND BINDING ARBITRATION
-Except as set out below, any dispute, claim, or controversy arising out of or relating to these Terms or your use of the Service will be resolved by binding arbitration administered by the American Arbitration Association under its Consumer Arbitration Rules, instead of in court, except that either party may bring an individual claim in small-claims court where eligible. You and Forge each waive any right to a jury trial.
-
-Class Action Waiver: Any arbitration or proceeding will be conducted only on an individual basis, not as a class, collective, or representative action, to the fullest extent the law allows.
-
-Minors: This arbitration and class-action-waiver section applies only to a user who is 18 or older at the time a dispute arises. For a dispute involving an athlete under 18, this section does not apply, and the dispute may instead be brought in a court of competent jurisdiction, unless a parent or legal guardian separately and knowingly agrees to arbitration on the athlete's behalf in a signed writing. [Placeholder -- confirm this carve-out with counsel; state law on arbitration involving minors varies and this approach has not been reviewed.]
-
-16. GOVERNING LAW
+15. GOVERNING LAW
 ${GOVERNING_LAW_CLAUSE}
 
-[Placeholder -- Section 15's arbitration and class-action waiver are a PROPOSAL and are not in the live signup agreement, which carries the paragraph above and nothing more. Two live documents describing two different dispute paths is ambiguity a counterparty gets to pick between, so either Section 15 is adopted and added to the live agreement, or it is dropped. It should not stay half-applied.]
-
-17. CHANGES TO THESE TERMS
+16. CHANGES TO THESE TERMS
 We may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.
 
-18. CONTACT
+17. CONTACT
 Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
 
 Questions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`;
@@ -324,8 +315,6 @@ This licence is effective until terminated by you or by Forge. It terminates aut
 
 13. GOVERNING LAW
 ${GOVERNING_LAW_CLAUSE}
-
-The Terms of Service propose binding arbitration with a class-action waiver for disputes about the Service. That proposal has not been adopted and does not apply to this Agreement; if it is ever adopted, this section and that one are to be read together and this Agreement updated to match.
 
 14. CONTACT
 This Application is provided by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.

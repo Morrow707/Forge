@@ -48,12 +48,16 @@ export const FORGE_LEGAL_ENTITY = "Forge Performance Systems LLC";
  * existing decision rather than making a new one.
  *
  * WHAT THIS DELIBERATELY DOES NOT INCLUDE is binding arbitration or a class-action
- * waiver. The terms draft proposes both, with its own note that the carve-out for
- * under-18s is unconfirmed and that state law on arbitration involving minors
- * varies. Adding a consumer's waiver of court access and of class participation to
- * a LIVE clickwrap is a decision for counsel, not a consistency edit, so the live
- * documents state governing law and venue and leave arbitration where it is: a
- * proposal in a document nobody has been shown. See docs/legal-clause-revisions.md.
+ * waiver. The terms draft used to propose both, with its own note that the carve-out
+ * for under-18s was unconfirmed and that state law on arbitration involving minors
+ * varies. That proposal has since been DROPPED rather than adopted: /terms became a
+ * public page serving the terms document, so "a proposal in a document nobody has
+ * been shown" stopped being true, and a reader of that page was being told
+ * arbitration while the agreement they accept at signup said courts. Adding a
+ * consumer's waiver of court access and of class participation to a live clickwrap
+ * is a decision for counsel, not a consistency edit -- so if it comes back it comes
+ * back to every document at once. server/seed-data/arbitration-dropped.test.ts holds
+ * the line; see also docs/legal-clause-revisions.md.
  */
 export const GOVERNING_LAW_CLAUSE =
   "This agreement, and any dispute arising out of it or out of your use of Forge, is governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. The parties will first try to resolve any dispute by talking to each other. Anything not resolved that way lies in the state and federal courts located in Maricopa County, Arizona, and both sides consent to the jurisdiction of those courts. Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.";

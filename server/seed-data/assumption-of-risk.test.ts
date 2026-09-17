@@ -53,8 +53,10 @@ describe("the assumption of risk release", () => {
   });
 
   it("carries the shared governing-law clause rather than a fourth answer", () => {
-    // The template proposed mediation, which would have been the third dispute path across
-    // Forge's documents after the live terms' courts and the terms draft's arbitration proposal.
+    // The template proposed mediation, which would have been a second dispute path across
+    // Forge's documents alongside the courts every other one names. (It would have been a third
+    // when the terms draft still proposed arbitration; that proposal has since been dropped --
+    // see arbitration-dropped.test.ts.)
     expect(ASSUMPTION_OF_RISK_RELEASE).toContain(GOVERNING_LAW_CLAUSE);
     expect(ASSUMPTION_OF_RISK_RELEASE).not.toMatch(/mediation/i);
   });
