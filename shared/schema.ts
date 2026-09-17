@@ -5169,6 +5169,17 @@ export const externalWaiverKindEnum = pgEnum("external_waiver_kind", [
   // biometric release, which covers video captured FOR TRACKING and grants
   // nothing for publicity.
   "photo_media_release",
+  // The signed Institutional Service Agreement between Forge and a school or club.
+  //
+  // NOT LIKE THE OTHERS IN THIS LIST, which are documents somebody else issued and Forge merely
+  // keeps a copy of. This one is Forge's own contract -- two named parties, two signature blocks,
+  // negotiated and signed per customer. It lives here because the MECHANICS are identical (a
+  // signed PDF exists outside Forge; Forge records that it exists, who issued it and when) and
+  // because the alternative was the clickwrap it replaces: an org coach clicking "accept" on a
+  // document whose own first line told them not to treat it as an agreement.
+  //
+  // Uploaded against the primary coach of the organization, who is the person who signs.
+  "institutional_agreement",
   // ---- A COACH'S OWN CREDENTIALS, WHICH ARE NOT WAIVERS AT ALL ----
   //
   // Same table, same upload-and-review mechanics, entirely different question.

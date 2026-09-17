@@ -398,15 +398,19 @@ export default function AdminDocuments() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               Institutional Agreement
-              <DraftBadge />
+              <Badge variant="secondary" className="text-[10px]">
+                SUPERSEDED -- shown to nobody
+              </Badge>
             </CardTitle>
             <CardDescription>
-              A different kind of document from the four above -- addressed to a paying
-              institutional customer (a school, club, or program on an org billing plan) rather
-              than an individual coach or athlete, and meant to actually shift liability onto that
-              institution rather than just disclose behavior. Real negotiated-contract stakes, not
-              clickwrap stakes -- do not send to a real institution as binding until a lawyer has
-              drafted or approved the substantive terms.
+              Kept as a record, not presented anywhere. This was an outline assembled from patterns
+              in the consumer terms, and an org coach was once asked to click "accept" on it --
+              a document whose own first line told them not to treat it as a binding agreement.
+              The real Service Agreement is now a two-party contract signed per customer, with the
+              clauses this never had: who obtains guardian consent, FERPA, indemnity for a consent
+              failure, and a liability cap. Forge records that the signed copy exists (an upload of
+              kind "institutional_agreement"), the same way it records a school's own participation
+              waiver. Nothing in the app accepts this text any more.
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -26627,43 +26627,42 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // PRIMARY coach of an org billing account -- required is false for
   // anyone else, same "not applicable, not just unaccepted" distinction
   // getGuardianNoticeStatus makes for a non-flagged athlete.
+  /** Whether this organization has its signed Institutional Service Agreement on file.
+   *
+   * IT USED TO BE A CLICKWRAP, and the clickwrap was the problem. The document an org coach was
+   * asked to accept opened by telling them not to treat it as a binding agreement -- it had never
+   * been drafted, only assembled from patterns in the consumer terms -- so the consent record it
+   * produced evidenced nothing. A real agreement now exists: two named parties, two signature
+   * blocks, signed per customer, with the clauses a template cannot generate (who obtains guardian
+   * consent, FERPA, indemnity for a consent failure, a liability cap).
+   *
+   * So Forge records THAT it was signed rather than asking anyone to click. Same mechanics as a
+   * school's participation waiver -- the signed PDF is uploaded, an admin reviews it, and the row
+   * is the record. `onFile` is true only once that review has accepted it: a document nobody has
+   * looked at is a document that might be the wrong one, or blank, or unsigned. */
   async getInstitutionalAgreementStatus(
     coachId: number,
-  ): Promise<{ required: boolean; accepted: boolean; acceptedAt: Date | null }> {
+  ): Promise<{ required: boolean; onFile: boolean; signedAt: Date | null; reviewPending: boolean }> {
     const coach = await this.getUser(coachId);
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const isPrimary = coachIds[0] === coachId;
-    if (!isPrimary || !coach?.billingTier) return { required: false, accepted: false, acceptedAt: null };
-    const [accepted] = await db
-      .select({ createdAt: consentRecords.createdAt })
-      .from(consentRecords)
-      .where(and(eq(consentRecords.userId, coachId), eq(consentRecords.consentType, "institutional_agreement")))
-      .orderBy(desc(consentRecords.createdAt))
-      .limit(1);
-    return { required: true, accepted: Boolean(accepted), acceptedAt: accepted?.createdAt ?? null };
-  },
-
-  async acceptInstitutionalAgreement(
-    coachId: number,
-    consentContext?: { ipAddress?: string; userAgent?: string },
-  ): Promise<{ required: boolean; accepted: boolean; acceptedAt: Date | null } | { error: string }> {
-    const coach = await this.getUser(coachId);
-    const coachIds = await this.getEffectiveCoachIds(coachId);
-    if (coachIds[0] !== coachId) {
-      return { error: "The institutional agreement is accepted by the primary coach of an org, not a staff member." };
+    if (!isPrimary || !coach?.billingTier) {
+      return { required: false, onFile: false, signedAt: null, reviewPending: false };
     }
-    if (!coach?.billingTier) {
-      return { error: "This account isn't on an organizational billing plan." };
-    }
-    const doc = await this.getLegalDocument("institutional_agreement");
-    await this.logConsentRecord({
-      userId: coachId,
-      consentType: "institutional_agreement",
-      documentText: doc?.content ?? "",
-      ipAddress: consentContext?.ipAddress,
-      userAgent: consentContext?.userAgent,
-    });
-    return this.getInstitutionalAgreementStatus(coachId);
+    const rows = await db
+      .select({ reviewStatus: externalWaivers.reviewStatus, signedOn: externalWaivers.signedOn, createdAt: externalWaivers.createdAt })
+      .from(externalWaivers)
+      .where(and(eq(externalWaivers.athleteId, coachId), eq(externalWaivers.kind, "institutional_agreement")))
+      .orderBy(desc(externalWaivers.createdAt));
+    const accepted = rows.find((r) => r.reviewStatus === "accepted");
+    return {
+      required: true,
+      onFile: Boolean(accepted),
+      signedAt: accepted ? (accepted.signedOn ? new Date(accepted.signedOn) : accepted.createdAt) : null,
+      // Uploaded but not yet reviewed. Worth saying out loud rather than showing the same "not on
+      // file" banner as somebody who has sent nothing -- one of them has already done their part.
+      reviewPending: !accepted && rows.some((r) => r.reviewStatus === "pending_review"),
+    };
   },
 
   async logConsentRecord(input: {

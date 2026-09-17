@@ -131,6 +131,7 @@ export const DOCUMENT_LABEL: Record<DocumentKind, string> = {
   medical_clearance: "Medical clearance to participate",
   emergency_authorization: "Emergency contact & treatment authorization",
   photo_media_release: "Photo / media release",
+  institutional_agreement: "Institutional Service Agreement (signed)",
   coaching_certification: "Coaching certification",
   background_check: "Background check / SafeSport clearance",
   cpr_first_aid: "CPR / First Aid certification",

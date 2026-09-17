@@ -3150,6 +3150,13 @@ DO $$ BEGIN
   ALTER TYPE "external_waiver_kind" ADD VALUE IF NOT EXISTS 'liability_insurance';
 EXCEPTION WHEN undefined_object THEN NULL; END $$;
 
+-- Forge's own signed Service Agreement with a school or club, filed like the school's own
+-- paperwork. It replaced a clickwrap that asked an org coach to accept a document whose first
+-- line told them not to treat it as binding.
+DO $$ BEGIN
+  ALTER TYPE "external_waiver_kind" ADD VALUE IF NOT EXISTS 'institutional_agreement';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+
 CREATE TABLE IF NOT EXISTS "external_waivers" (
   "id" serial PRIMARY KEY,
   "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,

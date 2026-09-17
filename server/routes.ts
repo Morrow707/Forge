@@ -5432,26 +5432,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Institutional Service Agreement -- a paying org's primary coach account
   // accepting the liability-shifting agreement scoped to their org billing
-  // plan (see server/seed-data/legal-documents-draft.ts's
-  // INSTITUTIONAL_AGREEMENT_DRAFT for what this is and its own "not
-  // reviewed by counsel" warning). "required" comes back false for a staff
-  // coach or an account with no billing tier assigned -- storage's own
-  // getInstitutionalAgreementStatus is what decides that, not this route.
+  // plan. "required" comes back false for a staff coach or an account with no billing tier
+  // assigned -- storage's own getInstitutionalAgreementStatus is what decides that, not this
+  // route.
+  //
+  // NO ACCEPT ROUTE ANY MORE. There used to be one, and it wrote a consent record against a
+  // document that opened by telling its reader not to treat it as a binding agreement. The real
+  // agreement is signed per customer, outside Forge, and uploaded like a school's own paperwork
+  // (externalWaivers, kind "institutional_agreement"). This route now reports whether that signed
+  // document is on file; nothing here accepts anything.
   app.get("/api/coach/institutional-agreement", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const status = await storage.getInstitutionalAgreementStatus(user.id);
-    const doc = status.required ? await storage.getLegalDocument("institutional_agreement") : null;
-    res.json({ ...status, documentText: doc?.content ?? "" });
-  });
-
-  app.post("/api/coach/institutional-agreement/accept", requireRole("coach"), async (req, res) => {
-    const user = currentUser(req);
-    const result = await storage.acceptInstitutionalAgreement(user.id, {
-      ipAddress: req.ip,
-      userAgent: req.get("user-agent") ?? undefined,
-    });
-    if ("error" in result) return res.status(400).json({ message: result.error });
-    res.json(result);
+    res.json(await storage.getInstitutionalAgreementStatus(user.id));
   });
 
   // Every time this athlete has said today's work was too hard, and what they

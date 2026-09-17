@@ -139,6 +139,17 @@ export default function DocumentsPage() {
       });
   const checklist = REQUIRED_DOCUMENTS[audience];
 
+  // An org's primary coach files their signed Service Agreement here too. It is not on the coach
+  // checklist -- it belongs to the ORGANISATION, not to the person, and a staff coach has nothing
+  // to do with it -- so it is offered as an upload kind only to the coach the server says needs
+  // it. Same reasoning as the checklist's own rule about never showing somebody a row they cannot
+  // satisfy.
+  const { data: institutional } = useQuery<{ required: boolean; onFile: boolean }>({
+    queryKey: ["/api/coach/institutional-agreement"],
+    enabled: user?.role === "coach" && !forSomeoneElse,
+  });
+  const offerInstitutional = institutional?.required === true;
+
   const key = [`/api/waivers/${targetId ?? 0}`];
   const { data, isLoading } = useQuery<{
     waivers: Waiver[];
@@ -292,6 +303,11 @@ export default function DocumentsPage() {
                       {d.label}
                     </SelectItem>
                   ))}
+                  {offerInstitutional && (
+                    <SelectItem value="institutional_agreement">
+                      {DOCUMENT_LABEL.institutional_agreement}
+                    </SelectItem>
+                  )}
                   <SelectItem value="other">{DOCUMENT_LABEL.other}</SelectItem>
                 </SelectContent>
               </Select>
