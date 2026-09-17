@@ -19,7 +19,12 @@ import {
 import { eq, isNull, and, asc } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
-import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT, PARENTAL_NOTICE_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT } from "./seed-data/legal-documents-draft";
+// BIOMETRIC_WAIVER_DRAFT is deliberately not imported: the seed never writes it. A fresh
+// install gets the real document straight from nextBiometricRelease(null), and an install still
+// carrying the draft is recognised by BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX, which is its own
+// constant in biometric-release.ts. The draft body is kept only as the evidence that prefix is
+// right -- see biometric-release.test.ts.
+import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, PARENTAL_NOTICE_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT } from "./seed-data/legal-documents-draft";
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";

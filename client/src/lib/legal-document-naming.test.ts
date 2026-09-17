@@ -17,7 +17,7 @@ const SEARCHED = ["client/src", "server", "shared"];
  * only shrink -- anything added needs a reason of the same kind, which in practice means "this
  * text has to match something already stored byte-for-byte". */
 const EXEMPT: ReadonlyArray<readonly [string, string]> = [
-  ["server/seed-data/legal-documents-draft.ts", "BIOMETRIC_WAIVER_DRAFT is the superseded draft, kept only so nextBiometricRelease can recognise an installation still carrying it. Reformatting it breaks the match."],
+  ["server/seed-data/legal-documents-draft.ts", "BIOMETRIC_WAIVER_DRAFT is the superseded draft, kept as the historical text the migration prefix is checked against. It is what production may still be carrying, so it is not ours to reword."],
   ["server/seed-data/shipped-versions.ts", "Comments naming which historical version each hash is."],
   ["server/seed-data/signup-agreement.ts", "LIVE_DOCUMENT_PATCHES matches the exact text stored in installations that took the old name -- the old spelling IS the pattern."],
   ["server/seed-data/biometric-release.ts", "Holds the prior text for the same reason."],
