@@ -34,6 +34,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { addDays, formatISO } from "date-fns";
 import { Pencil, Check } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 import {
   CalendarDays,
   UserPlus,
@@ -82,6 +83,7 @@ export default function AthleteDashboard() {
   const {
     data: coaches = [],
     isLoading: coachesLoading,
+    isError: coachesFailed,
     refetch: refetchCoaches,
   } = useQuery<{ id: number; name: string; coachCode: string }[]>({
     queryKey: ["/api/athlete/coaches"],
@@ -98,7 +100,9 @@ export default function AthleteDashboard() {
   const rangeStart = formatISO(days[0], { representation: "date" });
   const rangeEnd = formatISO(days[days.length - 1], { representation: "date" });
   const today = rangeStart;
-  const { data: upcoming = [], refetch: refetchUpcoming } = useQuery<CalendarEntry[]>({
+  const { data: upcoming = [], isError: upcomingFailed, refetch: refetchUpcoming } = useQuery<
+    CalendarEntry[]
+  >({
     queryKey: ["/api/athlete/calendar", rangeStart, rangeEnd],
     queryFn: async () => {
       const res = await apiRequest(
@@ -319,7 +323,20 @@ export default function AthleteDashboard() {
             stay free either way. Deliberately no AI branding or entry point
             here (no Sparkles icon, no "AI" in the copy) -- the AI program
             builder lives exclusively on the Library page. */}
-        {!coachesLoading && coaches.length === 0 && (
+        {/* THE THIRD PLACE /api/athlete/coaches DECIDES WHO SOMEBODY IS.
+            coaches = [] on failure is indistinguishable from having no coach, so a
+            coached athlete whose request dropped was told they are a Free Agent and
+            sent to Library to build their own program -- advice that is wrong for
+            them, on a screen that had just misidentified them. */}
+        {coachesFailed && (
+          <Card>
+            <CardContent className="py-14">
+              <ReadFailed what="your dashboard" onRetry={() => void refetchCoaches()} />
+            </CardContent>
+          </Card>
+        )}
+
+        {!coachesFailed && !coachesLoading && coaches.length === 0 && (
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <Badge className="gap-1.5 bg-primary/15 text-primary hover:bg-primary/15">
@@ -349,7 +366,21 @@ export default function AthleteDashboard() {
             their coach simply hasn't assigned anything yet -- and their navigation drops Library
             and the AI tabs, so there was nothing to click either. Shown only once the coaches
             query has actually answered, so it never flashes at a Free Agent. */}
-        {!coachesLoading && coaches.length > 0 && upcoming.length === 0 && (
+        {/* Same reasoning one level down: "nothing's been assigned to you yet" is a
+            statement about what their coach has done. */}
+        {!coachesFailed && !coachesLoading && coaches.length > 0 && upcomingFailed && (
+          <Card>
+            <CardContent className="py-14">
+              <ReadFailed what="what's coming up" onRetry={() => void refetchUpcoming()} />
+            </CardContent>
+          </Card>
+        )}
+
+        {!coachesFailed &&
+          !coachesLoading &&
+          !upcomingFailed &&
+          coaches.length > 0 &&
+          upcoming.length === 0 && (
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <p className="max-w-sm text-muted-foreground">

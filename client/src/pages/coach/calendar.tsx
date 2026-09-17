@@ -16,13 +16,14 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { getJson } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { CalendarDays } from "lucide-react";
 
 type RosterEntry = { id: number; name: string };
 
 export default function CoachCalendar() {
   const [, setLocation] = useLocation();
-  const { data: roster = [] } = useQuery<RosterEntry[]>({
+  const { data: roster = [], isError: rosterFailed } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
 
@@ -73,7 +74,7 @@ export default function CoachCalendar() {
     }
   }, [search, setLocation]);
 
-  const { data: entries = [], isLoading } = useQuery<CalendarEntry[]>({
+  const { data: entries = [], isLoading, isError, refetch } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/coach/calendar", range.start, range.end, athleteId],
     queryFn: () => {
       const params = new URLSearchParams({ start: range.start, end: range.end });
@@ -146,7 +147,24 @@ export default function CoachCalendar() {
           month, or filtering to one athlete who happens to have a quiet week, told a coach with
           a full roster that they had never scheduled anything. The call to action is still here,
           since an empty view is a fine moment to offer it; it is the claim that was wrong. */}
-      {!isLoading && entries.length === 0 && (
+      {/* The athlete filter is built from the roster, so a failed roster read narrows this
+          page to "All athletes" with no way to pick one -- worth saying rather than
+          leaving a coach wondering where their athletes went. */}
+      {rosterFailed && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          We couldn't load your roster, so the athlete filter is unavailable.
+        </p>
+      )}
+
+      {isError && (
+        <Card className="mt-6">
+          <CardContent className="py-14">
+            <ReadFailed what="this calendar" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {!isError && !isLoading && entries.length === 0 && (
         <Card className="mt-6">
           <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
             <CalendarDays className="h-8 w-8 text-muted-foreground" />

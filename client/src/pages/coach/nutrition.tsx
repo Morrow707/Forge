@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { ReadFailed } from "@/components/read-failed";
 import { AppShell } from "@/components/app-shell";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,10 +30,14 @@ type NutritionSummary = {
  * profile page -- see the ?tab=nutrition handling in athlete-detail.tsx. */
 export default function CoachNutrition() {
   const [, navigate] = useLocation();
-  const { data: roster = [] } = useQuery<RosterEntry[]>({
+  const { data: roster = [], isError: rosterFailed, refetch: refetchRoster } = useQuery<
+    RosterEntry[]
+  >({
     queryKey: ["/api/coach/roster"],
   });
-  const { data: summaries = [] } = useQuery<NutritionSummary[]>({
+  const { data: summaries = [], isError: summariesFailed, refetch: refetchSummaries } = useQuery<
+    NutritionSummary[]
+  >({
     queryKey: ["/api/coach/nutrition-summary"],
   });
   const [search, setSearch] = useState("");
@@ -58,7 +63,24 @@ export default function CoachNutrition() {
         nutritionist's plan. The AI never generates these numbers.
       </p>
 
-      {roster.length === 0 ? (
+      {/* A failed summary read is worse here than a missing row: summaryByAthlete simply
+          has no entry, so every athlete renders as though they logged nothing today --
+          which on a nutrition screen is a claim about whether a teenager ate. */}
+      {!rosterFailed && summariesFailed && (
+        <Card className="mb-4">
+          <CardContent className="py-6">
+            <ReadFailed what="today's food logs" onRetry={() => void refetchSummaries()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {rosterFailed ? (
+        <Card>
+          <CardContent className="py-14">
+            <ReadFailed what="your roster" onRetry={() => void refetchRoster()} />
+          </CardContent>
+        </Card>
+      ) : roster.length === 0 ? (
         <Card>
           <CardContent className="py-14 text-center text-sm text-muted-foreground">
             No athletes on your roster yet.

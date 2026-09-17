@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { getJson } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { Trophy, Medal, Timer } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { formatHeight } from "@/components/profile-fields-form";
@@ -151,11 +152,11 @@ function RosterRowSkeleton() {
 function StrengthLeaderboard() {
   const [exerciseId, setExerciseId] = useState<string>("");
 
-  const { data: exercises = [] } = useQuery<LeaderboardExercise[]>({
+  const { data: exercises = [], isError: exercisesFailed } = useQuery<LeaderboardExercise[]>({
     queryKey: ["/api/coach/leaderboard/exercises"],
   });
 
-  const { data: entries = [], isLoading } = useQuery<LeaderboardEntry[]>({
+  const { data: entries = [], isLoading, isError, refetch } = useQuery<LeaderboardEntry[]>({
     queryKey: ["/api/coach/leaderboard", exerciseId],
     queryFn: () => getJson(`/api/coach/leaderboard?exerciseId=${exerciseId}`),
     enabled: !!exerciseId,
@@ -174,7 +175,7 @@ function StrengthLeaderboard() {
           <SelectContent>
             {exercises.length === 0 ? (
               <SelectItem value="_none" disabled>
-                No exercises assigned yet
+                {exercisesFailed ? "Couldn't load exercises" : "No exercises assigned yet"}
               </SelectItem>
             ) : (
               exercises.map((e) => (
@@ -208,7 +209,15 @@ function StrengthLeaderboard() {
         </Card>
       )}
 
-      {exerciseId && !isLoading && entries.length === 0 && (
+      {exerciseId && isError && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="this leaderboard" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {exerciseId && !isError && !isLoading && entries.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Trophy className="h-10 w-10 text-muted-foreground" />
@@ -271,7 +280,7 @@ function SpeedLeaderboard() {
   }, [distances, distanceYards]);
 
 
-  const { data: exercises = [] } = useQuery<LeaderboardExercise[]>({
+  const { data: exercises = [], isError: exercisesFailed } = useQuery<LeaderboardExercise[]>({
     queryKey: ["/api/coach/leaderboard/skill-exercises"],
   });
 

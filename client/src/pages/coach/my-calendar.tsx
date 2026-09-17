@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { apiRequest } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { Dumbbell, CalendarDays } from "lucide-react";
 
 // A coach's own training calendar reuses the exact same CalendarView as
@@ -27,7 +28,7 @@ export default function CoachMyCalendar() {
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const [syncOpen, setSyncOpen] = useState(false);
 
-  const { data: entries = [] } = useQuery<CalendarEntry[]>({
+  const { data: entries = [], isError, refetch } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/coach/my/calendar", range.start, range.end],
     queryFn: async () => {
       const res = await apiRequest(
@@ -58,7 +59,15 @@ export default function CoachMyCalendar() {
           onEntryClick={(e) => navigate(`/coach/my/day/${e.assignmentId}/${e.programDayId}/${e.date}`)}
         />
 
-        {entries.length === 0 && (
+        {isError && (
+          <Card className="mt-6">
+            <CardContent className="py-14">
+              <ReadFailed what="your calendar" onRetry={() => void refetch()} />
+            </CardContent>
+          </Card>
+        )}
+
+        {!isError && entries.length === 0 && (
           <Card className="mt-6">
             <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
               <Dumbbell className="h-8 w-8 text-muted-foreground" />
