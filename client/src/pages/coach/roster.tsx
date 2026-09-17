@@ -85,6 +85,7 @@ import {
   Tags,
   AlertTriangle,
 } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
 
@@ -194,6 +195,7 @@ export default function CoachRoster() {
   const {
     data: roster = [],
     isLoading: rosterLoading,
+    isError: rosterFailed,
     refetch: refetchRoster,
   } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
@@ -656,6 +658,12 @@ export default function CoachRoster() {
                 </tbody>
               </table>
             </div>
+          ) : rosterFailed ? (
+            <Card>
+              <CardContent className="py-16">
+                <ReadFailed what="your roster" onRetry={() => void refetchRoster()} />
+              </CardContent>
+            </Card>
           ) : roster.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">

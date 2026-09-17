@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { format, parseISO, addDays, formatISO } from "date-fns";
 import { Target, Dumbbell, Trophy, X, Plus, Sparkles, Timer, History } from "lucide-react";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
+import { ReadFailed } from "@/components/read-failed";
 
 type ExerciseOption = { id: number; name: string };
 
@@ -79,12 +80,17 @@ export function GoalsPanel({
     rationale: string;
   } | null>(null);
 
-  const { data: goals = [], isLoading } = useQuery<Goal[]>({
+  const { data: goals = [], isLoading, isError, refetch } = useQuery<Goal[]>({
     queryKey: [goalsUrl],
     queryFn: () => getJson(goalsUrl),
   });
 
-  const { data: history = [], isLoading: historyLoading } = useQuery<Goal[]>({
+  const {
+    data: history = [],
+    isLoading: historyLoading,
+    isError: historyFailed,
+    refetch: refetchHistory,
+  } = useQuery<Goal[]>({
     queryKey: [goalsUrl, "history"],
     queryFn: () => getJson(`${goalsUrl}?history=true`),
     enabled: showHistory,
@@ -197,6 +203,8 @@ export function GoalsPanel({
           </p>
           {historyLoading ? (
             <div className="h-10 animate-pulse rounded-md bg-surface" />
+          ) : historyFailed ? (
+            <ReadFailed what="past goals" onRetry={() => void refetchHistory()} />
           ) : archivedGoals.length === 0 ? (
             <p className="py-2 text-center text-sm text-muted-foreground">
               Nothing here yet -- goals you remove from the active list stay here.
@@ -448,6 +456,8 @@ export function GoalsPanel({
 
       {isLoading ? (
         <div className="h-16 animate-pulse rounded-md bg-surface" />
+      ) : isError ? (
+        <ReadFailed what="these goals" onRetry={() => void refetch()} />
       ) : goals.length === 0 ? (
         <p className="py-4 text-center text-sm text-muted-foreground">
           No goals set yet.

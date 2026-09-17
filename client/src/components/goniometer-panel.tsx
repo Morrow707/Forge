@@ -26,6 +26,7 @@ import { cameraSupportsGoniometerMovement } from "@/lib/movement-screen-vision";
 import { GoniometerCaptureDialog } from "@/components/goniometer-capture-dialog";
 import { AvGoniometerCaptureDialog } from "@/components/av-goniometer-capture-dialog";
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
+import { ReadFailed } from "@/components/read-failed";
 
 type GoniometerReading = {
   id: number;
@@ -73,7 +74,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
   const [notes, setNotes] = useState("");
   const [cameraCaptureOpen, setCameraCaptureOpen] = useState(false);
 
-  const { data: readings = [], isLoading } = useQuery<GoniometerReading[]>({
+  const { data: readings = [], isLoading, isError, refetch } = useQuery<GoniometerReading[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
   });
@@ -257,6 +258,8 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
 
       {isLoading ? (
         <div className="h-24 animate-pulse rounded-md bg-surface" />
+      ) : isError ? (
+        <ReadFailed what="these measurements" onRetry={() => void refetch()} />
       ) : readings.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No goniometer readings logged yet.

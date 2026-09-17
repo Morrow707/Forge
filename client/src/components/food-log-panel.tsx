@@ -17,6 +17,7 @@ import { format, addDays, parseISO } from "date-fns";
 import { todayIso } from "@/lib/local-date";
 import { FOOD_LOG_MEALS, FOOD_LOG_MEAL_LABEL, type FoodLogMeal } from "@shared/schema";
 import { NutrientRings } from "@/components/nutrient-rings";
+import { ReadFailed } from "@/components/read-failed";
 
 const MICRO_FIELDS = [
   ["calciumMg", "Calcium", "mg"],
@@ -174,7 +175,7 @@ export function FoodLogPanel({
   const [dayMicrosOpen, setDayMicrosOpen] = useState(false);
 
   const queryKey = [fetchUrl, date];
-  const { data, isLoading } = useQuery<FoodLogResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<FoodLogResponse>({
     queryKey,
     queryFn: () => getJson(`${fetchUrl}?date=${date}`),
   });
@@ -250,6 +251,10 @@ export function FoodLogPanel({
 
       {isLoading ? (
         <div className="h-20 animate-pulse rounded-md bg-surface" />
+      ) : isError ? (
+        // Without this the rings render from a zeroed total, which reads as "you have eaten
+        // nothing today" -- a claim about somebody's intake made by a request that never landed.
+        <ReadFailed what="today's food log" onRetry={() => void refetch()} />
       ) : (
         <>
           <NutrientRings

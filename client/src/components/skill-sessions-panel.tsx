@@ -7,6 +7,7 @@ import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Pencil, Wand2 } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 type SkillSession = {
   id: number;
@@ -32,7 +33,7 @@ export function SkillSessionsPanel({
 }) {
   const qc = useQueryClient();
   const url = `/api/coach/roster/${athleteId}/skill-sessions`;
-  const { data: sessions = [], isLoading } = useQuery<SkillSession[]>({
+  const { data: sessions = [], isLoading, isError, refetch } = useQuery<SkillSession[]>({
     queryKey: [url],
     queryFn: () => getJson(url),
   });
@@ -63,6 +64,8 @@ export function SkillSessionsPanel({
 
       {isLoading ? (
         <div className="h-16 animate-pulse rounded-md bg-surface" />
+      ) : isError ? (
+        <ReadFailed what="these sessions" onRetry={() => void refetch()} />
       ) : sessions.length === 0 ? (
         <p className="py-4 text-center text-sm text-muted-foreground">No saved clips yet.</p>
       ) : (

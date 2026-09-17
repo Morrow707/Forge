@@ -8,6 +8,7 @@ import { format, parseISO } from "date-fns";
 import { Crown } from "lucide-react";
 import { ExerciseTrendDialog } from "@/components/exercise-trend-dialog";
 import { PinnedExercisePicker } from "@/components/pinned-exercise-picker";
+import { ReadFailed } from "@/components/read-failed";
 
 type PrEntry = {
   exerciseId: number;
@@ -26,7 +27,7 @@ export default function AthleteLiftHistory() {
   const [trendExercise, setTrendExercise] = useState<{ id: number; name: string } | null>(null);
   const [liftFilter, setLiftFilter] = useState("");
 
-  const { data, isLoading } = useQuery<PrEntry[]>({
+  const { data, isLoading, isError, refetch } = useQuery<PrEntry[]>({
     queryKey: ["/api/athlete/pr-history"],
     queryFn: () => getJson("/api/athlete/pr-history"),
   });
@@ -55,7 +56,10 @@ export default function AthleteLiftHistory() {
               value={liftFilter}
               onChange={setLiftFilter}
             />
-            {!data?.length && (
+            {isError && <ReadFailed what="your PR history" onRetry={() => void refetch()} />}
+            {!isError && !data?.length && (
+              // "Log some sets to start tracking PRs" told an athlete who has set PRs for years
+              // that they have none, on any request that failed.
               <p className="py-6 text-center text-sm text-muted-foreground">
                 Log some sets to start tracking PRs.
               </p>

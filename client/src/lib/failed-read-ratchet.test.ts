@@ -33,10 +33,16 @@ function walk(dir: string, out: string[] = []): string[] {
 /** A file is an offender when it reads something, claims emptiness off a length check, and has
  * no notion of the read having failed anywhere in it. Deliberately crude: it is a tripwire for
  * the shape, not a proof that every branch is right. */
+/** Comments stripped first. The component that FIXES this bug documents the bug by quoting it,
+ * and the scan duly reported the cure as a case of the disease. */
+function code(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
+
 function offenders(): string[] {
   const found: string[] = [];
   for (const file of walk(ROOT)) {
-    const src = fs.readFileSync(file, "utf8");
+    const src = code(fs.readFileSync(file, "utf8"));
     if (!/useQuery[<(]/.test(src)) continue;
     if (/\bisError\b/.test(src)) continue;
     if (!/\.length === 0/.test(src)) continue;
@@ -58,27 +64,20 @@ const KNOWN = new Set<string>([
   "components/coach-day-edit-dialog.tsx",
   "components/exercise-picker-dialog.tsx",
   "components/exercise-trend-dialog.tsx",
-  "components/food-log-panel.tsx",
   "components/game-days-panel.tsx",
-  "components/goals-panel.tsx",
-  "components/goniometer-panel.tsx",
   "components/imported-testing-data-panel.tsx",
   "components/manage-roster-groups-dialog.tsx",
   "components/muscle-heat-map.tsx",
   "components/notification-bell.tsx",
   "components/provisional-roster-panel.tsx",
-  "components/read-failed.tsx",
   "components/reengagement-banner.tsx",
   "components/skill-day-view-dialog.tsx",
   "components/skill-picker-dialog.tsx",
-  "components/skill-sessions-panel.tsx",
   "components/skills-trends-panel.tsx",
   "components/squad-quests.tsx",
   "components/suggested-corrective.tsx",
   "components/team-challenges-panel.tsx",
   "components/team-pr-wall-card.tsx",
-  "components/testing-history-panel.tsx",
-  "components/wellness-history-dialog.tsx",
   "pages/admin/academy-track-builder.tsx",
   "pages/admin/ai-spend.tsx",
   "pages/admin/blocked-athletes.tsx",
@@ -101,7 +100,6 @@ const KNOWN = new Set<string>([
   "pages/athlete/classes.tsx",
   "pages/athlete/dashboard.tsx",
   "pages/athlete/leaderboard.tsx",
-  "pages/athlete/lift-history.tsx",
   "pages/athlete/nutrition.tsx",
   "pages/athlete/recovery.tsx",
   "pages/class-builder.tsx",
@@ -114,7 +112,6 @@ const KNOWN = new Set<string>([
   "pages/coach/movement-screens.tsx",
   "pages/coach/my-calendar.tsx",
   "pages/coach/nutrition.tsx",
-  "pages/coach/roster.tsx",
   "pages/exercise-bank.tsx",
   "pages/program-builder.tsx",
   "pages/program-list.tsx",
@@ -158,14 +155,22 @@ describe("the surfaces already cleared", () => {
   });
 
   it.each([
+    // Round one: what a coach consults to decide whether somebody is safe to train.
     ["injury history", "client/src/components/injury-history-panel.tsx"],
     ["training load", "client/src/components/acwr-history-dialog.tsx"],
     ["movement screens", "client/src/components/movement-screen-panel.tsx"],
     ["weakness reports", "client/src/components/weakness-report-panel.tsx"],
     ["the hours cap", "client/src/components/cara-compliance-panel.tsx"],
+    // Round two: the athlete's own record, where an empty state is a claim about their history.
+    ["testing history", "client/src/components/testing-history-panel.tsx"],
+    ["wellness check-ins", "client/src/components/wellness-history-dialog.tsx"],
+    ["range-of-motion readings", "client/src/components/goniometer-panel.tsx"],
+    ["skill sessions", "client/src/components/skill-sessions-panel.tsx"],
+    ["goals", "client/src/components/goals-panel.tsx"],
+    ["the food log", "client/src/components/food-log-panel.tsx"],
+    ["PR history", "client/src/pages/athlete/lift-history.tsx"],
+    ["the roster", "client/src/pages/coach/roster.tsx"],
   ])("%s handles the read failing", (_what, file) => {
-    // These five are what a coach consults to decide whether somebody is safe to train, which
-    // is why they went first.
     const src = read(file);
     expect(src).toMatch(/\bisError\b|isError:/);
     expect(src).toContain("<ReadFailed");

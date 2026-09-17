@@ -19,6 +19,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
+import { ReadFailed } from "@/components/read-failed";
 
 type TestingResult = {
   id: number;
@@ -38,7 +39,7 @@ type TestingResult = {
 export function TestingHistoryPanel({ fetchUrl }: { fetchUrl: string }) {
   const [metric, setMetric] = useState<TestingMetricKey>("fortyYardDash");
 
-  const { data = [], isLoading } = useQuery<TestingResult[]>({
+  const { data = [], isLoading, isError, refetch } = useQuery<TestingResult[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
   });
@@ -72,6 +73,8 @@ export function TestingHistoryPanel({ fetchUrl }: { fetchUrl: string }) {
 
       {isLoading ? (
         <div className="h-40 animate-pulse rounded-md bg-surface" />
+      ) : isError ? (
+        <ReadFailed what="these results" onRetry={() => void refetch()} />
       ) : points.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No {activeMetric.label.toLowerCase()} entries recorded yet.

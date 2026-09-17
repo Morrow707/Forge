@@ -20,6 +20,7 @@ import {
 import { HeartPulse } from "lucide-react";
 import { READINESS_LABEL, BODY_PAIN_PARTS, type ReadinessLevel } from "@shared/wellness";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/read-failed";
 
 type WellnessEntry = {
   id: number;
@@ -55,7 +56,7 @@ export function WellnessHistoryDialog({
   athleteName: string;
   fetchUrl: string;
 }) {
-  const { data = [], isLoading } = useQuery<WellnessEntry[]>({
+  const { data = [], isLoading, isError, refetch } = useQuery<WellnessEntry[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
     enabled: open,
@@ -81,6 +82,8 @@ export function WellnessHistoryDialog({
 
         {isLoading ? (
           <div className="h-40 animate-pulse rounded-md bg-surface" />
+        ) : isError ? (
+          <ReadFailed what="these check-ins" onRetry={() => void refetch()} />
         ) : data.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No check-ins recorded yet.
