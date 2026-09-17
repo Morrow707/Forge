@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { ForgeMark } from "@/components/forge-mark";
@@ -16,10 +16,32 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
  * they are waiting on rather than an app that is broken. The one action
  * available is nudging the parent, and it re-sends to the address already on
  * file rather than letting the athlete pick a new one.
+ *
+ * IT HAS TO KEEP CHECKING. The hold is released by something that happens in somebody else's
+ * inbox, on another device, with nothing to tell this screen about it -- and /api/auth/me is
+ * fetched once, at sign-in. Without the poll below, "as soon as they finish, everything here
+ * unlocks for you" was untrue: an athlete whose parent had already finished sat on this screen
+ * until they worked out how to force a reload, which on the native app means killing it. The
+ * one promise this screen makes is the one it could not keep.
  */
 export default function GuardianPendingPage() {
   const { logoutMutation } = useAuth();
+  const qc = useQueryClient();
   const [sent, setSent] = useState(false);
+
+  // Cheap (one row, no joins) and only ever runs while an athlete is actually being held here,
+  // so 15s is a fast unlock rather than a load. Re-checking on focus covers the common shape:
+  // the athlete is standing next to the parent watching them do it, and comes back to the app
+  // the moment they are done.
+  useEffect(() => {
+    const recheck = () => qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    const timer = setInterval(recheck, 15_000);
+    window.addEventListener("focus", recheck);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", recheck);
+    };
+  }, [qc]);
 
   const resend = useMutation({
     mutationFn: async () => {
