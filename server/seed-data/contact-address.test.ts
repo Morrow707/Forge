@@ -10,6 +10,7 @@ import {
   EULA_DRAFT,
 } from "./legal-documents-draft";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./assumption-of-risk";
+import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
 
 /** Three documents once gave three different contact addresses, one of them on a domain that
  * doesn't match the registered application identity. The failure mode is quiet: somebody
@@ -24,6 +25,9 @@ const DOCUMENTS: Array<[string, string]> = [
   ["institutional agreement", INSTITUTIONAL_AGREEMENT_DRAFT],
   ["eula", EULA_DRAFT],
   ["assumption of risk", ASSUMPTION_OF_RISK_RELEASE],
+  // Not published yet, but it carries an address and a postal address, so it is covered by the
+  // one-address rule from the start rather than the day somebody wires it up.
+  ["ai terms of use", AI_TERMS_OF_USE],
 ];
 
 describe("contact address across the published documents", () => {

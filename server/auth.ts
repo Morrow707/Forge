@@ -547,8 +547,12 @@ export function setupAuth(app: Express) {
       // anything new can be assigned to them (see
       // storage.assertMinorHasActiveGuardian) -- collecting the email now,
       // required, is what makes that reachable at all instead of a
-      // permanent dead end. In practice only tier2 reaches this: tier1 is
-      // already rejected above.
+      // permanent dead end. EVERY minor reaches this, tier1 included -- the
+      // comment here used to say tier1 was "already rejected above", which
+      // was true of the route that sent under-13s to find a coach and has
+      // been false since it stopped (see the note eleven lines up). A stale
+      // comment about who is rejected at signup is the kind that gets read
+      // as the rule.
       if (role === "athlete" && tier !== "tier3_adult_18plus" && !guardianEmail) {
         return res.status(400).json({
           message: "A parent or guardian's email is required for an athlete under 18.",
