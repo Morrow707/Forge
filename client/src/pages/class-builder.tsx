@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkillExercise } from "@shared/schema";
+import { ReadFailed } from "@/components/read-failed";
 
 type RosterEntry = { id: number; name: string; email: string };
 type SkillTrackingLevel = "none" | "sprint" | "mechanics";
@@ -335,7 +336,7 @@ export function ClassBuilderPage({
   const qc = useQueryClient();
   const classId = Number(id);
 
-  const { data: cls, isLoading } = useQuery<any>({
+  const { data: cls, isLoading, isError, refetch } = useQuery<any>({
     queryKey: [`${apiBase}/classes`, classId],
     queryFn: () => getJson(`${apiBase}/classes/${classId}`),
   });
@@ -678,6 +679,16 @@ export function ClassBuilderPage({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, editable]);
+
+  // `!hydrated` never clears on a failed read, so this used to be a spinner that spins
+  // forever -- which reads as a slow page, not a broken one, and nobody retries it.
+  if (isError) {
+    return (
+      <AppShell title="Class">
+        <ReadFailed what="this class" onRetry={() => void refetch()} />
+      </AppShell>
+    );
+  }
 
   if (isLoading || !hydrated) {
     return (

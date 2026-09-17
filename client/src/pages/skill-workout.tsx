@@ -41,6 +41,7 @@ import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
+import { ReadFailed } from "@/components/read-failed";
 
 type SkillSet = {
   setNumber: number;
@@ -105,7 +106,7 @@ export default function SkillWorkoutPage() {
   const { user } = useAuth();
 
   const dayPath = `/api/athlete/skill-day/${assignmentId}/${dayId}?date=${date}`;
-  const { data: day, isLoading } = useQuery<SkillDayInfo>({
+  const { data: day, isLoading, isError, refetch } = useQuery<SkillDayInfo>({
     queryKey: ["/api/athlete/skill-day", assignmentId, dayId, date],
     queryFn: () => getJson(dayPath),
   });
@@ -231,6 +232,17 @@ export default function SkillWorkoutPage() {
     onSuccess: (data) => setAiFeedback(data.assistantMessage.content),
     onError: (err: ApiError) => toast.error(err.message || "Could not get AI feedback"),
   });
+
+  // `!day` covered a failed read too, so a dropped request left an athlete on a
+  // spinner that never resolves, mid-session, with no way to know it had failed or to
+  // retry it short of restarting the app.
+  if (isError) {
+    return (
+      <AppShell title="Skill Session">
+        <ReadFailed what="this session" onRetry={() => void refetch()} />
+      </AppShell>
+    );
+  }
 
   if (isLoading || !day) {
     return (

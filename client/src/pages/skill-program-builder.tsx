@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Save, ArrowLeft, MoonStar, Send, Lock, ChevronUp, ChevronDown, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkillExercise } from "@shared/schema";
+import { ReadFailed } from "@/components/read-failed";
 
 type RosterEntry = { id: number; name: string; email: string };
 
@@ -178,7 +179,7 @@ export function SkillProgramBuilderPage({
   const qc = useQueryClient();
   const programId = Number(id);
 
-  const { data: program, isLoading } = useQuery<any>({
+  const { data: program, isLoading, isError, refetch } = useQuery<any>({
     queryKey: [`${apiBase}/skill-programs`, programId],
     queryFn: () => getJson(`${apiBase}/skill-programs/${programId}`),
   });
@@ -304,6 +305,16 @@ export function SkillProgramBuilderPage({
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save skill program"),
   });
+
+  // `!hydrated` never clears on a failed read, so this used to be a spinner that spins
+  // forever -- which reads as a slow page, not a broken one, and nobody retries it.
+  if (isError) {
+    return (
+      <AppShell title="Skill Program">
+        <ReadFailed what="this skill program" onRetry={() => void refetch()} />
+      </AppShell>
+    );
+  }
 
   if (isLoading || !hydrated) {
     return (

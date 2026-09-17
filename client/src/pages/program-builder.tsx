@@ -77,6 +77,7 @@ import {
 } from "@shared/schema";
 import { WEEKDAY_OPTIONS } from "@/lib/weekdays";
 import { todayIso } from "@/lib/local-date";
+import { ReadFailed } from "@/components/read-failed";
 
 type RosterEntry = { id: number; name: string; email: string };
 type ScheduleDay = {
@@ -320,7 +321,7 @@ export function ProgramBuilderPage({
   const qc = useQueryClient();
   const programId = Number(id);
 
-  const { data: program, isLoading } = useQuery<any>({
+  const { data: program, isLoading, isError, refetch } = useQuery<any>({
     queryKey: [`${apiBase}/programs`, programId],
     queryFn: () => getJson(`${apiBase}/programs/${programId}`),
   });
@@ -568,6 +569,16 @@ export function ProgramBuilderPage({
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not add to your calendar"),
   });
+
+  // `!hydrated` never clears on a failed read, so this used to be a spinner that spins
+  // forever -- which reads as a slow page, not a broken one, and nobody retries it.
+  if (isError) {
+    return (
+      <AppShell title="Program">
+        <ReadFailed what="this program" onRetry={() => void refetch()} />
+      </AppShell>
+    );
+  }
 
   if (isLoading || !hydrated) {
     return (

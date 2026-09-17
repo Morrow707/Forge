@@ -58,13 +58,8 @@ const KNOWN = new Set<string>([
   "components/calendar-view.tsx",
   "components/class-lesson-reader-dialog.tsx",
   "components/coach-day-edit-dialog.tsx",
-  "pages/admin/academy-track-builder.tsx",
   "pages/admin/knowledge-base.tsx",
-  "pages/class-builder.tsx",
   "pages/coach/analytics.tsx",
-  "pages/program-builder.tsx",
-  "pages/skill-program-builder.tsx",
-  "pages/skill-workout.tsx",
   "pages/workout.tsx",
 ]);
 

@@ -15,6 +15,7 @@ import {
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Save, Eye } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 type LessonForm = {
   id?: number;
@@ -98,7 +99,7 @@ export default function AdminAcademyTrackBuilder() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
 
-  const { data: existing, isLoading } = useQuery<TrackFull>({
+  const { data: existing, isLoading, isError, refetch } = useQuery<TrackFull>({
     queryKey: [`/api/admin/academy/tracks/${trackId}`],
     queryFn: () => getJson(`/api/admin/academy/tracks/${trackId}`),
     enabled: trackId != null,
@@ -165,6 +166,20 @@ export default function AdminAcademyTrackBuilder() {
     return (
       <AppShell title="Loading…">
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
+      </AppShell>
+    );
+  }
+
+  // DESTRUCTIVE IF LEFT ALONE. Editing an existing track hydrates this form from the
+  // query in an effect; a failed read means the effect never runs, so title, lessons
+  // and quiz questions stay at their empty initial values -- and Save PUTs that whole
+  // payload over the track. An admin who opens a track, sees an empty form and presses
+  // Save deletes every lesson and question in it. The form does not open until the read
+  // lands.
+  if (!isNew && isError) {
+    return (
+      <AppShell title="Coaches Corner Lesson">
+        <ReadFailed what="this track" onRetry={() => void refetch()} />
       </AppShell>
     );
   }
