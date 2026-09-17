@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { apiRequest, ApiError, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { ReadFailed } from "@/components/read-failed";
 import { Flag, Check } from "lucide-react";
 
 type ProblemReport = {
@@ -24,7 +25,7 @@ type ProblemReport = {
 export function ProblemReportsContent() {
   const qc = useQueryClient();
   const [showCleared, setShowCleared] = useState(false);
-  const { data, isLoading } = useQuery<ProblemReport[]>({
+  const { data, isLoading, isError, refetch } = useQuery<ProblemReport[]>({
     queryKey: ["/api/admin/problem-reports", showCleared],
     // getJson, not a bare fetch. The native app authenticates with a bearer token rather than a
     // cookie (see queryClient's getNativeToken), so `credentials: "include"` authenticated
@@ -66,6 +67,10 @@ export function ProblemReportsContent() {
       <CardContent className="space-y-4">
         {isLoading ? (
           <div className="h-40 animate-pulse rounded-md bg-surface" />
+        ) : isError ? (
+          // "Nothing open" is the sentence that makes somebody close the tab. These are the
+          // reports users sent because something was broken enough to stop and write about.
+          <ReadFailed what="the problem reports" onRetry={() => void refetch()} />
         ) : !Array.isArray(data) || data.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {showCleared ? "No reports yet." : "Nothing open."}

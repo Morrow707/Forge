@@ -27,7 +27,7 @@ export function ReengagementBanner() {
   const [sentIds, setSentIds] = useState<Set<number>>(new Set());
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY));
 
-  const { data } = useQuery<InactiveAthlete[]>({
+  const { data, isError } = useQuery<InactiveAthlete[]>({
     queryKey: ["/api/coach/inactive-athletes"],
     queryFn: () => getJson("/api/coach/inactive-athletes"),
     staleTime: 5 * 60 * 1000,
@@ -45,6 +45,12 @@ export function ReengagementBanner() {
     },
   });
 
+  // Hidden is this banner's "everybody has trained recently", so a failed read says exactly
+  // that. Staying silent is the right call anyway -- it is a nudge prompt, not a record, and a
+  // failure box pinned above the dashboard would be worse than the thing it is reporting. What
+  // is NOT right is silence that looks like an answer, so this is the one case on the list where
+  // the honest handling is to stay hidden deliberately rather than by accident.
+  if (isError) return null;
   if (!data || data.length === 0) return null;
 
   const currentKey = [...data]

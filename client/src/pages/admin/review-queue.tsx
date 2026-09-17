@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { ReadFailed } from "@/components/read-failed";
 import { formatDistanceToNow } from "date-fns";
 import { Check, X, Pencil, CheckCircle2, TrendingUp, Flag, Youtube, Users } from "lucide-react";
 
@@ -83,7 +84,11 @@ const PAGE_SIZE = 100;
 export function ReviewQueueContent() {
   const qc = useQueryClient();
   const [submissionsLoadedPages, setSubmissionsLoadedPages] = useState(1);
-  const { data: submissionsResult } = useQuery<{ rows: PendingSubmission[]; total: number }>({
+  const {
+    data: submissionsResult,
+    isError: submissionsFailed,
+    refetch: refetchSubmissions,
+  } = useQuery<{ rows: PendingSubmission[]; total: number }>({
     queryKey: ["/api/admin/submissions", submissionsLoadedPages],
     queryFn: () =>
       getJson(`/api/admin/submissions?limit=${submissionsLoadedPages * PAGE_SIZE}&offset=0`),
@@ -93,7 +98,11 @@ export function ReviewQueueContent() {
   const submissionsHasMore = submissions.length < submissionsTotal;
 
   const [reportsLoadedPages, setReportsLoadedPages] = useState(1);
-  const { data: reportsResult } = useQuery<{ rows: OpenReport[]; total: number }>({
+  const {
+    data: reportsResult,
+    isError: reportsFailed,
+    refetch: refetchReports,
+  } = useQuery<{ rows: OpenReport[]; total: number }>({
     queryKey: ["/api/admin/reports", reportsLoadedPages],
     queryFn: () => getJson(`/api/admin/reports?limit=${reportsLoadedPages * PAGE_SIZE}&offset=0`),
   });
@@ -144,11 +153,16 @@ export function ReviewQueueContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {submissions.length === 0 && (
+            {submissionsFailed ? (
+              <ReadFailed
+                what="the trending submissions"
+                onRetry={() => void refetchSubmissions()}
+              />
+            ) : submissions.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 Nothing trending right now.
               </p>
-            )}
+            ) : null}
             {submissions.map((s) => (
               <div
                 key={s.id}
@@ -243,11 +257,16 @@ export function ReviewQueueContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {reports.length === 0 && (
+            {reportsFailed ? (
+              // Two lists, two reads, and they fail independently -- so each says whether it
+              // loaded rather than one banner covering the page and leaving the other list
+              // looking authoritative.
+              <ReadFailed what="the open reports" onRetry={() => void refetchReports()} />
+            ) : reports.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 No open reports.
               </p>
-            )}
+            ) : null}
             {reports.map((r) => (
               <div
                 key={r.id}

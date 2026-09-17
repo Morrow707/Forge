@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { getJson } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AthleteAvatar } from "@/components/athlete-avatar";
 import { Trophy } from "lucide-react";
@@ -25,7 +26,7 @@ type RecentPr = {
  * when the roster genuinely has no PRs in the recent window, same pattern
  * WeeklyDigestCard uses for its "quiet week" state. */
 export function TeamPrWallCard() {
-  const { data } = useQuery<RecentPr[]>({
+  const { data, isError, refetch } = useQuery<RecentPr[]>({
     queryKey: ["/api/coach/recent-prs"],
     queryFn: () => getJson("/api/coach/recent-prs"),
     staleTime: 5 * 60 * 1000,
@@ -43,7 +44,15 @@ export function TeamPrWallCard() {
         <CardDescription>Recent personal records across your roster.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
-        {data.length === 0 ? (
+        {isError ? (
+          // "No PRs in the last 30 days" is a judgement on a squad's month, shown to their
+          // coach on the dashboard.
+          <ReadFailed
+            what="your team's recent PRs"
+            onRetry={() => void refetch()}
+            className="flex flex-col items-start gap-2 py-1 text-left"
+          />
+        ) : data.length === 0 ? (
           <p className="py-1 text-sm text-muted-foreground">
             No PRs logged across your roster in the last 30 days.
           </p>
