@@ -6743,6 +6743,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? waivers.map((w) => ({ ...w, fileUrl: "" }))
             : waivers,
         summary: await storage.externalWaiverSummary(athleteId),
+        // Whose documents these are. A coach uploading on behalf of an athlete needs the page to
+        // say the athlete's name, or the one screen in Forge where you can file somebody else's
+        // medical form looks exactly like the one where you file your own.
+        athleteName: (await storage.getUser(athleteId))?.name ?? null,
       });
     } catch (err) {
       next(err);

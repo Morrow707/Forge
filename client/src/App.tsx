@@ -493,6 +493,12 @@ function Router() {
         <Route path="/documents">
           <AuthedRoute component={DocumentsPage} />
         </Route>
+        {/* The same page, filing for somebody else. A coach reaches it from the chase screen;
+            the server checks the relationship on both the read and the upload, so the route
+            itself does not need a role. */}
+        <Route path="/documents/:athleteId">
+          <AuthedRoute component={DocumentsPage} />
+        </Route>
         {/* The coach's view of everyone ELSE's documents. /documents above is their own. */}
         <Route path="/coach/athlete-documents">
           <ProtectedRoute role="coach" component={CoachAthleteDocuments} />

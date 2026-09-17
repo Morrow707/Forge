@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, X, Minus, Clock, Upload, FileWarning } from "lucide-react";
@@ -102,6 +103,18 @@ function StatusMark({ status, required }: { status: Summary["status"]; required:
 
 export default function DocumentsPage() {
   const { user } = useAuth();
+  // FILING SOMEBODY ELSE'S PAPERWORK IS THE SAME PAGE.
+  //
+  // The upload, the checklist and the review are identical whoever the document belongs to, and
+  // the only thing that changes is whose record it lands on -- so a coach opens this page for a
+  // rostered athlete rather than a second, slightly different copy of it that drifts. The server
+  // decides whether they may: /api/waivers/:athleteId runs canManageWaiversFor on both the read
+  // and the upload, so a hand-typed id in the URL bar gets a 403 rather than a stranger's
+  // medical form.
+  const params = useParams<{ athleteId?: string }>();
+  const routeAthleteId = Number(params.athleteId);
+  const forSomeoneElse = Number.isInteger(routeAthleteId) && routeAthleteId !== user?.id;
+  const targetId = forSomeoneElse ? routeAthleteId : user?.id;
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLDivElement>(null);
@@ -115,16 +128,25 @@ export default function DocumentsPage() {
   // participation-waiver row does not flicker out from under a rostered athlete on first load.
   // See useIsFreeAgent's own comment on why undefined is not "no".
   const isFreeAgent = useIsFreeAgent();
-  const audience = documentAudienceFor({
-    role: user?.role ?? "athlete",
-    hasCoach: isFreeAgent !== true,
-  });
+  const audience = forSomeoneElse
+    // Uploading FOR an athlete means somebody coaches them, which is what decides the checklist.
+    // Their own free-agent status is not what is being asked, and reading the viewer's would put
+    // a coach's credential list in front of an athlete's forms.
+    ? documentAudienceFor({ role: "athlete", hasCoach: true })
+    : documentAudienceFor({
+        role: user?.role ?? "athlete",
+        hasCoach: isFreeAgent !== true,
+      });
   const checklist = REQUIRED_DOCUMENTS[audience];
 
-  const key = [`/api/waivers/${user?.id ?? 0}`];
-  const { data, isLoading } = useQuery<{ waivers: Waiver[]; summary: Summary[] }>({
+  const key = [`/api/waivers/${targetId ?? 0}`];
+  const { data, isLoading } = useQuery<{
+    waivers: Waiver[];
+    summary: Summary[];
+    athleteName: string | null;
+  }>({
     queryKey: key,
-    enabled: !!user?.id,
+    enabled: !!targetId,
   });
 
   const byKind = new Map((data?.summary ?? []).map((s) => [s.kind, s]));
@@ -139,7 +161,7 @@ export default function DocumentsPage() {
       if (expiresOn) form.append("expiresOn", expiresOn);
       // uploadWithProgress, not apiRequest: a scanned multi-page packet over gym wifi is slow
       // enough that a bare spinner reads as hung.
-      return uploadWithProgress(`/api/waivers/${user!.id}`, form);
+      return uploadWithProgress(`/api/waivers/${targetId}`, form);
     },
     onSuccess: () => {
       toast.success("Uploaded. It'll show as on file once we've checked it.");
@@ -163,22 +185,31 @@ export default function DocumentsPage() {
     (d) => d.required && (byKind.get(d.kind)?.status ?? "missing") !== "accepted",
   ).length;
 
+  const who = data?.athleteName ?? "this athlete";
+
   return (
-    <AppShell title="Documents">
+    <AppShell title={forSomeoneElse ? "Athlete documents" : "Documents"}>
       <div className="mx-auto max-w-2xl space-y-4 p-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {audience === "coach" ? "Your coaching credentials" : "Your forms"}
+              {forSomeoneElse
+                ? `${who}'s forms`
+                : audience === "coach"
+                  ? "Your coaching credentials"
+                  : "Your forms"}
             </CardTitle>
             <CardDescription>
-              {audience === "coach"
+              {forSomeoneElse
+                ? `Filing on ${who}'s behalf. Whatever their school or club already had signed -- upload it here and it lands on their record, not yours.`
+                : audience === "coach"
                 ? "Certifications and clearances you already hold. Upload a copy so it's on file."
                 : audience === "athlete_rostered"
                   ? "If your school or club already had these signed, upload those instead of filling in ours again."
                   : "You train without a coach on Forge, so there's no school waiver to upload. These two still matter."}{" "}
-              Nothing here replaces the agreements you accepted when you signed up -- this is a
-              copy of what was signed elsewhere, so we know it exists.
+              Nothing here replaces the agreements {forSomeoneElse ? "they" : "you"} accepted when
+              {forSomeoneElse ? " they" : " you"} signed up -- this is a copy of what was signed
+              elsewhere, so we know it exists.
             </CardDescription>
           </CardHeader>
           <CardContent>

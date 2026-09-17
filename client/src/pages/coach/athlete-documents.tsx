@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Clock, FileWarning, Send } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, FileWarning, Send, Upload } from "lucide-react";
+import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,9 +15,15 @@ import type { DocumentStatus } from "@shared/required-documents";
  * existed if the athlete it belonged to happened to open their own page -- and nobody was ever
  * told. This is the other half: the coach sees the gaps, and can ask for them.
  *
- * READ-ONLY ABOUT THE DOCUMENTS THEMSELVES. Nothing here opens a file. A coach can already
- * upload on behalf of a rostered athlete from the athlete's own page, and reviewing is the
- * admin's job -- this screen is the chase, not the filing cabinet.
+ * NOTHING HERE OPENS A FILE. Reviewing is the admin's job, and a coach does not need to read a
+ * child's medical form to know whether one arrived. The rows say status, never contents.
+ *
+ * FILING IS A LINK, NOT A SECOND SCREEN. This comment used to say a coach could already upload
+ * for a rostered athlete "from the athlete's own page", which was true of the SERVER and of
+ * nothing the app could reach: /documents was hardcoded to the logged-in user. The route now
+ * takes an athlete id and the same page files for them, because a club that ran its own
+ * paperwork in August is holding the whole roster's forms already -- asking it to chase each
+ * parent for a document on its own desk is how a checklist stays red.
  */
 
 type Row = {
@@ -148,18 +155,32 @@ export default function CoachAthleteDocuments() {
                         : `${row.outstanding} outstanding`}
                     </CardDescription>
                   </div>
-                  {row.outstanding > 0 && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 gap-1.5"
-                      disabled={request.isPending}
-                      onClick={() => request.mutate([row.athleteId])}
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      Ask
+                  <div className="flex shrink-0 items-center gap-2">
+                    {/* Two different jobs, and a coach needs both. "Ask" puts it back on the
+                        family, which is right when the form is at home in a drawer. "Upload"
+                        is for when the coach is the one holding it -- a club that ran its own
+                        paperwork at the start of the season has the whole roster's forms in a
+                        folder, and making them chase each parent for a document already on
+                        their desk is how a checklist stays red. */}
+                    <Button asChild size="sm" variant="outline" className="gap-1.5">
+                      <Link href={`/documents/${row.athleteId}`}>
+                        <Upload className="h-3.5 w-3.5" />
+                        Upload
+                      </Link>
                     </Button>
-                  )}
+                    {row.outstanding > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        disabled={request.isPending}
+                        onClick={() => request.mutate([row.athleteId])}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        Ask
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-1.5 text-xs">
