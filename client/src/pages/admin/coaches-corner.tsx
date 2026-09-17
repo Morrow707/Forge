@@ -10,6 +10,7 @@ import { AcademyQuiz } from "@/components/academy-quiz";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, Circle, Pencil, Plus } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 type Lesson = {
   id: number;
@@ -44,7 +45,7 @@ export default function AdminCoachesCorner() {
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
 
-  const { data: tracks = [], isLoading } = useQuery<Track[]>({
+  const { data: tracks = [], isLoading, isError, refetch } = useQuery<Track[]>({
     queryKey: ["/api/admin/academy/tracks"],
     queryFn: () => getJson("/api/admin/academy/tracks"),
   });
@@ -182,6 +183,7 @@ export default function AdminCoachesCorner() {
         Coaches Corner nav item next to the account menu). Click a track to read it, or the pencil to
         edit its lessons and quiz.
       </p>
+      {isError && <ReadFailed what="the coach-education tracks" onRetry={() => void refetch()} />}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tracks.map((track) => (
           // The whole card opens the track, not just the words in its title. The card already

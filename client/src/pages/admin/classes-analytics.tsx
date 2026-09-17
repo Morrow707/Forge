@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ReadFailed } from "@/components/read-failed";
 import { GraduationCap, Users, Trophy, ChevronDown, ChevronUp, Lock } from "lucide-react";
 
 type LessonFunnelRow = {
@@ -135,7 +136,7 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
 }
 
 export default function AdminClassesAnalytics() {
-  const { data, isLoading } = useQuery<ClassAnalytics>({
+  const { data, isLoading, isError, refetch } = useQuery<ClassAnalytics>({
     queryKey: ["/api/admin/classes/analytics"],
   });
 
@@ -143,6 +144,10 @@ export default function AdminClassesAnalytics() {
     <AppShell title="Class Analytics">
       <div className="space-y-6">
         {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+
+        {/* Without this the page renders completely blank on a failed read -- no error,
+            no explanation, just an empty Class Analytics screen. */}
+        {isError && <ReadFailed what="class analytics" onRetry={() => void refetch()} />}
 
         {data && (
           <>

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
 import { AlertTriangle } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 type UsageRow = {
   day: string;
@@ -34,7 +35,7 @@ const num = (n: number) => n.toLocaleString();
  */
 export default function AdminAiSpend() {
   const [days, setDays] = useState(30);
-  const { data, isLoading } = useQuery<Usage>({
+  const { data, isLoading, isError, refetch } = useQuery<Usage>({
     queryKey: ["/api/admin/ai-usage", days],
     queryFn: () => getJson(`/api/admin/ai-usage?days=${days}`),
   });
@@ -94,6 +95,14 @@ export default function AdminAiSpend() {
 
             {isLoading ? (
               <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : isError ? (
+              // "Either the AI has not been used, or this is a fresh install" is a
+              // definite statement about the bill. A failed read is neither of those.
+              <ReadFailed
+                what="AI usage"
+                onRetry={() => void refetch()}
+                className="flex flex-col items-start gap-2 text-left"
+              />
             ) : rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nothing recorded in this window. Either the AI has not been used, or this is a

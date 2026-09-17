@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { getJson, resolveApiUrl, getNativeToken } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -37,12 +38,12 @@ export function ResearchExportsContent() {
   const [notes, setNotes] = useState("");
   const [generating, setGenerating] = useState(false);
 
-  const { data: consent } = useQuery<ConsentCounts>({
+  const { data: consent, isError: consentFailed, refetch: refetchConsent } = useQuery<ConsentCounts>({
     queryKey: ["/api/admin/research-consent"],
     queryFn: () => getJson("/api/admin/research-consent"),
   });
 
-  const { data: log = [] } = useQuery<ExportLogRow[]>({
+  const { data: log = [], isError: logFailed, refetch: refetchLog } = useQuery<ExportLogRow[]>({
     queryKey: ["/api/admin/research-exports"],
     queryFn: () => getJson("/api/admin/research-exports"),
   });
@@ -113,6 +114,17 @@ export function ResearchExportsContent() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* A failed read renders 0 of 0 through the ?? fallbacks, which is both a
+                consent figure and the "nothing can be reported" warning -- two claims
+                about whether athletes agreed, made without asking anybody. */}
+            {consentFailed ? (
+              <ReadFailed
+                what="the consent counts"
+                onRetry={() => void refetchConsent()}
+                className="flex flex-col items-start gap-2 text-left"
+              />
+            ) : (
+            <>
             <p className="font-display text-3xl font-bold">
               {consented}
               <span className="ml-2 text-base font-normal text-muted-foreground">
@@ -125,6 +137,8 @@ export function ResearchExportsContent() {
                 Below 10 consenting athletes nothing can be reported at all, so no extract will
                 generate until more people agree.
               </p>
+            )}
+            </>
             )}
           </CardContent>
         </Card>
@@ -183,7 +197,16 @@ export function ResearchExportsContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {log.length === 0 ? (
+            {/* This log is the record of what athlete data has left the organisation.
+                "No extracts have been generated yet" off a failed read is the one wrong
+                answer it can give. */}
+            {logFailed ? (
+              <ReadFailed
+                what="the extract log"
+                onRetry={() => void refetchLog()}
+                className="flex flex-col items-start gap-2 text-left"
+              />
+            ) : log.length === 0 ? (
               <p className="text-sm text-muted-foreground">No extracts have been generated yet.</p>
             ) : (
               log.map((row) => (
