@@ -237,3 +237,81 @@ change makes one of them false, the change is wrong.
   survive; only the file and two video-specific flags are cleared. That is
   what makes the retention policy defensible AND keeps the research data
   intact. Both properties depend on it.
+
+## Settled questions that keep getting re-litigated
+
+Written down because they have come up more than once and been answered the
+same way each time. Re-opening one costs a round trip; if the answer changes,
+change it HERE rather than arguing it again from scratch.
+
+- **FERPA and "school records" do not apply.** Raised as a gap at least twice,
+  and wrong both times. Forge receives name, gender, age, sport and position --
+  the textbook definition of directory information, which is what schools
+  disclose about athletes routinely. No GPA, no majors, no transcripts, no
+  disciplinary records, nothing out of a student information system. A school
+  official addendum or a data-processing agreement is procurement paperwork a
+  particular school may hand Forge; it is not a document to write in advance.
+  Scott, 2026-09-17: "why would we be handling school records? ... we are not
+  getting GPA, we aren't getting majors".
+- **Render holds everything.** Postgres on Render is the database and
+  `STORAGE_PATH` on Render is where every video and uploaded document lives.
+  Stripe sees payment details, Apple sees sign-in. Anthropic receives the text
+  of a prompt at the moment of a model call and stores nothing -- it is not
+  where the data lives, and saying so to a school would be wrong.
+- **Coaches supply athletes, not data about themselves.** What Forge holds for
+  a coach is their team and their card. A separate coach acceptable-use
+  agreement is not needed. The one real edge: a coach uploads OTHER people's
+  documents (`medical_clearance`, `emergency_authorization` are minors'
+  records), so the warranty that they had the right to upload it belongs in the
+  upload flow, not in a new agreement.
+- **No child medical consent form and no emergency contact field.** Forge is
+  never present at a session, so a treatment authorization has no recipient,
+  and an emergency contact is a third party's personal data with no operational
+  path. The coach knows who to call. Asked and answered, 2026-09-06.
+- **Payments stay off through beta.** The public Terms of Service says Forge
+  does not currently charge, and that is correct TODAY. The signup Terms of Use
+  describes paid plans because that is the text wanted AT LAUNCH. The two
+  reading differently is deliberate, not a contradiction to tidy up. Scott,
+  2026-09-17: "we are still in beta, so payments are turned off ... keep
+  payments off".
+
+## What deletion keeps, and what it does not
+
+**Current behaviour, so nobody has to re-derive it:** `deleteOwnAccount` is a
+total wipe for every role. It deletes the uploaded files, then
+`db.delete(users)`, and every child row cascades. There is no `trackingOptOut`
+branch and never has been -- the function has been touched three times since
+`22fffc9d` created it and was a full wipe in all of them. Nothing was removed
+or changed; the retention half was never wired in.
+
+**The intent, stated more than once:** an athlete who did not opt out of data
+collection can delete their account, and Forge keeps the SCRUBBED data for
+later research -- "15 year old football player that does a certain weight
+lifting protocol, i want to see what that looks like" (Scott, 2026-09-17).
+
+**Where the two diverge, and it is one place.** The scrubbed store already
+exists: `research_subjects` and its two child tables, read by
+`queryResearchCohort`. What breaks is that mirror membership is DERIVED from
+the live `users` row (`eligible()` in `server/research-mirror.ts`), so the
+nightly rebuild treats a deleted athlete's subject rows as stale orphans and
+reaps them. The retention is not blocked by policy; it is undone by a garbage
+collector that cannot tell "withdrew" from "deleted".
+
+**The distinction that causes the loop.** Two separate flags, and the mirror
+requires BOTH:
+- `trackingOptOut` -- collection for the athlete's own coaching.
+- `researchDataConsent` -- opt-IN, default false, inclusion in the mirror.
+
+So an athlete who merely never opted out of tracking is NOT in the mirror and
+never was. Admin's live surfaces see them through `queryTrackedCohort`, which
+reads live rows -- which is why deleting the account removes them from admin's
+view entirely. "Didn't opt out" and "consented to research" are not the same
+population, and any plan that says "keep the non-opted-out athletes' data"
+means widening mirror membership, which is a bigger consent question than the
+deletion change.
+
+**What the deletion change takes** (not yet done): keep the subject rows and
+null `users.researchSubjectId` in `deleteOwnAccount`; teach the sweep to keep
+a deliberately-orphaned subject rather than reap it; and one sentence in the
+research-consent text saying the scrubbed record survives account deletion,
+because consent was given as an account holder, not in perpetuity.
