@@ -27,7 +27,13 @@ function LegalDocumentPage({
   otherHref,
   otherLabel,
 }: {
-  docType: "terms_of_service" | "privacy_policy" | "eula" | "biometric_waiver" | "assumption_of_risk";
+  docType:
+    | "terms_of_service"
+    | "privacy_policy"
+    | "eula"
+    | "biometric_waiver"
+    | "assumption_of_risk"
+    | "ai_terms_of_use";
   title: string;
   otherHref: string;
   otherLabel: string;
@@ -119,6 +125,17 @@ export function AssumptionOfRiskPage() {
       title="Assumption of Risk and Release"
       otherHref="/terms"
       otherLabel="Terms of Service →"
+    />
+  );
+}
+
+export function AiTermsOfUsePage() {
+  return (
+    <LegalDocumentPage
+      docType="ai_terms_of_use"
+      title="Artificial Intelligence Terms of Use"
+      otherHref="/legal"
+      otherLabel="Signup Agreement \u2192"
     />
   );
 }

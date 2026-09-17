@@ -9,6 +9,7 @@ import {
   EULA_DRAFT,
 } from "./legal-documents-draft";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./assumption-of-risk";
+import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
 
 const DRAFT_FOR_TYPE: Record<string, string> = {
   terms_of_service: TERMS_OF_SERVICE_DRAFT,
@@ -18,6 +19,7 @@ const DRAFT_FOR_TYPE: Record<string, string> = {
   institutional_agreement: INSTITUTIONAL_AGREEMENT_DRAFT,
   eula: EULA_DRAFT,
   assumption_of_risk: ASSUMPTION_OF_RISK_RELEASE,
+  ai_terms_of_use: AI_TERMS_OF_USE,
 };
 
 describe("legal document types", () => {

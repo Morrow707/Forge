@@ -5,21 +5,34 @@ import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
 
 const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 
-/** The Rocket Lawyer AI terms are ON RECORD, NOT IN FORCE.
+/** The AI Terms of Use, now live.
  *
- * Four clauses in it contradict what Forge already tells people, and one of them -- the
- * entire-agreement clause -- carves out only the data and privacy policies, so a user accepting
- * it could argue it superseded the assumption-of-risk release and the biometric release. Those
- * are the only two documents where somebody gives up a right or grants a consent.
- *
- * So this pins the gap between "we have the text" and "people have agreed to it". Wiring it up
- * is a deliberate act that has to break this test first.
+ * Generated on Rocket Lawyer and revised three times against what Forge actually does. Each
+ * assertion below is one of the corrections, pinned so it cannot quietly come back -- four of
+ * them contradicted something Forge already tells people, and one, the entire-agreement clause,
+ * could have been argued to supersede the assumption-of-risk and biometric releases.
  */
-describe("the generated AI terms", () => {
-  it("is not seeded, shown, or accepted anywhere", () => {
-    const seed = read("server/seed.ts");
-    expect(seed).not.toContain("AI_TERMS_OF_USE");
-    expect(read("server/routes.ts")).not.toContain("AI_TERMS_OF_USE");
+describe("the AI terms", () => {
+  it("is wired end to end, not half-applied", () => {
+    // Half-wired is the worst of the three states: a document that exists, is referenced
+    // somewhere, and cannot actually be opened by the person being asked to accept it.
+    expect(read("shared/schema.ts")).toContain('"ai_terms_of_use"');
+    expect(read("server/reconcile-schema.ts")).toContain(
+      `ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'ai_terms_of_use';`,
+    );
+    expect(read("server/seed.ts")).toContain('updateLegalDocument("ai_terms_of_use", AI_TERMS_OF_USE)');
+    expect(read("client/src/App.tsx")).toContain('<Route path="/ai-terms"');
+    expect(read("client/src/pages/legal-document.tsx")).toContain('docType="ai_terms_of_use"');
+    // Admin-editable like every other one, or the only way to correct it is a deploy.
+    expect(read("client/src/pages/admin/documents.tsx")).toContain("ai_terms_of_use:");
+  });
+
+  it("is seeded only when absent, so an admin edit is never overwritten", () => {
+    // Every deploy runs the seed. updateLegalDocument behind a getLegalDocument check is what
+    // stops it reverting text somebody fixed in the admin tab.
+    expect(read("server/seed.ts")).toMatch(
+      /if \(!\(await storage\.getLegalDocument\("ai_terms_of_use"\)\)\) \{\s*\n\s*await storage\.updateLegalDocument\("ai_terms_of_use", AI_TERMS_OF_USE\);/,
+    );
   });
 
   it("no longer carries the four clauses that made the first version unusable", () => {

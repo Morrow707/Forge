@@ -23,6 +23,7 @@ import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT, P
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchContactPlaceholders } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
+import { AI_TERMS_OF_USE } from "./seed-data/ai-terms-of-use-draft";
 
 const LEGAL_DOC_TYPES = legalDocumentTypeEnum.enumValues;
 
@@ -6272,6 +6273,9 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   }
   if (!(await storage.getLegalDocument("assumption_of_risk"))) {
     await storage.updateLegalDocument("assumption_of_risk", ASSUMPTION_OF_RISK_RELEASE);
+  }
+  if (!(await storage.getLegalDocument("ai_terms_of_use"))) {
+    await storage.updateLegalDocument("ai_terms_of_use", AI_TERMS_OF_USE);
   }
 
   console.log("Seed complete.");

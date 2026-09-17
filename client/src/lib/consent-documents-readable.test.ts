@@ -39,6 +39,7 @@ const LEGAL_ROUTES = [
   "/eula",
   "/biometric-release",
   "/assumption-of-risk",
+  "/ai-terms",
 ];
 
 describe("legal documents on a consent surface", () => {

@@ -5972,6 +5972,13 @@ export const legalDocumentTypeEnum = pgEnum("legal_document_type", [
   // The assumption-of-risk release. Forge's only document that asks somebody to
   // give up a right, rather than granting a licence or taking a consent.
   "assumption_of_risk",
+  // The AI features specifically -- program generation, form-check feedback, the
+  // coaching assistant. A SUPPLEMENT to the signup agreement, not a rival: its own
+  // "Service" definition is the AI features and it points platform use back at that
+  // agreement, which is what keeps its entire-agreement clause narrow. It carries the
+  // indemnification, warranty disclaimer and liability cap the signup agreement does
+  // not have as standalone text.
+  "ai_terms_of_use",
 ]);
 
 /** The document types, derived so a new one cannot be added to the enum above

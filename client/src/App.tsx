@@ -37,6 +37,7 @@ import {
   EulaPage,
   BiometricReleasePage,
   AssumptionOfRiskPage,
+  AiTermsOfUsePage,
 } from "@/pages/legal-document";
 import DeleteAccountPage from "@/pages/delete-account";
 import NotFound from "@/pages/not-found";
@@ -305,6 +306,9 @@ function Router() {
         <Route path="/legal" component={LegalPage} />
         <Route path="/terms" component={TermsOfServicePage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />
+        {/* The AI features specifically. Platform use is the signup agreement's -- see the
+            "Service" definition in the document itself. */}
+        <Route path="/ai-terms" component={AiTermsOfUsePage} />
         <Route path="/eula" component={EulaPage} />
         {/* Linked from the capture-time release prompt and from all three guardian-claim
             checkboxes. Public because the claim is reached from an emailed invite, before

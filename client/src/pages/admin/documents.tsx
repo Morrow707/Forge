@@ -38,6 +38,7 @@ const DOC_LABEL: Record<LegalDocType, string> = {
   biometric_waiver: "Biometric Waiver",
   parental_notice: "Notice to Parent or Guardian",
   institutional_agreement: "Institutional Agreement",
+  ai_terms_of_use: "AI Terms of Use",
   eula: "End User License Agreement",
   assumption_of_risk: "Assumption of Risk and Release",
 };

@@ -1784,6 +1784,7 @@ ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'parental_notice';
 ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'institutional_agreement';
 ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'eula';
 ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'assumption_of_risk';
+ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'ai_terms_of_use';
 
 CREATE TABLE IF NOT EXISTS "legal_documents" (
   "id" serial PRIMARY KEY,
