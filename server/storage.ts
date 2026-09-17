@@ -4001,11 +4001,7 @@ export const storage = {
         kneeBendDepthDeg: skillSessionLogs.kneeBendDepthDeg,
       })
       .from(skillSessionLogs)
-      .leftJoin(
-        skillProgramExercises,
-        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
-      )
-      .leftJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      .leftJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
       .where(eq(skillSessionLogs.athleteId, athleteId));
     const skillSessions = skillRows.map((r) => ({
       subjectId,
@@ -7067,12 +7063,13 @@ export const storage = {
     const rows = await db
       .select({ elapsedSeconds: skillSessionLogs.elapsedSeconds })
       .from(skillSessionLogs)
-      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
+      // Read off the log's own snapshot rather than joined through the slot. A personal best is
+      // exactly the record that must not disappear because a coach tidied a program afterwards.
       .where(
         and(
           eq(skillSessionLogs.athleteId, athleteId),
           eq(skillSessionLogs.trackingLevel, "sprint"),
-          eq(skillProgramExercises.skillExerciseId, skillExerciseId),
+          eq(skillSessionLogs.skillExerciseId, skillExerciseId),
         ),
       );
     let best: number | null = null;
@@ -8962,8 +8959,10 @@ ${athleteContext}
           kneeBendDepthDeg: skillSessionLogs.kneeBendDepthDeg,
         })
         .from(skillSessionLogs)
-        .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
-        .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+        // One hop, not two: the drill is snapshotted on the log, so a capture whose slot the
+        // coach has since removed is still found and still named. Joining THROUGH the slot
+        // dropped exactly those rows once the link became nullable.
+        .innerJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
         .where(
           and(
             eq(skillSessionLogs.athleteId, athleteId),
@@ -10495,14 +10494,16 @@ Hard rules, no exceptions:
             .from(skillProgramExercises)
             .where(eq(skillProgramExercises.dayId, dayRow.id))
             .orderBy(skillProgramExercises.orderIndex);
-          // Matched on which DRILL the row is for, not on its position.
-          // skillSessionLogs.skillProgramExerciseId is notNull, so a session
-          // can never come unlinked -- but reusing a row by position means a
-          // coach swapping drill A for drill B in slot one silently relabels
-          // every session the athlete captured against A as B. Matching on
-          // identity keeps a reorder lossless and makes a genuine swap what
-          // it actually is: the old drill removed, with its sessions, and a
-          // new one added. Same drill twice in a day is matched in order of
+          // Matched on which DRILL the row is for, not on its position. Reusing a row by
+          // position means a coach swapping drill A for drill B in slot one silently relabels
+          // every session the athlete captured against A as B; matching on identity keeps a
+          // reorder lossless and makes a genuine swap what it actually is, the old drill
+          // removed and a new one added.
+          //
+          // It used to say the removal took the athlete's sessions with it, which was true and
+          // is no longer: skillSessionLogs.skillProgramExerciseId is nullable and ON DELETE SET
+          // NULL now, with the drill snapshotted beside it, so a removed drill unlinks those
+          // captures rather than destroying them. See that column's own comment. Same drill twice in a day is matched in order of
           // appearance.
           const skillClaimed = new Set<number>();
           const takeSkillRow = (skillExerciseId: number) => {
@@ -10617,7 +10618,9 @@ Hard rules, no exceptions:
     // leaderboard. The route checks this too, for a clearer message; this is
     // the check that holds for every caller.
     const [onThisDay] = await db
-      .select({ id: skillProgramExercises.id })
+      // skillExerciseId comes back too: it is snapshotted onto the log below so the capture
+      // keeps its identity after the slot is gone -- see skillSessionLogs' own comment.
+      .select({ id: skillProgramExercises.id, skillExerciseId: skillProgramExercises.skillExerciseId })
       .from(skillProgramExercises)
       .where(
         and(
@@ -10633,6 +10636,7 @@ Hard rules, no exceptions:
       skillAssignmentId: input.skillAssignmentId,
       skillProgramDayId: input.skillProgramDayId,
       skillProgramExerciseId: input.skillProgramExerciseId,
+      skillExerciseId: onThisDay.skillExerciseId,
       athleteId,
       trackingLevel: input.trackingLevel,
       elapsedSeconds: input.elapsedSeconds ?? null,
@@ -19295,6 +19299,9 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       .values({
         skillAssignmentId,
         skillProgramDayId,
+        // Same snapshot as the capture path above -- the drill's identity has to outlive the
+        // slot, or a coach's edit leaves this row pointing at nothing and naming nothing.
+        skillExerciseId: exercise.skillExerciseId,
         skillProgramExerciseId,
         athleteId,
         trackingLevel: exercise.trackingLevel,
@@ -21616,8 +21623,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return db
       .selectDistinct({ id: skillExercises.id, name: skillExercises.name })
       .from(skillSessionLogs)
-      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
-      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      // One hop, not two: the drill is snapshotted on the log, so a capture whose slot the
+      // coach has since removed is still found and still named. Joining THROUGH the slot
+      // dropped exactly those rows once the link became nullable.
+      .innerJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
       .where(and(eq(skillSessionLogs.athleteId, athleteId), eq(skillSessionLogs.trackingLevel, "sprint")))
       .orderBy(asc(skillExercises.name));
   },
@@ -21627,8 +21636,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return db
       .selectDistinct({ id: skillExercises.id, name: skillExercises.name })
       .from(skillSessionLogs)
-      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
-      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      // One hop, not two: the drill is snapshotted on the log, so a capture whose slot the
+      // coach has since removed is still found and still named. Joining THROUGH the slot
+      // dropped exactly those rows once the link became nullable.
+      .innerJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
       .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
       .where(
         and(
@@ -21656,11 +21667,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         skillExerciseName: skillExercises.name,
       })
       .from(skillSessionLogs)
-      .innerJoin(
-        skillProgramExercises,
-        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
-      )
-      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      // See the note on the other skill-history reads: identity comes off the log itself now.
+      .innerJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
       .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
       .where(
         and(
@@ -21712,11 +21720,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         manualResult: skillSessionLogs.manualResult,
       })
       .from(skillSessionLogs)
-      .innerJoin(
-        skillProgramExercises,
-        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
-      )
-      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      // See the note on the other skill-history reads: identity comes off the log itself now.
+      .innerJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
       .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
       .where(and(eq(skillSessionLogs.athleteId, athleteId), inArray(skillAssignments.coachId, coachIds)))
       .orderBy(desc(skillSessionLogs.createdAt));
@@ -23152,11 +23157,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const rows = await db
       .selectDistinct({ id: skillExercises.id, name: skillExercises.name })
       .from(skillSessionLogs)
-      .innerJoin(
-        skillProgramExercises,
-        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
-      )
-      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      // See the note on the other skill-history reads: identity comes off the log itself now.
+      .innerJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
       .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
       .where(
         and(eq(skillSessionLogs.trackingLevel, "sprint"), inArray(skillAssignments.coachId, coachIds)),
@@ -23188,15 +23190,23 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const rows = await db
       .selectDistinct({ distanceYards: skillSessionLogs.distanceYards })
       .from(skillSessionLogs)
-      .innerJoin(
+      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+      // leftJoin, so a capture whose slot the coach removed is still counted -- an innerJoin
+      // through the slot is exactly what used to drop it.
+      .leftJoin(
         skillProgramExercises,
         eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
       )
-      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
       .where(
         and(
           eq(skillSessionLogs.trackingLevel, "sprint"),
-          eq(skillProgramExercises.skillExerciseId, skillExerciseId),
+          // Either source. The snapshot is written on every path and backfilled by the
+          // migration, but a leaderboard is the wrong place to bet a time's visibility on one
+          // column always having been filled in -- a dropped time reports the wrong best.
+          or(
+            eq(skillSessionLogs.skillExerciseId, skillExerciseId),
+            eq(skillProgramExercises.skillExerciseId, skillExerciseId),
+          ),
           inArray(skillAssignments.coachId, coachIds),
           isNotNull(skillSessionLogs.elapsedSeconds),
           isNotNull(skillSessionLogs.distanceYards),
@@ -23222,15 +23232,23 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         date: skillSessionLogs.createdAt,
       })
       .from(skillSessionLogs)
-      .innerJoin(
+      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
+      // leftJoin, so a capture whose slot the coach removed is still counted -- an innerJoin
+      // through the slot is exactly what used to drop it.
+      .leftJoin(
         skillProgramExercises,
         eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id),
       )
-      .innerJoin(skillAssignments, eq(skillSessionLogs.skillAssignmentId, skillAssignments.id))
       .where(
         and(
           eq(skillSessionLogs.trackingLevel, "sprint"),
-          eq(skillProgramExercises.skillExerciseId, skillExerciseId),
+          // Either source. The snapshot is written on every path and backfilled by the
+          // migration, but a leaderboard is the wrong place to bet a time's visibility on one
+          // column always having been filled in -- a dropped time reports the wrong best.
+          or(
+            eq(skillSessionLogs.skillExerciseId, skillExerciseId),
+            eq(skillProgramExercises.skillExerciseId, skillExerciseId),
+          ),
           inArray(skillAssignments.coachId, coachIds),
         ),
       );
@@ -26716,8 +26734,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         skillExerciseName: skillExercises.name,
       })
       .from(skillSessionLogs)
-      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
-      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      // One hop, not two: the drill is snapshotted on the log, so a capture whose slot the
+      // coach has since removed is still found and still named. Joining THROUGH the slot
+      // dropped exactly those rows once the link became nullable.
+      .innerJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
       .where(
         and(
           inArray(skillSessionLogs.athleteId, [...capByAthlete.keys()]),
@@ -26945,8 +26965,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         skillExerciseName: skillExercises.name,
       })
       .from(skillSessionLogs)
-      .innerJoin(skillProgramExercises, eq(skillSessionLogs.skillProgramExerciseId, skillProgramExercises.id))
-      .innerJoin(skillExercises, eq(skillProgramExercises.skillExerciseId, skillExercises.id))
+      // One hop, not two: the drill is snapshotted on the log, so a capture whose slot the
+      // coach has since removed is still found and still named. Joining THROUGH the slot
+      // dropped exactly those rows once the link became nullable.
+      .innerJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
       .where(and(inArray(skillSessionLogs.athleteId, [...staleAthleteIds]), isNotNull(skillSessionLogs.videoUrl)));
     for (const row of skillRows) {
       candidates.push({

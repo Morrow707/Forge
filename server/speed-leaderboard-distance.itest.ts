@@ -54,6 +54,9 @@ async function runSprint(opts: {
     skillAssignmentId: assignment.id,
     skillProgramDayId: opts.dayId,
     skillProgramExerciseId: opts.peId,
+    // Deliberately left unset: this fixture writes a row the way one existed BEFORE
+    // skill_exercise_id was added, which is what the tolerant read in
+    // getSpeedLeaderboardDistancesForExercise exists to keep visible.
     athleteId: opts.athleteId,
     trackingLevel: "sprint",
     elapsedSeconds: opts.seconds,

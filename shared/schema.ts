@@ -1634,9 +1634,27 @@ export const skillSessionLogs = pgTable(
     skillProgramDayId: integer("skill_program_day_id")
       .notNull()
       .references(() => skillProgramDays.id, { onDelete: "cascade" }),
-    skillProgramExerciseId: integer("skill_program_exercise_id")
-      .notNull()
-      .references(() => skillProgramExercises.id, { onDelete: "cascade" }),
+    // "set null", not "cascade", and nullable -- the same rule and the same reason as
+    // workoutLogEntries.programExerciseId, which the strength side settled and this side did
+    // not. A coach removing a drill from a skill program day deleted every athlete's logged
+    // session for it: the video, the velocities, the trust scores, the PR flag, gone, silently,
+    // on an ordinary edit. Measured against a real database before it was changed -- one logged
+    // session before the coach's delete, zero after.
+    //
+    // Losing the link to a slot that no longer exists is fine; losing what the athlete actually
+    // did is not. See skillExerciseId below for how the drill's identity survives it.
+    skillProgramExerciseId: integer("skill_program_exercise_id").references(
+      () => skillProgramExercises.id,
+      { onDelete: "set null" },
+    ),
+    // Which drill this session was actually logged against, resolved once at capture time and
+    // never re-derived. Exactly what exerciseId is to workoutLogEntries: the live join through
+    // skillProgramExercises cannot answer this once the link is null, and a slot that has since
+    // been pointed at a different drill would silently relabel a historical capture rather than
+    // merely orphan it.
+    skillExerciseId: integer("skill_exercise_id").references(() => skillExercises.id, {
+      onDelete: "set null",
+    }),
     athleteId: integer("athlete_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

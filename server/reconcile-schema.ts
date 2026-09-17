@@ -690,6 +690,24 @@ DO $$ BEGIN
     FOREIGN KEY ("program_exercise_id") REFERENCES "program_exercises"("id") ON DELETE SET NULL;
 END $$;
 
+-- A coach removing a drill from a skill program day used to cascade-delete every athlete's
+-- logged session for it -- video, metrics, trust scores and all. The strength side settled this
+-- long ago (see workout_log_entries above); the skill side kept NOT NULL + CASCADE. Backfilled
+-- from the still-intact link the same way, and rows already destroyed by a past cascade are
+-- simply not there to recover.
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "skill_exercise_id" integer REFERENCES "skill_exercises"("id") ON DELETE SET NULL;
+UPDATE "skill_session_logs" ssl
+  SET "skill_exercise_id" = spe."skill_exercise_id"
+  FROM "skill_program_exercises" spe
+  WHERE ssl."skill_program_exercise_id" = spe."id" AND ssl."skill_exercise_id" IS NULL;
+DO $$ BEGIN
+  ALTER TABLE "skill_session_logs" ALTER COLUMN "skill_program_exercise_id" DROP NOT NULL;
+  ALTER TABLE "skill_session_logs" DROP CONSTRAINT IF EXISTS "skill_session_logs_skill_program_exercise_id_skill_program_exercises_id_fk";
+  ALTER TABLE "skill_session_logs" DROP CONSTRAINT IF EXISTS "skill_session_logs_skill_program_exercise_id_fkey";
+  ALTER TABLE "skill_session_logs" ADD CONSTRAINT "skill_session_logs_skill_program_exercise_id_skill_program_exercises_id_fk"
+    FOREIGN KEY ("skill_program_exercise_id") REFERENCES "skill_program_exercises"("id") ON DELETE SET NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS "workout_set_entries" (
   "id" serial PRIMARY KEY,
   "log_entry_id" integer NOT NULL REFERENCES "workout_log_entries"("id") ON DELETE CASCADE,
