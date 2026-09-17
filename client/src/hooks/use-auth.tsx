@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { App } from "@capacitor/app";
 import { useMutation, useQuery, useQueryClient, useIsRestoring } from "@tanstack/react-query";
 import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
-import { logDebug } from "@/lib/debug-console";
 import { flushPendingLogs } from "@/lib/offline-queue";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
@@ -56,7 +55,6 @@ function applyLoginSuccess(
   user: PublicUser,
   credentials: { email: string; password: string },
 ) {
-  logDebug("AUTH", `login succeeded, nativeToken=${nativeToken ? "present" : "absent"}`);
   setNativeToken(nativeToken);
   qc.setQueryData(["/api/auth/me"], user);
   // A stalled session earlier in this browser/app may have left a workout
@@ -71,9 +69,7 @@ function useLoginMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: LoginPayload) => {
-      logDebug("AUTH", `login mutation start (${payload.email})`);
       const res = await apiRequest("POST", "/api/auth/login", payload);
-      logDebug("AUTH", `login POST responded ${res.status}`);
       return (await res.json()) as LoginResult;
     },
     onSuccess: (result, variables) => {
@@ -81,14 +77,12 @@ function useLoginMutation() {
       // the login page reads this off loginMutation.data to switch to the
       // code-entry step. Nothing about a session gets established yet.
       if ("mfaRequired" in result) {
-        logDebug("AUTH", "login requires MFA");
         return;
       }
       const { nativeToken, ...user } = result;
       applyLoginSuccess(qc, nativeToken, user, variables);
     },
     onError: (err: ApiError) => {
-      logDebug("AUTH", `login failed: ${err.status} ${err.message}`);
       toast.error(err.message || "Login failed");
     },
   });
@@ -118,17 +112,13 @@ function useSignupMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: SignupPayload) => {
-      logDebug("AUTH", `signup mutation start (${payload.email})`);
       const res = await apiRequest("POST", "/api/auth/signup", payload);
-      logDebug("AUTH", `signup POST responded ${res.status}`);
       return (await res.json()) as PublicUser & { nativeToken?: string };
     },
     onSuccess: ({ nativeToken, ...user }, variables) => {
-      logDebug("AUTH", `signup succeeded, nativeToken=${nativeToken ? "present" : "absent"}`);
       applyLoginSuccess(qc, nativeToken, user, variables);
     },
     onError: (err: ApiError) => {
-      logDebug("AUTH", `signup failed: ${err.status} ${err.message}`);
       toast.error(err.message || "Signup failed");
     },
   });
@@ -138,11 +128,9 @@ function useLogoutMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      logDebug("AUTH", "logout mutation start");
       await apiRequest("POST", "/api/auth/logout");
     },
     onSuccess: () => {
-      logDebug("AUTH", "logout succeeded, clearing nativeToken + query cache");
       setNativeToken(null);
       // Offline queues live in localStorage and outlive this logout. They
       // are deliberately NOT cleared -- that is somebody's unsynced workout
@@ -200,7 +188,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isLoading) return;
-    logDebug("AUTH", isError ? "auth/me check errored" : `auth/me resolved: ${user ? `logged in as ${user.role}` : "logged out"}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, isError, user]);
 
