@@ -614,6 +614,10 @@ export type ItemState = {
   key: string;
   kind: "exercise" | "corrective";
   refId: number;
+  /** The underlying exercise, as opposed to refId's program-day SLOT. Sent with every save so a
+   * set keeps its identity when a coach's edit has deleted the slot out from under it -- see
+   * logEntryInputSchema's exerciseId. */
+  exerciseId: number;
   exerciseName: string;
   substitutedFrom: string | null;
   regression: PrescribedExercise["regression"];
@@ -717,6 +721,7 @@ function buildItem(
     key: `${kind}-${prescribed.id}`,
     kind,
     refId: prescribed.id,
+    exerciseId: prescribed.exercise.id,
     exerciseName: prescribed.exercise.name,
     substitutedFrom: kind === "exercise" ? (prescribed as PrescribedExercise).substitutedFrom : null,
     regression: kind === "exercise" ? ((prescribed as PrescribedExercise).regression ?? null) : null,
@@ -1243,6 +1248,7 @@ export function WorkoutPage({
       baseRevision: baseRevisionRef.current ?? undefined,
       entries: itemsSnapshot.map((it) => ({
         programExerciseId: it.kind === "exercise" ? it.refId : undefined,
+        exerciseId: it.exerciseId,
         correctiveId: it.kind === "corrective" ? it.refId : undefined,
         weightMode: it.weightMode,
         weightUnit: it.weightUnit,

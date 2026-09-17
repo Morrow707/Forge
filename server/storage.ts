@@ -20071,13 +20071,49 @@ ${catalog}`;
                 )?.exerciseId
               : undefined;
 
+        // The client's own answer to "which exercise was on screen", consulted ONLY when the
+        // slot above resolved to nothing. Confirmed against the catalogue first: it is a
+        // client-supplied id, and although it can only ever label this athlete's own set, an
+        // unchecked one would put a dead reference into the column every historical read --
+        // PR detection, the tracking report -- resolves identity through.
+        const fallbackExerciseId =
+          resolvedExerciseId == null && entry.exerciseId != null
+            ? (
+                await tx.query.exercises.findFirst({
+                  where: eq(exercises.id, entry.exerciseId),
+                })
+              )?.id
+            : undefined;
+
+        // A SLOT THE COACH DELETED WHILE THE ATHLETE WAS TRAINING MUST NOT COST THEM THE SESSION.
+        //
+        // Editing a program day replaces that day's entire programExercises row set -- delete
+        // all, reinsert fresh -- on every edit, even one that does not touch this exercise (see
+        // workoutLogEntries.programExerciseId's own comment). An athlete part-way through the
+        // day is holding the old ids, so their next save named a row that no longer exists.
+        //
+        // That is a foreign-key violation, which fails the whole transaction: every set in the
+        // request, with its weights, velocities and video. And it fails INVISIBLY, because the
+        // client files a 5xx as transient and queues it -- so the queue replays the same doomed
+        // payload on every reconnect, forever, while the screen says nothing. Verified against
+        // Postgres rather than assumed: insert ... violates foreign key constraint
+        // "workout_log_entries_program_exercise_id_fkey".
+        //
+        // The link is the disposable half. What the athlete did is not, so the FK is dropped and
+        // the work is kept -- exactly the trade the ON DELETE SET NULL above already makes for a
+        // set logged before the edit.
+        // Both programExercises.exerciseId and assignmentCorrectives.exerciseId are NOT NULL, so
+        // "resolved to an exercise" is exactly "the referenced row is still there". Correctives
+        // are reinserted on reassignment the same way, so they carry the identical risk.
+        const referentStillExists = resolvedExerciseId != null;
+
         const [entryRow] = await tx
           .insert(workoutLogEntries)
           .values({
             workoutLogId: log!.id,
-            programExerciseId: entry.programExerciseId ?? null,
-            exerciseId: resolvedExerciseId ?? null,
-            correctiveId: entry.correctiveId ?? null,
+            programExerciseId: referentStillExists ? entry.programExerciseId ?? null : null,
+            exerciseId: resolvedExerciseId ?? fallbackExerciseId ?? null,
+            correctiveId: referentStillExists ? entry.correctiveId ?? null : null,
             weightMode: entry.weightMode,
             rpe: entry.rpe ?? null,
             notes: entry.notes ?? null,

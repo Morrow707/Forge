@@ -8164,6 +8164,18 @@ export const setLogInputSchema = z.object({
 export const logEntryInputSchema = z
   .object({
     programExerciseId: z.number().optional(),
+    // WHICH EXERCISE THE ATHLETE WAS ACTUALLY LOOKING AT, sent as a fallback identity and used
+    // only when programExerciseId no longer resolves.
+    //
+    // A coach editing a program day deletes and reinserts that day's whole programExercises row
+    // set (see workoutLogEntries.programExerciseId's comment). An athlete mid-session is holding
+    // the old ids, so their next save carried a programExerciseId that no longer existed --
+    // which is a foreign-key violation, a 500, and, because the client files a 5xx as transient,
+    // a queued retry that fails identically forever. The session was lost silently.
+    //
+    // Client-supplied, so it is trusted only for labelling that athlete's own set, and only
+    // after it is confirmed to name a real exercise. See submitWorkoutLog.
+    exerciseId: z.number().int().positive().optional(),
     correctiveId: z.number().optional(),
     weightMode: z.enum(["numeric", "bodyweight", "band", "box"]).default("numeric"),
     // Per-exercise, not per-account -- a superset can legitimately pair a
