@@ -6520,6 +6520,23 @@ export const researchSubjects = pgTable(
     // training history -- a fact about the mirror, used to decide what to
     // refresh and to tell a reader how current an extract is.
     syncedAt: timestamp("synced_at").notNull().defaultNow(),
+    // Set when the account this row was built from was DELETED and the athlete
+    // had consented, under a version of the consent text that says so, to the
+    // scrubbed record outliving the account.
+    //
+    // It exists to separate two orphans that look identical to the nightly
+    // rebuild. That sweep decides membership by comparing the mirror against
+    // everyone currently consenting, so a subject with no live account behind
+    // it is stale and gets reaped -- which is correct for a withdrawal and
+    // wrong for a deletion we were asked to keep. Without this flag the
+    // retention is not blocked by policy, it is undone by a garbage collector
+    // that cannot tell the two apart.
+    //
+    // A retained row is never refreshed again (there is nothing to refresh
+    // from) and never re-adopted: a returning athlete signs up as a new
+    // account and gets a new subject id, so two extracts a year apart still
+    // cannot be joined on one person.
+    retainedAfterDeletion: boolean("retained_after_deletion").notNull().default(false),
   },
   (table) => ({
     sportIdx: index("research_subjects_sport_idx").on(table.sport),

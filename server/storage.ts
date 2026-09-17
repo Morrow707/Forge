@@ -167,7 +167,7 @@ import path from "node:path";
 import { UPLOADS_ROOT } from "./uploaded-files";
 import { scrubUserForAdmin } from "./admin-identity";
 import { encryptField, decryptField, isEncryptedField } from "./field-encryption";
-import { syncResearchSubject, removeResearchSubject } from "./research-mirror";
+import { syncResearchSubject, removeResearchSubject, retainSubjectAfterDeletion } from "./research-mirror";
 import { KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain, knowledgeDomainLabel } from "@shared/knowledge-domains";
 import { answerStyleInstruction, isAnswerRegister, isAnswerLength } from "@shared/answer-style";
 import { renderNormsForPrompt } from "@shared/cohort-norms";
@@ -2774,7 +2774,11 @@ async function referenceBlock(query: string, domains: string[], limit = 6): Prom
  * Nothing derived from it reaches the output, which is group statistics
  * only, exactly as before.
  */
-async function queryResearchCohort(filters: CohortQueryFilters) {
+// Exported for the same reason queryTrackedCohort is: runResearchCohortQuery
+// parses plain English with a model call and spends query budget before it
+// gets here, and the arithmetic between these two halves -- the cohort and the
+// denominator it is drawn from -- is the part worth asserting.
+export async function queryResearchCohort(filters: CohortQueryFilters) {
   const subjects = await db
     .select({
       id: researchSubjects.subjectId,
@@ -2791,6 +2795,9 @@ async function queryResearchCohort(filters: CohortQueryFilters) {
       benchMaxLbs: researchSubjects.benchMaxLbs,
       squatMaxLbs: researchSubjects.squatMaxLbs,
       deadliftMaxLbs: researchSubjects.deadliftMaxLbs,
+      // Not reported, and never reaches a PDF. Used only to keep the
+      // denominator honest -- see formerAthletes below.
+      retainedAfterDeletion: researchSubjects.retainedAfterDeletion,
     })
     .from(researchSubjects);
 
@@ -2914,6 +2921,15 @@ async function queryResearchCohort(filters: CohortQueryFilters) {
   return {
     cohortSize: cohortRows.length,
     minCohortSize: PLATFORM_TRENDS_MIN_COHORT,
+    // How many of this cohort are athletes who have since DELETED their
+    // accounts and whose scrubbed record was kept (see
+    // retainSubjectAfterDeletion). They are in the extract and are not on the
+    // platform, which is the only reason this number has to travel: the
+    // "matched overall" denominator is counted from live athletes, so without
+    // it a cohort could report 12 of 8 -- a nonsense on a document that leaves
+    // the organisation, and the sort of thing a reader is right to distrust
+    // the rest of the page over.
+    formerAthletes: cohortRows.filter((a) => a.retainedAfterDeletion).length,
     results,
     crosstab,
     injuries,
@@ -4192,6 +4208,25 @@ export const storage = {
       .from(externalWaivers)
       .where(eq(externalWaivers.athleteId, userId));
     await Promise.all(documentFiles.map((d) => deleteUploadedFile(d.url)));
+
+    // BEFORE the delete, because it reads the live row to decide. An athlete
+    // who consented to research under a version of the text that says the
+    // scrubbed record outlives the account keeps their research_subjects rows;
+    // everybody else's go with the cascade like everything else here.
+    //
+    // Deliberately not awaited inside a transaction with the delete: the
+    // account deletion is the thing the person asked for and must not fail
+    // because a retention flag could not be written. A retain that throws
+    // leaves the rows unmarked, so the nightly sweep reaps them -- the wrong
+    // outcome, but the safe direction to be wrong in, and the account is still
+    // gone.
+    if (user.role === "athlete") {
+      try {
+        await retainSubjectAfterDeletion(userId);
+      } catch (err) {
+        console.error("research retention on account delete failed:", err);
+      }
+    }
 
     await db.delete(users).where(eq(users.id, userId));
     return { ok: true };
@@ -24133,7 +24168,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return {
       filters,
       ...consented,
-      matchedBeforeConsent: all.cohortSize,
+      // Live athletes matching the filter, PLUS the former athletes already
+      // counted in `consented` -- who match it too, and who `all` cannot see
+      // because their accounts are gone. Adding them keeps the denominator
+      // what it claims to be ("N matched the filters overall") and keeps it
+      // from ever being smaller than the cohort drawn out of it.
+      matchedBeforeConsent: all.cohortSize + consented.formerAthletes,
       consentedCount: consented.cohortSize,
     };
   },

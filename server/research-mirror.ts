@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { formatISO, parseISO, startOfWeek } from "date-fns";
 import { db } from "./db";
 import {
+  consentRecords,
   exercises,
   injuryHistory,
   researchSubjectInjuries,
@@ -15,6 +16,7 @@ import {
 } from "@shared/schema";
 import { normalizeInjuryRegion, normalizeInjurySide } from "@shared/injury-taxonomy";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
+import { researchConsentDisclosesDeletionRetention } from "@shared/research-consent";
 
 /**
  * Keeping the research mirror in step with the accounts that consented to be
@@ -68,10 +70,16 @@ async function deleteSubjectRows(subjectId: string) {
 /**
  * Removes an account from the mirror.
  *
- * Called on withdrawal, on a tracking opt-out, and before an account is
- * deleted. Clearing users.researchSubjectId is not bookkeeping: leaving a
- * stale uuid there would make a later re-consent reuse the same subject id,
- * which would let two extracts taken a year apart be joined on it.
+ * Called on withdrawal and on a tracking opt-out -- both of which mean the
+ * athlete is out, so the rows go. NOT the path an account deletion takes:
+ * see retainSubjectAfterDeletion, which keeps the rows for someone who agreed
+ * to that. (This comment used to claim it was called before a deletion. It was
+ * not, and never had been; the nightly sweep was reaping those rows a day
+ * later instead, which is how the retention was being lost.)
+ *
+ * Clearing users.researchSubjectId is not bookkeeping: leaving a stale uuid
+ * there would make a later re-consent reuse the same subject id, which would
+ * let two extracts taken a year apart be joined on it.
  */
 export async function removeResearchSubject(athleteId: number): Promise<boolean> {
   const row = await db.query.users.findFirst({
@@ -81,6 +89,42 @@ export async function removeResearchSubject(athleteId: number): Promise<boolean>
   if (!row?.researchSubjectId) return false;
   await deleteSubjectRows(row.researchSubjectId);
   await db.update(users).set({ researchSubjectId: null }).where(eq(users.id, athleteId));
+  return true;
+}
+
+/**
+ * Keeps an athlete's scrubbed rows when their ACCOUNT is deleted.
+ *
+ * Returns true when the rows were marked to survive. False means there was
+ * nothing to keep, or that keeping it was not authorized -- the caller deletes
+ * the account either way; the only question here is what is left behind.
+ *
+ * Two conditions, both required. The athlete has to be in the mirror at all
+ * (so: consented, and not opted out of tracking), and the consent they gave
+ * has to have been under a version of the text that discloses this -- see
+ * researchConsentDisclosesDeletionRetention. Somebody who said yes to a document that
+ * mentioned exactly one limit on withdrawal, and said nothing about deletion,
+ * did not agree to this, and a retention they were not told about is the kind
+ * that has to be defended rather than explained.
+ */
+export async function retainSubjectAfterDeletion(athleteId: number): Promise<boolean> {
+  const row = await db.query.users.findFirst({
+    where: eq(users.id, athleteId),
+    columns: { researchSubjectId: true, trackingOptOut: true, researchDataConsent: true },
+  });
+  if (!row?.researchSubjectId || row.trackingOptOut || !row.researchDataConsent) return false;
+
+  const consent = await db.query.consentRecords.findFirst({
+    where: and(eq(consentRecords.userId, athleteId), eq(consentRecords.consentType, "research_data_use")),
+    orderBy: (c, { desc }) => [desc(c.createdAt)],
+    columns: { documentText: true },
+  });
+  if (!researchConsentDisclosesDeletionRetention(consent?.documentText)) return false;
+
+  await db
+    .update(researchSubjects)
+    .set({ retainedAfterDeletion: true })
+    .where(eq(researchSubjects.subjectId, row.researchSubjectId));
   return true;
 }
 
@@ -233,7 +277,15 @@ export async function syncAllResearchSubjects(): Promise<{
   }
 
   // Everything currently in the mirror, against everything that should be.
-  const present = await db.select({ subjectId: researchSubjects.subjectId }).from(researchSubjects);
+  // Deliberately-retained subjects are excluded from the comparison entirely
+  // rather than filtered out of `stale` afterwards: they have no live account
+  // by definition, so every pass would otherwise re-derive them as orphans and
+  // the only thing standing between them and deletion would be a filter
+  // somebody could drop while tidying.
+  const present = await db
+    .select({ subjectId: researchSubjects.subjectId })
+    .from(researchSubjects)
+    .where(eq(researchSubjects.retainedAfterDeletion, false));
   const claimed = await db
     .select({ researchSubjectId: users.researchSubjectId })
     .from(users)

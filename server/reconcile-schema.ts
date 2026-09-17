@@ -2896,8 +2896,15 @@ CREATE TABLE IF NOT EXISTS "research_subjects" (
   "deadlift_max_lbs" real,
   "is_minor" boolean NOT NULL DEFAULT false,
   "account_created_week" date,
-  "synced_at" timestamp NOT NULL DEFAULT now()
+  "synced_at" timestamp NOT NULL DEFAULT now(),
+  "retained_after_deletion" boolean NOT NULL DEFAULT false
 );
+
+-- For an installation whose research_subjects predates the column. Default
+-- false is the safe direction: an existing row is only ever retained by a
+-- deletion that happens after this ships, never retroactively.
+ALTER TABLE "research_subjects"
+  ADD COLUMN IF NOT EXISTS "retained_after_deletion" boolean NOT NULL DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS "research_subjects_sport_idx"
   ON "research_subjects" ("sport");
