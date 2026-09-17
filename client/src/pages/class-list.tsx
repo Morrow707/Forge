@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ClassAiDraft } from "@shared/schema";
+import { ReadFailed } from "@/components/read-failed";
 
 type ClassSummary = {
   id: number;
@@ -93,7 +94,7 @@ export function ClassListPage({
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const { data: classes = [], isLoading } = useQuery<ClassSummary[]>({
+  const { data: classes = [], isLoading, isError, refetch } = useQuery<ClassSummary[]>({
     queryKey: [`${apiBase}/classes`],
   });
   const { data: roster = [] } = useQuery<RosterEntry[]>({
@@ -250,7 +251,15 @@ export function ClassListPage({
         </div>
       }
     >
-      {!isLoading && classes.length === 0 && (
+      {isError && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="your classes" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {!isError && !isLoading && classes.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <GraduationCap className="h-10 w-10 text-muted-foreground" />

@@ -65,14 +65,10 @@ const KNOWN = new Set<string>([
   "pages/admin/knowledge-base.tsx",
   "pages/admin/query-engine.tsx",
   "pages/class-builder.tsx",
-  "pages/class-list.tsx",
   "pages/coach/analytics.tsx",
   "pages/coach/dashboard.tsx",
-  "pages/exercise-bank.tsx",
   "pages/program-builder.tsx",
-  "pages/program-list.tsx",
   "pages/skill-program-builder.tsx",
-  "pages/skill-program-list.tsx",
   "pages/skill-workout.tsx",
   "pages/workout.tsx",
 ]);
@@ -94,8 +90,19 @@ describe("a failed read is never rendered as an empty one", () => {
   });
 
   it("still finds the files it is meant to be scanning", () => {
-    // The failure mode of a scan-based test is silently matching nothing.
-    expect(current.length).toBeGreaterThan(20);
+    // The failure mode of a scan-based test is silently matching nothing -- a moved
+    // directory, a changed extension, a regex that stopped matching -- after which it
+    // passes forever while checking nothing at all.
+    //
+    // This used to assert the OFFENDER count was above 20, which conflated two
+    // different things and duly broke the moment the backlog got down to 18: doing the
+    // work made the alarm go off. The offender count is supposed to fall to zero. What
+    // must NOT fall is the scan's reach, so that is what this measures now -- how many
+    // files it is looking at, which only shrinks if the scan itself is broken.
+    const scanned = walk(ROOT);
+    expect(scanned.length).toBeGreaterThan(100);
+    const withReads = scanned.filter((f) => /useQuery[<(]/.test(code(fs.readFileSync(f, "utf8"))));
+    expect(withReads.length).toBeGreaterThan(50);
   });
 });
 

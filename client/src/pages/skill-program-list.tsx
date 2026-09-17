@@ -31,6 +31,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { todayIso } from "@/lib/local-date";
+import { ReadFailed } from "@/components/read-failed";
 
 type SkillProgramSummary = {
   id: number;
@@ -74,7 +75,7 @@ export function SkillProgramListPage({
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const { data: programs = [], isLoading } = useQuery<SkillProgramSummary[]>({
+  const { data: programs = [], isLoading, isError, refetch } = useQuery<SkillProgramSummary[]>({
     queryKey: [`${apiBase}/skill-programs`],
   });
   const { data: roster = [] } = useQuery<RosterEntry[]>({
@@ -236,7 +237,15 @@ export function SkillProgramListPage({
         </div>
       }
     >
-      {!isLoading && programs.length === 0 && (
+      {isError && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="your skill programs" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {!isError && !isLoading && programs.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Target className="h-10 w-10 text-muted-foreground" />

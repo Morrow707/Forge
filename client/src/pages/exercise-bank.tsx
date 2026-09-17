@@ -44,6 +44,7 @@ import {
 } from "@/lib/exercise-colors";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 
 const CATEGORIES = [
   "strength",
@@ -81,7 +82,9 @@ export function ExerciseBankPage({
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const { data: exercises = [], isLoading } = useQuery<ExerciseWithOwnership[]>({
+  const { data: exercises = [], isLoading, isError, refetch } = useQuery<
+    ExerciseWithOwnership[]
+  >({
     queryKey: [`${apiBase}/exercises`],
   });
   // Admin's Forge-library browse doesn't get favoriting/recently-used --
@@ -480,7 +483,17 @@ export function ExerciseBankPage({
         )}
       </div>
 
-      {!isLoading && displayed.length === 0 && (
+      {/* Same shape as skill-bank: the empty state carries "Add Exercise", so a failed
+          read offers to start a library that is already there. */}
+      {isError && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="the exercise library" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {!isError && !isLoading && displayed.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Dumbbell className="h-10 w-10 text-muted-foreground" />

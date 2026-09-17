@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { ProgramPhotoImportDialog } from "@/components/program-photo-import-dialog";
 import { todayIso } from "@/lib/local-date";
+import { ReadFailed } from "@/components/read-failed";
 
 type ProgramSummary = {
   id: number;
@@ -100,10 +101,10 @@ export function ProgramListPage({
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const { data: programs = [], isLoading } = useQuery<ProgramSummary[]>({
+  const { data: programs = [], isLoading, isError, refetch } = useQuery<ProgramSummary[]>({
     queryKey: [`${apiBase}/programs`],
   });
-  const { data: roster = [] } = useQuery<RosterEntry[]>({
+  const { data: roster = [], isError: rosterFailed } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
     enabled: showAssign,
   });
@@ -289,7 +290,17 @@ export function ProgramListPage({
         </>
       }
     >
-      {!isLoading && programs.length === 0 && (
+      {/* The empty state doubles as "New Program", so a failed read invites a coach to
+          rebuild a library they already have. */}
+      {isError && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="your programs" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {!isError && !isLoading && programs.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <ListChecks className="h-10 w-10 text-muted-foreground" />
@@ -536,6 +547,15 @@ export function ProgramListPage({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No specific athlete</SelectItem>
+                      {/* A failed roster read leaves only "No specific athlete", and the
+                          copy below promises the AI reads a real profile. Silently
+                          building a generic program under that promise is the failure
+                          worth naming. */}
+                      {rosterFailed && (
+                        <SelectItem value="none" disabled>
+                          Couldn't load your roster
+                        </SelectItem>
+                      )}
                       {roster.map((a) => (
                         <SelectItem key={a.id} value={String(a.id)}>
                           {a.name}
