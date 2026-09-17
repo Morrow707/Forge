@@ -3179,6 +3179,26 @@ ALTER TABLE "external_waivers" ADD COLUMN IF NOT EXISTS "review_source" text;
 ALTER TABLE "external_waivers" ADD COLUMN IF NOT EXISTS "ai_verdict" json;
 ALTER TABLE "external_waivers" ADD COLUMN IF NOT EXISTS "file_purged_at" timestamp;
 
+-- The file is kept forever and nobody can browse it. An admin cannot list accepted documents;
+-- to open one they name the athlete, name the document and say why, and that grant serves the
+-- bytes exactly once. Not a signed media URL -- those are shareable and reusable for their whole
+-- lifetime, which is the wrong property here. See shared/schema.ts.
+CREATE TABLE IF NOT EXISTS "external_waiver_view_grants" (
+  "id" serial PRIMARY KEY,
+  "waiver_id" integer NOT NULL REFERENCES "external_waivers"("id") ON DELETE CASCADE,
+  "admin_user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "token_hash" text NOT NULL UNIQUE,
+  "reason" text NOT NULL,
+  "expires_at" timestamp NOT NULL,
+  "used_at" timestamp,
+  "ip_address" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "external_waiver_view_grants_waiver_idx"
+  ON "external_waiver_view_grants" ("waiver_id", "created_at");
+CREATE INDEX IF NOT EXISTS "external_waiver_view_grants_admin_idx"
+  ON "external_waiver_view_grants" ("admin_user_id", "created_at");
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN

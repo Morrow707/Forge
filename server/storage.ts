@@ -5,6 +5,7 @@ import {
   coachAthleteRequests,
   guardianLinks,
   externalWaivers,
+  externalWaiverViewGrants,
   externalWaiverKindEnum,
   guardianInvites,
   coachStaff,
@@ -25575,7 +25576,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * which child is not a weaker version of review, it is not review -- the identity IS the
    * thing being checked. Kept off every aggregate and export path for that reason, and it is
    * an operational queue, never a report. */
-  async listExternalWaiversForReview(status: "pending_review" | "all" = "pending_review") {
+  async listExternalWaiversForReview() {
     const rows = await db
       .select({
         waiver: externalWaivers,
@@ -25584,21 +25585,136 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       })
       .from(externalWaivers)
       .innerJoin(users, eq(externalWaivers.athleteId, users.id))
-      // "all" NOW MEANS ALL, including accepted.
+      // PENDING ONLY. THERE IS NO LIST OF ACCEPTED DOCUMENTS, AT ALL.
       //
-      // It used to exclude them, and that followed from the old rule: the file was destroyed on
-      // decision, so an accepted row could only ever render a dead link, and listing a named
-      // child's accepted medical form was the thing that design existed to prevent. Keeping the
-      // file changes the question. "We are always covered" is only true if somebody can actually
-      // produce the document, and an operator who cannot find an accepted waiver cannot produce
-      // it. The default is still the pending queue -- accepted documents are not day-to-day
-      // work, and nobody browses them by accident.
-      .where(
-        status === "all" ? undefined : eq(externalWaivers.reviewStatus, "pending_review"),
-      )
+      // This has been all three positions in two days and the third is the one that holds. It
+      // first excluded accepted rows because their files were destroyed; then included them,
+      // because keeping the file only means "we are covered" if somebody can produce it, and an
+      // operator who cannot find a waiver cannot produce it. Both halves of that are true. What
+      // was wrong was the SHAPE of the answer -- a scrollable list of every accepted document is
+      // how one legitimate need (produce THIS form for THIS athlete) becomes a feed of
+      // children's signed medical records that anybody holding the role can read all afternoon.
+      //
+      // Producing one is a deliberate act instead: name the athlete, name the document, say why,
+      // and get a grant that opens it once (grantExternalWaiverView below). Nothing is lost
+      // except the browsing.
+      .where(eq(externalWaivers.reviewStatus, "pending_review"))
       .orderBy(desc(externalWaivers.createdAt))
       .limit(500);
     return rows;
+  },
+
+  /** ONE athlete's decided documents, by athlete id, for an admin who has to produce one.
+   *
+   * Metadata only -- never fileUrl. This is what replaces browsing: an admin who genuinely needs
+   * a document already knows whose it is, so the lookup takes an athlete and returns what exists
+   * rather than a feed. Opening any of it takes a grant.
+   */
+  async findDecidedWaiversForAthlete(athleteId: number) {
+    return db
+      .select({
+        id: externalWaivers.id,
+        kind: externalWaivers.kind,
+        reviewStatus: externalWaivers.reviewStatus,
+        reviewSource: externalWaivers.reviewSource,
+        issuingOrganization: externalWaivers.issuingOrganization,
+        signedOn: externalWaivers.signedOn,
+        expiresOn: externalWaivers.expiresOn,
+        createdAt: externalWaivers.createdAt,
+        filePurgedAt: externalWaivers.filePurgedAt,
+        hasFile: sql<boolean>`${externalWaivers.fileUrl} <> ''`,
+      })
+      .from(externalWaivers)
+      .where(
+        and(
+          eq(externalWaivers.athleteId, athleteId),
+          ne(externalWaivers.reviewStatus, "pending_review"),
+        ),
+      )
+      .orderBy(desc(externalWaivers.createdAt))
+      .limit(50);
+  },
+
+  /** One view, with a name and a reason on it. Returns the raw token; only its hash is stored.
+   *
+   * Short expiry, because a grant is for opening a document now rather than for keeping.
+   * Single-use, because what is being prevented is a second UNRECORDED look, not a second look.
+   * Asking again is allowed and writes another row -- never impossible, never silent. */
+  async grantExternalWaiverView(input: {
+    waiverId: number;
+    adminUserId: number;
+    reason: string;
+    ipAddress?: string;
+  }): Promise<{ token: string; expiresAt: Date } | null> {
+    const reason = input.reason.trim();
+    // A one-word reason is the same as no reason. Short enough not to be a hurdle, long enough
+    // that somebody had to think of a sentence.
+    if (reason.length < 8) return null;
+    const [waiver] = await db
+      .select({ id: externalWaivers.id, fileUrl: externalWaivers.fileUrl })
+      .from(externalWaivers)
+      .where(eq(externalWaivers.id, input.waiverId));
+    if (!waiver || !waiver.fileUrl) return null;
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await db.insert(externalWaiverViewGrants).values({
+      waiverId: input.waiverId,
+      adminUserId: input.adminUserId,
+      tokenHash: createHash("sha256").update(token).digest("hex"),
+      reason,
+      expiresAt,
+      ipAddress: input.ipAddress ?? null,
+    });
+    return { token, expiresAt };
+  },
+
+  /** Spends a grant and returns the file to serve, or null.
+   *
+   * Marked used in the same UPDATE that matches it, so two requests racing the same token cannot
+   * both win -- only one gets a row back. Marked before the bytes are read rather than after: a
+   * read that fails still costs the grant, because the alternative is a retry loop serving one
+   * document repeatedly off a single record. */
+  async consumeExternalWaiverViewGrant(
+    token: string,
+    adminUserId: number,
+  ): Promise<{ fileUrl: string; waiverId: number } | null> {
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const [grant] = await db
+      .update(externalWaiverViewGrants)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(externalWaiverViewGrants.tokenHash, tokenHash),
+          eq(externalWaiverViewGrants.adminUserId, adminUserId),
+          isNull(externalWaiverViewGrants.usedAt),
+          gt(externalWaiverViewGrants.expiresAt, new Date()),
+        ),
+      )
+      .returning();
+    if (!grant) return null;
+    const [waiver] = await db
+      .select({ fileUrl: externalWaivers.fileUrl })
+      .from(externalWaivers)
+      .where(eq(externalWaivers.id, grant.waiverId));
+    if (!waiver?.fileUrl) return null;
+    return { fileUrl: waiver.fileUrl, waiverId: grant.waiverId };
+  },
+
+  /** Every grant ever issued against one athlete's documents. Who looked, when, and why --
+   * which is the entire reason a grant exists rather than a link. */
+  async listExternalWaiverViewGrants(athleteId: number) {
+    return db
+      .select({
+        grant: externalWaiverViewGrants,
+        adminName: users.name,
+        kind: externalWaivers.kind,
+      })
+      .from(externalWaiverViewGrants)
+      .innerJoin(externalWaivers, eq(externalWaiverViewGrants.waiverId, externalWaivers.id))
+      .innerJoin(users, eq(externalWaiverViewGrants.adminUserId, users.id))
+      .where(eq(externalWaivers.athleteId, athleteId))
+      .orderBy(desc(externalWaiverViewGrants.createdAt))
+      .limit(200);
   },
 
   /** Destroys the uploaded file and stamps the row. NOT called on a decision any more.

@@ -6726,8 +6726,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allowed =
         user.role === "admin" || (await storage.canManageWaiversFor(user.id, athleteId));
       if (!allowed) return res.status(403).json({ message: "Not your athlete." });
+      const waivers = await storage.listExternalWaiversForAthlete(athleteId);
+      // AN ADMIN NEVER GETS A fileUrl FROM HERE, AND THAT IS THE WHOLE GATE.
+      //
+      // Taking the list out of the admin queue would have been cosmetic on its own: this route
+      // hands back every waiver row for an athlete, res.json signs any /uploads path on the way
+      // out, and an admin is allowed to call it. So an admin could read documents one athlete at
+      // a time from a screen that was never meant to offer them -- the browse the queue change
+      // just closed, through a different door.
+      //
+      // The uploader, their guardian and their coach still get the link. It is their document.
       res.json({
-        waivers: await storage.listExternalWaiversForAthlete(athleteId),
+        waivers:
+          user.role === "admin" && !(await storage.canManageWaiversFor(user.id, athleteId))
+            ? waivers.map((w) => ({ ...w, fileUrl: "" }))
+            : waivers,
         summary: await storage.externalWaiverSummary(athleteId),
       });
     } catch (err) {
@@ -6868,10 +6881,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /** The admin review queue. Carries athlete names, deliberately -- accepting a legal document
    * about a named child without knowing which child is not review. See
    * listExternalWaiversForReview's own comment on why this is not an analytics surface. */
-  app.get("/api/admin/waivers", requireRole("admin"), async (req, res, next) => {
+  app.get("/api/admin/waivers", requireRole("admin"), async (_req, res, next) => {
     try {
-      const status = req.query.status === "all" ? "all" : "pending_review";
-      res.json(await storage.listExternalWaiversForReview(status));
+      // Pending only. There is no "show everything" any more -- see
+      // listExternalWaiversForReview's comment on why a scrollable list of accepted documents
+      // is the wrong shape for a real need.
+      res.json(await storage.listExternalWaiversForReview());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** What one named athlete has on file. Metadata only; opening any of it takes a grant. */
+  app.get("/api/admin/waivers/athlete/:athleteId", requireRole("admin"), async (req, res, next) => {
+    try {
+      const athleteId = Number(req.params.athleteId);
+      if (!Number.isInteger(athleteId)) return res.status(400).json({ message: "Bad athlete id" });
+      res.json({
+        documents: await storage.findDecidedWaiversForAthlete(athleteId),
+        views: await storage.listExternalWaiverViewGrants(athleteId),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** Ask to open one document, once, with a reason. */
+  app.post("/api/admin/waivers/:id/view-grant", requireRole("admin"), async (req, res, next) => {
+    try {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const parsed = z.object({ reason: z.string().min(8).max(500) }).safeParse(req.body);
+      if (!Number.isInteger(id) || !parsed.success) {
+        return res.status(400).json({ message: "Say why you need to open this one." });
+      }
+      const grant = await storage.grantExternalWaiverView({
+        waiverId: id,
+        adminUserId: user.id,
+        reason: parsed.data.reason,
+        ipAddress: req.ip,
+      });
+      if (!grant) return res.status(404).json({ message: "No file to open for that document." });
+      res.json(grant);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** Serves the bytes exactly once and spends the grant.
+   *
+   * Streamed through here rather than handed out as a signed media URL: a signed URL is
+   * shareable and reusable for its whole lifetime, which is right for a coach re-watching a form
+   * check and wrong for a child's signed medical record. Content-Disposition inline with no
+   * filename, and no-store, so it opens and is not quietly kept by a browser cache. */
+  app.get("/api/admin/waivers/view/:token", requireRole("admin"), async (req, res, next) => {
+    try {
+      const user = currentUser(req);
+      const spent = await storage.consumeExternalWaiverViewGrant(String(req.params.token), user.id);
+      if (!spent) {
+        return res.status(410).json({ message: "That link has already been used or has expired." });
+      }
+      const rel = spent.fileUrl.replace(/^\/uploads\//, "");
+      if (rel.includes("..")) return res.status(400).json({ message: "Bad path." });
+      res.setHeader("Cache-Control", "no-store, private");
+      res.setHeader("Content-Disposition", "inline");
+      res.sendFile(path.join(UPLOADS_ROOT, rel), (err) => {
+        // The grant is already spent by design -- see consumeExternalWaiverViewGrant. Logged
+        // rather than retried, so one missing file cannot become an unlimited re-read.
+        if (err && !res.headersSent) res.status(404).json({ message: "File not found." });
+      });
     } catch (err) {
       next(err);
     }

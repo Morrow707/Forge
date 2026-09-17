@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, X, FileText } from "lucide-react";
+import { Check, X, FileText, Search, Eye } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,10 +43,10 @@ type Row = {
 
 export default function AdminWaiversPage() {
   const qc = useQueryClient();
-  const [showAll, setShowAll] = useState(false);
+  const [lookupId, setLookupId] = useState("");
+  const [lookupFor, setLookupFor] = useState("");
   const [notes, setNotes] = useState<Record<number, string>>({});
-
-  const key = [`/api/admin/waivers?status=${showAll ? "all" : "pending_review"}`];
+  const key = ["/api/admin/waivers"];
   const { data, isLoading } = useQuery<Row[]>({ queryKey: key });
 
   const review = useMutation({
@@ -79,12 +79,27 @@ export default function AdminWaiversPage() {
               {" "}Deciding either way deletes the file, so this is the only time it can be opened.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button size="sm" variant="secondary" onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "Show only pending" : "Show rejected and expired too"}
-            </Button>
+          <CardContent className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              There is no list of accepted documents. To produce one, look up the athlete below --
+              you'll be asked what it's for, and the document opens once.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Athlete id"
+                value={lookupId}
+                onChange={(e) => setLookupId(e.target.value)}
+                className="h-9 max-w-[10rem] text-sm"
+              />
+              <Button size="sm" variant="secondary" onClick={() => setLookupFor(lookupId.trim())}>
+                <Search className="h-3.5 w-3.5" />
+                Look up
+              </Button>
+            </div>
           </CardContent>
         </Card>
+
+        {lookupFor && <AthleteDocuments athleteId={Number(lookupFor)} />}
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
@@ -171,5 +186,130 @@ export default function AdminWaiversPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+
+/** ONE ATHLETE, NAMED, AND EVERY OPEN RECORDED.
+ *
+ * The replacement for scrolling. Metadata only until somebody says what they need it for; the
+ * grant then serves the file once and is spent. Asking again is allowed and writes another row
+ * in the log below -- the control is that an open is never silent, not that it is impossible.
+ */
+function AthleteDocuments({ athleteId }: { athleteId: number }) {
+  const qc = useQueryClient();
+  const [reasonFor, setReasonFor] = useState<number | null>(null);
+  const [reason, setReason] = useState("");
+  const key = [`/api/admin/waivers/athlete/${athleteId}`];
+  const { data, isLoading } = useQuery<{
+    documents: {
+      id: number;
+      kind: DocumentKind;
+      reviewStatus: string;
+      reviewSource: string | null;
+      issuingOrganization: string | null;
+      expiresOn: string | null;
+      createdAt: string;
+      hasFile: boolean;
+    }[];
+    views: {
+      grant: { id: number; reason: string; createdAt: string; usedAt: string | null };
+      adminName: string;
+      kind: DocumentKind;
+    }[];
+  }>({ queryKey: key, enabled: Number.isInteger(athleteId) });
+
+  const openOnce = useMutation({
+    mutationFn: async (waiverId: number) => {
+      const res = await apiRequest("POST", `/api/admin/waivers/${waiverId}/view-grant`, { reason });
+      return (await res.json()) as { token: string };
+    },
+    onSuccess: ({ token }) => {
+      setReasonFor(null);
+      setReason("");
+      qc.invalidateQueries({ queryKey: key });
+      // Navigated to rather than fetched: it is a one-shot stream, and spending the grant on a
+      // background fetch whose response nobody rendered would be the worst of both.
+      window.open(resolveApiUrl(`/api/admin/waivers/view/${token}`), "_blank", "noreferrer");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't open that"),
+  });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Athlete {athleteId}</CardTitle>
+        <CardDescription>
+          Opening a document records who you are, when, and the reason you give. It opens once --
+          you can ask again, and that is another line in the log.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {(data?.documents ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nothing decided on file.</p>
+        ) : (
+          (data?.documents ?? []).map((d) => (
+            <div key={d.id} className="space-y-2 rounded-md border border-border p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{DOCUMENT_LABEL[d.kind]}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {d.reviewStatus.replace("_", " ")}
+                    {d.reviewSource ? ` · by ${d.reviewSource}` : ""}
+                    {d.issuingOrganization ? ` · ${d.issuingOrganization}` : ""}
+                    {d.expiresOn ? ` · expires ${d.expiresOn}` : ""}
+                  </p>
+                </div>
+                {d.hasFile ? (
+                  <Button size="sm" variant="secondary" onClick={() => setReasonFor(d.id)}>
+                    <Eye className="h-3.5 w-3.5" />
+                    Open once
+                  </Button>
+                ) : (
+                  <span className="shrink-0 text-xs text-muted-foreground">file deleted</span>
+                )}
+              </div>
+              {reasonFor === d.id && (
+                <div className="flex gap-2">
+                  <Input
+                    autoFocus
+                    placeholder="What do you need it for?"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={reason.trim().length < 8 || openOnce.isPending}
+                    onClick={() => openOnce.mutate(d.id)}
+                  >
+                    Open
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+
+        {(data?.views ?? []).length > 0 && (
+          <details className="text-xs">
+            <summary className="cursor-pointer font-semibold text-primary">
+              Who has opened these ({data!.views.length})
+            </summary>
+            <ul className="mt-2 space-y-1 text-muted-foreground">
+              {data!.views.map((v) => (
+                <li key={v.grant.id}>
+                  {new Date(v.grant.createdAt).toLocaleString()} · {v.adminName} ·{" "}
+                  {DOCUMENT_LABEL[v.kind]} · {v.grant.usedAt ? "opened" : "not opened"} · "
+                  {v.grant.reason}"
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </CardContent>
+    </Card>
   );
 }

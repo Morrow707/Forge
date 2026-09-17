@@ -5270,6 +5270,58 @@ export const externalWaivers = pgTable(
 );
 export type ExternalWaiver = typeof externalWaivers.$inferSelect;
 
+// ---------- One-time admin views of a kept document ----------
+//
+// THE FILE IS KEPT FOREVER; BROWSING IT IS NOT A THING ANYONE CAN DO.
+//
+// Two decisions that look contradictory and are not. The file stays, because a
+// release nobody can produce covers nobody -- an accepted row with no document
+// behind it is not evidence on the day somebody asks. And an admin can never
+// scroll a list of children's signed medical forms, because "we might need one
+// of these some day" is not a reason to let anybody read all of them today.
+//
+// What reconciles them is that producing a document is a deliberate act with a
+// name on it. An admin cannot list accepted documents at all. To open one they
+// name the athlete, name the document, and say why; that grant opens the file
+// exactly once and then is spent. Asking again is allowed and is a second row
+// here -- the control is not that it is impossible twice, it is that it is
+// never silent and never casual.
+//
+// Deliberately NOT a signed media URL. Those are shareable and re-usable for
+// their whole lifetime, which is the property that makes them right for a
+// coach re-watching a form check and wrong for this. The grant streams bytes
+// through one route, once.
+export const externalWaiverViewGrants = pgTable(
+  "external_waiver_view_grants",
+  {
+    id: serial("id").primaryKey(),
+    waiverId: integer("waiver_id")
+      .notNull()
+      .references(() => externalWaivers.id, { onDelete: "cascade" }),
+    adminUserId: integer("admin_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Single-use secret. Hashed, on the same reasoning as every other token in
+    // this schema: a leaked database should not hand somebody a working key.
+    tokenHash: text("token_hash").notNull().unique(),
+    // Why they need it, in their own words. Required -- a grant with no stated
+    // purpose is exactly the casual look this exists to stop, and a reason
+    // nobody ever reads still changes what people do before they type it.
+    reason: text("reason").notNull(),
+    // Short, because a grant is for opening a document now, not for keeping.
+    expiresAt: timestamp("expires_at").notNull(),
+    // Stamped the moment the bytes are served. A grant with this set is spent.
+    usedAt: timestamp("used_at"),
+    ipAddress: text("ip_address"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    waiverIdx: index("external_waiver_view_grants_waiver_idx").on(table.waiverId, table.createdAt),
+    adminIdx: index("external_waiver_view_grants_admin_idx").on(table.adminUserId, table.createdAt),
+  }),
+);
+export type ExternalWaiverViewGrant = typeof externalWaiverViewGrants.$inferSelect;
+
 // ---------- Record access audit log ----------
 // Immutable, insert-only log of a staff member (coach or admin) touching
 // one specific athlete's video or biometric record -- the per-record
