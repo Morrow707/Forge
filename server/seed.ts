@@ -24,7 +24,7 @@ import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content"
 // carrying the draft is recognised by BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX, which is its own
 // constant in biometric-release.ts. The draft body is kept only as the evidence that prefix is
 // right -- see biometric-release.test.ts.
-import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT, nextParentalNotice } from "./seed-data/legal-documents-draft";
+import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT, nextParentalNotice, nextPrivacyPolicy } from "./seed-data/legal-documents-draft";
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
@@ -6240,8 +6240,16 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   if (!(await storage.getLegalDocument("terms_of_service"))) {
     await storage.updateLegalDocument("terms_of_service", TERMS_OF_SERVICE_DRAFT);
   }
-  if (!(await storage.getLegalDocument("privacy_policy"))) {
-    await storage.updateLegalDocument("privacy_policy", PRIVACY_POLICY_DRAFT);
+  // The privacy policy, like the parental notice, has a version lane rather than only patches --
+  // its oldest shipped text predates both the research-sharing section and the subject-code
+  // paragraph, so an installation holding it describes an analytics surface Forge no longer has.
+  // Runs BEFORE the patch pass below, so a replaced document then gets the same address and
+  // email corrections as everything else.
+  const storedPrivacy = await storage.getLegalDocument("privacy_policy");
+  const nextPrivacy = nextPrivacyPolicy(storedPrivacy?.content ?? null);
+  if (nextPrivacy) {
+    await storage.updateLegalDocument("privacy_policy", nextPrivacy);
+    if (storedPrivacy) console.log("Replaced a superseded privacy policy with the current one.");
   }
   // The video and biometric consent. Unlike the four documents around it this one is LIVE --
   // recordBiometricRelease and logGuardianConsents snapshot it into a consent record as the

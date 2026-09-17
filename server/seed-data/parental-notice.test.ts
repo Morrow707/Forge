@@ -67,9 +67,14 @@ describe("the notice to parent or guardian", () => {
 });
 
 describe("migrating a stored notice", () => {
-  it("replaces the version it succeeded", () => {
-    expect(PARENTAL_NOTICE_PRIOR_SHIPPED).toHaveLength(1);
+  it("replaces every version it succeeded, not just the last one", () => {
+    // It listed one hash, which stranded any installation seeded before that on a notice
+    // carrying three false statements -- and this document is EMAILED to a minor's parent, so a
+    // stranded copy is what the next parent reads. live-document-migration.test.ts replays the
+    // file's whole history to keep this honest.
+    expect(PARENTAL_NOTICE_PRIOR_SHIPPED.length).toBeGreaterThan(1);
     expect(PARENTAL_NOTICE_PRIOR_SHIPPED).not.toContain(sha256(PARENTAL_NOTICE_DRAFT));
+    expect(new Set(PARENTAL_NOTICE_PRIOR_SHIPPED).size).toBe(PARENTAL_NOTICE_PRIOR_SHIPPED.length);
   });
 
   it("seeds a fresh install and is a no-op once current", () => {

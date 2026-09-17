@@ -92,9 +92,42 @@ export const BIOMETRIC_RELEASE_PRIOR_SHIPPED = [
  * as the thing that was agreed to. A correction that reaches only new installations would leave
  * every existing parent reading the old one. */
 export const PARENTAL_NOTICE_PRIOR_SHIPPED = [
-  // Said "you don't need to do anything for the account to keep working" while the athlete was
-  // locked out pending a guardian claim; addressed every minor's parent as the parent of a
-  // 13-to-17-year-old; and told an under-13's guardian to turn OFF camera tracking that starts
-  // off and is theirs to turn on.
+  // EVERY version, not just the one it replaced. Listing only the immediately previous text
+  // stranded any installation seeded before that on a notice carrying three false statements --
+  // and this is the document that gets EMAILED to a minor's parent, so a stranded copy is not a
+  // stale page nobody opens, it is what the next parent reads. Found by replaying the file's
+  // whole history through the migration (live-document-migration.test.ts), not by reading it.
+  //
+  // Each of these said "you don't need to do anything for the account to keep working" while the
+  // athlete was locked out pending a guardian claim, addressed every minor's parent as the parent
+  // of a 13-to-17-year-old, and told an under-13's guardian to turn OFF camera tracking that
+  // starts off and is theirs to turn on.
+  "e347a9f7cb769becf66d08f96b9c0ef70b693ecd5f4352a5450ec53f02a0b035",
+  "30b0dacc768a7c1762793f015e8063dd689e2d9b796eabea9f0c508a35b1ec95",
   "99c15769c09c622a4c38437704be2eaf80d52b42a320daa291c1b383526389a5",
+] as const;
+
+/** PREVIOUS versions of the privacy policy, as they sit in a database AFTER LIVE_DOCUMENT_PATCHES
+ * has had its go at them.
+ *
+ * A lane rather than more patches, because this document did not change by a sentence -- the
+ * oldest version is 1,400 characters shorter than the current one, missing both the subject-code
+ * paragraph (how an admin analytics surface is de-identified) and the research-sharing section.
+ * Patching that forward would mean a patch the size of the document, which is a whole-document
+ * replacement wearing a disguise. A hash says the same thing honestly: this is a version Forge
+ * shipped, so replace it; anything else is somebody's own wording, so leave it alone.
+ *
+ * Hashed AFTER the patches rather than as the source text once was, because that is the shape an
+ * installation actually holds -- the address and email patches have already edited it in place. */
+export const PRIVACY_POLICY_PRIOR_SHIPPED = [
+  // Predates the research-sharing section and the subject-code sentence, so it described an
+  // admin analytics surface Forge no longer has.
+  //
+  // TWO HASHES FOR ONE VERSION, and both are needed. An installation that has deployed since it
+  // seeded holds the PATCHED shape -- the address and email corrections edited it in place --
+  // while one that seeded and never redeployed holds the source text exactly. Listing only the
+  // patched form would leave the second kind stranded, which is the same mistake as listing only
+  // the immediately previous version.
+  "d788f23ff8083a40133a1508be8c05d27bb84188549c6e62d8882250a95f40f3", // as stored after patches
+  "afc0584e301fd55241e7e44cadb398da8a53e7a155c57072e9709d580fd79897", // as seeded, unpatched
 ] as const;

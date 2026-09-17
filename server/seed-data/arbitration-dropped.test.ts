@@ -97,10 +97,13 @@ describe("migrating an installation that took the arbitration text", () => {
     }
   });
 
-  it("renumbers the section that followed it", () => {
+  it("renumbers the sections that followed it, in one patch", () => {
+    // ONE PATCH, not two. The CONTACT renumber used to be its own entry, and a later change --
+    // the intellectual-property section, which shifts the same headings back the other way --
+    // made the two collide: whichever ran last won, and the tail ended up inconsistent. A patch
+    // that leaves the document half-renumbered is a patch that depends on what runs after it.
     const [from] = removals[0]!;
-    const stored = `${from}\nWe may update these Terms.\n\n18. CONTACT\nForge is operated by X.`;
-    const patched = patchLiveDocuments(stored)!;
+    const patched = patchLiveDocuments(from)!;
     expect(patched).toContain("15. GOVERNING LAW");
     expect(patched).toContain("16. CHANGES TO THESE TERMS");
     expect(patched).toContain("17. CONTACT");

@@ -278,13 +278,23 @@ export const LIVE_DOCUMENT_PATCHES: ReadonlyArray<readonly [string, string]> = [
     "These Terms and any action related to them are governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. Exclusive jurisdiction and venue for any dispute not subject to arbitration under Section 15 lie in the state and federal courts located in Maricopa County, Arizona.",
     `${GOVERNING_LAW_CLAUSE}\n\n[Placeholder -- Section 15's arbitration and class-action waiver are a PROPOSAL and are not in the live signup agreement, which carries the paragraph above and nothing more. Two live documents describing two different dispute paths is ambiguity a counterparty gets to pick between, so either Section 15 is adopted and added to the live agreement, or it is dropped. It should not stay half-applied.]`,
   ],
+  // THESE TWO WRITE THE ADDRESS AS WELL AS THE EMAIL, and they have to.
+  //
+  // The address patches above prepend the business address to a contact SENTENCE. An installation
+  // old enough to still hold "[Placeholder -- add a real support/contact email...]" has no such
+  // sentence yet, so those patches find nothing, skip, and the patch below then writes the
+  // sentence -- after the only thing that would have given it an address has already run. The
+  // result was a document seeded before 2026-09-02 carrying the right email and no postal
+  // address, in the section whose entire job is telling somebody how to reach Forge. Producing
+  // the finished form in one step is what makes it independent of where either patch sits in
+  // this list.
   [
     "[Placeholder -- add a real support/contact email once one exists.]",
-    `Questions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`,
+    `Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.\n\nQuestions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`,
   ],
   [
     "[Placeholder -- add a real privacy-contact email once one exists.]",
-    `Questions about this Policy, or to make a request about your data: ${FORGE_CONTACT_EMAIL}`,
+    `Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.\n\nQuestions about this Policy, or to make a request about your data: ${FORGE_CONTACT_EMAIL}`,
   ],
   [
     "[Placeholder -- add a real contact email once one exists, the same one referenced in the Terms of Service and Privacy Policy.]",
@@ -331,9 +341,15 @@ FORGE -- NOTICE TO PARENT OR GUARDIAN (DRAFT)`,
 FORGE -- END USER LICENSE AGREEMENT (DRAFT)`,
     "FORGE -- END USER LICENSE AGREEMENT",
   ],
+  // ANCHORED ON THE SENTENCE, NOT ON THE SECTION NUMBER AFTER IT, which is what it used to be.
+  // The number moves: the arbitration removal shifts GOVERNING LAW from 16 to 15, and the
+  // intellectual-property section shifts it back to 16. A patch that names a neighbouring
+  // heading only fires when the list happens to run after whichever patch last renumbered it,
+  // and an installation that skipped a release arrives with the numbering of neither. Matching
+  // the placeholder alone is true whatever section it ends up sitting in.
   [
-    " [Placeholder -- confirm with counsel whether and how this section can apply where the person being asked to indemnify is a minor athlete or their parent/guardian; several states limit or void an indemnification obligation imposed on a minor.]\n\n15. GOVERNING LAW",
-    "\n\n15. GOVERNING LAW",
+    " [Placeholder -- confirm with counsel whether and how this section can apply where the person being asked to indemnify is a minor athlete or their parent/guardian; several states limit or void an indemnification obligation imposed on a minor.]",
+    "",
   ],
   // The institutional agreement names the biometric document twice. It is ACCEPTED by a coach on
   // an org plan, so a stored copy is a document somebody agreed to and gets corrected in place
@@ -385,17 +401,17 @@ ${GOVERNING_LAW_CLAUSE}
 
 [Placeholder -- Section 15's arbitration and class-action waiver are a PROPOSAL and are not in the live signup agreement, which carries the paragraph above and nothing more. Two live documents describing two different dispute paths is ambiguity a counterparty gets to pick between, so either Section 15 is adopted and added to the live agreement, or it is dropped. It should not stay half-applied.]
 
-17. CHANGES TO THESE TERMS`,
+17. CHANGES TO THESE TERMS
+We may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.
+
+18. CONTACT`,
     `15. GOVERNING LAW
 ${GOVERNING_LAW_CLAUSE}
 
-16. CHANGES TO THESE TERMS`,
-  ],
-  // Renumbering the section after it. Anchored on the line below the heading so this cannot
-  // touch another document's section 18.
-  [
-    "18. CONTACT\nForge is operated by",
-    "17. CONTACT\nForge is operated by",
+16. CHANGES TO THESE TERMS
+We may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.
+
+17. CONTACT`,
   ],
   // The EULA and the licence agreement each carried a paragraph explaining that the terms
   // PROPOSE arbitration and that the proposal does not apply here. With the proposal gone there
@@ -410,6 +426,21 @@ The Terms of Service propose binding arbitration with a class-action waiver for 
   [
     "unless a specific request for further deletion is made. [Placeholder -- confirm this matches what BIPA",
     `unless a specific request for further deletion is made. Either request can be made at ${FORGE_CONTACT_EMAIL}. [Placeholder -- confirm this matches what BIPA`,
+  ],
+  // --- The terms gained an intellectual-property and automated-access section.
+  //
+  // Seventeen sections and not one of them said the software, the exercise library or the site
+  // content belonged to Forge, or that harvesting it was not allowed. The gap mattered more here
+  // than for most products: the thing worth scraping is the coaching library, which is an asset
+  // rather than marketing copy. Section 1 already bound a visitor who never signs up ("or using
+  // the Forge app or website"), so what was missing was the substance, not the reach.
+  //
+  // ONE PATCH FOR THE WHOLE TAIL rather than eight renumbering patches. Renumbering in pieces
+  // cascades: rename 10 to 11 and the next patch looking for 11 finds the heading just created.
+  // A single exact match cannot half-apply.
+  [
+    "10. TERMINATION\nWe may suspend or terminate an account that violates these Terms. You may stop using Forge and delete your account at any time.\n\n11. DISCLAIMER OF WARRANTIES\nThe Service is provided \"as is,\" without warranties of any kind, to the fullest extent the law allows.\n\n12. LIMITATION OF LIABILITY\nTo the fullest extent the law allows, Forge Performance Systems LLC is not liable for indirect, incidental, or consequential damages arising from use of the Service, including injuries arising from training activity -- athletic training carries inherent physical risk that using this app does not create or increase.\n\n13. ASSUMPTION OF RISK\nAthletic training -- including weightlifting, sprinting, jumping, and other movements tracked or programmed through Forge -- carries inherent risks of physical injury, up to and including severe injury or death. By using the Service, you expressly acknowledge and assume these risks. As stated in Section 3, Forge's camera-based tracking, AI-generated suggestions, and form-fault flags are informational aids only; they do not guarantee safety, correct execution of any movement, or the absence of injury. A coach using the Service remains responsible for appropriately supervising and modifying training for their own athletes.\n\n14. INDEMNIFICATION\nYou agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct.\n\n15. GOVERNING LAW\nThis agreement, and any dispute arising out of it or out of your use of Forge, is governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. The parties will first try to resolve any dispute by talking to each other. Anything not resolved that way lies in the state and federal courts located in Maricopa County, Arizona, and both sides consent to the jurisdiction of those courts. Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.\n\n16. CHANGES TO THESE TERMS\nWe may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.\n\n17. CONTACT\nForge is operated by Forge Performance Systems LLC, 5145 North 7th Street, D-237, Phoenix, Arizona 85014.\n\nQuestions about these Terms, or about your account: forgeperformancesystems@outlook.com",
+    "10. INTELLECTUAL PROPERTY AND AUTOMATED ACCESS\nForge, its software, its exercise and coaching library, and the content of its website are Forge's property. You may use them through the Service as it is intended to be used. You may not copy, scrape, or harvest them, access the Service by automated means, or reverse-engineer the software, except where the law says otherwise. This does not affect your own content, which is covered by Section 6.\n\n11. TERMINATION\nWe may suspend or terminate an account that violates these Terms. You may stop using Forge and delete your account at any time.\n\n12. DISCLAIMER OF WARRANTIES\nThe Service is provided \"as is,\" without warranties of any kind, to the fullest extent the law allows.\n\n13. LIMITATION OF LIABILITY\nTo the fullest extent the law allows, Forge Performance Systems LLC is not liable for indirect, incidental, or consequential damages arising from use of the Service, including injuries arising from training activity -- athletic training carries inherent physical risk that using this app does not create or increase.\n\n14. ASSUMPTION OF RISK\nAthletic training -- including weightlifting, sprinting, jumping, and other movements tracked or programmed through Forge -- carries inherent risks of physical injury, up to and including severe injury or death. By using the Service, you expressly acknowledge and assume these risks. As stated in Section 3, Forge's camera-based tracking, AI-generated suggestions, and form-fault flags are informational aids only; they do not guarantee safety, correct execution of any movement, or the absence of injury. A coach using the Service remains responsible for appropriately supervising and modifying training for their own athletes.\n\n15. INDEMNIFICATION\nYou agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct.\n\n16. GOVERNING LAW\nThis agreement, and any dispute arising out of it or out of your use of Forge, is governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. The parties will first try to resolve any dispute by talking to each other. Anything not resolved that way lies in the state and federal courts located in Maricopa County, Arizona, and both sides consent to the jurisdiction of those courts. Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.\n\n17. CHANGES TO THESE TERMS\nWe may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.\n\n18. CONTACT\nForge is operated by Forge Performance Systems LLC, 5145 North 7th Street, D-237, Phoenix, Arizona 85014.\n\nQuestions about these Terms, or about your account: forgeperformancesystems@outlook.com",
   ],
 ];
 

@@ -36,6 +36,12 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/forge_ci
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The live-document migration test replays every historical version of the legal
+          # documents through LIVE_DOCUMENT_PATCHES, which needs their history. A shallow
+          # clone has one commit and the test cannot run at all -- and a test that quietly
+          # does nothing in CI is worse than no test, because it reads as passing.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:

@@ -19,7 +19,11 @@ import {
   FORGE_LEGAL_ENTITY,
   GOVERNING_LAW_CLAUSE,
 } from "@shared/contact";
-import { isShippedVersion, PARENTAL_NOTICE_PRIOR_SHIPPED } from "./shipped-versions";
+import {
+  isShippedVersion,
+  PARENTAL_NOTICE_PRIOR_SHIPPED,
+  PRIVACY_POLICY_PRIOR_SHIPPED,
+} from "./shipped-versions";
 
 const DRAFT_NOTICE =
   "DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.";
@@ -53,28 +57,31 @@ Forge does not currently charge for access. If and when paid plans launch, separ
 9. PROHIBITED CONDUCT
 Don't use Forge to harass anyone, upload content you don't have the right to share, attempt to access another person's account or another coach's roster without authorization, or interfere with the Service's normal operation.
 
-10. TERMINATION
+10. INTELLECTUAL PROPERTY AND AUTOMATED ACCESS
+Forge, its software, its exercise and coaching library, and the content of its website are Forge's property. You may use them through the Service as it is intended to be used. You may not copy, scrape, or harvest them, access the Service by automated means, or reverse-engineer the software, except where the law says otherwise. This does not affect your own content, which is covered by Section 6.
+
+11. TERMINATION
 We may suspend or terminate an account that violates these Terms. You may stop using Forge and delete your account at any time.
 
-11. DISCLAIMER OF WARRANTIES
+12. DISCLAIMER OF WARRANTIES
 The Service is provided "as is," without warranties of any kind, to the fullest extent the law allows.
 
-12. LIMITATION OF LIABILITY
+13. LIMITATION OF LIABILITY
 To the fullest extent the law allows, Forge Performance Systems LLC is not liable for indirect, incidental, or consequential damages arising from use of the Service, including injuries arising from training activity -- athletic training carries inherent physical risk that using this app does not create or increase.
 
-13. ASSUMPTION OF RISK
+14. ASSUMPTION OF RISK
 Athletic training -- including weightlifting, sprinting, jumping, and other movements tracked or programmed through Forge -- carries inherent risks of physical injury, up to and including severe injury or death. By using the Service, you expressly acknowledge and assume these risks. As stated in Section 3, Forge's camera-based tracking, AI-generated suggestions, and form-fault flags are informational aids only; they do not guarantee safety, correct execution of any movement, or the absence of injury. A coach using the Service remains responsible for appropriately supervising and modifying training for their own athletes.
 
-14. INDEMNIFICATION
+15. INDEMNIFICATION
 You agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct.
 
-15. GOVERNING LAW
+16. GOVERNING LAW
 ${GOVERNING_LAW_CLAUSE}
 
-16. CHANGES TO THESE TERMS
+17. CHANGES TO THESE TERMS
 We may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.
 
-17. CONTACT
+18. CONTACT
 Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
 
 Questions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`;
@@ -341,4 +348,13 @@ export function nextParentalNotice(current: string | null): string | null {
   if (current === null) return PARENTAL_NOTICE_DRAFT;
   if (current === PARENTAL_NOTICE_DRAFT) return null;
   return isShippedVersion(current, PARENTAL_NOTICE_PRIOR_SHIPPED) ? PARENTAL_NOTICE_DRAFT : null;
+}
+
+/** What the stored privacy policy should become. `null` leaves it alone -- an admin's own wording
+ * is theirs, and only a version Forge shipped is replaced. See PRIVACY_POLICY_PRIOR_SHIPPED for
+ * why this one needed a lane rather than another patch. */
+export function nextPrivacyPolicy(current: string | null): string | null {
+  if (current === null) return PRIVACY_POLICY_DRAFT;
+  if (current === PRIVACY_POLICY_DRAFT) return null;
+  return isShippedVersion(current, PRIVACY_POLICY_PRIOR_SHIPPED) ? PRIVACY_POLICY_DRAFT : null;
 }
