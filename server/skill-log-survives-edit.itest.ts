@@ -10,7 +10,13 @@ import {
   skillPrograms,
   skillSessionLogs,
 } from "@shared/schema";
-import { makeAthlete, makeCoach, resetDatabase } from "./test-support/fixtures";
+import {
+  makeAthlete,
+  makeCoach,
+  makeUploadedFile,
+  resetDatabase,
+  uploadedFileExists,
+} from "./test-support/fixtures";
 
 /** A COACH EDITING A SKILL PROGRAM MUST NOT DESTROY WHAT AN ATHLETE ALREADY FILMED.
  *
@@ -108,5 +114,32 @@ describe("a skill session logged against a drill the coach later removes", () =>
       .where(eq(skillSessionLogs.athleteId, athlete.id));
     expect(row.skillProgramExerciseId).toBe(slot.id);
     expect(row.skillExerciseId).toBe(drill.id);
+  });
+
+  it("keeps the video file too, not just the row", async () => {
+    // The row surviving is worth nothing if something deleted the clip behind it. The two media
+    // cleanups in storage.ts are scoped to a whole skill program (a lesson removed, a class
+    // deleted), where the logs still die with the program DAY -- neither sits around a bare
+    // drill delete. This pins that, because the two halves are easy to get out of step.
+    const { athlete, drill, day, slot, assignment } = await build();
+    const videoUrl = await makeUploadedFile("kept-take.mp4");
+    await db.insert(skillSessionLogs).values({
+      skillAssignmentId: assignment.id,
+      skillProgramDayId: day.id,
+      skillProgramExerciseId: slot.id,
+      skillExerciseId: drill.id,
+      athleteId: athlete.id,
+      trackingLevel: "mechanics",
+      videoUrl,
+    } as never);
+
+    await db.delete(skillProgramExercises).where(eq(skillProgramExercises.id, slot.id));
+
+    const [row] = await db
+      .select()
+      .from(skillSessionLogs)
+      .where(eq(skillSessionLogs.athleteId, athlete.id));
+    expect(row.videoUrl).toBe(videoUrl);
+    expect(await uploadedFileExists(videoUrl)).toBe(true);
   });
 });
