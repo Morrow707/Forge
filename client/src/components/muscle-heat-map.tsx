@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJson } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import {
@@ -129,7 +130,7 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
   const path = athleteId
     ? `/api/coach/roster/${athleteId}/muscle-load?days=${windowDays}`
     : `/api/athlete/muscle-load?days=${windowDays}`;
-  const { data: rawByGroup, isLoading } = useQuery<Record<string, number>>({
+  const { data: rawByGroup, isLoading, isError, refetch } = useQuery<Record<string, number>>({
     queryKey: ["muscle-load", athleteId ?? "self", windowDays],
     queryFn: () => getJson(path),
   });
@@ -173,7 +174,13 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
         </div>
       </CardHeader>
       <CardContent>
-        {entries.length === 0 ? (
+        {isError ? (
+          // "No sets logged in the last N days" is what this map says about somebody who has
+          // been resting. Saying it when the request failed turns a loading problem into a
+          // training-history claim, on the screen a coach uses to see what an athlete has
+          // already hammered this week.
+          <ReadFailed what="this training load" onRetry={() => void refetch()} />
+        ) : entries.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No sets logged in the last {windowDays} days -- try a wider window.
           </p>

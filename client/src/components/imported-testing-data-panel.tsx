@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { ReadFailed } from "@/components/read-failed";
 import { format, parseISO } from "date-fns";
 import { FileSpreadsheet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,12 +30,24 @@ type ImportedRow = {
  * out of Forge's own tracking.
  */
 export function ImportedTestingDataPanel({ athleteId }: { athleteId: number }) {
-  const { data: rows = [], isLoading } = useQuery<ImportedRow[]>({
+  const { data: rows = [], isLoading, isError, refetch } = useQuery<ImportedRow[]>({
     queryKey: [`/api/coach/roster/${athleteId}/testing-data-import`],
   });
 
   if (isLoading)
     return <div className="h-16 animate-pulse rounded-md bg-surface" />;
+  // Hiding the panel is how it says "nothing was imported for this athlete", so hiding it on a
+  // failed read says the same thing about numbers that came off a coach's printout -- the ones
+  // Forge cannot regenerate because they were never measured here.
+  if (isError) {
+    return (
+      <ReadFailed
+        what="this athlete's imported testing data"
+        onRetry={() => void refetch()}
+        className="flex flex-col items-start gap-2 py-4 text-left"
+      />
+    );
+  }
   if (rows.length === 0) return null;
 
   const byDate = new Map<string, ImportedRow[]>();

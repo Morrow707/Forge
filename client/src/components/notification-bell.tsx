@@ -20,6 +20,7 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { ReadFailed } from "@/components/read-failed";
 
 type NotificationItem = {
   id: number;
@@ -45,7 +46,11 @@ export function NotificationBell() {
     refetchInterval: 60_000,
   });
 
-  const { data: notifications = [] } = useQuery<NotificationItem[]>({
+  const {
+    data: notifications = [],
+    isError: notificationsFailed,
+    refetch: refetchNotifications,
+  } = useQuery<NotificationItem[]>({
     queryKey: ["/api/notifications"],
     enabled: open,
   });
@@ -92,7 +97,17 @@ export function NotificationBell() {
           Notifications
         </div>
         <div className="max-h-80 overflow-y-auto">
-          {notifications.length === 0 && (
+          {notificationsFailed ? (
+            // "Nothing yet" is a claim about whether anybody has written to you. An athlete
+            // asking their coach a question about a set, or a guardian's reply, reads the same
+            // as silence when the list does not load.
+            <ReadFailed
+              what="your notifications"
+              onRetry={() => void refetchNotifications()}
+              className="flex flex-col items-center gap-2 px-3 py-8 text-center"
+            />
+          ) : null}
+          {!notificationsFailed && notifications.length === 0 && (
             <p className="px-3 py-8 text-center text-sm text-muted-foreground">
               {user?.role === "coach"
                 ? "Nothing yet. You'll see athlete comments and video uploads here."

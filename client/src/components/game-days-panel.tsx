@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { ReadFailed } from "@/components/read-failed";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +54,11 @@ export function GameDaysSection({ teamId, teamName }: { teamId: number; teamName
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [microcycleGameDay, setMicrocycleGameDay] = useState<TeamGameDay | null>(null);
-  const { data: gameDays = [] } = useQuery<TeamGameDay[]>({
+  const {
+    data: gameDays = [],
+    isError: gameDaysFailed,
+    refetch: refetchGameDays,
+  } = useQuery<TeamGameDay[]>({
     queryKey: ["/api/coach/team-game-days"],
     queryFn: () => getJson("/api/coach/team-game-days"),
   });
@@ -80,7 +85,16 @@ export function GameDaysSection({ teamId, teamName }: { teamId: number; teamName
           Add Game Day
         </Button>
       </div>
-      {teamGameDays.length === 0 ? (
+      {gameDaysFailed ? (
+        // A coach plans the week backwards from the game. "No games scheduled yet" on a failed
+        // read invites them to add one that already exists, and quietly removes the fixture the
+        // microcycle should have been built around.
+        <ReadFailed
+          what="this team's game days"
+          onRetry={() => void refetchGameDays()}
+          className="flex flex-col items-start gap-2 py-2 text-left"
+        />
+      ) : teamGameDays.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           No games scheduled yet -- add one to plan the week's training around it.
         </p>
@@ -215,7 +229,7 @@ function MicrocycleDialog({
   gameDay: TeamGameDay;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { data: plan, isLoading } = useQuery<MicrocyclePlan>({
+  const { data: plan, isLoading, isError: planFailed, refetch: refetchPlan } = useQuery<MicrocyclePlan>({
     queryKey: [`/api/coach/teams/${gameDay.teamId}/game-days/${gameDay.id}/microcycle`],
     queryFn: () =>
       getJson(`/api/coach/teams/${gameDay.teamId}/game-days/${gameDay.id}/microcycle`),
@@ -232,6 +246,8 @@ function MicrocycleDialog({
         </DialogHeader>
         {isLoading || !plan ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Loading...</p>
+        ) : planFailed ? (
+          <ReadFailed what="this microcycle" onRetry={() => void refetchPlan()} />
         ) : plan.athletes.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
             No athletes on this team yet.

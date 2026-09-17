@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJson } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { WellnessBadge, AcwrBadge, HealthStatusToggle } from "@/components/athlete-status-badges";
 import { WellnessHistoryDialog } from "@/components/wellness-history-dialog";
 import { AcwrHistoryDialog } from "@/components/acwr-history-dialog";
@@ -38,7 +39,7 @@ export function CoachDayBriefing({ date }: { date: string }) {
   const [historyAthlete, setHistoryAthlete] = useState<{ id: number; name: string } | null>(null);
   const [historyView, setHistoryView] = useState<"wellness" | "acwr" | null>(null);
 
-  const { data = [], isLoading } = useQuery<AthleteBriefing[]>({
+  const { data = [], isLoading, isError, refetch } = useQuery<AthleteBriefing[]>({
     queryKey: ["/api/coach/day-briefing", date],
     queryFn: () => getJson(`/api/coach/day-briefing?date=${date}`),
   });
@@ -47,6 +48,13 @@ export function CoachDayBriefing({ date }: { date: string }) {
 
   if (isLoading) {
     return <div className="h-40 animate-pulse rounded-lg bg-surface" />;
+  }
+
+  // A coach opening today's briefing to a failed read was told their roster was empty -- which,
+  // for the screen that surfaces who is flagged, sore or overreaching this morning, reads as
+  // "nobody needs looking at today".
+  if (isError) {
+    return <ReadFailed what="today's briefing" onRetry={() => void refetch()} />;
   }
 
   if (data.length === 0) {

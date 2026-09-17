@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
+import { ReadFailed } from "@/components/read-failed";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { getJson } from "@/lib/queryClient";
@@ -270,7 +271,7 @@ function WorkoutsTab() {
 }
 
 export default function AthleteRecovery() {
-  const { data: entries = [], isLoading } = useQuery<WellnessEntry[]>({
+  const { data: entries = [], isLoading, isError, refetch } = useQuery<WellnessEntry[]>({
     queryKey: ["/api/athlete/wellness/history", HISTORY_DAYS],
     queryFn: () => getJson(`/api/athlete/wellness/history?limit=${HISTORY_DAYS}`),
   });
@@ -285,7 +286,16 @@ export default function AthleteRecovery() {
         {HISTORY_DAYS} days. Averages recompute automatically every time you check in -- nothing
         here is a running total.
       </p>
-      {isLoading ? (
+      {isError ? (
+        // Without this the trends card renders from an empty array, so every metric flatlines
+        // at zero and the athlete reads it as "I have not checked in" rather than "this did not
+        // load". Sleep, soreness and stress at zero is a picture of somebody in trouble.
+        <Card>
+          <CardContent className="py-10">
+            <ReadFailed what="your check-in history" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
         <div className="h-64 animate-pulse rounded-lg bg-surface" />
       ) : (
         <Card>

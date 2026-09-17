@@ -92,7 +92,7 @@ export function AcwrBadge({
 // no separate check needed here.
 export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
   const qc = useQueryClient();
-  const { data } = useQuery<{ flagged: boolean; acknowledgedAt: string | null }>({
+  const { data, isError, refetch } = useQuery<{ flagged: boolean; acknowledgedAt: string | null }>({
     queryKey: [`/api/coach/roster/${athleteId}/guardian-notice`],
   });
 
@@ -106,6 +106,29 @@ export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not update"),
   });
+
+  // ABSENCE IS THE SIGNAL HERE, which is what makes a failed read dangerous. This badge appears
+  // only when a minor needs a guardian waiver, so rendering nothing says "this athlete is fine"
+  // -- and on a roster of thirty rows, nobody notices a badge that did not draw. A muted,
+  // retryable marker says the check did not happen, without claiming the waiver is missing
+  // either: we do not know, and the honest badge says so.
+  if (isError) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          void refetch();
+        }}
+        title="We couldn't check this athlete's guardian status -- tap to try again"
+        aria-label="Guardian status unknown -- the check failed. Tap to try again."
+        className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+      >
+        <ShieldAlert className="h-3 w-3" />
+        Guardian status unknown
+      </button>
+    );
+  }
 
   if (!data?.flagged || data.acknowledgedAt) return null;
   return (
@@ -271,9 +294,16 @@ export function ResearchConsentControl({ athleteId }: { athleteId: number }) {
   // taking it as a prop: the athlete-detail payload does not carry
   // researchDataConsent, and a prop the only caller cannot supply is how this
   // control came to be written, exported and then mounted nowhere.
-  const { data: consent } = useQuery<{ granted: boolean; grantedAt: string | null }>({
+  const {
+    data: consent,
+    isError: consentFailed,
+    refetch: refetchConsent,
+  } = useQuery<{ granted: boolean; grantedAt: string | null }>({
     queryKey: [`/api/coach/roster/${athleteId}/research-consent`],
   });
+  // Defaulting to false is the SAFE direction for a consent -- nobody is included in an extract
+  // on a guess -- but it is still a claim, and the coach acts on it: "Research: no" is what
+  // prompts them to go and ask a guardian for consent they may already have given.
   const granted = consent?.granted ?? false;
 
   const { data: consentText } = useQuery<{ text: string }>({
@@ -310,6 +340,10 @@ export function ResearchConsentControl({ athleteId }: { athleteId: number }) {
         type="button"
         onClick={(e) => {
           e.stopPropagation();
+          if (consentFailed) {
+            void refetchConsent();
+            return;
+          }
           if (granted) mutation.mutate({ granted: false });
           else setOpen(true);
         }}
@@ -319,12 +353,14 @@ export function ResearchConsentControl({ athleteId }: { athleteId: number }) {
           granted ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
         )}
         aria-label={
-          granted
-            ? "Research consent given -- click to withdraw"
-            : "No research consent on file -- click to record a guardian's consent"
+          consentFailed
+            ? "We couldn't check this athlete's research consent -- click to try again"
+            : granted
+              ? "Research consent given -- click to withdraw"
+              : "No research consent on file -- click to record a guardian's consent"
         }
       >
-        {granted ? "Research: yes" : "Research: no"}
+        {consentFailed ? "Research: ?" : granted ? "Research: yes" : "Research: no"}
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
