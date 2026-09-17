@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, getJson } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useSwipeToDismissKeyboard } from "@/hooks/use-swipe-to-dismiss-keyboard";
 import { format, parseISO } from "date-fns";
@@ -70,7 +71,7 @@ export function AdminTeachChatPanel({
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading } = useQuery<KnowledgeState>({
+  const { data, isLoading, isError, refetch } = useQuery<KnowledgeState>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
   });
@@ -131,7 +132,13 @@ export function AdminTeachChatPanel({
         <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
           <div ref={messageListRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto">
             {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
-            {!isLoading && messages.length === 0 && (
+            {/* "Nothing taught yet" off a failed read invites an admin to teach the
+                model something it already knows, into a panel that is not showing
+                them what is there. */}
+            {isError && (
+              <ReadFailed what="what has been taught here" onRetry={() => void refetch()} />
+            )}
+            {!isError && !isLoading && messages.length === 0 && (
               <p className="py-8 text-center text-sm text-muted-foreground">{emptyStateHint}</p>
             )}
             {messages.map((m) => (

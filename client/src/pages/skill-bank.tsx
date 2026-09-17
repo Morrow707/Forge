@@ -23,6 +23,7 @@ import {
 } from "@/lib/exercise-colors";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 
 /** Skill Bank list -- deliberately separate from ExerciseBankPage, its own
  * table/API/route, with a trimmed filter set (Skill Type, Sport, Created By
@@ -51,7 +52,9 @@ export function SkillBankPage({
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const [faultSettingsOpen, setFaultSettingsOpen] = useState(false);
-  const { data: skills = [], isLoading } = useQuery<SkillExerciseWithOwnership[]>({
+  const { data: skills = [], isLoading, isError, refetch } = useQuery<
+    SkillExerciseWithOwnership[]
+  >({
     queryKey: [`${apiBase}/skill-exercises`],
   });
 
@@ -289,7 +292,15 @@ export function SkillBankPage({
         )}
       </div>
 
-      {!isLoading && displayed.length === 0 && (
+      {isError && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="the skill drill library" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {!isError && !isLoading && displayed.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Target className="h-10 w-10 text-muted-foreground" />

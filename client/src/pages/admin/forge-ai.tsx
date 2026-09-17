@@ -11,6 +11,7 @@ import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, Sparkles, Loader2, BookOpen, Eye, X, AlertTriangle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/read-failed";
 
 type ForgeAiMessage = { id: number; role: "admin" | "assistant"; content: string; createdAt: string };
 
@@ -68,7 +69,7 @@ export function ForgeAiContent() {
     confidence: "low" | "moderate" | "high";
     createdAt: string;
   };
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError, refetch } = useQuery<{
     messages: ForgeAiMessage[];
     entries: ForgeAiEntry[];
     usageCounts: Record<number, number>;
@@ -146,7 +147,10 @@ export function ForgeAiContent() {
           <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
               {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
-              {!isLoading && messages.length === 0 && (
+              {isError && (
+                <ReadFailed what="this conversation" onRetry={() => void refetch()} />
+              )}
+              {!isError && !isLoading && messages.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   Nothing taught yet -- paste an idea, a quote, a link, or just ask a question to start.
                 </p>
@@ -266,6 +270,11 @@ export function ForgeAiContent() {
           <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto">
             {isLoading ? (
               <div className="h-40 animate-pulse rounded-md bg-surface" />
+            ) : isError ? (
+              // The header counts entries off the same read, so a failure renders
+              // "What it knows (0)" above "Nothing taught yet" -- twice as confident,
+              // and wrong both times.
+              <ReadFailed what="what it knows" onRetry={() => void refetch()} />
             ) : entries.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Nothing taught yet.</p>
             ) : (

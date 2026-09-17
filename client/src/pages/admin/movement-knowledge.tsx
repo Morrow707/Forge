@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, getJson } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -79,7 +80,7 @@ export function MovementKnowledgeContent() {
 
   const fetchUrl = `/api/admin/movement-knowledge/${movementType}`;
 
-  const { data, isLoading } = useQuery<ChatState>({
+  const { data, isLoading, isError, refetch } = useQuery<ChatState>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
   });
@@ -173,7 +174,13 @@ export function MovementKnowledgeContent() {
           <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
               {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
-              {!isLoading && messages.length === 0 && (
+              {isError && (
+                <ReadFailed
+                  what={`what has been taught for ${movementType}`}
+                  onRetry={() => void refetch()}
+                />
+              )}
+              {!isError && !isLoading && messages.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   Nothing taught yet for {movementType} -- try something like "knees should break
                   parallel, don't let the threshold get more lenient than 95 degrees" or paste a URL

@@ -53,7 +53,6 @@ function offenders(): string[] {
 
 /** Known offenders, newest sweep. ONLY EVER REMOVE FROM THIS LIST. */
 const KNOWN = new Set<string>([
-  "components/admin-teach-chat-panel.tsx",
   "components/app-shell.tsx",
   "components/assign-program-dialog.tsx",
   "components/calendar-view.tsx",
@@ -63,9 +62,7 @@ const KNOWN = new Set<string>([
   "pages/admin/dashboard.tsx",
   "pages/admin/diagnostics.tsx",
   "pages/admin/documents.tsx",
-  "pages/admin/forge-ai.tsx",
   "pages/admin/knowledge-base.tsx",
-  "pages/admin/movement-knowledge.tsx",
   "pages/admin/query-engine.tsx",
   "pages/class-builder.tsx",
   "pages/class-list.tsx",
@@ -74,7 +71,6 @@ const KNOWN = new Set<string>([
   "pages/exercise-bank.tsx",
   "pages/program-builder.tsx",
   "pages/program-list.tsx",
-  "pages/skill-bank.tsx",
   "pages/skill-program-builder.tsx",
   "pages/skill-program-list.tsx",
   "pages/skill-workout.tsx",
