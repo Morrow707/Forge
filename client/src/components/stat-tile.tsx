@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /** Counts `value` up from its previous value (0 on first render) over
  * `duration`ms using requestAnimationFrame with an ease-out curve -- no
@@ -109,44 +110,66 @@ export function Sparkline({ values, className }: { values: number[]; className?:
 /** One clickable stat card on a dashboard's stat-tile row -- identical
  * between the coach and athlete dashboards (they were two hand-duplicated
  * copies of the exact same markup before this was pulled out), so both now
- * render from this single implementation.
+ * render from this single implementation. A THIRD copy survived privately in
+ * admin/dashboard.tsx and was found by this file gaining `unavailable` and the
+ * admin page not getting it -- the duplicate is now deleted and that page
+ * imports this. `href` is optional because that copy allowed a tile with
+ * nowhere to go.
  *
  * `trend`, when given, is a real last-7-days series (oldest to newest) --
  * only wired in on the dashboards for stats with genuine daily-granularity
  * history behind them (see each dashboard file for which and why). Never
- * pass a fabricated/placeholder series just to fill the space. */
+ * pass a fabricated/placeholder series just to fill the space.
+ *
+ * `unavailable` is the same principle applied to the number itself. Every
+ * value here is a `.length` or a filtered count, so a failed read renders a
+ * confident, animated ZERO -- and on a dashboard a zero is not a blank, it is
+ * a reading. "Flagged today: 0" is the one that matters: it says every athlete
+ * checked in fine, in the place a coach looks to find out whether anybody
+ * needs attention. An em dash says we do not know, which is the truth. */
 export function StatTile({
   icon: Icon,
   label,
   value,
   href,
   trend,
+  unavailable,
 }: {
   icon: LucideIcon;
   label: string;
   value: number;
-  href: string;
+  /** Omit for a tile that is a readout rather than a link. */
+  href?: string;
   trend?: number[];
+  unavailable?: boolean;
 }) {
-  const displayValue = useCountUp(value);
-  return (
-    <Link href={href}>
-      <Card className="cursor-pointer transition-colors hover:border-primary/50">
+  const displayValue = useCountUp(unavailable ? 0 : value);
+  const card = (
+      <Card className={cn(href && "cursor-pointer transition-colors hover:border-primary/50")}>
         <CardContent className="flex items-center gap-3 p-3 md:p-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
             <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="font-display text-2xl font-bold tabular-nums md:text-3xl">
-                {displayValue}
+              <p
+                className={cn(
+                  "font-display text-2xl font-bold tabular-nums md:text-3xl",
+                  unavailable && "text-muted-foreground",
+                )}
+              >
+                {unavailable ? "--" : displayValue}
               </p>
-              {trend && <Sparkline values={trend} className="mb-1 shrink-0" />}
+              {/* No sparkline either: a trend drawn from a series we could not
+                  fetch is a picture of nothing. */}
+              {!unavailable && trend && <Sparkline values={trend} className="mb-1 shrink-0" />}
             </div>
-            <p className="truncate text-sm text-muted-foreground">{label}</p>
+            <p className="truncate text-sm text-muted-foreground">
+              {unavailable ? `${label} -- couldn't load` : label}
+            </p>
           </div>
         </CardContent>
       </Card>
-    </Link>
   );
+  return href ? <Link href={href}>{card}</Link> : card;
 }

@@ -3,7 +3,8 @@ import { Link, useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkline } from "@/components/stat-tile";
+import { StatTile } from "@/components/stat-tile";
+import { ReadFailed } from "@/components/read-failed";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -91,7 +92,7 @@ type JobHealth = {
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const { data: exercises = [] } = useQuery<ExerciseWithOwnership[]>({
+  const { data: exercises = [], isError: exercisesFailed } = useQuery<ExerciseWithOwnership[]>({
     queryKey: ["/api/admin/exercises"],
   });
   // limit=1: this widget only needs the total count, not the rows
@@ -105,14 +106,14 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/reports?limit=1"],
     queryFn: () => getJson("/api/admin/reports?limit=1"),
   });
-  const { data: platformStats } = useQuery<PlatformStats>({
+  const { data: platformStats, isError: statsFailed } = useQuery<PlatformStats>({
     queryKey: ["/api/admin/platform-stats"],
   });
   // Polled rather than fetched once: this card is what an operator leaves
   // open to watch, and a status panel that only tells the truth at the moment
   // you loaded it is barely a status panel. A minute is well inside the
   // 24-hour window a failure stays active for, so nothing is missed.
-  const { data: systemStatus } = useQuery<SystemStatus>({
+  const { data: systemStatus, isError: systemStatusFailed, refetch: refetchSystemStatus } = useQuery<SystemStatus>({
     queryKey: ["/api/admin/system-status"],
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
@@ -136,7 +137,7 @@ export default function AdminDashboard() {
   const days = [0, 1, 2].map((offset) => addDays(new Date(), offset));
   const rangeStart = formatISO(days[0], { representation: "date" });
   const rangeEnd = formatISO(days[days.length - 1], { representation: "date" });
-  const { data: upcoming = [] } = useQuery<CalendarEntry[]>({
+  const { data: upcoming = [], isError: upcomingFailed } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/admin/my/calendar", rangeStart, rangeEnd],
     queryFn: async () => {
       const res = await apiRequest(
@@ -190,7 +191,7 @@ export default function AdminDashboard() {
                       {shown.length === 0 && (
                         <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
                           <CalendarDays className="h-3.5 w-3.5" />
-                          Nothing scheduled
+                          {upcomingFailed ? "Couldn't load" : "Nothing scheduled"}
                         </p>
                       )}
                       {shown.map((e) => (
@@ -224,16 +225,20 @@ export default function AdminDashboard() {
         </Card>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile icon={Users} label="Coaches" value={platformStats?.totalCoaches ?? 0} href="/admin/users?role=coach" />
-          <StatTile icon={UserCheck} label="Athletes" value={platformStats?.totalAthletes ?? 0} href="/admin/users?role=athlete" />
+          {/* Every one of these reads `?? 0`, so a failed platform-stats request renders
+              a platform with no coaches, no athletes and no signups -- which is not a
+              quiet dashboard, it is an alarming one, and wrong. */}
+          <StatTile icon={Users} label="Coaches" value={platformStats?.totalCoaches ?? 0} unavailable={statsFailed} href="/admin/users?role=coach" />
+          <StatTile icon={UserCheck} label="Athletes" value={platformStats?.totalAthletes ?? 0} unavailable={statsFailed} href="/admin/users?role=athlete" />
           <StatTile
             icon={UserPlus}
             label="New signups this week"
             value={platformStats?.newSignupsThisWeek ?? 0}
+            unavailable={statsFailed}
             trend={platformStats?.newSignupsTrend}
             href="/admin/users"
           />
-          <StatTile icon={Compass} label="Free Agents" value={platformStats?.freeAgentCount ?? 0} href="/admin/users" />
+          <StatTile icon={Compass} label="Free Agents" value={platformStats?.freeAgentCount ?? 0} unavailable={statsFailed} href="/admin/users" />
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -244,8 +249,12 @@ export default function AdminDashboard() {
                   <Dumbbell className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="font-display text-3xl font-bold">{exercises.length}</p>
-                  <p className="text-sm text-muted-foreground">Forge exercises</p>
+                  <p className="font-display text-3xl font-bold">
+                    {exercisesFailed ? "--" : exercises.length}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {exercisesFailed ? "Forge exercises -- couldn't load" : "Forge exercises"}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -332,7 +341,18 @@ export default function AdminDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {jobs.length === 0 ? (
+            {/* This card is the operator's evidence that the nightly jobs are running at
+                all -- data retention, the research mirror, the norms rebuild. "No
+                scheduled jobs have registered yet" off a failed read points at the
+                server having never booted, which is a very different emergency from the
+                one actually happening. */}
+            {systemStatusFailed ? (
+              <ReadFailed
+                what="job health"
+                onRetry={() => void refetchSystemStatus()}
+                className="flex flex-col items-start gap-2 text-left"
+              />
+            ) : jobs.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No scheduled jobs have registered yet. They register as the server boots.
               </p>
@@ -395,38 +415,6 @@ export default function AdminDashboard() {
       </div>
     </AppShell>
   );
-}
-
-function StatTile({
-  icon: Icon,
-  label,
-  value,
-  trend,
-  href,
-}: {
-  icon: typeof Users;
-  label: string;
-  value: number;
-  trend?: number[];
-  href?: string;
-}) {
-  const card = (
-    <Card className={cn(href && "cursor-pointer transition-colors hover:border-primary/50")}>
-      <CardContent className="flex items-center gap-3 p-3 md:p-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="font-display text-2xl font-bold md:text-3xl">{value}</p>
-            {trend && <Sparkline values={trend} className="mb-1 shrink-0" />}
-          </div>
-          <p className="truncate text-sm text-muted-foreground">{label}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-  return href ? <Link href={href}>{card}</Link> : card;
 }
 
 // The integration badges say "Live"/"Not set up", which reads wrong for a

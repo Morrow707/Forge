@@ -14,6 +14,7 @@ import { ReengagementBanner } from "@/components/reengagement-banner";
 import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
 import { StatTile } from "@/components/stat-tile";
+import { ReadFailed } from "@/components/read-failed";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { resolveWidgetOrder } from "@/lib/widget-layout";
@@ -83,19 +84,19 @@ type TeamSummary = { id: number; name: string; code: string | null };
 export default function CoachDashboard() {
   const { user } = useAuth();
   const widgetVisibility = useWidgetVisibility("coach");
-  const { data: programs = [], refetch: refetchPrograms } = useQuery<ProgramSummary[]>({
+  const { data: programs = [], isError: programsFailed, refetch: refetchPrograms } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
   });
-  const { data: roster = [], refetch: refetchRoster } = useQuery<RosterEntry[]>({
+  const { data: roster = [], isError: rosterFailed, refetch: refetchRoster } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
-  const { data: exercises = [], refetch: refetchExercises } = useQuery<ExerciseSummary[]>({
+  const { data: exercises = [], isError: exercisesFailed, refetch: refetchExercises } = useQuery<ExerciseSummary[]>({
     queryKey: ["/api/coach/exercises"],
   });
   const { data: teams = [], refetch: refetchTeams } = useQuery<TeamSummary[]>({
     queryKey: ["/api/coach/teams"],
   });
-  const { data: wellnessToday = [], refetch: refetchWellnessToday } = useQuery<
+  const { data: wellnessToday = [], isError: wellnessFailed, refetch: refetchWellnessToday } = useQuery<
     { level: "green" | "yellow" | "red" }[]
   >({
     queryKey: ["/api/coach/roster-wellness"],
@@ -112,7 +113,7 @@ export default function CoachDashboard() {
   const rangeStart = formatISO(days[0], { representation: "date" });
   const rangeEnd = formatISO(days[days.length - 1], { representation: "date" });
 
-  const { data: upcoming = [], refetch: refetchUpcoming } = useQuery<CalendarEntry[]>({
+  const { data: upcoming = [], isError: upcomingFailed, refetch: refetchUpcoming } = useQuery<CalendarEntry[]>({
     queryKey: ["/api/coach/calendar", rangeStart, rangeEnd],
     queryFn: async () => {
       const res = await apiRequest(
@@ -240,6 +241,7 @@ export default function CoachDashboard() {
         <NextThreeDaysCard
           days={days}
           entries={upcoming}
+          unavailable={upcomingFailed}
           calendarHref="/coach/calendar"
           description="Quick look across your roster — synced with the full calendar."
           compact
@@ -270,23 +272,36 @@ export default function CoachDashboard() {
         onToggle={widgetVisibility.setHidden}
       >
         <div className="grid grid-cols-1 shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile icon={Users} label="Athletes" value={roster.length} href="/coach/roster" />
+          <StatTile
+            icon={Users}
+            label="Athletes"
+            value={roster.length}
+            unavailable={rosterFailed}
+            href="/coach/roster"
+          />
           <StatTile
             icon={ListChecks}
             label="Programs"
             value={programs.length}
+            unavailable={programsFailed}
             href="/coach/programs"
           />
           <StatTile
             icon={Dumbbell}
             label="Exercises in bank"
             value={exercises.length}
+            unavailable={exercisesFailed}
             href="/coach/exercises"
           />
+          {/* The one that carries real weight. flaggedToday is a filtered count, so a
+              failed read renders a confident zero -- "nobody is flagged today" -- in
+              the exact place a coach looks to find out whether anybody needs attention
+              before training. */}
           <StatTile
             icon={HeartPulse}
             label="Flagged today"
             value={flaggedToday}
+            unavailable={wellnessFailed}
             href="/coach/roster"
             trend={flaggedTrend}
           />
@@ -316,7 +331,10 @@ export default function CoachDashboard() {
             </Link>
           </CardHeader>
           <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
-            {programs.length === 0 && (
+            {programsFailed && (
+              <ReadFailed what="your programs" onRetry={() => void refetchPrograms()} />
+            )}
+            {!programsFailed && programs.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <ListChecks className="h-5 w-5" />

@@ -20,9 +20,15 @@ export function NextThreeDaysCard({
   description,
   compact,
   onEntryClick,
+  unavailable,
 }: {
   days: Date[];
   entries: CalendarEntry[];
+  /** The calendar read failed. Three columns of "Nothing scheduled" is a claim
+   * about what is programmed for the next three days -- for a coach, that
+   * nothing is on the roster's plate; for an athlete, that they have no
+   * training. Neither is something an unanswered request establishes. */
+  unavailable?: boolean;
   calendarHref: string;
   description: string;
   /** Tighter padding + shrink-0 -- the coach dashboard's treatment,
@@ -84,7 +90,7 @@ export function NextThreeDaysCard({
                   {shown.length === 0 && (
                     <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
                       <CalendarDays className="h-3.5 w-3.5" />
-                      Nothing scheduled
+                      {unavailable ? "Couldn't load" : "Nothing scheduled"}
                     </p>
                   )}
                   {shown.map((e) => (
