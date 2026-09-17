@@ -1,5 +1,5 @@
 // First-pass draft text for the admin-editable Terms of Service, Privacy
-// Policy, Biometric Waiver, and Parental Notice (see shared/schema.ts
+// Policy, and Parental Notice (see shared/schema.ts
 // legalDocuments). Grounded in what Forge actually does today --
 // camera-based tracking, the AI features, the wellness/nutrition/injury
 // data it collects, the age-tier system built alongside this -- not
@@ -133,41 +133,15 @@ Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
 
 Questions about this Policy, or to make a request about your data: ${FORGE_CONTACT_EMAIL}`;
 
-// A biometric waiver is its own legal instrument, separate from the general
-// Privacy Policy section that just mentions this data exists (see Section 4
-// above) -- most state biometric laws (Illinois' BIPA is the model this
-// draft follows most closely, since it's the most specific and the most
-// litigated) expect a standalone written release naming exactly what's
-// collected, why, how long it's kept, and an explicit "I consent," not a
-// clause buried in a longer privacy policy. consentRecords.consentType
-// already has "biometric_waiver" as a real value (see shared/schema.ts) --
-// this is the document text that type has never had until now.
-export const BIOMETRIC_WAIVER_DRAFT = `${DRAFT_NOTICE}
-
-FORGE -- BIOMETRIC INFORMATION CONSENT AND RELEASE (DRAFT)
-
-1. WHAT THIS IS
-This is a release specifically for the biometric and biometric-adjacent information described below, separate from and in addition to Forge's general Terms of Service and Privacy Policy. Signing (or, for an athlete under 18, a parent/guardian or coach-as-agent signing on the athlete's behalf) means you understand and consent to the collection described here.
-
-2. WHAT'S COLLECTED
-Forge's camera-based tracking (ARKit on iOS, MediaPipe on web/Android) processes video of the athlete's body in motion, captured on the athlete's own device, to compute: joint angles and body-segment positions, bar-path/barbell velocity, jump height and ground-contact time, sprint splits, and similar movement-mechanics metrics. Some of this processing is a form of biometric identifier or biometric information under laws like Illinois' Biometric Information Privacy Act (BIPA) and comparable state statutes. Raw video is stored only when the athlete (or their coach, recording on their behalf) explicitly chooses to save a clip -- tracking metrics are computed whether or not the clip itself is kept.
-
-3. WHY IT'S COLLECTED
-Solely to provide the Service: showing an athlete and their coach tracked performance metrics and trends, flagging movement-mechanics faults for coaching purposes, and (only for saved clips) letting an athlete or coach review the footage itself. This data is not used for facial recognition, identity verification, or any purpose other than athletic performance tracking as described here.
-
-4. RETENTION AND DESTRUCTION
-Raw video for Tier 1 (under 13) accounts is automatically deleted 30 days after capture; for Tier 2 (13-17) accounts, 90 days after capture. These windows are current engineering defaults, not figures set by counsel or required by any specific statute -- see the note below. Numeric metrics computed from that video (bar-path velocity, joint angles, jump height, and similar) are NOT deleted on this schedule; they are retained as ordinary performance history, the same as a hand-recorded stopwatch time would be, until the athlete's account itself is deleted. Adult (Tier 3, 18+) accounts have no automatic video deletion window -- video is retained until the athlete deletes it individually or deletes their account. Deleting an account permanently removes all of that account's stored video immediately, for every tier. [Placeholder -- confirm with counsel that stating these operational windows here satisfies BIPA's requirement for a published retention schedule, whether the 30/90-day figures themselves should change, and whether a maximum age-independent retention ceiling should also be added.]
-
-5. NO SALE, NO UNRELATED DISCLOSURE
-Forge does not sell, lease, trade, or otherwise profit from data that identifies an individual athlete. De-identified group statistics may be provided to a research organisation, including for payment, but only for athletes whose guardian (or who themselves, if 18 or over) has separately agreed to that specific use, and only in the form described in Section 7 of the Privacy Policy: group figures with any group under ten withheld, and no identifiers, video, or free text of any kind. It is shared only with the athlete's own coach (as the core function of the Service) and with the service providers named in the Privacy Policy's "How We Share Information" section, solely to operate the Service.
-
-6. YOUR RIGHTS
-You (or, for a minor, their parent/guardian) may ask what biometric data Forge holds for that athlete, and may request its deletion by deleting the athlete's account, which removes stored video immediately -- tracked numeric metrics already logged as part of training history are retained the same way any other workout record is, unless a specific request for further deletion is made. Either request can be made at ${FORGE_CONTACT_EMAIL}. [Placeholder -- confirm this matches what BIPA and any other applicable state law actually requires before this is treated as a complete rights statement.]
-
-7. CONSENT
-By signing, you confirm you've read and understood this release and consent to the collection, use, and retention described above, for as long as the associated Forge account remains active or until consent is withdrawn by deleting the account.
-
-[Placeholder -- signature/date capture, and the specific state-law citations this release is meant to satisfy, need to be finalized with counsel before this is used to collect a real signature.]`;
+// THE BIOMETRIC DRAFT IS GONE. The document Forge uses is BIOMETRIC_RELEASE in
+// biometric-release.ts -- the one Scott supplied, which replaced this draft entirely.
+//
+// What used to sit here was that draft's full text, kept as evidence that
+// BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX really is its opening. The prefix is pinned by
+// its own hash now, so the body was carrying nothing. The prefix itself stays where it is
+// and is not the draft -- it is what RECOGNISES the draft in an installation that still
+// stores it, so that seed can replace it. Deleting that would not remove the draft from
+// anywhere; it would strand it.
 
 // Addressed to a parent/guardian, not the athlete -- distinct from every
 // other document in this file, which speaks to whoever's using the app.
@@ -235,13 +209,13 @@ This Institutional Service Agreement ("Agreement") supplements, and does not rep
 By accepting this Agreement, you represent that you have the authority to bind the Institution to its terms. If you're not sure whether you have that authority, don't accept on the Institution's behalf -- have whoever does accept it instead.
 
 3. PARENTAL/GUARDIAN CONSENT IS THE INSTITUTION'S RESPONSIBILITY
-Forge's own signup flow captures a parent or guardian's email for a minor athlete and, for an athlete under 13, requires a coach to provision the account rather than allowing direct self-signup (see the Terms of Service and Biometric Waiver for what that involves). That is not a substitute for whatever consent, notice, or waiver the Institution is independently required to obtain from a minor athlete's parent or guardian under applicable law (including COPPA) or the Institution's own policies before that athlete uses Forge as part of the Institution's program. The Institution is solely responsible for obtaining and documenting that consent. [Placeholder -- counsel should confirm exactly what allocation of this responsibility is enforceable, and whether any additional Forge-side mechanism is needed to support it, rather than assuming a contract clause alone resolves it.]
+Forge's own signup flow captures a parent or guardian's email for a minor athlete and, for an athlete under 13, requires a coach to provision the account rather than allowing direct self-signup (see the Terms of Service and the Video and Biometric Consent for what that involves). That is not a substitute for whatever consent, notice, or waiver the Institution is independently required to obtain from a minor athlete's parent or guardian under applicable law (including COPPA) or the Institution's own policies before that athlete uses Forge as part of the Institution's program. The Institution is solely responsible for obtaining and documenting that consent. [Placeholder -- counsel should confirm exactly what allocation of this responsibility is enforceable, and whether any additional Forge-side mechanism is needed to support it, rather than assuming a contract clause alone resolves it.]
 
 4. INDEMNIFICATION
 The Institution agrees to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) the Institution's failure to obtain any parental or guardian consent required under Section 3; (b) the Institution's use of the Service outside the scope described in the Terms of Service; or (c) the Institution's own negligent supervision of its athletes' use of the Service. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. [Placeholder -- this is the core liability-shifting mechanism of the whole Agreement and the single clause most in need of real counsel drafting; the consumer Terms of Service's own indemnification section carries a similar, still-unresolved flag for minor athletes, and that issue is not solved by moving the obligation onto the Institution instead.]
 
 5. DATA HANDLING
-Forge's handling of data collected from the Institution's athletes -- what's collected, how long it's kept, and what's deleted automatically -- is governed by the Privacy Policy and Biometric Waiver, unchanged by this Agreement. If the Institution is a school subject to FERPA or a similar student-records law, the Institution is responsible for its own compliance with that law with respect to its use of Forge; this Agreement does not make Forge a "school official" or equivalent under any such law unless a separate, specific written agreement says so. [Placeholder -- if the Institution's use case actually requires FERPA school-official status or a signed data-processing agreement, that is separate, unbuilt work, not something this paragraph accomplishes by itself.]
+Forge's handling of data collected from the Institution's athletes -- what's collected, how long it's kept, and what's deleted automatically -- is governed by the Privacy Policy and the Video and Biometric Consent, unchanged by this Agreement. If the Institution is a school subject to FERPA or a similar student-records law, the Institution is responsible for its own compliance with that law with respect to its use of Forge; this Agreement does not make Forge a "school official" or equivalent under any such law unless a separate, specific written agreement says so. [Placeholder -- if the Institution's use case actually requires FERPA school-official status or a signed data-processing agreement, that is separate, unbuilt work, not something this paragraph accomplishes by itself.]
 
 6. TERM
 This Agreement is in effect for as long as the Institution's account remains on an organizational billing plan, and does not apply retroactively to anything that happened before the Institution accepted it.

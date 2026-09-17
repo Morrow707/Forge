@@ -3,18 +3,20 @@ import { legalDocumentTypeEnum } from "@shared/schema";
 import {
   TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
-  BIOMETRIC_WAIVER_DRAFT,
   PARENTAL_NOTICE_DRAFT,
   INSTITUTIONAL_AGREEMENT_DRAFT,
   EULA_DRAFT,
 } from "./legal-documents-draft";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./assumption-of-risk";
+import { BIOMETRIC_RELEASE } from "./biometric-release";
 import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
 
 const DRAFT_FOR_TYPE: Record<string, string> = {
   terms_of_service: TERMS_OF_SERVICE_DRAFT,
   privacy_policy: PRIVACY_POLICY_DRAFT,
-  biometric_waiver: BIOMETRIC_WAIVER_DRAFT,
+  // Not a draft, and never was one in production: the seed writes the real document
+  // straight from nextBiometricRelease(null).
+  biometric_waiver: BIOMETRIC_RELEASE,
   parental_notice: PARENTAL_NOTICE_DRAFT,
   institutional_agreement: INSTITUTIONAL_AGREEMENT_DRAFT,
   eula: EULA_DRAFT,

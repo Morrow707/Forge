@@ -115,7 +115,19 @@ Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
 
 Questions, a request about what Forge holds, or a withdrawal: ${FORGE_CONTACT_EMAIL}`;
 
-/** The draft text as the seed originally wrote it, reassembled exactly. */
+/** THE ERASER, NOT THE DRAFT.
+ *
+ * The opening of the superseded draft -- its banner and its title line, exactly as the seed once
+ * wrote them. Its only job is to RECOGNISE that draft in an installation that still stores it,
+ * so the seed can replace it with the document Forge actually uses. Deleting this would not
+ * remove the draft from anywhere; it would strand whoever still has it on a document headed
+ * "DRAFT -- not reviewed by a lawyer", which is the text a guardian would then be agreeing to.
+ *
+ * It goes when production is confirmed to hold the current document and not this, and not before.
+ *
+ * The draft's full body used to live in legal-documents-draft.ts as the evidence that this
+ * string really was its opening. That body is deleted; biometric-release.test.ts pins this
+ * string's hash instead, which is the same guarantee without carrying a dead document around. */
 export const BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX = `${DRAFT_NOTICE}
 
 FORGE -- BIOMETRIC INFORMATION CONSENT AND RELEASE (DRAFT)`;

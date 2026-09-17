@@ -335,6 +335,17 @@ FORGE -- END USER LICENSE AGREEMENT (DRAFT)`,
     " [Placeholder -- confirm with counsel whether and how this section can apply where the person being asked to indemnify is a minor athlete or their parent/guardian; several states limit or void an indemnification obligation imposed on a minor.]\n\n15. GOVERNING LAW",
     "\n\n15. GOVERNING LAW",
   ],
+  // The institutional agreement names the biometric document twice. It is ACCEPTED by a coach on
+  // an org plan, so a stored copy is a document somebody agreed to and gets corrected in place
+  // like any other.
+  [
+    "(see the Terms of Service and Biometric Waiver for what that involves)",
+    "(see the Terms of Service and the Video and Biometric Consent for what that involves)",
+  ],
+  [
+    "is governed by the Privacy Policy and Biometric Waiver, unchanged by this Agreement",
+    "is governed by the Privacy Policy and the Video and Biometric Consent, unchanged by this Agreement",
+  ],
   // --- The video and biometric document's name, after it was retitled from a release to a
   // consent. A document that points the reader at another document has to call it by the name
   // that document actually carries, or the reader cannot tell whether the thing they were shown

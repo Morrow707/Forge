@@ -5,10 +5,9 @@ import {
   PARENTAL_NOTICE_DRAFT,
   EULA_DRAFT,
   INSTITUTIONAL_AGREEMENT_DRAFT,
-  BIOMETRIC_WAIVER_DRAFT,
 } from "./legal-documents-draft";
 import { SIGNUP_AGREEMENT } from "./signup-agreement";
-import { BIOMETRIC_RELEASE } from "./biometric-release";
+import { BIOMETRIC_RELEASE, BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX } from "./biometric-release";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./assumption-of-risk";
 import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
 
@@ -65,11 +64,16 @@ describe("the two that keep their warning, on purpose", () => {
     );
   });
 
-  it("the superseded biometric draft is untouched", () => {
-    // Migration-matching text: nextBiometricRelease recognises an installation still carrying
-    // this by exact comparison, so a single character's difference strands that installation on
-    // the old document forever. It is never served -- the seed replaces it on the same run.
-    expect(BIOMETRIC_WAIVER_DRAFT).toMatch(/^DRAFT --/);
-    expect(BIOMETRIC_WAIVER_DRAFT).toContain("FORGE -- BIOMETRIC INFORMATION CONSENT AND RELEASE (DRAFT)");
+  it("the superseded biometric draft is gone, and its eraser is not", () => {
+    // The draft text itself is deleted -- the document Forge uses is BIOMETRIC_RELEASE, and the
+    // draft was carrying nothing but its own history. What remains is the prefix that RECOGNISES
+    // that draft in an installation still storing it, which is how such an installation stops
+    // storing it. That string still reads like a draft because it is quoting one.
+    expect(BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX).toMatch(/^DRAFT --/);
+    expect(BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX).toContain(
+      "FORGE -- BIOMETRIC INFORMATION CONSENT AND RELEASE (DRAFT)",
+    );
+    // Short enough to be obviously a fingerprint rather than a document somebody could be shown.
+    expect(BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX.length).toBeLessThan(400);
   });
 });

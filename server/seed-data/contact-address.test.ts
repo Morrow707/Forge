@@ -4,12 +4,12 @@ import { SIGNUP_AGREEMENT, patchLiveDocuments } from "./signup-agreement";
 import {
   TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
-  BIOMETRIC_WAIVER_DRAFT,
   PARENTAL_NOTICE_DRAFT,
   INSTITUTIONAL_AGREEMENT_DRAFT,
   EULA_DRAFT,
 } from "./legal-documents-draft";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./assumption-of-risk";
+import { BIOMETRIC_RELEASE } from "./biometric-release";
 import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
 
 /** Three documents once gave three different contact addresses, one of them on a domain that
@@ -20,7 +20,7 @@ const DOCUMENTS: Array<[string, string]> = [
   ["signup agreement (live)", SIGNUP_AGREEMENT],
   ["terms of service", TERMS_OF_SERVICE_DRAFT],
   ["privacy policy", PRIVACY_POLICY_DRAFT],
-  ["biometric waiver", BIOMETRIC_WAIVER_DRAFT],
+  ["video and biometric consent", BIOMETRIC_RELEASE],
   ["parental notice", PARENTAL_NOTICE_DRAFT],
   ["institutional agreement", INSTITUTIONAL_AGREEMENT_DRAFT],
   ["eula", EULA_DRAFT],
@@ -69,10 +69,10 @@ describe("patching the stored documents", () => {
   });
 
   it("adds the address to the waiver's rights section without dropping its counsel question", () => {
-    const stored = BIOMETRIC_WAIVER_DRAFT.replace(
-      `Either request can be made at ${FORGE_CONTACT_EMAIL}. `,
-      "",
-    );
+    // A stored fragment rather than the whole superseded draft, which has been deleted -- the
+    // patch matches on this sentence, so the sentence is what the test needs.
+    const stored =
+      "You may ask Forge to delete the biometric data it holds for you, and to delete the video it was taken from, unless a specific request for further deletion is made. [Placeholder -- confirm this matches what BIPA and comparable laws require.]";
     const patched = patchLiveDocuments(stored);
     expect(patched).toContain(FORGE_CONTACT_EMAIL);
     // The counsel questions are the point of these drafts being drafts. Only the address moves.

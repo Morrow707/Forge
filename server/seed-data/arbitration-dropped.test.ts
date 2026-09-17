@@ -8,7 +8,6 @@ import {
 import {
   TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
-  BIOMETRIC_WAIVER_DRAFT,
   PARENTAL_NOTICE_DRAFT,
   INSTITUTIONAL_AGREEMENT_DRAFT,
   EULA_DRAFT,
@@ -30,7 +29,6 @@ const PUBLISHED: Array<[string, string]> = [
   ["signup agreement (live)", SIGNUP_AGREEMENT],
   ["terms of service", TERMS_OF_SERVICE_DRAFT],
   ["privacy policy", PRIVACY_POLICY_DRAFT],
-  ["biometric waiver", BIOMETRIC_WAIVER_DRAFT],
   ["parental notice", PARENTAL_NOTICE_DRAFT],
   ["institutional agreement", INSTITUTIONAL_AGREEMENT_DRAFT],
   ["eula", EULA_DRAFT],
@@ -46,7 +44,7 @@ describe("one dispute path across the documents", () => {
 
   it.each(PUBLISHED)("%s names one venue, or none", (_name, text) => {
     // Not every document states governing law -- the privacy policy, the parental notice and the
-    // biometric waiver defer to the terms rather than restating them, which is fine. What is not
+    // parental notice defer to the terms rather than restating them, which is fine. What is not
     // fine is a document naming a DIFFERENT forum, so the assertion is on the documents that do
     // name one: whichever they are, they agree.
     if (!/governing law/i.test(text)) return;

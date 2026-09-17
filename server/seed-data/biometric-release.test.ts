@@ -8,27 +8,36 @@ import {
   BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX,
   nextBiometricRelease,
 } from "./biometric-release";
-import { BIOMETRIC_WAIVER_DRAFT } from "./legal-documents-draft";
 import { FORGE_CONTACT_EMAIL, GOVERNING_LAW_CLAUSE } from "@shared/contact";
+import { sha256 } from "./shipped-versions";
 
 describe("migrating the stored biometric release", () => {
-  it("recognises the draft that shipped", () => {
-    // The prefix is reassembled independently of legal-documents-draft.ts, so if that file's
-    // banner or title is ever reworded the migration would stop matching and an installation
-    // would keep the draft forever. Asserted rather than assumed.
-    expect(BIOMETRIC_WAIVER_DRAFT.startsWith(BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX)).toBe(true);
-    expect(nextBiometricRelease(BIOMETRIC_WAIVER_DRAFT)).toBe(BIOMETRIC_RELEASE);
+  it("has not been reworded, which is the only way it can still match", () => {
+    // PINNED, because the thing it has to match is not in this repository -- it is the text
+    // sitting in a database somewhere that has not been migrated yet. The draft's full body
+    // used to be kept here as the evidence; it has been deleted, so the guarantee is this hash.
+    // If a change to the banner or the title makes this fail, the fix is to revert the change,
+    // not to update the hash: this string is a record of what was written years ago, not a
+    // document anybody is free to edit.
+    expect(sha256(BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX)).toBe(
+      "113fa5923a5396eeeececed6125d41fcb50113faec0f7f8f4ca79606ccc215ba",
+    );
   });
 
-  it("recognises the draft after the contact-address patch edited it in place", () => {
-    // This document has already been edited once by a previous seed migration, which is exactly
-    // why the match is on the opening rather than the whole body.
-    const patched = BIOMETRIC_WAIVER_DRAFT.replace(
-      "[Placeholder -- confirm this matches what BIPA",
-      `Either request can be made at ${FORGE_CONTACT_EMAIL}. [Placeholder -- confirm this matches what BIPA`,
-    );
-    expect(patched).not.toBe(BIOMETRIC_WAIVER_DRAFT);
-    expect(nextBiometricRelease(patched)).toBe(BIOMETRIC_RELEASE);
+  it("recognises a stored draft whatever its body says", () => {
+    // Matched on the opening rather than the whole document ON PURPOSE: this one was already
+    // edited in place once, by the contact-address migration, so an exact whole-document match
+    // would miss precisely the installations that took that patch. Both shapes here.
+    const asShipped = `${BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX}\n\n1. WHAT THIS IS\nSome body text.`;
+    const afterTheAddressPatch = `${BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX}\n\n1. WHAT THIS IS\nSome body text. Either request can be made at ${FORGE_CONTACT_EMAIL}.`;
+    expect(nextBiometricRelease(asShipped)).toBe(BIOMETRIC_RELEASE);
+    expect(nextBiometricRelease(afterTheAddressPatch)).toBe(BIOMETRIC_RELEASE);
+  });
+
+  it("leaves a document that merely mentions the draft alone", () => {
+    // The prefix has to appear at the START. An admin who quoted the old banner inside their own
+    // release has written their own document, and it is not ours to overwrite.
+    expect(nextBiometricRelease(`Our own release.\n\n${BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX}`)).toBeNull();
   });
 
   it("seeds on a fresh install", () => {
