@@ -5,6 +5,7 @@ import path from "node:path";
 const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 const pending = read("client/src/pages/guardian-pending.tsx");
 const dashboard = read("client/src/pages/guardian-dashboard.tsx");
+const readFailed = read("client/src/components/read-failed.tsx");
 const routes = read("server/routes.ts");
 
 /** The minor hold is released by someone else, somewhere else. */
@@ -45,13 +46,14 @@ describe("the guardian dashboard's failed reads", () => {
   it("never renders a failed request as an endless spinner", () => {
     expect(dashboard).toMatch(/athletesFailed \?/);
     expect(dashboard).toMatch(/videosFailed \?/);
-    expect(dashboard).toMatch(/function LoadFailed/);
+    expect(dashboard).toMatch(/<ReadFailed /);
   });
 
   it("says a failure is not an empty record", () => {
     // The videos card promises "every video on this athlete's record". An empty list is a
-    // claim a parent would act on, so a read that did not arrive must not look like one.
-    expect(dashboard).toContain("This isn't a sign that there's nothing here.");
+    // claim a parent would act on, so a read that did not arrive must not look like one. The
+    // sentence lives in the shared component now, said the same way on every surface.
+    expect(readFailed).toContain("That isn't the same as there being none.");
   });
 
   it("offers a retry rather than requiring a reload", () => {

@@ -22,6 +22,7 @@ import {
 import { Activity } from "lucide-react";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/read-failed";
 
 type AcwrPoint = {
   date: string;
@@ -153,7 +154,7 @@ export function AcwrHistoryDialog({
   athleteName: string;
   fetchUrl: string;
 }) {
-  const { data = [], isLoading } = useQuery<AcwrPoint[]>({
+  const { data = [], isLoading, isError, refetch } = useQuery<AcwrPoint[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
     enabled: open,
@@ -182,6 +183,10 @@ export function AcwrHistoryDialog({
 
         {isLoading ? (
           <div className="h-40 animate-pulse rounded-md bg-surface" />
+        ) : isError ? (
+          // "Not enough logged training yet" is a statement about how much this athlete has
+          // trained. A request that did not arrive knows nothing about that.
+          <ReadFailed what="this load history" onRetry={() => void refetch()} />
         ) : data.length === 0 || data.every((p) => p.acuteLoad === 0 && p.chronicLoad === 0) ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             Not enough logged training yet to calculate a load ratio.

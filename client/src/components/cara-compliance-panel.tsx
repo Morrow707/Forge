@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ShieldCheck, ClipboardPlus, AlertTriangle, Timer, Download } from "lucide-react";
 import { shareOrDownloadFile } from "@/lib/share-file";
+import { ReadFailed } from "@/components/read-failed";
 
 type ComplianceRow = {
   athleteId: number;
@@ -59,7 +60,11 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
     queryFn: () => getJson("/api/coach/cara/settings"),
   });
 
-  const { data: compliance } = useQuery<{ capMinutes: number | null; athletes: ComplianceRow[] }>({
+  const {
+    data: compliance,
+    isError: complianceFailed,
+    refetch: refetchCompliance,
+  } = useQuery<{ capMinutes: number | null; athletes: ComplianceRow[] }>({
     queryKey: ["/api/coach/cara/compliance"],
     queryFn: () => getJson("/api/coach/cara/compliance"),
     refetchInterval: 60_000,
@@ -193,7 +198,13 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
           Weekly cap: {Math.round(settings.capMinutes / 60)} hours. Resets Sunday. Exports cover
           the last 12 weeks for an audit record.
         </p>
-        {compliance?.athletes.length === 0 ? (
+        {complianceFailed ? (
+          // The old branch was `compliance?.athletes.length === 0`, which on a failed read is
+          // undefined === 0, i.e. false -- so it fell through and rendered an empty list with no
+          // message at all. On a panel about an hours cap, "nobody is over" and "we don't know"
+          // have to look different.
+          <ReadFailed what="these hours" onRetry={() => void refetchCompliance()} />
+        ) : compliance?.athletes.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">No athletes yet.</p>
         ) : (
           <div className="space-y-1.5">

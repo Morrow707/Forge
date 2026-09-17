@@ -30,6 +30,7 @@ import { ActiveSessionsDialog } from "@/components/active-sessions-dialog";
 import { DeleteAccountDialog } from "@/components/delete-account-dialog";
 import { ReportProblemDialog } from "@/components/report-problem-dialog";
 import { localIsoDate } from "@/lib/local-date";
+import { ReadFailed } from "@/components/read-failed";
 
 type GuardianAthlete = {
   id: number;
@@ -145,25 +146,6 @@ function rangeLast14Days() {
  * A guardian account can be linked to more than one athlete (siblings on
  * Forge), so this page fetches the whole list up front and switches the
  * detail queries below by whichever athleteId is currently selected. */
-/** A read that did not arrive, said out loud.
- *
- * This screen had two places where a failed request rendered as "Loading…" forever: the athlete
- * list, which leaves the whole dashboard blank, and the video list, whose own copy promises
- * "every video on this athlete's record". On a parental-oversight screen those are the wrong
- * failures to have -- a parent looking for a video and shown nothing has been told something
- * untrue, and a spinner that never resolves gives them nothing to do about it.
- */
-function LoadFailed({ what, onRetry }: { what: string; onRetry: () => void }) {
-  return (
-    <div className="flex flex-col items-start gap-2">
-      <p className="text-sm text-muted-foreground">{what} This isn't a sign that there's nothing here.</p>
-      <Button variant="outline" size="sm" onClick={onRetry}>
-        Try again
-      </Button>
-    </div>
-  );
-}
-
 export default function GuardianDashboardPage() {
   const { user, logoutMutation } = useAuth();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -376,10 +358,7 @@ export default function GuardianDashboardPage() {
       <main className="mx-auto max-w-2xl space-y-4 p-4">
         <ResearchConsentRequests />
         {athletesFailed ? (
-          <LoadFailed
-            what="We couldn't load your athletes."
-            onRetry={() => void refetchAthletes()}
-          />
+          <ReadFailed what="your athletes" onRetry={() => void refetchAthletes()} />
         ) : athletesLoading || !athletes ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : athletes.length === 0 ? (
@@ -714,10 +693,7 @@ export default function GuardianDashboardPage() {
                       // Never "no videos" on a failed load. This card promises every video on
                       // the athlete's record, and an empty list is the answer a parent would
                       // act on -- so a request that did not arrive has to say so.
-                      <LoadFailed
-                        what="We couldn't load this list."
-                        onRetry={() => void refetchVideos()}
-                      />
+                      <ReadFailed what="this list" onRetry={() => void refetchVideos()} />
                     ) : !videos ? (
                       <p className="text-sm text-muted-foreground">Loading…</p>
                     ) : videos.length === 0 ? (

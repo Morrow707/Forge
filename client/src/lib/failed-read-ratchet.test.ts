@@ -1,0 +1,173 @@
+import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+
+/** A FAILED READ MUST NOT RENDER AS "THERE IS NOTHING HERE".
+ *
+ * Almost every read here is written `const { data = [], isLoading } = useQuery(...)`, then
+ * `isLoading ? <spinner> : data.length === 0 ? <"nothing logged"> : <list>`. When the request
+ * fails, react-query leaves data undefined, the `= []` default makes it an empty array, and
+ * isLoading goes false -- so the screen states as fact that the athlete has no injuries, no
+ * movement screens, no training load. A coach reads that and programs a session on it.
+ *
+ * A SWEEP FOUND 82 SUCH FILES. Fixing all of them in one change would be a diff nobody can
+ * review, so this is a ratchet rather than a wall: the offenders are listed below, the list may
+ * only ever get SHORTER, and a file not on it must handle the failure. That makes the next new
+ * screen correct by default and leaves the backlog visible instead of forgotten.
+ *
+ * To clear one: give the query isError/refetch and render <ReadFailed> (see
+ * client/src/components/read-failed.tsx), then delete its line here.
+ */
+
+const ROOT = path.join(process.cwd(), "client", "src");
+
+function walk(dir: string, out: string[] = []): string[] {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(p, out);
+    else if (/\.tsx$/.test(entry.name) && !/\.test\.tsx$/.test(entry.name)) out.push(p);
+  }
+  return out;
+}
+
+/** A file is an offender when it reads something, claims emptiness off a length check, and has
+ * no notion of the read having failed anywhere in it. Deliberately crude: it is a tripwire for
+ * the shape, not a proof that every branch is right. */
+function offenders(): string[] {
+  const found: string[] = [];
+  for (const file of walk(ROOT)) {
+    const src = fs.readFileSync(file, "utf8");
+    if (!/useQuery[<(]/.test(src)) continue;
+    if (/\bisError\b/.test(src)) continue;
+    if (!/\.length === 0/.test(src)) continue;
+    found.push(path.relative(path.join(process.cwd(), "client", "src"), file).replace(/\\/g, "/"));
+  }
+  return found.sort();
+}
+
+/** Known offenders, newest sweep. ONLY EVER REMOVE FROM THIS LIST. */
+const KNOWN = new Set<string>([
+  "components/admin-teach-chat-panel.tsx",
+  "components/app-shell.tsx",
+  "components/assign-program-dialog.tsx",
+  "components/athlete-status-badges.tsx",
+  "components/athlete-switcher.tsx",
+  "components/calendar-view.tsx",
+  "components/class-lesson-reader-dialog.tsx",
+  "components/coach-day-briefing.tsx",
+  "components/coach-day-edit-dialog.tsx",
+  "components/exercise-picker-dialog.tsx",
+  "components/exercise-trend-dialog.tsx",
+  "components/food-log-panel.tsx",
+  "components/game-days-panel.tsx",
+  "components/goals-panel.tsx",
+  "components/goniometer-panel.tsx",
+  "components/imported-testing-data-panel.tsx",
+  "components/manage-roster-groups-dialog.tsx",
+  "components/muscle-heat-map.tsx",
+  "components/notification-bell.tsx",
+  "components/provisional-roster-panel.tsx",
+  "components/read-failed.tsx",
+  "components/reengagement-banner.tsx",
+  "components/skill-day-view-dialog.tsx",
+  "components/skill-picker-dialog.tsx",
+  "components/skill-sessions-panel.tsx",
+  "components/skills-trends-panel.tsx",
+  "components/squad-quests.tsx",
+  "components/suggested-corrective.tsx",
+  "components/team-challenges-panel.tsx",
+  "components/team-pr-wall-card.tsx",
+  "components/testing-history-panel.tsx",
+  "components/wellness-history-dialog.tsx",
+  "pages/admin/academy-track-builder.tsx",
+  "pages/admin/ai-spend.tsx",
+  "pages/admin/blocked-athletes.tsx",
+  "pages/admin/classes-analytics.tsx",
+  "pages/admin/coaches-corner.tsx",
+  "pages/admin/dashboard.tsx",
+  "pages/admin/diagnostics.tsx",
+  "pages/admin/documents.tsx",
+  "pages/admin/forge-ai.tsx",
+  "pages/admin/knowledge-base.tsx",
+  "pages/admin/movement-knowledge.tsx",
+  "pages/admin/my-calendar.tsx",
+  "pages/admin/problem-reports.tsx",
+  "pages/admin/query-engine.tsx",
+  "pages/admin/removal-requests.tsx",
+  "pages/admin/research-exports.tsx",
+  "pages/admin/review-queue.tsx",
+  "pages/admin/users.tsx",
+  "pages/admin/waivers.tsx",
+  "pages/athlete/classes.tsx",
+  "pages/athlete/dashboard.tsx",
+  "pages/athlete/leaderboard.tsx",
+  "pages/athlete/lift-history.tsx",
+  "pages/athlete/nutrition.tsx",
+  "pages/athlete/recovery.tsx",
+  "pages/class-builder.tsx",
+  "pages/class-list.tsx",
+  "pages/coach/analytics.tsx",
+  "pages/coach/athlete-detail.tsx",
+  "pages/coach/calendar.tsx",
+  "pages/coach/dashboard.tsx",
+  "pages/coach/leaderboard.tsx",
+  "pages/coach/movement-screens.tsx",
+  "pages/coach/my-calendar.tsx",
+  "pages/coach/nutrition.tsx",
+  "pages/coach/roster.tsx",
+  "pages/exercise-bank.tsx",
+  "pages/program-builder.tsx",
+  "pages/program-list.tsx",
+  "pages/skill-bank.tsx",
+  "pages/skill-program-builder.tsx",
+  "pages/skill-program-list.tsx",
+  "pages/skill-workout.tsx",
+  "pages/team-about.tsx",
+  "pages/workout.tsx",
+]);
+
+describe("a failed read is never rendered as an empty one", () => {
+  const current = offenders();
+
+  it("has no offender that is not already known", () => {
+    // A NEW screen with this bug is the thing this test exists to stop. Adding a line here to
+    // make it pass is the wrong fix -- the right one is four lines of isError in the screen.
+    expect(current.filter((f) => !KNOWN.has(f))).toEqual([]);
+  });
+
+  it("does not leave a fixed file on the list", () => {
+    // Keeps the backlog honest: a file that has been cleared has to come off, or the number
+    // stops meaning anything and the ratchet stops ratcheting.
+    const stale = [...KNOWN].filter((f) => !current.includes(f)).sort();
+    expect(stale).toEqual([]);
+  });
+
+  it("still finds the files it is meant to be scanning", () => {
+    // The failure mode of a scan-based test is silently matching nothing.
+    expect(current.length).toBeGreaterThan(20);
+  });
+});
+
+describe("the surfaces already cleared", () => {
+  const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
+
+  it("say plainly that a failure is not an absence", () => {
+    expect(read("client/src/components/read-failed.tsx")).toContain(
+      "That isn't the same as there being none.",
+    );
+  });
+
+  it.each([
+    ["injury history", "client/src/components/injury-history-panel.tsx"],
+    ["training load", "client/src/components/acwr-history-dialog.tsx"],
+    ["movement screens", "client/src/components/movement-screen-panel.tsx"],
+    ["weakness reports", "client/src/components/weakness-report-panel.tsx"],
+    ["the hours cap", "client/src/components/cara-compliance-panel.tsx"],
+  ])("%s handles the read failing", (_what, file) => {
+    // These five are what a coach consults to decide whether somebody is safe to train, which
+    // is why they went first.
+    const src = read(file);
+    expect(src).toMatch(/\bisError\b|isError:/);
+    expect(src).toContain("<ReadFailed");
+  });
+});

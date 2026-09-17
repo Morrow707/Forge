@@ -24,6 +24,7 @@ import { OverheadSquatCaptureDialog } from "@/components/overhead-squat-capture-
 import { AvOverheadSquatCaptureDialog } from "@/components/av-overhead-squat-capture-dialog";
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
+import { ReadFailed } from "@/components/read-failed";
 
 type Battery = { id: number; name: string; isForgeOfficial: boolean; editable: boolean };
 type BatteryTest = {
@@ -77,7 +78,7 @@ export function MovementScreenPanel({ athleteId }: { athleteId: number }) {
   const [showNew, setShowNew] = useState(false);
   const [viewingId, setViewingId] = useState<number | null>(null);
 
-  const { data: screens = [], isLoading } = useQuery<ScreenSummary[]>({
+  const { data: screens = [], isLoading, isError, refetch } = useQuery<ScreenSummary[]>({
     queryKey: [historyUrl],
     queryFn: () => getJson(historyUrl),
   });
@@ -98,6 +99,8 @@ export function MovementScreenPanel({ athleteId }: { athleteId: number }) {
 
       {isLoading ? (
         <div className="h-24 animate-pulse rounded-md bg-surface" />
+      ) : isError ? (
+        <ReadFailed what="this athlete's screens" onRetry={() => void refetch()} />
       ) : screens.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">No screens logged yet.</p>
       ) : (

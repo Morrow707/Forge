@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/read-failed";
 
 type WeaknessDeficit = {
   title: string;
@@ -45,7 +46,7 @@ export function WeaknessReportPanel({
   const qc = useQueryClient();
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const { data: reports = [], isLoading } = useQuery<WeaknessReport[]>({
+  const { data: reports = [], isLoading, isError, refetch } = useQuery<WeaknessReport[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
   });
@@ -88,6 +89,8 @@ export function WeaknessReportPanel({
 
       {isLoading ? (
         <div className="h-24 animate-pulse rounded-md bg-surface" />
+      ) : isError ? (
+        <ReadFailed what="this athlete's reports" onRetry={() => void refetch()} />
       ) : reports.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No weakness reports generated yet.

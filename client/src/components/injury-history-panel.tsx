@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioChipGroup } from "@/components/filter-chip-group";
+import { ReadFailed } from "@/components/read-failed";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { BODY_PAIN_PARTS } from "@shared/wellness";
 import { toast } from "sonner";
@@ -40,7 +41,7 @@ export function InjuryHistoryPanel({
   canToggleResolved?: boolean;
 }) {
   const qc = useQueryClient();
-  const { data: entries = [], isLoading } = useQuery<InjuryEntry[]>({
+  const { data: entries = [], isLoading, isError, refetch } = useQuery<InjuryEntry[]>({
     queryKey: [baseUrl],
     queryFn: () => getJson(baseUrl),
   });
@@ -108,7 +109,9 @@ export function InjuryHistoryPanel({
 
       {isLoading && <div className="h-10 animate-pulse rounded-md bg-surface" />}
 
-      {!isLoading && entries.length === 0 && !adding && (
+      {isError && <ReadFailed what="this injury history" onRetry={() => void refetch()} />}
+
+      {!isLoading && !isError && entries.length === 0 && !adding && (
         <p className="py-2 text-center text-xs text-muted-foreground">Nothing logged</p>
       )}
 
