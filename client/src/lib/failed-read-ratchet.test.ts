@@ -72,10 +72,7 @@ const KNOWN = new Set<string>([
   "pages/admin/my-calendar.tsx",
   "pages/admin/query-engine.tsx",
   "pages/admin/research-exports.tsx",
-  "pages/athlete/classes.tsx",
   "pages/athlete/dashboard.tsx",
-  "pages/athlete/leaderboard.tsx",
-  "pages/athlete/nutrition.tsx",
   "pages/class-builder.tsx",
   "pages/class-list.tsx",
   "pages/coach/analytics.tsx",
@@ -91,7 +88,6 @@ const KNOWN = new Set<string>([
   "pages/skill-program-builder.tsx",
   "pages/skill-program-list.tsx",
   "pages/skill-workout.tsx",
-  "pages/team-about.tsx",
   "pages/workout.tsx",
 ]);
 

@@ -19,6 +19,7 @@ import { formatHeight } from "@/components/profile-fields-form";
 import { StreakBadges } from "@/components/streak-badge";
 import { AthleteAvatar } from "@/components/athlete-avatar";
 import { Skeleton } from "@/components/skeleton";
+import { ReadFailed } from "@/components/read-failed";
 import { cn } from "@/lib/utils";
 
 type LeaderboardExercise = { id: number; name: string };
@@ -174,11 +175,11 @@ function NoCoachCard() {
 function StrengthLeaderboard({ myId }: { myId: number }) {
   const [exerciseId, setExerciseId] = useState<string>("");
 
-  const { data: exercises } = useQuery<LeaderboardExercise[] | null>({
+  const { data: exercises, isError: exercisesFailed } = useQuery<LeaderboardExercise[] | null>({
     queryKey: ["/api/athlete/leaderboard/exercises"],
   });
 
-  const { data: entries = [], isLoading } = useQuery<LeaderboardEntry[]>({
+  const { data: entries = [], isLoading, isError, refetch } = useQuery<LeaderboardEntry[]>({
     queryKey: ["/api/athlete/leaderboard", exerciseId],
     queryFn: () => getJson(`/api/athlete/leaderboard?exerciseId=${exerciseId}`),
     enabled: !!exerciseId,
@@ -199,7 +200,7 @@ function StrengthLeaderboard({ myId }: { myId: number }) {
           <SelectContent>
             {(exercises ?? []).length === 0 ? (
               <SelectItem value="_none" disabled>
-                No exercises assigned yet
+                {exercisesFailed ? "Couldn't load your exercises" : "No exercises assigned yet"}
               </SelectItem>
             ) : (
               (exercises ?? []).map((e) => (
@@ -233,7 +234,15 @@ function StrengthLeaderboard({ myId }: { myId: number }) {
         </Card>
       )}
 
-      {exerciseId && !isLoading && entries.length === 0 && (
+      {exerciseId && isError && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="this leaderboard" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {exerciseId && !isError && !isLoading && entries.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Trophy className="h-10 w-10 text-muted-foreground" />
@@ -278,7 +287,7 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
   // on one mixed list whoever ran the shortest distance always won.
   const [distanceYards, setDistanceYards] = useState<string>("");
 
-  const { data: distances = [] } = useQuery<number[]>({
+  const { data: distances = [], isError: distancesFailed } = useQuery<number[]>({
     queryKey: ["/api/athlete/leaderboard/speed-distances", skillExerciseId],
     queryFn: () => getJson(`/api/athlete/leaderboard/speed-distances?skillExerciseId=${skillExerciseId}`),
     enabled: !!skillExerciseId,
@@ -294,11 +303,11 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
   }, [distances, distanceYards]);
 
 
-  const { data: exercises } = useQuery<LeaderboardExercise[] | null>({
+  const { data: exercises, isError: exercisesFailed } = useQuery<LeaderboardExercise[] | null>({
     queryKey: ["/api/athlete/leaderboard/skill-exercises"],
   });
 
-  const { data: entries = [], isLoading } = useQuery<SpeedLeaderboardEntry[]>({
+  const { data: entries = [], isLoading, isError, refetch } = useQuery<SpeedLeaderboardEntry[]>({
     queryKey: ["/api/athlete/leaderboard/speed", skillExerciseId, distanceYards],
     queryFn: () =>
       getJson(`/api/athlete/leaderboard/speed?skillExerciseId=${skillExerciseId}&distanceYards=${distanceYards}`),
@@ -321,7 +330,7 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
             <SelectContent>
               {(exercises ?? []).length === 0 ? (
                 <SelectItem value="_none" disabled>
-                  No timed drills assigned yet
+                  {exercisesFailed ? "Couldn't load your drills" : "No timed drills assigned yet"}
                 </SelectItem>
               ) : (
                 (exercises ?? []).map((e) => (
@@ -344,7 +353,7 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
               <SelectContent>
                 {distances.length === 0 ? (
                   <SelectItem value="_none" disabled>
-                    No timed runs yet
+                    {distancesFailed ? "Couldn't load distances" : "No timed runs yet"}
                   </SelectItem>
                 ) : (
                   distances.map((d) => (
@@ -380,7 +389,15 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
         </Card>
       )}
 
-      {skillExerciseId && !isLoading && entries.length === 0 && (
+      {skillExerciseId && isError && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="this leaderboard" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {skillExerciseId && !isError && !isLoading && entries.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Timer className="h-10 w-10 text-muted-foreground" />

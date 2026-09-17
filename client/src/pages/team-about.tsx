@@ -7,6 +7,7 @@ import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { Palette, Mail } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 type Branding = {
   brandTeamName?: string | null;
@@ -31,12 +32,12 @@ export default function TeamAboutPage() {
   const isCoach = user?.role === "coach";
   const [brandingOpen, setBrandingOpen] = useState(false);
 
-  const { data: branding } = useQuery<Branding>({
+  const { data: branding, isError: brandingFailed, refetch: refetchBranding } = useQuery<Branding>({
     queryKey: ["/api/branding/me"],
     queryFn: () => getJson("/api/branding/me"),
   });
 
-  const { data: roster } = useQuery<TeamRoster>({
+  const { data: roster, isError: rosterFailed, refetch: refetchRoster } = useQuery<TeamRoster>({
     queryKey: [isCoach ? "/api/coach/team-roster" : "/api/athlete/team-roster"],
     queryFn: () => getJson(isCoach ? "/api/coach/team-roster" : "/api/athlete/team-roster"),
   });
@@ -130,7 +131,23 @@ export default function TeamAboutPage() {
           </Card>
         )}
 
-        {!branding?.brandMission && !branding?.brandMotto && (!roster || roster.staff.length === 0) && (
+        {/* "Your coach hasn't set up a team page yet" is a statement about the coach.
+            Neither read landing is a statement about anything. */}
+        {(brandingFailed || rosterFailed) && (
+          <ReadFailed
+            what="this team's page"
+            onRetry={() => {
+              if (brandingFailed) void refetchBranding();
+              if (rosterFailed) void refetchRoster();
+            }}
+          />
+        )}
+
+        {!brandingFailed &&
+          !rosterFailed &&
+          !branding?.brandMission &&
+          !branding?.brandMotto &&
+          (!roster || roster.staff.length === 0) && (
           <p className="py-6 text-center text-sm text-muted-foreground">
             {isCoach
               ? "Add a motto, mission, and contact email from Branding to fill out this page."

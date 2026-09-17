@@ -7,6 +7,7 @@ import { getJson } from "@/lib/queryClient";
 import { average } from "@/lib/wellness-metrics";
 import { Scale } from "lucide-react";
 import { Link } from "wouter";
+import { ReadFailed } from "@/components/read-failed";
 
 type WellnessEntry = { bodyMass: number | null };
 const RECOVERY_HISTORY_DAYS = 90;
@@ -25,7 +26,7 @@ const RECOVERY_HISTORY_DAYS = 90;
 export default function AthleteNutrition() {
   const { user } = useAuth();
 
-  const { data: coaches } = useQuery<{ id: number }[]>({
+  const { data: coaches, isError: coachesFailed, refetch: refetchCoaches } = useQuery<{ id: number }[]>({
     queryKey: ["/api/athlete/coaches"],
     enabled: user?.role === "athlete",
   });
@@ -37,13 +38,28 @@ export default function AthleteNutrition() {
   // (not just buried in the Recovery tabs) because a nutritionist reviewing
   // targets wants it front and center, per how most college athletes
   // actually consume this page.
-  const { data: wellnessHistory } = useQuery<WellnessEntry[]>({
+  const { data: wellnessHistory, isError: wellnessFailed, refetch: refetchWellness } = useQuery<WellnessEntry[]>({
     queryKey: ["/api/athlete/wellness/history", RECOVERY_HISTORY_DAYS],
     queryFn: () => getJson(`/api/athlete/wellness/history?limit=${RECOVERY_HISTORY_DAYS}`),
   });
   const bodyMassValues = (wellnessHistory ?? []).map((w) => w.bodyMass);
   const latestBodyMass = bodyMassValues.find((v) => v != null) ?? null;
   const avgBodyMass = average(bodyMassValues);
+
+  // This read decides which page an athlete is looking at. A failure leaves
+  // isFreeAgent false, so a Free Agent is told their targets were "set by your
+  // coach" -- they have none -- and loses the controls to set them at all.
+  if (coachesFailed) {
+    return (
+      <AppShell title="Nutrition">
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="your nutrition page" onRetry={() => void refetchCoaches()} />
+          </CardContent>
+        </Card>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Nutrition">
@@ -64,7 +80,14 @@ export default function AthleteNutrition() {
           registered dietitian who knows you.
         </p>
       </div>
-      {(latestBodyMass != null || avgBodyMass != null) && (
+      {wellnessFailed && (
+        <Card className="mb-6">
+          <CardContent className="p-5">
+            <ReadFailed what="your body mass history" onRetry={() => void refetchWellness()} />
+          </CardContent>
+        </Card>
+      )}
+      {!wellnessFailed && (latestBodyMass != null || avgBodyMass != null) && (
         <Card className="mb-6">
           <CardContent className="flex items-center justify-between gap-4 p-5">
             <div className="flex items-center gap-4">

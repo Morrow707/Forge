@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ReadFailed } from "@/components/read-failed";
 import { GraduationCap, ListOrdered, ArrowRight, Search, Trophy, Lock, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { todayIso } from "@/lib/local-date";
@@ -64,15 +65,30 @@ const CLASS_SORT_OPTIONS: { value: ClassSort; label: string }[] = [
 export default function AthleteClasses() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const { data: coaches, isLoading: coachesLoading } = useQuery<{ id: number }[]>({
+  const {
+    data: coaches,
+    isLoading: coachesLoading,
+    isError: coachesFailed,
+    refetch: refetchCoaches,
+  } = useQuery<{ id: number }[]>({
     queryKey: ["/api/athlete/coaches"],
   });
   const isFreeAgent = !!coaches && coaches.length === 0;
 
-  const { data: myClasses = [], isLoading: myLoading } = useQuery<EnrolledClass[]>({
+  const {
+    data: myClasses = [],
+    isLoading: myLoading,
+    isError: myFailed,
+    refetch: refetchMine,
+  } = useQuery<EnrolledClass[]>({
     queryKey: ["/api/athlete/my-classes"],
   });
-  const { data: catalog = [], isLoading: catalogLoading } = useQuery<BrowsableClass[]>({
+  const {
+    data: catalog = [],
+    isLoading: catalogLoading,
+    isError: catalogFailed,
+    refetch: refetchCatalog,
+  } = useQuery<BrowsableClass[]>({
     queryKey: ["/api/athlete/classes"],
     enabled: isFreeAgent,
   });
@@ -128,7 +144,26 @@ export default function AthleteClasses() {
           <h2 className="mb-3 font-display text-lg font-bold uppercase tracking-wide text-muted-foreground">
             My Classes
           </h2>
-          {!myLoading && myClasses.length === 0 && (
+          {!myFailed && coachesFailed && (
+            <Card>
+              <CardContent className="py-12">
+                <ReadFailed
+                  what="whether you have a coach"
+                  onRetry={() => void refetchCoaches()}
+                />
+              </CardContent>
+            </Card>
+          )}
+          {myFailed && (
+            <Card>
+              <CardContent className="py-12">
+                <ReadFailed what="your classes" onRetry={() => void refetchMine()} />
+              </CardContent>
+            </Card>
+          )}
+          {/* isFreeAgent is false while the coaches read is failing too, so without this
+              guard the page tells a Free Agent their coach hasn't enrolled them. */}
+          {!myFailed && !coachesFailed && !myLoading && myClasses.length === 0 && (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
                 <GraduationCap className="h-10 w-10 text-muted-foreground" />
@@ -182,7 +217,14 @@ export default function AthleteClasses() {
             <h2 className="mb-3 font-display text-lg font-bold uppercase tracking-wide text-muted-foreground">
               Browse Forge Classes
             </h2>
-            {!catalogLoading && catalog.length === 0 && (
+            {catalogFailed && (
+              <ReadFailed
+                what="the Forge Classes catalog"
+                onRetry={() => void refetchCatalog()}
+                className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border py-10 text-center"
+              />
+            )}
+            {!catalogFailed && !catalogLoading && catalog.length === 0 && (
               <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-10 text-center">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <GraduationCap className="h-5 w-5" />
