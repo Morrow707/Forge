@@ -21,6 +21,7 @@ const EXEMPT: ReadonlyArray<readonly [string, string]> = [
   ["server/seed-data/shipped-versions.ts", "Comments naming which historical version each hash is."],
   ["server/seed-data/signup-agreement.ts", "LIVE_DOCUMENT_PATCHES matches the exact text stored in installations that took the old name -- the old spelling IS the pattern."],
   ["server/seed-data/biometric-release.ts", "Holds the prior text for the same reason."],
+  ["server/seed-data/documents-are-not-drafts.test.ts", "Asserts the superseded draft still carries its old title verbatim -- that exact string is what nextBiometricRelease matches on."],
   ["shared/contact.ts", "The constant's own doc comment says which names it replaced; naming them is the point of it."],
 ];
 

@@ -1720,6 +1720,7 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "date_of_birth" date;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "provisioned_via_coach_consent" boolean NOT NULL DEFAULT false;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "requires_guardian_notice" boolean NOT NULL DEFAULT false;
 ALTER TABLE "provisional_athletes" ADD COLUMN IF NOT EXISTS "date_of_birth" date;
+ALTER TABLE "provisional_athletes" ADD COLUMN IF NOT EXISTS "coppa_attested_at" timestamp;
 
 -- Admin Query Engine saved filter presets (shared/schema.ts adminSavedViews).
 CREATE TABLE IF NOT EXISTS "admin_saved_views" (

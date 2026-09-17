@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { COACH_COPPA_ATTESTATION, needsCoppaAttestation } from "@shared/coach-attestation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -62,6 +63,7 @@ export function PlayerIntakeImportDialog({
     setImages([]);
     setRows([]);
     setCreated([]);
+    setAttested(false);
   }
 
   const analyzeMutation = useMutation({
@@ -81,10 +83,19 @@ export function PlayerIntakeImportDialog({
   });
 
   const readyRows = rows.filter((r) => r.name.trim().length > 0);
+  // Shown, not assumed. A Tier 1 account has no verified-parent step anywhere -- the coach
+  // relaying a parent's permission IS the consent it rests on -- and an attestation nobody was
+  // asked to read is a weaker record than one presented as a tick with the words next to it.
+  // Only when the batch actually contains an under-13, so the ordinary import is untouched.
+  const under13 = readyRows.filter((r) => needsCoppaAttestation({ age: r.age }));
+  const [attested, setAttested] = useState(false);
 
   const applyMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/coach/roster/player-intake/apply", { rows: readyRows });
+      const res = await apiRequest("POST", "/api/coach/roster/player-intake/apply", {
+        rows: readyRows,
+        coppaAttested: attested,
+      });
       return res.json() as Promise<CreatedSlot[]>;
     },
     onSuccess: (data) => {
@@ -143,6 +154,27 @@ export function PlayerIntakeImportDialog({
             <p className="text-sm text-muted-foreground">
               {readyRows.length} of {rows.length} row{rows.length === 1 ? "" : "s"} have a name and are ready.
             </p>
+            {under13.length > 0 && (
+              <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+                <p className="text-xs font-semibold">
+                  {under13.length === 1
+                    ? `${under13[0]!.name.trim() || "One athlete"} is under 13.`
+                    : `${under13.length} of these athletes are under 13.`}
+                </p>
+                <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground">
+                  {COACH_COPPA_ATTESTATION}
+                </p>
+                <label className="flex items-start gap-2 text-xs font-medium">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={attested}
+                    onChange={(e) => setAttested(e.target.checked)}
+                  />
+                  <span>I confirm the above.</span>
+                </label>
+              </div>
+            )}
             <div className="space-y-3">
               {rows.map((row, i) => (
                 <div key={i} className="space-y-2 rounded-md border border-border p-3">
@@ -242,7 +274,11 @@ export function PlayerIntakeImportDialog({
               </Button>
               <Button
                 type="button"
-                disabled={readyRows.length === 0 || applyMutation.isPending}
+                disabled={
+                  readyRows.length === 0 ||
+                  applyMutation.isPending ||
+                  (under13.length > 0 && !attested)
+                }
                 onClick={() => applyMutation.mutate()}
               >
                 {applyMutation.isPending

@@ -290,6 +290,51 @@ export const LIVE_DOCUMENT_PATCHES: ReadonlyArray<readonly [string, string]> = [
     "[Placeholder -- add a real contact email once one exists, the same one referenced in the Terms of Service and Privacy Policy.]",
     `Questions, or to act on anything described above: ${FORGE_CONTACT_EMAIL}`,
   ],
+  // --- The "this is a draft" notice, removed from the four documents people are shown.
+  //
+  // Every one of these opened with "DRAFT -- not reviewed by a lawyer ... do not treat it as
+  // legally sufficient", and three of them are served on PUBLIC pages: /terms, /privacy and
+  // /eula, the last of which is the licence URL App Store Connect points at. So Forge's own
+  // answer to "are these terms any good" was printed above the terms, by Forge, where every
+  // reader and every counterparty could quote it back. A disclaimer like that does not make an
+  // unreviewed document safer; it makes a document that would otherwise be relied on into one
+  // its author has publicly disavowed, which is the opposite of what it was there to do.
+  //
+  // The documents themselves are unchanged apart from the notice and the title suffix. They are
+  // still awaiting review -- that fact now lives in docs/legal-open-questions.md, where a
+  // reviewer reads it and a user does not.
+  //
+  // NOT the institutional agreement, which says something different and true: that it was never
+  // drafted at all, only assembled from patterns as an outline. Stripping that one would dress
+  // an outline up as a contract for a school to sign. It keeps its warning until it is real.
+  [
+    `DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.
+
+FORGE -- TERMS OF SERVICE (DRAFT)`,
+    "FORGE -- TERMS OF SERVICE",
+  ],
+  [
+    `DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.
+
+FORGE -- PRIVACY POLICY (DRAFT)`,
+    "FORGE -- PRIVACY POLICY",
+  ],
+  [
+    `DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.
+
+FORGE -- NOTICE TO PARENT OR GUARDIAN (DRAFT)`,
+    "FORGE -- NOTICE TO PARENT OR GUARDIAN",
+  ],
+  [
+    `DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.
+
+FORGE -- END USER LICENSE AGREEMENT (DRAFT)`,
+    "FORGE -- END USER LICENSE AGREEMENT",
+  ],
+  [
+    " [Placeholder -- confirm with counsel whether and how this section can apply where the person being asked to indemnify is a minor athlete or their parent/guardian; several states limit or void an indemnification obligation imposed on a minor.]\n\n15. GOVERNING LAW",
+    "\n\n15. GOVERNING LAW",
+  ],
   // --- The video and biometric document's name, after it was retitled from a release to a
   // consent. A document that points the reader at another document has to call it by the name
   // that document actually carries, or the reader cannot tell whether the thing they were shown

@@ -1,4 +1,9 @@
 import { db } from "./db";
+import {
+  COACH_COPPA_ATTESTATION,
+  COACH_COPPA_ATTESTATION_NOT_TAKEN,
+  needsCoppaAttestation,
+} from "@shared/coach-attestation";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import {
   users,
@@ -24765,6 +24770,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       sport?: string | null;
       position?: string | null;
     }[],
+    /** True when the coach made the under-13 attestation for this batch. Recorded per slot, and
+     * only on the slots that needed one -- a coach adding one ten-year-old among twenty
+     * fifteen-year-olds has attested about the ten-year-old, not about the other twenty. */
+    coppaAttested = false,
   ) {
     const created: (typeof provisionalAthletes.$inferSelect)[] = [];
     for (const row of rows) {
@@ -24784,6 +24793,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           bodyWeightLbs: row.bodyWeightLbs ?? null,
           age: row.age ?? null,
           gender: row.gender ?? null,
+          coppaAttestedAt:
+            coppaAttested && needsCoppaAttestation({ age: row.age }) ? new Date() : null,
           sport: row.sport ?? null,
           position: row.position ?? null,
         })
@@ -24920,7 +24931,22 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     await this.logConsentRecord({
       userId: user.id,
       consentType: tier === "tier1_under13" ? "coach_coppa_consent" : "terms_of_service",
-      documentText: agreedToTermsText,
+      // WHAT THE RECORD SAYS IS WHAT THE COACH ASSERTED, not what the athlete accepted.
+      //
+      // This used to store agreedToTermsText for both branches, which made the Tier 1 row --
+      // the only consent a ten-year-old's account rests on, and the row a regulator reads as
+      // its COPPA basis -- say nothing more than "a coach accepted some terms". True, and not
+      // the question anybody is asking of it. The attestation is the assertion that a parent
+      // gave permission, so that is the text the record carries.
+      documentText:
+        tier === "tier1_under13"
+          ? provisional.coppaAttestedAt
+            ? COACH_COPPA_ATTESTATION
+            // The slot was made before anyone knew this athlete was under 13, so the coach was
+            // never shown the attestation. Saying so is the only honest option: citing an
+            // attestation nobody made is the same overclaiming this branch was written to stop.
+            : COACH_COPPA_ATTESTATION_NOT_TAKEN
+          : agreedToTermsText,
       // For Tier 1, the coach is the one who set up this claim link and is
       // recorded as having consented on the athlete's behalf; for Tier 2/3
       // claimed via a coach's link, the athlete/parent typing their own

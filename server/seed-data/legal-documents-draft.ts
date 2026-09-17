@@ -23,9 +23,7 @@ import {
 const DRAFT_NOTICE =
   "DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.";
 
-export const TERMS_OF_SERVICE_DRAFT = `${DRAFT_NOTICE}
-
-FORGE -- TERMS OF SERVICE (DRAFT)
+export const TERMS_OF_SERVICE_DRAFT = `FORGE -- TERMS OF SERVICE
 
 1. ACCEPTANCE OF TERMS
 By creating a Forge account or using the Forge app or website ("Forge," "the Service"), you agree to these Terms. If you don't agree, don't use the Service.
@@ -67,7 +65,7 @@ To the fullest extent the law allows, Forge Performance Systems LLC is not liabl
 Athletic training -- including weightlifting, sprinting, jumping, and other movements tracked or programmed through Forge -- carries inherent risks of physical injury, up to and including severe injury or death. By using the Service, you expressly acknowledge and assume these risks. As stated in Section 3, Forge's camera-based tracking, AI-generated suggestions, and form-fault flags are informational aids only; they do not guarantee safety, correct execution of any movement, or the absence of injury. A coach using the Service remains responsible for appropriately supervising and modifying training for their own athletes.
 
 14. INDEMNIFICATION
-You agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. [Placeholder -- confirm with counsel whether and how this section can apply where the person being asked to indemnify is a minor athlete or their parent/guardian; several states limit or void an indemnification obligation imposed on a minor.]
+You agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct.
 
 15. GOVERNING LAW
 ${GOVERNING_LAW_CLAUSE}
@@ -80,9 +78,7 @@ Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
 
 Questions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`;
 
-export const PRIVACY_POLICY_DRAFT = `${DRAFT_NOTICE}
-
-FORGE -- PRIVACY POLICY (DRAFT)
+export const PRIVACY_POLICY_DRAFT = `FORGE -- PRIVACY POLICY
 
 1. OVERVIEW
 This Privacy Policy describes what Forge Performance Systems LLC ("Forge") collects through the Forge app and website, why, and what control you have over it.
@@ -188,9 +184,7 @@ By signing, you confirm you've read and understood this release and consent to t
 // state expects parental involvement for a minor's data varies, and this
 // draft assumes 13-17 warrants one without that having been confirmed
 // against real law.]
-export const PARENTAL_NOTICE_DRAFT = `${DRAFT_NOTICE}
-
-FORGE -- NOTICE TO PARENT OR GUARDIAN (DRAFT)
+export const PARENTAL_NOTICE_DRAFT = `FORGE -- NOTICE TO PARENT OR GUARDIAN
 
 1. WHY YOU'RE SEEING THIS
 Your teen (age 13-17) created their own Forge account, using either a coach's invite code or a direct signup -- at this age, Forge lets a teen register themselves rather than requiring a parent to do it for them. This notice is what a parent or guardian would receive as a result, so you know the account exists and what it involves before you'd normally need to ask.
@@ -271,9 +265,7 @@ Same as the Terms of Service: the laws of the State of Arizona, without regard t
 // Seeding this draft does not overwrite it: paste the real document into the
 // admin Documents tab and the seed leaves it alone from then on, the same
 // guard every other document here has.
-export const EULA_DRAFT = `${DRAFT_NOTICE}
-
-FORGE -- END USER LICENSE AGREEMENT (DRAFT)
+export const EULA_DRAFT = `FORGE -- END USER LICENSE AGREEMENT
 
 This Agreement is between you and Forge Performance Systems LLC ("Forge"). It covers the Forge application software (the "Application"). Your use of the Forge service, your account, and your data is governed separately by the Terms of Service and the Privacy Policy.
 

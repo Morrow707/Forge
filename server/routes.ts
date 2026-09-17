@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
+import { needsCoppaAttestation } from "@shared/coach-attestation";
 import { coachesCornerCompedForRoster } from "@shared/billing-tiers";
 import { createServer, type Server } from "http";
 import path from "path";
@@ -6127,10 +6128,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           position: z.string().trim().max(60).optional().nullable(),
         }),
       ),
+      // The coach's under-13 attestation (shared/coach-attestation.ts). Only required when the
+      // batch actually contains one, so the common case is unchanged.
+      coppaAttested: z.boolean().optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const created = await storage.createProvisionalAthletes(user.id, parsed.data.rows);
+    // CHECKED SERVER-SIDE, because the tick is the whole consent.
+    //
+    // A Tier 1 account has no verified-parent step: the coach relaying a parent's permission is
+    // the only thing behind it. A gate that lives only in the dialog is a gate a scripted POST
+    // walks past, and what it would walk past here is the account's entire lawful basis.
+    if (parsed.data.rows.some((r) => needsCoppaAttestation({ age: r.age })) && !parsed.data.coppaAttested) {
+      return res.status(400).json({
+        message:
+          "One of these athletes is under 13. Confirm you have a parent or guardian's permission before adding them.",
+      });
+    }
+    const created = await storage.createProvisionalAthletes(
+      user.id,
+      parsed.data.rows,
+      parsed.data.coppaAttested === true,
+    );
     res.status(201).json(created);
   });
 

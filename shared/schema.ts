@@ -3610,6 +3610,12 @@ export const provisionalAthletes = pgTable(
     gender: genderEnum("gender"),
     sport: text("sport"),
     position: text("position"),
+    // When the coach made the under-13 attestation for this slot (see
+    // shared/coach-attestation.ts). Null for every slot that did not need one, which is
+    // most of them -- this is not "did the coach agree to the terms", it is the one
+    // assertion a Tier 1 account rests on, and it has to be answerable per slot rather
+    // than inferred from the coach having used the feature at all.
+    coppaAttestedAt: timestamp("coppa_attested_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
