@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, X, FileText } from "lucide-react";
@@ -156,9 +157,12 @@ export default function AdminWaiversPage() {
                     {waiver.reviewStatus.replace("_", " ")}
                     {waiver.reviewNote ? ` — ${waiver.reviewNote}` : ""}
                     {" · "}
-                    <a href={`/admin/users/${athleteId}`} className="font-semibold text-primary hover:underline">
+                    <Link
+                      href={`/admin/users?search=${encodeURIComponent(athleteName)}`}
+                      className="font-semibold text-primary hover:underline"
+                    >
                       account
-                    </a>
+                    </Link>
                   </p>
                 )}
               </CardContent>

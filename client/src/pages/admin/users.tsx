@@ -98,9 +98,16 @@ export default function AdminUsers() {
   // Dashboard stat tiles (Coaches/Athletes) deep-link here with ?role=coach
   // or ?role=athlete so the tile actually lands on the filtered view it
   // named, not just this page in general.
-  const initialRole = new URLSearchParams(useSearch()).get("role");
-  const [searchInput, setSearchInput] = useState("");
-  const [appliedSearch, setAppliedSearch] = useState("");
+  const initialParams = new URLSearchParams(useSearch());
+  const initialRole = initialParams.get("role");
+  // ?search= lands here pre-filtered, the same way ?role= does. The waiver
+  // review queue is the caller that needs it: an admin deciding whether a
+  // signed document is about the right child has to be able to reach that
+  // athlete's account, and there is no per-user route to link to -- this page
+  // shows a user by finding them, so a deep link has to arrive as a search.
+  const initialSearch = initialParams.get("search") ?? "";
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [appliedSearch, setAppliedSearch] = useState(initialSearch);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(
     ROLE_FILTERS.includes(initialRole as RoleFilter) ? (initialRole as RoleFilter) : "all",
   );

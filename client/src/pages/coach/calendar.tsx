@@ -141,12 +141,22 @@ export default function CoachCalendar() {
         singleDayContent={(date) => <CoachDayBriefing date={date} />}
       />
 
+      {/* Scoped to what is on screen, because that is all this knows. It used to read "Nothing
+          scheduled yet. Assign a program to an athlete" for ANY empty view -- so paging to next
+          month, or filtering to one athlete who happens to have a quiet week, told a coach with
+          a full roster that they had never scheduled anything. The call to action is still here,
+          since an empty view is a fine moment to offer it; it is the claim that was wrong. */}
       {!isLoading && entries.length === 0 && (
         <Card className="mt-6">
           <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
             <CalendarDays className="h-8 w-8 text-muted-foreground" />
             <p className="text-muted-foreground">
-              Nothing scheduled yet. Assign a program to an athlete from Roster & Teams.
+              {athleteId === "all"
+                ? "Nothing scheduled in this view."
+                : `Nothing scheduled for ${roster.find((a) => String(a.id) === athleteId)?.name ?? "this athlete"} in this view.`}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Try another date range, or assign a program from Roster &amp; Teams.
             </p>
           </CardContent>
         </Card>
