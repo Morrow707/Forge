@@ -238,6 +238,45 @@ change makes one of them false, the change is wrong.
   what makes the retention policy defensible AND keeps the research data
   intact. Both properties depend on it.
 
+## Hydrate-in-an-effect, save-the-whole-state
+
+A shape that turned up FOUR times in one audit, in four different files, with
+two different symptoms. Worth recognising on sight rather than rediscovering.
+
+```
+const [content, setContent] = useState("");        // or [], or a DEFAULT_ constant
+const { data } = useQuery(...);
+useEffect(() => { if (data && !hydrated) { setContent(data.content); ... } }, [data]);
+// ...and a Save that PUTs the whole of that state back.
+```
+
+**On a failed read the effect never runs**, so the state keeps its empty initial
+value, and then one of two things happens:
+
+- **The destructive one.** The editor renders anyway, showing empty, and Save
+  writes that emptiness over the real record. `manage-roster-groups-dialog`
+  (a rename would PATCH the default Group A/B/C over the coach's real groups),
+  `SignupAgreementEditor` and `LegalDocEditor` (an empty box over the live
+  signup agreement or the Terms of Service), `academy-track-builder` (Save
+  deletes every lesson and quiz question in the track). Nothing is corrupted
+  here -- a whole record is REPLACED, which no field-level validation catches.
+- **The invisible one.** The page guards on `isLoading || !hydrated`, and
+  `hydrated` never becomes true, so it spins forever. `program-builder`,
+  `skill-program-builder`, `class-builder`, and the compliance snapshot on
+  `admin/documents`. A spinner that never resolves reads as a slow page rather
+  than a broken one, so nobody retries it and nobody reports it.
+
+The fix is the same either way: give the query `isError` and render
+`<ReadFailed>` BEFORE the editor or the spinner. The editor does not open until
+the read lands.
+
+**There is no scan for this one, deliberately.** grep cannot separate "an effect
+that copies query data into state which is later saved wholesale" from any file
+that merely contains a read, an effect and a write -- an attempt matched thirty
+files, most of them fine. A ratchet with thirty false positives is worse than
+none, because people stop reading it. This section is the substitute; if
+somebody finds a reliable way to detect the shape, a scan beats a paragraph.
+
 ## Settled questions that keep getting re-litigated
 
 Written down because they have come up more than once and been answered the
