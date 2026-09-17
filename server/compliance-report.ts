@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 
 const TIER_LABEL: Record<string, string> = {
   tier1_under13: "Tier 1 -- Under 13",
@@ -9,7 +10,7 @@ const TIER_LABEL: Record<string, string> = {
 
 const CONSENT_LABEL: Record<string, string> = {
   terms_of_service: "Terms of Service",
-  biometric_waiver: "Biometric Waiver",
+  biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
   coach_coppa_consent: "Coach/Program Consent (Tier 1 agent)",
   parental_notice_ack: "Parental Notice Acknowledgment",
 };

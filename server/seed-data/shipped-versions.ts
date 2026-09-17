@@ -57,6 +57,10 @@ export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
   "947e8481794b56764889857299e9c486c4f4e3c66c251b07fe6dbe18c739acb2",
   // Gained governing law, the business address and the healthcare-notice split (f0adc47).
   "1f1710bd22aa595ef58e1f9754a22bfd2dda120ec720d97072d76b3ce981a25f",
+  // Called the video and biometric document a "release" in three places, after that document
+  // had been retitled to a consent. The agreement a user accepts must name the other document
+  // they are being pointed at by the name that document actually carries.
+  "6c195eafbf7c4b884f4664756aec7d74444db12024e90bb5574b7e071efc9d5e",
 ] as const;
 
 /** Character length of each entry in SIGNUP_AGREEMENT_PRIOR_SHIPPED, same order.
@@ -66,7 +70,7 @@ export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
  * than derived, since deriving it would mean keeping the full prior texts -- which is the thing
  * hashes exist to avoid. A wrong length simply fails to match and the document is left alone,
  * which is the safe direction. */
-export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274, 11937] as const;
+export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274, 11937, 12126] as const;
 
 /** PREVIOUS versions of the video and biometric release, oldest first. See above. */
 export const BIOMETRIC_RELEASE_PRIOR_SHIPPED = [

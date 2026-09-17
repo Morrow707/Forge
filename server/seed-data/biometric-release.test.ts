@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
@@ -107,7 +109,7 @@ describe("every document a user is asked to accept is reachable", () => {
   });
 
   it("points the capture-time prompt at the release rather than the signup agreement", () => {
-    // The regression: the dialog said "Read the full video and biometric release" and linked
+    // The regression: the dialog said "Read the full video and biometric consent" and linked
     // /legal, which renders only the clickwrap. It then linked the right document in a new
     // window, which opens nothing on native -- so the document is read in place now.
     const dialog = read("client/src/components/biometric-release-dialog.tsx");
@@ -155,5 +157,17 @@ describe("what the document is, and is not", () => {
     expect(BIOMETRIC_RELEASE).toContain("any group of fewer than ten people withheld");
     expect(BIOMETRIC_RELEASE).toContain("there is no separate signature page");
     expect(BIOMETRIC_RELEASE).toContain("Declining is a real choice and carries no penalty");
+  });
+  it("is what the counsel review packet actually shows a lawyer", () => {
+    // docs/biometric-release-for-counsel.md embeds a copy of this document. A copy goes stale
+    // silently -- it did, twice over, still carrying the old "CONSENT AND RELEASE" title and
+    // missing the governing-law section added with it -- and a reviewer has no way to tell they
+    // are reading a version the product never shipped. The packet is what gets sent outside the
+    // building, so the copy in it is asserted rather than remembered.
+    const packet = readFileSync(
+      join(import.meta.dirname, "../../docs/biometric-release-for-counsel.md"),
+      "utf8",
+    );
+    expect(packet).toContain(BIOMETRIC_RELEASE);
   });
 });

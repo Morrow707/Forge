@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { FORGE_CONTACT_EMAIL } from "@shared/contact";
-import { SIGNUP_AGREEMENT, patchContactPlaceholders } from "./signup-agreement";
+import { SIGNUP_AGREEMENT, patchLiveDocuments } from "./signup-agreement";
 import {
   TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
@@ -63,7 +63,7 @@ describe("contact address across the published documents", () => {
 describe("patching the stored documents", () => {
   it("fills a placeholder an installation already seeded", () => {
     const stored = "18. CONTACT\n[Placeholder -- add a real support/contact email once one exists.]";
-    const patched = patchContactPlaceholders(stored);
+    const patched = patchLiveDocuments(stored);
     expect(patched).toContain(FORGE_CONTACT_EMAIL);
     expect(patched).not.toContain("[Placeholder");
   });
@@ -73,7 +73,7 @@ describe("patching the stored documents", () => {
       `Either request can be made at ${FORGE_CONTACT_EMAIL}. `,
       "",
     );
-    const patched = patchContactPlaceholders(stored);
+    const patched = patchLiveDocuments(stored);
     expect(patched).toContain(FORGE_CONTACT_EMAIL);
     // The counsel questions are the point of these drafts being drafts. Only the address moves.
     expect(patched).toContain("confirm this matches what BIPA");
@@ -81,13 +81,13 @@ describe("patching the stored documents", () => {
 
   it("is a no-op on a document that has already been patched", () => {
     for (const [name, text] of DOCUMENTS) {
-      expect(patchContactPlaceholders(text), name).toBeNull();
+      expect(patchLiveDocuments(text), name).toBeNull();
     }
   });
 
   it("leaves the counsel-question placeholders alone", () => {
     const stored = "Some clause. [Placeholder -- confirm with counsel whether this is enforceable.]";
-    expect(patchContactPlaceholders(stored)).toBeNull();
+    expect(patchLiveDocuments(stored)).toBeNull();
   });
 });
 
@@ -97,19 +97,19 @@ describe("patching an already-seeded installation twice", () => {
     // the replacement and a naive re-run matches it again. The seed runs on every deploy, so
     // "applies twice" means "applies two hundred times" on a long-lived installation.
     const seeded = `18. CONTACT\n\nQuestions about these Terms, or about your account: ${FORGE_CONTACT_EMAIL}`;
-    const once = patchContactPlaceholders(seeded);
+    const once = patchLiveDocuments(seeded);
     expect(once).not.toBeNull();
     expect(once).toContain("5145 North 7th Street");
-    expect(patchContactPlaceholders(once!)).toBeNull();
+    expect(patchLiveDocuments(once!)).toBeNull();
     expect((once!.match(/5145 North 7th Street/g) ?? []).length).toBe(1);
   });
 
   it("fills the EULA's governing-law placeholder once", () => {
     const seeded =
       "13. GOVERNING LAW\n[Placeholder -- counsel to specify the governing law and venue, and to confirm they are consistent with the Terms of Service's dispute-resolution section, including that section's carve-out for athletes under 18.]";
-    const once = patchContactPlaceholders(seeded);
+    const once = patchLiveDocuments(seeded);
     expect(once).toContain("Maricopa County");
     expect(once).not.toContain("[Placeholder -- counsel to specify the governing law");
-    expect(patchContactPlaceholders(once!)).toBeNull();
+    expect(patchLiveDocuments(once!)).toBeNull();
   });
 });

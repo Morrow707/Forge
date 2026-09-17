@@ -20,7 +20,7 @@ import { eq, isNull, and, asc } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, BIOMETRIC_WAIVER_DRAFT, PARENTAL_NOTICE_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT } from "./seed-data/legal-documents-draft";
-import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchContactPlaceholders } from "./seed-data/signup-agreement";
+import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
 import { AI_TERMS_OF_USE } from "./seed-data/ai-terms-of-use-draft";
@@ -6229,7 +6229,7 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
     await storage.updateLegalAgreement(agreementForSentryFix.replace(STALE_SENTRY_CLAIM, CORRECTED_SENTRY_CLAIM));
   }
 
-  // Draft Terms of Service / Privacy Policy / Biometric Waiver -- same
+  // Draft Terms of Service / Privacy Policy -- same
   // "only if not already there" guard as the legalAgreement placeholder
   // above, so a redeploy never overwrites an admin's edits to any of them.
   if (!(await storage.getLegalDocument("terms_of_service"))) {
@@ -6238,7 +6238,7 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   if (!(await storage.getLegalDocument("privacy_policy"))) {
     await storage.updateLegalDocument("privacy_policy", PRIVACY_POLICY_DRAFT);
   }
-  // The video and biometric release. Unlike the four documents around it this one is LIVE --
+  // The video and biometric consent. Unlike the four documents around it this one is LIVE --
   // recordBiometricRelease and logGuardianConsents snapshot it into a consent record as the
   // thing the person agreed to -- so it gets the same treatment the signup agreement got: seeded
   // on a fresh install, and migrated once on an install still carrying the draft, which told its
@@ -6256,7 +6256,7 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // Exact-match, replace in place, no-op on every redeploy after the first.
   for (const docType of LEGAL_DOC_TYPES) {
     const stored = await storage.getLegalDocument(docType);
-    const patched = stored && patchContactPlaceholders(stored.content);
+    const patched = stored && patchLiveDocuments(stored.content);
     if (patched) {
       await storage.updateLegalDocument(docType, patched);
       console.log(`Filled the contact address in the stored ${docType} document.`);

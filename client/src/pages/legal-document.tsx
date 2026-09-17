@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { Link } from "wouter";
 import { ForgeMark } from "@/components/forge-mark";
 
@@ -13,7 +14,7 @@ import { ForgeMark } from "@/components/forge-mark";
  * itself carries its own "not reviewed by a lawyer" notice as its first
  * paragraph, unedited here.
  *
- * The EULA and the video and biometric release are served the same way, for two
+ * The EULA and the video and biometric consent are served the same way, for two
  * different reasons. App Store Connect asks for a licence URL when an app
  * supplies its own EULA. The release is here because it is LIVE: an adult agrees
  * to it at the camera and a guardian agrees to it while claiming a minor's
@@ -111,7 +112,7 @@ export function BiometricReleasePage() {
   return (
     <LegalDocumentPage
       docType="biometric_waiver"
-      title="Video and Biometric Consent and Release"
+      title={BIOMETRIC_DOCUMENT_NAME}
       otherHref="/privacy"
       otherLabel="Privacy Policy →"
     />

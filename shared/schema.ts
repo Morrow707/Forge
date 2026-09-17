@@ -894,7 +894,7 @@ export const claimGuardianInviteSchema = z.object({
   }),
   agreedToMinorMediaRelease: z.literal(true, {
     errorMap: () => ({
-      message: "A parent or guardian has to agree to the video and biometric release",
+      message: "A parent or guardian has to agree to the video and biometric consent",
     }),
   }),
   agreedToAssumptionOfRisk: z.literal(true, {

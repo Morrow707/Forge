@@ -86,7 +86,7 @@ This release does not apply to, and nothing here limits liability for:
 
 - gross negligence, recklessness, or intentional or wilful misconduct;
 - any liability that cannot lawfully be released or limited;
-- a claim arising from how Forge handles your personal information, video or biometric data, which is governed by the Privacy Policy and the Video and Biometric Consent and Release rather than by this document.
+- a claim arising from how Forge handles your personal information, video or biometric data, which is governed by the Privacy Policy and the Video and Biometric Consent rather than by this document.
 
 8. ATHLETES UNDER 18 -- WHAT A GUARDIAN CAN AND CANNOT GIVE UP
 

@@ -61,3 +61,26 @@ export const FORGE_LEGAL_ENTITY = "Forge Performance Systems LLC";
  */
 export const GOVERNING_LAW_CLAUSE =
   "This agreement, and any dispute arising out of it or out of your use of Forge, is governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. The parties will first try to resolve any dispute by talking to each other. Anything not resolved that way lies in the state and federal courts located in Maricopa County, Arizona, and both sides consent to the jurisdiction of those courts. Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.";
+
+/** The name of the video and biometric document, spelled once.
+ *
+ * The document was retitled from "Biometric Information Consent and Release" to a plain consent
+ * once it became clear it releases nothing -- it takes permission to collect, and calling that a
+ * release misdescribes what the person agreeing is doing. The title changed in one file; the
+ * seven places that NAME the document did not, so a guardian could be shown a link reading
+ * "the video and biometric release", open it, and find a document called something else. When a
+ * document's name is the only handle somebody has on which paper they agreed to, two names for
+ * it is a real problem, not a cosmetic one.
+ *
+ * So it is spelled here, and legal-document-naming.test.ts scans for the old spellings rather
+ * than trusting anybody to grep. The old names stay readable in the migration lanes
+ * (shipped-versions.ts, LIVE_DOCUMENT_PATCHES, BIOMETRIC_WAIVER_DRAFT), which have to match
+ * historical text byte-for-byte and are exempt by that scan on purpose.
+ *
+ * The `biometric_waiver` DOC TYPE keeps its name: it is a database enum value with rows pointing
+ * at it, and renaming a stored key to fix a display string is how you turn a naming problem into
+ * a data problem. */
+export const BIOMETRIC_DOCUMENT_NAME = "Video and Biometric Consent";
+
+/** The same name lowercased, for use mid-sentence in prose. */
+export const BIOMETRIC_DOCUMENT_NAME_INLINE = "video and biometric consent";

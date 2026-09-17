@@ -59,7 +59,7 @@ describe("the guardian claim as the consent vehicle", () => {
     await resetDatabase();
     await db.insert(legalDocuments).values([
       { docType: "privacy_policy", content: "PRIVACY POLICY v1" },
-      { docType: "biometric_waiver", content: "VIDEO AND BIOMETRIC RELEASE v1" },
+      { docType: "biometric_waiver", content: "VIDEO AND BIOMETRIC CONSENT v1" },
       { docType: "parental_notice", content: "PARENTAL NOTICE v1" },
     ]);
   });
@@ -75,7 +75,7 @@ describe("the guardian claim as the consent vehicle", () => {
 
   // The one that matters most on a camera platform. A parent may consent to the terms and the
   // privacy policy and still not have agreed to their child being filmed.
-  it("refuses a claim that skips the video and biometric release", async () => {
+  it("refuses a claim that skips the video and biometric consent", async () => {
     const { token } = await inviteFor(14);
     const res = await new TestClient(server.baseUrl).post(
       `/api/guardian-invites/${token}/claim`,
@@ -115,7 +115,7 @@ describe("the guardian claim as the consent vehicle", () => {
     for (const row of rows) expect(row.givenByUserId).toBe(link!.guardianId);
     // A record naming a document by type alone is worthless once the document is edited, so the
     // text is snapshotted.
-    expect(rows.map((r) => r.documentText)).toContain("VIDEO AND BIOMETRIC RELEASE v1");
+    expect(rows.map((r) => r.documentText)).toContain("VIDEO AND BIOMETRIC CONSENT v1");
     expect(rows.map((r) => r.documentText)).toContain("PRIVACY POLICY v1");
   });
 

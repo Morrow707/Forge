@@ -86,7 +86,7 @@ describe("the terms themselves", () => {
   });
 
   it("points biometric consent at the separate release rather than absorbing it", () => {
-    expect(SIGNUP_AGREEMENT).toMatch(/separate video and biometric consent and release/);
+    expect(SIGNUP_AGREEMENT).toMatch(/separate video and biometric consent/);
   });
 
   it("gives one contact address", () => {

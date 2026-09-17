@@ -85,7 +85,7 @@ export function BiometricReleaseDialog({
                   to read. */}
               <LegalDocumentReader
                 docType="biometric_waiver"
-                label="Read the full video and biometric release"
+                label="Read the full video and biometric consent"
               />
             </div>
           </DialogDescription>

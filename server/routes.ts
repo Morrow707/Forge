@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
+import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { coachesCornerCompedForRoster } from "@shared/billing-tiers";
 import { createServer, type Server } from "http";
 import path from "path";
@@ -3791,7 +3792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(pdf);
   });
 
-  // Draft Terms of Service / Privacy Policy / Biometric Waiver / Parental
+  // Draft Terms of Service / Privacy Policy / Parental
   // Notice -- see legalDocuments' own schema comment: separate from
   // legalAgreement above, not wired into signup or any live consent-
   // collection/delivery flow, purely for admin editing/printing/emailing
@@ -3812,7 +3813,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const LEGAL_DOC_TITLES: Record<LegalDocType, string> = {
     terms_of_service: "Terms of Service",
     privacy_policy: "Privacy Policy",
-    biometric_waiver: "Biometric Information Consent and Release",
+    biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
     parental_notice: "Notice to Parent or Guardian",
     institutional_agreement: "Institutional Service Agreement",
     eula: "End User License Agreement",

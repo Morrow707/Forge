@@ -45,7 +45,7 @@ describe("the capture-time biometric gate", () => {
     await resetDatabase();
     await db
       .insert(legalDocuments)
-      .values({ docType: "biometric_waiver", content: "BIOMETRIC RELEASE v1" });
+      .values({ docType: "biometric_waiver", content: "VIDEO AND BIOMETRIC CONSENT v1" });
   });
 
   async function setup(ageYears = 25) {

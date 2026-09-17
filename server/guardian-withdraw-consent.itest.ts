@@ -111,7 +111,7 @@ describe("a guardian withdrawing consent", () => {
     await storage.logConsentRecord({
       userId: athlete.id,
       consentType: "biometric_waiver",
-      documentText: "VIDEO AND BIOMETRIC RELEASE v1",
+      documentText: "VIDEO AND BIOMETRIC CONSENT v1",
       givenByUserId: guardian.id,
     });
 
@@ -119,10 +119,10 @@ describe("a guardian withdrawing consent", () => {
     const rows = await db.query.consentRecords.findMany({
       where: eq(consentRecords.userId, athlete.id),
     });
-    expect(rows.some((r) => r.documentText === "VIDEO AND BIOMETRIC RELEASE v1")).toBe(true);
+    expect(rows.some((r) => r.documentText === "VIDEO AND BIOMETRIC CONSENT v1")).toBe(true);
     const withdrawal = rows.find((r) => r.documentText.startsWith("WITHDRAWN "));
     expect(withdrawal).toBeTruthy();
-    expect(withdrawal!.documentText).toContain("VIDEO AND BIOMETRIC RELEASE v1");
+    expect(withdrawal!.documentText).toContain("VIDEO AND BIOMETRIC CONSENT v1");
   });
 
   // What re-locks the account. The minor gate refuses everything for a minor with no linked

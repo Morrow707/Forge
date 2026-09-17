@@ -38,7 +38,7 @@ the software does. Permission is not requested, it is **enforced**:
 - An athlete whose age cannot be determined is held too, under a separate reason, and is asked
   for a date of birth rather than told to ask a parent.
 - At claim time the guardian agrees to three things separately: the terms, the privacy policy,
-  and the video and biometric release. Each is recorded as its own consent record with the exact
+  and the video and biometric consent. Each is recorded as its own consent record with the exact
   document text as it stood at that moment.
 - A second confirmation email then goes to the same address, stating what was agreed and how to
   withdraw it if the reader did not do it.
@@ -149,9 +149,9 @@ Separately consented, opt-in, and not mentioned in the current policy at all:
 
 `shared/contact.ts` now holds the single address, `forgeperformancesystems@outlook.com`, and
 every document generated from this repository interpolates it: the live signup agreement, and
-the drafted terms, privacy policy, biometric waiver and parental notice. A test asserts no
+the drafted terms, privacy policy, video and biometric consent and parental notice. A test asserts no
 document carries any other address and that each one a user is shown carries this one, so a
-fourth address cannot appear quietly. The biometric waiver's rights section also gained the
+fourth address cannot appear quietly. The video and biometric consent's rights section also gained the
 address — it stated a right to ask what data Forge holds while giving no way to ask.
 
 **Two documents are not in this repository and still disagree**, and neither can be fixed from

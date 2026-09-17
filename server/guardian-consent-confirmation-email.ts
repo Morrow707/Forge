@@ -42,7 +42,7 @@ export function buildGuardianConsentConfirmationEmail(
             The privacy policy, covering what Forge collects about ${safeName} and who can see it
           </li>
           <li style="margin-bottom:6px;">
-            The video and biometric release -- ${safeName} can be recorded on video for coaching,
+            The video and biometric consent -- ${safeName} can be recorded on video for coaching,
             and measurements taken from that footage
           </li>
         </ul>

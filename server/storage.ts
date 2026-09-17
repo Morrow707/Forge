@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import {
   users,
   coachAthletes,
@@ -24315,7 +24316,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       requiresGuardianNoticeCount: guardianNoticeCount,
       notYetBuilt: [
         "Parental Notice content is delivered today, embedded in the guardian-invite email sent at signup (issueGuardianInviteIfNeeded in server/auth.ts) -- but check whether RESEND_FROM_EMAIL is set to a verified sending domain in production; while it's on Resend's sandbox default, that email silently fails to reach any address other than the Resend account's own verified inbox (see server/email.ts's own startup warning for this).",
-        "The video and biometric release IS collected today -- an adult ticks it at signup or agrees at the camera (recordBiometricRelease), and a guardian agrees for a minor at claim time (logGuardianConsents) -- so consentRecords carries real rows of this type. It has still not been reviewed by counsel. This line previously said the opposite, that the document was an unwired draft, and stayed that way after three flows started writing it: a report that understates its own coverage is worse than one that says nothing, because it is what gets handed to a lawyer.",
+        "The video and biometric consent IS collected today -- an adult ticks it at signup or agrees at the camera (recordBiometricRelease), and a guardian agrees for a minor at claim time (logGuardianConsents) -- so consentRecords carries real rows of this type. It has still not been reviewed by counsel. This line previously said the opposite, that the document was an unwired draft, and stayed that way after three flows started writing it: a report that understates its own coverage is worse than one that says nothing, because it is what gets handed to a lawyer.",
         "Institutional Service Agreement (org billing customers) exists as a draft and is now presented for acceptance to a primary coach's account on an org billing tier, but its substantive liability-shifting language hasn't been drafted or reviewed by counsel -- do not present it to a real institution as binding yet.",
         "Legal review confirming the tier thresholds, retention windows, and coach-consent mechanism actually satisfy COPPA, any state Age-Appropriate Design Code, BIPA, or other applicable law.",
         "Any accounts created before dateOfBirth existed remain tier \"unknown\" until that field is backfilled.",
@@ -26234,7 +26235,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    *      history, and rewriting the original row would destroy it.
    *   2. Purges the athlete's stored video through the same path the retention job uses. Derived
    *      metrics are untouched, the same way a retention purge leaves them: the consent withdrawn
-   *      here is the video and biometric release.
+   *      here is the video and biometric consent.
    *   3. Removes the guardian link LAST, which is what re-locks the account -- the minor gate
    *      refuses everything for a minor with no linked guardian, so this returns the child to
    *      exactly the state they were in before the parent ever claimed.
@@ -26334,7 +26335,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     await this.logConsentRecord({
       userId: athleteId,
       consentType: "biometric_waiver",
-      documentText: release?.content ?? "Biometric Information Consent and Release",
+      documentText: release?.content ?? BIOMETRIC_DOCUMENT_NAME,
       ipAddress: context?.ipAddress,
       userAgent: context?.userAgent,
     });

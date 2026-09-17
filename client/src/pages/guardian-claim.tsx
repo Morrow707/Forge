@@ -173,12 +173,12 @@ export default function GuardianClaimPage() {
                 />
                 <span>
                   I consent to my child being recorded on video for coaching, and to measurements
-                  being taken from that footage, as set out in the video and biometric release
+                  being taken from that footage, as set out in the video and biometric consent
                 </span>
               </label>
               <LegalDocumentReader
                 docType="biometric_waiver"
-                label="Read the video and biometric release"
+                label="Read the video and biometric consent"
                 className="pl-6 text-xs"
               />
             </div>

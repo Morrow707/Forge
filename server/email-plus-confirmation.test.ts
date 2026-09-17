@@ -24,7 +24,7 @@ describe("the guardian consent confirmation", () => {
     expect(html).toContain("privacy policy");
     // The one specific to putting a minor on a camera platform, and the reason this email exists
     // on this product rather than a generic welcome note.
-    expect(html).toMatch(/video and biometric release/i);
+    expect(html).toMatch(/video and biometric consent/i);
     expect(html).toMatch(/recorded on video/i);
   });
 

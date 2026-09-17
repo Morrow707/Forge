@@ -86,7 +86,7 @@ You may create an account for yourself if you are 18 or older.
 
 An athlete under 18 may use Forge only with a parent or legal guardian who has their own linked Forge account and has agreed on the athlete's behalf. This is enforced by the software, not merely requested: a minor athlete's account is held and cannot be used until a guardian has claimed it and agreed. It applies to every athlete under 18 however they arrived -- signing up alone, invited by a coach, or moved between teams. An athlete whose date of birth is not on record is held the same way until it is supplied.
 
-At the point of claiming, the guardian agrees separately to these terms, to the privacy policy, and to the video and biometric release, and a confirmation is emailed to them describing what was agreed and how to withdraw it.
+At the point of claiming, the guardian agrees separately to these terms, to the privacy policy, and to the video and biometric consent, and a confirmation is emailed to them describing what was agreed and how to withdraw it.
 
 A guardian may withdraw that consent at any time. Doing so deletes every stored video on the athlete's account and returns the account to the held state; the athlete cannot use Forge again until a guardian consents afresh.
 
@@ -116,7 +116,7 @@ If you film a set, Forge records video on your device and measures your movement
 
 Forge does not perform facial recognition, does not read fingerprints, and records no audio. The capture session has no audio input and the app requests no microphone permission.
 
-Collection of this data is governed by a separate video and biometric consent and release, not by this document. An adult athlete agrees to it in their own right; for an athlete under 18 it comes from their guardian. Camera tracking is optional -- you can train and log normally without it -- and a guardian can switch it off for their athlete at any time.
+Collection of this data is governed by a separate video and biometric consent, not by this document. An adult athlete agrees to it in their own right; for an athlete under 18 it comes from their guardian. Camera tracking is optional -- you can train and log normally without it -- and a guardian can switch it off for their athlete at any time.
 
 7. HOW LONG VIDEO IS KEPT
 
@@ -152,7 +152,7 @@ A payment made by a parent or guardian on a minor's behalf is also recorded as a
 
 12. YOUR CONTENT
 
-What you upload stays yours. You give Forge the permission it needs to store it, process it, and show it to the people described in section 4 so that the features work. Forge does not use athlete video or images for advertising or promotion. Use of an athlete's likeness is governed by the separate video and biometric release.
+What you upload stays yours. You give Forge the permission it needs to store it, process it, and show it to the people described in section 4 so that the features work. Forge does not use athlete video or images for advertising or promotion. Use of an athlete's likeness is governed by the separate video and biometric consent.
 
 Forge's own content -- programming, lessons, written material, and the software -- stays Forge's.
 
@@ -237,9 +237,16 @@ export const UNCONFIGURED_FALLBACK = "No agreement has been configured yet.";
  * above and the Sentry correction in seed.ts: match exactly, replace in place, touch nothing
  * else, and be a permanent no-op afterwards.
  *
- * Only the ADDRESS placeholders are listed. The counsel-question placeholders in those documents
- * are deliberate and stay until counsel answers them. */
-export const CONTACT_PLACEHOLDER_PATCHES: ReadonlyArray<readonly [string, string]> = [
+ * The counsel-question placeholders in those documents are deliberate and stay until counsel
+ * answers them; a patch here is for something that is simply WRONG in a stored copy.
+ *
+ * This started as the address placeholders alone, which is what the old name
+ * (CONTACT_PLACEHOLDER_PATCHES) described. It now also removes the dropped arbitration proposal
+ * and corrects a document's name, so it is named for what it is: the one place a live document
+ * gets corrected in an installation that already has it. Adding to it is the price of editing a
+ * document that has already shipped -- the alternative is a fix that reaches new installations
+ * and quietly misses every existing one, which is the failure this whole mechanism exists for. */
+export const LIVE_DOCUMENT_PATCHES: ReadonlyArray<readonly [string, string]> = [
   // The address went out without its unit number. Narrow and exact: only the wrong form of
   // Forge's own address is touched, so a document quoting an address for any other reason is
   // unaffected. Must come FIRST -- the patches below write the corrected address, and a document
@@ -282,6 +289,16 @@ export const CONTACT_PLACEHOLDER_PATCHES: ReadonlyArray<readonly [string, string
   [
     "[Placeholder -- add a real contact email once one exists, the same one referenced in the Terms of Service and Privacy Policy.]",
     `Questions, or to act on anything described above: ${FORGE_CONTACT_EMAIL}`,
+  ],
+  // --- The video and biometric document's name, after it was retitled from a release to a
+  // consent. A document that points the reader at another document has to call it by the name
+  // that document actually carries, or the reader cannot tell whether the thing they were shown
+  // is the thing being referred to. The assumption-of-risk release has no shipped-version lane of
+  // its own -- seed.ts writes it once and never again -- so this patch is how an installation
+  // that already stored it gets the corrected sentence.
+  [
+    "the Privacy Policy and the Video and Biometric Consent and Release rather than by this document.",
+    "the Privacy Policy and the Video and Biometric Consent rather than by this document.",
   ],
   // --- The arbitration proposal, dropped rather than adopted.
   //
@@ -341,9 +358,9 @@ The Terms of Service propose binding arbitration with a class-action waiver for 
 ];
 
 /** Applies the patches above to one stored document. Returns null when nothing changed. */
-export function patchContactPlaceholders(content: string): string | null {
+export function patchLiveDocuments(content: string): string | null {
   let next = content;
-  for (const [from, to] of CONTACT_PLACEHOLDER_PATCHES) {
+  for (const [from, to] of LIVE_DOCUMENT_PATCHES) {
     // Skip a patch whose result is already there. Several of these replacements CONTAIN the text
     // they match on -- prepending an address line to a contact sentence leaves that sentence
     // intact -- so a naive replace applies again on the next deploy and stacks the address up

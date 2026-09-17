@@ -129,7 +129,7 @@ Ordered by how exposed each one leaves you.
 
 ## 1. There is no biometric consent for adults — the largest gap
 
-The biometric waiver exists as a document, but `server/routes.ts` says of the whole legal-document
+The video and biometric consent exists as a document, but `server/routes.ts` says of the whole legal-document
 set: *"not wired into signup or any live consent-collection/delivery flow, purely for admin
 editing/printing/emailing pending real legal review."*
 

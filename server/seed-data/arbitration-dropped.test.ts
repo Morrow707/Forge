@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { GOVERNING_LAW_CLAUSE } from "@shared/contact";
 import {
   SIGNUP_AGREEMENT,
-  CONTACT_PLACEHOLDER_PATCHES,
-  patchContactPlaceholders,
+  LIVE_DOCUMENT_PATCHES,
+  patchLiveDocuments,
 } from "./signup-agreement";
 import {
   TERMS_OF_SERVICE_DRAFT,
@@ -72,7 +72,7 @@ describe("migrating an installation that took the arbitration text", () => {
   // The removal patch's own `from` IS the previously shipped text, so the migration is tested
   // against the real thing rather than a paraphrase of it: production is carrying this exact
   // string today, and nothing else in the repo still holds a copy to test against.
-  const removals = CONTACT_PLACEHOLDER_PATCHES.filter(([from]) =>
+  const removals = LIVE_DOCUMENT_PATCHES.filter(([from]) =>
     /binding arbitration/i.test(from),
   );
 
@@ -82,7 +82,7 @@ describe("migrating an installation that took the arbitration text", () => {
 
   it.each(removals)("removes it from a stored document", (from, to) => {
     const stored = `Some earlier section.\n\n${from}\nThe rest of the document.`;
-    const patched = patchContactPlaceholders(stored);
+    const patched = patchLiveDocuments(stored);
     expect(patched).not.toBeNull();
     expect(patched!).not.toMatch(/binding arbitration/i);
     expect(patched!).toContain(to);
@@ -90,19 +90,19 @@ describe("migrating an installation that took the arbitration text", () => {
   });
 
   it("is a no-op on a document that has already been migrated", () => {
-    // The guard that makes this true is the one in patchContactPlaceholders: a removal patch is
+    // The guard that makes this true is the one in patchLiveDocuments: a removal patch is
     // self-guarding because its `from` is gone afterwards. Worth asserting, because the OTHER
     // guard there -- skip when the result is already present -- would skip these patches on the
     // first run and never apply them at all.
     for (const [, to] of removals) {
-      expect(patchContactPlaceholders(`Some earlier section.\n\n${to}\nThe rest.`)).toBeNull();
+      expect(patchLiveDocuments(`Some earlier section.\n\n${to}\nThe rest.`)).toBeNull();
     }
   });
 
   it("renumbers the section that followed it", () => {
     const [from] = removals[0]!;
     const stored = `${from}\nWe may update these Terms.\n\n18. CONTACT\nForge is operated by X.`;
-    const patched = patchContactPlaceholders(stored)!;
+    const patched = patchLiveDocuments(stored)!;
     expect(patched).toContain("15. GOVERNING LAW");
     expect(patched).toContain("16. CHANGES TO THESE TERMS");
     expect(patched).toContain("17. CONTACT");

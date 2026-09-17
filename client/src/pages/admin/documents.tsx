@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ const TIER_LABEL: Record<string, string> = {
 const DOC_LABEL: Record<LegalDocType, string> = {
   terms_of_service: "Terms of Service",
   privacy_policy: "Privacy Policy",
-  biometric_waiver: "Biometric Waiver",
+  biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
   parental_notice: "Notice to Parent or Guardian",
   institutional_agreement: "Institutional Agreement",
   ai_terms_of_use: "AI Terms of Use",
@@ -45,7 +46,7 @@ const DOC_LABEL: Record<LegalDocType, string> = {
 
 const CONSENT_LABEL: Record<string, string> = {
   terms_of_service: "Terms of Service",
-  biometric_waiver: "Biometric Waiver",
+  biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
   coach_coppa_consent: "Coach/Program Consent (Tier 1 agent)",
   parental_notice_ack: "Parental Notice Acknowledgment",
   institutional_agreement: "Institutional Agreement",
@@ -128,7 +129,7 @@ function ResearchDataReviewCard() {
           <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
             <li>
               <span className="text-foreground">Privacy Policy S7</span> and the{" "}
-              <span className="text-foreground">Biometric Data Waiver</span> were rewritten to
+              <span className="text-foreground">{BIOMETRIC_DOCUMENT_NAME}</span> were rewritten to
               describe research sharing as it actually works. Both are drafts below.
             </li>
             <li>
@@ -331,16 +332,17 @@ export default function AdminDocuments() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              Biometric Waiver
-              <DraftBadge />
+              {BIOMETRIC_DOCUMENT_NAME}
+              <LiveBadge />
             </CardTitle>
             <CardDescription>
-              A standalone release for the camera-tracked movement data Forge collects (see
+              A standalone consent for the camera-tracked movement data Forge collects (see
               Section 4 of the Privacy Policy) -- separate from it on purpose, since laws like
-              Illinois' BIPA expect a dedicated written release, not a clause inside a longer
-              policy. Same "not wired into any live consent flow, not reviewed by counsel"
-              treatment as the two documents above; nothing collects a real signature against
-              this yet.
+              Illinois' BIPA expect a dedicated written consent, not a clause inside a longer
+              policy. Unlike the drafts above this one is LIVE: an adult agrees to it at signup or
+              at the camera, and a guardian agrees to it for a minor at claim time, and the text
+              below is snapshotted verbatim into each of those consent records. Editing it changes
+              what the next person agrees to. Still not reviewed by counsel.
             </CardDescription>
           </CardHeader>
           <CardContent>

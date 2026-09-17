@@ -1,4 +1,4 @@
-# Forge — video and biometric consent and release
+# Forge — video and biometric consent
 
 **For legal review.** Prepared 2026-09-16. Two parts: the document as it currently
 stands in the product, and the engineering facts behind each claim in it so they can
@@ -22,9 +22,13 @@ parent or legal guardian creates their own linked account and agrees on their be
 
 ## Document text as it currently stands
 
-FORGE -- VIDEO AND BIOMETRIC CONSENT AND RELEASE
+<!-- Copied verbatim from server/seed-data/biometric-release.ts. biometric-release.test.ts
+     asserts the two match: a review packet carrying a stale copy of the document is worse
+     than no packet, because the reviewer has no way to tell. -->
 
-This release covers video of an athlete training and the measurements Forge takes from it. It is separate from, and in addition to, Forge's Terms of Use and Privacy Policy. An adult athlete agrees to it for themselves. For an athlete under 18 it is agreed by a parent or legal guardian.
+FORGE -- VIDEO AND BIOMETRIC CONSENT
+
+This consent covers video of an athlete training and the measurements Forge takes from it. It is separate from, and in addition to, Forge's Terms of Use and Privacy Policy. An adult athlete agrees to it for themselves. For an athlete under 18 it is agreed by a parent or legal guardian.
 
 1. WHAT IS RECORDED AND MEASURED
 
@@ -80,15 +84,19 @@ Withdrawal operates from the point it takes effect and does not undo processing 
 
 8. HOW THIS CONSENT IS GIVEN AND RECORDED
 
-This release is agreed in the app, by an affirmative action that is not pre-ticked and not bundled with any other agreement. Forge stores the exact text of this document as it stood at that moment, together with the date and time, the IP address and the browser or device it was agreed from. That record is the evidence of consent; there is no separate signature page.
+This consent is agreed in the app, by an affirmative action that is not pre-ticked and not bundled with any other agreement. Forge stores the exact text of this document as it stood at that moment, together with the date and time, the IP address and the browser or device it was agreed from. That record is the evidence of consent; there is no separate signature page.
 
 Declining is a real choice and carries no penalty. Sets still log, with reps and weight, without the camera measurements.
 
-9. CONTACT
+9. GOVERNING LAW AND DISPUTES
+
+This agreement, and any dispute arising out of it or out of your use of Forge, is governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. The parties will first try to resolve any dispute by talking to each other. Anything not resolved that way lies in the state and federal courts located in Maricopa County, Arizona, and both sides consent to the jurisdiction of those courts. Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.
+
+10. CONTACT
+
+Forge is operated by Forge Performance Systems LLC, 5145 North 7th Street, D-237, Phoenix, Arizona 85014.
 
 Questions, a request about what Forge holds, or a withdrawal: forgeperformancesystems@outlook.com
-
----
 
 ## The engineering facts behind each claim
 

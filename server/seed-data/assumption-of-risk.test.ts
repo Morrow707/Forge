@@ -41,7 +41,7 @@ describe("the assumption of risk release", () => {
     expect(ASSUMPTION_OF_RISK_RELEASE).toMatch(/cannot lawfully be released or limited/);
     // Data claims belong to the privacy documents, not here -- otherwise this release would
     // quietly cover the biometric handling that has its own instrument and its own withdrawal.
-    expect(ASSUMPTION_OF_RISK_RELEASE).toMatch(/Video and Biometric Consent and Release/);
+    expect(ASSUMPTION_OF_RISK_RELEASE).toMatch(/Video and Biometric Consent/);
   });
 
   it("tells a guardian what they cannot give up", () => {
