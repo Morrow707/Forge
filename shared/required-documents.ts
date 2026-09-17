@@ -9,10 +9,11 @@ export type DocumentKind = (typeof externalWaiverKindEnum.enumValues)[number];
  * that cannot apply:
  *
  * - A ROSTERED ATHLETE trains under a school or club, which already ran its own participation
- *   waiver, medical clearance and emergency form. Those are the three worth having.
+ *   waiver and medical clearance. Those are the two worth having.
  * - A FREE AGENT has no institution. Nobody issued them a participation waiver and asking for
  *   one produces a permanently red row they can never clear. What still matters for someone
- *   training alone is clearance and a contact in an emergency.
+ *   training alone is clearance: whether training is safe for them does not depend on who,
+ *   if anyone, is watching.
  * - A COACH is not being cleared to participate, they are being cleared to SUPERVISE. Their
  *   documents are credentials -- certification, background check, CPR, insurance -- and calling
  *   any of that a "waiver" would be wrong in a way that matters if anyone ever reads this list.
@@ -35,18 +36,35 @@ export type RequiredDocument = {
   why: string;
 };
 
+/** NO EMERGENCY CONTACT OR TREATMENT AUTHORIZATION, deliberately, and it was on this list once.
+ *
+ * A treatment authorization exists so that somebody PHYSICALLY PRESENT with a child can consent
+ * to treatment when the guardian cannot be reached. Forge is never present -- no staff, no
+ * supervised session, nobody watching a lift in real time, which is the central claim of the
+ * assumption-of-risk release rather than an incidental fact about it. There is nobody on Forge's
+ * side for that authority to run to, and a clickwrap record in this database is not something
+ * anyone can hand a paramedic.
+ *
+ * The contact details fail for a nearer reason: a rostered athlete's coach already holds them
+ * from the club's own form, so a second copy here is not another number, it is a number that can
+ * go stale -- and a stale emergency contact is worse than none, because somebody trusts it on
+ * the day it matters. A free agent trains alone; there is no path by which Forge places a call.
+ *
+ * And it is a THIRD PARTY'S personal data. The contact never signed up for Forge, never agreed
+ * to anything and cannot ask for their number back. Holding that indefinitely, on a platform
+ * whose users include children, with no operational path that would ever read it, is a liability
+ * rather than a record.
+ *
+ * The `emergency_authorization` enum value stays in schema.ts: uploads already made keep their
+ * kind, and waiver-reader can still classify one somebody sends anyway. It is simply not asked
+ * for. (Scott, 2026-09-17: "if they are being coached by an actual coach, the coach knows who
+ * to call.") */
 const ATHLETE_SHARED: RequiredDocument[] = [
   {
     kind: "medical_clearance",
     label: "Medical clearance to participate",
     required: true,
     why: "A physician's sign-off that training is safe. Forge asks nothing about this at signup, so if it exists it only exists here.",
-  },
-  {
-    kind: "emergency_authorization",
-    label: "Emergency contact & treatment authorization",
-    required: true,
-    why: "Who to call, and permission to seek treatment. For an athlete under 18 this is the one that matters most on the worst day.",
   },
   {
     kind: "photo_media_release",

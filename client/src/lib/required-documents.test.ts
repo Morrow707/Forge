@@ -21,9 +21,9 @@ describe("who is asked for what", () => {
     expect(rostered).toContain("participation_waiver");
     // There is no institution to have issued one.
     expect(freeAgent).not.toContain("participation_waiver");
-    // What still matters when you train alone.
+    // What still matters when you train alone: whether training is safe for you does not depend
+    // on who, if anyone, is watching.
     expect(freeAgent).toContain("medical_clearance");
-    expect(freeAgent).toContain("emergency_authorization");
   });
 
   it("asks a coach about supervising, never about participating", () => {

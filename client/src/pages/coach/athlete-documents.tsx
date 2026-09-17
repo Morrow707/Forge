@@ -106,8 +106,8 @@ export default function CoachAthleteDocuments() {
             <CardTitle className="text-base">What your athletes have on file</CardTitle>
             <CardDescription>
               The forms their school or club already had signed — participation waiver, medical
-              clearance, emergency authorization. Forge holds the record; it doesn't clear anyone
-              to train, and nothing here says a document is legally enforceable.
+              clearance. Forge holds the record; it doesn't clear anyone to train, and nothing
+              here says a document is legally enforceable.
             </CardDescription>
           </CardHeader>
         </Card>
