@@ -58,32 +58,36 @@ describe("what it takes to be accepted without a human", () => {
   });
 });
 
-// THE FILE EXISTS ONLY WHILE A DECISION IS PENDING.
+// THE FILE IS KEPT. A release covers somebody only if it can be produced, and a row saying a
+// document was seen, with no document behind it, proves nothing on the day it is asked for.
+// (Scott, 2026-09-17. The previous rule destroyed the scan on every decision.)
 describe("what happens to the file", () => {
-  it("is destroyed on an automatic acceptance", () => {
+  it("survives an automatic acceptance", () => {
     const fn = storage.slice(
       storage.indexOf("async acceptExternalWaiverFromAi"),
       storage.indexOf("async flagExternalWaiverForHuman"),
     );
-    expect(fn).toContain("purgeExternalWaiverFile");
+    expect(fn).not.toContain("purgeExternalWaiverFile");
   });
 
-  it("is destroyed on a human decision too, accept or reject", () => {
+  it("survives a human decision too, accept or reject", () => {
+    // A rejection keeps it as well: it is what an appeal argues over, and a rejection can be
+    // wrong.
     const fn = storage.slice(
       storage.indexOf("async reviewExternalWaiver"),
       storage.indexOf("async externalWaiverSummary"),
     );
-    expect(fn).toContain("purgeExternalWaiverFile");
-    // Not conditional on the decision -- a rejected child's medical scan is no better to keep.
-    expect(fn).not.toMatch(/if \(input\.decision === "accepted"\)[\s\S]{0,80}purgeExternalWaiverFile/);
+    expect(fn).not.toContain("purgeExternalWaiverFile");
   });
 
-  it("never lists an accepted document back to an admin, even under 'show everything'", () => {
+  it("goes when the account goes, rather than outliving the row that points at it", () => {
+    // external_waivers cascades away with the user, so a kept file whose row is gone can never
+    // be produced for anyone and is simply disk nobody can reach.
     const fn = storage.slice(
-      storage.indexOf("async listExternalWaiversForReview"),
-      storage.indexOf("async reviewExternalWaiver"),
+      storage.indexOf("async deleteOwnAccount"),
+      storage.indexOf("async deleteOwnAccount") + 12000,
     );
-    expect(fn).toContain('ne(externalWaivers.reviewStatus, "accepted")');
+    expect(fn).toMatch(/externalWaivers\.fileUrl[\s\S]{0,400}deleteUploadedFile/);
   });
 
   it("refuses a stored path that tries to escape the uploads root", () => {

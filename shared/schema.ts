@@ -5220,21 +5220,28 @@ export const externalWaivers = pgTable(
     reviewSource: text("review_source"),
     // What the model read off the page: the kind it thinks this is, whether it
     // found a signature and a date, the issuer, and its own confidence. Kept
-    // after the file is gone, because once the file is gone this IS the record.
+    // alongside the file, as the record of how the decision was reached.
     aiVerdict: json("ai_verdict"),
-    // THE FILE ONLY EXISTS WHILE A DECISION IS PENDING.
+    // THE FILE IS KEPT. Set only where one is deliberately destroyed.
     //
-    // Set the moment a document is decided, either way, and the file is deleted
-    // from disk at the same time. What Forge needed from a child's signed
-    // medical form was the answer to "does one exist, for the right thing,
-    // signed" -- and it has that answer in the columns beside this one. Keeping
-    // the scan afterwards stores a named minor's medical and guardian-signature
-    // detail forever in exchange for nothing, and hands every future admin,
-    // every backup and every breach a copy of it.
+    // It used to be stamped on every decision, accept or reject, and the scan
+    // deleted with it -- the reasoning being that "does a signed form exist,
+    // for the right thing" is answered by the columns beside this one, so
+    // holding a named minor's medical and guardian-signature detail afterwards
+    // bought nothing and handed a copy to every future admin, backup and
+    // breach. That reasoning is sound about exposure and wrong about what the
+    // document is for. A release only covers anyone if it can be PRODUCED: an
+    // accepted row saying a waiver was seen, with no waiver behind it, is not
+    // evidence of anything on the day somebody asks. Scott's call, 2026-09-17:
+    // "keep the file forever, it needs to always stay so the athlete and us are
+    // always covered."
     //
-    // So an accepted document is unreachable by anybody, including an admin,
-    // rather than merely hidden from one screen. A rejected one goes too: the
-    // reason is what the uploader needs, and they still hold the original.
+    // So nothing routine purges a file now. This column stays for the rows
+    // already stamped by the old behaviour -- whose files are genuinely gone
+    // and must not be shown as openable -- and for a deliberate destruction:
+    // an account deletion takes its documents with it, because the row
+    // cascades away with the user and a file no row points at can never be
+    // produced for anyone anyway.
     filePurgedAt: timestamp("file_purged_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },

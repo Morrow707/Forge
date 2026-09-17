@@ -332,10 +332,11 @@ export default function DocumentsPage() {
                       {DOCUMENT_LABEL[w.kind]} · {new Date(w.createdAt).toLocaleDateString()} ·{" "}
                       {w.reviewStatus.replace("_", " ")}
                     </span>
-                    {/* THE FILE IS DESTROYED THE MOMENT A DOCUMENT IS DECIDED, so there is
-                        nothing to link to and saying "file deleted" is the honest thing to show.
-                        See shared/schema.ts's filePurgedAt: Forge needed to know a signed form
-                        exists, not to keep a copy of a child's medical record forever. */}
+                    {/* The file is KEPT, so there is normally something to open here -- a
+                        document that cannot be produced does not cover anybody. The "file
+                        deleted" branch is for rows decided under the old behaviour, which
+                        destroyed the scan on every decision: those files are genuinely gone and
+                        must not be offered as openable. See shared/schema.ts's filePurgedAt. */}
                     {w.fileUrl ? (
                       <a
                         href={resolveApiUrl(w.fileUrl)}

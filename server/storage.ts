@@ -4139,6 +4139,17 @@ export const storage = {
       .where(eq(problemReports.userId, userId));
     await Promise.all(reportImages.map((r) => deleteUploadedFile(r.image)));
 
+    // External documents -- school waivers, medical clearance, a coach's credentials. These are
+    // KEPT for the life of the account now (see purgeExternalWaiverFile), which makes them the
+    // newest thing on this list that outlives the row pointing at it: external_waivers cascades
+    // away with the user, so without this the scans sit on disk permanently, reachable by
+    // nothing and producible for nobody. Same failure the comments above were written about.
+    const documentFiles = await db
+      .select({ url: externalWaivers.fileUrl })
+      .from(externalWaivers)
+      .where(eq(externalWaivers.athleteId, userId));
+    await Promise.all(documentFiles.map((d) => deleteUploadedFile(d.url)));
+
     await db.delete(users).where(eq(users.id, userId));
     return { ok: true };
   },
@@ -25479,34 +25490,39 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       })
       .from(externalWaivers)
       .innerJoin(users, eq(externalWaivers.athleteId, users.id))
-      // A DECIDED DOCUMENT IS NOT IN THIS QUEUE, EVEN UNDER "show everything".
+      // "all" NOW MEANS ALL, including accepted.
       //
-      // Its file is destroyed on decision, so "all" could only ever render a row with a dead
-      // link -- and a screen that lists a named child's accepted medical form, link or no link,
-      // is the thing this design exists to prevent. "all" widens to rejected and expired, which
-      // still have something an admin might need to act on, and stops there.
+      // It used to exclude them, and that followed from the old rule: the file was destroyed on
+      // decision, so an accepted row could only ever render a dead link, and listing a named
+      // child's accepted medical form was the thing that design existed to prevent. Keeping the
+      // file changes the question. "We are always covered" is only true if somebody can actually
+      // produce the document, and an operator who cannot find an accepted waiver cannot produce
+      // it. The default is still the pending queue -- accepted documents are not day-to-day
+      // work, and nobody browses them by accident.
       .where(
-        status === "all"
-          ? ne(externalWaivers.reviewStatus, "accepted")
-          : eq(externalWaivers.reviewStatus, "pending_review"),
+        status === "all" ? undefined : eq(externalWaivers.reviewStatus, "pending_review"),
       )
       .orderBy(desc(externalWaivers.createdAt))
       .limit(500);
     return rows;
   },
 
-  /** Destroys the uploaded file and stamps the row. Called on EVERY decision, accept or reject.
+  /** Destroys the uploaded file and stamps the row. NOT called on a decision any more.
    *
-   * The file exists only while a decision is pending -- see shared/schema.ts's own comment on
-   * filePurgedAt. What Forge needed from a child's signed medical form was "does one exist, for
-   * the right thing, signed", and after a decision that answer is in the columns. Keeping the
-   * scan past that stores a named minor's medical and guardian-signature detail forever in
-   * exchange for nothing, and hands it to every future admin, every backup and every breach.
+   * It used to run on every decision, accept or reject, on the reasoning that the columns
+   * already answered "does a signed form exist, for the right thing" and keeping the scan past
+   * that only exposed a named minor's medical and guardian-signature detail. The exposure half
+   * of that was right; the conclusion was wrong. A release covers somebody only if it can be
+   * PRODUCED, and an accepted row with no document behind it proves nothing on the day it is
+   * asked for. See shared/schema.ts's filePurgedAt comment.
+   *
+   * What still calls it: a deliberate destruction. An account deletion takes its documents with
+   * it, since the row cascades away with the user and a file no row points at can never be
+   * produced for anybody anyway.
    *
    * Best-effort on the unlink and deliberately so: if the file is already gone, or the disk
    * refuses, the ROW still records that it was purged, because a row claiming the file survives
-   * when it does not is the less useful of the two lies. A leftover file with no row pointing at
-   * it is unreachable through the app regardless -- every path here reads fileUrl from the row.
+   * when it does not is the less useful of the two lies.
    */
   async purgeExternalWaiverFile(waiverId: number): Promise<void> {
     const [row] = await db
@@ -25558,7 +25574,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         ...(input.expiresOn ? { expiresOn: input.expiresOn } : {}),
       })
       .where(eq(externalWaivers.id, input.waiverId));
-    await this.purgeExternalWaiverFile(input.waiverId);
+    // The file stays. It is the document this row is a record OF.
   },
 
   /** Records that the model could not clear it, so a person will. The verdict is kept even
@@ -25590,9 +25606,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .where(eq(externalWaivers.id, input.waiverId))
       .returning();
     if (!row) return null;
-    // Decided, so the file goes -- the same rule the model's own acceptances follow. An admin
-    // who has just read it cannot open it again, and neither can the next one.
-    await this.purgeExternalWaiverFile(input.waiverId);
+    // The file stays, on an acceptance and on a rejection alike. Accepted, it is the proof the
+    // document exists; rejected, it is what an appeal argues over, and a rejection can be wrong.
     return row;
   },
 
