@@ -9,13 +9,25 @@ import { join } from "node:path";
 //
 // The flag is read at module load, so each case imports a fresh copy.
 
+// Mocked before billing.ts is ever imported -- the same pattern billing.test.ts
+// uses and vitest.config.ts documents. It used to stub a parseable DATABASE_URL
+// instead and let the real storage.ts load, which worked but cost 3.2 SECONDS on
+// the first import: that module's graph is ~25k lines and it was being compiled
+// inside a test with vitest's 5s default timeout. Idle, that passed; sharing four
+// cores with 130-odd other test files, it did not, which is exactly the shape of
+// the flake this file produced -- red under load, green when run alone.
+//
+// Nothing here touches storage. getEntitlements, getFreeAgentEntitlements and
+// getVideoRetentionLimits are pure functions of the account row they are handed;
+// the storage calls in billing.ts all live in the Stripe webhook paths, which are
+// billing.test.ts's subject, not this file's. So the mock is empty on purpose: if
+// one of these functions ever starts reading the database, this throws rather
+// than quietly passing against a stub.
+vi.mock("./storage", () => ({ storage: {} }));
+
 async function billingWithEnforcement(enabled: boolean) {
   vi.resetModules();
   vi.stubEnv("BILLING_ENFORCEMENT_ENABLED", enabled ? "true" : "false");
-  // billing.ts pulls in storage.ts, which builds a pool at import time. No
-  // query is made here -- this just has to be a parseable URL so the module
-  // graph loads in a suite that deliberately has no database.
-  vi.stubEnv("DATABASE_URL", process.env.DATABASE_URL ?? "postgresql://unused@localhost:1/unused");
   return import("./billing");
 }
 
