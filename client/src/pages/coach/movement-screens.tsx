@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
+import { ReadFailed } from "@/components/read-failed";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +43,7 @@ export default function MovementScreensPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Battery | null>(null);
 
-  const { data: batteries = [], isLoading } = useQuery<Battery[]>({
+  const { data: batteries = [], isLoading, isError, refetch } = useQuery<Battery[]>({
     queryKey: ["/api/coach/movement-screens/batteries"],
     queryFn: () => getJson("/api/coach/movement-screens/batteries"),
   });
@@ -89,6 +90,14 @@ export default function MovementScreensPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           <div className="h-32 animate-pulse rounded-md bg-surface sm:col-span-2 lg:col-span-3" />
+        ) : isError ? (
+          // "No movement screens available yet" would send a coach off to build a battery that
+          // already exists, or leave them assuming this athlete has never been screened.
+          <Card className="sm:col-span-2 lg:col-span-3">
+            <CardContent className="py-16">
+              <ReadFailed what="the movement screens" onRetry={() => void refetch()} />
+            </CardContent>
+          </Card>
         ) : batteries.length === 0 ? (
           // There was no zero-length branch at all here, so an unseeded battery library rendered
           // the page title over a completely blank body -- no text, no button, nothing to
@@ -168,7 +177,7 @@ export default function MovementScreensPage() {
 
 function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClose: () => void }) {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery<{ battery: Battery; tests: Test[] }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ battery: Battery; tests: Test[] }>({
     queryKey: [`/api/coach/movement-screens/batteries/${batteryId}`],
     queryFn: () => getJson(`/api/coach/movement-screens/batteries/${batteryId}`),
   });
@@ -222,7 +231,11 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
           <DialogTitle>Edit Battery</DialogTitle>
           <DialogDescription>Your own copy -- editing this never touches Forge's version.</DialogDescription>
         </DialogHeader>
-        {isLoading || !data ? (
+        {isError ? (
+          // The editor would otherwise sit on a shimmer forever, so a coach waits on a battery
+          // that is never going to arrive.
+          <ReadFailed what="this battery" onRetry={() => void refetch()} />
+        ) : isLoading || !data ? (
           <div className="h-40 animate-pulse rounded-md bg-surface" />
         ) : (
           <div className="space-y-4">

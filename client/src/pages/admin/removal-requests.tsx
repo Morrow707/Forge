@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { formatDistanceToNow } from "date-fns";
 import { ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { ReadFailed } from "@/components/read-failed";
 
 type RemovalRequest = {
   id: number;
@@ -32,7 +33,7 @@ export default function AdminRemovalRequestsPage() {
   const qc = useQueryClient();
   const [notes, setNotes] = useState<Record<number, string>>({});
 
-  const { data: requests, isLoading } = useQuery<RemovalRequest[]>({
+  const { data: requests, isLoading, isError, refetch } = useQuery<RemovalRequest[]>({
     queryKey: ["/api/admin/removal-requests"],
     queryFn: () => getJson("/api/admin/removal-requests"),
   });
@@ -78,6 +79,19 @@ export default function AdminRemovalRequestsPage() {
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : isError ? (
+        // "Nothing is waiting on you" is a poor thing to tell somebody when the list did not
+        // load. Every row here is a guardian asking for a video of their child to be taken
+        // down, and the page's own copy says nothing happens on its own.
+        <Card>
+          <CardContent className="py-8">
+            <ReadFailed
+              what="the open removal requests"
+              onRetry={() => void refetch()}
+              className="flex flex-col items-start gap-2 text-left"
+            />
+          </CardContent>
+        </Card>
       ) : (requests ?? []).length === 0 ? (
         <Card>
           <CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground">

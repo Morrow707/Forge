@@ -24,7 +24,7 @@ import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content"
 // carrying the draft is recognised by BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX, which is its own
 // constant in biometric-release.ts. The draft body is kept only as the evidence that prefix is
 // right -- see biometric-release.test.ts.
-import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT, nextParentalNotice, nextPrivacyPolicy } from "./seed-data/legal-documents-draft";
+import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT, nextParentalNotice, nextPrivacyPolicy, nextTermsOfService } from "./seed-data/legal-documents-draft";
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
@@ -6237,8 +6237,14 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // Draft Terms of Service / Privacy Policy -- same
   // "only if not already there" guard as the legalAgreement placeholder
   // above, so a redeploy never overwrites an admin's edits to any of them.
-  if (!(await storage.getLegalDocument("terms_of_service"))) {
-    await storage.updateLegalDocument("terms_of_service", TERMS_OF_SERVICE_DRAFT);
+  // The terms, like the privacy policy and the parental notice, have a version lane: the oldest
+  // shipped text names Forge Athletic Technologies LLC and leaves governing law unfilled, which
+  // is a different document rather than a few stale sentences.
+  const storedTerms = await storage.getLegalDocument("terms_of_service");
+  const nextTerms = nextTermsOfService(storedTerms?.content ?? null);
+  if (nextTerms) {
+    await storage.updateLegalDocument("terms_of_service", nextTerms);
+    if (storedTerms) console.log("Replaced a superseded terms of service with the current one.");
   }
   // The privacy policy, like the parental notice, has a version lane rather than only patches --
   // its oldest shipped text predates both the research-sharing section and the subject-code

@@ -4,7 +4,11 @@ import { writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { patchLiveDocuments } from "./signup-agreement";
 import * as CURRENT from "./legal-documents-draft";
-import { nextParentalNotice, nextPrivacyPolicy } from "./legal-documents-draft";
+import {
+  nextParentalNotice,
+  nextPrivacyPolicy,
+  nextTermsOfService,
+} from "./legal-documents-draft";
 
 /** EVERY VERSION FORGE EVER SEEDED HAS TO REACH THE CURRENT ONE.
  *
@@ -71,7 +75,9 @@ describe("migrating a stored document from any version Forge ever shipped", () =
             ? nextParentalNotice
             : name === "PRIVACY_POLICY_DRAFT"
               ? nextPrivacyPolicy
-              : null;
+              : name === "TERMS_OF_SERVICE_DRAFT"
+                ? nextTermsOfService
+                : null;
         const seeded = lane ? lane(stored) ?? stored : stored;
         const migrated = patchLiveDocuments(seeded) ?? seeded;
         expect(migrated, `${name} stored at ${commit} does not reach its current text`).toBe(current);

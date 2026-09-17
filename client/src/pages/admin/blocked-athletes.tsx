@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { formatDistanceToNow } from "date-fns";
 import { ShieldCheck, MailX, MailWarning, Clock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { ReadFailed } from "@/components/read-failed";
 
 type BlockedAthlete = {
   id: number;
@@ -44,7 +45,7 @@ export default function AdminBlockedAthletesPage() {
   // it is actually used; `total` is what lets it say how big the backlog is without shipping it.
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 100;
-  const { data, isLoading } = useQuery<{ total: number; rows: BlockedAthlete[] }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ total: number; rows: BlockedAthlete[] }>({
     queryKey: ["/api/admin/blocked-athletes", page],
     queryFn: () =>
       getJson(`/api/admin/blocked-athletes?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`),
@@ -117,6 +118,19 @@ export default function AdminBlockedAthletesPage() {
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : isError ? (
+        // The green tick below states, as a fact, that every minor on the platform has a
+        // guardian. Rendering that off a failed request is the most confident wrong thing in
+        // this app: it is the screen somebody checks to find the children who are locked out.
+        <Card>
+          <CardContent className="py-8">
+            <ReadFailed
+              what="the blocked-athlete list"
+              onRetry={() => void refetch()}
+              className="flex flex-col items-start gap-2 text-left"
+            />
+          </CardContent>
+        </Card>
       ) : rows.length === 0 ? (
         <Card>
           <CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground">

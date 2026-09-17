@@ -23,6 +23,7 @@ import {
   isShippedVersion,
   PARENTAL_NOTICE_PRIOR_SHIPPED,
   PRIVACY_POLICY_PRIOR_SHIPPED,
+  TERMS_OF_SERVICE_PRIOR_SHIPPED,
 } from "./shipped-versions";
 
 const DRAFT_NOTICE =
@@ -357,4 +358,15 @@ export function nextPrivacyPolicy(current: string | null): string | null {
   if (current === null) return PRIVACY_POLICY_DRAFT;
   if (current === PRIVACY_POLICY_DRAFT) return null;
   return isShippedVersion(current, PRIVACY_POLICY_PRIOR_SHIPPED) ? PRIVACY_POLICY_DRAFT : null;
+}
+
+/** What the stored terms of service should become. `null` leaves it alone.
+ *
+ * A lane rather than patches for the same reason the privacy policy has one: the oldest shipped
+ * versions name a company that no longer exists and leave governing law as a placeholder. Those
+ * are not sentences to correct, they are a different document. */
+export function nextTermsOfService(current: string | null): string | null {
+  if (current === null) return TERMS_OF_SERVICE_DRAFT;
+  if (current === TERMS_OF_SERVICE_DRAFT) return null;
+  return isShippedVersion(current, TERMS_OF_SERVICE_PRIOR_SHIPPED) ? TERMS_OF_SERVICE_DRAFT : null;
 }

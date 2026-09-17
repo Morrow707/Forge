@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ApiError, apiRequest, resolveApiUrl } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { DOCUMENT_LABEL, type DocumentKind } from "@shared/required-documents";
 
 /** The review queue for documents uploaded from outside Forge.
@@ -47,7 +48,7 @@ export default function AdminWaiversPage() {
   const [lookupFor, setLookupFor] = useState("");
   const [notes, setNotes] = useState<Record<number, string>>({});
   const key = ["/api/admin/waivers"];
-  const { data, isLoading } = useQuery<Row[]>({ queryKey: key });
+  const { data, isLoading, isError, refetch } = useQuery<Row[]>({ queryKey: key });
 
   const review = useMutation({
     mutationFn: async (input: { id: number; decision: "accepted" | "rejected"; note?: string }) => {
@@ -103,6 +104,10 @@ export default function AdminWaiversPage() {
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : isError ? (
+          // "Nothing waiting" on a failed read is how a review queue empties itself. Every
+          // document in it is a minor's paperwork somebody is waiting on.
+          <ReadFailed what="the review queue" onRetry={() => void refetch()} />
         ) : (data ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing waiting.</p>
         ) : (
@@ -201,7 +206,7 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
   const [reasonFor, setReasonFor] = useState<number | null>(null);
   const [reason, setReason] = useState("");
   const key = [`/api/admin/waivers/athlete/${athleteId}`];
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError, refetch } = useQuery<{
     documents: {
       id: number;
       kind: DocumentKind;
@@ -236,6 +241,19 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
   });
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="pt-5">
+          <ReadFailed
+            what="this athlete's documents"
+            onRetry={() => void refetch()}
+            className="flex flex-col items-start gap-2 text-left"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

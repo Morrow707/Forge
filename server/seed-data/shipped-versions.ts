@@ -92,42 +92,46 @@ export const BIOMETRIC_RELEASE_PRIOR_SHIPPED = [
  * as the thing that was agreed to. A correction that reaches only new installations would leave
  * every existing parent reading the old one. */
 export const PARENTAL_NOTICE_PRIOR_SHIPPED = [
-  // EVERY version, not just the one it replaced. Listing only the immediately previous text
-  // stranded any installation seeded before that on a notice carrying three false statements --
-  // and this is the document that gets EMAILED to a minor's parent, so a stranded copy is not a
-  // stale page nobody opens, it is what the next parent reads. Found by replaying the file's
-  // whole history through the migration (live-document-migration.test.ts), not by reading it.
-  //
-  // Each of these said "you don't need to do anything for the account to keep working" while the
-  // athlete was locked out pending a guardian claim, addressed every minor's parent as the parent
-  // of a 13-to-17-year-old, and told an under-13's guardian to turn OFF camera tracking that
-  // starts off and is theirs to turn on.
+  "8bb0c75e99088d382afbc886cca9cced91e4bd91ba108b8da0f73474066872aa",
+  "870ce1f4633138164b90278a5fe06367e50eba7e9764a158898aba3b18b7301d",
   "e347a9f7cb769becf66d08f96b9c0ef70b693ecd5f4352a5450ec53f02a0b035",
-  "30b0dacc768a7c1762793f015e8063dd689e2d9b796eabea9f0c508a35b1ec95",
   "99c15769c09c622a4c38437704be2eaf80d52b42a320daa291c1b383526389a5",
+  "30b0dacc768a7c1762793f015e8063dd689e2d9b796eabea9f0c508a35b1ec95",
 ] as const;
 
-/** PREVIOUS versions of the privacy policy, as they sit in a database AFTER LIVE_DOCUMENT_PATCHES
- * has had its go at them.
+/** EVERY stored shape of the privacy policy Forge ever shipped, current one excluded.
+
+ * Two entries per version, deliberately: an installation that has redeployed holds the shape
+ * LIVE_DOCUMENT_PATCHES leaves behind, and one that seeded and never redeployed holds the source
+ * text exactly. Listing only one of the two strands the other kind.
  *
- * A lane rather than more patches, because this document did not change by a sentence -- the
- * oldest version is 1,400 characters shorter than the current one, missing both the subject-code
- * paragraph (how an admin analytics surface is de-identified) and the research-sharing section.
- * Patching that forward would mean a patch the size of the document, which is a whole-document
- * replacement wearing a disguise. A hash says the same thing honestly: this is a version Forge
- * shipped, so replace it; anything else is somebody's own wording, so leave it alone.
- *
- * Hashed AFTER the patches rather than as the source text once was, because that is the shape an
- * installation actually holds -- the address and email patches have already edited it in place. */
+ * The oldest of these predate the research-sharing section and the subject-code paragraph, so an
+ * installation holding one describes an admin analytics surface Forge no longer has. Some also
+ * name FORGE ATHLETIC TECHNOLOGIES LLC, a company that no longer exists -- which is the clearest
+ * case there is for replacing a document wholesale rather than patching sentences in it. */
 export const PRIVACY_POLICY_PRIOR_SHIPPED = [
-  // Predates the research-sharing section and the subject-code sentence, so it described an
-  // admin analytics surface Forge no longer has.
-  //
-  // TWO HASHES FOR ONE VERSION, and both are needed. An installation that has deployed since it
-  // seeded holds the PATCHED shape -- the address and email corrections edited it in place --
-  // while one that seeded and never redeployed holds the source text exactly. Listing only the
-  // patched form would leave the second kind stranded, which is the same mistake as listing only
-  // the immediately previous version.
-  "d788f23ff8083a40133a1508be8c05d27bb84188549c6e62d8882250a95f40f3", // as stored after patches
-  "afc0584e301fd55241e7e44cadb398da8a53e7a155c57072e9709d580fd79897", // as seeded, unpatched
+  "de816ec9b3efbca8402182a9118fe7796f7ca1c98cde33e8334c4d446f6a9b27",
+  "1dc4eb085f048ce1e388407c9f919bd9f3e6ff70eec7a600a52694d29877e628",
+  "afc0584e301fd55241e7e44cadb398da8a53e7a155c57072e9709d580fd79897",
+  "d788f23ff8083a40133a1508be8c05d27bb84188549c6e62d8882250a95f40f3",
+  "5d3b0240c7f181513917cf5a99c2e578b4f89205f35d6d54061b11ddb50c6df7",
+  "29ed4c2a0cd7ae14415d743002f8b61fa1e1b337f0e38d5248fbb11bbd531a77",
+  "0e7d9b079f0d6acf8a34aca0c1cacf08e302d30194c42cdfe5a1dff1b827a6cc",
+] as const;
+/** EVERY stored shape of the terms of service Forge ever shipped, current one excluded.
+
+ * Same two-shapes-per-version rule as the privacy policy above. The oldest here carry
+ * "[Placeholder -- to be set once the company's home jurisdiction is finalized.]" where governing
+ * law belongs, and name FORGE ATHLETIC TECHNOLOGIES LLC as the liable entity. A document naming
+ * the wrong company is not something to fix with a sentence patch. */
+export const TERMS_OF_SERVICE_PRIOR_SHIPPED = [
+  "47367a2e4dcb9bfc27db7240f5bcd4c84b080807bb0e8069a69a28aa5350561e",
+  "77ba725a6505b32db815e5d4db47b531d2e4b325dbbaf76bde87b05a258dde9e",
+  "9fe5c4a5c59661074aa5f28218114c59225628de9eb699a87b759c9916522865",
+  "827ddbd3d850501d59adc794266786ef3bc0802771bf7077fcbd908bd6d47de2",
+  "b51209c610f677c44e020afe98f7b68344079ac70180eeb88443c11656d3bcd2",
+  "b96386b86189840781a590451743468ef73345cac9d4391648d44c4c9e971aa6",
+  "2160c9605752c049445d5e8d5bab32b6e40a43731ce040398892dfde909c960d",
+  "c79d547edbd11ce6737253747e42eefef8828561a51b64f4d92b74163198f2e4",
+  "477d50ecba839e87cd0c6897fcc9468ccc69d79922527a2d73e53c38b4a862f5",
 ] as const;

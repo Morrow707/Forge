@@ -12,10 +12,28 @@ type CorrectiveSuggestion = { id: number; name: string; muscleGroup: string };
  * nothing if no match is found, so it never implies a suggestion exists
  * when one doesn't. */
 export function SuggestedCorrective({ faultCode }: { faultCode: string }) {
-  const { data: suggestions = [] } = useQuery<CorrectiveSuggestion[]>({
+  const { data: suggestions = [], isError, refetch } = useQuery<CorrectiveSuggestion[]>({
     queryKey: ["/api/athlete/suggested-correctives", faultCode],
     queryFn: () => getJson(`/api/athlete/suggested-correctives?faultCode=${faultCode}`),
   });
+
+  // Rendering nothing on a FAILED read would say the same thing as rendering nothing on an
+  // empty one -- that no corrective matches this fault. The comment above promises this
+  // component never implies a suggestion exists when one does not; the converse matters too,
+  // because the athlete is looking at a flagged fault and deciding what to do about it. One
+  // line, in place, rather than a box: this sits under a fault on a review screen.
+  if (isError) {
+    return (
+      <button
+        type="button"
+        onClick={() => void refetch()}
+        className="ml-6 flex items-center gap-1.5 text-xs text-muted-foreground underline"
+      >
+        <Wrench className="h-3 w-3 shrink-0" />
+        We couldn't check for a corrective. Try again.
+      </button>
+    );
+  }
 
   if (suggestions.length === 0) return null;
 
