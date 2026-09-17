@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { ShieldAlert, Save, Mail } from "lucide-react";
 
 import type { LegalDocumentType as LegalDocType } from "@shared/schema";
+import { ReadFailed } from "@/components/read-failed";
 type LegalDocument = { docType: LegalDocType; content: string; updatedAt: string };
 
 type ComplianceReportData = {
@@ -102,6 +103,8 @@ function PublishedBadge({ at }: { at: string }) {
  * actually opted in" is the first thing a reviewer asks, and it is a number,
  * not a document. */
 function ResearchDataReviewCard() {
+  // Renders `?? "--"` below rather than `?? 0`, which is already the honest answer
+  // for a failed read, so this one needs no isError branch.
   const { data } = useQuery<{ totalAthletes: number; consentedAthletes: number }>({
     queryKey: ["/api/admin/research-consent"],
   });
@@ -214,7 +217,12 @@ function ResearchDataReviewCard() {
  * it's system data for the same "review before relying on it" purpose,
  * kept on this page rather than given their own nav slot. */
 export default function AdminDocuments() {
-  const { data: compliance, isLoading: complianceLoading } = useQuery<ComplianceReportData>({
+  const {
+    data: compliance,
+    isLoading: complianceLoading,
+    isError: complianceFailed,
+    refetch: refetchCompliance,
+  } = useQuery<ComplianceReportData>({
     queryKey: ["/api/admin/compliance-report"],
   });
 
@@ -273,7 +281,16 @@ export default function AdminDocuments() {
               label="Download printable PDF"
             />
 
-            {complianceLoading || !compliance ? (
+            {/* `!compliance` covered a failed read as well as a pending one, so a failure
+                showed "Loading…" forever -- a spinner that will never resolve reads as a
+                slow page, not a broken one, and nobody retries it. */}
+            {complianceFailed ? (
+              <ReadFailed
+                what="the compliance snapshot"
+                onRetry={() => void refetchCompliance()}
+                className="flex flex-col items-start gap-2 py-4 text-left"
+              />
+            ) : complianceLoading || !compliance ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -466,7 +483,7 @@ export default function AdminDocuments() {
 // shape built for documents that don't have this live/frozen behavior.
 function SignupAgreementEditor() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery<{ content: string }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ content: string }>({
     queryKey: ["/api/legal-agreement"],
   });
   const [content, setContent] = useState("");
@@ -490,6 +507,21 @@ function SignupAgreementEditor() {
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save"),
   });
+
+  // NOT A DISPLAY BUG. On a failed read `data` is undefined, hydrated stays false and
+  // content stays "" -- so the editor shows an empty box for the LIVE signup agreement
+  // every athlete accepts, with nothing to distinguish "this document is empty" from
+  // "we could not fetch it". An admin who types a paragraph and presses Save replaces
+  // the whole agreement. The editor does not open until the read lands.
+  if (isError) {
+    return (
+      <ReadFailed
+        what="the current signup agreement"
+        onRetry={() => void refetch()}
+        className="flex flex-col items-start gap-2 py-4 text-left"
+      />
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -523,7 +555,12 @@ function SignupAgreementEditor() {
 
 function LegalDocEditor({ docType }: { docType: LegalDocType }) {
   const qc = useQueryClient();
-  const { data: docs } = useQuery<LegalDocument[]>({ queryKey: ["/api/admin/legal-documents"] });
+  const {
+    data: docs,
+    isLoading: docsLoading,
+    isError,
+    refetch,
+  } = useQuery<LegalDocument[]>({ queryKey: ["/api/admin/legal-documents"] });
   const doc = docs?.find((d) => d.docType === docType);
   const [content, setContent] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -558,17 +595,36 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
     onError: (err: ApiError) => toast.error(err.message || "Could not send"),
   });
 
+  // Same as SignupAgreementEditor above, and this one had no loading guard at all: an
+  // empty box, enabled, over the live Terms of Service, Privacy Policy or EULA. Save
+  // replaces the document wholesale, so an admin acting on a failed read does not
+  // corrupt a field, they replace a legal document with a paragraph.
+  if (isError) {
+    return (
+      <ReadFailed
+        what={`the current ${DOC_LABEL[docType]}`}
+        onRetry={() => void refetch()}
+        className="flex flex-col items-start gap-2 py-4 text-left"
+      />
+    );
+  }
+
   return (
     <div className="space-y-3">
       <Textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
+        disabled={docsLoading}
         rows={12}
         className="font-mono text-xs"
         placeholder="Loading…"
       />
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !content.trim()}>
+        <Button
+          size="sm"
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending || docsLoading || !content.trim()}
+        >
           <Save className="h-4 w-4" />
           {saveMutation.isPending ? "Saving…" : "Save"}
         </Button>

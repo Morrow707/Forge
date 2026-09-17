@@ -12,6 +12,7 @@ import { DownloadButton } from "@/components/download-button";
 import { getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { FileSearch, HardDrive, History, AlertTriangle, Video } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 /**
  * Admin Data & Diagnostics.
@@ -74,7 +75,7 @@ type AuditRow = {
 };
 
 function RecordAccessTab() {
-  const { data: rows = [], isLoading } = useQuery<AuditRow[]>({
+  const { data: rows = [], isLoading, isError, refetch } = useQuery<AuditRow[]>({
     queryKey: ["/api/admin/audit-log"],
     queryFn: () => getJson("/api/admin/audit-log?limit=200"),
   });
@@ -102,7 +103,20 @@ function RecordAccessTab() {
       </CardHeader>
       <CardContent>
         {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
-        {!isLoading && rows.length === 0 && (
+        {/* THE ONE ON THIS PAGE THAT IS NOT JUST DIAGNOSTIC. This is the
+            aggregate-data access log -- the record of who looked at athlete data
+            and why, which storage.ts awaits precisely because a query that cannot
+            be logged must not run. "Nothing recorded yet" off a failed read says
+            nobody has ever looked, which is the single most misleading thing this
+            page could say. */}
+        {isError && (
+          <ReadFailed
+            what="the record-access log"
+            onRetry={() => void refetch()}
+            className="flex flex-col items-start gap-2 py-6 text-left"
+          />
+        )}
+        {!isError && !isLoading && rows.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             Nothing recorded yet.
           </p>
@@ -150,7 +164,7 @@ type JobRun = {
 };
 
 function JobRunsTab() {
-  const { data: runs = [], isLoading } = useQuery<JobRun[]>({
+  const { data: runs = [], isLoading, isError, refetch } = useQuery<JobRun[]>({
     queryKey: ["/api/admin/job-runs"],
     queryFn: () => getJson("/api/admin/job-runs?limit=200"),
   });
@@ -169,7 +183,14 @@ function JobRunsTab() {
       </CardHeader>
       <CardContent>
         {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
-        {!isLoading && runs.length === 0 && (
+        {isError && (
+          <ReadFailed
+            what="job run history"
+            onRetry={() => void refetch()}
+            className="flex flex-col items-start gap-2 py-6 text-left"
+          />
+        )}
+        {!isError && !isLoading && runs.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">No runs recorded yet.</p>
         )}
         <div className="space-y-1.5">
@@ -221,7 +242,7 @@ type SystemEvent = {
 
 function SystemEventsTab() {
   const [showCleared, setShowCleared] = useState(true);
-  const { data: events = [], isLoading } = useQuery<SystemEvent[]>({
+  const { data: events = [], isLoading, isError, refetch } = useQuery<SystemEvent[]>({
     queryKey: ["/api/admin/system-events"],
     queryFn: () => getJson("/api/admin/system-events?limit=200"),
   });
@@ -247,7 +268,16 @@ function SystemEventsTab() {
       </CardHeader>
       <CardContent>
         {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
-        {!isLoading && shown.length === 0 && (
+        {/* An events panel reading "Nothing recorded" is how an operator concludes
+            the platform is healthy. */}
+        {isError && (
+          <ReadFailed
+            what="system events"
+            onRetry={() => void refetch()}
+            className="flex flex-col items-start gap-2 py-6 text-left"
+          />
+        )}
+        {!isError && !isLoading && shown.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">Nothing recorded.</p>
         )}
         <div className="space-y-1.5">
@@ -308,7 +338,7 @@ function mb(bytes: number | null | undefined) {
 }
 
 function StorageTab() {
-  const { data, isLoading } = useQuery<StorageStatus>({
+  const { data, isLoading, isError, refetch } = useQuery<StorageStatus>({
     queryKey: ["/api/admin/storage-status"],
     queryFn: () => getJson("/api/admin/storage-status"),
   });
@@ -345,6 +375,16 @@ function StorageTab() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {isLoading && <div className="h-16 animate-pulse rounded-md bg-surface" />}
+          {/* Renders as an empty card otherwise -- no rows, no error, nothing. This is
+              the card that answers whether uploads are on a persistent disk, so a
+              silent blank is the worst of both: it neither reassures nor warns. */}
+          {isError && (
+            <ReadFailed
+              what="the uploads disk status"
+              onRetry={() => void refetch()}
+              className="flex flex-col items-start gap-2 py-4 text-left"
+            />
+          )}
           {data && (
             <>
               <Row label="Uploads root" value={data.uploadsRoot} mono />

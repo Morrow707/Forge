@@ -113,7 +113,7 @@ export default function AdminQueryEngine() {
   const [saveName, setSaveName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SavedView | null>(null);
 
-  const { data: savedViews = [] } = useQuery<SavedView[]>({
+  const { data: savedViews = [], isError: savedViewsFailed } = useQuery<SavedView[]>({
     queryKey: ["/api/admin/saved-views"],
     queryFn: () => getJson("/api/admin/saved-views"),
   });
@@ -456,6 +456,16 @@ export default function AdminQueryEngine() {
             </div>
           </CardContent>
         </Card>
+
+        {/* The results below come from a MUTATION, not a query, and their "either nothing
+            matched or too few did to report" wording is deliberate suppression rather than
+            a failed read -- nothing to fix there. This card is the page's only real read,
+            and a failure silently removes it, so a saved view looks deleted. */}
+        {savedViewsFailed && (
+          <p className="text-sm text-muted-foreground">
+            We couldn't load your saved views. They haven't been deleted.
+          </p>
+        )}
 
         {savedViews.length > 0 && (
           <Card>
