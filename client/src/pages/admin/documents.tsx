@@ -66,6 +66,20 @@ function DraftBadge() {
     </Badge>
   );
 }
+/** Published for anyone to read, but not itself the thing anybody accepts.
+ *
+ * The third state, and the one these badges were missing. A document served at a public URL is
+ * not a draft in a drawer -- /terms, /privacy and /eula are readable by anyone and /eula is the
+ * licence URL App Store Connect points at -- but it is not agreed to either; the signup Terms of
+ * Use is what people accept. Calling these DRAFT told an admin they were inert, which is how the
+ * "not reviewed by a lawyer" banner sat on a public page for as long as it did. */
+function PublishedBadge({ at }: { at: string }) {
+  return (
+    <Badge variant="outline" className="text-[10px]">
+      PUBLISHED at {at} -- awaiting counsel
+    </Badge>
+  );
+}
 
 
 /** The research-sharing review packet.
@@ -303,12 +317,13 @@ export default function AdminDocuments() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               Terms of Service
-              <DraftBadge />
+              <PublishedBadge at="/terms" />
             </CardTitle>
             <CardDescription>
-              Not wired into signup and not enforced against current accounts -- current beta
-              testers are friends, no need to force a re-consent flow on them. Edit, print, or
-              email this for review.
+              Served on a public page anyone can open. It is not what anybody accepts -- the
+              signup Terms of Use is -- so editing it does not re-consent existing accounts. It
+              is still published under Forge's name, so it is read as Forge's word. Not yet
+              reviewed by counsel; the open questions are in docs/legal-open-questions.md.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -320,9 +335,12 @@ export default function AdminDocuments() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               Privacy Policy
-              <DraftBadge />
+              <PublishedBadge at="/privacy" />
             </CardTitle>
-            <CardDescription>Same treatment as the Terms of Service above.</CardDescription>
+            <CardDescription>
+              Same treatment as the Terms of Service above, and the one most likely to be read by
+              somebody deciding whether to let their child use this.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <LegalDocEditor docType="privacy_policy" />
@@ -354,7 +372,7 @@ export default function AdminDocuments() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               Notice to Parent or Guardian
-              <DraftBadge />
+              <LiveBadge />
             </CardTitle>
             <CardDescription>
               Addressed to a parent, not the athlete -- what any minor athlete's parent or guardian
@@ -363,7 +381,9 @@ export default function AdminDocuments() {
               recorded against. This is the content half of the guardian-notice system (see
               users.requiresGuardianNotice and GUARDIAN_NOTICE_LIVE in shared/privacy-tiers.ts);
               its content is embedded and delivered today in the guardian-invite email sent at
-              signup (see issueGuardianInviteIfNeeded in server/auth.ts). Not reviewed by counsel.
+              signup (see issueGuardianInviteIfNeeded in server/auth.ts) -- every minor's parent
+              gets this text, so editing it changes what the next one reads. Not reviewed by
+              counsel.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -388,7 +408,49 @@ export default function AdminDocuments() {
           </CardHeader>
           <CardContent>
             <LegalDocEditor docType="institutional_agreement" />
+          </CardContent>
+        </Card>
+
+        {/* These two were inside the institutional card, so they wore its DRAFT badge and its
+            "do not send to a real institution as binding" warning -- neither of which is about
+            either of them. One is the licence Apple points at; the other is the only document
+            Forge has that asks anybody to give up a right. */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              End User License Agreement
+              <PublishedBadge at="/eula" />
+            </CardTitle>
+            <CardDescription>
+              The SOFTWARE licence, distinct from the Terms of Service, which govern the service.
+              It carries the clauses Apple requires of an app that replaces the standard licence
+              with its own -- Apple as a third-party beneficiary, and Apple disclaiming
+              maintenance and warranty -- and App Store Connect's licence URL points at this page.
+              Not yet reviewed by counsel.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <LegalDocEditor docType="eula" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Assumption of Risk and Release
+              <LiveBadge />
+            </CardTitle>
+            <CardDescription>
+              Forge's only genuine liability waiver: every other document here grants a licence,
+              describes data handling, or takes a consent, and this one asks somebody to give up a
+              right. Section 8 says plainly what a guardian can and cannot waive on a child's
+              behalf, which is the part most templates get wrong by omission. Editing it changes
+              what the next person agrees to. Not yet reviewed by counsel -- and of everything on
+              this page that caveat weighs most here, because an unenforceable release is not a
+              weak release, it is no release.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <LegalDocEditor docType="assumption_of_risk" />
           </CardContent>
         </Card>
