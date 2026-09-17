@@ -24,7 +24,7 @@ import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content"
 // carrying the draft is recognised by BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX, which is its own
 // constant in biometric-release.ts. The draft body is kept only as the evidence that prefix is
 // right -- see biometric-release.test.ts.
-import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, PARENTAL_NOTICE_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT } from "./seed-data/legal-documents-draft";
+import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, INSTITUTIONAL_AGREEMENT_DRAFT, EULA_DRAFT, nextParentalNotice } from "./seed-data/legal-documents-draft";
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
@@ -6267,8 +6267,16 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
       console.log(`Filled the contact address in the stored ${docType} document.`);
     }
   }
-  if (!(await storage.getLegalDocument("parental_notice"))) {
-    await storage.updateLegalDocument("parental_notice", PARENTAL_NOTICE_DRAFT);
+  // The notice to parent or guardian. Like the biometric consent this one is DELIVERED rather
+  // than published -- its text is embedded in the guardian-invite email, and for an athlete under
+  // 13 it is what guardian_coppa_consent records as the thing agreed to -- so a correction has to
+  // reach an installation that already seeded it, not just a fresh one. An admin's own wording is
+  // left alone.
+  const storedNotice = await storage.getLegalDocument("parental_notice");
+  const nextNotice = nextParentalNotice(storedNotice?.content ?? null);
+  if (nextNotice) {
+    await storage.updateLegalDocument("parental_notice", nextNotice);
+    if (storedNotice) console.log("Replaced the previous notice to parent or guardian.");
   }
   if (!(await storage.getLegalDocument("institutional_agreement"))) {
     await storage.updateLegalDocument("institutional_agreement", INSTITUTIONAL_AGREEMENT_DRAFT);

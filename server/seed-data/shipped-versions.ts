@@ -84,3 +84,17 @@ export const BIOMETRIC_RELEASE_PRIOR_SHIPPED = [
   // a right belonging to a person under 18". Both fixed; this is the text they replaced.
   "e2f21ac408046074dfe8278ee6cceeece1b544b334d42582f17be023f4fe064f",
 ] as const;
+
+/** PREVIOUS versions of the notice to parent or guardian, oldest first. See above.
+ *
+ * This document needed a lane at all because it is DELIVERED -- its text is embedded in the
+ * guardian-invite email, and for an athlete under 13 it is what guardian_coppa_consent records
+ * as the thing that was agreed to. A correction that reaches only new installations would leave
+ * every existing parent reading the old one. */
+export const PARENTAL_NOTICE_PRIOR_SHIPPED = [
+  // Said "you don't need to do anything for the account to keep working" while the athlete was
+  // locked out pending a guardian claim; addressed every minor's parent as the parent of a
+  // 13-to-17-year-old; and told an under-13's guardian to turn OFF camera tracking that starts
+  // off and is theirs to turn on.
+  "99c15769c09c622a4c38437704be2eaf80d52b42a320daa291c1b383526389a5",
+] as const;

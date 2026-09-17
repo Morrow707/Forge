@@ -19,6 +19,7 @@ import {
   FORGE_LEGAL_ENTITY,
   GOVERNING_LAW_CLAUSE,
 } from "@shared/contact";
+import { isShippedVersion, PARENTAL_NOTICE_PRIOR_SHIPPED } from "./shipped-versions";
 
 const DRAFT_NOTICE =
   "DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.";
@@ -160,25 +161,68 @@ Questions about this Policy, or to make a request about your data: ${FORGE_CONTA
 // against real law.]
 export const PARENTAL_NOTICE_DRAFT = `FORGE -- NOTICE TO PARENT OR GUARDIAN
 
-1. WHY YOU'RE SEEING THIS
-Your teen (age 13-17) created their own Forge account, using either a coach's invite code or a direct signup -- at this age, Forge lets a teen register themselves rather than requiring a parent to do it for them. This notice is what a parent or guardian would receive as a result, so you know the account exists and what it involves before you'd normally need to ask.
+An athlete under 18 has been listed on Forge with you as their parent or legal guardian. This notice tells you what that account is, what it collects, and what you need to do. For an athlete under 13, this notice is also the document your consent is recorded against.
+
+1. THE ACCOUNT DOES NOT WORK UNTIL YOU CLAIM IT
+
+This is the part that needs doing. An athlete under 18 cannot use Forge until a parent or legal guardian has their own linked Forge account. Until then the athlete can sign in and see nothing but a screen telling them to wait for you.
+
+Use the link in the email this notice came with. It takes a few minutes and it is what turns the account on.
+
+Depending on their age, the athlete either made the account themselves or a coach created a slot for them and handed them a code. Either way the account is held until you claim it.
 
 2. WHAT FORGE IS
-Forge is an athletic performance platform coaches and athletes use for training programs, wellness check-ins, and camera-based movement tracking (bar-path velocity, jump height, sprint times, and similar metrics computed from video captured on your teen's own device). See the Privacy Policy for the full description of what it collects and why.
 
-3. WHAT'S COLLECTED ABOUT YOUR TEEN
-Account/profile information (name, email, sport, position, age), training data their coach assigns and they log, wellness self-reports (sleep, soreness, stress), and -- only when your teen explicitly chooses to save a clip -- video captured during a tracked movement. See the Privacy Policy's "Biometric Information" section for what's collected from that video specifically.
+An athletic training platform. Coaches write training programmes, athletes log what they lift, and the app can measure movement from video the athlete records on their own phone -- bar path, range of motion, velocity, jump height, sprint times and similar figures.
 
-4. WHO CAN SEE IT
-Your teen's own coach can see their training data and tracked metrics, the same way a coach would see it on a clipboard or a whiteboard. Forge staff can access it only as described in the Privacy Policy (support, legal compliance, or safety review). Nobody else -- not other athletes, not other coaches outside your teen's own -- can see it.
+Forge supervises nothing. Nobody employed by Forge is present at a session, watches a lift, or is responsible for how an athlete trains.
 
-5. YOUR ROLE AND YOUR OPTIONS
-You don't need to do anything for the account to keep working. If you'd rather review what's on file, ask questions, or have the account deleted, you (or your teen) can do that -- see Section 9 of the Privacy Policy ("Your Rights and Choices") for how. Deleting the account removes it and any saved video permanently.
+3. WHAT IS COLLECTED
 
-If you don't want the account deleted but also don't want any new camera-tracked video or movement metrics collected going forward, you can turn that off without affecting anything else about the account -- your teen's programs, workout logs, and everything else keep working normally. If you set up your own guardian account through the link in this email, you can turn it off yourself at any time from your dashboard; otherwise, ask your teen's coach to do it on your behalf.
+- Account and profile details: name, email, date of birth, sport, position, height and weight.
+- Training the coach assigns and the athlete logs.
+- Wellness self-reports the athlete chooses to fill in: sleep, soreness, stress.
+- Where camera tracking is on: the measurements above, and the video itself only when the athlete ticks "save clip for coach" after a set. A clip they do not save is not kept.
 
-6. QUESTIONS
-Questions, or to act on anything described above: ${FORGE_CONTACT_EMAIL}`;
+Some of what is measured from video is biometric information under Illinois' Biometric Information Privacy Act and comparable state laws. It is covered by a separate document, the Video and Biometric Consent, which you agree to when you claim the account.
+
+4. CAMERA TRACKING, AND WHICH WAY THE SWITCH STARTS
+
+For an athlete UNDER 13, camera tracking starts OFF. Nobody with authority has agreed to it yet, so nothing is measured from video until you turn it on yourself from your guardian dashboard. You do not have to. Training and logging work normally without it.
+
+For an athlete aged 13 to 17, camera tracking starts ON, and you can turn it off at any time from your guardian dashboard. Turning it off stops further collection from that point.
+
+5. WHO CAN SEE IT
+
+The athlete. You, through the guardian dashboard. Their own coach and their organisation's staff, which is what coaching is. Forge administrators, for support, auditing and video management -- and every time a coach or administrator opens an athlete's video, that access is written to a log.
+
+No other athlete, and no coach outside their own, can see any of it. There is no public or general-audience visibility for athlete media anywhere in Forge.
+
+6. HOW LONG VIDEO IS KEPT
+
+Raw video of an athlete under 13 is deleted 30 days after the set. For an athlete aged 13 to 17, 90 days. This runs automatically.
+
+Deleting a video does not delete the numbers taken from it. Those are the athlete's training record and are kept until the account is deleted.
+
+7. WHAT YOU CAN DO, AT ANY TIME
+
+- See everything on file for your athlete, through the guardian dashboard.
+- Turn camera tracking on or off.
+- Ask for a particular recording to be removed.
+- Withdraw consent. This permanently deletes every raw video stored for the athlete, records what was withdrawn and when, and suspends the athlete's access until a parent or guardian consents again.
+- Delete the account, which permanently removes its stored video immediately.
+
+Any of these can also be done by writing to the address below.
+
+8. GOVERNING LAW AND DISPUTES
+
+${GOVERNING_LAW_CLAUSE}
+
+9. CONTACT
+
+Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
+
+Questions, a request about what Forge holds, or a withdrawal: ${FORGE_CONTACT_EMAIL}`;
 
 // Distinct from the four documents above in one important way: those are
 // aimed at an individual coach or athlete and (mostly) just describe what
@@ -286,3 +330,15 @@ ${GOVERNING_LAW_CLAUSE}
 This Application is provided by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
 
 Questions about this Agreement: ${FORGE_CONTACT_EMAIL}`;
+
+/** What the stored parental notice should become, given whatever is live. `null` means leave it
+ * alone -- an admin's own wording is theirs, and only a version Forge shipped is replaced.
+ *
+ * Whole-document hashes rather than the biometric document's prefix match: this one has never
+ * been edited in place by a migration, so every stored copy is byte-for-byte something Forge
+ * wrote, and an exact match is the stricter test. */
+export function nextParentalNotice(current: string | null): string | null {
+  if (current === null) return PARENTAL_NOTICE_DRAFT;
+  if (current === PARENTAL_NOTICE_DRAFT) return null;
+  return isShippedVersion(current, PARENTAL_NOTICE_PRIOR_SHIPPED) ? PARENTAL_NOTICE_DRAFT : null;
+}
