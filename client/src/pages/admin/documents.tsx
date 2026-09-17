@@ -227,9 +227,10 @@ export default function AdminDocuments() {
           <CardContent>
             <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
               <ShieldAlert className="h-4 w-4 shrink-0" />
-              Nothing on this page has been reviewed by counsel. Tier thresholds and retention
-              windows are real, current system behavior -- not a claim that the underlying
-              approach is legally sound.
+              Apart from the Video and Biometric Consent, which was built with a lawyer, nothing
+              on this page has been reviewed by counsel. Tier thresholds and retention windows are
+              real, current system behavior -- not a claim that the underlying approach is legally
+              sound.
             </p>
           </CardContent>
         </Card>
@@ -360,7 +361,9 @@ export default function AdminDocuments() {
               policy. Unlike the drafts above this one is LIVE: an adult agrees to it at signup or
               at the camera, and a guardian agrees to it for a minor at claim time, and the text
               below is snapshotted verbatim into each of those consent records. Editing it changes
-              what the next person agrees to. Still not reviewed by counsel.
+              what the next person agrees to -- and this is the one document here that HAS been
+              reviewed: built with a lawyer and supplied 2026-09-17. Treat a change to it like a
+              change to a contract, not an edit to a draft.
             </CardDescription>
           </CardHeader>
           <CardContent>

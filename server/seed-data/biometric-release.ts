@@ -5,8 +5,13 @@ import { isShippedVersion, BIOMETRIC_RELEASE_PRIOR_SHIPPED } from "./shipped-ver
 // biometric_waiver consent record (storage.recordBiometricRelease for an adult,
 // logGuardianConsents for a minor's guardian at claim time).
 //
-// NOT REVIEWED BY A LAWYER, same standing caveat as the signup agreement beside
-// it. What it replaces was not a safer version of that caveat -- it was
+// REVIEWED BY A LAWYER -- the one document here that has been. Scott built it with
+// counsel and supplied the text (2026-09-17), which is why it does not carry the
+// standing "not reviewed" caveat the documents beside it still do. Anything that
+// changes its wording from here is changing a reviewed document, so it wants the
+// same care as changing a contract rather than the care of editing a draft.
+//
+// What it replaces was not a safer version of that caveat -- it was
 // BIOMETRIC_WAIVER_DRAFT, whose first line read "DRAFT -- not reviewed by a
 // lawyer ... Do not treat it as legally sufficient", whose title ended in
 // "(DRAFT)", which carried two bracketed counsel questions in its visible body,

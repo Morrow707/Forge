@@ -1,8 +1,12 @@
 # Forge — video and biometric consent
 
-**For legal review.** Prepared 2026-09-16. Two parts: the document as it currently
-stands in the product, and the engineering facts behind each claim in it so they can
-be checked rather than taken on trust.
+**Reviewed.** Prepared 2026-09-16 for legal review; the document was subsequently
+built with a lawyer and supplied by the operator on 2026-09-17, so this is no longer
+a packet asking for review. It is kept as the record of what the reviewed document
+says and of the engineering facts behind each claim in it -- which is what a reviewer
+would need again if the text is ever revisited, and what anyone checking a claim
+against the software needs now. The document text below is asserted against the live
+constant by biometric-release.test.ts, so it cannot drift from what is in use.
 
 Forge is a training and coaching platform. **Its users include minors, including
 children under 13.** Every athlete under 18 is blocked from using the product until a
