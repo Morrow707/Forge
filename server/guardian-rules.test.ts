@@ -8,6 +8,7 @@ import {
 } from "@shared/schema";
 
 const routes = readFileSync(join(__dirname, "routes.ts"), "utf8");
+const storageSource = readFileSync(join(__dirname, "storage.ts"), "utf8");
 const storage = readFileSync(join(__dirname, "storage.ts"), "utf8");
 const auth = readFileSync(join(__dirname, "auth.ts"), "utf8");
 
@@ -134,7 +135,7 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     expect(section).not.toContain("updateProfileSchema");
   });
 
-  it("leaves exactly four guardian writes, all deliberate", () => {
+  it("leaves exactly five guardian writes, all deliberate", () => {
     // Camera tracking off, which is prospective and is the parental control the feature exists
     // for; asking for a removal, which somebody else answers; and signing off a research-consent
     // change the ATHLETE asked for.
@@ -160,6 +161,19 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     // athlete's record too. Taking back the permission itself is not a request, because a
     // permission somebody else can refuse to release was never really theirs.
     //
+    // The fifth is re-confirming research consent after FORGE changed the wording of the consent
+    // text. It is the same reasoning as the third, one step further: the third answers a question
+    // the athlete raised, this answers a question Forge raised. Neither originates.
+    //
+    // It is the one that came closest to breaching rule 3, and this test caught it doing so. As
+    // first written it took { athleteId, granted } for any linked athlete at any time -- which is
+    // a set-consent route with a re-consent label on it, exactly what "gives a guardian no way to
+    // originate a consent change" below forbids. It now refuses unless that athlete's stored
+    // consent is genuinely on superseded terms, so the only thing a guardian can do is answer a
+    // question that was already put to them. Without a guardian-side surface at all, a change to
+    // the consent wording would reach adults only, which for anybody under 18 is the same as not
+    // shipping it -- they cannot answer for themselves.
+    //
     // Anything else appearing here is a regression.
     const guardianWrites = [...routes.matchAll(/app\.(post|patch|put|delete)\(\s*\n?\s*"\/api\/guardian\/[^"]*"/g)];
     const paths = guardianWrites.map((m) => m[0].split('"')[1]);
@@ -168,6 +182,7 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
       "/api/guardian/athletes/:athleteId/tracking-opt-out",
       "/api/guardian/athletes/:athleteId/withdraw-consent",
       "/api/guardian/research-consent-requests/:id",
+      "/api/guardian/research-re-consent",
     ]);
   });
 
@@ -177,6 +192,12 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     const section = routes.slice(routes.indexOf("// ---------------- Guardian"));
     expect(section).not.toContain('app.put("/api/guardian/athletes/:athleteId/research-consent"');
     expect(routes).toContain('"/api/athlete/research-consent/request"');
+    // The re-consent route is an answer, not an origination, and what makes that true is a
+    // server-side check that there is an open question -- not the route's name. Assert the check
+    // itself: a re-consent handler that stopped looking at staleTerms would be a set-consent
+    // route for a guardian, reachable for any linked athlete at any time.
+    const reConsent = storageSource.slice(storageSource.indexOf("async reConfirmResearchConsentAsGuardian"));
+    expect(reConsent.slice(0, reConsent.indexOf("\n  },"))).toContain("staleTerms");
   });
 });
 

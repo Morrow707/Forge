@@ -183,7 +183,7 @@ import {
   searchKnowledgePassages,
   renderPassagesForPrompt,
 } from "./knowledge-retrieval";
-import { RESEARCH_CONSENT_TEXT } from "@shared/research-consent";
+import { RESEARCH_CONSENT_TEXT, researchConsentDisclosesDeletionRetention } from "@shared/research-consent";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
   MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
@@ -5568,6 +5568,83 @@ export const storage = {
       .orderBy(asc(researchConsentRequests.createdAt));
   },
 
+  /**
+   * Athletes of this guardian whose research consent is on superseded terms.
+   *
+   * A minor cannot answer this themselves, so without a guardian-side surface a
+   * change to the consent wording reaches nobody under 18 at all -- the new
+   * terms would apply only to adults, silently, which is the same as not
+   * shipping them. The guardian is the decision-maker here and does not need
+   * the minor to raise a request first: they are re-confirming a decision that
+   * was already theirs.
+   */
+  async listResearchReConsentsForGuardian(guardianId: number) {
+    const rows = await db
+      .select({ athleteId: users.id, athleteName: users.name, grantedAt: users.researchDataConsentAt })
+      .from(guardianLinks)
+      .innerJoin(users, eq(users.id, guardianLinks.athleteId))
+      .where(and(eq(guardianLinks.guardianId, guardianId), eq(users.researchDataConsent, true)))
+      .orderBy(asc(users.name));
+
+    const stale: typeof rows = [];
+    for (const row of rows) {
+      const text = await this.getResearchConsentDocumentText(row.athleteId);
+      if (!researchConsentDisclosesDeletionRetention(text)) stale.push(row);
+    }
+    return stale;
+  },
+
+  /**
+   * The guardian's answer to the above.
+   *
+   * Writes a fresh consent record either way, because a re-confirmation and a
+   * withdrawal are both decisions somebody made on a date about a specific
+   * document -- and the record IS the consent. Silently leaving the old record
+   * in place on a "yes" would mean the athlete stayed on the old terms while
+   * the screen said otherwise.
+   */
+  async reConfirmResearchConsentAsGuardian(
+    guardianId: number,
+    input: { athleteId: number; granted: boolean; ipAddress?: string; userAgent?: string },
+  ) {
+    const [link] = await db
+      .select({ athleteId: guardianLinks.athleteId })
+      .from(guardianLinks)
+      .where(
+        and(eq(guardianLinks.guardianId, guardianId), eq(guardianLinks.athleteId, input.athleteId)),
+      )
+      .limit(1);
+    if (!link) return { ok: false as const, message: "That athlete is not linked to you." };
+
+    // A GUARDIAN MAY ANSWER, NEVER ORIGINATE. Without this the route is a
+    // set-consent endpoint pointed at somebody else's record -- which is the
+    // rule-3 breach server/guardian-rules.test.ts exists to catch, and it
+    // caught it.
+    //
+    // What makes this an answer is that Forge asked: consent was already given,
+    // the wording changed underneath it, and the only thing on offer is to
+    // stand by that decision or take it back. An athlete on the current terms
+    // has no open question, so there is nothing here to answer and the route
+    // declines rather than quietly writing.
+    const status = await this.getResearchDataConsent(input.athleteId);
+    if (!status?.staleTerms) {
+      return {
+        ok: false as const,
+        message: "There is nothing waiting on you for that athlete.",
+      };
+    }
+
+    await this.setResearchDataConsent({
+      athleteId: input.athleteId,
+      granted: input.granted,
+      grantedByUserId: guardianId,
+      relayedFrom: "the athlete's own guardian, re-confirming in the app after the terms changed",
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    });
+    return { ok: true as const };
+  },
+
   /** The sign-off. Approving writes the consent with the GUARDIAN as grantor, so the consent
    * trail records an adult's decision rather than the minor's ask. Denying changes nothing
    * except the request's own status -- a refused ask must not be able to move consent. */
@@ -5621,15 +5698,49 @@ export const storage = {
     return { ok: true };
   },
 
+  /** The text this athlete's CURRENT research consent was given under, or null
+   * when they have never answered. The record is the only place it lives: the
+   * live users row carries a boolean and a date, not what was on screen. */
+  async getResearchConsentDocumentText(athleteId: number): Promise<string | null> {
+    const row = await db.query.consentRecords.findFirst({
+      where: and(
+        eq(consentRecords.userId, athleteId),
+        eq(consentRecords.consentType, "research_data_use"),
+      ),
+      orderBy: (c, { desc }) => [desc(c.createdAt)],
+      columns: { documentText: true },
+    });
+    return row?.documentText ?? null;
+  },
+
   async getResearchDataConsent(athleteId: number) {
     const row = await db.query.users.findFirst({
       where: eq(users.id, athleteId),
       columns: { researchDataConsent: true, researchDataConsentAt: true, dateOfBirth: true },
     });
     if (!row) return null;
+    // Only asked of somebody who is currently opted IN. Somebody opted out has
+    // nothing to re-confirm, and asking them again would read as pestering a
+    // person for an answer they already gave.
+    const staleTerms =
+      row.researchDataConsent &&
+      !researchConsentDisclosesDeletionRetention(
+        await this.getResearchConsentDocumentText(athleteId),
+      );
     return {
       granted: row.researchDataConsent,
       grantedAt: row.researchDataConsentAt,
+      // Consented under a version of the text that predates a change, so the
+      // agreement on file is narrower than what Forge now does. Today that is
+      // the section saying the scrubbed record survives account deletion: until
+      // they answer again, deleting their account still removes them from the
+      // mirror entirely, which is the deal they actually agreed to.
+      //
+      // Deliberately derived from the STORED TEXT rather than a flag set at
+      // migration time. A flag would have to be maintained by whoever next
+      // edits the consent wording, and they will not remember; this answers
+      // itself.
+      staleTerms,
       // Whether this athlete may answer for themselves, or whether it has to
       // come from a guardian. No date of birth on file is treated as a minor:
       // the safe assumption when the answer is unknown is the one that needs

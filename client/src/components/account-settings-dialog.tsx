@@ -611,6 +611,7 @@ function MyResearchConsentSection() {
     granted: boolean;
     requiresGuardian: boolean;
     grantedAt: string | null;
+    staleTerms: boolean;
   }>({ queryKey: ["/api/athlete/research-consent"] });
 
   const { data: consentText } = useQuery<{ text: string }>({
@@ -661,6 +662,52 @@ function MyResearchConsentSection() {
           out of everything prepared from that point on.
         </p>
       </div>
+
+      {/* THE TERMS CHANGED AFTER THEY SAID YES.
+          Shown above the controls, not as a toast or a blocking dialog. A consent
+          somebody is interrupted into giving is worth less than one they chose to give,
+          and there is nothing urgent here: until they answer, the narrower agreement
+          they actually made is the one that applies. So it waits where they already
+          come to change this, and says exactly what is different. */}
+      {status.staleTerms && (
+        <div className="space-y-2 rounded-md border border-amber-500/50 bg-amber-500/5 px-3 py-2.5">
+          <p className="text-sm font-semibold">What you agreed to has changed</p>
+          <p className="text-xs text-muted-foreground">
+            When you said yes, the only limit we named was that a report already sent
+            can't be recalled. We've added one: if you delete your account, the group
+            numbers stay -- age, sport, position and the training numbers, with nothing
+            in them that points back to you. Your account, your videos and anything that
+            identifies you still go.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {status.requiresGuardian
+              ? "Until a parent or guardian answers, the version you agreed to is the one that applies, and deleting your account would still remove you from everything."
+              : "Until you answer, the version you agreed to is the one that applies, and deleting your account would still remove you from everything."}
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowText((v) => !v)}
+            className="text-xs underline underline-offset-2 text-muted-foreground hover:text-foreground"
+          >
+            {showText ? "Hide" : "Read"} the new wording
+          </button>
+          {!status.requiresGuardian && (
+            <div className="flex flex-wrap gap-2 pt-0.5">
+              <Button size="sm" disabled={mutation.isPending} onClick={() => mutation.mutate(true)}>
+                I still agree
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={mutation.isPending}
+                onClick={() => mutation.mutate(false)}
+              >
+                Withdraw instead
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {status.requiresGuardian ? (
         // Under 18 the decision is a guardian's, but the ASK is the athlete's. Before this they

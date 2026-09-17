@@ -5326,6 +5326,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(await storage.getPendingResearchConsentRequest(currentUser(req).id));
   });
 
+  // RE-CONSENT, GUARDIAN SIDE. A minor cannot answer for themselves, so without
+  // this a change to the consent wording would reach adults only -- which is
+  // the same as not shipping it for everybody under 18.
+  app.get("/api/guardian/research-re-consent", requireGuardianAccess, async (req, res) => {
+    res.json(await storage.listResearchReConsentsForGuardian(currentUser(req).id));
+  });
+
+  app.post("/api/guardian/research-re-consent", requireGuardianAccess, async (req, res) => {
+    const parsed = z
+      .object({ athleteId: z.number().int().positive(), granted: z.boolean() })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "athleteId and granted are required" });
+    const result = await storage.reConfirmResearchConsentAsGuardian(currentUser(req).id, {
+      athleteId: parsed.data.athleteId,
+      granted: parsed.data.granted,
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
+    if (!result.ok) return res.status(404).json({ message: result.message });
+    res.json({ ok: true });
+  });
+
   // The guardian's side of the same request: see what has been asked, and sign it off or not.
   app.get("/api/guardian/research-consent-requests", requireGuardianAccess, async (req, res) => {
     res.json(await storage.listPendingResearchConsentRequestsForGuardian(currentUser(req).id));

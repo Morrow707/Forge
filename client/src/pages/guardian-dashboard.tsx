@@ -356,7 +356,8 @@ export default function GuardianDashboardPage() {
       </header>
 
       <main className="mx-auto max-w-2xl space-y-4 p-4">
-        <ResearchConsentRequests />
+        <ResearchReConsent />
+      <ResearchConsentRequests />
         {athletesFailed ? (
           <ReadFailed what="your athletes" onRetry={() => void refetchAthletes()} />
         ) : athletesLoading || !athletes ? (
@@ -787,6 +788,94 @@ export default function GuardianDashboardPage() {
       <ReportProblemDialog open={reportProblemOpen} onOpenChange={setReportProblemOpen} />
       <DeleteAccountDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen} />
     </div>
+  );
+}
+
+/** RE-CONSENT AFTER A CHANGE TO THE TERMS.
+ *
+ * Distinct from ResearchConsentRequests below, which answers an ask the MINOR made. Nobody asked
+ * for this one: the wording of the consent changed after the guardian said yes, so the agreement
+ * on file is narrower than what Forge now does, and the guardian is being shown the difference
+ * and asked again. It is their decision to re-make, not a request to approve, so it needs no
+ * request row and the minor is not involved in raising it.
+ *
+ * Until they answer, the narrower agreement is what applies -- deleting the account still removes
+ * that athlete from everything. That is why this informs rather than blocks: there is no unsafe
+ * state to prevent, and a consent somebody was cornered into giving is worth less than one they
+ * chose to give.
+ */
+function ResearchReConsent() {
+  const qc = useQueryClient();
+  const { data: athletes = [], isError, refetch } = useQuery<
+    { athleteId: number; athleteName: string | null; grantedAt: string | null }[]
+  >({ queryKey: ["/api/guardian/research-re-consent"] });
+
+  const answer = useMutation({
+    mutationFn: async (input: { athleteId: number; granted: boolean }) => {
+      await apiRequest("POST", "/api/guardian/research-re-consent", input);
+    },
+    onSuccess: (_d, input) => {
+      qc.invalidateQueries({ queryKey: ["/api/guardian/research-re-consent"] });
+      toast.success(input.granted ? "Recorded -- thank you" : "Withdrawn");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+  });
+
+  // A failed read here must not render as "nothing to answer" -- that is the whole shape this
+  // codebase has been clearing out, and it matters more on a consent surface than most.
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="py-6">
+          <ReadFailed what="anything waiting for your answer" onRetry={() => void refetch()} />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (athletes.length === 0) return null;
+
+  return (
+    <Card className="border-amber-500/50">
+      <CardHeader>
+        <CardTitle>What you agreed to has changed</CardTitle>
+        <CardDescription>
+          When you agreed your athlete's numbers could be used for research, the only limit we
+          named was that a report already sent can't be recalled. We've added one: if the account
+          is deleted, the group numbers stay -- age, sport, position and the training numbers,
+          with nothing in them that points back to your athlete. The account, the videos and
+          anything identifying still go. Until you answer, the version you agreed to is the one
+          that applies.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {athletes.map((a) => (
+          <div key={a.athleteId} className="rounded-md border border-border p-3">
+            <p className="text-sm">
+              <span className="font-semibold">{a.athleteName ?? "Your athlete"}</span> -- agreed{" "}
+              {a.grantedAt ? new Date(a.grantedAt).toLocaleDateString() : "previously"}.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                disabled={answer.isPending}
+                onClick={() => answer.mutate({ athleteId: a.athleteId, granted: true })}
+              >
+                I still agree
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={answer.isPending}
+                onClick={() => answer.mutate({ athleteId: a.athleteId, granted: false })}
+              >
+                Withdraw instead
+              </Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
