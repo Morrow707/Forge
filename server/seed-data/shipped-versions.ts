@@ -74,4 +74,9 @@ export const BIOMETRIC_RELEASE_PRIOR_SHIPPED = [
   "b1a705d735bedc0f2b2f5c3522fc2882500cfcc4f95e7618dc788fe38f31f6c5",
   // Gained the business address (f0adc47).
   "906fc9ad5600aa550f8b475d04c64ef1c8faa1c10a763ceff500906d6fdb5893",
+  // Titled "CONSENT AND RELEASE" while releasing nothing, and the only user-facing document
+  // with no governing law or dispute clause -- so the one a guardian agrees to about their
+  // child did not carry "nothing here waives a right that cannot lawfully be waived, including
+  // a right belonging to a person under 18". Both fixed; this is the text they replaced.
+  "e2f21ac408046074dfe8278ee6cceeece1b544b334d42582f17be023f4fe064f",
 ] as const;

@@ -27,7 +27,7 @@ describe("the pinned current versions", () => {
 
   it("biometric release", () => {
     expect(sha256(BIOMETRIC_RELEASE)).toBe(
-      "e2f21ac408046074dfe8278ee6cceeece1b544b334d42582f17be023f4fe064f",
+      "cefcad4207a9530a0690fab46b627369bdf7093a27c62b7999e9746c32263e7a",
     );
   });
 });

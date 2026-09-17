@@ -1,4 +1,4 @@
-import { FORGE_CONTACT_EMAIL, FORGE_POSTAL_ADDRESS, FORGE_LEGAL_ENTITY } from "@shared/contact";
+import { FORGE_CONTACT_EMAIL, FORGE_POSTAL_ADDRESS, FORGE_LEGAL_ENTITY, GOVERNING_LAW_CLAUSE } from "@shared/contact";
 import { isShippedVersion, BIOMETRIC_RELEASE_PRIOR_SHIPPED } from "./shipped-versions";
 
 // The video and biometric release actually agreed to, and snapshotted into every
@@ -43,9 +43,9 @@ import { isShippedVersion, BIOMETRIC_RELEASE_PRIOR_SHIPPED } from "./shipped-ver
 const DRAFT_NOTICE =
   "DRAFT -- not reviewed by a lawyer. This document is a starting point for legal review, not a finished, reliable Terms of Service. Do not treat it as legally sufficient until counsel has reviewed and approved it.";
 
-export const BIOMETRIC_RELEASE = `FORGE -- VIDEO AND BIOMETRIC CONSENT AND RELEASE
+export const BIOMETRIC_RELEASE = `FORGE -- VIDEO AND BIOMETRIC CONSENT
 
-This release covers video of an athlete training and the measurements Forge takes from it. It is separate from, and in addition to, Forge's Terms of Use and Privacy Policy. An adult athlete agrees to it for themselves. For an athlete under 18 it is agreed by a parent or legal guardian.
+This consent covers video of an athlete training and the measurements Forge takes from it. It is separate from, and in addition to, Forge's Terms of Use and Privacy Policy. An adult athlete agrees to it for themselves. For an athlete under 18 it is agreed by a parent or legal guardian.
 
 1. WHAT IS RECORDED AND MEASURED
 
@@ -101,11 +101,15 @@ Withdrawal operates from the point it takes effect and does not undo processing 
 
 8. HOW THIS CONSENT IS GIVEN AND RECORDED
 
-This release is agreed in the app, by an affirmative action that is not pre-ticked and not bundled with any other agreement. Forge stores the exact text of this document as it stood at that moment, together with the date and time, the IP address and the browser or device it was agreed from. That record is the evidence of consent; there is no separate signature page.
+This consent is agreed in the app, by an affirmative action that is not pre-ticked and not bundled with any other agreement. Forge stores the exact text of this document as it stood at that moment, together with the date and time, the IP address and the browser or device it was agreed from. That record is the evidence of consent; there is no separate signature page.
 
 Declining is a real choice and carries no penalty. Sets still log, with reps and weight, without the camera measurements.
 
-9. CONTACT
+9. GOVERNING LAW AND DISPUTES
+
+${GOVERNING_LAW_CLAUSE}
+
+10. CONTACT
 
 Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
 

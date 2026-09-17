@@ -7,7 +7,7 @@ import {
   nextBiometricRelease,
 } from "./biometric-release";
 import { BIOMETRIC_WAIVER_DRAFT } from "./legal-documents-draft";
-import { FORGE_CONTACT_EMAIL } from "@shared/contact";
+import { FORGE_CONTACT_EMAIL, GOVERNING_LAW_CLAUSE } from "@shared/contact";
 
 describe("migrating the stored biometric release", () => {
   it("recognises the draft that shipped", () => {
@@ -123,5 +123,37 @@ describe("every document a user is asked to accept is reachable", () => {
     expect(claim).toContain('docType="privacy_policy"');
     expect(claim).toContain('docType="biometric_waiver"');
     expect(claim).not.toContain('href="/legal"');
+  });
+});
+
+describe("what the document is, and is not", () => {
+  it("does not call itself a release", () => {
+    // It was titled "CONSENT AND RELEASE" and released nothing -- nine sections of consent, no
+    // claim given up, nothing surrendered. Forge has exactly ONE document that asks somebody to
+    // surrender a right, and that separation is deliberate: see assumption-of-risk.ts's header.
+    // A consent that calls itself a release invites the question of whether a guardian can
+    // release a child's claim, which this document does not ask and cannot answer.
+    expect(BIOMETRIC_RELEASE).toContain("FORGE -- VIDEO AND BIOMETRIC CONSENT");
+    expect(BIOMETRIC_RELEASE).not.toContain("CONSENT AND RELEASE");
+    expect(BIOMETRIC_RELEASE).toContain("This consent covers video of an athlete training");
+  });
+
+  it("carries the governing law clause the other documents carry", () => {
+    // It was the ONLY user-facing document without one -- and it is the document a parent agrees
+    // to about camera capture of their child. The last sentence is the one that was missing.
+    expect(BIOMETRIC_RELEASE).toContain(GOVERNING_LAW_CLAUSE);
+    expect(BIOMETRIC_RELEASE).toContain(
+      "Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.",
+    );
+  });
+
+  it("still says the true things about the software", () => {
+    // The sections a template could not have written. Each matches the code, and that is the
+    // part of this document worth protecting through any rewording of it.
+    expect(BIOMETRIC_RELEASE).toContain("It records no audio at all");
+    expect(BIOMETRIC_RELEASE).toContain("that access is written to a log");
+    expect(BIOMETRIC_RELEASE).toContain("any group of fewer than ten people withheld");
+    expect(BIOMETRIC_RELEASE).toContain("there is no separate signature page");
+    expect(BIOMETRIC_RELEASE).toContain("Declining is a real choice and carries no penalty");
   });
 });
