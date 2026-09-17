@@ -146,6 +146,14 @@ import {
   TIER2_VIDEO_RETENTION_DAYS,
   type PrivacyTier,
 } from "@shared/privacy-tiers";
+import {
+  REQUIRED_DOCUMENTS,
+  documentAudienceFor,
+  documentNeedsAction,
+  documentStatus,
+  type DocumentKind,
+  type DocumentStatus,
+} from "@shared/required-documents";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { promises as fsPromises } from "node:fs";
 import path from "node:path";
@@ -3287,6 +3295,38 @@ async function markSkillEntriesCompleted(
   for (const e of skillEntries) {
     if (done.has(`${e.assignmentId}:${e.programDayId}:${e.date}`)) e.completed = true;
   }
+}
+
+
+/** One athlete's documents, as one line per kind.
+ *
+ * Module-level rather than a method so the roster view below can reuse it against rows it has
+ * already fetched in bulk, instead of running a query per athlete. The status rule itself lives
+ * in shared/required-documents.ts, so this and the athlete's own page cannot disagree.
+ *
+ * A pending upload outranks nothing: the newest row for a kind that is still in play is the one
+ * that counts, which is why rejected rows are skipped here -- a rejection means the document has
+ * to be replaced, and the checklist should read as though nothing arrived.
+ */
+function summariseWaivers(
+  rows: { kind: string; reviewStatus: string; expiresOn: string | null; issuingOrganization: string | null; id: number }[],
+  today: string,
+) {
+  return externalWaiverKindEnum.enumValues.map((kind) => {
+    const current = rows.find(
+      (r) => r.kind === kind && (r.reviewStatus === "accepted" || r.reviewStatus === "pending_review"),
+    );
+    return {
+      kind,
+      // Expiry is read here rather than written by a nightly job: the date is on the row, the
+      // question is only ever asked when somebody looks, and a job that rewrites rows on a
+      // schedule is a second thing that can be wrong about them.
+      status: documentStatus(current, today),
+      issuingOrganization: current?.issuingOrganization ?? null,
+      expiresOn: current?.expiresOn ?? null,
+      waiverId: current?.id ?? null,
+    };
+  });
 }
 
 export const storage = {
@@ -25613,25 +25653,133 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
 
   /** What an athlete has on file, as one line per kind, for a coach's roster view and the
    * athlete's own account page. Says nothing about enforceability -- see the schema comment. */
-  async externalWaiverSummary(athleteId: number) {
-    const rows = await this.listExternalWaiversForAthlete(athleteId);
+  /** THE CHASE LIST: every athlete on a coach's roster who is missing, expiring or expired.
+   *
+   * The documents feature could record what arrived and could show one athlete their own
+   * checklist. What nothing could do was answer the question a coach actually has -- "who on my
+   * roster is not covered" -- so a red cross only existed if the person it belonged to happened
+   * to open their own page. A checklist nobody is shown is a checklist nobody completes.
+   *
+   * ONE QUERY FOR THE WHOLE ROSTER, not one per athlete. A coach with sixty athletes would
+   * otherwise mean sixty round trips to render a page that is mostly green.
+   *
+   * Everyone here is rostered by definition, so they all get the rostered checklist -- the
+   * free-agent variant exists for athletes with no coach, who by definition are not on one.
+   */
+  async documentStatusForRoster(coachId: number) {
+    const roster = await this.getRosterForCoach(coachId);
+    const athleteIds = roster.map((a) => a.id);
+    if (athleteIds.length === 0) return [];
+
+    const rows = await db
+      .select({
+        id: externalWaivers.id,
+        athleteId: externalWaivers.athleteId,
+        kind: externalWaivers.kind,
+        reviewStatus: externalWaivers.reviewStatus,
+        expiresOn: externalWaivers.expiresOn,
+        issuingOrganization: externalWaivers.issuingOrganization,
+      })
+      .from(externalWaivers)
+      .where(inArray(externalWaivers.athleteId, athleteIds))
+      .orderBy(desc(externalWaivers.createdAt));
+
+    const byAthlete = new Map<number, typeof rows>();
+    for (const row of rows) {
+      const list = byAthlete.get(row.athleteId) ?? [];
+      list.push(row);
+      byAthlete.set(row.athleteId, list);
+    }
+
     const today = new Date().toISOString().slice(0, 10);
-    return externalWaiverKindEnum.enumValues.map((kind) => {
-      const current = rows.find(
-        (r) => r.kind === kind && (r.reviewStatus === "accepted" || r.reviewStatus === "pending_review"),
-      );
-      // Expiry is read here rather than written by a nightly job: the date is on the row, the
-      // question is only ever asked when somebody looks, and a job that rewrites rows on a
-      // schedule is a second thing that can be wrong about them.
-      const lapsed = !!current?.expiresOn && current.expiresOn < today;
+    const checklist = REQUIRED_DOCUMENTS[documentAudienceFor({ role: "athlete", hasCoach: true })];
+
+    return roster.map((athlete) => {
+      const summary = summariseWaivers(byAthlete.get(athlete.id) ?? [], today);
+      const byKind = new Map(summary.map((s) => [s.kind as DocumentKind, s]));
+      const documents = checklist.map((doc) => {
+        const line = byKind.get(doc.kind);
+        return {
+          kind: doc.kind,
+          label: doc.label,
+          required: doc.required,
+          status: (line?.status ?? "missing") as DocumentStatus,
+          expiresOn: line?.expiresOn ?? null,
+        };
+      });
       return {
-        kind,
-        status: current ? (lapsed ? ("expired" as const) : current.reviewStatus) : ("missing" as const),
-        issuingOrganization: current?.issuingOrganization ?? null,
-        expiresOn: current?.expiresOn ?? null,
-        waiverId: current?.id ?? null,
+        athleteId: athlete.id,
+        athleteName: athlete.name,
+        documents,
+        // Only REQUIRED rows count as outstanding. A recommended document that nobody has is
+        // not a gap, and counting it would make every athlete permanently red -- which is how a
+        // checklist stops being read at all.
+        outstanding: documents.filter((d) => d.required && documentNeedsAction(d.status)).length,
       };
     });
+  },
+
+  /** Has this athlete already been chased recently?
+   *
+   * Read off the notifications themselves rather than a new column. The notification IS the
+   * chase, so it is the honest record of when one was sent, and a second source of truth for
+   * "when did we last ask" is a second thing that can be wrong.
+   */
+  async athletesChasedSince(athleteIds: number[], since: Date): Promise<Set<number>> {
+    if (athleteIds.length === 0) return new Set();
+    const rows = await db
+      .select({ userId: notifications.userId })
+      .from(notifications)
+      .where(
+        and(
+          inArray(notifications.userId, athleteIds),
+          eq(notifications.type, "documents_requested"),
+          gte(notifications.createdAt, since),
+        ),
+      );
+    return new Set(rows.map((r) => r.userId));
+  },
+
+  /** Ask an athlete (and whoever is responsible for them) for what is outstanding.
+   *
+   * THE GUARDIAN IS NOTIFIED TOO, and for a minor they are usually the only one who can act:
+   * a 15-year-old cannot produce their own medical clearance or sign an emergency
+   * authorization. Telling only the athlete would be a request sent to the wrong person.
+   */
+  async requestDocuments(input: {
+    coachId: number;
+    athleteId: number;
+    athleteName: string;
+    missing: string[];
+  }): Promise<void> {
+    const coach = await this.getUser(input.coachId);
+    const from = coach?.name ? `${coach.name} ` : "";
+    const list = input.missing.join(", ");
+    await this.createNotification(
+      input.athleteId,
+      "documents_requested",
+      "Documents needed",
+      `${from}needs these on file: ${list}. You can upload a photo or a PDF from your Documents page.`,
+      "/documents",
+    );
+    const guardians = await db
+      .select({ guardianId: guardianLinks.guardianId })
+      .from(guardianLinks)
+      .where(eq(guardianLinks.athleteId, input.athleteId));
+    for (const g of guardians) {
+      await this.createNotification(
+        g.guardianId,
+        "documents_requested",
+        `Documents needed for ${input.athleteName}`,
+        `${from}needs these on file for ${input.athleteName}: ${list}. You can upload a photo or a PDF from their Documents page.`,
+        "/documents",
+      );
+    }
+  },
+
+  async externalWaiverSummary(athleteId: number) {
+    const rows = await this.listExternalWaiversForAthlete(athleteId);
+    return summariseWaivers(rows, new Date().toISOString().slice(0, 10));
   },
 
   async getOpenMediaRemovalRequests(): Promise<

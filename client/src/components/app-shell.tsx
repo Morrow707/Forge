@@ -50,6 +50,7 @@ import {
   HeartPulse,
   Video,
   FileCheck2,
+  FileWarning,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -123,6 +124,9 @@ const coachNav: NavItem[] = [
   // Same page for every role, different checklist -- see shared/required-documents.ts. A coach
   // is asked for credentials (background check, certification, CPR), not for a waiver.
   { href: "/documents", label: "Documents", icon: FileCheck2, overflow: true },
+  // Their ROSTER's documents, which is a different question from their own -- who is not
+  // covered, and asking them for it.
+  { href: "/coach/athlete-documents", label: "Athlete Documents", icon: FileWarning, overflow: true },
   { href: "/coach/about", label: "About", icon: Info, overflow: true },
 ];
 

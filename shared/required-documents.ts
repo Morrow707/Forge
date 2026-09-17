@@ -119,3 +119,57 @@ export const DOCUMENT_LABEL: Record<DocumentKind, string> = {
   liability_insurance: "Liability insurance",
   other: "Other",
 };
+
+/** How long before an expiry date a document starts asking to be renewed.
+ *
+ * A clearance that lapses tonight and is noticed tomorrow is the same as never having had one:
+ * the gap is on the day it matters. Thirty days is enough to book a physical or re-run a
+ * background check without it being so early that the warning becomes wallpaper.
+ */
+export const EXPIRY_WARNING_DAYS = 30;
+
+export type DocumentStatus =
+  | "missing"
+  | "pending_review"
+  | "accepted"
+  | "rejected"
+  | "expiring_soon"
+  | "expired";
+
+/** The single rule for "where does this document stand", shared by the athlete's own checklist
+ * and the coach's roster view.
+ *
+ * It lives here rather than in storage.ts because two screens that answer the same question
+ * differently is how a coach comes to believe an athlete is covered when their own page says
+ * otherwise. Pure, so it is tested without a database.
+ *
+ * `today` and `expiresOn` are both plain YYYY-MM-DD. Compared as strings on purpose -- an ISO
+ * date sorts lexicographically, and parsing them into Date objects is how a document expires a
+ * day early for somebody in a different time zone.
+ */
+export function documentStatus(
+  current: { reviewStatus: string; expiresOn?: string | null } | undefined,
+  today: string,
+): DocumentStatus {
+  if (!current) return "missing";
+  if (current.expiresOn) {
+    if (current.expiresOn < today) return "expired";
+    if (current.expiresOn <= addDays(today, EXPIRY_WARNING_DAYS)) return "expiring_soon";
+  }
+  if (current.reviewStatus === "accepted") return "accepted";
+  if (current.reviewStatus === "rejected") return "rejected";
+  return "pending_review";
+}
+
+/** YYYY-MM-DD plus n days, via UTC so it cannot be shifted by the server's own zone. */
+export function addDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const t = Date.UTC(y, m - 1, d) + days * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/** Does this status need somebody to do something? Expired and expiring count; a rejection
+ * counts because the upload has to be replaced. */
+export function documentNeedsAction(status: DocumentStatus): boolean {
+  return status !== "accepted" && status !== "pending_review";
+}

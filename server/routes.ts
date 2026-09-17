@@ -6807,6 +6807,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  /** THE CHASE LIST. Who on this coach's roster is not covered. */
+  app.get("/api/coach/documents-status", requireRole("coach"), async (req, res, next) => {
+    try {
+      res.json(await storage.documentStatusForRoster(currentUser(req).id));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** Ask for what is outstanding -- one athlete, or everyone who needs something.
+   *
+   * ONE ASK PER ATHLETE PER DAY. The whole roster is one button, so without a floor the obvious
+   * way to use this screen is to press it again whenever it still looks red -- and a parent who
+   * gets the same request four times reads Forge as broken and stops reading any of them. An
+   * athlete chased within the last 24 hours is skipped and counted, so the coach is told what
+   * happened rather than being quietly given a smaller number.
+   */
+  app.post("/api/coach/documents-status/request", requireRole("coach"), async (req, res, next) => {
+    try {
+      const user = currentUser(req);
+      const parsed = z
+        .object({ athleteIds: z.array(z.number().int()).max(500).optional() })
+        .safeParse(req.body ?? {});
+      if (!parsed.success) return res.status(400).json({ message: "Bad request" });
+
+      const statuses = await storage.documentStatusForRoster(user.id);
+      const wanted = parsed.data.athleteIds;
+      // Omitted means "everyone outstanding" -- the mass send. An explicit list is still
+      // filtered by the roster, so an id that is not this coach's simply is not there.
+      const targets = statuses.filter(
+        (s) => s.outstanding > 0 && (!wanted || wanted.includes(s.athleteId)),
+      );
+
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const alreadyChased = await storage.athletesChasedSince(
+        targets.map((t) => t.athleteId),
+        dayAgo,
+      );
+
+      let sent = 0;
+      for (const target of targets) {
+        if (alreadyChased.has(target.athleteId)) continue;
+        await storage.requestDocuments({
+          coachId: user.id,
+          athleteId: target.athleteId,
+          athleteName: target.athleteName,
+          missing: target.documents
+            .filter((d) => d.required && d.status !== "accepted" && d.status !== "pending_review")
+            .map((d) => d.label),
+        });
+        sent += 1;
+      }
+      res.json({ sent, skipped: targets.length - sent, outstanding: targets.length });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   /** The admin review queue. Carries athlete names, deliberately -- accepting a legal document
    * about a named child without knowing which child is not review. See
    * listExternalWaiversForReview's own comment on why this is not an analytics surface. */

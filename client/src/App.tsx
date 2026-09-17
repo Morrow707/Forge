@@ -97,6 +97,7 @@ const AdminExercises = lazy(withLoadTimeout(() => import("@/pages/admin/exercise
 const AdminCoachExercises = lazy(withLoadTimeout(() => import("@/pages/admin/coach-exercises")));
 const AdminRemovalRequests = lazy(withLoadTimeout(() => import("@/pages/admin/removal-requests")));
 const AdminWaivers = lazy(withLoadTimeout(() => import("@/pages/admin/waivers")));
+const CoachAthleteDocuments = lazy(withLoadTimeout(() => import("@/pages/coach/athlete-documents")));
 // One page for every role -- the upload mechanics are shared and the checklist is not.
 // See shared/required-documents.ts.
 const DocumentsPage = lazy(withLoadTimeout(() => import("@/pages/documents")));
@@ -487,6 +488,10 @@ function Router() {
         </Route>
         <Route path="/documents">
           <AuthedRoute component={DocumentsPage} />
+        </Route>
+        {/* The coach's view of everyone ELSE's documents. /documents above is their own. */}
+        <Route path="/coach/athlete-documents">
+          <ProtectedRoute role="coach" component={CoachAthleteDocuments} />
         </Route>
         <Route path="/admin/query-engine">
           <ProtectedRoute role="admin" component={AdminQueryEngine} />
