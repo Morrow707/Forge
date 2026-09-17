@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
   PARENTAL_NOTICE_DRAFT,
   EULA_DRAFT,
-  INSTITUTIONAL_AGREEMENT_DRAFT,
 } from "./legal-documents-draft";
 import { SIGNUP_AGREEMENT } from "./signup-agreement";
 import { BIOMETRIC_RELEASE, BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX } from "./biometric-release";
@@ -52,16 +53,19 @@ describe("a document Forge shows somebody", () => {
 });
 
 describe("the two that keep their warning, on purpose", () => {
-  it("the institutional agreement still says it was never drafted", () => {
-    // Different claim from the others, and a true one: this was assembled from patterns in the
-    // consumer terms as an outline, not written. A school is asked to ACCEPT it, so stripping
-    // the warning would dress an outline up as a contract for somebody to sign. It keeps the
-    // warning until it is a real document -- which is a decision about the document, not about
-    // its wording.
-    expect(INSTITUTIONAL_AGREEMENT_DRAFT).toMatch(/NOT been drafted by a lawyer/);
-    expect(INSTITUTIONAL_AGREEMENT_DRAFT).toMatch(
-      /Do not send this to a real institutional customer/,
+  it("the institutional agreement outline is gone entirely", () => {
+    // It used to keep a warning saying it was never drafted by a lawyer and must not be sent to
+    // a customer. Both were true, which is why the document is now deleted rather than carrying
+    // the warning: the Rocket Lawyer Service Agreement supersedes it, and a document nobody may
+    // send is more dangerous sitting in the admin list -- one click from a school's inbox --
+    // than absent. The signed contract is an external waiver a coach uploads; only the seeded
+    // outline is gone.
+    const source = fs.readFileSync(
+      path.join(process.cwd(), "server/seed-data/legal-documents-draft.ts"),
+      "utf8",
     );
+    expect(source).not.toMatch(/export const INSTITUTIONAL_AGREEMENT_DRAFT/);
+    expect(source).not.toMatch(/INSTITUTIONAL SERVICE AGREEMENT \(DRAFT\)/);
   });
 
   it("the superseded biometric draft is gone, and its eraser is not", () => {

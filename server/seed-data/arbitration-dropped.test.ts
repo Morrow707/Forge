@@ -9,7 +9,6 @@ import {
   TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
   PARENTAL_NOTICE_DRAFT,
-  INSTITUTIONAL_AGREEMENT_DRAFT,
   EULA_DRAFT,
 } from "./legal-documents-draft";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./assumption-of-risk";
@@ -30,7 +29,6 @@ const PUBLISHED: Array<[string, string]> = [
   ["terms of service", TERMS_OF_SERVICE_DRAFT],
   ["privacy policy", PRIVACY_POLICY_DRAFT],
   ["parental notice", PARENTAL_NOTICE_DRAFT],
-  ["institutional agreement", INSTITUTIONAL_AGREEMENT_DRAFT],
   ["eula", EULA_DRAFT],
   ["assumption of risk", ASSUMPTION_OF_RISK_RELEASE],
   ["ai terms of use", AI_TERMS_OF_USE],

@@ -38,6 +38,9 @@ const DOC_LABEL: Record<LegalDocType, string> = {
   privacy_policy: "Privacy Policy",
   biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
   parental_notice: "Notice to Parent or Guardian",
+  // Retired: nothing seeds or renders this any more (see the comment where its
+  // card used to be). The key stays because LegalDocType is the enum and
+  // Postgres cannot drop a value from one.
   institutional_agreement: "Institutional Agreement",
   ai_terms_of_use: "AI Terms of Use",
   eula: "End User License Agreement",
@@ -49,6 +52,9 @@ const CONSENT_LABEL: Record<string, string> = {
   biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
   coach_coppa_consent: "Coach/Program Consent (Tier 1 agent)",
   parental_notice_ack: "Parental Notice Acknowledgment",
+  // KEEP. Unlike the document, these are real consent records: coaches who
+  // clicked accept on the old in-app clickwrap before it was retired. Dropping
+  // the label would render their history as a bare enum value.
   institutional_agreement: "Institutional Agreement",
 };
 
@@ -394,29 +400,14 @@ export default function AdminDocuments() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              Institutional Agreement
-              <Badge variant="secondary" className="text-[10px]">
-                SUPERSEDED -- shown to nobody
-              </Badge>
-            </CardTitle>
-            <CardDescription>
-              Kept as a record, not presented anywhere. This was an outline assembled from patterns
-              in the consumer terms, and an org coach was once asked to click "accept" on it --
-              a document whose own first line told them not to treat it as a binding agreement.
-              The real Service Agreement is now a two-party contract signed per customer, with the
-              clauses this never had: who obtains guardian consent, FERPA, indemnity for a consent
-              failure, and a liability cap. Forge records that the signed copy exists (an upload of
-              kind "institutional_agreement"), the same way it records a school's own participation
-              waiver. Nothing in the app accepts this text any more.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <LegalDocEditor docType="institutional_agreement" />
-          </CardContent>
-        </Card>
+        {/* NO INSTITUTIONAL AGREEMENT CARD. The outline that lived here is deleted --
+            see server/seed-data/legal-documents-draft.ts. It was assembled from patterns in
+            the consumer terms, never drafted, and its own first line said not to send it to a
+            customer; the Rocket Lawyer Service Agreement supersedes it. Keeping it visible
+            "as a record" left a document nobody may send one click from a school's inbox.
+            What Forge records now is that a SIGNED copy exists, as an upload of kind
+            "institutional_agreement" -- the same way it records a school's own participation
+            waiver. That is the coach's Documents page, not this one. */}
 
         {/* These two were inside the institutional card, so they wore its DRAFT badge and its
             "do not send to a real institution as binding" warning -- neither of which is about

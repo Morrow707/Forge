@@ -3805,7 +3805,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "privacy_policy",
     "biometric_waiver",
     "parental_notice",
-    "institutional_agreement",
+    // No "institutional_agreement". The seeded outline under that name is
+    // deleted (see legal-documents-draft.ts); the institutional contract is a
+    // signed PDF a coach uploads, not a document an admin edits here.
     "eula",
     "assumption_of_risk",
   ] as const;
@@ -3816,7 +3818,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     privacy_policy: "Privacy Policy",
     biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
     parental_notice: "Notice to Parent or Guardian",
-    institutional_agreement: "Institutional Service Agreement",
     eula: "End User License Agreement",
     assumption_of_risk: "Assumption of Risk and Release",
   };

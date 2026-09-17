@@ -5,7 +5,6 @@ import {
   TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
   PARENTAL_NOTICE_DRAFT,
-  INSTITUTIONAL_AGREEMENT_DRAFT,
   EULA_DRAFT,
 } from "./legal-documents-draft";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./assumption-of-risk";
@@ -22,7 +21,6 @@ const DOCUMENTS: Array<[string, string]> = [
   ["privacy policy", PRIVACY_POLICY_DRAFT],
   ["video and biometric consent", BIOMETRIC_RELEASE],
   ["parental notice", PARENTAL_NOTICE_DRAFT],
-  ["institutional agreement", INSTITUTIONAL_AGREEMENT_DRAFT],
   ["eula", EULA_DRAFT],
   ["assumption of risk", ASSUMPTION_OF_RISK_RELEASE],
   // Not published yet, but it carries an address and a postal address, so it is covered by the

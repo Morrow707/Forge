@@ -232,65 +232,27 @@ Forge is operated by ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS}.
 
 Questions, a request about what Forge holds, or a withdrawal: ${FORGE_CONTACT_EMAIL}`;
 
-// Distinct from the four documents above in one important way: those are
-// aimed at an individual coach or athlete and (mostly) just describe what
-// Forge already does. This one is aimed at a paying institutional customer
-// (a school, club, or program on an org billing tier -- see
-// shared/billing-tiers.ts) and is meant to actually shift liability onto
-// that institution, not just disclose behavior. That makes it a real
-// negotiated-contract instrument, not a clickwrap disclosure -- the stakes
-// of shipping unreviewed language are meaningfully higher here than for the
-// other four. Do not present this to an actual paying institution, or
-// describe it to one as binding, until a lawyer has drafted or approved the
-// substantive terms, not just proofread this draft. Presented for
-// acceptance by whoever holds the institution's primary coach account (see
-// storage.setTrackingOptOut's "primary, not staff" pattern for how that's
-// resolved elsewhere) -- there being no separate institutional-user
-// concept in Forge yet, that account is standing in for the institution
-// itself here, on the assumption that whoever an admin assigned org billing
-// to is also who's authorized to accept an agreement on the institution's
-// behalf. That assumption itself needs confirming, not just the clauses.
-export const INSTITUTIONAL_AGREEMENT_DRAFT = `${DRAFT_NOTICE} This document in particular has NOT been drafted by a lawyer -- it was assembled from patterns in Forge's own consumer Terms of Service as a starting outline only. Do not send this to a real institutional customer as a proposed or binding agreement.
+/* INSTITUTIONAL_AGREEMENT_DRAFT WAS HERE, AND IS DELETED ON PURPOSE.
+ *
+ * It was never a lawyer's work -- its own banner said so: "assembled from
+ * patterns in Forge's own consumer Terms of Service as a starting outline
+ * only. Do not send this to a real institutional customer." It has been
+ * superseded by a Service Agreement drafted through Rocket Lawyer, which
+ * Forge and the institution sign outside the app; a coach uploads the signed
+ * copy and it is stored as an external waiver of kind
+ * "institutional_agreement" (shared/schema.ts), which is a DIFFERENT thing
+ * that shares the name and is not going anywhere.
+ *
+ * A document nobody may send is worse than no document: it sat in the admin
+ * documents list looking like the institutional contract, one careless click
+ * from being emailed to a school.
+ *
+ * The legal_document_type enum keeps its "institutional_agreement" value --
+ * Postgres cannot drop one, and an installation's history may reference it --
+ * but nothing seeds it any more and reconcile-schema deletes the stored row.
+ * server/seed-data/institutional-agreement-retired.test.ts holds this shut.
+ */
 
-FORGE -- INSTITUTIONAL SERVICE AGREEMENT (DRAFT)
-
-1. PARTIES AND SCOPE
-This Institutional Service Agreement ("Agreement") supplements, and does not replace, the individual Terms of Service that every coach and athlete using the Service under your program separately accepts. It applies specifically to your organization's ("Institution's," "you're") use of Forge as a paying institutional customer -- a school, club, or program on an organizational billing plan -- and takes effect when an authorized representative of the Institution accepts it.
-
-2. AUTHORITY TO ACCEPT
-By accepting this Agreement, you represent that you have the authority to bind the Institution to its terms. If you're not sure whether you have that authority, don't accept on the Institution's behalf -- have whoever does accept it instead.
-
-3. PARENTAL/GUARDIAN CONSENT IS THE INSTITUTION'S RESPONSIBILITY
-Forge's own signup flow captures a parent or guardian's email for a minor athlete and, for an athlete under 13, requires a coach to provision the account rather than allowing direct self-signup (see the Terms of Service and the Video and Biometric Consent for what that involves). That is not a substitute for whatever consent, notice, or waiver the Institution is independently required to obtain from a minor athlete's parent or guardian under applicable law (including COPPA) or the Institution's own policies before that athlete uses Forge as part of the Institution's program. The Institution is solely responsible for obtaining and documenting that consent. [Placeholder -- counsel should confirm exactly what allocation of this responsibility is enforceable, and whether any additional Forge-side mechanism is needed to support it, rather than assuming a contract clause alone resolves it.]
-
-4. INDEMNIFICATION
-The Institution agrees to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) the Institution's failure to obtain any parental or guardian consent required under Section 3; (b) the Institution's use of the Service outside the scope described in the Terms of Service; or (c) the Institution's own negligent supervision of its athletes' use of the Service. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. [Placeholder -- this is the core liability-shifting mechanism of the whole Agreement and the single clause most in need of real counsel drafting; the consumer Terms of Service's own indemnification section carries a similar, still-unresolved flag for minor athletes, and that issue is not solved by moving the obligation onto the Institution instead.]
-
-5. DATA HANDLING
-Forge's handling of data collected from the Institution's athletes -- what's collected, how long it's kept, and what's deleted automatically -- is governed by the Privacy Policy and the Video and Biometric Consent, unchanged by this Agreement. If the Institution is a school subject to FERPA or a similar student-records law, the Institution is responsible for its own compliance with that law with respect to its use of Forge; this Agreement does not make Forge a "school official" or equivalent under any such law unless a separate, specific written agreement says so. [Placeholder -- if the Institution's use case actually requires FERPA school-official status or a signed data-processing agreement, that is separate, unbuilt work, not something this paragraph accomplishes by itself.]
-
-6. TERM
-This Agreement is in effect for as long as the Institution's account remains on an organizational billing plan, and does not apply retroactively to anything that happened before the Institution accepted it.
-
-7. GOVERNING LAW
-Same as the Terms of Service: the laws of the State of Arizona, without regard to its conflict-of-laws provisions, with exclusive jurisdiction and venue in the state and federal courts located in Maricopa County, Arizona.`;
-
-// The app's end-user licence, kept separate from TERMS_OF_SERVICE_DRAFT above
-// because the two answer different questions: the Terms govern the Forge
-// SERVICE (your account, your coach, your data), this governs the SOFTWARE
-// licence. Apple requires that distinction to carry specific clauses whenever
-// an app supplies its own licence instead of using the standard one -- the
-// acknowledgement that the licence is with Forge and not Apple, Apple's
-// disclaimer of maintenance and warranty, and Apple as a third-party
-// beneficiary entitled to enforce it. Those are sections 1, 5, 6 and 11 below,
-// and their absence is the kind of thing that gets a submission rejected long
-// after the binary itself is fine.
-//
-// Forge already HAS an externally drafted EULA, which is where the address
-// legal@forgeperformance.com came from -- a domain matching nothing Forge owns.
-// Seeding this draft does not overwrite it: paste the real document into the
-// admin Documents tab and the seed leaves it alone from then on, the same
-// guard every other document here has.
 export const EULA_DRAFT = `FORGE -- END USER LICENSE AGREEMENT
 
 This Agreement is between you and Forge Performance Systems LLC ("Forge"). It covers the Forge application software (the "Application"). Your use of the Forge service, your account, and your data is governed separately by the Terms of Service and the Privacy Policy.

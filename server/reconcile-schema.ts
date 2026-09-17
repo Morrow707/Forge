@@ -1794,6 +1794,25 @@ CREATE TABLE IF NOT EXISTS "legal_documents" (
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
 
+-- Remove the retired institutional-agreement outline from any installation
+-- that already seeded it. Deleting the constant only stops NEW installs from
+-- getting it; a database seeded before this still holds the text, and it would
+-- go on appearing in the admin documents list as though it were the
+-- institutional contract -- which it never was. Its own banner said it must
+-- not be sent to a customer, and a document nobody may send is more dangerous
+-- sitting in a list than absent.
+--
+-- The enum value stays: Postgres cannot drop one, and nothing needs it gone.
+-- The signed contract a coach uploads is an external_waiver of the same name
+-- and is untouched by this.
+-- ::text, NOT a bare enum literal. The ALTER TYPE ... ADD VALUE above runs in
+-- this same transaction, and Postgres rejects using a value added in the same
+-- transaction that added it ("unsafe use of new value"): it fails the whole
+-- reconcile, which fails the deploy. Comparing the column as text sidesteps the
+-- check without needing the value to be committed first. Found by running this
+-- against a throwaway database, not by reading it.
+DELETE FROM "legal_documents" WHERE "doc_type"::text = 'institutional_agreement';
+
 -- Coach-personal widget visibility (shared/schema.ts users.hiddenWidgets).
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "hidden_widgets" json;
 

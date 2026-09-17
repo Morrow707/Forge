@@ -4,7 +4,6 @@ import {
   TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
   PARENTAL_NOTICE_DRAFT,
-  INSTITUTIONAL_AGREEMENT_DRAFT,
   EULA_DRAFT,
 } from "./legal-documents-draft";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./assumption-of-risk";
@@ -18,11 +17,20 @@ const DRAFT_FOR_TYPE: Record<string, string> = {
   // straight from nextBiometricRelease(null).
   biometric_waiver: BIOMETRIC_RELEASE,
   parental_notice: PARENTAL_NOTICE_DRAFT,
-  institutional_agreement: INSTITUTIONAL_AGREEMENT_DRAFT,
   eula: EULA_DRAFT,
   assumption_of_risk: ASSUMPTION_OF_RISK_RELEASE,
   ai_terms_of_use: AI_TERMS_OF_USE,
 };
+
+/** Enum values that deliberately seed NOTHING. Written down rather than
+ * deleted from the check, so "this type has no text" stays a decision somebody
+ * made and not an omission the test stopped noticing.
+ *
+ * institutional_agreement: the outline under that name is deleted (see
+ * legal-documents-draft.ts). The real contract is signed outside the app and
+ * uploaded as an external waiver. Postgres cannot drop an enum value, so the
+ * value remains with nothing behind it. */
+const RETIRED: ReadonlySet<string> = new Set(["institutional_agreement"]);
 
 describe("legal document types", () => {
   it("has starting text for every type in the enum", () => {
@@ -31,7 +39,16 @@ describe("legal document types", () => {
     // A type present in the enum with no draft seeds an empty document that an admin finds blank
     // with no indication anything is missing, so the enum is the list and this is the check.
     for (const docType of legalDocumentTypeEnum.enumValues) {
+      if (RETIRED.has(docType)) continue;
       expect(DRAFT_FOR_TYPE[docType], `no draft text for "${docType}"`).toBeTruthy();
+    }
+  });
+
+  it("seeds nothing for a retired type", () => {
+    // The other direction: a retired type that quietly regrows seed text is how
+    // a document nobody may send comes back into the admin list.
+    for (const docType of RETIRED) {
+      expect(DRAFT_FOR_TYPE[docType], `"${docType}" is retired but has text`).toBeUndefined();
     }
   });
 
