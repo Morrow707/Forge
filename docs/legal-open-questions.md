@@ -52,13 +52,47 @@ advance. See CLAUDE.md, "Settled questions that keep getting re-litigated".
 Kept rather than deleted because it has been raised as a gap more than once. The
 record of the answer is what stops it being raised a third time.
 
+## 5. Verifiable parental consent for under-13s -- OPEN, and not a document
+
+**The one question here that is about a MECHANISM rather than wording**, which is why it
+was missing from this file until now: everything else on this list is a clause somebody
+can read, so it travels with the documents automatically. How consent is actually
+verified travels with nothing.
+
+What happens today. An athlete under 18 cannot use Forge until a parent or legal
+guardian claims their own linked account; until then the athlete signs in to a screen
+telling them to wait. Claiming it writes four consent records -- `guardian_coppa_consent`
+for an under-13, plus the biometric release, the assumption of risk and the privacy
+policy -- each snapshotting the exact document text at that moment. The Notice to Parent
+or Guardian is the document the under-13 consent is recorded against, and it says so in
+its own first paragraph.
+
+The gate is real: the account does not function until it happens. That is better
+evidence than a signature on a form nobody checks.
+
+**The question is whether clicking a link in an email is verifiable enough.** COPPA
+requires VERIFIABLE parental consent for an under-13, and the email address was typed by
+a coach or by the child. The FTC treats plain email as one of the weaker methods; "email
+plus" expects a second confirming step. `consentTypeEnum` in shared/schema.ts already
+records the corroborating path -- a card transaction that notifies the cardholder is an
+FTC-approved method -- and is careful to call it CORROBORATING, not a substitute. With
+billing off during beta, that corroboration does not exist yet, so verification rests on
+the email link alone.
+
+Ask counsel directly: is this sufficient for an under-13, and if not, what second step do
+they want? Three answers are foreseeable and all are actionable -- a follow-up
+confirmation step, a small authorising card transaction, or not accepting under-13s at
+all until it is settled. The third is a product decision, not a technicality:
+`tier1_under13` is a live tier and an under-13 can sign up today.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
 biometric consent plus the engineering facts behind each of its claims.
 
 **Four documents under review:** the Terms of Service, the Privacy Policy, the EULA,
-and the Notice to Parent or Guardian. It was five; the Institutional Service Agreement
+and the Notice to Parent or Guardian. That last one is also the parental consent
+document, so question 5 should be put to whoever reads it, at the same time. It was five; the Institutional Service Agreement
 outline is gone, superseded by the Rocket Lawyer Service Agreement, which is a signed
 contract rather than a document in this repo -- questions 2 and 3 travel with it and
 should reach whoever reviews it.
