@@ -7834,11 +7834,27 @@ export const repBreakdownEntrySchema = z.object({
   // How long into the concentric phase peak velocity was reached -- see
   // bar-tracking.ts's RepBreakdown comment. Optional since sets logged
   // before this field existed won't have it.
-  timeToPeakVelocitySeconds: z.number().optional(),
+  //
+  // NULLABLE, AND LEAVING THAT OFF REJECTED WHOLE WORKOUTS.
+  //
+  // ".optional()" accepts undefined and refuses null, and this field is null on any rep whose
+  // trace was too coarse to locate the peak (MIN_SAMPLES_TO_PEAK -- the client type says
+  // "number | null" and its own comment says a consumer must render the absence). So one shaky
+  // rep in a set made the POST 400 with "Expected number, received null", and because the whole
+  // day is submitted as one payload, the ENTIRE log was refused: every exercise, not just the
+  // tracked set. The client then classified a 400 as a permanent rejection -- correctly, it is
+  // one -- so it was never queued for retry either, and the athlete's session was gone.
+  //
+  // The reasoning that produced ".optional()" is right there in the old comment and it was only
+  // half the question: it covers a field that is ABSENT on an older row, and says nothing about
+  // a field that is PRESENT and null on a new one.
+  timeToPeakVelocitySeconds: z.number().optional().nullable(),
   // See bar-tracking.ts's RepBreakdown.eai comment -- OVR's own "EAI" column, reverse-
   // engineered as peakVelocityMps / timeToPeakVelocitySeconds. Optional for the same reason as
   // timeToPeakVelocitySeconds above: sets logged before this field existed won't have it.
-  eai: z.number().optional(),
+  // Nullable for the same reason as it too -- it is that value's divisor, so it is null exactly
+  // when that one is.
+  eai: z.number().optional().nullable(),
   startT: z.number(),
   endT: z.number(),
   depthDeg: z.number().optional().nullable(),
