@@ -134,10 +134,54 @@ change is wrong.
   diagnostics blob, and an entry that arrived without one says so. A capture
   that lost its own explanation has to be visible AS that, because "invisible"
   and "never happened" are the same thing to whoever is reading the page.
+- **Report membership is decided by the SET, never by the program row beside it.**
+  The membership test used to also require `programExercises.trackingLevel` to be
+  present and not `'none'`. That column is live and editable, and turning
+  tracking off on an exercise is exactly what somebody does after a few takes
+  come back unusable -- so that one click removed every past capture on it from
+  the report, the failed ones that prompted it first among them. The takes worth
+  reading about were the takes it hid. It was redundant too: a hand-logged set
+  has no camera-derived column and never reaches the filter. Anything that
+  narrows membership by what the program says TODAY is the same bug again.
+  `server/capture-diagnostics-round-trip.itest.ts` turns tracking off after the
+  set is logged and asserts the entry is still there.
+- **One end-to-end test backs the two scans.** The dialog scan and the schema
+  round-trip are both text scans -- they catch the two ways this has actually
+  broken, and neither runs a line of the pipeline. Between the dialog and the
+  report sit a zod parse, an insert, a json column and a WHERE clause, and the
+  `trackingLevel` hole above lived in the last of those with both scans green.
+  The itest submits a REFUSED take through the real parse and reads it back off
+  the report. Keep all three; they fail for different reasons.
 - **The tracking report is server-side.** It is served from `storage.ts`
   through `/api/admin/tracking-report/entries`, so a fix to that query ships on
   a Render deploy, not in a TestFlight build. Worth saying out loud when
   someone is testing report changes by installing a build.
+
+## A set that was logged and a set that reached the server
+
+- **A transport failure must never be an `ApiError`.** `fetch()` rejects with a
+  bare TypeError for anything that never reached the server. Wrapping that in a
+  readable message was right; wrapping it in an `ApiError` with status 0 was not
+  and it cost a logged set: the autosave classifies with
+  `err instanceof ApiError && err.status !== 401 && err.status < 500`, status 0
+  satisfies both halves, so a save that failed because the phone blinked was
+  filed as a payload the server would keep refusing -- thrown instead of queued,
+  never retried, and the offline rescue that exists for exactly this case could
+  not run. The rule is structural rather than a better number: `NetworkError`
+  extends `Error`, so every `instanceof ApiError` branch in the app behaves as
+  it did before the wrapper existed, including ones nobody thought to check.
+- **`client/src/lib/transport-failure-is-retryable.test.ts` guards it two ways,
+  on purpose.** Three assertions scan the source, because the classifier lives
+  inline in `workout.tsx` and cannot be reached without rendering the screen.
+  Three more stub `fetch` into rejecting and evaluate that same condition
+  against the error that actually comes out. A regex is satisfied by a file
+  containing the right words; the bug was about what `apiRequest` threw.
+- **The debug console logs every save outcome, and that stays.** `logDebug("SAVE", ...)`
+  fires on the POST succeeding, on it failing with the status, on the
+  classification, and on a queue. Whether a set reached the server was the first
+  question asked when one disappeared and there was no way to ask it -- the
+  cause sat undetected for four builds. There is no console to read on an
+  iPhone, so this is the only instrument.
 
 ## The AI knowledge library
 

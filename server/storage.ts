@@ -21187,12 +21187,24 @@ ${catalog}`;
             isNotNull(workoutSetEntries.barPathDeviationCm),
             isNotNull(workoutSetEntries.jumpHeightCm),
           ),
-          // Still excluded where the program row IS present and says tracking is off: that
-          // is a real "this exercise is not camera-tracked" statement, unlike a missing row.
-          or(
-            isNull(programExercises.trackingLevel),
-            sql`${programExercises.trackingLevel} != 'none'`,
-          ),
+          // WHAT THE PROGRAM ROW SAYS TODAY IS NOT WHAT THE CAMERA DID THEN.
+          //
+          // There used to be a second condition here excluding any set whose program row is
+          // present and says trackingLevel = 'none', on the reasoning that this is a real
+          // "not camera-tracked" statement rather than a missing row. It reads correctly and
+          // it silently threw away captures.
+          //
+          // trackingLevel is live and editable. A coach who turns tracking off on an exercise
+          // -- which is exactly what someone does after a few takes come back unusable --
+          // removed every past capture on it from this report in the same click, failed ones
+          // included. So the takes that prompted the change were the takes it hid, and the page
+          // that exists to explain them went empty at the moment it was needed. Measured, not
+          // reasoned: server/capture-diagnostics-round-trip.itest.ts turns tracking off after
+          // the set is logged and the entry is gone.
+          //
+          // It was also already redundant. What it was for -- an athlete hand-logging a tracked
+          // exercise without ever tapping Record -- is covered by the membership test above:
+          // that set has no camera-derived column at all and never gets this far.
         ),
       )
       .orderBy(desc(workoutSetEntries.id))
