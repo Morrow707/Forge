@@ -75,10 +75,20 @@ describe("the tracking report's membership test", () => {
   });
 
   it("still excludes a set that was never put through the camera", () => {
-    // Membership is any camera-derived column. A hand-logged set has none of them, which is
-    // what keeps this report from filling with sets nobody pointed a camera at -- and is why
-    // the program-row clause above was redundant as well as harmful.
-    expect(fn).toContain("isNotNull(workoutSetEntries.trackingDiagnostics)");
-    expect(fn).toContain("isNotNull(workoutSetEntries.peakVelocityMps)");
+    // Membership is any camera-derived column, and it is now built from the one classified list
+    // in shared/schema.ts rather than four columns named here. It used to name four, which
+    // between them describe bar-path and jump captures and nothing else -- see
+    // shared/camera-columns-are-classified.test.ts, which is where that list is actually
+    // guarded. What this file still pins is the SHAPE: the membership test reads the list.
+    expect(fn).toContain("CAMERA_DERIVED_SET_COLUMNS.map");
+    // A hand-logged set has none of those columns, which is what keeps this report from filling
+    // with sets nobody pointed a camera at -- and is why the program-row clause was redundant.
+  });
+
+  it("does not inner-join the set's identity away", () => {
+    // exerciseId on the log entry is nullable, so an inner join here does not produce a row with
+    // a missing name -- it produces no row, for a capture that really happened.
+    expect(fn).not.toContain("innerJoin(exercises");
+    expect(fn).toContain("leftJoin(exercises");
   });
 });

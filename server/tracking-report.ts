@@ -1062,7 +1062,11 @@ function buildEntry(
     return {
       date: r.date,
       athleteLabel: labelFor(r.athleteId),
-      exerciseName: r.exerciseName,
+      // NAMED, NOT DROPPED. exerciseId on the log entry is nullable, so a set whose exercise
+      // could not be resolved at save time arrives here with no name. The query used to inner-join
+      // it away, which made a real capture invisible; showing it as unidentified says what is
+      // actually true, the same way an entry that arrived without diagnostics says so.
+      exerciseName: r.exerciseName ?? "(exercise no longer resolves)",
       setNumber: r.setNumber,
       reps: r.reps,
       weight: r.weight,

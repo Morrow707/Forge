@@ -4,6 +4,7 @@ import { db } from "./db";
 import { eq } from "drizzle-orm";
 import {
   programExercises,
+  workoutLogEntries as logEntries,
   submitWorkoutLogSchema,
   workoutLogEntries,
   workoutLogs,
@@ -198,6 +199,46 @@ describe("a capture that failed reaches the admin tracking report", () => {
     const after = await storage.getRecentTrackedSetsForAdmin(50);
     expect(after, "the capture happened; a later program edit cannot un-happen it").toHaveLength(1);
     expect((after[0].trackingDiagnostics as typeof refusedTake).outcome).toBe(
+      "empty_no_clean_read",
+    );
+  });
+
+  it("shows a capture in a mode whose metrics are not velocity or jump height", async () => {
+    // FIVE MODES WERE INVISIBLE HERE. Membership asked about four columns -- diagnostics, peak
+    // velocity, bar path deviation, jump height -- which describe bar-path and jump captures and
+    // nothing else. A kettlebell swing, a med-ball throw, a golf or baseball swing, a sprint and
+    // a sled push write none of them, so those captures never reached the page that exists to
+    // explain a capture, and an absent row reads exactly like a mode nobody filmed.
+    const ctx = await setup();
+    const kbTake = payload(ctx);
+    const set = kbTake.entries[0].sets[0] as Record<string, unknown>;
+    delete set.trackingDiagnostics;
+    set.kbSwingPeakSpeedMps = 3.4;
+    set.kbSwingPeakHeightCm = 142;
+    await storage.submitWorkoutLog(
+      ctx.athlete.id,
+      submitWorkoutLogSchema.parse(kbTake) as never,
+    );
+
+    const entries = await storage.getRecentTrackedSetsForAdmin(50);
+    expect(entries, "a swing capture is a capture").toHaveLength(1);
+  });
+
+  it("shows a capture whose exercise no longer resolves, named rather than dropped", async () => {
+    // workoutLogEntries.exerciseId is nullable -- submitWorkoutLog writes
+    // `resolvedExerciseId ?? fallbackExerciseId ?? null`. The report inner-joined exercises on
+    // it, so a set that captured fine and then lost its exercise identity was not a row with a
+    // missing name, it was not a row at all.
+    const ctx = await setup();
+    await storage.submitWorkoutLog(
+      ctx.athlete.id,
+      submitWorkoutLogSchema.parse(payload(ctx)) as never,
+    );
+    await db.update(logEntries).set({ exerciseId: null });
+
+    const entries = await storage.getRecentTrackedSetsForAdmin(50);
+    expect(entries).toHaveLength(1);
+    expect((entries[0].trackingDiagnostics as typeof refusedTake).outcome).toBe(
       "empty_no_clean_read",
     );
   });

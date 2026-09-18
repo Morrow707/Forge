@@ -145,6 +145,23 @@ change is wrong.
   narrows membership by what the program says TODAY is the same bug again.
   `server/capture-diagnostics-round-trip.itest.ts` turns tracking off after the
   set is logged and asserts the entry is still there.
+- **Membership is EVERY camera-derived column, from one classified list.** It was four --
+  diagnostics, peak velocity, bar path deviation, jump height -- which between them
+  describe bar-path and jump captures and nothing else. Kettlebell swing, med ball,
+  the golf/baseball swing, sprint and sled push write none of the four, so five
+  capture modes never appeared on this page at all, and the page gave no sign:
+  an absent row and a mode nobody filmed look identical. `CAMERA_DERIVED_SET_COLUMNS`
+  in `shared/schema.ts` is now the single list, and
+  `shared/camera-columns-are-classified.test.ts` reads the table's real columns and
+  fails on any that is in neither it nor `NON_CAMERA_SET_COLUMNS` -- so a new capture
+  mode cannot skip the report. `formCheckVideoUrl` stays OUT deliberately: a
+  hand-uploaded form video is not a capture.
+- **Nothing about the set's identity is inner-joined.** `workoutLogEntries.exerciseId`
+  is nullable (`resolvedExerciseId ?? fallbackExerciseId ?? null`), and the report
+  inner-joined `exercises` on it -- which does not produce a row with a missing name,
+  it produces no row, for a capture that really happened. It is a LEFT join and the
+  entry reads "(exercise no longer resolves)". Three silent drops have now been found
+  in this one query; treat any narrowing of it as guilty until tested.
 - **One end-to-end test backs the two scans.** The dialog scan and the schema
   round-trip are both text scans -- they catch the two ways this has actually
   broken, and neither runs a line of the pipeline. Between the dialog and the
