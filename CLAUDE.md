@@ -277,6 +277,46 @@ files, most of them fine. A ratchet with thirty false positives is worse than
 none, because people stop reading it. This section is the substitute; if
 somebody finds a reliable way to detect the shape, a scan beats a paragraph.
 
+## Every legal document ALREADY EXISTS. Nothing needs writing.
+
+Written down after an hour was spent generating a second EULA in Rocket Lawyer
+for a document Forge has had since 2026-09-16, live at /eula. The cause was a
+list headed "four documents under review", which meant "these need a lawyer's
+eyes" and read as "these need producing". Do not repeat that: when asked what
+legal work is left, say the state of each document before naming any task.
+
+**Nine documents, all with usable text, none carrying draft language**
+(`server/seed-data/documents-are-not-drafts.test.ts` enforces the last part):
+
+| Document | Where |
+|---|---|
+| Terms of Service | `legal-documents-draft.ts` |
+| Privacy Policy | `legal-documents-draft.ts` |
+| Notice to Parent or Guardian | `legal-documents-draft.ts` |
+| EULA | `legal-documents-draft.ts` |
+| Terms of Use (signup) | `signup-agreement.ts` |
+| Video and Biometric Consent | `biometric-release.ts` |
+| Assumption of Risk | `assumption-of-risk.ts` |
+| AI Terms of Use | `ai-terms-of-use-draft.ts` |
+| Research consent | `shared/research-consent.ts` |
+
+The `_DRAFT` suffixes are historical variable names, not banners. The remaining
+`DRAFT --` strings in the repo are the `from` side of LIVE_DOCUMENT_PATCHES,
+which strip that language out of documents an older installation stored; they
+have to stay.
+
+**The only legal work left is REVIEW**: four documents plus five questions to
+counsel (`docs/legal-open-questions.md`), and two blanks Scott has to fill in
+the Rocket Lawyer Service Agreement.
+
+**Do not regenerate a document in Rocket Lawyer to "improve" one of these.** A
+generic template is a worse fit, not a better one. The EULA is the proof: the
+Rocket Lawyer version licenses "one copy on one computer", forbids multi-user
+networks (a roster IS one), offers an archival copy on non-hard-drive media,
+refunds "exclusive of shipping and handling", carries NONE of the five
+Apple-required clauses, and has an entire-agreement clause broad enough to
+argue it supersedes the Terms, the Privacy Policy and the biometric consent.
+
 ## Settled questions that keep getting re-litigated
 
 Written down because they have come up more than once and been answered the
