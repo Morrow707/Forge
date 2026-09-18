@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock, Repeat, LineChart } from "lucide-react";
 import type { Exercise } from "@shared/schema";
+import { ReadFailed } from "@/components/read-failed";
 
 type TrackingLevel =
   | "none"
@@ -146,7 +147,7 @@ export function CoachDayEditDialog({
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const { data, isLoading } = useQuery<DayDetail>({
+  const { data, isLoading, isError, refetch } = useQuery<DayDetail>({
     queryKey: ["/api/coach/program-days", programDayId],
     queryFn: () => getJson(`/api/coach/program-days/${programDayId}`),
     enabled: open && programDayId != null,
@@ -407,7 +408,15 @@ export function CoachDayEditDialog({
             )}
           </DialogHeader>
 
-          {isLoading || !data ? (
+          {/* Fifth instance of the hydrate-in-an-effect shape (see CLAUDE.md). The
+              effect fills title and exercises from `data`, and Save PUTs the whole day
+              back -- so an editor rendered on a failed read would offer to write an
+              empty day over one with exercises in it. `!data` happens to cover the
+              failure here, which turns it into the other symptom: a spinner that never
+              resolves. Both are fixed by refusing to open until the read lands. */}
+          {isError ? (
+            <ReadFailed what="this day" onRetry={() => void refetch()} />
+          ) : isLoading || !data ? (
             <div className="h-40 animate-pulse rounded-md bg-surface" />
           ) : (
             <div className="space-y-4">

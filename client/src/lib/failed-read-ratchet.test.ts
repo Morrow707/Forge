@@ -53,10 +53,6 @@ function offenders(): string[] {
 
 /** Known offenders, newest sweep. ONLY EVER REMOVE FROM THIS LIST. */
 const KNOWN = new Set<string>([
-  "components/app-shell.tsx",
-  "components/calendar-view.tsx",
-  "components/coach-day-edit-dialog.tsx",
-  "pages/admin/knowledge-base.tsx",
   "pages/coach/analytics.tsx",
   "pages/workout.tsx",
 ]);

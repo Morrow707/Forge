@@ -13,6 +13,7 @@ import { KNOWLEDGE_DOMAINS } from "@shared/knowledge-domains";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Upload, Trash2, Search, AlertTriangle, BookOpen, ScanText } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 // The assistants a source can serve. A source can carry several: an energy
 // availability chapter is honestly both nutrition and strength, and forcing
@@ -70,7 +71,7 @@ export function KnowledgeBaseContent() {
   const [transcribeTarget, setTranscribeTarget] = useState<Source | null>(null);
   const [readingSource, setReadingSource] = useState<Source | null>(null);
 
-  const { data: sources = [] } = useQuery<Source[]>({
+  const { data: sources = [], isError: sourcesFailed, refetch: refetchSources } = useQuery<Source[]>({
     queryKey: ["/api/admin/knowledge-sources"],
     queryFn: () => getJson("/api/admin/knowledge-sources"),
     // A transcription pass writes its progress to the source row, so the
@@ -91,7 +92,7 @@ export function KnowledgeBaseContent() {
     (s) => s.status === "transcribing" || s.status === "extracting",
   );
 
-  const { data: conflicts = [] } = useQuery<Conflict[]>({
+  const { data: conflicts = [], isError: conflictsFailed } = useQuery<Conflict[]>({
     queryKey: ["/api/admin/knowledge-conflicts"],
     queryFn: () => getJson("/api/admin/knowledge-conflicts"),
   });
@@ -330,6 +331,13 @@ export function KnowledgeBaseContent() {
           </CardContent>
         </Card>
 
+        {/* A conflicts card that renders nothing on failure says the library has no
+            contradictions in it, which is the whole question this card exists to answer. */}
+        {conflictsFailed && (
+          <p className="text-sm text-muted-foreground">
+            We couldn't check for contradictions. That isn't the same as there being none.
+          </p>
+        )}
         {conflicts.length > 0 && (
           <Card className="border-amber-500/50">
             <CardHeader>
@@ -428,7 +436,16 @@ export function KnowledgeBaseContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {sources.length === 0 ? (
+            {/* "Nothing ingested yet" over a library of transcribed books is how somebody
+                decides to re-upload one -- which re-runs transcription across every page
+                and charges for it a second time. */}
+            {sourcesFailed ? (
+              <ReadFailed
+                what="the knowledge library"
+                onRetry={() => void refetchSources()}
+                className="flex flex-col items-start gap-2 text-left"
+              />
+            ) : sources.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nothing ingested yet.</p>
             ) : (
               sources.map((s) => (

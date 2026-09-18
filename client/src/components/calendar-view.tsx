@@ -22,6 +22,7 @@ import {
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/read-failed";
 import {
   ChevronLeft,
   ChevronRight,
@@ -433,7 +434,7 @@ function DayPreviewChevron({ open, onToggle, label }: { open: boolean; onToggle:
  * after that (a day's prescription doesn't change underneath you
  * mid-glance). */
 function DayPreviewList({ fetchUrl }: { fetchUrl: string }) {
-  const { data, isLoading } = useQuery<DayPreviewExercise[]>({
+  const { data, isLoading, isError, refetch } = useQuery<DayPreviewExercise[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
     staleTime: Infinity,
@@ -443,6 +444,14 @@ function DayPreviewList({ fetchUrl }: { fetchUrl: string }) {
     <div className="space-y-1 border-t border-border p-2.5">
       {isLoading ? (
         <div className="h-12 animate-pulse rounded bg-surface" />
+      ) : isError ? (
+        // staleTime: Infinity means a failure sticks for the whole session, so this one
+        // does not quietly come right on the next glance -- the retry is the way back.
+        <ReadFailed
+          what="this day's exercises"
+          onRetry={() => void refetch()}
+          className="flex flex-col items-center gap-1.5 py-1 text-center text-xs"
+        />
       ) : !data?.length ? (
         <p className="py-1 text-center text-xs text-muted-foreground">Nothing prescribed here yet.</p>
       ) : (

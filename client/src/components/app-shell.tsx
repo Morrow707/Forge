@@ -408,7 +408,9 @@ export function AppShell({
   // requireFreeAgent in routes.ts) -- the coach is the athlete's guidance
   // now, not the AI -- so leaving either tab visible would just lead to a
   // 403 instead of actually going away like it's supposed to.
-  const { data: coaches } = useQuery<{ id: number }[]>({
+  const { data: coaches, isError: coachesFailed, refetch: refetchCoaches } = useQuery<
+    { id: number }[]
+  >({
     queryKey: ["/api/athlete/coaches"],
     enabled: user?.role === "athlete",
   });
@@ -419,6 +421,13 @@ export function AppShell({
   // actually says they have one.
   const isFreeAgent = user?.role === "athlete" && coaches !== undefined && coaches.length === 0;
   const coachStatusKnown = user?.role !== "athlete" || coaches !== undefined;
+  // A FAILED read is also "not known", and the conservative nav above is still the right
+  // answer for it -- a nav entry must never point somewhere the athlete cannot go. What
+  // was missing is that the holdback then lasts forever: five items are simply absent,
+  // with nothing to say why or any way to get them back short of restarting the app.
+  // This is the one place in this sweep where the existing behaviour was already right
+  // and only its silence was wrong.
+  const navHeldBackByFailure = user?.role === "athlete" && coachesFailed;
 
   const nav = (
     user?.role === "coach"
@@ -1049,6 +1058,15 @@ export function AppShell({
                   </Link>
                 );
               })}
+              {navHeldBackByFailure && (
+                <button
+                  type="button"
+                  onClick={() => void refetchCoaches()}
+                  className="flex items-center gap-1.5 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Some sections are hidden -- tap to retry
+                </button>
+              )}
               {user?.role === "coach" && (
                 <Link
                   href="/coach/coaches-corner"
