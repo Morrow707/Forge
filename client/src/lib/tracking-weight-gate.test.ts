@@ -43,22 +43,42 @@ describe("recording a tracked set", () => {
 // LEFT join -- so a set that captured cleanly and then had its program day edited underneath it
 // (which nulls programExerciseId, by that join's own design) vanished from the report entirely.
 describe("the tracking report's membership test", () => {
-  const fn = storage.slice(
-    storage.indexOf("async getRecentTrackedSetsForAdmin"),
-    storage.indexOf("async getForceVelocityProfileForAthlete"),
-  );
+  // COMMENTS STRIPPED, or this scan reads the explanation as the thing explained: the query
+  // now carries a paragraph on why it does not filter by trackingLevel, and naming the column
+  // to say so is not the same as consulting it. Same lesson as the read ratchet, where the
+  // component that FIXES a bug quoted it and got reported as a case of it.
+  const fn = storage
+    .slice(
+      storage.indexOf("async getRecentTrackedSetsForAdmin"),
+      storage.indexOf("async getForceVelocityProfileForAthlete"),
+    )
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
 
-  it("keeps a tracked set whose program row is gone", () => {
-    expect(fn).toContain("isNull(programExercises.trackingLevel)");
-    // The old, silently-excluding form.
+  it("does not consult the program row at all", () => {
+    // THIS ASSERTION USED TO RUN THE OTHER WAY, twice, and both forms were wrong.
+    //
+    // First `isNotNull(programExercises.trackingLevel)`, which dropped a set whose program day
+    // had since been edited. That was replaced by an isNull/!= 'none' pair, pinned here, which
+    // still dropped a set whose exercise a coach had since switched tracking OFF on -- the one
+    // edit somebody makes after a few takes come back unusable, so it hid exactly the captures
+    // that prompted it. Measured in server/capture-diagnostics-round-trip.itest.ts.
+    //
+    // There is no third version of a condition over this column that is right. What the camera
+    // did is a fact about the SET; trackingLevel is a live setting that says what the program
+    // asks for today. So the whole clause is gone, and the rule is that it stays gone.
+    // The column is still SELECTED -- the report shows what the program asks for today beside
+    // what the camera did, which is useful context. What must not come back is a WHERE over it.
+    expect(fn).not.toContain("isNull(programExercises.trackingLevel)");
     expect(fn).not.toContain("isNotNull(programExercises.trackingLevel)");
+    expect(fn).not.toContain("!= 'none'");
   });
 
   it("still excludes a set that was never put through the camera", () => {
+    // Membership is any camera-derived column. A hand-logged set has none of them, which is
+    // what keeps this report from filling with sets nobody pointed a camera at -- and is why
+    // the program-row clause above was redundant as well as harmful.
     expect(fn).toContain("isNotNull(workoutSetEntries.trackingDiagnostics)");
-  });
-
-  it("still excludes an exercise whose program row says tracking is off", () => {
-    expect(fn).toContain("!= 'none'");
+    expect(fn).toContain("isNotNull(workoutSetEntries.peakVelocityMps)");
   });
 });
