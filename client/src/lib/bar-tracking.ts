@@ -1117,8 +1117,15 @@ export function summarizeTrackedSet(
   // typical means -- a single or double rep set, or a trace with nothing in it. The absolute
   // gate is the fallback for exactly that case, which is the one where a constant is all
   // anybody has.
+  // The floor is MIN_REP_AMPLITUDE_FLOOR_CM, not the movement's own gate. The movement gate is
+  // an estimate of how far this lift travels and is exactly the number the relative gate exists
+  // to stop depending on; the floor is the separate, weaker claim that nothing under 8cm is a
+  // rep of anything. Passing the movement gate here would put the absolute threshold back in
+  // charge and bring its failure -- an arched bench whose real reps sit under it, merged into
+  // their neighbours -- back with it.
   const phases =
-    segmentPhasesRelative(ySmoothed) ?? segmentPhases(ySmoothed, minAmplitudeM);
+    segmentPhasesRelative(ySmoothed, MIN_REP_AMPLITUDE_FLOOR_CM / 100) ??
+    segmentPhases(ySmoothed, minAmplitudeM);
   if (phases.length === 0) return null;
 
   const phaseStats = phases.map((phase) => {
@@ -2159,6 +2166,42 @@ const RELATIVE_REP_AMPLITUDE_FRACTION = 0.4;
 // itself as typical and always pass.
 const MIN_REVERSALS_FOR_RELATIVE_GATE = 3;
 
+// WHICH REVERSALS COUNT AS "TYPICAL", AND WHY THE PLAIN MEDIAN WAS THE WRONG ONE.
+//
+// The exploratory pass is deliberately permissive -- it enumerates every reversal, noise
+// included -- and the gate was then a fraction of the MEDIAN of all of them. That is only the
+// size of a rep if real reps are the majority of what the pass returned, and they are not: at a
+// gate of 2% of span a bench set returns five distinct populations, and the reps are the
+// smallest of the five by count.
+//
+// Measured on a ten-rep bench trace with a sticking-point dip, the exploratory pass returned 52
+// phases whose amplitudes clustered at 0.4-0.8cm (pose noise), 4.8-5.9cm (the dip itself),
+// 12.0-12.7cm (what is left of the press after the dip splits it), 29.4-30.0cm and 36.7-36.8cm
+// (the real thing). The median landed at 12.3cm -- a third of a real rep, and squarely inside a
+// noise population -- so the gate came out at 4.9cm and split ten reps into nineteen.
+//
+// Reps are the LARGE population, so that is what to take the median of -- everything at least
+// some fraction of the biggest reversal in the take.
+//
+// WHY A LADDER AND NOT ONE FRACTION. The two failures pull in opposite directions.
+//
+// Cut too low and the fragments the dip already created stay in the population and drag the
+// median down, which lowers the gate, which keeps them split -- the estimate defends the very
+// error it is supposed to fix. A single 0.25 cut still split a 10cm dip on a 38cm press.
+//
+// Cut too high and one wild pose frame becomes the maximum on its own, nothing else clears the
+// bar, and there is no population left to take a median of. Falling straight back to the whole
+// list there restores the original bug in full.
+//
+// So: strictest cut first, and drop to the next only when the current one left fewer than
+// MIN_REVERSALS_FOR_RELATIVE_GATE values behind. On a clean set 0.5 holds and the median is a
+// real rep. Against a spike four times the height of the lift, 0.5 and 0.35 each select only
+// the spike, 0.25 admits the presses, and the median is a real rep again. A set whose last reps
+// shorten under fatigue is the case the ladder must NOT exclude, and does not need to: a short
+// rep dropping out of the population only moves the estimate, and the gate is 40% of it, so a
+// rep at less than half the height of the tallest is still comfortably above the bar.
+const LARGE_REVERSAL_FRACTIONS_OF_MAX = [0.5, 0.35, 0.25];
+
 /**
  * Segments reps WITHOUT a real-world scale, by deriving the amplitude gate from the trace
  * itself. `positions` may be in any consistent unit, including raw pixel-space.
@@ -2176,6 +2219,16 @@ const MIN_REVERSALS_FOR_RELATIVE_GATE = 3;
  */
 export function segmentPhasesRelative(
   positions: number[],
+  /** A hard minimum for the derived gate, in the same units as `positions`.
+   *
+   * Only meaningful when those units are real metres. A trace with no scale has no floor to
+   * offer -- the caller passes nothing and the gate is purely relative, which is the whole
+   * point of that path. With a scale it is what stops a take containing NO reps from having its
+   * own noise elected as typical and segmented into hundreds of them: a relative gate cannot
+   * tell "small reps" from "no reps", because in both cases the large population is all there
+   * is. That question needs a real-world size, and this is it.
+   */
+  floor?: number,
 ): { startIdx: number; endIdx: number }[] | null {
   if (positions.length < 2) return null;
   const span = Math.max(...positions) - Math.min(...positions);
@@ -2187,16 +2240,25 @@ export function segmentPhasesRelative(
 
   const amplitudes = exploratory
     .map((p) => Math.abs(positions[p.endIdx] - positions[p.startIdx]))
-    .filter((a) => a > 0)
-    .sort((a, b) => a - b);
+    .filter((a) => a > 0);
   if (amplitudes.length < MIN_REVERSALS_FOR_RELATIVE_GATE) return null;
 
-  const mid = Math.floor(amplitudes.length / 2);
-  const typical =
-    amplitudes.length % 2 === 0 ? (amplitudes[mid - 1] + amplitudes[mid]) / 2 : amplitudes[mid];
+  // The median of the LARGE population, not of everything -- see
+  // LARGE_REVERSAL_FRACTION_OF_MAX for the measurement that forced this.
+  const biggest = Math.max(...amplitudes);
+  // Strictest first. Falls through to the whole list only when even the loosest cut left too
+  // little to take a median of, which means the take had no population worth separating.
+  const pool = (
+    LARGE_REVERSAL_FRACTIONS_OF_MAX.map((f) =>
+      amplitudes.filter((a) => a >= biggest * f),
+    ).find((c) => c.length >= MIN_REVERSALS_FOR_RELATIVE_GATE) ?? amplitudes
+  ).sort((a, b) => a - b);
+  const mid = Math.floor(pool.length / 2);
+  const typical = pool.length % 2 === 0 ? (pool[mid - 1] + pool[mid]) / 2 : pool[mid];
   if (!(typical > 0)) return null;
 
-  return segmentPhases(positions, typical * RELATIVE_REP_AMPLITUDE_FRACTION);
+  const gate = typical * RELATIVE_REP_AMPLITUDE_FRACTION;
+  return segmentPhases(positions, floor != null && floor > gate ? floor : gate);
 }
 
 // A trace with no real-world scale still has to pass through filters that assume one.

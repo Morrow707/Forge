@@ -475,6 +475,41 @@ There is deliberately no velocity field of any kind in the scale-free output. A 
 units per second would look like a speed, sort like a speed, and get compared against last week's
 speed by an athlete with no way to know the units changed.
 
+#### "The take's own typical rep" was being measured wrong, and a sticking point paid for it
+
+The relative gate is 40% of a typical reversal, and the typical reversal was the MEDIAN of every
+reversal an exploratory pass could find. That is only the size of a rep if reps are the majority
+of what the pass returns, and they are nowhere near it. A ten-rep bench trace with a sticking
+point came back as five separate amplitude populations -- pose noise, the dip itself, the
+remainder of the press once the dip had split it, and two clusters of real reps -- and the reps
+were the smallest of the five by count. The median landed a third of the way up a real rep, so
+the gate came out below the dip, and the dip became a rep boundary.
+
+That is the defect the OVR paired session found: ten presses reported as fifteen, per-rep peaks
+spanning 0.24 to 1.96 m/s against the sensor's 0.91 to 1.10, while the set MEAN stayed within
+3.5% because splitting a rep produces a fast half and a slow half that average out. The scale was
+never the problem, and several builds were spent looking at it.
+
+Two changes, and both are load-bearing:
+
+**The median is taken over the large reversals only** -- strictest cut first (half the biggest
+reversal in the take), dropping to a looser one only when the cut left too few values to take a
+median of. A single cut does not work in both directions: too low and the fragments the dip
+created stay in the population and drag the gate down onto themselves, too high and one wild pose
+frame is the only thing that clears the bar.
+
+**The calibrated path passes a real-world floor** of `MIN_REP_AMPLITUDE_FLOOR_CM`, and it is the
+only thing that can tell a take of small reps from a take of no reps. A purely relative gate
+cannot: with nothing but noise in the trace, the noise IS the large population, elects itself
+typical, and 400 frames of wobble segment into 166 reps. The scale-free path still has no floor
+and still cannot answer that question -- correctly, since pixel-space has no centimetres, but
+anything consuming it needs to reject an empty take some other way.
+
+A side effect worth knowing about: the better gate absorbs the lone-hand dropout bug outright up
+to 30 degrees of camera tilt. `barPointFromSides` is still the actual fix and still the only
+thing that holds at 45, but `lone-hand-trace.test.ts` had to narrow its reproduction to that
+angle, and the comment there explains why that is the second time it has narrowed.
+
 ### The correct camera angle was being scored as a problem
 
 `assessCameraAlignment` asks whether the athlete is squared up to the lens. That is the right

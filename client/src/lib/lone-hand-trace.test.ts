@@ -75,21 +75,41 @@ const PATTERNS = [
 ];
 const TILTS = [20, 30];
 
+// The angle the bug still reproduces at. It used to reproduce at 20 and 30 as well; see the
+// comment on the first test for what closed those and why the test was narrowed rather than
+// relaxed.
+const TILT_THAT_STILL_BREAKS = 45;
+
 describe("a hand that comes and goes is not a rep", () => {
   // The bug, reproduced. Scott's ten-rep bench came back as 31 reps with a 9cm range of motion;
-  // this grid lands between 20 and 29 reps at 20-27cm, which is the same failure.
+  // this grid landed between 20 and 29 reps at 20-27cm, which is the same failure.
   it("used to invent two or three reps out of every real one", () => {
-    for (const tiltDeg of TILTS) {
-      for (const pattern of PATTERNS) {
-        const old = summarize(benchSet({ ...pattern, tiltDeg, useMidpointFix: false }));
-        // Was >15 when this was written. The oversized-phantom filter catches some of what the
-        // lone-hand swap invents -- a swap moves the traced point most of a grip width along the
-        // lift, which lands well over twice a real rep -- so the worst corner of this grid now
-        // comes back at 14 rather than 20. That is the filter working, not the bug going away:
-        // 14 against 10 real presses is still the same failure, and the midpoint fix below is
-        // what actually resolves it.
-        expect(old.repBreakdown.length, `tilt ${tiltDeg}, ${JSON.stringify(pattern)}`).toBeGreaterThan(12);
-      }
+    for (const pattern of PATTERNS.slice(0, 3)) {
+      const old = summarize(
+        benchSet({ ...pattern, tiltDeg: TILT_THAT_STILL_BREAKS, useMidpointFix: false }),
+      );
+      // THIS TEST HAS BEEN NARROWED TWICE, BOTH TIMES BECAUSE SOMETHING ELSE GOT BETTER, AND
+      // THAT IS WORTH READING BEFORE NARROWING IT AGAIN.
+      //
+      // First the oversized-phantom filter: a lone-hand swap moves the traced point most of a
+      // grip width along the lift, which lands well over twice a real rep, so the worst corner
+      // came back at 14 rather than 20 and the threshold went from >15 to >12.
+      //
+      // Then the amplitude gate stopped being derived from the median of every reversal in the
+      // take and became the median of the LARGE ones (segmentPhasesRelative). That is a much
+      // better estimate of what a rep is, and it turns out to be good enough to absorb the
+      // lone-hand swap outright at 0, 10, 20 and 30 degrees of tilt -- all four dropout
+      // patterns come back at exactly 10 on the BROKEN trace. Only at 45 degrees, where the
+      // grip line carries most of the press direction, is the swap still large enough to read
+      // as a rep. The fourth pattern (60 on, 60 off, one swap per rep) resolves even there.
+      //
+      // So the honest statement is that the blast radius shrank, not that the bug went away.
+      // The midpoint fix is still what resolves it -- the next test asserts 10 reps across the
+      // WHOLE grid, 45 degrees included, and that is the assertion that must never be narrowed.
+      expect(
+        old.repBreakdown.length,
+        `tilt ${TILT_THAT_STILL_BREAKS}, ${JSON.stringify(pattern)}`,
+      ).toBeGreaterThan(12);
     }
   });
 
