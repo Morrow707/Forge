@@ -258,6 +258,7 @@ import type {
 } from "@shared/schema";
 import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
+import { CAMERA_DERIVED_SET_COLUMNS } from "@shared/schema";
 import { classAiDraftSchema } from "@shared/schema";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
 import type { VideoRetentionLimits } from "@shared/video-retention";
@@ -21145,7 +21146,14 @@ ${catalog}`;
       // mode still has to come from programExercises (it was never
       // snapshotted), left-joined since a later program-day edit can leave
       // programExerciseId null without touching the set's actual data.
-      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      // LEFT, not INNER. workoutLogEntries.exerciseId is nullable -- submitWorkoutLog writes
+      // `resolvedExerciseId ?? fallbackExerciseId ?? null`, so a set whose exercise could not be
+      // resolved at save time carries null there. An inner join turned that into the row not
+      // existing: the capture ran, the numbers were stored, and the report showed nothing, with
+      // no way to tell it apart from a set nobody filmed. buildTrackingReportEntries names an
+      // unresolved exercise rather than dropping the row, for the same reason the report keeps a
+      // set that arrived without diagnostics.
+      .leftJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
       .where(
         and(
@@ -21181,11 +21189,18 @@ ${catalog}`;
           // Any camera-derived column is enough to say the pipeline ran. computeFlags marks the
           // ones that arrived without diagnostics so they read as a gap rather than as a set
           // nothing can be said about.
+          // EVERY camera-derived column, from the one list in shared/schema.ts -- not a
+          // useful-looking subset. This was four columns (diagnostics, peak velocity, bar path
+          // deviation, jump height), which between them describe bar-path and jump captures and
+          // nothing else. A kettlebell swing, a med-ball throw, a golf or baseball swing, a
+          // sprint and a sled push write none of the four, so five capture modes never appeared
+          // on this page at all -- and an absent row looks exactly like a mode nobody filmed, so
+          // the gap could not be noticed from the page itself. A new mode picks this up for free
+          // once its columns are classified, which a test makes mandatory.
           or(
-            isNotNull(workoutSetEntries.trackingDiagnostics),
-            isNotNull(workoutSetEntries.peakVelocityMps),
-            isNotNull(workoutSetEntries.barPathDeviationCm),
-            isNotNull(workoutSetEntries.jumpHeightCm),
+            ...CAMERA_DERIVED_SET_COLUMNS.map((c) =>
+              isNotNull(workoutSetEntries[c as keyof typeof workoutSetEntries] as never),
+            ),
           ),
           // WHAT THE PROGRAM ROW SAYS TODAY IS NOT WHAT THE CAMERA DID THEN.
           //

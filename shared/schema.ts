@@ -7944,6 +7944,97 @@ export const captureDeviceInfoSchema = z.object({
 // client-side by tracking-diagnostics.ts's buildTrackingDiagnostics from data every AV tracker
 // dialog already has in hand (the raw per-frame Vision output, the calibration result) --
 // nothing new captured natively, just packaged and persisted instead of discarded.
+/** EVERY COLUMN ON workoutSetEntries THAT ONLY A CAMERA CAPTURE CAN WRITE.
+ *
+ * This exists because the admin tracking report -- the entire feedback loop for the capture
+ * pipeline -- decides whether a set ran through the camera by asking whether any of these is
+ * set, and it used to ask about four of them: trackingDiagnostics, peakVelocityMps,
+ * barPathDeviationCm and jumpHeightCm. Those four cover bar-path and jump captures and NOTHING
+ * else, so a kettlebell swing, a med-ball throw, a golf or baseball swing, a sprint and a sled
+ * push were invisible on that page no matter how they went. Five capture modes with no feedback
+ * loop at all, and the page gave no sign they were missing -- an absent row and a mode nobody
+ * filmed look identical.
+ *
+ * So the list is the whole set rather than a useful-looking subset, and it lives here beside the
+ * table instead of inside the query. `shared/camera-columns-are-classified.test.ts` derives the
+ * table's real column list and fails on any column that is in neither this array nor
+ * NON_CAMERA_SET_COLUMNS -- adding a capture mode therefore cannot silently skip this step, which
+ * is exactly how the five above were missed.
+ *
+ * What is deliberately NOT here: formCheckVideoUrl and videoUploadedAt (an athlete can upload a
+ * form video by hand, with no tracking involved), formCheckFlag and isPr (a coach or the server
+ * writes those), and the plain logged columns. Keeping those out is what stops the report
+ * filling with sets nobody pointed a camera at.
+ */
+export const CAMERA_DERIVED_SET_COLUMNS = [
+  "peakVelocityMps",
+  "meanVelocityMps",
+  "concentricSeconds",
+  "eccentricSeconds",
+  "barPathDeviationCm",
+  "barPathTrace",
+  "formFaults",
+  "repBreakdown",
+  "armPathTrace",
+  "peakPowerWatts",
+  "meanPowerWatts",
+  "eccentricMeanVelocityMps",
+  "romCm",
+  "meanEai",
+  "velocityLossPercent",
+  "jumpHeightCm",
+  "jumpDistanceCm",
+  "groundContactSeconds",
+  "reactiveStrengthIndex",
+  "jumpBreakdown",
+  "swingSeparationDeg",
+  "swingTempoRatio",
+  "swingBackswingMs",
+  "swingDownswingMs",
+  "swingHeadSwayCm",
+  "swingTrustScore",
+  "medBallPeakSpeedMps",
+  "medBallReleaseHeightCm",
+  "medBallTrustScore",
+  "medBallRepBreakdown",
+  "kbSwingPeakSpeedMps",
+  "kbSwingPeakHeightCm",
+  "kbSwingTrustScore",
+  "horizontalLoadElapsedSeconds",
+  "horizontalLoadDistanceYards",
+  "horizontalLoadAvgSpeedYardsPerSec",
+  "legDriveAsymmetry",
+  "armDriveAsymmetry",
+  "trustScores",
+  "trustScorePct",
+  "captureDeviceInfo",
+  "trackingDiagnostics",
+  "skeletonFrames",
+] as const;
+
+/** The rest of workoutSetEntries, listed for the same reason: so the classification test can
+ * tell "considered and ruled out" apart from "nobody looked at it yet". */
+export const NON_CAMERA_SET_COLUMNS = [
+  "id",
+  "logEntryId",
+  "setNumber",
+  "reps",
+  "weight",
+  "weightUnit",
+  "bandColor",
+  "boxHeight",
+  "boxHeightUnit",
+  "formCheckVideoUrl",
+  "formCheckFlag",
+  "isPr",
+  "videoFavorited",
+  "videoUploadedAt",
+  "pendingDeletionAt",
+  "staleAccountPendingDeletionAt",
+  "weightLbs",
+  "repsCount",
+] as const;
+
 export const trackingDiagnosticsSchema = z.object({
   outcome: z.enum([
     "tracked",
