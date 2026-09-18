@@ -85,6 +85,7 @@ import { MuscleHeatMap } from "@/components/muscle-heat-map";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { GoalsPanel } from "@/components/goals-panel";
 import { Skeleton } from "@/components/skeleton";
+import { ReadFailed } from "@/components/read-failed";
 import { convertWeight } from "@/lib/progression";
 
 type RosterEntry = { id: number; name: string; email: string };
@@ -713,7 +714,7 @@ export default function CoachAnalytics() {
     faults: { code: string; label: string }[];
   } | null>(null);
 
-  const { data: roster = [] } = useQuery<RosterEntry[]>({
+  const { data: roster = [], isError: rosterFailed } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
 
@@ -738,14 +739,14 @@ export default function CoachAnalytics() {
     queryFn: () => getJson("/api/coach/exercises"),
   });
 
-  const { data: overview = [], isLoading: overviewLoading } = useQuery<RecentSession[]>({
+  const { data: overview = [], isLoading: overviewLoading, isError: overviewFailed, refetch: refetchOverview } = useQuery<RecentSession[]>({
     queryKey: ["/api/coach/analytics/overview", athleteId],
     queryFn: () => getJson(`/api/coach/analytics/overview?athleteId=${athleteId}&limit=100`),
     enabled: !!athleteId && !exerciseId,
   });
   const [showAllSessions, setShowAllSessions] = useState(false);
 
-  const { data: points = [], isLoading } = useQuery<AnalyticsPoint[]>({
+  const { data: points = [], isLoading, isError: pointsFailed, refetch: refetchPoints } = useQuery<AnalyticsPoint[]>({
     queryKey: ["/api/coach/analytics", athleteId, exerciseId],
     queryFn: async () => {
       const res = await apiRequest(
@@ -956,6 +957,7 @@ export default function CoachAnalytics() {
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
         <AthletePickerField
           roster={roster}
+          rosterFailed={rosterFailed}
           athleteId={athleteId}
           onChange={handleAthleteChange}
           search={athleteSearch}
@@ -1074,7 +1076,10 @@ export default function CoachAnalytics() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {!overviewLoading && overview.length === 0 && (
+              {overviewFailed && (
+                <ReadFailed what="recent sessions" onRetry={() => void refetchOverview()} />
+              )}
+              {!overviewFailed && !overviewLoading && overview.length === 0 && (
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <CalendarDays className="h-10 w-10 text-muted-foreground" />
                   <p className="text-muted-foreground">No workouts logged yet.</p>
@@ -1128,7 +1133,15 @@ export default function CoachAnalytics() {
         </div>
       )}
 
-      {athleteId && exerciseId && !isLoading && chartData.length === 0 && (
+      {athleteId && exerciseId && pointsFailed && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="these sets" onRetry={() => void refetchPoints()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {athleteId && exerciseId && !pointsFailed && !isLoading && chartData.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Gauge className="h-10 w-10 text-muted-foreground" />
@@ -2428,6 +2441,7 @@ export default function CoachAnalytics() {
         <TabsContent value="videos">
           <VideosTab
             roster={roster}
+            rosterFailed={rosterFailed}
             athleteId={athleteId}
             onAthleteChange={handleAthleteChange}
             athleteSearch={athleteSearch}
@@ -2438,6 +2452,7 @@ export default function CoachAnalytics() {
         <TabsContent value="skills">
           <SkillsTab
             roster={roster}
+            rosterFailed={rosterFailed}
             athleteId={athleteId}
             onAthleteChange={handleAthleteChange}
             athleteSearch={athleteSearch}
@@ -2464,12 +2479,14 @@ export default function CoachAnalytics() {
  * roster/search plumbing this page already lifts. */
 function SkillsTab({
   roster,
+  rosterFailed,
   athleteId,
   onAthleteChange,
   athleteSearch,
   onAthleteSearchChange,
 }: {
   roster: RosterEntry[];
+  rosterFailed?: boolean;
   athleteId: string;
   onAthleteChange: (id: string) => void;
   athleteSearch: string;
@@ -2480,6 +2497,7 @@ function SkillsTab({
     <div className="space-y-4">
       <AthletePickerField
         roster={roster}
+        rosterFailed={rosterFailed}
         athleteId={athleteId}
         onChange={onAthleteChange}
         search={athleteSearch}
@@ -2505,12 +2523,15 @@ function SkillsTab({
  * same lifted athleteId state in CoachAnalytics). */
 function AthletePickerField({
   roster,
+  rosterFailed,
   athleteId,
   onChange,
   search,
   onSearchChange,
 }: {
   roster: RosterEntry[];
+  /** The roster read failed, so `roster` being empty says nothing about the roster. */
+  rosterFailed?: boolean;
   athleteId: string;
   onChange: (id: string) => void;
   search: string;
@@ -2542,9 +2563,11 @@ function AthletePickerField({
             // athlete, opened the picker, and read "No athletes match" -- copy written for a
             // failed search, with no hint that the answer is to invite someone first.
             <p className="px-2 py-1.5 text-sm text-muted-foreground">
-              {roster.length === 0
-                ? "No athletes yet -- invite one from Roster and their history shows up here."
-                : "No athletes match"}
+              {rosterFailed
+                ? "We couldn't load your roster."
+                : roster.length === 0
+                  ? "No athletes yet -- invite one from Roster and their history shows up here."
+                  : "No athletes match"}
             </p>
           )}
           {filtered.map((a) => (
@@ -2594,12 +2617,14 @@ type VideoItem = {
  * selection and its pinned-lift picker. */
 function VideosTab({
   roster,
+  rosterFailed,
   athleteId,
   onAthleteChange,
   athleteSearch,
   onAthleteSearchChange,
 }: {
   roster: RosterEntry[];
+  rosterFailed?: boolean;
   athleteId: string;
   onAthleteChange: (id: string) => void;
   athleteSearch: string;
@@ -2608,13 +2633,13 @@ function VideosTab({
   const [liftFilter, setLiftFilter] = useState("");
   const [watching, setWatching] = useState<{ url: string; title: string } | null>(null);
 
-  const { data: liftVideos = [], isLoading: liftLoading } = useQuery<FormCheckVideoRow[]>({
+  const { data: liftVideos = [], isLoading: liftLoading, isError: liftFailed, refetch: refetchLift } = useQuery<FormCheckVideoRow[]>({
     queryKey: ["/api/coach/roster", athleteId, "form-check-videos"],
     queryFn: () => getJson(`/api/coach/roster/${athleteId}/form-check-videos`),
     enabled: !!athleteId,
   });
 
-  const { data: skillVideos = [], isLoading: skillLoading } = useQuery<SkillSessionVideoRow[]>({
+  const { data: skillVideos = [], isLoading: skillLoading, isError: skillFailed } = useQuery<SkillSessionVideoRow[]>({
     queryKey: ["/api/coach/roster", athleteId, "skill-sessions"],
     queryFn: () => getJson(`/api/coach/roster/${athleteId}/skill-sessions`),
     enabled: !!athleteId,
@@ -2651,6 +2676,7 @@ function VideosTab({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <AthletePickerField
           roster={roster}
+          rosterFailed={rosterFailed}
           athleteId={athleteId}
           onChange={(id) => {
             onAthleteChange(id);
@@ -2680,7 +2706,15 @@ function VideosTab({
         </Card>
       )}
 
-      {athleteId && !loading && allVideos.length === 0 && (
+      {athleteId && (liftFailed || skillFailed) && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="this athlete's videos" onRetry={() => void refetchLift()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {athleteId && !liftFailed && !skillFailed && !loading && allVideos.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Video className="h-10 w-10 text-muted-foreground" />
@@ -2894,7 +2928,7 @@ const ACWR_WINDOW_OPTIONS = [
 
 function AcwrTrendCard({ athleteId }: { athleteId: string }) {
   const [windowDays, setWindowDays] = useState(60);
-  const { data: history = [], isLoading } = useQuery<AcwrPoint[]>({
+  const { data: history = [], isLoading, isError, refetch } = useQuery<AcwrPoint[]>({
     queryKey: ["/api/coach/roster", athleteId, "acwr-history", windowDays],
     queryFn: () => getJson(`/api/coach/roster/${athleteId}/acwr-history?days=${windowDays}`),
     enabled: !!athleteId,
@@ -2955,7 +2989,13 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!hasEnoughData ? (
+        {/* This card carries the acute:chronic workload ratio, which is an injury-risk
+            signal. "No training load logged" off a failed read is the same false all-clear
+            the wellness badge used to give, and it comes with advice -- try a wider
+            window -- that cannot help. */}
+        {isError ? (
+          <ReadFailed what="this athlete's training load" onRetry={() => void refetch()} />
+        ) : !hasEnoughData ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No training load logged in the last {windowDays} days -- try a wider window.
           </p>
@@ -3045,7 +3085,7 @@ const WEEKLY_LOAD_WINDOW_OPTIONS = [
 
 function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
   const [windowWeeks, setWindowWeeks] = useState(12);
-  const { data: series = [], isLoading } = useQuery<WeeklyLoadPoint[]>({
+  const { data: series = [], isLoading, isError, refetch } = useQuery<WeeklyLoadPoint[]>({
     queryKey: ["/api/coach/roster", athleteId, "weekly-load", windowWeeks],
     queryFn: () => getJson(`/api/coach/roster/${athleteId}/weekly-load?weeks=${windowWeeks}`),
     enabled: !!athleteId,
@@ -3105,7 +3145,9 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
         </div>
       </CardHeader>
       <CardContent>
-        {!hasEnoughData ? (
+        {isError ? (
+          <ReadFailed what="this athlete's weekly load" onRetry={() => void refetch()} />
+        ) : !hasEnoughData ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No training load logged in the last {windowWeeks} weeks -- try a wider window.
           </p>
@@ -3179,7 +3221,7 @@ const TREND_COLORS = [
 function TeamTrends() {
   const [metric, setMetric] = useState<TestingMetricKey>("fortyYardDash");
 
-  const { data: points = [], isLoading } = useQuery<TrendPoint[]>({
+  const { data: points = [], isLoading, isError: trendsFailed, refetch: refetchTrends } = useQuery<TrendPoint[]>({
     queryKey: ["/api/coach/testing-trends", metric],
     queryFn: () => getJson(`/api/coach/testing-trends?metric=${metric}`),
   });
@@ -3216,6 +3258,15 @@ function TeamTrends() {
           </CardHeader>
           <CardContent>
             <Skeleton className="h-80 w-full rounded-md" />
+          </CardContent>
+        </Card>
+      ) : trendsFailed ? (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed
+              what={`${activeMetric.label.toLowerCase()} history`}
+              onRetry={() => void refetchTrends()}
+            />
           </CardContent>
         </Card>
       ) : athletes.length === 0 ? (
@@ -3377,9 +3428,13 @@ function CoachClassFunnelRow({ row }: { row: CoachClassAnalyticsRow }) {
  * assigned), and only counting their own enrollments within a shared Forge
  * class rather than every coach's on the platform. */
 function CoachClassAnalyticsTab() {
-  const { data, isLoading } = useQuery<CoachClassAnalytics>({
+  const { data, isLoading, isError, refetch } = useQuery<CoachClassAnalytics>({
     queryKey: ["/api/coach/classes/analytics"],
   });
+
+  if (isError) {
+    return <ReadFailed what="your class analytics" onRetry={() => void refetch()} />;
+  }
 
   if (isLoading) {
     return (
