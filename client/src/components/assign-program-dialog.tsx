@@ -28,6 +28,7 @@ import { Stethoscope, Plus, Trash2, Clock, CalendarCog, ChevronDown, Repeat } fr
 import type { Exercise } from "@shared/schema";
 import { WEEKDAY_OPTIONS } from "@/lib/weekdays";
 import { todayIso } from "@/lib/local-date";
+import { ReadFailed } from "@/components/read-failed";
 
 const DURATION_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
@@ -112,7 +113,9 @@ export function AssignProgramDialog({
     setDateOverrides(new Map());
   }, [selectedProgramId, startDate, trainingWeekdays.join(",")]);
 
-  const { data: schedule = [] } = useQuery<ScheduleDay[]>({
+  const { data: schedule = [], isError: scheduleFailed, refetch: refetchSchedule } = useQuery<
+    ScheduleDay[]
+  >({
     queryKey: ["/api/coach/programs", selectedProgramId, "schedule", startDate, trainingWeekdays.join(",")],
     queryFn: async () => {
       const params = new URLSearchParams({ startDate });
@@ -480,10 +483,27 @@ export function AssignProgramDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
+              {/* NOT COSMETIC. A failed schedule read leaves `schedule` empty, and the
+                  submit above builds effectiveOverrides from it -- so with training
+                  weekdays chosen, the assignment is created with NO weekday-walked
+                  dates and every session lands on the plain day-in-a-row grid instead
+                  of the days the coach picked. The same empty array also drops
+                  programWeekCount to 1, so a twelve-week program is described as one
+                  week on the way past. Assigning is blocked until the read lands. */}
+              {scheduleFailed && (
+                <ReadFailed
+                  what="this program's schedule"
+                  onRetry={() => void refetchSchedule()}
+                  className="flex flex-col items-start gap-2 text-left"
+                />
+              )}
               <Button
                 type="submit"
                 disabled={
-                  assignMutation.isPending || !selectedProgramId || assignAthletes.size === 0
+                  assignMutation.isPending ||
+                  !selectedProgramId ||
+                  assignAthletes.size === 0 ||
+                  scheduleFailed
                 }
               >
                 Assign to {assignAthletes.size} athlete
@@ -530,7 +550,7 @@ function CorrectivesSetupFlow({
   const athleteOrdinal = distinctAthleteIds.indexOf(current.athleteId) + 1;
   const totalAthletes = distinctAthleteIds.length;
 
-  const { data: recentCorrectives = [] } = useQuery<Exercise[]>({
+  const { data: recentCorrectives = [], isError: recentFailed } = useQuery<Exercise[]>({
     queryKey: ["/api/coach/athletes", current.athleteId, "recent-correctives"],
     queryFn: async () => {
       const res = await apiRequest(
@@ -599,6 +619,14 @@ function CorrectivesSetupFlow({
             </DialogDescription>
           </DialogHeader>
 
+          {/* Absent on failure rather than wrong -- this is a shortcut list, and the
+              coach can still search. Said out loud so it does not look like they have
+              never used a corrective before. */}
+          {recentFailed && (
+            <p className="py-1 text-xs text-muted-foreground">
+              Couldn't load recent correctives.
+            </p>
+          )}
           {recentCorrectives.length > 0 && (
             <div className="space-y-1">
               <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">

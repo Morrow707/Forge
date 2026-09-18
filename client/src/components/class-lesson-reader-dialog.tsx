@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
+import { ReadFailed } from "@/components/read-failed";
 
 export type ContentPage = {
   title?: string;
@@ -204,13 +205,16 @@ export function ClassLessonReaderDialog({
 }) {
   const isPreview = previewContent != null;
   const qc = useQueryClient();
-  const { data: fetchedContent, isLoading } = useQuery<LessonContent>({
+  const { data: fetchedContent, isLoading, isError, refetch } = useQuery<LessonContent>({
     queryKey: [`/api/athlete/classes/${classId}/lessons/${lesson.id}/content`],
     queryFn: () => getJson(`/api/athlete/classes/${classId}/lessons/${lesson.id}/content`),
     enabled: open && !isPreview,
   });
   const lessonContent = isPreview ? previewContent : fetchedContent;
   const contentLoading = isPreview ? false : isLoading;
+  // A preview is handed its content directly and never reads, so it can never be in
+  // this state.
+  const contentFailed = isPreview ? false : isError;
 
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -439,7 +443,18 @@ export function ClassLessonReaderDialog({
         >
           {contentLoading && <div className="h-40 animate-pulse rounded-lg bg-surface" />}
 
-          {!contentLoading && phase === "reading" && (
+          {/* Worse than a wrong empty state here. With pages empty, pageIndex 0 is also
+              the LAST page, so the footer renders "Finish Reading" / "View Quiz" -- and
+              an athlete shown "no reading content" because the fetch failed can press it
+              and write contentCompletedAt for a lesson that never appeared on screen.
+              The reading view refuses rather than offering to complete nothing. */}
+          {contentFailed && phase === "reading" && (
+            <div className="mx-auto max-w-2xl">
+              <ReadFailed what="this lesson" onRetry={() => void refetch()} />
+            </div>
+          )}
+
+          {!contentFailed && !contentLoading && phase === "reading" && (
             <div className="mx-auto max-w-2xl space-y-3">
               {pages.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No reading content for this lesson yet.</p>
@@ -663,7 +678,9 @@ export function ClassLessonReaderDialog({
             </div>
           )}
           <div className="flex items-center justify-between gap-2">
-            {phase === "reading" && (
+            {/* The footer is where "Finish Reading" lives, so the failure has to reach
+                here too -- suppressing the page body alone would leave the button. */}
+            {phase === "reading" && !contentFailed && (
               <>
                 <Button
                   size="lg"
