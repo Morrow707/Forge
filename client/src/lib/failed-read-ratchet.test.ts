@@ -10,13 +10,26 @@ import path from "node:path";
  * isLoading goes false -- so the screen states as fact that the athlete has no injuries, no
  * movement screens, no training load. A coach reads that and programs a session on it.
  *
- * A SWEEP FOUND 82 SUCH FILES. Fixing all of them in one change would be a diff nobody can
- * review, so this is a ratchet rather than a wall: the offenders are listed below, the list may
- * only ever get SHORTER, and a file not on it must handle the failure. That makes the next new
- * screen correct by default and leaves the backlog visible instead of forgotten.
+ * A SWEEP FOUND 82 SUCH FILES. Fixing them in one change would have been a diff nobody could
+ * review, so this began as a ratchet: every offender listed, the list allowed only to get
+ * shorter, and any file not on it required to handle the failure.
  *
- * To clear one: give the query isError/refetch and render <ReadFailed> (see
- * client/src/components/read-failed.tsx), then delete its line here.
+ * THE LIST IS NOW EMPTY, so this is a wall rather than a ratchet -- every read in client/src
+ * either distinguishes a failure from an absence or does not claim emptiness at all. The
+ * mechanism does not change: KNOWN stays, and it stays empty. A new screen with this bug fails
+ * the first assertion below, and the fix is four lines of isError in that screen, never a line
+ * added here. Keeping the machinery costs nothing and is what stops the backlog growing back.
+ *
+ * What the sweep turned up along the way, and what makes this worth more than tidy error
+ * states: several of these were not display bugs at all. An editor hydrated from a failed read
+ * saved its own emptiness over a live legal document and over a coach's roster groups; an
+ * assign dialog built an assignment from a schedule it never received and put every session on
+ * the wrong day; a lesson reader offered "Finish Reading" for a lesson that never rendered; a
+ * dashboard reported "Flagged today: 0" without having asked. See CLAUDE.md,
+ * "Hydrate-in-an-effect, save-the-whole-state", for the shape behind the first two.
+ *
+ * To fix a new one: give the query isError/refetch and render <ReadFailed> (see
+ * client/src/components/read-failed.tsx).
  */
 
 const ROOT = path.join(process.cwd(), "client", "src");
@@ -51,10 +64,8 @@ function offenders(): string[] {
   return found.sort();
 }
 
-/** Known offenders, newest sweep. ONLY EVER REMOVE FROM THIS LIST. */
-const KNOWN = new Set<string>([
-  "pages/workout.tsx",
-]);
+/** Known offenders. EMPTY, AND MEANT TO STAY THAT WAY -- only ever remove, never add. */
+const KNOWN = new Set<string>([]);
 
 describe("a failed read is never rendered as an empty one", () => {
   const current = offenders();
@@ -66,8 +77,10 @@ describe("a failed read is never rendered as an empty one", () => {
   });
 
   it("does not leave a fixed file on the list", () => {
-    // Keeps the backlog honest: a file that has been cleared has to come off, or the number
-    // stops meaning anything and the ratchet stops ratcheting.
+    // Kept the backlog honest while there was one: a file that had been cleared had to come
+    // off, or the number stopped meaning anything. With KNOWN empty this can only fail if
+    // somebody adds a line to it, which is the wrong fix for this bug and is the other thing
+    // worth catching.
     const stale = [...KNOWN].filter((f) => !current.includes(f)).sort();
     expect(stale).toEqual([]);
   });

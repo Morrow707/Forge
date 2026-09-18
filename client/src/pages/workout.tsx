@@ -114,6 +114,7 @@ import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
 import { WellnessGate } from "@/components/wellness-gate";
 import { CaraTimer } from "@/components/cara-timer";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
+import { ReadFailed } from "@/components/read-failed";
 
 type ExerciseInfo = {
   id: number;
@@ -1033,7 +1034,7 @@ export function WorkoutPage({
   const [pendingSync, setPendingSync] = useState(() => hasPendingLog(dayKey));
   const [sharingWorkout, setSharingWorkout] = useState(false);
 
-  const { data, isLoading } = useQuery<DayDetail>({
+  const { data, isLoading, isError, refetch } = useQuery<DayDetail>({
     queryKey: [`${apiBase}/day`, assignmentId, programDayId, date],
     queryFn: async () => {
       const url = `${apiBase}/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`;
@@ -1054,7 +1055,25 @@ export function WorkoutPage({
           setOffline(false);
           return json;
         } catch (err) {
-          if (err instanceof ApiError) throw err;
+          // A 5xx means the server answered and failed, so retrying is pointless --
+          // but a cached day is not. An athlete standing in a gym mid-session should
+          // still see their own prescription off a server fault; the alternative is
+          // a blank screen and a session they cannot log.
+          //
+          // NOT for a 401 or 403. Those say this person may not have this data right
+          // now (signed out, or the guardian gate holding an account shut), and
+          // serving a cached copy would be handing athlete data to somebody the
+          // server just refused. Status decides, not the shape of the error.
+          if (err instanceof ApiError) {
+            if (err.status >= 500) {
+              const cached = loadDayCache<DayDetail>(dayKey);
+              if (cached) {
+                setOffline(true);
+                return cached;
+              }
+            }
+            throw err;
+          }
           if (attempt < maxAttempts) {
             await new Promise((r) => setTimeout(r, 400 * attempt));
             continue;
@@ -2011,6 +2030,23 @@ export function WorkoutPage({
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't change the unit"),
   });
+
+  // THE WORST PLACE IN THE APP TO SPIN FOREVER. `!data` covered the failed read as
+  // well as the pending one, so an athlete whose request finally gave up -- three
+  // retries, no cached copy -- stood in a gym watching a skeleton pulse, with no error,
+  // no retry and no way to log the session they were in the middle of.
+  //
+  // This page tries harder than any other before it gets here (three attempts, then the
+  // offline cache, plus a listener that refetches the moment the browser reports
+  // connectivity back), which is exactly why the remaining failure needed saying out
+  // loud: by this point something is genuinely wrong, and waiting will not fix it.
+  if (isError) {
+    return (
+      <AppShell title="Workout">
+        <ReadFailed what="this workout" onRetry={() => void refetch()} />
+      </AppShell>
+    );
+  }
 
   if (isLoading || !data) {
     return (
