@@ -10,14 +10,22 @@ describe("tracker ground truth", () => {
     expect(error).toBeGreaterThan(3);
   });
 
-  it("refuses to call one sample a measurement", () => {
-    // The honest answer while the table has one row. A threshold derived
-    // from a single set is still a guess wearing a number, and the summary
-    // has to say so rather than reporting a confident figure.
+  it("refuses to call a handful of samples a measurement", () => {
+    // The honest answer while the table is this thin. A threshold derived from
+    // one or two sets is still a guess wearing a number, and the summary has to
+    // say so rather than reporting a confident figure.
+    //
+    // Asserted as the RULE rather than as the current row count: this pinned
+    // "exactly one group" and so failed the first time real paired data was
+    // added, which is the one moment it should have had nothing to say.
     const summary = summarizeError();
-    expect(summary).toHaveLength(1);
-    expect(summary[0].usable).toBe(false);
-    expect(summary[0].samples).toBe(1);
+    expect(summary.length).toBeGreaterThan(0);
+    for (const group of summary) {
+      expect(group.usable, `${group.exercise} ${group.metric}`).toBe(group.samples >= 5);
+    }
+    // And nothing has cleared that bar yet. When something does, this line is
+    // the one that fails, and that failure is the good news.
+    expect(summary.every((g) => !g.usable)).toBe(true);
   });
 
   it("uses a median so one broken reading does not set the error rate", () => {
