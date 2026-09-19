@@ -203,8 +203,11 @@ Two things worth saying out loud when someone tests this:
   but its telemetry is only readable on the admin tracking report, which is
   served from `storage.ts` and ships on a Render deploy. Testing report changes
   by installing a build will show nothing.
-- The institutional agreement is still an unreviewed draft whose own text says
-  not to present it as binding. Scott is handling it.
+- The Institutional Service Agreement is written (`docs/institutional-service-agreement.md`,
+  2026-09-19) and is with the attorney alongside the four public documents. It has not
+  been sent to any school. It is a contract, not an app page: nothing in the code seeds
+  or renders it, and the only thing the app knows about it is whether a signed copy is on
+  file for a school.
 
 ## AI Coach + Video is ON SALE, with the accuracy warning attached
 
@@ -664,9 +667,9 @@ The `_DRAFT` suffixes are historical variable names, not banners. The remaining
 which strip that language out of documents an older installation stored; they
 have to stay.
 
-**The only legal work left is REVIEW**: four documents plus five questions to
-counsel (`docs/legal-open-questions.md`), and two blanks Scott has to fill in
-the Rocket Lawyer Service Agreement.
+**The only legal work left is REVIEW**: the four public documents, the Institutional
+Service Agreement (`docs/institutional-service-agreement.md`), and the questions in
+`docs/legal-open-questions.md`. Nothing needs writing.
 
 **Do not regenerate a document in Rocket Lawyer to "improve" one of these.** A
 generic template is a worse fit, not a better one. The EULA is the proof: the
