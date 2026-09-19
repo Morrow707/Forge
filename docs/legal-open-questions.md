@@ -117,13 +117,16 @@ is the preferred approach for a national app over state-specific language. No ch
 text. `server/seed-data/assumption-of-risk.ts` records the opinion in its header. The
 Rocket Lawyer Activity Release that this replaced is retired.
 
-## 9. Research consent -- OPEN, packet prepared 2026-09-19
+## 9. Research consent -- REVIEWED, 2026-09-19
 
-The one live consent no lawyer has read; Rocket Lawyer has no template for it.
-`docs/research-consent-for-counsel.md` carries the collection mechanics, what the software
-does with a yes, the five questions (de-identified video-derived data, coach-relayed guardian
-consent, retention after deletion, re-consent on text change, what is missing) and the full
-text. Sent to Scott for the attorney the same day.
+Counsel returned a rewritten "Research Consent and Data Use Authorization" the same day the
+packet (`docs/research-consent-for-counsel.md`) went out, and it went live verbatim as
+version 2026-09-19. Its wording answers the packet's questions in the text itself: "designed
+so that it cannot be traced back" (question 1), retention after deletion kept with the
+withdraw-first procedure (question 3), no researcher named (question 5). Everyone who
+consented under the 2026-09-17 wording is asked again. One word open: section 6 says "age
+bracket"; the store keeps age in whole years. Scott to choose "age" in the text or a band in
+the store.
 
 The AI Terms of Use is REVIEWED: Scott, 2026-09-19, "we used the AI terms of use as a
 draft, a lawyer modified that". Its file header says so.
@@ -133,7 +136,7 @@ draft, a lawyer modified that". Its file header says so.
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
 biometric consent plus the engineering facts behind each of its claims.
 
-**Four documents still under review** (the Assumption of Risk was reviewed 2026-09-19, question 8) (factual corrections from the 2026-09-19 pass already
+**Four documents still under review** (the Assumption of Risk, the AI Terms of Use and the research consent were reviewed 2026-09-19, questions 8 and 9) (factual corrections from the 2026-09-19 pass already
 applied; see `git log -- server/seed-data/legal-documents-draft.ts`): the Terms of Service,
 the Privacy Policy, the EULA, the Notice to Parent or Guardian, and the Institutional
 Service Agreement. The Notice is also the parental consent document, so question 5 should

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { storage } from "./storage";
 import { db } from "./db";
+import { RESEARCH_CONSENT_TEXT } from "@shared/research-consent";
 import { consentRecords, guardianLinks } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { makeAthlete, makeCoach, resetDatabase } from "./test-support/fixtures";
@@ -40,8 +41,12 @@ describe("research data consent", () => {
       .from(consentRecords)
       .where(eq(consentRecords.userId, athlete.id));
     expect(record.consentType).toBe("research_data_use");
-    expect(record.documentText).toContain("Only group numbers");
-    expect(record.documentText).toContain("Your name, email, birthday");
+    // Asserted against the live constant rather than quoted phrases: the text was
+    // replaced by counsel's version on 2026-09-19 and a phrase pinned here would
+    // have to be re-pinned every time it changes. What matters is that the WHOLE
+    // text was stored, not a version string.
+    expect(record.documentText).toBe(RESEARCH_CONSENT_TEXT);
+    expect(record.documentText).toContain("aggregated group statistics");
   });
 
   it("records a withdrawal as its own dated decision", async () => {
