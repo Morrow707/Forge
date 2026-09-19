@@ -97,6 +97,9 @@ export const PARENTAL_NOTICE_PRIOR_SHIPPED = [
   "e347a9f7cb769becf66d08f96b9c0ef70b693ecd5f4352a5450ec53f02a0b035",
   "99c15769c09c622a4c38437704be2eaf80d52b42a320daa291c1b383526389a5",
   "30b0dacc768a7c1762793f015e8063dd689e2d9b796eabea9f0c508a35b1ec95",
+  // 2026-09-19 launch-readiness pass: the collected-data list gained nutrition and Apple Health, and
+  // the retention section gained the per-program cap.
+  "ac5af50708b3d388629bb0bd8aba61168c4fe0b61078c53e56fc2e1785ae4711",
 ] as const;
 
 /** EVERY stored shape of the privacy policy Forge ever shipped, current one excluded.
@@ -117,6 +120,10 @@ export const PRIVACY_POLICY_PRIOR_SHIPPED = [
   "5d3b0240c7f181513917cf5a99c2e578b4f89205f35d6d54061b11ddb50c6df7",
   "29ed4c2a0cd7ae14415d743002f8b61fa1e1b337f0e38d5248fbb11bbd531a77",
   "0e7d9b079f0d6acf8a34aca0c1cacf08e302d30194c42cdfe5a1dff1b827a6cc",
+  // 2026-09-19 launch-readiness pass: Apple Health disclosed, three processors added (Stripe, Sentry,
+  // IP geolocation), the under-13 signup sentence corrected, retention given real numbers, the
+  // 'not yet reviewed by counsel' admission and the 'no version tracking' sentence removed.
+  "ea972e2aebe9e2cf87aeb3658ae5eaba344add1b274041347b2e281d6ddfcfcc",
 ] as const;
 /** EVERY stored shape of the terms of service Forge ever shipped, current one excluded.
 
@@ -134,4 +141,7 @@ export const TERMS_OF_SERVICE_PRIOR_SHIPPED = [
   "2160c9605752c049445d5e8d5bab32b6e40a43731ce040398892dfde909c960d",
   "c79d547edbd11ce6737253747e42eefef8828561a51b64f4d92b74163198f2e4",
   "477d50ecba839e87cd0c6897fcc9468ccc69d79922527a2d73e53c38b4a862f5",
+  // 2026-09-19 launch-readiness pass: guardian acceptance sentence, framework names dropped from s2,
+  // the under-13 signup sentence corrected in s4, parent (not coach) permission in s6.
+  "0587dbda49107e1d7718a6ee1b4230aee8fab13c0950a6fe34f84bec15aa66ae",
 ] as const;
