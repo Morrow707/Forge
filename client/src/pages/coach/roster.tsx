@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -428,6 +428,11 @@ export default function CoachRoster() {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
       toast.success("Added to team");
     },
+    // The one mutation here that had no onError, and the one whose failure a coach
+    // most needs to read: a join refused at the plan ceiling answers with the
+    // "move up a plan" message, which silently went nowhere -- the athlete simply
+    // did not appear and nothing said why.
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't add that athlete to the team"),
   });
 
   const bulkAddToTeamMutation = useMutation({
@@ -1703,7 +1708,7 @@ function PainEscalations() {
               {e.isMinor && <span className="ml-1 text-amber-500">(under 18)</span>}
             </span>
             <Button size="sm" variant="outline" asChild>
-              <a href={`/coach/roster/${e.athleteId}`}>Open</a>
+              <Link href={`/coach/roster/${e.athleteId}`}>Open</Link>
             </Button>
           </div>
         ))}

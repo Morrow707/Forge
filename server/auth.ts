@@ -213,6 +213,20 @@ const deviceApprovalPollLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: "Too many requests. Please try again shortly." },
 });
+// Completing a reset with a token. Its own budget, deliberately separate from
+// passwordResetLimiter's 8/hour: that one is shared with REQUESTING a reset, so
+// putting completion under it could lock a legitimate user out of finishing a
+// reset after a few request attempts. The token is 32 random bytes hashed at
+// rest with a one-hour expiry, so this is consistency with the other
+// token-bearing routes, not a defence that was missing.
+const passwordResetCompleteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Please try again shortly." },
+});
+
 const deviceApprovalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 30,
@@ -1679,7 +1693,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/auth/reset-password", async (req, res, next) => {
+  app.post("/api/auth/reset-password", passwordResetCompleteLimiter, async (req, res, next) => {
     try {
       const parsed = resetPasswordSchema.safeParse(req.body);
       if (!parsed.success) {

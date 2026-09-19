@@ -124,7 +124,7 @@ describe("no component is built and then never mounted", () => {
       }
     }
     expect(unmounted, `components nothing imports: ${unmounted.join(", ")}`).toEqual([]);
-  });
+  }, 60_000); // repo-wide scan; the default 5s times out under a loaded CI box
 });
 
 // THE QUERY ENGINE'S PRIVACY PROPERTIES HAVE TO BE ON SCREEN.

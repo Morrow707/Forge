@@ -173,7 +173,7 @@ function NoCoachCard() {
   );
 }
 
-function StrengthLeaderboard({ myId }: { myId: number }) {
+function StrengthLeaderboard() {
   const [exerciseId, setExerciseId] = useState<string>("");
 
   const { data: exercises, isError: exercisesFailed } = useQuery<LeaderboardExercise[] | null>({
@@ -281,7 +281,7 @@ function StrengthLeaderboard({ myId }: { myId: number }) {
   );
 }
 
-function SpeedLeaderboard({ myId }: { myId: number }) {
+function SpeedLeaderboard() {
   const [skillExerciseId, setSkillExerciseId] = useState<string>("");
   // A 10, a 40 and a 60 are three different events, so the board is picked
   // per distance instead of ranking every sprint for this drill together --
@@ -463,10 +463,10 @@ export default function AthleteLeaderboard() {
           <TabsTrigger value="speed">Speed & Agility</TabsTrigger>
         </TabsList>
         <TabsContent value="strength">
-          <StrengthLeaderboard myId={user.id} />
+          <StrengthLeaderboard />
         </TabsContent>
         <TabsContent value="speed">
-          <SpeedLeaderboard myId={user.id} />
+          <SpeedLeaderboard />
         </TabsContent>
       </Tabs>
     </AppShell>

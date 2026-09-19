@@ -1,7 +1,10 @@
 # Forge -- signup Terms of Use: review request
 
-Prepared 2026-09-19 for attorney review. The last of the nine live documents with no
-lawyer's eyes on it. It is the clickwrap every account holder accepts at signup, and the
+**Reviewed.** Prepared 2026-09-19 for attorney review; counsel returned a rewrite the same day
+with the four additions below folded in and answered the five questions, and that text is live
+(`docs/signup-terms-counsel-2026-09-19.txt`, then merged with the public Terms of Service on
+Scott's decision). Kept as the record of what was asked and why. At the time of writing it was
+the last of the nine live documents with no lawyer's eyes on it. It is the clickwrap every account holder accepts at signup, and the
 exact text is stored with each acceptance (`server/seed-data/signup-agreement.ts`; a
 healthcare notice for clinicians is appended to it at deploy time).
 

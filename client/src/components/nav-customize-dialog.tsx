@@ -14,6 +14,7 @@ import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import { DAILY_CHECKIN_TERM_KEY, DEFAULT_DAILY_CHECKIN_TERM } from "@shared/wellness";
+import { ReadFailed } from "@/components/read-failed";
 
 export type NavCustomizeItem = { href: string; label: string; icon: LucideIcon };
 
@@ -41,7 +42,11 @@ export function NavCustomizeDialog({
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [labels, setLabels] = useState<Record<string, string>>({});
 
-  const { data } = useQuery<NavPrefs>({
+  const {
+    data,
+    isError,
+    refetch,
+  } = useQuery<NavPrefs>({
     queryKey: ["/api/coach/nav-prefs"],
     queryFn: () => getJson("/api/coach/nav-prefs"),
     enabled: open,
@@ -89,6 +94,14 @@ export function NavCustomizeDialog({
             and your whole staff. Your athletes' own navigation is unchanged.
           </DialogDescription>
         </DialogHeader>
+        {/* HYDRATE-IN-AN-EFFECT, SAVE-THE-WHOLE-STATE -- see CLAUDE.md. On a failed read the
+            effect never runs, so `hidden` stays an empty Set and `labels` an empty object, and
+            the PATCH below replaces both wholesale: the first checkbox tap would write away
+            every other hidden tab and every rename this coach's whole staff shares. The editor
+            does not open until the read lands. */}
+        {isError ? (
+          <ReadFailed what="your navigation settings" onRetry={() => void refetch()} />
+        ) : (
         <div className="space-y-2">
           {items.map((item) => {
             const Icon = item.icon;
@@ -126,6 +139,7 @@ export function NavCustomizeDialog({
             />
           </div>
         </div>
+        )}
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
           Done
         </Button>

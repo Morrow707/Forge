@@ -7,10 +7,13 @@ holds it, the app renders a school's own filled-in copy from that constant, and 
 human-readable mirror of it. `shared/institutional-service-agreement.test.ts` fails if the two
 drift. Edit the constant; regenerate or hand-edit this file to match.
 
-A school's primary coach downloads their own copy from /documents
-(`POST /api/coach/institutional-agreement/download`), signs it, and uploads the signed PDF back
-on the same page as an `externalWaivers` kind `institutional_agreement` (see
-`institutional-agreement-signed.itest.ts`). Scott no longer fills anything in by hand.
+A school's primary coach signs it in the app on /documents: fills in the institution's
+details, reads the text, ticks that they are authorised and have read it, and types their name
+(`POST /api/coach/institutional-agreement/sign`, `institutional-agreement-sign.itest.ts`). That
+writes the signed PDF as an accepted `externalWaivers` kind `institutional_agreement`, an
+`institutional_agreement_signatures` evidence row and a consent record. Paper is the fallback:
+download (`POST .../download`), sign, upload on the same page (`institutional-agreement-signed.itest.ts`).
+Scott no longer fills anything in by hand.
 
 The header block below is shown with its fields empty. In a rendered agreement they are filled:
 INSTITUTION, ADDRESS, AUTHORIZED REPRESENTATIVE and NOTICES TO THE INSTITUTION come from the form

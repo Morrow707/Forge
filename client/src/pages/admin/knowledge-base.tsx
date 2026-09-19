@@ -652,7 +652,7 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
  * both "1 source" and are nothing alike.
  */
 function CoverageCard() {
-  const { data: coverage = [] } = useQuery<
+  const { data: coverage = [], isError: coverageFailed, refetch: refetchCoverage } = useQuery<
     { domain: string; label: string; sources: number; passages: number; fromVision: number }[]
   >({
     queryKey: ["/api/admin/knowledge-coverage"],
@@ -674,6 +674,15 @@ function CoverageCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {coverageFailed ? (
+          // An empty coverage table is read as "no assistant has anything behind it",
+          // and the action that prompts is re-ingesting a book -- which is a real bill.
+          <ReadFailed
+            what="the knowledge coverage"
+            onRetry={() => void refetchCoverage()}
+            className="flex flex-col items-start gap-2 text-left"
+          />
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -703,7 +712,8 @@ function CoverageCard() {
             </tbody>
           </table>
         </div>
-        {empty.length > 0 && (
+        )}
+        {!coverageFailed && empty.length > 0 && (
           <p className="text-xs text-amber-500">
             Nothing behind {empty.map((c) => c.label).join(", ")}. Those assistants are running
             on general knowledge alone.
@@ -1247,7 +1257,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
   const [fromPage, setFromPage] = useState("");
   const [toPage, setToPage] = useState("");
 
-  const { data: pageMap = [] } = useQuery<
+  const { data: pageMap = [], isError: pageMapFailed, refetch: refetchPageMap } = useQuery<
     { pageNumber: number; passages: number; characters: number }[]
   >({
     queryKey: ["knowledge-page-map", source.id],
@@ -1343,8 +1353,10 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
           </Button>
         </CardTitle>
         <CardDescription>
-          {source.passageCount.toLocaleString()} passage(s), from{" "}
-          {pageMap.length.toLocaleString()} page(s) that produced any text.
+          {source.passageCount.toLocaleString()} passage(s)
+          {pageMapFailed
+            ? ". Couldn't load which pages they came from."
+            : `, from ${pageMap.length.toLocaleString()} page(s) that produced any text.`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -1353,6 +1365,13 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
             Pages, by how much they produced
           </p>
           <div className="max-h-40 overflow-y-auto rounded-md border">
+            {pageMapFailed && (
+              <ReadFailed
+                what="the page map"
+                onRetry={() => void refetchPageMap()}
+                className="flex flex-col items-start gap-2 p-2 text-left"
+              />
+            )}
             <div className="flex flex-wrap gap-1 p-2">
               {pageMap.map((p) => (
                 <button

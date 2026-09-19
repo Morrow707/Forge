@@ -9,6 +9,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/read-failed";
 import { AcademyQuiz } from "@/components/academy-quiz";
 
 type TrackSummary = {
@@ -56,12 +57,12 @@ export default function CoachesCorner() {
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [sort, setSort] = useState<TrackSort>("unlocked");
 
-  const { data: tracks = [], isLoading } = useQuery<TrackSummary[]>({
+  const { data: tracks = [], isLoading, isError, refetch } = useQuery<TrackSummary[]>({
     queryKey: ["/api/coach/academy/tracks"],
     queryFn: () => getJson("/api/coach/academy/tracks"),
   });
 
-  const { data: trackDetail } = useQuery<TrackDetail>({
+  const { data: trackDetail, isError: trackFailed, refetch: refetchTrack } = useQuery<TrackDetail>({
     queryKey: [`/api/coach/academy/tracks/${selectedTrackId}`],
     queryFn: () => getJson(`/api/coach/academy/tracks/${selectedTrackId}`),
     enabled: selectedTrackId != null,
@@ -83,6 +84,44 @@ export default function CoachesCorner() {
     return (
       <AppShell title="Coaches Corner">
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
+      </AppShell>
+    );
+  }
+
+  // A failed catalog read renders as an empty grid under the "not unlocked yet"
+  // upsell, which reads as "Forge has no coach education" rather than "we could
+  // not load it" -- and the upsell is the wrong thing to show a coach who may
+  // already have access.
+  if (isError) {
+    return (
+      <AppShell title="Coaches Corner">
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="Coaches Corner" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      </AppShell>
+    );
+  }
+
+  // Same reason on the way in to a track: without this, tapping a card leaves the
+  // coach on the catalog with no sign anything was tried.
+  if (selectedTrackId != null && trackFailed) {
+    return (
+      <AppShell
+        title="Coaches Corner"
+        actions={
+          <Button variant="outline" onClick={() => setSelectedTrackId(null)}>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Coaches Corner
+          </Button>
+        }
+      >
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="this track" onRetry={() => void refetchTrack()} />
+          </CardContent>
+        </Card>
       </AppShell>
     );
   }

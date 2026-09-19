@@ -1194,6 +1194,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.use(async (req, res, next) => {
     try {
+      // API requests only. This is mounted with no path, so it used to answer the SPA document
+      // request itself with the JSON refusal -- a held athlete who refreshed any URL saw a raw
+      // JSON page instead of the app, and never reached the screen that tells them what to do.
+      if (!req.path.startsWith("/api/")) return next();
       const user = req.isAuthenticated?.() ? (req.user as any) : null;
       if (!user || user.role !== "athlete") return next();
       if (GUARDIAN_GATE_ALLOWED_PREFIXES.some((p) => req.path.startsWith(p))) return next();
@@ -3903,6 +3907,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // signed PDF a coach uploads, not a document an admin edits here.
     "eula",
     "assumption_of_risk",
+    // Missing here too, so the admin editor's GET/PUT for it 404'd along with the public page.
+    "ai_terms_of_use",
   ] as const;
   type LegalDocType = (typeof LEGAL_DOC_TYPES)[number];
   const isLegalDocType = (v: string): v is LegalDocType => (LEGAL_DOC_TYPES as readonly string[]).includes(v);
@@ -3913,6 +3919,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     parental_notice: "Notice to Parent or Guardian",
     eula: "End User License Agreement",
     assumption_of_risk: "Assumption of Risk and Release",
+    ai_terms_of_use: "Artificial Intelligence Terms of Use",
   };
 
   // Publicly browsable -- see the public route below. App Store Connect needs
@@ -3938,6 +3945,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "eula",
     "biometric_waiver",
     "assumption_of_risk",
+    // /ai-terms rendered "couldn't load" from the day the page shipped: the type was in the
+    // enum, seeded, routed and admin-editable, but never made public here. The runtime audit
+    // of 2026-09-19 caught it; nothing static could.
+    "ai_terms_of_use",
   ] as const;
   const isPublicLegalDocType = (v: string): v is (typeof PUBLIC_LEGAL_DOC_TYPES)[number] =>
     (PUBLIC_LEGAL_DOC_TYPES as readonly string[]).includes(v);

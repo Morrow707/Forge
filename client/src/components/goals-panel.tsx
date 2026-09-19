@@ -179,6 +179,9 @@ export function GoalsPanel({
       qc.invalidateQueries({ queryKey: [goalsUrl] });
       qc.invalidateQueries({ queryKey: [goalsUrl, "history"] });
     },
+    // Without this the X button simply did nothing on a failure -- the goal
+    // stayed on screen with no explanation, which reads as a dead button.
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that goal"),
   });
 
   return (

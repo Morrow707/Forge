@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { SlidersHorizontal } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 import {
   DEFAULT_SKILL_FAULT_THRESHOLDS,
   SKILL_FAULT_THRESHOLD_BOUNDS,
@@ -36,7 +37,10 @@ export function SkillFaultThresholdsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const { data } = useQuery<{ effective: SkillFaultThresholds; isCustomized: boolean }>({
+  const { data, isError, refetch } = useQuery<{
+    effective: SkillFaultThresholds;
+    isCustomized: boolean;
+  }>({
     queryKey: QUERY_KEY,
     queryFn: () => getJson("/api/coach/skill-fault-thresholds"),
     enabled: open,
@@ -77,6 +81,17 @@ export function SkillFaultThresholdsDialog({
             Fault Detection Sensitivity
           </DialogTitle>
         </DialogHeader>
+        {/* HYDRATE-IN-AN-EFFECT, SAVE-THE-WHOLE-STATE -- see CLAUDE.md. On a failed read the
+            effect never runs and `values` keeps DEFAULT_SKILL_FAULT_THRESHOLDS, so pressing Save
+            would PUT the defaults straight over whatever this coach had tuned. The editor does
+            not open until the read lands. */}
+        {isError ? (
+          <ReadFailed
+            what="your fault detection thresholds"
+            onRetry={() => void refetch()}
+          />
+        ) : (
+          <>
         <p className="text-sm text-muted-foreground">
           These control how sensitive the camera tracker's automatic fault flags are for sprint
           and swing/throw mechanics. They started as general coaching-literature defaults --
@@ -125,6 +140,8 @@ export function SkillFaultThresholdsDialog({
             {saveMutation.isPending ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

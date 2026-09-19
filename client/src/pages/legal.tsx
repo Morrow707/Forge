@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { ForgeMark } from "@/components/forge-mark";
+import { ReadFailed } from "@/components/read-failed";
 
 /**
  * Public, unauthenticated page for the same document signup's clickwrap
@@ -11,7 +12,7 @@ import { ForgeMark } from "@/components/forge-mark";
  * without logging in to point it at -- this is that page.
  */
 export default function LegalPage() {
-  const { data, isLoading } = useQuery<{ content: string }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ content: string }>({
     queryKey: ["/api/legal-agreement"],
   });
 
@@ -29,6 +30,8 @@ export default function LegalPage() {
         </h1>
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : isError ? (
+          <ReadFailed what="these terms" onRetry={() => void refetch()} />
         ) : (
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
             {data?.content}

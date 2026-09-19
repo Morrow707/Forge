@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { ReadFailed } from "@/components/read-failed";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AppShell } from "@/components/app-shell";
@@ -77,7 +78,7 @@ export default function AdminCoachExercisesPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
-  const { data, isLoading } = useQuery<Response>({
+  const { data, isLoading, isError, refetch } = useQuery<Response>({
     queryKey: ["/api/admin/coach-exercises"],
     queryFn: () => getJson("/api/admin/coach-exercises"),
   });
@@ -162,7 +163,15 @@ export default function AdminCoachExercisesPage() {
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
-      {!isLoading && !visible.length && (
+      {isError && (
+        <Card>
+          <CardContent className="p-6">
+            <ReadFailed what="the coach-built exercises" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {!isLoading && !isError && !visible.length && (
         <Card>
           <CardContent className="p-6 text-center text-sm text-muted-foreground">
             Nothing matches that.

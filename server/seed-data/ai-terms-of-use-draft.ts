@@ -8,7 +8,9 @@
  * carried. All four are genuinely fixed rather than softened:
  *
  *   - The entire-agreement clause now names its survivors -- the signup agreement, the
- *     Assumption of Risk and Release, the Video and Biometric Information Release and the
+ *     Assumption of Risk and Release, the Video and Biometric Consent (retitled from "Release"
+ *     2026-09-17; name reference corrected here 2026-09-19, a patch in signup-agreement.ts's
+ *     LIVE_DOCUMENT_PATCHES carries it to stored copies) and the
  *     Privacy Policy all remain in force. The first version carved out only the privacy policy,
  *     so accepting it could have been argued to supersede Forge's only two instruments where
  *     somebody gives up a right or grants a consent.
@@ -81,7 +83,7 @@ Alternative Dispute Resolution. The parties will attempt to resolve any dispute 
 
 Governing Law and Jurisdiction. All matters relating to the Company, these Terms, and any dispute or claim arising therefrom or related thereto shall be governed by and construed in accordance with the laws of the State of Arizona, without giving effect to any choice or conflict of law provision. Any legal suit, action, or proceeding arising out of or related to these Terms or the Service shall be instituted exclusively in the state or federal courts located in Maricopa County, Arizona. Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.
 
-Entire Agreement. These Terms constitute the entire understanding between the User and the Company with respect to the Service and supersede all prior or contemporaneous understandings and agreements, whether written or oral, with respect to the Service, except the Forge signup agreement, the Assumption of Risk and Release, the Video and Biometric Information Release, and the Privacy Policy, each of which remains in full force and effect.
+Entire Agreement. These Terms constitute the entire understanding between the User and the Company with respect to the Service and supersede all prior or contemporaneous understandings and agreements, whether written or oral, with respect to the Service, except the Forge signup agreement, the Assumption of Risk and Release, the Video and Biometric Consent, and the Privacy Policy, each of which remains in full force and effect.
 
 Headings. Headings used in these Terms are provided for convenience only and shall not be used to construe meaning or intent.
 

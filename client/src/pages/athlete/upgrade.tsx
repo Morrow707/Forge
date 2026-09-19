@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "@/components/read-failed";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { FreeAgentGate } from "@/components/free-agent-gate";
@@ -64,6 +65,7 @@ export default function AthleteUpgrade() {
   const {
     data: products,
     isLoading,
+    isError: productsFailed,
     refetch,
   } = useQuery<FreeAgentTierProduct[]>({
     queryKey: ["apple-iap-free-agent-products"],
@@ -206,6 +208,9 @@ export default function AthleteUpgrade() {
         )}
         {live && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {productsFailed && !isLoading && (
+              <ReadFailed what="the plans from the App Store" onRetry={() => void refetch()} />
+            )}
             {isLoading &&
               [0, 1, 2].map((i) => <div key={i} className="h-56 animate-pulse rounded-lg bg-surface" />)}
             {products?.map((p) => (

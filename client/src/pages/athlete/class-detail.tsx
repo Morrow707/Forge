@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Lock, CheckCircle2, PlayCircle, BookOpen, ListChecks, Star, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClassLessonReaderDialog } from "@/components/class-lesson-reader-dialog";
+import { ReadFailed } from "@/components/read-failed";
 import { Capacitor } from "@capacitor/core";
 
 type LessonProgress = {
@@ -41,7 +42,7 @@ export default function AthleteClassDetail() {
   const qc = useQueryClient();
   const classId = Number(id);
 
-  const { data, isLoading } = useQuery<ClassProgress>({
+  const { data, isLoading, isError, refetch } = useQuery<ClassProgress>({
     queryKey: [`/api/athlete/classes/${classId}/progress`],
     queryFn: () => getJson(`/api/athlete/classes/${classId}/progress`),
   });
@@ -101,6 +102,22 @@ export default function AthleteClassDetail() {
       }
     },
   });
+
+  // `isLoading || !data` alone spins forever on a failed read -- the "invisible"
+  // half of the hydrate-in-an-effect shape in CLAUDE.md. A spinner that never
+  // resolves reads as a slow page rather than a broken one, so the error branch
+  // comes first.
+  if (isError) {
+    return (
+      <AppShell title="Class">
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="this class" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      </AppShell>
+    );
+  }
 
   if (isLoading || !data) {
     return (

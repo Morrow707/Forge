@@ -3,6 +3,7 @@ import { externalLinkClick } from "@/lib/open-external";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
+import { ReadFailed } from "@/components/read-failed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,7 +81,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
   const [form, setForm] = useState<SkillForm>(emptyForm);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  const { data: skill, isLoading } = useQuery<SkillExerciseWithOwnership>({
+  const { data: skill, isLoading, isError, refetch } = useQuery<SkillExerciseWithOwnership>({
     queryKey: [`${apiBase}/skill-exercises/${id}`],
     enabled: !isNew,
   });
@@ -133,6 +134,21 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
     return (
       <AppShell title="Loading Drill…">
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
+      </AppShell>
+    );
+  }
+
+  // A failed read is not a missing record -- see components/read-failed.tsx. Said apart
+  // from the not-found branch below so nobody is told a record does not exist on the
+  // strength of a request that never landed.
+  if (!isNew && isError) {
+    return (
+      <AppShell title="Skill Drill">
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="this skill drill" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
       </AppShell>
     );
   }

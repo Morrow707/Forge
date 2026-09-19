@@ -1,5 +1,10 @@
 # Proposed clause revisions, and the consents that are missing
 
+**RESOLVED, all of it, as of 2026-09-19.** Part 1's Privacy Policy wording is what section 7 of
+the live policy says today. Part 2's missing consents exist: the Video and Biometric Consent and
+the Assumption of Risk are live, adult-facing documents, both reviewed by counsel. Kept as the
+record of how the gaps were found; nothing here is open.
+
 Two parts. Part 1 is replacement wording for the two clauses that contradict shipped behaviour.
 Part 2 is what the software does that no document currently covers.
 

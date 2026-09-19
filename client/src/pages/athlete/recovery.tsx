@@ -209,9 +209,17 @@ function WorkoutsTab() {
   useEffect(() => {
     if (!supported || user == null) return;
     let cancelled = false;
-    fetchRecentWorkouts(user.id, HISTORY_DAYS).then((w) => {
-      if (!cancelled) setWorkouts(w);
-    });
+    fetchRecentWorkouts(user.id, HISTORY_DAYS)
+      .then((w) => {
+        if (!cancelled) setWorkouts(w);
+      })
+      // A rejected Health read left `workouts` null forever, so this tab was a
+      // skeleton that never resolved -- reads as a slow page, not a broken one.
+      // Empty lands on the "no workouts logged" line, which is at least a
+      // statement the athlete can act on.
+      .catch(() => {
+        if (!cancelled) setWorkouts([]);
+      });
     return () => {
       cancelled = true;
     };

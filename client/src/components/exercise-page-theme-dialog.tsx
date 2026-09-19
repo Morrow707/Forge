@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Lock, Sparkles } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 import { ColorField } from "@/components/color-field";
 import { BILLING_ADD_ONS, formatCents } from "@shared/billing-tiers";
 import type { ExercisePageTheme } from "@shared/schema";
@@ -37,7 +38,7 @@ export function ExercisePageThemeDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery<ThemeResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<ThemeResponse>({
     queryKey: QUERY_KEY,
     queryFn: () => getJson("/api/coach/exercise-page-theme"),
     enabled: open,
@@ -129,6 +130,10 @@ export function ExercisePageThemeDialog({
 
         {isLoading ? (
           <div className="h-40 animate-pulse rounded-md bg-surface" />
+        ) : isError ? (
+          // `entitled` falls back to false when the read fails, so without this branch a coach
+          // who HAS the add-on is told to buy it -- an answer nobody asked the server for.
+          <ReadFailed what="your exercise screen colors" onRetry={() => void refetch()} />
         ) : !entitled ? (
           <div className="flex flex-col items-start gap-3 rounded-md border border-border bg-surface p-4">
             <Lock className="h-6 w-6 text-muted-foreground" />

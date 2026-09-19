@@ -44,7 +44,7 @@ describe("the AI terms", () => {
     for (const survivor of [
       "the Forge signup agreement",
       "the Assumption of Risk and Release",
-      "the Video and Biometric Information Release",
+      "the Video and Biometric Consent",
       "the Privacy Policy",
     ]) {
       expect(AI_TERMS_OF_USE, survivor).toContain(survivor);
@@ -146,5 +146,20 @@ describe("the age rule, against the gate that enforces it", () => {
     // are checked against their own phrasing of the one rule rather than a shared sentence.
     expect(signup).toMatch(/applies to all minor athletes, regardless of whether they initiated/);
     expect(AI_TERMS_OF_USE).toMatch(/every athlete under 18 however they arrived/);
+  });
+});
+
+describe("the AI terms are actually servable", () => {
+  // The runtime audit of 2026-09-19 found /ai-terms rendering "couldn't load": the type was
+  // in the enum, seeded, routed and admin-labelled -- every static check above passed -- but
+  // it was never added to the two route-side lists that make a document readable. Both are
+  // scanned here because each one failing independently was the bug.
+  const routes = read("server/routes.ts");
+  const listBody = (name: string) => routes.slice(routes.indexOf(`const ${name} = [`), routes.indexOf("] as const;", routes.indexOf(`const ${name} = [`)));
+  it("is a legal document type the routes know", () => {
+    expect(listBody("LEGAL_DOC_TYPES")).toContain('"ai_terms_of_use"');
+  });
+  it("is public, so /ai-terms can fetch it without signing in", () => {
+    expect(listBody("PUBLIC_LEGAL_DOC_TYPES")).toContain('"ai_terms_of_use"');
   });
 });
