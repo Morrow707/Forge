@@ -24,6 +24,7 @@ type SignupPayload = {
   // It picks the billing band at signup (see the signup page); athletes
   // never send it.
   expectedAthletes?: number;
+  staffInviteCode?: string;
   agreedToTerms: true;
   // Optional and unticked by default -- see the signup page's own comment
   // for why this is a separate box from the terms, and why the server

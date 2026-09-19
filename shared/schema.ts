@@ -7343,6 +7343,11 @@ export const signupSchema = z.object({
   // The upper bound is MAX_EXPECTED_ATHLETES rather than a literal so the signup form, the
   // plan route and this schema cannot disagree about it.
   expectedAthletes: z.number().int().min(1).max(MAX_EXPECTED_ATHLETES).optional(),
+  // A coach joining an EXISTING program's staff at signup. The plan is the primary coach's and
+  // lives on the primary's row, so a signup carrying this is not asked expectedAthletes -- see
+  // the signup handler. It is the staffInviteCode the primary hands out (users.staffInviteCode),
+  // never coachCode, which is the athlete code and is public.
+  staffInviteCode: z.string().trim().min(1).max(64).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),

@@ -47,13 +47,13 @@ describe("signup sends expectedAthletes only for a coach", () => {
   });
 
   it("only draws the question for a coach", () => {
-    expect(signupSrc).toMatch(/role === "coach" && \(\s*\n?\s*<div/);
+    expect(signupSrc).toMatch(/role === "coach" && !joiningStaff && \(\s*\n?\s*<div/);
     expect(signupSrc).toContain("How many athletes will you have?");
   });
 
   it("validates before submitting rather than letting the server 400 answer it", () => {
     expect(signupSrc).toMatch(/Number\.isInteger\(expectedAthletesNum\)/);
-    expect(signupSrc).toMatch(/if \(role === "coach" && !expectedAthletesValid\)/);
+    expect(signupSrc).toMatch(/if \(role === "coach" && !joiningStaff && !expectedAthletesValid\)/);
   });
 });
 

@@ -566,6 +566,7 @@ export function setupAuth(app: Express) {
         agreedToBiometricRelease,
         agreedToAssumptionOfRisk,
         expectedAthletes,
+        staffInviteCode,
       } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
@@ -587,7 +588,22 @@ export function setupAuth(app: Express) {
       // A coach who arrives any other way is NOT put through this: a staff coach joining an
       // existing org (POST /api/auth/join-staff) does not pick a plan, because the plan is the
       // primary coach's and lives on the primary's row.
-      if (role === "coach" && expectedAthletes === undefined) {
+      //
+      // That other way is a staff invite code in the signup body: the assistant is joining a
+      // program that already has a plan, so asking them for a headcount would either be
+      // ignored or, worse, quote them a second bill. The code is checked BEFORE the account
+      // is created so a typo is a 400 rather than an orphaned coach account.
+      const staffPrimary =
+        role === "coach" && staffInviteCode
+          ? await storage.getUserByStaffInviteCode(staffInviteCode)
+          : null;
+      if (role === "coach" && staffInviteCode && (!staffPrimary || staffPrimary.role !== "coach")) {
+        return res.status(400).json({
+          message: "That staff invite code doesn't match any program. Ask your head coach for it.",
+        });
+      }
+      const joiningStaff = staffPrimary !== null;
+      if (role === "coach" && !joiningStaff && expectedAthletes === undefined) {
         return res.status(400).json({ message: "Tell us roughly how many athletes you'll have" });
       }
 
@@ -670,8 +686,10 @@ export function setupAuth(app: Express) {
         // NOT touched: it defaults true and is the one switch that makes any of this actually
         // restrict an account, flipped by an admin and nothing else. Setting a tier here is a
         // price quote, not enforcement.
-        plannedAthleteCount: role === "coach" ? expectedAthletes ?? null : null,
-        billingTier: role === "coach" && expectedAthletes !== undefined
+        // A staff coach's own row never carries a plan: everything billing reads resolves
+        // off the primary's row, and a tier here would be a second quote nobody asked for.
+        plannedAthleteCount: role === "coach" && !joiningStaff ? expectedAthletes ?? null : null,
+        billingTier: role === "coach" && !joiningStaff && expectedAthletes !== undefined
           ? bandForAthleteCount(expectedAthletes).id
           : null,
         // Every minor, not just 13-17: an under-13 athlete needs the
@@ -694,6 +712,17 @@ export function setupAuth(app: Express) {
         agreedToTermsAt: new Date(),
         agreedToTermsText,
       });
+      // The code was validated above, and a brand-new account has no staff of its own, so
+      // the only way this returns null is the primary rotating their code in the same
+      // second. Surface it rather than leave a coach who thinks they joined on their own.
+      if (joiningStaff && staffInviteCode) {
+        const joined = await storage.joinCoachStaffByCode(user.id, staffInviteCode);
+        if (!joined) {
+          return res.status(400).json({
+            message: "That staff invite code stopped working. Ask your head coach for a fresh one.",
+          });
+        }
+      }
       await storage.logConsentRecord({
         userId: user.id,
         consentType: "terms_of_service",
