@@ -189,25 +189,15 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **462** is the newest TestFlight build, cut from `c089279` on
-  2026-09-19 (Scott: "Upload all"). `verify_build` run 461 passed
-  `altool --validate-app` on the same commit first. It carries everything
-  accumulated since 459: the camera entitlement gate and caveat coverage
-  (`6bca8a8`), the tier reversal (AI Coach + Video back on sale with the
-  purchase warning, skills moved onto it, so Basic and AI Coach lose the Skill
-  Programs tab, Skill Bank and skill sessions), and the SEO and first-paint
-  work (marketing pages, movement library, the 412kB lighter chunk split,
-  WebP screenshots). Nothing on `main` is waiting on an upload.
-- **NOT in 462:** the fixes from the post-merge audit, merged via PR #121. The
-  prerendered public routes no longer 301 to a trailing-slash URL (server-side:
-  `server/public-static.ts`, ships on Render, not in a build). The
-  `useSkillsAccess` / `useCameraAccess` hooks now report a failed read, the
-  skills gate renders `ReadFailed` instead of spinning forever, and both
-  workout pages say so where the camera control would have been. That half is
-  client-side and reaches the app; 462 still has the infinite spinner. Also
-  server-side: the SPA catch-all now really answers a missing asset with a 404
-  (it never had, `req.path` is "/" under `app.use("*")`), which is what the
-  client's stale-chunk reload recovery waits for.
+- Build **465** is the newest TestFlight build, cut from `efdf9d0` on
+  2026-09-19 (Scott: "upload whatever you need to upload"). `verify_build`
+  run 464 had passed `altool --validate-app` on the merge it carries. On top
+  of 462 it adds the post-merge audit fixes: the access hooks report a failed
+  read (skills gate shows ReadFailed instead of spinning, both workout pages
+  say so where the camera control would be), plus the server-side clean-URL
+  prerender, the real 404 for missing assets and the shared color helper,
+  which ship on Render rather than in the binary. Nothing on `main` is
+  waiting on an upload.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
