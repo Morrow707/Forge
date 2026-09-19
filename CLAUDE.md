@@ -229,10 +229,18 @@ whose rep counts were wrong and whose fixes are not yet validated against real f
 - **Never hand-type the tier list.** The checkout route named the three ids as literals, so
   withdrawing a tier elsewhere would have left that one endpoint still selling it. It derives
   from `FREE_AGENT_TIER_ORDER` now, and the test scans for the literal.
-- **The App Store side needs a human.** The subscription Product lives in App Store Connect, not
-  this repo. Forge no longer offers it, but the Product must be marked unavailable there or it
-  is still reachable. Verification deliberately keeps honouring such a purchase -- refusing to
-  grant a tier somebody was genuinely charged for would be worse.
+- **OPEN ACTION, DEFERRED BY SCOTT 2026-09-19: mark the Product unavailable in App Store
+  Connect.** "Flag it, we will update it later." This is the one half of the withdrawal that
+  code cannot do. The `ai_coach_video` auto-renewable subscription Product lives in App Store
+  Connect, not in this repo. Forge no longer OFFERS it -- it is off every price list, every card
+  and the checkout route -- but the Product itself is still live on Apple's side, so it remains
+  reachable there until somebody marks it unavailable. Until that happens the withdrawal is
+  complete in the app and incomplete on the store.
+  Deliberately NOT worked around in code: verification keeps honouring such a purchase, because
+  refusing to grant a tier somebody was genuinely charged for is worse than the sale staying
+  open a while longer. Do not "fix" this by making verification reject the product -- that
+  punishes the customer for Apple-side configuration.
+  Delete this bullet when the Product is marked unavailable.
 - **Putting it back is one line**: add `ai_coach_video` to `FREE_AGENT_TIER_ORDER`. Do that when
   the camera has been validated against real lifts, not before.
 
