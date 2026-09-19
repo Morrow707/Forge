@@ -210,6 +210,26 @@ Two things worth saying out loud when someone tests this:
   fills it); signing is still on paper, and the signed copy is uploaded on the same page.
   Generating never writes a record -- only the upload does.
 
+## A school picks its plan at signup by typing a number
+
+Added 2026-09-19. Scott: "make schools pick a plan at signup ... can we have them type in how
+many athletes they will have?" Yes: the price is already $4 an athlete in bands, so the number
+IS the plan. `users.plannedAthleteCount` is what the school SAID; the roster is what they HAVE;
+billing uses the larger (`getBilledAthleteCountForCoach`).
+
+- **Coach signup requires `expectedAthletes`** and sets `billingTier` from `bandForAthleteCount`.
+  That is what makes the Service Agreement offered with no admin step. `isBetaAccount` is NOT
+  touched -- it stays the deliberate enforcement switch, so nothing is charged or capped in beta.
+- **`GET/PUT /api/coach/plan`** is the one place the plan is read and changed; PUT is primary
+  coach only. The coach billing page shows planned, roster, billed band, and an `atCap` notice.
+- **The Stripe webhook writes the band** on a coach subscription (`applyCoachSubscriptionBand`),
+  and `plannedAthleteCount` only ever moves up from it. Nothing writes it on the Apple path.
+- **At the ceiling the join is refused**, and the message says the coach must move up a plan.
+  Moving up is the same $4 a head, so guessing low costs nothing. Enforcement semantics unchanged.
+- Every fresh coach signup is asked the number, including a future assistant who joins a staff
+  afterwards; their own answer is never read once they are on a staff. A staff-invite signal at
+  signup would let them skip it and was not built.
+
 ## Per-team coach assignment
 
 Added 2026-09-19. Scott: "for a school, can they assign more than one coach to a team?"

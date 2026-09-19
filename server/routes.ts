@@ -2,7 +2,7 @@ import express, { type Express } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { needsCoppaAttestation } from "@shared/coach-attestation";
-import { coachesCornerCompedForRoster } from "@shared/billing-tiers";
+import { coachesCornerCompedForRoster, BILLING_TIERS, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
@@ -189,6 +189,7 @@ import {
   updateLegalDocumentSchema,
   emailLegalDocumentSchema,
   externalWaiverKindEnum,
+  signupSchema,
 } from "@shared/schema";
 import { readUploadedWaiver } from "./waiver-reader";
 import { promises as fsp } from "node:fs";
@@ -11227,10 +11228,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
-      // The roster band, which is what /coach/billing quotes. Seat count rather
-      // than a raw roster length, so the figure checkout uses is the same one the
-      // rest of billing counts (see getRosterSeatCountForCoach).
-      const seats = await storage.getRosterSeatCountForCoach(user.id);
+      // The roster band, which is what /coach/billing quotes. The BILLED count, not the raw
+      // seat count: a school that told us at signup it expects 180 athletes and has not added
+      // anybody yet would otherwise check out on the zero-athlete band, which is the cheapest
+      // one there is. See storage.getBilledAthleteCountForCoach for why it is the larger of
+      // the two rather than either on its own.
+      const seats = await storage.getBilledAthleteCountForCoach(user.id);
       const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/coach");
       const result = await createCoachSubscriptionCheckout(
         user.id,
@@ -11243,6 +11246,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     },
   );
+
+  /** The org's plan as every plan surface reads it: what they said, what they have, what they
+   * are billed for, and which band that lands in. One builder for the GET and the PUT so the
+   * two can never answer the same question differently.
+   *
+   * atCap is entitlements, not the band: the band is a PRICE, the cap is enforcement, and
+   * enforcement is off for a beta account (athleteCap null), so this is false today. It exists
+   * so a coach can see the same wall an athlete meets at claimRosterSeat, from their side. */
+  async function coachPlanPayload(coachId: number) {
+    const primaryId = await storage.getPrimaryCoachId(coachId);
+    const primary = await storage.getUser(primaryId);
+    const rosterCount = await storage.getRosterSeatCountForCoach(coachId);
+    const billedCount = await storage.getBilledAthleteCountForCoach(coachId);
+    const band = primary?.billingTier ? BILLING_TIERS[primary.billingTier] ?? null : null;
+    const entitlements = await getEntitlementsForCoach(coachId);
+    return {
+      plannedAthleteCount: primary?.plannedAthleteCount ?? null,
+      rosterCount,
+      billedCount,
+      band: band
+        ? {
+            id: band.id,
+            label: band.label,
+            monthlyPriceCents: band.monthlyPriceCents,
+            athleteCapIncluded: band.athleteCapIncluded,
+            athleteFloor: band.athleteFloor,
+          }
+        : null,
+      atCap: entitlements.athleteCap !== null && rosterCount >= entitlements.athleteCap,
+      perAthleteCents: ORG_PER_ATHLETE_CENTS,
+    };
+  }
+
+  // THE PLAN A SCHOOL PICKED FOR ITSELF.
+  //
+  // Reads the org's own answer to "how many athletes do you expect?" back, next to what the
+  // roster actually holds and what the two of them add up to for billing. This is the read
+  // side of the self-serve plan: the band was chosen by the number the school typed at signup
+  // (see the signup handler in server/auth.ts), not by an admin, and this is where they see
+  // and change it.
+  //
+  // Any staff coach may READ it -- the plan is org-wide information, the same way branding is
+  // -- but it always resolves off the primary coach's row, which is where billing lives.
+  app.get("/api/coach/plan", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await coachPlanPayload(user.id));
+  });
+
+  // Restating the expected number, which re-derives the band. Primary coach only: an assistant
+  // changing what the org pays is the same class of thing as an assistant repainting the
+  // program's colors, and requirePrimaryCoach is what already says no to that.
+  app.put("/api/coach/plan", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
+    // Same bounds as signup, from the same schema field, so the two answers to one question
+    // cannot start disagreeing about what a valid answer is.
+    const schema = z.object({ expectedAthletes: signupSchema.shape.expectedAthletes.unwrap() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Tell us roughly how many athletes you'll have" });
+    }
+    const user = currentUser(req);
+    await storage.setPlannedAthleteCount(user.id, parsed.data.expectedAthletes);
+    // Answers with the same shape the GET does, so a client never has to refetch to redraw.
+    res.json(await coachPlanPayload(user.id));
+  });
 
   app.post(
     "/api/billing/checkout/class-lesson",

@@ -85,9 +85,12 @@ describe("prices and quantities come from the server, never the request", () => 
   it("charges the coach the band its roster falls into", () => {
     const idx = routes.indexOf('"/api/billing/checkout/coach"');
     const route = routes.slice(idx, idx + 900);
-    // The roster count comes from storage, never from the request body: a
-    // client-supplied quantity would be a client-supplied price.
-    expect(route).toContain("getRosterSeatCountForCoach");
+    // The count comes from storage, never from the request body: a
+    // client-supplied quantity would be a client-supplied price. It is the BILLED count (the
+    // larger of the roster and what the school said it expects at signup), not the bare roster
+    // -- a school that has not added anybody yet would otherwise check out on the cheapest band
+    // there is. See storage.getBilledAthleteCountForCoach.
+    expect(route).toContain("getBilledAthleteCountForCoach");
     expect(route).not.toMatch(/req\.body/);
     expect(billing).toContain("quantity: band.athleteCapIncluded");
     // And the band itself is derived server-side from that count.

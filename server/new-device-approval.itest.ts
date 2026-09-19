@@ -232,6 +232,9 @@ describe("a new device waits on the email", () => {
       role: "coach",
       dateOfBirth: "1990-01-01",
       agreedToTerms: true,
+      // A coach signup picks its plan here -- see server/plan-at-signup.itest.ts. Nothing to do
+      // with the device gate; without it the route 400s before this test's subject is reached.
+      expectedAthletes: 25,
     });
     if (signup.status !== 201) {
       throw new Error(`signup did not succeed: ${signup.status} ${JSON.stringify(signup.body)}`);
