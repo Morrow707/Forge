@@ -198,12 +198,13 @@ can install. Delete entries as a `beta` ships them.
   Programs tab, Skill Bank and skill sessions), and the SEO and first-paint
   work (marketing pages, movement library, the 412kB lighter chunk split,
   WebP screenshots). Nothing on `main` is waiting on an upload.
-- Two known problems on `main` that 462 also carries, found in the
-  post-merge audit and NOT yet fixed: the prerendered public routes 301 to a
-  trailing-slash URL (server-side, ships on Render, not in a build), and the
-  `useSkillsAccess` / `useCameraAccess` hooks never surface a failed read, so
-  a failed `/api/athlete/skills-access` request is an infinite spinner on the
-  skills tab. The second one is client-side and DOES reach the app.
+- **NOT in 462:** the two fixes from the post-merge audit, queued on PR #121. The
+  prerendered public routes no longer 301 to a trailing-slash URL (server-side:
+  `server/public-static.ts`, ships on Render, not in a build). The
+  `useSkillsAccess` / `useCameraAccess` hooks now report a failed read, the
+  skills gate renders `ReadFailed` instead of spinning forever, and both
+  workout pages say so where the camera control would have been. That half is
+  client-side and reaches the app; 462 still has the infinite spinner.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

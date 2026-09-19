@@ -20,6 +20,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { PUBLIC_ROUTES } from "../shared/public-routes";
 import { SITE_NAME, DEFAULT_SHARE_IMAGE } from "../client/src/lib/page-meta";
+import { prerenderedFileFor } from "../server/public-static";
 
 const dist = path.resolve(import.meta.dirname, "..", "dist", "public");
 const origin = (process.env.VITE_PUBLIC_ORIGIN || "https://forgeperformancesystems.com").replace(/\/$/, "");
@@ -67,15 +68,13 @@ for (const route of routes) {
     html = replaceOrFail(html, pattern, replacement, what);
   }
 
-  if (route.path === "/") {
-    fs.writeFileSync(path.join(dist, "index.html"), html);
-  } else {
-    // A directory with its own index.html, so express.static serves it at the clean URL with no
-    // routing change and no rewrite rule.
-    const dir = path.join(dist, route.path.replace(/^\//, ""));
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "index.html"), html);
-  }
+  // A flat file per route, served at the clean URL through the extensions option in
+  // server/public-static.ts. NOT a directory with an index.html: express.static answers that
+  // with a 301 to the trailing-slash URL, which is how the first version of this shipped every
+  // public page behind a redirect its own canonical tag disagreed with.
+  const out = path.join(dist, prerenderedFileFor(route.path));
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, html);
   written++;
 }
 

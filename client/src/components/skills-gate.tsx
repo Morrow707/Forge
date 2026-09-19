@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Target } from "lucide-react";
 import { useSkillsAccess } from "@/hooks/use-skills-access";
+import { ReadFailed } from "@/components/read-failed";
 
 /**
  * Wraps every skills page an athlete can reach.
@@ -25,7 +26,18 @@ export function SkillsGate({ children, title = "Skills" }: { children: ReactNode
   const [, navigate] = useLocation();
   const access = useSkillsAccess();
 
-  if (access === undefined) {
+  // A failed read is not "still loading". Without this branch a failed request left `allowed`
+  // undefined for good and the spinner below never resolved -- the invisible shape CLAUDE.md
+  // describes, where a broken page reads as a slow one and nobody retries it.
+  if (access.failed) {
+    return (
+      <AppShell title={title}>
+        <ReadFailed what="whether skills are part of your plan" onRetry={access.retry} className="flex flex-col items-center gap-2 py-24 text-center" />
+      </AppShell>
+    );
+  }
+
+  if (access.allowed === undefined) {
     return (
       <AppShell title={title}>
         <div className="flex items-center justify-center py-24">

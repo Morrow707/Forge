@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import { createServer as createViteServer, createLogger } from "vite";
 import type { Server } from "http";
 import viteConfig from "../vite.config";
+import { PUBLIC_STATIC_OPTIONS, servePrerendered } from "./public-static";
 
 const viteLogger = createLogger();
 
@@ -90,7 +91,11 @@ export function serveStatic(app: Express) {
   }
 
   app.use(staticLimiter);
-  app.use(express.static(distPath));
+  // A public route's prerendered head, at its clean URL, BEFORE express.static can see a
+  // directory of the same name and answer with a redirect or fall through to the root page.
+  // See server/public-static.ts for the two ways that went wrong.
+  app.use(servePrerendered(distPath));
+  app.use(express.static(distPath, PUBLIC_STATIC_OPTIONS));
   // A MISSING BUILD ASSET IS A 404, NOT THE APP'S HTML.
   //
   // Everything unmatched fell through to index.html, including a request for a hashed asset
