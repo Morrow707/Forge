@@ -131,21 +131,28 @@ the store.
 The AI Terms of Use is REVIEWED: Scott, 2026-09-19, "we used the AI terms of use as a
 draft, a lawyer modified that". Its file header says so.
 
-## 10. Signup Terms of Use -- OPEN, packet prepared 2026-09-19
+## 10. Signup Terms of Use -- REVIEWED, 2026-09-19
 
-The last live document with no lawyer's eyes on it. `docs/signup-terms-for-counsel.md`
-carries four factual additions Forge wants regardless (the guardian's fourth agreement,
-Apple Health, error monitoring, what deletion leaves behind), five questions (two Terms
-documents and precedence, a zero liability cap for non-paying users, changes without notice,
-promising a technical control, general), and the full text. Every claim in the document was
-checked against the code that day and holds.
+Counsel returned a rewrite the same day the packet (`docs/signup-terms-for-counsel.md`) went
+out, with the four factual additions folded in, and answered all five questions. The live
+text (`server/seed-data/signup-agreement.ts`) is their rewrite with the answers applied
+verbatim (`docs/signup-terms-counsel-2026-09-19.txt`): no software-enforcement warranty in
+s3; a $50 floor on the liability cap and a gross-negligence carve-out in s15; notice and
+in-app re-acceptance for material changes in s16 (built, see CLAUDE.md); a precedence clause
+over the public Terms of Service; DMCA, severability and entire-agreement clauses. Every
+existing user is asked to accept it once.
+
+Two follow-ups from the answers, both decided by Scott 2026-09-19: the public Terms of
+Service is to be MERGED into this document ("just one less document that gets in the way";
+the clause-by-clause comparison and the three carry-over decisions are in the session record
+and in the merge PR), and the DMCA agent is to be registered (`docs/app-store-launch-notes.md`).
 
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
 biometric consent plus the engineering facts behind each of its claims.
 
-**Four documents still under review** (the Assumption of Risk, the AI Terms of Use and the research consent were reviewed 2026-09-19, questions 8 and 9) (factual corrections from the 2026-09-19 pass already
+**Four documents still under review** (the Assumption of Risk, the AI Terms of Use, the research consent and the signup Terms of Use were reviewed 2026-09-19, questions 8 to 10) (factual corrections from the 2026-09-19 pass already
 applied; see `git log -- server/seed-data/legal-documents-draft.ts`): the Terms of Service,
 the Privacy Policy, the EULA, the Notice to Parent or Guardian, and the Institutional
 Service Agreement. The Notice is also the parental consent document, so question 5 should

@@ -1311,6 +1311,8 @@ CREATE INDEX IF NOT EXISTS "injury_history_athlete_idx" ON "injury_history" ("at
 
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "agreed_to_terms_at" timestamp;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "agreed_to_terms_text" text;
+-- Re-acceptance notice: when the guardian of this minor was emailed that the terms changed.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "terms_reaccept_notified_at" timestamp;
 
 CREATE TABLE IF NOT EXISTS "legal_agreement" (
   "id" integer PRIMARY KEY,

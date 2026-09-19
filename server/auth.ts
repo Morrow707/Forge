@@ -4,6 +4,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
+import { z } from "zod";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
 import { bandForAthleteCount } from "@shared/billing-tiers";
@@ -291,6 +292,12 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
   // to offer the guardian view; requireGuardianAccess is the enforcement.
   (publicUser as any).hasGuardianLinks =
     (await storage.getAthletesForGuardian(user.id)).length > 0;
+  // Whether this account is still on the terms it accepted. One text comparison against the
+  // live agreement -- cheap enough to ride along on every /api/auth/me rather than making the
+  // client ask a second endpoint before it can decide whether to show anything. The full
+  // status (and the text to render) is GET /api/auth/terms-status.
+  publicUser.needsTermsAcceptance = (await storage.getTermsAcceptanceStatus(user.id))
+    .needsAcceptance;
   if (user.role === "coach") {
     (publicUser as any).hiddenSections = await storage.getHiddenSectionsForCoach(user.id);
     publicUser.staffTitle = await storage.getStaffTitleForCoach(user.id);
@@ -1835,6 +1842,43 @@ export function setupAuth(app: Express) {
     if (user.emailVerified) return res.json({ ok: true });
     sendVerificationEmail(req, user);
     res.json({ ok: true });
+  });
+
+  // RE-ACCEPTANCE OF THE TERMS AFTER A MATERIAL CHANGE.
+  //
+  // Counsel: an update binds an existing user only if they were given actual notice and an
+  // opportunity to accept or reject. These two routes are the whole server side of that -- they
+  // REPORT and they RECORD. Neither blocks anything: the adult acceptance screen is a client
+  // decision, and a minor whose guardian has not answered keeps using the app (Scott: locking a
+  // child out for a parent's inaction is the wrong trade). Nothing here touches sign-in, the
+  // device gate, or any other route's authorization.
+  app.get("/api/auth/terms-status", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    res.json(await storage.getTermsAcceptanceStatus((req.user as any).id));
+  });
+
+  app.post("/api/auth/accept-terms", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    const parsed = z.object({ agreed: z.literal(true) }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "You must agree to the terms to continue." });
+    }
+    const user = req.user as any;
+    const status = await storage.getTermsAcceptanceStatus(user.id);
+    // A minor cannot accept for themselves -- their agreement is their guardian's to give, the
+    // same rule that governs the research consent and the biometric release.
+    if (status.guardianDecides) {
+      return res.status(403).json({
+        message: "A parent or guardian has to accept these terms for you.",
+        guardianDecides: true,
+      });
+    }
+    const { acceptedAt } = await storage.acceptCurrentTerms({
+      userId: user.id,
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
+    res.json({ acceptedAt });
   });
 
   app.get("/api/auth/me", async (req, res) => {

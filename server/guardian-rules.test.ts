@@ -174,6 +174,16 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     // the consent wording would reach adults only, which for anybody under 18 is the same as not
     // shipping it -- they cannot answer for themselves.
     //
+    // The sixth is accepting the TERMS OF USE on the minor's behalf after Forge changed them.
+    // Same shape as the fifth and the same reasoning: Forge raised the question, the guardian
+    // answers it, and a minor cannot answer for themselves -- counsel's rule is that an updated
+    // agreement binds an existing user only if they were given notice and a chance to accept or
+    // reject, so without this route a rewrite of the clickwrap would bind adults only. It is not
+    // information ABOUT the child (rule 3) but the permission their account stands on, which is
+    // the guardian's to give, exactly as the withdraw-consent route above is theirs to take back.
+    // Accepting when nothing is stale is a no-op re-affirmation rather than a change, so unlike
+    // the research route there is nothing here a guardian could originate.
+    //
     // Anything else appearing here is a regression.
     const guardianWrites = [...routes.matchAll(/app\.(post|patch|put|delete)\(\s*\n?\s*"\/api\/guardian\/[^"]*"/g)];
     const paths = guardianWrites.map((m) => m[0].split('"')[1]);
@@ -183,6 +193,7 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
       "/api/guardian/athletes/:athleteId/withdraw-consent",
       "/api/guardian/research-consent-requests/:id",
       "/api/guardian/research-re-consent",
+      "/api/guardian/terms-reacceptance",
     ]);
   });
 

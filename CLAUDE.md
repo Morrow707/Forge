@@ -238,6 +238,32 @@ billing uses the larger (`getBilledAthleteCountForCoach`).
   (`staffInviteCode` on `signupSchema`). The code is checked before the account is created, the
   row gets no plan of its own, and the account lands on the staff in the same request.
 
+## A changed Terms of Use is accepted again, never assumed
+
+Added 2026-09-19 on counsel's answer: "we can change the terms without telling you, and
+continued use constitutes acceptance" is an illusory contract; an existing user must get
+notice and an accept-or-reject step. Section 16 of the signup Terms now promises exactly that,
+so the software has to do it.
+
+- **The rule is a text comparison, not a version flag.** `storage.getTermsAcceptanceStatus`
+  compares the user's `agreedToTermsText` snapshot with the live agreement, both cut at
+  `HEALTHCARE_NOTICE_MARKER` so the clinician note the seed appends is not a change. Any
+  other difference means "ask again". There is no "minor edit" escape hatch on purpose: an
+  admin edit to the live agreement re-asks the whole platform, which is what a change to a
+  contract costs.
+- **Adults are blocked in the client, not the server.** `TermsReacceptanceGate` in App.tsx
+  is a non-dismissable dialog with the full text, a checkbox and Accept, or sign out.
+  `POST /api/auth/accept-terms` snapshots the new text and writes a `terms_of_service`
+  consent record. The server only reports `needsTermsAcceptance` on the public user.
+- **A minor is never locked out.** Their guardian gets one email (`terms-change-notice.ts`,
+  sent after the seed applies a new version, marked on the MINOR's row by
+  `termsReacceptNotifiedAt` so a redeploy does not re-send) and a card on the guardian
+  dashboard; `POST /api/guardian/terms-reacceptance` accepts on the child's behalf and the
+  record names the guardian. Scott's call: locking a child out for a parent's inaction is
+  the wrong trade.
+- **Every existing user meets the gate once** after the 2026-09-19 deploy, because counsel's
+  text differs from whatever they accepted. That is the intended first run, not a bug.
+
 ## Per-team coach assignment
 
 Added 2026-09-19. Scott: "for a school, can they assign more than one coach to a team?"
@@ -717,10 +743,12 @@ have to stay.
 **The only legal work left is REVIEW**: the four public documents, the Institutional
 Service Agreement (`docs/institutional-service-agreement.md`), the signup Terms of Use,
 and the questions in `docs/legal-open-questions.md`. Nothing needs
-writing. Four documents ARE reviewed: the Video and Biometric Consent (built with counsel,
+writing. Five documents ARE reviewed: the Video and Biometric Consent (built with counsel,
 2026-09-17), the Assumption of Risk (counsel's opinion 2026-09-19, question 8), the AI
-Terms of Use (lawyer-modified from the Rocket Lawyer draft) and the research consent
-(counsel's rewrite, live verbatim 2026-09-19, question 9; `shared/research-consent.ts`).
+Terms of Use (lawyer-modified from the Rocket Lawyer draft), the research consent
+(counsel's rewrite, live verbatim 2026-09-19, question 9; `shared/research-consent.ts`)
+and the signup Terms of Use (counsel's rewrite with their five answers folded in, live
+2026-09-19, question 10; `server/seed-data/signup-agreement.ts`).
 A change to the research consent text re-asks everyone; the deletion-retention gate
 recognises the disclosure under the current heading and every prior one
 (`PRIOR_DELETION_RETENTION_HEADINGS`), so an earlier yes keeps counting for what it said.

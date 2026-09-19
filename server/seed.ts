@@ -25,8 +25,9 @@ import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content"
 // constant in biometric-release.ts. The draft body is kept only as the evidence that prefix is
 // right -- see biometric-release.test.ts.
 import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, EULA_DRAFT, nextParentalNotice, nextPrivacyPolicy, nextTermsOfService } from "./seed-data/legal-documents-draft";
-import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments } from "./seed-data/signup-agreement";
+import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments, HEALTHCARE_NOTICE_MARKER } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
+import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
 import { AI_TERMS_OF_USE } from "./seed-data/ai-terms-of-use-draft";
 
@@ -6195,7 +6196,7 @@ async function main() {
   // and honest by design -- lists what Forge actually does to secure data
   // (real, checkable mechanisms, not marketing language) alongside what it
   // does not yet have, exactly as it would be described to a lawyer.
-  const HEALTHCARE_NOTICE_MARKER = "A note for physical therapists, physicians, and other licensed clinicians";
+  // Imported rather than restated -- the re-acceptance check strips this same marker.
   const currentAgreement = await storage.getLegalAgreement();
   if (!currentAgreement.includes(HEALTHCARE_NOTICE_MARKER)) {
     const healthcareNotice = `${HEALTHCARE_NOTICE_MARKER}:
@@ -6217,6 +6218,26 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
         ? healthcareNotice
         : `${currentAgreement}\n\n${healthcareNotice}`,
     );
+  }
+
+  // ACTUAL NOTICE, for the people who cannot meet the in-app one.
+  //
+  // The agreement was just rewritten above, so every existing account is now on older terms.
+  // An adult meets the new text at their next sign-in (needsTermsAcceptance on /api/auth/me);
+  // a minor cannot answer at all, so their guardian is emailed once. See
+  // server/terms-change-notice.ts for why the mark lives on the athlete's row. Best effort and
+  // never allowed to fail the deploy -- a seed that dies here leaves the rest of it unrun.
+  if (agreement !== null && existingAgreement !== UNCONFIGURED_FALLBACK) {
+    try {
+      const sent = await notifyGuardiansOfTermsChange();
+      if (sent.guardiansEmailed > 0) {
+        console.log(
+          `Terms changed: emailed ${sent.guardiansEmailed} guardian(s) about ${sent.athletesMarked} athlete(s).`,
+        );
+      }
+    } catch (err) {
+      console.error("Could not send terms-change notices to guardians:", err);
+    }
   }
 
   // One-time correction: the healthcare notice above originally claimed Sentry wasn't used at

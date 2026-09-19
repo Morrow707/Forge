@@ -66,32 +66,59 @@ describe("the terms themselves", () => {
   it("covers the disclosures that had no home before", () => {
     // Each of these was a gap named in docs/legal-clause-revisions.md Part 2. They are listed
     // here so that deleting one from the document is a deliberate act with a failing test
-    // attached, not an edit nobody notices.
-    expect(SIGNUP_AGREEMENT).toContain("dietetic or medical advice"); // nutrition, incl. to minors
-    expect(SIGNUP_AGREEMENT).toMatch(/still images taken from the training video/); // images leave for AI form check
-    expect(SIGNUP_AGREEMENT).toMatch(/geolocation lookup on the IP address of a sign-in/); // undisclosed transfer
-    expect(SIGNUP_AGREEMENT).toMatch(/health information about you/); // health data category
-    expect(SIGNUP_AGREEMENT).toMatch(/can cause injury/); // assumption of risk, in front of the athlete
+    // attached, not an edit nobody notices. Reworded in counsel's 2026-09-19 rewrite -- the
+    // phrasing below is theirs; what is pinned is that each disclosure is still MADE.
+    expect(SIGNUP_AGREEMENT).toContain("dietetic, medical, or nutritional advice"); // nutrition, incl. to minors
+    expect(SIGNUP_AGREEMENT).toMatch(/still images from your submitted training video/); // images leave for AI form check
+    expect(SIGNUP_AGREEMENT).toMatch(/IP-based geolocation service/); // undisclosed transfer
+    expect(SIGNUP_AGREEMENT).toMatch(/constitute health-related information/); // health data category
+    expect(SIGNUP_AGREEMENT).toMatch(/inherent risks of injury/); // assumption of risk, in front of the athlete
   });
 
   it("states the minor video retention windows it promises", () => {
-    expect(SIGNUP_AGREEMENT).toContain("30 days");
-    expect(SIGNUP_AGREEMENT).toContain("90 days");
+    expect(SIGNUP_AGREEMENT).toContain("thirty (30) days");
+    expect(SIGNUP_AGREEMENT).toContain("ninety (90) days");
   });
 
   it("does not quote the rolling cap's numbers, which move with billing", () => {
     // shared/video-retention.ts has three different sets of these (default, unlimited, paid
     // add-on). A number here would be wrong for two of the three.
-    expect(SIGNUP_AGREEMENT).toMatch(/limits are shown in the app/);
+    expect(SIGNUP_AGREEMENT).toMatch(/displays current retention limits/);
   });
 
   it("points biometric consent at the separate release rather than absorbing it", () => {
-    expect(SIGNUP_AGREEMENT).toMatch(/separate video and biometric consent/);
+    expect(SIGNUP_AGREEMENT).toMatch(/separate Video and Biometric Consent/);
+  });
+
+  it("carries the five answers counsel's rewrite folded in", () => {
+    // The document is the attorney's, verbatim, and these five are the edits that were asked for
+    // on top of it. A later "tidy" that drops one is dropping a reviewed decision, so each is
+    // pinned to the sentence that makes it.
+    // 1. Section 3 no longer promises software enforcement Forge does not perform.
+    expect(SIGNUP_AGREEMENT).not.toMatch(/enforced by the software/);
+    // 2. A liability floor and a carve-out for gross negligence.
+    expect(SIGNUP_AGREEMENT).toMatch(/\$50/);
+    expect(SIGNUP_AGREEMENT).toMatch(/gross negligence/i);
+    // 3. Notice and re-acceptance on a material change -- the promise server/storage.ts's
+    //    getTermsAcceptanceStatus and the accept-terms routes exist to keep.
+    expect(SIGNUP_AGREEMENT).toMatch(/ask you to review and accept the revised Terms/);
+    // 4. These Terms govern over the publicly posted Terms of Service.
+    expect(SIGNUP_AGREEMENT).toMatch(/these Terms of Use shall govern/);
+    // 5. DMCA notice-and-takedown, naming the designated agent.
+    expect(SIGNUP_AGREEMENT).toMatch(/Digital Millennium Copyright Act/);
+    expect(SIGNUP_AGREEMENT).toMatch(/designated copyright agent/);
+    // Plus severability and entire agreement.
+    expect(SIGNUP_AGREEMENT).toMatch(/invalid or unenforceable/);
+    expect(SIGNUP_AGREEMENT).toMatch(/constitute the entire agreement/);
   });
 
   it("gives one contact address", () => {
     // Which address, and that every other document agrees with it, is contact-address.test.ts.
-    const addresses = new Set(SIGNUP_AGREEMENT.match(/[\w.+-]+@[\w.-]+/g) ?? []);
+    // Trailing sentence punctuation trimmed: counsel's contact line ends "...@outlook.com.",
+    // and a full stop is not a second address.
+    const addresses = new Set(
+      (SIGNUP_AGREEMENT.match(/[\w.+-]+@[\w.-]+/g) ?? []).map((a) => a.replace(/\.+$/, "")),
+    );
     expect(addresses.size).toBe(1);
   });
 });
