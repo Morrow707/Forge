@@ -19,7 +19,12 @@ import {
   visionRefineGripSeed,
   type ImplementPoint,
 } from "@/lib/vision-body-landmarks";
-import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
+import type {
+  PoseFrame as NativePoseFrame,
+  CaptureDeviceInfo,
+  AvObjectLockTelemetry,
+} from "@/lib/native-av-preview";
+import { referenceObjectVerdict, MIN_YARDSTICK_PX } from "@shared/tracker-arbiter";
 import {
   POSE_LANDMARKS,
   detectFormFaults,
@@ -273,6 +278,51 @@ function gripWidthPxFromFrames(frames: NativePoseFrame[]): number | null {
 }
 
 const MIN_JOINT_CONFIDENCE_FOR_GRIP = 0.3;
+
+/**
+ * WHERE THE ATHLETE WAS, FOR THE TAKE, SO A REFERENCE OBJECT CAN BE HELD AGAINST IT.
+ *
+ * The per-frame version of this lives in Swift, where it gates the lock in real time (see
+ * AvTrackerArbiter). This is its once-per-take twin: medians over the whole clip, because a
+ * reference-object scale is itself a median over the whole clip and the two have to be measured
+ * the same way to be compared. A handful of frames where the athlete was occluded should no more
+ * veto the scale than they should move it.
+ *
+ * Uses only the frames where BOTH wrists cleared the confidence floor, matching
+ * gripWidthPxFromFrames exactly -- so the anchor and the yardstick describe the same set of
+ * frames, rather than an anchor drawn from moments the yardstick knows nothing about.
+ */
+function takeBodyReference(frames: NativePoseFrame[]): {
+  anchor: { x: number; y: number } | null;
+  yardstick: { px: number; source: "grip" } | null;
+  frameWidth: number;
+  frameHeight: number;
+} {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  let frameWidth = 0;
+  let frameHeight = 0;
+  for (const f of frames) {
+    if (f.frameWidth > 0 && f.frameHeight > 0) {
+      frameWidth = f.frameWidth;
+      frameHeight = f.frameHeight;
+    }
+    const left = f.joints.find((j) => j.name === "leftWrist");
+    const right = f.joints.find((j) => j.name === "rightWrist");
+    if (!left || !right) continue;
+    if (left.confidence < MIN_JOINT_CONFIDENCE_FOR_GRIP || right.confidence < MIN_JOINT_CONFIDENCE_FOR_GRIP) continue;
+    xs.push((left.x + right.x) / 2);
+    ys.push((left.y + right.y) / 2);
+  }
+  const med = (v: number[]) => [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)];
+  const gripPx = gripWidthPxFromFrames(frames);
+  return {
+    anchor: xs.length > 0 ? { x: med(xs), y: med(ys) } : null,
+    yardstick: gripPx != null && gripPx >= MIN_YARDSTICK_PX ? { px: gripPx, source: "grip" } : null,
+    frameWidth,
+    frameHeight,
+  };
+}
 
 
 function plateScaleFromFrames(
@@ -803,6 +853,11 @@ export function AvBarTrackerDialog({
       elapsedSeconds: number;
       readerStatus?: string;
       assetDurationSeconds?: number;
+      // See AvObjectLockTelemetry. The caller already passes the whole AvAnalysisResult here;
+      // this type only ever narrowed it, and these two were being dropped on the floor at the
+      // narrowing rather than anywhere interesting.
+      objectLock?: AvObjectLockTelemetry;
+      objectLockSecondary?: AvObjectLockTelemetry;
     },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
     forSetNumber: number,
@@ -851,7 +906,42 @@ export function AvBarTrackerDialog({
     const gripWidthPx = gripWidthPxFromFrames(rawFrames);
     const plateFailedGripCheck =
       plateScaleRaw != null && !plateReadIsPlausibleAgainstGrip(plateScaleRaw.measured, gripWidthPx);
-    const plateScale = plateFailedGripCheck ? null : plateScaleRaw;
+
+    // IS IT THE RIGHT SHAPE, AND IS IT ANYWHERE NEAR THE ATHLETE.
+    //
+    // The size ratio above is a real cross-check and it catches the gross case -- the 497px read
+    // that took a whole bench set's numbers with it. What it cannot catch is the common one. Its
+    // window spans 0.25 to 2.5, a factor of ten, because a plate genuinely can appear at very
+    // different sizes; a plate on the rack at twice the athlete's distance reads at about half
+    // the pixels and sails straight through.
+    //
+    // Shape and position are what separate those two, and both were ALREADY BEING MEASURED. The
+    // aspect ratio and the median box centre have been written into the diagnostics blob since
+    // the reference-object work landed, precisely so a human could work out after the fact why a
+    // take's numbers had come out wrong. Nothing ever read them back. The measurement was never
+    // the missing piece.
+    //
+    // Same rule as the native per-frame gate, same file, same threshold -- see
+    // referenceObjectVerdict and shared/tracker-arbiter.ts. That is what makes this a
+    // unification rather than a second opinion: the object tracker is being held to one standard
+    // in both places, and the standard is the body.
+    const bodyRef = takeBodyReference(rawFrames);
+    const plateShapeVerdict = plateScaleRaw
+      ? referenceObjectVerdict({
+          shape: plateScaleRaw.shape,
+          anchor: bodyRef.anchor,
+          yardstick: bodyRef.yardstick,
+          frameWidth: bodyRef.frameWidth,
+          frameHeight: bodyRef.frameHeight,
+        })
+      : null;
+    // Every reason, not the first one. A read that is both the wrong shape AND in the wrong place
+    // is a different diagnosis from one that is merely oblique, and the report shows both.
+    const plateRejectedReasons: string[] = [
+      ...(plateFailedGripCheck ? ["size_vs_grip"] : []),
+      ...(plateShapeVerdict?.reasons ?? []),
+    ];
+    const plateScale = plateRejectedReasons.length > 0 ? null : plateScaleRaw;
 
     // SHOULDER BREADTH, WHERE THE BODY'S LENGTH IS UNAVAILABLE.
     //
@@ -975,6 +1065,7 @@ export function AvBarTrackerDialog({
       referenceObject?: ReferenceObjectRead | null;
       gripWidthPx?: number | null;
       plateRejectedAgainstGrip?: boolean;
+      plateRejectedReasons?: string[];
     } = {
       scaleSource,
       scaleCandidates,
@@ -989,6 +1080,7 @@ export function AvBarTrackerDialog({
       referenceObject: (plateScale ?? plateScaleRaw)?.shape ?? null,
       gripWidthPx: gripWidthPx == null ? null : Math.round(gripWidthPx * 10) / 10,
       plateRejectedAgainstGrip: plateFailedGripCheck,
+      plateRejectedReasons,
     };
 
     // No scale used to end the take here, with nothing saved but the video. It no longer does.
@@ -1260,6 +1352,8 @@ export function AvBarTrackerDialog({
             rawFrames,
             trackingMode: coreMlTrackingMode,
             recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
             calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
             trace: traceDiagnostics(scaleFree.repCount),
           }),
@@ -1279,6 +1373,8 @@ export function AvBarTrackerDialog({
           rawFrames,
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
           trace: traceDiagnostics(null),
         }),
@@ -1405,6 +1501,8 @@ export function AvBarTrackerDialog({
             rawFrames,
             trackingMode: coreMlTrackingMode,
             recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
             calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
             trace: traceDiagnostics(scaleFree.repCount),
           }),
@@ -1424,6 +1522,8 @@ export function AvBarTrackerDialog({
           rawFrames,
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
           trace: traceDiagnostics(null),
         }),
@@ -1484,6 +1584,8 @@ export function AvBarTrackerDialog({
             rawFrames,
             trackingMode: coreMlTrackingMode,
             recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
             calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
             trace: traceDiagnostics(scaleFreeOnRomProblem.repCount),
           }),
@@ -1502,6 +1604,8 @@ export function AvBarTrackerDialog({
           rawFrames,
           trackingMode: coreMlTrackingMode,
           recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
           trace: traceDiagnostics(null),
         }),
@@ -1627,6 +1731,8 @@ export function AvBarTrackerDialog({
       rawFrames,
       trackingMode: coreMlTrackingMode,
       recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
       calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
       trace: traceDiagnostics(metrics.repBreakdown.length),
     });

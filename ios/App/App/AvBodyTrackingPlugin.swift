@@ -1516,6 +1516,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             var tracked = false
             var leftWristJoint: (x: Double, y: Double)?
             var rightWristJoint: (x: Double, y: Double)?
+            // The body's own measuring stick for the object tracker's plausibility gate -- the
+            // shoulders are the fallback span when a wrist drops out. See
+            // AvTrackerArbiter.bodyYardstickPx and shared/tracker-arbiter.ts.
+            var leftShoulderJoint: (x: Double, y: Double)?
+            var rightShoulderJoint: (x: Double, y: Double)?
             var leftAnkleJoint: (x: Double, y: Double)?
             var rightAnkleJoint: (x: Double, y: Double)?
             // pixelBuffer already comes back downscaled straight from the reader's own decode
@@ -1554,6 +1559,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                             leftWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
                         } else if label == "rightWrist" {
                             rightWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                        } else if label == "leftShoulder" {
+                            leftShoulderJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                        } else if label == "rightShoulder" {
+                            rightShoulderJoint = (x: Double(point.location.x), y: Double(point.location.y))
                         } else if label == "leftAnkle" {
                             leftAnkleJoint = (x: Double(point.location.x), y: Double(point.location.y))
                         } else if label == "rightAnkle" {
@@ -1725,11 +1734,28 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // (already tried, made things worse -- see extractWorkingFrame's own comment above)
             // or running detection concurrently with capture (already tried, caused real
             // on-device thermal throttling -- see this file's header comment).
+            // What the BODY tracker knows, handed to the object tracker so it can be checked
+            // against it. This is the whole unification in one variable: the two systems ran
+            // side by side for a year and never once compared notes, and every drifted lock that
+            // cost a take was a lock nobody asked the obvious question about. See
+            // AvTrackerArbiter and shared/tracker-arbiter.ts.
+            let bodyContext = AvCoreMlImplementDetector.BodyContext(
+                anchor: AvTrackerArbiter.handAnchor(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
+                yardstick: AvTrackerArbiter.bodyYardstick(
+                    leftWrist: leftWristJoint, rightWrist: rightWristJoint,
+                    leftShoulder: leftShoulderJoint, rightShoulder: rightShoulderJoint,
+                    frameWidth: Double(frameWidth), frameHeight: Double(frameHeight)
+                ),
+                frameWidth: Double(frameWidth),
+                frameHeight: Double(frameHeight)
+            )
+
             var coreMlImplement: [String: Any]?
             if coreMlDetectionEnabled, let targetLabel = coreMlTargetLabel,
                let result = coreMlImplementDetector.track(
                    pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, orientation: orientation, targetLabel: targetLabel,
-                   regionOfInterest: AvCoreMlImplementDetector.regionOfInterest(leftWrist: leftWristJoint, rightWrist: rightWristJoint)
+                   regionOfInterest: AvCoreMlImplementDetector.regionOfInterest(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
+                   body: bodyContext
                ) {
                 coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence)
             }
@@ -1752,7 +1778,14 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                processedCount % Self.coreMlSecondaryEveryNthFrame == 0,
                let secondary = coreMlSecondaryDetector.track(
                    pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, orientation: orientation,
-                   targetLabel: secondaryLabel, regionOfInterest: nil
+                   targetLabel: secondaryLabel, regionOfInterest: nil,
+                   // The same body context, and the secondary needs it MORE than the primary
+                   // does. It searches the whole frame by design -- a plate sits out at the end
+                   // of the bar, well outside a wrist-anchored region -- so until now it was the
+                   // one detector with no spatial constraint of any kind on what it could pick
+                   // up. On a barbell lift it is also the detector that sets the real-world
+                   // scale, which makes it the one whose mistakes are most expensive.
+                   body: bodyContext
                ) {
                 var dict = coreMlResultDict(secondary.box, confidence: secondary.confidence)
                 dict["label"] = secondaryLabel
@@ -1871,6 +1904,24 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     + (boxTopNormalizedY.map { "boxTopNormalizedY=\(String(format: "%.4f", $0))" } ?? "no confident read")
             )
         }
+        // WHAT THE LOCK DID, SHIPPED WITH THE TAKE. See AvObjectLockTelemetry.
+        //
+        // Nil when the detector never ran on this clip, which is a different statement from
+        // "object tracking ran and broke nothing" -- the report has to be able to tell those
+        // apart, so the key is omitted rather than zeroed. Same omit-when-nil convention as
+        // boxTopNormalizedY.
+        //
+        // Read here rather than inside the resolve closure below: that closure escapes onto the
+        // main queue, so touching a property of self from it would both need an explicit capture
+        // and read detector state from a different queue after analysis has finished. A plain
+        // local snapshot avoids the whole question.
+        let objectLockTelemetry: [String: Any]? =
+            coreMlDetectionEnabled ? coreMlImplementDetector.telemetry.dictionary : nil
+        let objectLockSecondaryTelemetry: [String: Any]? =
+            coreMlSecondaryEnabled ? coreMlSecondaryDetector.telemetry.dictionary : nil
+        if let objectLockTelemetry {
+            logDiag("object lock: \(objectLockTelemetry.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+        }
         logDiag(
             "analyzeRecording finished: \(processedCount) frames processed, "
                 + "\(trackedCount) tracked, \(String(format: "%.2f", elapsed))s elapsed"
@@ -1893,6 +1944,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 ]
                 if let error = reader.error {
                     result["readerErrorMessage"] = error.localizedDescription
+                }
+                if let objectLock = objectLockTelemetry {
+                    result["objectLock"] = objectLock
+                }
+                if let objectLockSecondary = objectLockSecondaryTelemetry {
+                    result["objectLockSecondary"] = objectLockSecondary
                 }
                 // Omit-when-nil, same convention as leftImplement/rightImplement above -- the JS
                 // bridge treats a missing key as "no confident box read," not a zeroed default.
@@ -2272,6 +2329,183 @@ private final class AvAnalysisProgress {
 // either. One detector instance, one loaded model, reused across whatever
 // class each call asks it to look for -- track()'s targetLabel argument
 // picks the class per call rather than this class hardcoding one.
+// THE REFEREE THAT DOES NOT WORK FOR EITHER TEAM.
+//
+// A PORT. shared/tracker-arbiter.ts is the source of truth and carries the full reasoning --
+// why the threshold is expressed in the athlete's own grip widths rather than pixels or frame
+// fractions, why an unanswerable frame has to pass rather than fail, and the specific mechanism
+// (a re-classification handing the lock to a plate on the rack, whose smaller apparent size
+// inflates the scale, which inflates every distance, which turns eleven bench reps into
+// eighteen) this exists to stop. Read that file before changing anything here.
+//
+// It lives in both places because it has to run in two: the rule must be TESTED, and there is no
+// Swift test target in this repo, but it must also ACT in real time mid-clip, and correcting a
+// take after the fact is not correcting it. Same arrangement implement-tracking.ts already has
+// with AvImplementTracker's constants. shared/tracker-arbiter-parity.test.ts reads this file and
+// fails if the constants drift apart, so the duplication is enforced rather than trusted.
+private enum AvTrackerArbiter {
+    // Keep in sync with MAX_LOCK_DISTANCE_IN_YARDSTICKS in shared/tracker-arbiter.ts.
+    static let maxLockDistanceInYardsticks = 2.5
+    // Keep in sync with FALLBACK_LOCK_DISTANCE_FRAME_FRACTION in shared/tracker-arbiter.ts.
+    static let fallbackLockDistanceFrameFraction = 0.45
+    // Keep in sync with MIN_YARDSTICK_PX in shared/tracker-arbiter.ts.
+    static let minYardstickPx = 24.0
+
+    struct Yardstick {
+        var px: Double
+        /// "grip" or "shoulders" -- which span supplied it, for telemetry.
+        var source: String
+    }
+
+    enum Basis: String {
+        case yardstick
+        case frameFraction = "frame_fraction"
+        case noAnchor = "no_anchor"
+    }
+
+    struct Verdict {
+        var plausible: Bool
+        var distanceInYardsticks: Double?
+        var basis: Basis
+    }
+
+    /// Distance between two normalized Vision points, in this frame's own pixels.
+    ///
+    /// Pixels, not normalized units, for the reason the TS file spells out: normalized space is
+    /// anisotropic on a non-square frame, so the same real distance scores differently depending
+    /// on which way the movement pointed and what the clip's aspect ratio happens to be.
+    private static func distancePx(
+        _ a: (x: Double, y: Double), _ b: (x: Double, y: Double),
+        frameWidth: Double, frameHeight: Double
+    ) -> Double {
+        hypot((a.x - b.x) * frameWidth, (a.y - b.y) * frameHeight)
+    }
+
+    static func bodyYardstick(
+        leftWrist: (x: Double, y: Double)?, rightWrist: (x: Double, y: Double)?,
+        leftShoulder: (x: Double, y: Double)?, rightShoulder: (x: Double, y: Double)?,
+        frameWidth: Double, frameHeight: Double
+    ) -> Yardstick? {
+        guard frameWidth > 0, frameHeight > 0 else { return nil }
+        if let l = leftWrist, let r = rightWrist {
+            let px = distancePx(l, r, frameWidth: frameWidth, frameHeight: frameHeight)
+            if px >= minYardstickPx { return Yardstick(px: px, source: "grip") }
+        }
+        if let l = leftShoulder, let r = rightShoulder {
+            let px = distancePx(l, r, frameWidth: frameWidth, frameHeight: frameHeight)
+            if px >= minYardstickPx { return Yardstick(px: px, source: "shoulders") }
+        }
+        return nil
+    }
+
+    /// Where on the athlete the object is measured FROM -- the hands, never the shoulders, even
+    /// when the shoulders are supplying the yardstick. See handAnchor in the TS file.
+    static func handAnchor(
+        leftWrist: (x: Double, y: Double)?, rightWrist: (x: Double, y: Double)?
+    ) -> (x: Double, y: Double)? {
+        if let l = leftWrist, let r = rightWrist {
+            return (x: (l.x + r.x) / 2, y: (l.y + r.y) / 2)
+        }
+        return leftWrist ?? rightWrist
+    }
+
+    /// THE RULE. Is this object plausibly the one in the athlete's hands?
+    ///
+    /// Returns plausible on anything it cannot judge. A frame with no athlete in it is ordinary,
+    /// and absence of a body reading is not evidence the object is wrong -- dropping a good lock
+    /// on every such frame would be the same over-eagerness this is meant to cure, relocated.
+    static func lockDistanceVerdict(
+        objectCenter: (x: Double, y: Double),
+        anchor: (x: Double, y: Double)?,
+        yardstick: Yardstick?,
+        frameWidth: Double, frameHeight: Double
+    ) -> Verdict {
+        guard let anchor, frameWidth > 0, frameHeight > 0 else {
+            return Verdict(plausible: true, distanceInYardsticks: nil, basis: .noAnchor)
+        }
+        let gap = distancePx(objectCenter, anchor, frameWidth: frameWidth, frameHeight: frameHeight)
+        if let yardstick {
+            let inYardsticks = gap / yardstick.px
+            return Verdict(
+                plausible: inYardsticks <= maxLockDistanceInYardsticks,
+                distanceInYardsticks: inYardsticks,
+                basis: .yardstick
+            )
+        }
+        let diagonal = hypot(frameWidth, frameHeight)
+        return Verdict(
+            plausible: gap <= diagonal * fallbackLockDistanceFrameFraction,
+            distanceInYardsticks: nil,
+            basis: .frameFraction
+        )
+    }
+}
+
+// WHAT THE LOCK ACTUALLY DID, FOR A TAKE THAT CAN BE ARGUED WITH.
+//
+// Every unlock path in this detector used to be silent. A take where the lock broke forty times
+// and a take where it never broke once produced byte-identical diagnostics, so the one subsystem
+// in this pipeline whose every threshold is documented as an untuned guess was also the only one
+// with no way to find out whether any of them were right. That is why this has been audited three
+// times and is still wrong: there has never been anything to audit against.
+//
+// Same standing as the capture diagnostics in CLAUDE.md, and for the same reason -- a lock that
+// broke and was never recorded is indistinguishable from a lock that held, which is the exact
+// shape of failure that costs the most to discover late.
+private struct AvObjectLockTelemetry {
+    var framesTracked = 0
+    var framesLockHeld = 0
+    var freshDetections = 0
+    var breaksLowConfidence = 0
+    var breaksImplausibleJump = 0
+    var breaksTrajectoryDisagreement = 0
+    /// The new one. A lock the body tracker says is nowhere near the athlete.
+    var breaksWristGate = 0
+    /// A re-classification that found the object where the tracker already thought it was.
+    var reclassifyConfirmations = 0
+    /// A re-classification that MOVED the lock. The interesting number: a take with several of
+    /// these is a take whose scale was measured off more than one object.
+    var reclassifyCorrections = 0
+    /// Fresh detections the wrist gate refused, at seeding or at re-classification. A high count
+    /// against a low correction count is the signature of a gym with equipment everywhere, and
+    /// the gate doing its job.
+    var candidatesRejectedByWristGate = 0
+    /// Largest distance-from-hands, in yardsticks, that was ACCEPTED. Says how close this take
+    /// ran to the threshold, which is what makes the threshold tunable from real footage rather
+    /// than re-reasoned from scratch.
+    var maxAcceptedDistanceInYardsticks: Double?
+    /// Which body span supplied the yardstick on the last frame that had one -- "grip",
+    /// "shoulders", or absent when no frame ever did.
+    var yardstickSource: String?
+
+    mutating func recordAccepted(_ verdict: AvTrackerArbiter.Verdict) {
+        guard let d = verdict.distanceInYardsticks else { return }
+        if maxAcceptedDistanceInYardsticks == nil || d > maxAcceptedDistanceInYardsticks! {
+            maxAcceptedDistanceInYardsticks = d
+        }
+    }
+
+    var dictionary: [String: Any] {
+        var out: [String: Any] = [
+            "framesTracked": framesTracked,
+            "framesLockHeld": framesLockHeld,
+            "freshDetections": freshDetections,
+            "breaksLowConfidence": breaksLowConfidence,
+            "breaksImplausibleJump": breaksImplausibleJump,
+            "breaksTrajectoryDisagreement": breaksTrajectoryDisagreement,
+            "breaksWristGate": breaksWristGate,
+            "reclassifyConfirmations": reclassifyConfirmations,
+            "reclassifyCorrections": reclassifyCorrections,
+            "candidatesRejectedByWristGate": candidatesRejectedByWristGate,
+        ]
+        if let d = maxAcceptedDistanceInYardsticks {
+            out["maxAcceptedDistanceInYardsticks"] = (d * 100).rounded() / 100
+        }
+        if let s = yardstickSource { out["yardstickSource"] = s }
+        return out
+    }
+}
+
 private final class AvCoreMlImplementDetector {
     private let modelName = "MedBallDetector"
 
@@ -2328,6 +2562,32 @@ private final class AvCoreMlImplementDetector {
 
     private var trackingRequest: VNTrackObjectRequest?
     private let sequenceHandler = VNSequenceRequestHandler()
+
+    /// What this detector's lock did over the take -- see AvObjectLockTelemetry. Read once at the
+    /// end of analysis and shipped with the result; nothing in the tracking maths reads it.
+    private(set) var telemetry = AvObjectLockTelemetry()
+
+    /// Everything the BODY tracker knows that this detector needs in order to be checked against
+    /// it. Passed in per frame rather than stored, because it is genuinely per frame: a wrist
+    /// drops out and comes back, and the honest answer on the frames in between is "no yardstick
+    /// this frame", not a stale one from four frames ago.
+    struct BodyContext {
+        var anchor: (x: Double, y: Double)?
+        var yardstick: AvTrackerArbiter.Yardstick?
+        var frameWidth: Double
+        var frameHeight: Double
+    }
+
+    /// The arbiter's rule, applied to a box this detector is considering or already holding.
+    private func verdict(for box: CGRect, body: BodyContext) -> AvTrackerArbiter.Verdict {
+        AvTrackerArbiter.lockDistanceVerdict(
+            objectCenter: (x: Double(box.midX), y: Double(box.midY)),
+            anchor: body.anchor,
+            yardstick: body.yardstick,
+            frameWidth: body.frameWidth,
+            frameHeight: body.frameHeight
+        )
+    }
     // A detection this weak is more likely a false positive (a shadow, a
     // teammate's shirt) than a real med ball -- untuned starting value, same
     // "no real footage to calibrate against yet" caveat every other
@@ -2412,6 +2672,7 @@ private final class AvCoreMlImplementDetector {
         recentBoxes = []
         trajectoryRequest = makeTrajectoryRequest()
         latestTrajectoryObservations = []
+        telemetry = AvObjectLockTelemetry()
     }
 
     // Center-to-center normalized distance and area ratio between two boxes -- both in Vision's
@@ -2514,8 +2775,11 @@ private final class AvCoreMlImplementDetector {
     // frame) skips a fresh detection outright rather than falling back to a full-frame scan --
     // same "only worth it when there's a wrist to anchor on" precedent
     // extractWorkingFrame's own caller already established for the motion-diff tracker.
-    func track(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation, targetLabel: String, regionOfInterest: CGRect?) -> (box: CGRect, confidence: Float)? {
-        guard let visionModel = visionModel else { return nil }
+    func track(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation, targetLabel: String, regionOfInterest: CGRect?, body: BodyContext) -> (box: CGRect, confidence: Float)? {
+        guard visionModel != nil else { return nil }
+
+        telemetry.framesTracked += 1
+        if let source = body.yardstick?.source { telemetry.yardstickSource = source }
 
         if trackingLabel != targetLabel {
             trackingRequest = nil
@@ -2530,9 +2794,35 @@ private final class AvCoreMlImplementDetector {
                 else {
                     trackingRequest = nil
                     recentBoxes = []
+                    telemetry.breaksLowConfidence += 1
                     return nil
                 }
                 let newBox = observation.boundingBox
+                // THE CHECK THAT WAS MISSING, AND THE ONE THAT ACTUALLY FIXES DRIFT.
+                //
+                // Every other guard in this function is the object tracker asking a question
+                // about the object tracker: did the box jump, does the path fit a parabola, is
+                // the region still this class. All three miss the failure that strands a take,
+                // because a lock that has slid onto a plate on the rack behind the lifter jumps
+                // nowhere, flies nowhere, and IS a plate. It answers every question this
+                // detector knows how to ask, correctly, about the wrong object.
+                //
+                // The body tracker has known where the athlete's hands are the whole time. This
+                // is the first thing in the pipeline that asks it. A rack plate fails this on
+                // every frame rather than only at a re-classification boundary, which is why
+                // this and not the gated re-seed below is what closes the hole.
+                //
+                // Ordered before the jump check on purpose: a box that is both far from the
+                // athlete and jumping should be recorded as the former. That is the diagnosis
+                // worth having.
+                let wristVerdict = verdict(for: newBox, body: body)
+                if !wristVerdict.plausible {
+                    trackingRequest = nil
+                    recentBoxes = []
+                    telemetry.breaksWristGate += 1
+                    return nil
+                }
+                telemetry.recordAccepted(wristVerdict)
                 // Camera overlord: VNTrackObjectRequest only ever verifies visual continuity
                 // of the region it's already following -- it never re-checks "is this still
                 // targetLabel" once locked on. A jump this implausible against the recent
@@ -2542,6 +2832,7 @@ private final class AvCoreMlImplementDetector {
                 if let lastBox = recentBoxes.last, isImplausibleJump(from: lastBox, to: newBox) {
                     trackingRequest = nil
                     recentBoxes = []
+                    telemetry.breaksImplausibleJump += 1
                     return nil
                 }
                 // Camera overlord: an entirely independent, physics-based signal -- see
@@ -2561,6 +2852,7 @@ private final class AvCoreMlImplementDetector {
                     if disagreement > maxPlausibleCenterJump {
                         trackingRequest = nil
                         recentBoxes = []
+                        telemetry.breaksTrajectoryDisagreement += 1
                         return nil
                     }
                 }
@@ -2596,10 +2888,35 @@ private final class AvCoreMlImplementDetector {
                     // Deliberately no region of interest: the whole question is whether the right
                     // object is somewhere other than where the tracker is looking, and a search
                     // anchored on the current belief could not find out.
+                    // Still no region of interest: the whole question is whether the right
+                    // object is somewhere other than where the tracker is looking, and a search
+                    // anchored on the current belief could not find out. The wrist gate does the
+                    // narrowing instead, and it is a better narrowing -- it is anchored on the
+                    // ATHLETE rather than on the belief being tested.
+                    //
+                    // WITHOUT THAT GATE THIS STEP WAS A LIABILITY RATHER THAN A CORRECTION. It
+                    // took the most confident detection of the class anywhere in the image, and
+                    // in a gym the most confident plate is routinely not the one on the bar: the
+                    // one on the rack is square to the lens, unoccluded and evenly lit, while
+                    // the loaded one is foreshortened and half behind the athlete. So a step
+                    // written to recover from drift was itself capable of causing it, every
+                    // thirty frames, and seedTracking's own history reset then disarmed the jump
+                    // check that might have caught it. Now a candidate the athlete is nowhere
+                    // near cannot be chosen at all, and the lock is left where it is.
                     if let fresh = freshDetection(
                         pixelBuffer: pixelBuffer, orientation: orientation,
-                        targetLabel: targetLabel, regionOfInterest: nil
+                        targetLabel: targetLabel, regionOfInterest: nil, body: body
                     ) {
+                        // Whether this re-classification CONFIRMED the lock or MOVED it. The
+                        // distinction is the single most diagnostic number this detector
+                        // produces -- a take with several corrections is a take whose scale was
+                        // measured off more than one object -- and it was not being recorded at
+                        // all. Same threshold the jump check uses, since it is the same
+                        // question: is this the same object or a different one.
+                        let moved = AvCoreMlImplementDetector
+                            .boxDelta(newBox, fresh.box).centerDistance > maxPlausibleCenterJump
+                        if moved { telemetry.reclassifyCorrections += 1 }
+                        else { telemetry.reclassifyConfirmations += 1 }
                         // Re-seeded on the fresh box either way, since a live classification is
                         // better grounded than a tracked region. seedTracking also restarts the
                         // box history there, which matters most in the correcting case: the boxes
@@ -2612,10 +2929,12 @@ private final class AvCoreMlImplementDetector {
                 }
                 recordBox(newBox)
                 request.inputObservation = observation
+                telemetry.framesLockHeld += 1
                 return (newBox, observation.confidence)
             } catch {
                 trackingRequest = nil
                 recentBoxes = []
+                telemetry.breaksLowConfidence += 1
                 return nil
             }
         }
@@ -2624,9 +2943,10 @@ private final class AvCoreMlImplementDetector {
 
         guard let best = freshDetection(
             pixelBuffer: pixelBuffer, orientation: orientation,
-            targetLabel: targetLabel, regionOfInterest: regionOfInterest
+            targetLabel: targetLabel, regionOfInterest: regionOfInterest, body: body
         ) else { return nil }
 
+        telemetry.freshDetections += 1
         seedTracking(on: best.box)
         return (best.box, best.confidence)
     }
@@ -2637,7 +2957,7 @@ private final class AvCoreMlImplementDetector {
     /// ordinary, so a caller must never read nil as evidence the object has gone.
     private func freshDetection(
         pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation,
-        targetLabel: String, regionOfInterest: CGRect?
+        targetLabel: String, regionOfInterest: CGRect?, body: BodyContext
     ) -> (box: CGRect, confidence: Float)? {
         guard let visionModel = visionModel else { return nil }
         let detectRequest = VNCoreMLRequest(model: visionModel)
@@ -2659,12 +2979,21 @@ private final class AvCoreMlImplementDetector {
         // from seeding off a kettlebell in the background -- every other class's detection is
         // real signal, just not for THIS call.
         guard (try? handler.perform([detectRequest])) != nil,
-            let results = detectRequest.results as? [VNRecognizedObjectObservation],
-            let best = results
-                .filter({ $0.labels.first?.identifier == targetLabel })
-                .max(by: { $0.confidence < $1.confidence }),
-            best.confidence >= minDetectionConfidence
+            let results = detectRequest.results as? [VNRecognizedObjectObservation]
         else { return nil }
+        let ofThisClass = results
+            .filter { $0.labels.first?.identifier == targetLabel }
+            .filter { $0.confidence >= minDetectionConfidence }
+        // THE FILTER GOES BEFORE THE MAX, AND THE ORDER IS THE ENTIRE POINT.
+        //
+        // Taking the most confident detection and THEN asking whether it is plausible would
+        // throw away a perfectly good second-place detection of the real implement whenever a
+        // better-lit duplicate exists somewhere in the room -- which, for the "plate" class in a
+        // gym, is most takes. Filtering first means the choice is made among the candidates the
+        // athlete could actually be holding, and the most confident of THOSE wins.
+        let plausible = ofThisClass.filter { verdict(for: $0.boundingBox, body: body).plausible }
+        telemetry.candidatesRejectedByWristGate += ofThisClass.count - plausible.count
+        guard let best = plausible.max(by: { $0.confidence < $1.confidence }) else { return nil }
         return (best.boundingBox, best.confidence)
     }
 

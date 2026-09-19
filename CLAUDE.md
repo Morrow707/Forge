@@ -93,6 +93,41 @@
 - Only back squat, Pendlay row, bench press and box jump have been tested
   against real lifts. Everything else is unvalidated.
 
+## The two trackers answer to one referee
+
+Added 2026-09-19. Same standing as the capture-diagnostics invariants below --
+these are invariants, not preferences. Read `docs/camera-tracking-notes.md`
+("The two trackers now share one referee") before touching any of it.
+
+- **Every check on the object tracker's lock must be answerable by the BODY
+  tracker.** The object tracker's own three guards -- jump, trajectory,
+  re-classification -- are all questions it asks about itself, and a lock that
+  has drifted smoothly onto a plate on the rack answers all three correctly
+  about the wrong object. `shared/tracker-arbiter.ts` is the rule that can tell
+  the difference, and it is deliberately ONE rule used in three places (per
+  frame in Swift, at re-classification, and once per take for the scale). Adding
+  a fourth self-referential check is not progress; the trackers agreeing is.
+- **The threshold is in the athlete's grip widths, never pixels or frame
+  fractions.** Grip width is measured every frame, needs no calibration, and
+  scales with camera distance and zoom exactly as the scene does. That is what
+  makes one number correct at every framing. Every earlier attempt used a frame
+  fraction and needed per-setup tuning it never got.
+- **A frame the arbiter cannot judge PASSES.** No body reading is not evidence
+  the object is wrong. The gate fires only on a positive finding. Inverting this
+  reproduces the over-eagerness it exists to cure, somewhere new.
+- **Candidate filtering happens BEFORE the most-confident pick.** Choosing first
+  and validating after discards a good second-place detection of the real
+  implement whenever a better-lit duplicate exists in the room -- which, for the
+  `plate` class in a gym, is most takes. The order is the fix.
+- **Every unlock is recorded.** `AvObjectLockTelemetry` ->
+  `TrackingDiagnostics.objectLock` -> the admin tracking report. Every threshold
+  in this subsystem is an admitted guess, and it had been audited three times
+  with no evidence to revise them against because the unlocks were silent. A
+  guard that cannot be shown to have fired is a guard nobody can tune.
+- **The Swift port is a port.** The gate must act mid-clip and there is no Swift
+  test target, so the constants live twice. `shared/tracker-arbiter.test.ts`
+  reads the Swift source and fails when they diverge. Change one, change both.
+
 ## Capture diagnostics
 
 Added 2026-09-16, after a bench set that failed three separate ways left no

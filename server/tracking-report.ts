@@ -28,6 +28,21 @@ type CaptureDeviceInfo = {
 };
 // Mirrors client/src/lib/tracking-diagnostics.ts's TrackingDiagnostics -- kept in sync by hand,
 // same pattern CaptureDeviceInfo above already uses.
+type ObjectLockLine = {
+  framesTracked: number;
+  framesLockHeld: number;
+  freshDetections: number;
+  breaksLowConfidence: number;
+  breaksImplausibleJump: number;
+  breaksTrajectoryDisagreement: number;
+  breaksWristGate: number;
+  reclassifyConfirmations: number;
+  reclassifyCorrections: number;
+  candidatesRejectedByWristGate: number;
+  maxAcceptedDistanceInYardsticks?: number;
+  yardstickSource?: string;
+};
+
 type TrackingDiagnostics = {
   outcome:
     | "tracked"
@@ -68,6 +83,9 @@ type TrackingDiagnostics = {
     boxTopNormalizedY?: number;
   } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence?: number | null };
+  // See ObjectLockDiagnostics in client/src/lib/tracking-diagnostics.ts.
+  objectLock?: ObjectLockLine | null;
+  objectLockSecondary?: ObjectLockLine | null;
   objectDetection: {
     framesWithLeftImplement: number;
     framesWithRightImplement: number;
@@ -108,6 +126,7 @@ type TrackingDiagnostics = {
     scaleCorroborated?: boolean;
     gripWidthPx?: number | null;
     plateRejectedAgainstGrip?: boolean;
+    plateRejectedReasons?: string[];
     referenceObject?: {
       label: string;
       medianWidthPx: number;
@@ -456,6 +475,60 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
     });
   }
 
+  // WHAT THE OBJECT TRACKER'S LOCK ACTUALLY DID, WHICH USED TO BE UNKNOWABLE.
+  //
+  // The detector breaks its own lock four ways and reported none of them, so this page showed a
+  // take where the lock broke forty times and a take where it held all set as the same take. Its
+  // thresholds are all admitted guesses, and there has never been any evidence on which to
+  // revise them -- which is why the same audit has now been run three times.
+  //
+  // Two numbers matter most when reading this. RE-CLASSIFY CORRECTIONS above zero means the
+  // detector changed its mind about which object it was following mid-clip, so any scale derived
+  // from it was measured off more than one thing. WRIST-GATE BREAKS means the body tracker
+  // caught the object tracker somewhere the athlete was not -- the check that did not exist
+  // before, and the only one of the four that can catch a lock that drifted smoothly onto a
+  // plate on the rack and then behaved impeccably.
+  for (const [label, lock] of [
+    ["Object lock", d.objectLock],
+    ["Object lock (scale class)", d.objectLockSecondary],
+  ] as const) {
+    if (!lock) continue;
+    const breaks =
+      lock.breaksLowConfidence +
+      lock.breaksImplausibleJump +
+      lock.breaksTrajectoryDisagreement +
+      lock.breaksWristGate;
+    lines.push({
+      label,
+      value:
+        `held ${lock.framesLockHeld}/${lock.framesTracked} frames, ${lock.freshDetections} fresh lock-on${lock.freshDetections === 1 ? "" : "s"}` +
+        `, ${breaks} break${breaks === 1 ? "" : "s"}` +
+        (breaks > 0
+          ? ` (${[
+              lock.breaksLowConfidence > 0 ? `${lock.breaksLowConfidence} lost it` : null,
+              lock.breaksImplausibleJump > 0 ? `${lock.breaksImplausibleJump} jumped` : null,
+              lock.breaksTrajectoryDisagreement > 0
+                ? `${lock.breaksTrajectoryDisagreement} off-trajectory`
+                : null,
+              lock.breaksWristGate > 0 ? `${lock.breaksWristGate} nowhere near the athlete` : null,
+            ]
+              .filter(Boolean)
+              .join(", ")})`
+          : "") +
+        `. Re-checks: ${lock.reclassifyConfirmations} confirmed` +
+        (lock.reclassifyCorrections > 0
+          ? `, ${lock.reclassifyCorrections} MOVED THE LOCK -- scale may be measured off more than one object`
+          : ", none moved the lock") +
+        (lock.candidatesRejectedByWristGate > 0
+          ? `. ${lock.candidatesRejectedByWristGate} candidate detection${lock.candidatesRejectedByWristGate === 1 ? "" : "s"} refused for being too far from the hands`
+          : "") +
+        (lock.maxAcceptedDistanceInYardsticks != null
+          ? `. Furthest accepted: ${lock.maxAcceptedDistanceInYardsticks} grip widths from the hands` +
+            (lock.yardstickSource === "shoulders" ? " (measured off the shoulders)" : "")
+          : ". No frame ever gave a body measurement to judge against"),
+    });
+  }
+
   // WHAT THE TRACE CAME OUT AS, AND WHETHER THE REPS SEPARATED.
   //
   // A refused take used to say "couldn't get a clean read" and nothing else, and the two things
@@ -666,6 +739,25 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
             `${c.plateRejectedAgainstGrip ? " -- rejected, no plate is that size next to a grip" : ""}`,
         });
       }
+    }
+
+    // WHY THE REFERENCE-OBJECT SCALE WAS REFUSED, NOT JUST THAT IT WAS.
+    //
+    // Three different failures used to arrive as one word. A box that is not a disc means the
+    // model boxed a rack upright or a bench end and wants retraining; a real plate too far from
+    // the athlete means the lock drifted onto somebody else's bar and the camera framing or the
+    // gate is the story; a size that cannot sit next to that grip is a threshold question. They
+    // call for three different responses and were indistinguishable on this page.
+    if (c.plateRejectedReasons != null && c.plateRejectedReasons.length > 0) {
+      const explain: Record<string, string> = {
+        size_vs_grip: "wrong size next to that grip",
+        aspect_ratio: "not disc-shaped -- boxed something that is not a plate",
+        too_far_from_athlete: "a real plate, but not the athlete's -- too far from the hands",
+      };
+      lines.push({
+        label: "Plate read refused because",
+        value: c.plateRejectedReasons.map((r) => explain[r] ?? r).join("; "),
+      });
     }
 
     // THE OTHER HALF OF EVERY RANGE-OF-MOTION NUMBER.

@@ -8051,6 +8051,25 @@ export const NON_CAMERA_SET_COLUMNS = [
   "repsCount",
 ] as const;
 
+/** See ObjectLockDiagnostics in client/src/lib/tracking-diagnostics.ts, which is the shape the
+ * client actually sends, and AvObjectLockTelemetry in ios/App/App/AvBodyTrackingPlugin.swift,
+ * which produces it. Declared as its own schema because the primary and secondary detectors ship
+ * the identical shape and a copy-paste of twelve fields is a copy-paste of the next bug. */
+const objectLockDiagnosticsSchema = z.object({
+  framesTracked: z.number(),
+  framesLockHeld: z.number(),
+  freshDetections: z.number(),
+  breaksLowConfidence: z.number(),
+  breaksImplausibleJump: z.number(),
+  breaksTrajectoryDisagreement: z.number(),
+  breaksWristGate: z.number(),
+  reclassifyConfirmations: z.number(),
+  reclassifyCorrections: z.number(),
+  candidatesRejectedByWristGate: z.number(),
+  maxAcceptedDistanceInYardsticks: z.number().optional(),
+  yardstickSource: z.string().optional(),
+});
+
 export const trackingDiagnosticsSchema = z.object({
   outcome: z.enum([
     "tracked",
@@ -8194,6 +8213,22 @@ export const trackingDiagnosticsSchema = z.object({
     })
     .optional()
     .nullable(),
+  // WHAT THE OBJECT TRACKER'S LOCK DID OVER THE TAKE. See ObjectLockDiagnostics in
+  // client/src/lib/tracking-diagnostics.ts and AvObjectLockTelemetry in the Swift plugin.
+  //
+  // The object tracker breaks its own lock four ways and reported none of them, so the one
+  // subsystem in this pipeline whose every threshold is an admitted guess was also the only one
+  // producing no evidence about whether the guesses were any good. Three audits have now been
+  // run against it without that evidence. This is what makes the fourth unnecessary.
+  //
+  // The counters are all required once the object is present, because a MISSING counter and a
+  // counter reading zero mean opposite things and the report distinguishes them: the object is
+  // absent entirely when no object tracking ran, and all-zero when it ran and broke nothing.
+  // The two optional fields are genuinely absent rather than zero when no frame in the take ever
+  // produced a body yardstick -- reporting 0 yardsticks of drift for a take that never measured
+  // any would be a lie in the most misleading direction available.
+  objectLock: objectLockDiagnosticsSchema.optional().nullable(),
+  objectLockSecondary: objectLockDiagnosticsSchema.optional().nullable(),
   // Which of pose-tracking.ts's two calibration methods (nose-to-ankle, or the shoulder-to-
   // ankle fallback) each frame actually resolved through -- see calibrationMethodBreakdown's
   // own comment. unresolvedFrames > 0 across the whole clip is why calibration failed.
@@ -8236,6 +8271,11 @@ export const trackingDiagnosticsSchema = z.object({
       // the bar; shape and position are what say whether it found one at all.
       gripWidthPx: z.number().optional().nullable(),
       plateRejectedAgainstGrip: z.boolean().optional(),
+      // See plateRejectedReasons in client/src/lib/tracking-diagnostics.ts. A loose string array
+      // rather than an enum on purpose: a new rejection reason must never be the thing that
+      // makes an insert fail, and the report renders whatever arrives. The client side is where
+      // the vocabulary is defined.
+      plateRejectedReasons: z.array(z.string()).optional(),
       referenceObject: z
         .object({
           label: z.string().max(40),

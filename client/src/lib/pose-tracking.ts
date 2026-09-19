@@ -804,8 +804,31 @@ export function rejectImplausibleScales(
 // wrong scale.
 //
 // The wrists need no calibration and were tracked on every frame of that take.
-const PLATE_TO_GRIP_RATIO_LOW = 0.25;
-const PLATE_TO_GRIP_RATIO_HIGH = 2.5;
+// WHY THESE NUMBERS, RATHER THAN THE FACTOR-OF-TEN WINDOW THEY REPLACE.
+//
+// The ratio of a plate's apparent size to the grip's apparent width is DEPTH-INDEPENDENT when
+// both are on the same bar: move the camera and both shrink together. That is what makes it a
+// usable check at all, and it also means the honest window is much narrower than the old
+// 0.25-2.5, which was picked as "wide enough not to fire by accident" rather than derived.
+//
+// A bumper plate is 0.45m. Grip widths run from about 0.40m (close grip) to 0.81m (a wide
+// competition bench grip), so a correct read lands between 0.45/0.81 = 0.56 and 0.45/0.40 = 1.13.
+// Perspective only pushes it upward: a bar angled to the lens foreshortens the grip line while
+// leaving the plate's larger axis alone, and at 45 degrees off square that is about 1.6.
+//
+// 0.45 to 2.0 keeps roughly a 25% margin below the narrowest real read and a 25% margin above the
+// most foreshortened one. The old low bound was the expensive half: a plate on a rack at twice the
+// athlete's distance reads about half the pixels, lands near 0.4, and passed comfortably -- and a
+// plate measured at half its true size doubles the metres-per-pixel scale, which is precisely the
+// inflation that turns settling wobble into reps.
+//
+// Derived from geometry, not from footage, which is the same caveat every constant in this
+// pipeline carries. The difference now is that the object-lock telemetry records the distances
+// and rejections this produces, so the next revision can be made from takes instead of from
+// reasoning. Do not widen these back without that data -- widening is what made the check
+// decorative the first time.
+const PLATE_TO_GRIP_RATIO_LOW = 0.45;
+const PLATE_TO_GRIP_RATIO_HIGH = 2.0;
 
 export function plateReadIsPlausibleAgainstGrip(
   platePixelSize: number,

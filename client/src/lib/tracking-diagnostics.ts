@@ -61,6 +61,26 @@ export type TraceDiagnostics = {
   largestGapSeconds: number | null;
 };
 
+/** Mirror of AvObjectLockTelemetry from the native bridge -- see native-av-preview.ts and
+ * AvBodyTrackingPlugin.swift. Restated here rather than re-exported because this is the shape
+ * that goes into the database, and shared/schema.ts's trackingDiagnosticsSchema has to declare
+ * every field of it or zod strips it silently on insert (this has happened twice; see
+ * shared/tracking-diagnostics-roundtrip.test.ts). */
+export type ObjectLockDiagnostics = {
+  framesTracked: number;
+  framesLockHeld: number;
+  freshDetections: number;
+  breaksLowConfidence: number;
+  breaksImplausibleJump: number;
+  breaksTrajectoryDisagreement: number;
+  breaksWristGate: number;
+  reclassifyConfirmations: number;
+  reclassifyCorrections: number;
+  candidatesRejectedByWristGate: number;
+  maxAcceptedDistanceInYardsticks?: number;
+  yardstickSource?: string;
+};
+
 export type TrackingDiagnostics = {
   outcome: TrackingOutcome;
   // Present only on a "scale_free_only" capture. Lives here rather than in repBreakdown because
@@ -133,6 +153,26 @@ export type TrackingDiagnostics = {
       maxGapPx: number | null;
     } | null;
   };
+
+  // WHAT THE OBJECT TRACKER'S LOCK DID, AND WHY THIS IS NOT OPTIONAL POLISH.
+  //
+  // The object tracker breaks its own lock four ways and, until this field existed, reported
+  // none of them. A take where the lock broke forty times and a take where it held all set
+  // produced byte-identical diagnostics. So the one part of this pipeline whose every threshold
+  // is documented as an untuned guess was also the only part with no way to find out whether any
+  // of them were right, which is precisely why it has been audited three times and is still
+  // being fixed.
+  //
+  // Same standing as every other invariant in CLAUDE.md's capture-diagnostics section: a failure
+  // that leaves no record is indistinguishable from no failure, and the record is worth more
+  // than the take it describes.
+  //
+  // Null when no object tracking ran on this clip -- a different statement from "it ran and
+  // broke nothing", which reads as all-zero counters.
+  objectLock: ObjectLockDiagnostics | null;
+  // The secondary class's lock. On a barbell lift that is the PLATE, which is the detector that
+  // sets real-world scale, so its corrections are the ones that move every number in the take.
+  objectLockSecondary: ObjectLockDiagnostics | null;
 
   calibration: {
     scaleFactor: number | null;
@@ -214,6 +254,14 @@ export type TrackingDiagnostics = {
      *  span. Recorded because the read still appears under referenceObject above, and a number
      *  shown without saying it was discarded is how a bad scale looked like a good one. */
     plateRejectedAgainstGrip?: boolean;
+    // EVERY reason the reference-object scale was refused, not just whether it was.
+    //
+    // "size_vs_grip" is the old size-ratio check. "aspect_ratio" is a box that is not a disc --
+    // the rack upright, the bench end. "too_far_from_athlete" is a real plate that belongs to
+    // somebody else's bar. The three call for completely different responses (retune a
+    // threshold, retrain the model, move the camera), and a single boolean collapsed them into
+    // one indistinguishable "rejected".
+    plateRejectedReasons?: string[];
   } | null;
   // WHAT THE TRACE ITSELF CAME OUT AS, AND WHAT THE SEGMENTER MADE OF IT.
   //
@@ -389,6 +437,9 @@ export function buildTrackingDiagnostics(args: {
   // See TrackingDiagnostics["trace"]. Passed in rather than derived here because only the caller
   // has the finished trace and whatever the segmenter made of it.
   trace?: TrackingDiagnostics["trace"];
+  // Straight off AvAnalysisResult -- see the objectLock field's own comment above.
+  objectLock?: ObjectLockDiagnostics | null;
+  objectLockSecondary?: ObjectLockDiagnostics | null;
 }): TrackingDiagnostics {
   return {
     outcome: args.outcome,
@@ -400,6 +451,8 @@ export function buildTrackingDiagnostics(args: {
     objectDetection: summarizeObjectDetection(
       args.rawFrames, args.calibration?.scaleFactor ?? null, args.trackingMode ?? null,
     ),
+    objectLock: args.objectLock ?? null,
+    objectLockSecondary: args.objectLockSecondary ?? null,
     calibration: args.calibration ?? null,
   };
 }

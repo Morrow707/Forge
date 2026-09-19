@@ -121,6 +121,95 @@ Med ball is the mode with the most machinery behind it and the only one where
 the object tracker, the body tracker and the physics trajectory check all
 cross-check each other. It is the best real test of the three-system design.
 
+## The two trackers now share one referee
+
+Forge points two independent trackers at the same lift: the body tracker finds
+the athlete's joints, the object tracker finds the equipment. They had never
+compared notes. The object tracker's three guards -- an implausible-jump check,
+a physics trajectory fit, and a periodic re-classification -- are all questions
+the object tracker asks about the object tracker, and a lock that has slid onto
+a plate on the rack behind the lifter answers every one of them correctly about
+the wrong object. It jumps nowhere, flies nowhere, and it *is* a plate.
+
+`shared/tracker-arbiter.ts` is the rule that was missing, and it is deliberately
+one rule applied in three places rather than three fixes:
+
+1. **Every tracked frame, natively.** A box the body tracker says is nowhere
+   near the athlete's hands drops the lock that frame. This is what actually
+   fixes drift onto background equipment -- a rack plate fails on every frame,
+   while a re-classification boundary comes round only twice a second.
+2. **At re-classification.** Candidates are filtered by the same rule *before*
+   the most confident one is chosen. The order matters more than the filter:
+   choosing first and checking afterwards throws away a good second-place
+   detection of the real implement whenever a better-lit duplicate exists
+   elsewhere in the room, which for the `plate` class in a gym is most takes.
+3. **Once per take, on the client.** `referenceObjectVerdict` decides whether a
+   reference-object scale read is allowed to set the scale at all.
+
+**The threshold is expressed in the athlete's own grip widths**, and that is the
+whole trick. Grip width is a real-world length the body tracker measures on
+every frame, needs no calibration, and shrinks and grows with camera distance
+and zoom exactly as the scene does -- so `2.5 grip widths` means the same
+physical thing at three feet or thirty, in portrait or landscape, at 1x or 2x. A
+threshold in pixels or frame fractions does not, which is why earlier attempts at
+this needed per-setup tuning and never got it. It is also a measurement the
+object tracker cannot influence, which is what makes it a referee.
+
+**An unanswerable frame PASSES.** A frame with no body reading is ordinary -- the
+lifter steps out of shot, a pose read fails -- and absence of a body reading is
+not evidence the object is wrong. The gate only fires on a positive finding: the
+athlete was measurably right there, and the object was not near them. Inverting
+this would reproduce the over-eagerness the whole thing exists to cure.
+
+### Why this was worth doing now, specifically
+
+The mechanism ran all the way to the rep count. A barbell lift tracks the PLATE
+(`COREML_TRACKING_MODE_BY_EQUIPMENT` maps `Barbell` to `plate`). A plate further
+from the camera measures fewer pixels across; scale is metres per pixel; fewer
+pixels for the same 0.45m disc means a larger scale, means every distance in the
+take inflated, means settling wobble clearing the rep-amplitude gate. That is the
+same inflation that turned eleven bench reps into eighteen. The re-classification
+pass, written to *recover* from drift, was itself capable of causing it every
+thirty frames.
+
+Two things that were already being measured and then ignored now decide
+something: the reference object's aspect ratio (a plate is a disc; the read that
+prompted this boxed at 3.12, which is a rack upright) and its median position
+relative to the hands. Both had been written into the diagnostics blob purely so
+a human could work out after the fact why the numbers had been wrong.
+
+### The part that makes the next change cheap
+
+Every unlock path in the object tracker used to be silent. A take where the lock
+broke forty times and a take where it held all set produced byte-identical
+diagnostics -- so the one subsystem whose every threshold is an admitted guess
+was also the only one producing no evidence about whether the guesses were any
+good. That, not the missing check, is why this has been audited three times.
+
+`AvObjectLockTelemetry` now ships with the analysis result, through
+`TrackingDiagnostics.objectLock`, onto the admin tracking report. Read two
+numbers first: **re-classify corrections** above zero means the detector changed
+its mind about which object it was following mid-clip, so any scale derived from
+it was measured off more than one thing; **wrist-gate breaks** is the body
+tracker catching the object tracker somewhere the athlete was not.
+
+`PLATE_TO_GRIP_RATIO_LOW/HIGH` went from `0.25`-`2.5` to `0.45`-`2.0` at the
+same time, derived rather than guessed (the ratio is depth-independent when both
+objects are on the same bar, so the honest window is much narrower than a
+factor of ten). Do not widen it back without telemetry to justify it -- widening
+is what made the check decorative the first time.
+
+### If you change the rule, change it in both places
+
+The gate has to run natively to correct a lock mid-clip, and there is no Swift
+test target in this repo, so the constants exist twice: `shared/tracker-arbiter.ts`
+is the source of truth and `AvTrackerArbiter` in `AvBodyTrackingPlugin.swift` is
+a port. `shared/tracker-arbiter.test.ts` reads the Swift source and fails if they
+drift apart, and also asserts that the gate is still applied per frame and that
+candidate filtering still happens before the most-confident pick. It is a text
+scan and cannot prove the two behave identically -- only that they were handed
+the same numbers, which is the half that actually rots.
+
 ## Four modes cannot have cross-tracker corroboration at all
 
 Jump, sprint, mechanics and horizontal_load have **no implement in the scene**,

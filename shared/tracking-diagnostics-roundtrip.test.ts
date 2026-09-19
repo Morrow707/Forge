@@ -80,6 +80,37 @@ const FULL_PAYLOAD = {
     velocityRejections: 4,
     largestGapSeconds: 0.28,
   },
+  // See ObjectLockDiagnostics. Both detectors, because a barbell lift runs both and the SECONDARY
+  // is the one that sets scale -- shipping only the primary would have left the consequential
+  // half of this undeclared, which is the exact failure this whole file exists to catch.
+  objectLock: {
+    framesTracked: 763,
+    framesLockHeld: 640,
+    freshDetections: 9,
+    breaksLowConfidence: 12,
+    breaksImplausibleJump: 3,
+    breaksTrajectoryDisagreement: 0,
+    breaksWristGate: 6,
+    reclassifyConfirmations: 18,
+    reclassifyCorrections: 2,
+    candidatesRejectedByWristGate: 41,
+    maxAcceptedDistanceInYardsticks: 1.82,
+    yardstickSource: "grip",
+  },
+  objectLockSecondary: {
+    framesTracked: 190,
+    framesLockHeld: 171,
+    freshDetections: 4,
+    breaksLowConfidence: 8,
+    breaksImplausibleJump: 1,
+    breaksTrajectoryDisagreement: 0,
+    breaksWristGate: 3,
+    reclassifyConfirmations: 5,
+    reclassifyCorrections: 1,
+    candidatesRejectedByWristGate: 22,
+    maxAcceptedDistanceInYardsticks: 2.11,
+    yardstickSource: "shoulders",
+  },
   calibration: {
     scaleFactor: 0.00525,
     scaleSource: "shoulder_width" as const,
@@ -88,6 +119,7 @@ const FULL_PAYLOAD = {
     scaleCorroborated: false,
     gripWidthPx: 114.2,
     plateRejectedAgainstGrip: true,
+    plateRejectedReasons: ["size_vs_grip", "aspect_ratio"],
     referenceObject: {
       label: "plate (secondary)",
       medianWidthPx: 593.94,

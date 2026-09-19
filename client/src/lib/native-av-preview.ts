@@ -163,6 +163,50 @@ export type AvAnalysisResult = {
   // found a confident 3D pose this clip -- confirms the OS-version check fired correctly, not
   // just that body3DJoints happened to come back empty on every frame.
   body3DAvailable: boolean;
+  // WHAT THE OBJECT TRACKER'S LOCK ACTUALLY DID OVER THE TAKE.
+  //
+  // See AvObjectLockTelemetry in AvBodyTrackingPlugin.swift. Every unlock path in that detector
+  // used to be silent, so a take where the lock broke forty times and a take where it never
+  // broke produced identical diagnostics -- which is why the one subsystem whose thresholds are
+  // all documented as untuned guesses has been audited three times without anybody being able to
+  // tune them. Nothing reads these to drive tracking maths; they exist so the next change to
+  // those thresholds can be made against real takes.
+  //
+  // Omitted (not zeroed) when the detector never ran on this clip. "No object tracking here" and
+  // "object tracking ran and broke nothing" are different statements and the report has to be
+  // able to tell them apart.
+  objectLock?: AvObjectLockTelemetry;
+  // The secondary class's own lock -- on a barbell lift that is the PLATE, and therefore the
+  // detector that sets real-world scale, which makes its telemetry the more consequential of the
+  // two despite being sampled rather than tracked every frame.
+  objectLockSecondary?: AvObjectLockTelemetry;
+};
+
+export type AvObjectLockTelemetry = {
+  framesTracked: number;
+  framesLockHeld: number;
+  freshDetections: number;
+  breaksLowConfidence: number;
+  breaksImplausibleJump: number;
+  breaksTrajectoryDisagreement: number;
+  /** A lock the BODY tracker said was nowhere near the athlete. The check that did not exist
+   * before, and the one that catches a lock drifted onto a plate on the rack -- the other three
+   * breaks are all questions the object tracker asks about itself, and a drifted lock answers
+   * every one of them correctly about the wrong object. */
+  breaksWristGate: number;
+  /** A re-classification that found the object where the tracker already thought it was. */
+  reclassifyConfirmations: number;
+  /** A re-classification that MOVED the lock. The most diagnostic number here: a take with
+   * several of these is a take whose scale may have been measured off more than one object. */
+  reclassifyCorrections: number;
+  /** Candidate detections the wrist gate refused. A high count with few corrections is a gym
+   * with equipment everywhere and the gate doing its job. */
+  candidatesRejectedByWristGate: number;
+  /** The largest distance-from-hands, in body yardsticks, that was ACCEPTED -- how close this
+   * take ran to MAX_LOCK_DISTANCE_IN_YARDSTICKS. Absent when no frame had a yardstick. */
+  maxAcceptedDistanceInYardsticks?: number;
+  /** Which body span supplied the yardstick: "grip", or "shoulders" when a wrist dropped out. */
+  yardstickSource?: string;
 };
 
 interface AvBodyTrackingPlugin {
