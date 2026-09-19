@@ -110,7 +110,7 @@ describe("no component calls a hook after an early return", () => {
 
     const violations = files.flatMap(violationsIn);
     expect(violations).toEqual([]);
-  });
+  }, 60_000); // repo-wide scan; the default 5s times out under a loaded CI box
 
   // The check has to actually be able to see one, or a green run means nothing.
   it("catches the shape it exists to catch", () => {

@@ -7361,18 +7361,14 @@ export const workoutSetEntriesRelations = relations(
 
 // ---------- Zod insert schemas ----------
 
-export const insertUserSchema = createInsertSchema(users)
-  .pick({ email: true, passwordHash: true, name: true, role: true })
-  .extend({ email: z.string().email() });
-
-// role is deliberately restricted to coach/athlete -- admin accounts are
-// never self-service, only promoted directly in the database.
 /** Upper bound on the "how many athletes do you expect?" answer, shared by signupSchema,
  * PUT /api/coach/plan and the signup form. 5,000 is well past the largest band the pricing
  * table enumerates (1,000) -- bandForAthleteCount clamps above that rather than failing -- and
  * is here to refuse a typo, not to cap a customer. */
 export const MAX_EXPECTED_ATHLETES = 5000;
 
+// role is deliberately restricted to coach/athlete -- admin accounts are
+// never self-service, only promoted directly in the database.
 export const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -7767,11 +7763,6 @@ export const insertSkillAssignmentSchema = z.object({
   durationWeeks: z.number().int().min(1).max(12).default(1),
   dateOverrides: z.record(z.string(), z.string()).optional(),
   athletes: z.array(z.object({ athleteId: z.number() })).min(1),
-});
-
-export const insertProgramSchema = createInsertSchema(programs).pick({
-  name: true,
-  description: true,
 });
 
 export const programExerciseInputSchema = z.object({

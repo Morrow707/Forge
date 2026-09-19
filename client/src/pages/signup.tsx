@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ReadFailed } from "@/components/read-failed";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Select,
@@ -139,7 +140,14 @@ export default function SignupPage() {
   // people would never click) so the checkbox below actually means someone
   // saw this, not just that they trust there's something reasonable behind
   // a link.
-  const { data: agreement } = useQuery<{ content: string }>({
+  // isError matters here more than on a read-only page: the box below is the clickwrap text.
+  // Left unhandled it sits on "Loading…" forever while the mandatory checkbox stays tickable,
+  // so somebody agrees to "the terms above" when the terms above are the word Loading.
+  const {
+    data: agreement,
+    isError: agreementFailed,
+    refetch: refetchAgreement,
+  } = useQuery<{ content: string }>({
     queryKey: ["/api/legal-agreement"],
   });
 
@@ -149,7 +157,15 @@ export default function SignupPage() {
     }
     return (
       <Redirect
-        to={user.role === "coach" ? "/coach" : user.role === "admin" ? "/admin" : "/athlete"}
+        to={
+          user.role === "coach"
+            ? "/coach"
+            : user.role === "admin"
+              ? "/admin"
+              : user.role === "guardian"
+                ? "/guardian"
+                : "/athlete"
+        }
       />
     );
   }
@@ -481,11 +497,20 @@ export default function SignupPage() {
               <div className="space-y-2">
                 <Label>Terms</Label>
                 <div className="max-h-32 overflow-y-auto whitespace-pre-line rounded-md border border-border bg-surface p-3 text-xs text-muted-foreground">
-                  {agreement?.content ?? "Loading…"}
+                  {agreementFailed ? (
+                    <ReadFailed
+                      what="the terms"
+                      onRetry={() => void refetchAgreement()}
+                      className="flex flex-col items-start gap-2"
+                    />
+                  ) : (
+                    (agreement?.content ?? "Loading…")
+                  )}
                 </div>
                 <label className="flex items-start gap-2 text-sm">
                   <Checkbox
                     checked={agreedToTerms}
+                    disabled={agreementFailed}
                     onCheckedChange={(c) => setAgreedToTerms(c === true)}
                     className="mt-0.5"
                   />
@@ -604,12 +629,12 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
           <div className="space-y-2 rounded-md border border-border p-3">
             <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <Lock className="h-3.5 w-3.5" />
-              Coming soon, as a paid upgrade
+              On a paid plan
             </p>
             <p className="text-muted-foreground">
               The full AI coach -- conversational AI program building, an AI form-check review of
-              your lifts, and the AI chat coach. We're still building out billing for this, so
-              consider it a preview of what's ahead.
+              your lifts, and the AI chat coach -- is available as a paid upgrade. You can see the
+              plans any time under Upgrade in the app. Nothing is charged while Forge is in beta.
             </p>
           </div>
         </div>

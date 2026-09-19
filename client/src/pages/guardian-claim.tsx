@@ -53,7 +53,7 @@ export default function GuardianClaimPage() {
     mutationFn: async () => {
       // The agreements travel with the request. They used to stay on this page, which meant the
       // server wrote a consent record for an act it had never been told about.
-      const res = await apiRequest("POST", `/api/guardian-invites/${token}/claim`, {
+      const res = await apiRequest("POST", `/api/guardian-invites/${encodeURIComponent(token)}/claim`, {
         password,
         agreedToTerms,
         agreedToPrivacyPolicy,
@@ -65,8 +65,6 @@ export default function GuardianClaimPage() {
     onSuccess: ({ nativeToken, ...claimedUser }) => {
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], claimedUser);
-      if (preview?.email) {
-      }
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not set up this account"),
   });

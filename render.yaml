@@ -130,6 +130,21 @@ services:
       # own verifier (see server/apple-iap.ts).
       - key: BILLING_LIVE
         sync: false
+      # BILLING_ENFORCEMENT_ENABLED is the OTHER billing switch: whether a tier
+      # actually restricts an account (roster cap, entitlements). Off through
+      # beta, and isBetaAccount on each user must also be flipped per account
+      # from the admin billing panel. See server/billing.ts ENFORCEMENT_ENABLED.
+      - key: BILLING_ENFORCEMENT_ENABLED
+        sync: false
+      # Model overrides for server/ai.ts. Both have in-code defaults; set only to
+      # pin a specific model id. LOG_RESPONSE_BODIES=true logs API response
+      # bodies in server/index.ts -- debugging only, never on in production.
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: ANTHROPIC_FAST_MODEL
+        sync: false
+      - key: LOG_RESPONSE_BODIES
+        sync: false
       - key: APPLE_IAP_LIVE
         sync: false
       - key: APPLE_IAP_ENVIRONMENT

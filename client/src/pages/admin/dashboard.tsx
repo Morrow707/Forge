@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { StatTile } from "@/components/stat-tile";
 import { ReadFailed } from "@/components/read-failed";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest, getJson } from "@/lib/queryClient";
+import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
 import {
@@ -98,11 +99,11 @@ export default function AdminDashboard() {
   // limit=1: this widget only needs the total count, not the rows
   // themselves -- see getPendingSubmissionsForAdmin/getOpenReportsForAdmin's
   // own {total, rows} shape in storage.ts.
-  const { data: submissions } = useQuery<PendingSubmissionsResponse>({
+  const { data: submissions, isError: submissionsFailed } = useQuery<PendingSubmissionsResponse>({
     queryKey: ["/api/admin/submissions?limit=1"],
     queryFn: () => getJson("/api/admin/submissions?limit=1"),
   });
-  const { data: reports } = useQuery<OpenReportsResponse>({
+  const { data: reports, isError: reportsFailed } = useQuery<OpenReportsResponse>({
     queryKey: ["/api/admin/reports?limit=1"],
     queryFn: () => getJson("/api/admin/reports?limit=1"),
   });
@@ -124,6 +125,9 @@ export default function AdminDashboard() {
   const clearEvent = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/admin/system-events/${id}/clear`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/system-status"] }),
+    // Without this the Clear button is indistinguishable from a dead control: the
+    // row stays, nothing is said, and the next press does nothing either.
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't clear that event"),
   });
 
   const categoryCounts = exercises.reduce<Record<string, number>>((acc, ex) => {
@@ -131,6 +135,10 @@ export default function AdminDashboard() {
     return acc;
   }, {});
   const pendingCount = (submissions?.total ?? 0) + (reports?.total ?? 0);
+  // Same rule as the StatTile `unavailable` prop beside it: a failed read must not
+  // render as a confident "0 awaiting review", because the one thing that number is
+  // for is deciding whether to open the queue at all.
+  const pendingFailed = submissionsFailed || reportsFailed;
 
   // Admin's own training calendar -- same role-agnostic /api/admin/my/calendar
   // endpoint admin/my-calendar.tsx uses, just windowed to 3 days here.
@@ -279,8 +287,12 @@ export default function AdminDashboard() {
                   <ClipboardCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="font-display text-3xl font-bold">{pendingCount}</p>
-                  <p className="text-sm text-muted-foreground">Awaiting review</p>
+                  <p className={pendingFailed ? "font-display text-3xl font-bold text-muted-foreground" : "font-display text-3xl font-bold"}>
+                    {pendingFailed ? "--" : pendingCount}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {pendingFailed ? "Awaiting review -- couldn't load" : "Awaiting review"}
+                  </p>
                 </div>
               </CardContent>
             </Card>

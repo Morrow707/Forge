@@ -44,6 +44,7 @@ import {
 import { average } from "@/lib/wellness-metrics";
 import { Link } from "wouter";
 import { GoalsPanel } from "@/components/goals-panel";
+import { ReadFailed } from "@/components/read-failed";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { StreakBadges } from "@/components/streak-badge";
 import { DigestBanner } from "@/components/digest-banner";
@@ -140,7 +141,7 @@ export default function AthleteProgress() {
     }
   }
 
-  const { data, isLoading } = useQuery<ProgressSummary>({
+  const { data, isLoading, isError, refetch } = useQuery<ProgressSummary>({
     queryKey: ["/api/athlete/progress"],
     queryFn: () => getJson("/api/athlete/progress"),
   });
@@ -150,7 +151,11 @@ export default function AthleteProgress() {
     queryFn: () => getJson("/api/athlete/trophies"),
   });
 
-  const { data: metrics } = useQuery<BodyMetric[]>({
+  const {
+    data: metrics,
+    isError: metricsFailed,
+    refetch: refetchMetrics,
+  } = useQuery<BodyMetric[]>({
     queryKey: ["/api/athlete/body-metrics"],
     queryFn: () => getJson("/api/athlete/body-metrics"),
   });
@@ -193,6 +198,9 @@ export default function AthleteProgress() {
       await apiRequest("DELETE", `/api/athlete/body-metrics/${id}`);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/athlete/body-metrics"] }),
+    // Without this a failed delete is completely silent: the row stays on screen
+    // with no toast, which reads as the button doing nothing.
+    onError: () => toast.error("Couldn't delete that entry"),
   });
 
   const chartData = (metrics ?? []).map((m) => ({
@@ -231,6 +239,18 @@ export default function AthleteProgress() {
       ) : (
         <>
           <DigestBanner />
+
+          {/* Without this the three tiles below read 0 / 0 / 0 and the PR card says
+              "log some sets to start tracking PRs" -- a failed read stated as fact
+              about an athlete who may have years of them. The rest of the page is
+              backed by its own queries, so it still renders. */}
+          {isError && (
+            <Card className="mb-6">
+              <CardContent className="py-8">
+                <ReadFailed what="your training summary" onRetry={() => void refetch()} />
+              </CardContent>
+            </Card>
+          )}
 
           <div className="mb-6 grid gap-4 sm:grid-cols-3">
             <Card>
@@ -297,7 +317,7 @@ export default function AthleteProgress() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-2">
-              {!data?.recentPRs.length && (
+              {!isError && !data?.recentPRs.length && (
                 <p className="py-6 text-center text-sm text-muted-foreground">
                   Log some sets to start tracking PRs.
                 </p>
@@ -545,7 +565,13 @@ export default function AthleteProgress() {
               )}
 
               <div className="space-y-2">
-                {!metrics?.length && (
+                {metricsFailed && (
+                  <ReadFailed
+                    what="your body metrics"
+                    onRetry={() => void refetchMetrics()}
+                  />
+                )}
+                {!metricsFailed && !metrics?.length && (
                   <p className="py-4 text-center text-sm text-muted-foreground">
                     No entries yet -- log your first weigh-in above.
                   </p>

@@ -44,7 +44,7 @@ describe("the AI terms", () => {
     for (const survivor of [
       "the Forge signup agreement",
       "the Assumption of Risk and Release",
-      "the Video and Biometric Information Release",
+      "the Video and Biometric Consent",
       "the Privacy Policy",
     ]) {
       expect(AI_TERMS_OF_USE, survivor).toContain(survivor);

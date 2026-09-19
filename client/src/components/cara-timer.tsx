@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { getJson, apiRequest } from "@/lib/queryClient";
+import { toast } from "sonner";
 import { Timer } from "lucide-react";
 
 type CaraStatus = {
@@ -68,14 +69,19 @@ export function CaraTimer() {
     return () => clearInterval(id);
   }, []);
 
+  // Both of these are answers to the idle prompt -- the dialog closes on the
+  // click either way, so a failure that says nothing leaves the athlete
+  // believing their training time was stopped (or kept) when it was not.
   const confirmActiveMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/athlete/cara/confirm-active"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/athlete/cara/status"] }),
+    onError: (err: Error) => toast.error(err.message || "Couldn't keep the timer running"),
   });
 
   const stopMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/athlete/cara/stop"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/athlete/cara/status"] }),
+    onError: (err: Error) => toast.error(err.message || "Couldn't stop the timer"),
   });
 
   if (!data?.tracking || !data.open) return null;

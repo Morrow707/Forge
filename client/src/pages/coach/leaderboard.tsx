@@ -265,7 +265,7 @@ function SpeedLeaderboard() {
   // on one mixed list whoever ran the shortest distance always won.
   const [distanceYards, setDistanceYards] = useState<string>("");
 
-  const { data: distances = [] } = useQuery<number[]>({
+  const { data: distances = [], isError: distancesFailed } = useQuery<number[]>({
     queryKey: ["/api/coach/leaderboard/speed-distances", skillExerciseId],
     queryFn: () => getJson(`/api/coach/leaderboard/speed-distances?skillExerciseId=${skillExerciseId}`),
     enabled: !!skillExerciseId,
@@ -285,7 +285,7 @@ function SpeedLeaderboard() {
     queryKey: ["/api/coach/leaderboard/skill-exercises"],
   });
 
-  const { data: entries = [], isLoading } = useQuery<SpeedLeaderboardEntry[]>({
+  const { data: entries = [], isLoading, isError, refetch } = useQuery<SpeedLeaderboardEntry[]>({
     queryKey: ["/api/coach/leaderboard/speed", skillExerciseId, distanceYards],
     queryFn: () =>
       getJson(`/api/coach/leaderboard/speed?skillExerciseId=${skillExerciseId}&distanceYards=${distanceYards}`),
@@ -308,7 +308,7 @@ function SpeedLeaderboard() {
             <SelectContent>
               {exercises.length === 0 ? (
                 <SelectItem value="_none" disabled>
-                  No timed drills assigned yet
+                  {exercisesFailed ? "Couldn't load drills" : "No timed drills assigned yet"}
                 </SelectItem>
               ) : (
                 exercises.map((e) => (
@@ -333,7 +333,7 @@ function SpeedLeaderboard() {
               <SelectContent>
                 {distances.length === 0 ? (
                   <SelectItem value="_none" disabled>
-                    No timed runs yet
+                    {distancesFailed ? "Couldn't load distances" : "No timed runs yet"}
                   </SelectItem>
                 ) : (
                   distances.map((d) => (
@@ -385,7 +385,15 @@ function SpeedLeaderboard() {
         </Card>
       )}
 
-      {skillExerciseId && !isLoading && entries.length === 0 && (
+      {skillExerciseId && isError && (
+        <Card>
+          <CardContent className="py-16">
+            <ReadFailed what="this leaderboard" onRetry={() => void refetch()} />
+          </CardContent>
+        </Card>
+      )}
+
+      {skillExerciseId && !isError && !isLoading && entries.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Timer className="h-10 w-10 text-muted-foreground" />

@@ -22,7 +22,15 @@ export default function AdminLoginPage() {
   if (!isLoading && user) {
     return (
       <Redirect
-        to={user.role === "admin" ? "/admin" : user.role === "coach" ? "/coach" : "/athlete"}
+        to={
+          user.role === "admin"
+            ? "/admin"
+            : user.role === "coach"
+              ? "/coach"
+              : user.role === "guardian"
+                ? "/guardian"
+                : "/athlete"
+        }
       />
     );
   }

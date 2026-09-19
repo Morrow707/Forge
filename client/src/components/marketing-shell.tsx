@@ -60,6 +60,7 @@ export function MarketingFooter() {
             <Link href="/for-athletes" className="hover:text-foreground">For Athletes</Link>
             <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
             <Link href="/camera-validation" className="hover:text-foreground">Camera accuracy</Link>
+            <Link href="/movements" className="hover:text-foreground">Movements</Link>
           </div>
         </div>
         <div className="flex flex-col items-center justify-between gap-4 border-t border-border pt-6 sm:flex-row">
@@ -68,8 +69,9 @@ export function MarketingFooter() {
             <Link href="/login" className="hover:text-foreground">Log In</Link>
             <Link href="/signup" className="hover:text-foreground">Sign Up</Link>
             <Link href="/admin/login" className="hover:text-foreground">Admin</Link>
-            <Link href="/legal" className="hover:text-foreground">Legal</Link>
+            <Link href="/terms" className="hover:text-foreground">Terms</Link>
             <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
+            <Link href="/legal" className="hover:text-foreground">Legal</Link>
           </div>
         </div>
       </div>

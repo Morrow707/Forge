@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
+import { ReadFailed } from "@/components/read-failed";
 import { ResearchExportsContent } from "./research-exports";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -128,9 +129,26 @@ type CohortQueryHistoryEntry = {
  * of why athlete data was queried, which is the question that gets asked months later and had
  * no answer stored anywhere. */
 function CohortQueryHistory() {
-  const { data = [] } = useQuery<CohortQueryHistoryEntry[]>({
+  const { data = [], isError, refetch } = useQuery<CohortQueryHistoryEntry[]>({
     queryKey: ["/api/admin/cohort-query-history"],
   });
+  // This IS the audit record of why athlete data was queried. Returning null on a
+  // failed read says "no cut has ever been run here", which is the one answer this
+  // section exists to be able to give truthfully.
+  if (isError) {
+    return (
+      <div className="space-y-2 border-t border-border pt-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Previous cuts
+        </p>
+        <ReadFailed
+          what="the record of previous cuts"
+          onRetry={() => void refetch()}
+          className="flex flex-col items-start gap-2 text-left"
+        />
+      </div>
+    );
+  }
   if (data.length === 0) return null;
   return (
     <div className="space-y-2 border-t border-border pt-4">
@@ -376,7 +394,7 @@ function BucketBarChart({ data, unit = "" }: { data: Bucket[]; unit?: string }) 
 }
 
 export default function AdminPlatformTrends() {
-  const { data, isLoading } = useQuery<PlatformTrends>({
+  const { data, isLoading, isError, refetch } = useQuery<PlatformTrends>({
     queryKey: ["/api/admin/platform-trends"],
   });
 
@@ -398,6 +416,12 @@ export default function AdminPlatformTrends() {
         <CohortQueryCard />
 
         {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+
+        {isError && (
+          // Without this the whole page below the banner is simply absent, with
+          // nothing saying why -- indistinguishable from a platform with no athletes.
+          <ReadFailed what="the platform trends" onRetry={() => void refetch()} />
+        )}
 
         {data && (
           <>

@@ -326,7 +326,13 @@ export default function AdminDocuments() {
             )}
 
             {compliance && (
-              <SubSection title="Not yet reviewed / built">
+              // HEADING, DELIBERATELY NOT "not yet built". Every entry the server puts
+              // in this list is a caveat on something, and most of them are caveats on
+              // things that DO exist -- the biometric consent entry says in its own text
+              // that it is collected today and has been reviewed by counsel. A heading
+              // saying those are unbuilt is how an hour went into regenerating a document
+              // Forge already had; see CLAUDE.md, "Every legal document ALREADY EXISTS".
+              <SubSection title="Open items and caveats">
                 <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                   {compliance.notYetBuilt.map((item) => (
                     <li key={item}>{item}</li>

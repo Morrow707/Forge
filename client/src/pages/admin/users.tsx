@@ -126,7 +126,11 @@ export default function AdminUsers() {
       ),
   });
 
-  const { data: detail } = useQuery<UserDetail>({
+  const {
+    data: detail,
+    isError: detailFailed,
+    refetch: refetchDetail,
+  } = useQuery<UserDetail>({
     queryKey: ["/api/admin/users", expandedId],
     queryFn: () => getJson(`/api/admin/users/${expandedId}`),
     enabled: expandedId !== null,
@@ -251,7 +255,16 @@ export default function AdminUsers() {
                   </button>
                   {isExpanded && (
                     <div className="border-t border-border bg-surface-elevated/50 p-4">
-                      {!detail || detail.id !== u.id ? (
+                      {detailFailed && (!detail || detail.id !== u.id) ? (
+                        // Otherwise the skeleton below pulses forever on a failed
+                        // read, which reads as a slow panel rather than a broken one --
+                        // so nobody retries it and nobody reports it.
+                        <ReadFailed
+                          what="this account's details"
+                          onRetry={() => void refetchDetail()}
+                          className="flex flex-col items-start gap-2 text-left"
+                        />
+                      ) : !detail || detail.id !== u.id ? (
                         <div className="h-16 animate-pulse rounded-md bg-surface" />
                       ) : (
                         <div className="space-y-3">

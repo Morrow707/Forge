@@ -345,7 +345,7 @@ export default function AthleteDashboard() {
               <p className="max-w-sm text-muted-foreground">
                 You don't have a coach yet. Head to Library to build a program -- start from a
                 Forge template and swap out any exercise that doesn't work for you, or let the AI
-                ask a few questions and build it with you (a paid upgrade, coming soon).
+                ask a few questions and build it with you on a paid plan.
               </p>
               <Button asChild>
                 <Link href="/athlete/programs">

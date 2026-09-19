@@ -84,7 +84,19 @@ export default function ClaimPage() {
   });
 
   if (!isLoading && user) {
-    return <Redirect to={user.role === "coach" ? "/coach" : "/athlete"} />;
+    return (
+      <Redirect
+        to={
+          user.role === "coach"
+            ? "/coach"
+            : user.role === "admin"
+              ? "/admin"
+              : user.role === "guardian"
+                ? "/guardian"
+                : "/athlete"
+        }
+      />
+    );
   }
 
   if (!isLoading && (previewError || (!previewLoading && !preview))) {

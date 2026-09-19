@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ReadFailed } from "@/components/read-failed";
+import { externalLinkClick } from "@/lib/open-external";
 import { Check, X, Minus, Clock, Upload, FileWarning } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -149,14 +151,20 @@ export default function DocumentsPage() {
   // to do with it -- so it is offered as an upload kind only to the coach the server says needs
   // it. Same reasoning as the checklist's own rule about never showing somebody a row they cannot
   // satisfy.
-  const { data: institutional } = useQuery<InstitutionalAgreementStatus>({
+  const {
+    data: institutional,
+    isError: institutionalFailed,
+    refetch: refetchInstitutional,
+  } = useQuery<InstitutionalAgreementStatus>({
     queryKey: ["/api/coach/institutional-agreement"],
     enabled: user?.role === "coach" && !forSomeoneElse,
   });
   const offerInstitutional = institutional?.required === true;
 
   const key = [`/api/waivers/${targetId ?? 0}`];
-  const { data, isLoading } = useQuery<{
+  // isError matters: without it a failed read renders every checklist row as "missing", which
+  // tells a coach a medical clearance is not on file when nobody actually checked.
+  const { data, isLoading, isError, refetch } = useQuery<{
     waivers: Waiver[];
     summary: Summary[];
     athleteName: string | null;
@@ -231,6 +239,11 @@ export default function DocumentsPage() {
           <CardContent>
             {isLoading ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : isError ? (
+              <ReadFailed
+                what={forSomeoneElse ? "these forms" : "your documents"}
+                onRetry={() => void refetch()}
+              />
             ) : (
               <>
                 <ul className="space-y-1.5">
@@ -288,6 +301,11 @@ export default function DocumentsPage() {
             </p>
           ))}
 
+        {institutionalFailed && (
+          // A failed read here silently hides the Service Agreement panel from the one coach who
+          // needs it, so say so instead of showing nothing.
+          <ReadFailed what="your Service Agreement status" onRetry={() => void refetchInstitutional()} />
+        )}
         {offerInstitutional && <InstitutionalAgreementSigning />}
 
         <Card ref={uploadRef}>
@@ -396,6 +414,10 @@ export default function DocumentsPage() {
                         href={resolveApiUrl(w.fileUrl)}
                         target="_blank"
                         rel="noreferrer"
+                        // Without this the link did nothing at all in the native app: WKWebView
+                        // has no behaviour for target="_blank". Same helper every other
+                        // document/video link in the app already uses.
+                        onClick={externalLinkClick(resolveApiUrl(w.fileUrl))}
                         className="shrink-0 font-semibold text-primary hover:underline"
                       >
                         Open

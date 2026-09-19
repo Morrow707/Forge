@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
+import { ReadFailed } from "@/components/read-failed";
 import { toast } from "sonner";
 import { Ticket, DollarSign, GraduationCap } from "lucide-react";
 
@@ -122,17 +123,17 @@ export default function AdminBilling() {
   const [newTrialDays, setNewTrialDays] = useState("14");
   const [newMaxRedemptions, setNewMaxRedemptions] = useState("");
 
-  const { data: codes = [] } = useQuery<RedeemCode[]>({
+  const { data: codes = [], isError: codesFailed, refetch: refetchCodes } = useQuery<RedeemCode[]>({
     queryKey: ["/api/admin/redeem-codes"],
     queryFn: () => getJson("/api/admin/redeem-codes"),
   });
 
-  const { data: pricing = [], isLoading: pricingLoading } = useQuery<PricingItem[]>({
+  const { data: pricing = [], isLoading: pricingLoading, isError: pricingFailed, refetch: refetchPricing } = useQuery<PricingItem[]>({
     queryKey: ["/api/admin/pricing"],
     queryFn: () => getJson("/api/admin/pricing"),
   });
 
-  const { data: classLessons = [] } = useQuery<ClassLessonPrice[]>({
+  const { data: classLessons = [], isError: classLessonsFailed, refetch: refetchClassLessons } = useQuery<ClassLessonPrice[]>({
     queryKey: ["/api/admin/pricing/class-lessons"],
     queryFn: () => getJson("/api/admin/pricing/class-lessons"),
   });
@@ -219,7 +220,17 @@ export default function AdminBilling() {
               Create code
             </Button>
 
-            {codes.length > 0 && (
+            {codesFailed && (
+              <div className="border-t border-border pt-3">
+                <ReadFailed
+                  what="the existing redeem codes"
+                  onRetry={() => void refetchCodes()}
+                  className="flex flex-col items-start gap-2 text-left"
+                />
+              </div>
+            )}
+
+            {!codesFailed && codes.length > 0 && (
               <div className="space-y-1.5 border-t border-border pt-3">
                 {codes.map((c) => (
                   <div
@@ -263,6 +274,16 @@ export default function AdminBilling() {
           </CardHeader>
           <CardContent className="space-y-5">
             {pricingLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+            {pricingFailed && (
+              // An empty card under "every priced thing on the platform" reads as
+              // "Forge charges for nothing", which is the opposite of what this card
+              // is the one screen for.
+              <ReadFailed
+                what="the price catalog"
+                onRetry={() => void refetchPricing()}
+                className="flex flex-col items-start gap-2 text-left"
+              />
+            )}
             {categories.map((cat) => (
               <div key={cat}>
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -293,7 +314,19 @@ export default function AdminBilling() {
           </CardContent>
         </Card>
 
-        {lessonsByClass.size > 0 && (
+        {classLessonsFailed && (
+          <Card>
+            <CardContent className="p-5">
+              <ReadFailed
+                what="the Forge Class lesson prices"
+                onRetry={() => void refetchClassLessons()}
+                className="flex flex-col items-start gap-2 text-left"
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {!classLessonsFailed && lessonsByClass.size > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">

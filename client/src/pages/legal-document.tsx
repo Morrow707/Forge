@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { Link } from "wouter";
 import { ForgeMark } from "@/components/forge-mark";
+import { ReadFailed } from "@/components/read-failed";
 
 /**
  * Public, unauthenticated pages for Forge's legal documents (shared/schema.ts
@@ -44,7 +45,7 @@ function LegalDocumentPage({
   otherHref: string;
   otherLabel: string;
 }) {
-  const { data, isLoading } = useQuery<{ content: string; updatedAt: string | null }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ content: string; updatedAt: string | null }>({
     queryKey: [`/api/legal-documents/${docType}`],
   });
 
@@ -67,6 +68,8 @@ function LegalDocumentPage({
         )}
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : isError ? (
+          <ReadFailed what={`the ${title}`} onRetry={() => void refetch()} className="mb-8 flex flex-col items-start gap-2" />
         ) : (
           <p className="mb-8 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
             {data?.content}
