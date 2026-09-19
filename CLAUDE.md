@@ -207,8 +207,15 @@ Two things worth saying out loud when someone tests this:
   documents and has not been sent to any school. Since 2026-09-19 a school's primary
   coach can fill in their own details on /documents and download it as a PDF
   (`shared/institutional-service-agreement.ts` is the text, `server/institutional-agreement-routes.ts`
-  fills it); signing is still on paper, and the signed copy is uploaded on the same page.
-  Generating never writes a record -- only the upload does.
+  fills it). Since later that day it can be SIGNED in the app: the primary coach reads the
+  text on /documents, ticks that they are authorised and have read it, types their name, and
+  `POST /api/coach/institutional-agreement/sign` writes the signed PDF as an ACCEPTED
+  `institutional_agreement` waiver (reviewSource `in_app_signature`), an
+  `institutional_agreement_signatures` row (the evidentiary record: text hash, IP, user agent,
+  typed name; insert-only) and a consent record. Paper stays as the fallback. Downloading a
+  copy never writes a record -- only signing or uploading does. The agreement text is still
+  under attorney review; a change to it changes the hash on every later signature, which is
+  the point of storing it.
 
 ## A school picks its plan at signup by typing a number
 

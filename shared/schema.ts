@@ -5391,6 +5391,70 @@ export const externalWaiverViewGrants = pgTable(
 );
 export type ExternalWaiverViewGrant = typeof externalWaiverViewGrants.$inferSelect;
 
+/** THE EVIDENCE THAT A SCHOOL SIGNED, CLICK BY CLICK.
+ *
+ * The paper loop -- download the PDF, print it, sign it, scan it, upload it, wait for a review --
+ * still works and is still the fallback. This table is what makes it optional: a school's primary
+ * coach fills in their side, types their name, and the agreement is signed in the app.
+ *
+ * A clickwrap is only worth anything if it can be PRODUCED later, and "produced" means four
+ * things at once: WHO signed (name, title, and that they said they were authorized to bind the
+ * institution), WHAT they signed (the sha256 of the exact rendered text, so a later edit to the
+ * agreement constant cannot be passed off as what this school agreed to), WHEN, and FROM WHERE
+ * (ip and user agent). The earlier institutional clickwrap failed on the second of those -- it
+ * recorded that a button was pressed and nothing about the document behind it -- which is why it
+ * was replaced by an upload in the first place.
+ *
+ * INSERT-ONLY, like consentRecords. Nothing edits or deletes a row here; a school that signs
+ * again gets a new row and the old one stays, because which agreement was in force on a given
+ * date is the question this table exists to answer. `waiverId` points at the generated signed PDF
+ * filed as an accepted `external_waivers` row of kind `institutional_agreement` -- that row is
+ * still what `getInstitutionalAgreementStatus` reads for `onFile`, so an in-app signature and an
+ * uploaded paper copy are the same fact to everything downstream. Nullable and ON DELETE SET NULL:
+ * if the file row is ever retired, the evidence of the signature must not go with it.
+ */
+export const institutionalAgreementSignatures = pgTable(
+  "institutional_agreement_signatures",
+  {
+    id: serial("id").primaryKey(),
+    coachUserId: integer("coach_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    waiverId: integer("waiver_id").references(() => externalWaivers.id, { onDelete: "set null" }),
+    // The Institution's side of the agreement, exactly as it was typed into the form and exactly
+    // as it appears in the rendered text.
+    institutionName: text("institution_name").notNull(),
+    address: text("address").notNull(),
+    signerName: text("signer_name").notNull(),
+    signerTitle: text("signer_title").notNull(),
+    noticeEmail: text("notice_email").notNull(),
+    // What they actually typed into the signature box. Kept separately from signerName even
+    // though the route requires the two to match, because the record of an electronic signature
+    // is the act, not the field it was checked against.
+    typedSignature: text("typed_signature").notNull(),
+    // sha256 of the rendered agreement text. The whole text is also snapshotted in the consent
+    // record; this is the cheap comparison that says whether two signatures are of the same
+    // document.
+    agreementHash: text("agreement_hash").notNull(),
+    // Forge's side, as it stood on the day. Environment-configured (see
+    // institutional-agreement-routes.ts), so it changes the day somebody else signs for Forge and
+    // the old rows must still say who signed then.
+    forgeSignerName: text("forge_signer_name").notNull(),
+    forgeSignerTitle: text("forge_signer_title").notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    signedAt: timestamp("signed_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachIdx: index("institutional_agreement_signatures_coach_idx").on(
+      table.coachUserId,
+      table.signedAt,
+    ),
+  }),
+);
+export type InstitutionalAgreementSignature =
+  typeof institutionalAgreementSignatures.$inferSelect;
+
 // ---------- Record access audit log ----------
 // Immutable, insert-only log of a staff member (coach or admin) touching
 // one specific athlete's video or biometric record -- the per-record
