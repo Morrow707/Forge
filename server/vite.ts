@@ -1,31 +1,12 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
-import rateLimit from "express-rate-limit";
 import { createServer as createViteServer, createLogger } from "vite";
 import type { Server } from "http";
 import viteConfig from "../vite.config";
-import { PUBLIC_STATIC_OPTIONS, servePrerendered, spaFallback } from "./public-static";
+import { PUBLIC_STATIC_OPTIONS, servePrerendered, spaFallback, staticLimiter } from "./public-static";
 
 const viteLogger = createLogger();
-
-// Both setupVite's (dev) and serveStatic's (production) catch-alls sit
-// outside routes.ts's general /api limiter entirely -- they're mounted
-// directly on the app in index.ts, not inside registerRoutes. Its own
-// budget, not apiLimiter's: a single page load can fire far more of these
-// (every JS/CSS chunk, image, and the SPA shell itself) than it does JSON
-// API calls, so sharing a counter would let normal asset loading exhaust
-// the budget a user's actual API calls need. No session/user context is
-// reliably available at this layer either way (this runs for the very
-// first request of a fresh page load, before any app code executes), so
-// this one is keyed by IP only.
-const staticLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 3000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests. Please try again shortly." },
-});
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

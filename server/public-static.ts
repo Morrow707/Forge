@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { RequestHandler } from "express";
+import rateLimit from "express-rate-limit";
 import type { ServeStaticOptions } from "serve-static";
 
 /** How the built client is served, and how the prerenderer has to name its files to match.
@@ -28,6 +29,24 @@ import type { ServeStaticOptions } from "serve-static";
  * ONE MODULE, THREE CONSUMERS. `serveStatic` in server/vite.ts, scripts/prerender.ts and the
  * test read from here so the file naming and the serving cannot drift apart.
  */
+// Both setupVite's (dev) and serveStatic's (production) catch-alls sit
+// outside routes.ts's general /api limiter entirely -- they're mounted
+// directly on the app in index.ts, not inside registerRoutes. Its own
+// budget, not apiLimiter's: a single page load can fire far more of these
+// (every JS/CSS chunk, image, and the SPA shell itself) than it does JSON
+// API calls, so sharing a counter would let normal asset loading exhaust
+// the budget a user's actual API calls need. No session/user context is
+// reliably available at this layer either way (this runs for the very
+// first request of a fresh page load, before any app code executes), so
+// this one is keyed by IP only.
+export const staticLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 3000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please try again shortly." },
+});
+
 export const PUBLIC_STATIC_OPTIONS: ServeStaticOptions = {
   redirect: false,
 };
