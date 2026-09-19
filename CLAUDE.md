@@ -204,6 +204,37 @@ Two things worth saying out loud when someone tests this:
 - The institutional agreement is still an unreviewed draft whose own text says
   not to present it as binding. Scott is handling it.
 
+## AI Coach + Video is withdrawn from sale, not deleted
+
+Flagged 2026-09-19. Scott: "our camera doesn't work, it does, but isn't accurate, we need to
+stall the $19.99 package for now, keep it in the code, but don't let it be accessible, remove
+the price point from view, remove the option."
+
+The whole of what that tier adds over AI Coach is `hasVideoFormCheck` -- the camera pipeline,
+whose rep counts were wrong and whose fixes are not yet validated against real footage.
+
+- **Two lists, and the difference between them is somebody's subscription.**
+  `FREE_AGENT_TIER_ORDER` is WHAT IS FOR SALE and now holds two tiers; every customer surface
+  already maps over it, so the tier left /pricing, the landing cards, the upgrade page, the
+  StoreKit product list and the Stripe price-env requirement in one line.
+  `ALL_FREE_AGENT_TIER_IDS` is WHAT HAS EVER BEEN SOLD and is read by everything that resolves an
+  EXISTING subscription: Apple receipt verification, the stored-value schema, the admin screen.
+- **Withdrawing a tier must never revoke it.** Athletes are already paying for it. They keep
+  video form-check, their renewals keep resolving, and restore keeps working. The silent failure
+  is one direction only -- a cleanup that shrinks one more list to "the tiers we sell" strips a
+  paid feature from a paying customer with no error and nothing on any screen.
+  `shared/withdrawn-tier-stays-off-sale.test.ts` asserts both halves, including that the Swift
+  plugin still asks StoreKit about the withdrawn product id (a restore needs it).
+- **Never hand-type the tier list.** The checkout route named the three ids as literals, so
+  withdrawing a tier elsewhere would have left that one endpoint still selling it. It derives
+  from `FREE_AGENT_TIER_ORDER` now, and the test scans for the literal.
+- **The App Store side needs a human.** The subscription Product lives in App Store Connect, not
+  this repo. Forge no longer offers it, but the Product must be marked unavailable there or it
+  is still reachable. Verification deliberately keeps honouring such a purchase -- refusing to
+  grant a tier somebody was genuinely charged for would be worse.
+- **Putting it back is one line**: add `ai_coach_video` to `FREE_AGENT_TIER_ORDER`. Do that when
+  the camera has been validated against real lifts, not before.
+
 ## Capture diagnostics
 
 Added 2026-09-16, after a bench set that failed three separate ways left no

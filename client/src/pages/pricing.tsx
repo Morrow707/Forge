@@ -13,7 +13,13 @@ import {
   ORG_PER_ATHLETE_CENTS,
   ORG_BLOCK_SIZE,
 } from "@shared/billing-tiers";
-import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER, FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
+import {
+  FREE_AGENT_TIERS,
+  FREE_AGENT_TIER_ORDER,
+  FREE_AGENT_TIER_GRID_COLS,
+  FREE_AGENT_ADD_ONS,
+  FREE_AGENT_ADD_ON_ORDER,
+} from "@shared/free-agent-tiers";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
 import { Flame, Check, Video, AlertTriangle } from "lucide-react";
 import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
@@ -199,10 +205,14 @@ export default function PricingPage() {
           <p className="mb-6 text-center text-sm text-muted-foreground">
             No coach yet? Get your own AI coach -- these tiers are per athlete, not per team.
           </p>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className={cn("grid gap-4", FREE_AGENT_TIER_GRID_COLS)}>
             {FREE_AGENT_TIER_ORDER.map((id) => {
               const tier = FREE_AGENT_TIERS[id];
-              const featured = id === "ai_coach_video";
+              // The priciest tier ON SALE, derived rather than named. This used to be a literal
+              // comparison against the top tier's id, so withdrawing that tier left the section
+              // with no highlighted card at all and nothing to say which plan the page steers
+              // toward. Deriving also moves the highlight back on its own if the tier returns.
+              const featured = id === FREE_AGENT_TIER_ORDER[FREE_AGENT_TIER_ORDER.length - 1];
               return (
                 <Card
                   key={id}

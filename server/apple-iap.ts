@@ -33,7 +33,7 @@ import {
 } from "@apple/app-store-server-library";
 import {
   APPLE_BUNDLE_ID,
-  FREE_AGENT_TIER_ORDER,
+  ALL_FREE_AGENT_TIER_IDS,
   FREE_AGENT_TIERS,
   appleProductIdForFreeAgentTier,
   type FreeAgentTierId,
@@ -159,8 +159,18 @@ export async function verifyAppleTransaction(signedTransactionInfo: string): Pro
 // (shared/free-agent-tiers.ts moved to basic/ai_coach/ai_coach_video while
 // this file kept mapping stale "base"/"pro"-named ids that didn't
 // correspond to anything actually priced). One source, both directions.
+//
+// ALL_FREE_AGENT_TIER_IDS, NOT FREE_AGENT_TIER_ORDER, AND THE DIFFERENCE IS SOMEBODY'S
+// SUBSCRIPTION. The order list is what is currently FOR SALE; AI Coach + Video was withdrawn
+// from it on 2026-09-19 while the camera is unreliable. Athletes already paying for it still
+// send that product id on every renewal and every restore, and a map built from the sale list
+// would return null for them -- which reads as "unknown product", grants nothing, and quietly
+// strips video form-check from a customer who is still being charged for it.
+//
+// Withdrawing a tier must never be able to do that. This map is about RECOGNISING what somebody
+// bought, which has nothing to do with whether it is still on the price list.
 const PRODUCT_ID_TO_TIER: Record<string, FreeAgentTierId> = Object.fromEntries(
-  FREE_AGENT_TIER_ORDER.map((tier) => [appleProductIdForFreeAgentTier(tier), tier]),
+  ALL_FREE_AGENT_TIER_IDS.map((tier) => [appleProductIdForFreeAgentTier(tier), tier]),
 );
 
 export function tierForAppleProductId(productId: string): FreeAgentTierId | null {

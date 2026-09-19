@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { FreeAgentGate } from "@/components/free-agent-gate";
@@ -18,7 +19,11 @@ import {
 } from "@/lib/apple-iap";
 import type { FreeAgentTierId } from "@shared/free-agent-tiers";
 import { Sparkles, Video, RotateCcw, CreditCard } from "lucide-react";
-import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
+import {
+  FREE_AGENT_TIERS,
+  FREE_AGENT_TIER_ORDER,
+  FREE_AGENT_TIER_GRID_COLS,
+} from "@shared/free-agent-tiers";
 import { apiRequest } from "@/lib/queryClient";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { formatCents } from "@shared/billing-tiers";
@@ -151,7 +156,7 @@ export default function AthleteUpgrade() {
         }
       >
         {!supported && (
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className={cn("mt-6 grid grid-cols-1 gap-4", FREE_AGENT_TIER_GRID_COLS)}>
             {FREE_AGENT_TIER_ORDER.map((id) => {
               const tier = FREE_AGENT_TIERS[id];
               return (

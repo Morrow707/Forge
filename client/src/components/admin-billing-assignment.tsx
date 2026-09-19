@@ -21,7 +21,8 @@ import {
 } from "@shared/billing-tiers";
 import {
   FREE_AGENT_TIERS,
-  FREE_AGENT_TIER_ORDER,
+  ALL_FREE_AGENT_TIER_IDS,
+  WITHDRAWN_FREE_AGENT_TIERS,
   FREE_AGENT_ADD_ONS,
   FREE_AGENT_ADD_ON_ORDER,
 } from "@shared/free-agent-tiers";
@@ -250,10 +251,16 @@ function AthleteBillingForm({ userId, email }: { userId: number; email: string }
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>None (coached, or unbilled)</SelectItem>
-            {FREE_AGENT_TIER_ORDER.map((id) => (
+            {/* ALL_FREE_AGENT_TIER_IDS, not the for-sale list. This is the one screen where a
+                withdrawn tier still has to appear: athletes are already on AI Coach + Video, an
+                admin has to be able to see that and to move somebody off it, and a dropdown that
+                silently omitted their current tier would show the wrong value and write it on the
+                next save. Marked so nobody assigns it by accident. */}
+            {ALL_FREE_AGENT_TIER_IDS.map((id) => (
               <SelectItem key={id} value={id}>
                 {FREE_AGENT_TIERS[id].label} —{" "}
                 {formatCents(FREE_AGENT_TIERS[id].monthlyPriceCents)}/mo
+                {WITHDRAWN_FREE_AGENT_TIERS.includes(id) ? " (withdrawn — not for sale)" : ""}
               </SelectItem>
             ))}
           </SelectContent>

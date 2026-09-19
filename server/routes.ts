@@ -72,6 +72,7 @@ import {
 } from "./system-events";
 import {
   FREE_AGENT_TIERS,
+  FREE_AGENT_TIER_ORDER,
   entitlementsForFreeAgentTier,
   type FreeAgentTierId,
 } from "@shared/free-agent-tiers";
@@ -10971,7 +10972,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
-      const schema = z.object({ tier: z.enum(["basic", "ai_coach", "ai_coach_video"]) });
+      // THE ENUM IS DERIVED, NOT TYPED OUT, AND THAT IS THE POINT.
+      //
+      // It used to list the three tier ids as literals, which meant withdrawing a tier from sale
+      // everywhere else in the app left this one route still happily creating checkouts for it.
+      // A hand-typed copy of a list is a copy that stops agreeing with the list.
+      //
+      // FREE_AGENT_TIER_ORDER is the for-sale list specifically -- a withdrawn tier is refused
+      // here even though it remains a perfectly valid thing for an account to already BE. See
+      // shared/free-agent-tiers.ts on why those are two different questions.
+      const schema = z.object({
+        tier: z.enum(FREE_AGENT_TIER_ORDER as [FreeAgentTierId, ...FreeAgentTierId[]]),
+      });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Pick a plan first." });

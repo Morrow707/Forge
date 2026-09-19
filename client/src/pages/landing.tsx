@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
@@ -23,7 +24,11 @@ import {
 } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
 import { bandForAthleteCount, formatCents } from "@shared/billing-tiers";
-import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
+import {
+  FREE_AGENT_TIERS,
+  FREE_AGENT_TIER_ORDER,
+  FREE_AGENT_TIER_GRID_COLS,
+} from "@shared/free-agent-tiers";
 import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
 
 /** A screenshot dressed up as a little browser window -- same treatment on
@@ -483,7 +488,7 @@ export default function LandingPage() {
                 </h3>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">Training on your own.</p>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className={cn("mt-6 grid gap-4 sm:grid-cols-2", FREE_AGENT_TIER_GRID_COLS)}>
                 {FREE_AGENT_CARDS.map((t) => (
                   <div key={t.name} className="rounded-lg border border-border p-5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-primary">

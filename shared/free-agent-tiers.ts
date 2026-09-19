@@ -68,14 +68,82 @@ export function entitlementsForFreeAgentTier(
   return { hasAiChat: def.hasAiChat, hasVideoFormCheck: def.hasVideoFormCheck };
 }
 
-// Ordered cheapest-to-priciest, for rendering the /pricing page and the admin assignment
-// dropdown in a sensible order without re-sorting.
+// AI COACH + VIDEO IS WITHDRAWN FROM SALE. THE TIER STAYS; THE OFFER DOES NOT.
 //
+// Scott, 2026-09-19: "our camera doesn't work, it does, but isn't accurate, we need to stall the
+// $19.99 package for now, keep it in the code, but don't let it be accessible, remove the price
+// point from view, remove the option."
+//
+// The whole of what that tier adds over AI Coach is `hasVideoFormCheck` -- the camera pipeline.
+// Its rep counts were wrong (see docs/camera-tracking-notes.md: a scale read off the wrong plate
+// inflated every distance, and eleven bench reps came back as eighteen), and the fixes for that
+// have not been validated against real footage yet. Charging ten dollars a month more for the
+// half of the product that is currently the least trustworthy is not a thing to leave switched on
+// while it gets sorted out.
+//
+// TWO LISTS, AND THE DIFFERENCE BETWEEN THEM IS THE WHOLE MECHANISM.
+//
+// FREE_AGENT_TIER_ORDER is now WHAT IS FOR SALE. Every customer-facing surface already reads it
+// -- /pricing, the landing page cards, the athlete upgrade page, the StoreKit product list and
+// the Stripe price-env requirement -- so a tier leaving this list disappears from all of them at
+// once, price included, with no per-page edits and nothing left behind to un-hide later.
+//
+// ALL_FREE_AGENT_TIER_IDS is WHAT HAS EVER BEEN SOLD, and it is not decoration. An athlete who is
+// already paying for AI Coach + Video must keep it: their Apple receipt still has to resolve to a
+// tier, their stored `free_agent_tier` still has to validate, and `entitlementsForFreeAgentTier`
+// still has to hand back video form-check. Anything that resolves an EXISTING subscription reads
+// this list. Anything that SELLS a new one reads the other. Confusing the two silently revokes a
+// feature from people who paid for it, which is why
+// `shared/withdrawn-tier-stays-off-sale.test.ts` asserts both halves.
+//
+// NOT DELETED, DELIBERATELY. The definition, the entitlement, the Apple product id and the
+// server-side gating all stay exactly as they were. Putting this back on sale is a one-line
+// change to FREE_AGENT_TIER_ORDER once the camera has been validated against real lifts.
+//
+// ONE THING THIS CODE CANNOT DO, AND IT NEEDS A HUMAN. The App Store subscription Product for
+// this tier lives in App Store Connect, not in this repo. Removing it from FREE_AGENT_TIER_ORDER
+// stops Forge OFFERING it, but the Product itself has to be marked unavailable there or someone
+// could still reach it through the App Store. Verification deliberately keeps honouring such a
+// purchase -- refusing to grant a tier somebody was genuinely charged for would be worse -- so
+// the App Store side is the only place that can actually close it.
+export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["basic", "ai_coach"];
+
+/** Every tier that has ever been sold, withdrawn ones included, cheapest first.
+ *
+ * Read by anything that has to RECOGNISE a tier rather than offer one: Apple receipt
+ * verification, the stored-value schema, the admin assignment screen. See the comment above for
+ * why this is a separate list from FREE_AGENT_TIER_ORDER and what breaks if they are merged.
+ */
+export const ALL_FREE_AGENT_TIER_IDS: FreeAgentTierId[] = ["basic", "ai_coach", "ai_coach_video"];
+
+/** Sold before, not sold now. Rendered with a "not for sale" note where it still has to appear
+ * at all, which is the admin screen and nowhere else. */
+export const WITHDRAWN_FREE_AGENT_TIERS: readonly FreeAgentTierId[] = ["ai_coach_video"];
+
+/** Tailwind column count for the tier-card grids, sized to however many tiers are on sale.
+ *
+ * Written as whole literal class names because Tailwind scans source text -- a template string
+ * built at runtime produces a class that was never generated. Three cards in a three-column grid
+ * and two in a two-column grid; withdrawing a tier without this left a visible hole where the
+ * third card used to be, on all three pages that render them.
+ */
+export const FREE_AGENT_TIER_GRID_COLS =
+  FREE_AGENT_TIER_ORDER.length >= 3 ? "sm:grid-cols-3" : "sm:grid-cols-2";
+
+/** Whether a new subscription may be started on this tier. Checkout asks this; entitlement
+ * resolution never does, because an existing subscriber's access does not depend on whether the
+ * tier is still on the price list. */
+export function isFreeAgentTierPurchasable(tier: string | null | undefined): boolean {
+  return !!tier && (FREE_AGENT_TIER_ORDER as string[]).includes(tier);
+}
+
 // Family is gone entirely -- the product, the household grouping behind it and the code that
 // created groups. Any account still stored on it is moved to AI Coach + Video by a backfill in
 // reconcile-schema.ts, which is what Family always resolved to anyway: it never changed what one
-// member could do, only how many profiles one payment covered.
-export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["basic", "ai_coach", "ai_coach_video"];
+// member could do, only how many profiles one payment covered. That backfill target is now a
+// withdrawn tier, which is correct and must not be "fixed": those accounts were paying for what
+// AI Coach + Video grants, and moving them down a tier to tidy a list would take a feature away
+// from them.
 
 // The app's real bundle id (see ios/App/App.xcodeproj) -- StoreKit 2 Product
 // ids are conventionally namespaced under it. Shared here (not just in

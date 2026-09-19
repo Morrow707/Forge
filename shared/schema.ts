@@ -41,7 +41,7 @@ import {
 } from "./billing-tiers";
 import {
   FREE_AGENT_TIERS,
-  FREE_AGENT_TIER_ORDER,
+  ALL_FREE_AGENT_TIER_IDS,
   FREE_AGENT_ADD_ON_ORDER,
   type FreeAgentTierId,
   type FreeAgentAddOnId,
@@ -7423,11 +7423,17 @@ export const redeemCodeInputSchema = z.object({
 });
 
 // Admin-only -- see server/billing.ts and shared/free-agent-tiers.ts. Enum
-// values pulled from FREE_AGENT_TIER_ORDER/FREE_AGENT_ADD_ON_ORDER (not
+// values pulled from ALL_FREE_AGENT_TIER_IDS/FREE_AGENT_ADD_ON_ORDER (not
 // hand-typed), same reasoning as updateCoachBillingSchema above.
+//
+// ALL_FREE_AGENT_TIER_IDS rather than the for-sale list: a withdrawn tier is still a legal
+// STORED value, so an admin opening an athlete already on AI Coach + Video has to be able to
+// save the form without the tier they are not changing being rejected on the way through. This
+// validates what an account may BE, not what a customer may BUY -- checkout is where that
+// question belongs, and it asks isFreeAgentTierPurchasable.
 export const updateFreeAgentBillingSchema = z.object({
   freeAgentTier: z
-    .enum(FREE_AGENT_TIER_ORDER as [FreeAgentTierId, ...FreeAgentTierId[]])
+    .enum(ALL_FREE_AGENT_TIER_IDS as [FreeAgentTierId, ...FreeAgentTierId[]])
     .optional()
     .nullable(),
   freeAgentAddOns: z.array(z.enum(FREE_AGENT_ADD_ON_ORDER as [FreeAgentAddOnId, ...FreeAgentAddOnId[]])).optional(),
