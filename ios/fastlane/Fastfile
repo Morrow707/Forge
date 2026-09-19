@@ -220,6 +220,20 @@ platform :ios do
     ensure
       FileUtils.rm_f(key_json_path)
     end
+    # deliver exits 0 whether or not it found anything to download. The first
+    # real run (2026-09-19) came back with nothing but the two hand-written
+    # files and this message still said "downloaded" -- because the app had
+    # TestFlight builds and no App Store version, so there was no listing to
+    # fetch. Say that, rather than let an empty folder pass as a reconciled one.
+    downloaded = File.join(METADATA_DIR, "en-US", "description.txt")
+    unless File.exist?(downloaded)
+      UI.user_error!(
+        "deliver finished but wrote no en-US/description.txt, so there is no App Store " \
+        "listing to download yet. The app exists in App Store Connect with TestFlight builds " \
+        "only; create the first App Store version (name, subtitle, description, keywords, " \
+        "screenshots) in the console, then run this lane again. Nothing was uploaded.",
+      )
+    end
     UI.success("Live listing downloaded to ios/fastlane/metadata/. Commit it before editing anything.")
   end
 

@@ -132,6 +132,23 @@ jobs:
       # nothing. Download the artifact, unzip it over ios/fastlane/metadata/,
       # and commit -- that commit is the reconciled copy every later
       # upload_metadata run is diffed against.
+      # Also print every downloaded file into the job log, between markers.
+      # The artifact above is served from Azure blob storage, which the
+      # remote Claude sandbox's egress proxy refuses -- so a session there
+      # can trigger this lane and read the result, but never fetch the zip.
+      # The log is reachable through the GitHub API. Text only: the listing
+      # is a handful of small files, and screenshots are never downloaded.
+      - name: Print the downloaded listing
+        if: inputs.lane == 'download_metadata'
+        shell: bash
+        run: |
+          find ios/fastlane/metadata -type f -name '*.txt' | sort | while read -r f; do
+            echo "=====BEGIN $f"
+            cat "$f"
+            echo
+            echo "=====END $f"
+          done
+
       - name: Upload the downloaded listing
         if: inputs.lane == 'download_metadata'
         uses: actions/upload-artifact@v7
