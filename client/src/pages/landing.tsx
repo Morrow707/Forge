@@ -49,7 +49,19 @@ function BrowserFrame({ src, alt, className }: { src: string; alt: string; class
         <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
       </div>
-      <img src={src} alt={alt} className="block w-full" />
+      {/* WEBP FIRST, PNG AS THE FALLBACK SOURCE.
+          These screenshots were ~960kB of PNG across five files and are the heaviest thing a
+          first-time visitor downloads -- PNG is lossless, which nothing needs for a picture of a
+          dashboard. The .webp siblings are committed next to the originals (see
+          scripts/optimize-marketing-images.mjs) and cut that by about 60%. The PNG stays as the
+          <source> fallback and as the file a designer edits.
+
+          loading/decoding are set for the same reason: these sit below the fold on every page
+          that uses them, so blocking first paint on them is pure cost. */}
+      <picture>
+        <source srcSet={src.replace(/\.png$/, ".webp")} type="image/webp" />
+        <img src={src} alt={alt} className="block w-full" loading="lazy" decoding="async" />
+      </picture>
     </div>
   );
 }

@@ -17,6 +17,8 @@
  * Those are public, listed here so nobody has to rediscover them, and marked index: false.
  */
 
+import { MOVEMENTS } from "./movement-library";
+
 export type PublicRoute = {
   path: string;
   title: string;
@@ -69,6 +71,15 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
     title: "What the camera has actually been tested on",
     description:
       "Which movements Forge's camera tracking has been validated against real footage, which have not, and what a camera cannot measure from a given angle. Published in full.",
+    index: true,
+    priority: 0.8,
+    image: "/marketing/shot-analytics.png",
+  },
+  {
+    path: "/movements",
+    title: "Movement library",
+    description:
+      "How to film each movement Forge's camera tracking has been validated on, what it measures, and what is not reliable on each one.",
     index: true,
     priority: 0.8,
     image: "/marketing/shot-analytics.png",
@@ -161,6 +172,21 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
  * coach puts on a flyer, so it is the one per-code page that SHOULD be indexed. It is absent
  * from PUBLIC_ROUTES only because its paths are not knowable at build time; the sitemap cannot
  * list them and the page carries its own metadata at runtime. */
+
+/** The per-movement pages, appended rather than typed out: the movement list is the source of
+ * truth for which exist, and writing them here again would be a second list to keep in step.
+ * Four today, and more when the validation set grows. */
+for (const m of MOVEMENTS) {
+  PUBLIC_ROUTES.push({
+    path: `/movements/${m.slug}`,
+    title: `Filming a ${m.name.toLowerCase()}`,
+    description: `Where to put the camera for a ${m.name.toLowerCase()}, what Forge measures from the footage, and what is not reliable on this movement.`,
+    index: true,
+    priority: 0.7,
+    image: "/marketing/shot-analytics.png",
+  });
+}
+
 export const NOINDEX_PREFIXES = [
   "/admin",
   "/claim",

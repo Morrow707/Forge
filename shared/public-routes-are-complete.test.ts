@@ -22,6 +22,17 @@ const HANDLED_AT_RUNTIME: Record<string, string> = {
   "/team/:code": "per-code, unknowable at build time -- PublicTeamPage sets its own head",
 };
 
+/** A router path may be a PATTERN. "/movements/:slug" is one route in App.tsx and four entries
+ * in PUBLIC_ROUTES, one per validated movement, because each needs its own title and its own
+ * line in the sitemap. Comparing the two as plain strings reported all four as routes that do
+ * not exist -- so the comparison has to understand a parameter segment. */
+function patternMatches(pattern: string, concrete: string): boolean {
+  const a = pattern.split("/");
+  const b = concrete.split("/");
+  if (a.length !== b.length) return false;
+  return a.every((seg, i) => seg.startsWith(":") || seg === b[i]);
+}
+
 function routerPaths(): { path: string; protected: boolean }[] {
   const found: { path: string; protected: boolean }[] = [];
   // Self-closing <Route path="..." component={X} /> is the public form; the wrapping
@@ -61,6 +72,8 @@ describe("every route a logged-out visitor can reach is classified", () => {
       .filter((p) => !p.protected)
       .map((p) => p.path)
       .filter((path) => !known.has(path))
+      // A parameterised route is covered when the list carries concrete paths under it.
+      .filter((path) => !PUBLIC_ROUTES.some((r) => patternMatches(path, r.path)))
       .filter((path) => !(path in HANDLED_AT_RUNTIME))
       .filter((path) => !NOINDEX_PREFIXES.some((n) => path === n || path.startsWith(`${n}/`)))
       .sort();
@@ -73,7 +86,10 @@ describe("every route a logged-out visitor can reach is classified", () => {
 
   it("lists nothing that is not actually a route", () => {
     const routerSet = new Set(paths.map((p) => p.path));
-    const stale = PUBLIC_ROUTES.map((r) => r.path).filter((p) => !routerSet.has(p)).sort();
+    const routerPatterns = [...routerSet];
+    const stale = PUBLIC_ROUTES.map((r) => r.path)
+      .filter((p) => !routerSet.has(p) && !routerPatterns.some((rp) => patternMatches(rp, p)))
+      .sort();
     expect(stale, "in the sitemap but not in the router -- a 404 offered to Google").toEqual([]);
   });
 

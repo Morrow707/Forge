@@ -85,3 +85,42 @@ describe("the per-route metadata", () => {
     }
   });
 });
+
+describe("the marketing screenshots", () => {
+  // These are the heaviest thing a first-time visitor downloads, and the WebP siblings are
+  // COMMITTED rather than generated during the build -- sharp is not a declared dependency and
+  // making every Render deploy install a native image library to re-encode five files that
+  // change twice a year is the wrong trade.
+  //
+  // Committed artifacts go stale silently, though: somebody adds a screenshot, references the
+  // PNG, and never runs scripts/optimize-marketing-images.mjs. The page still works, it is just
+  // quietly heavy again. So the pairing is asserted rather than trusted.
+  const dir = join(ROOT, "client", "public", "marketing");
+  const files = require("node:fs").readdirSync(dir) as string[];
+  const pngs = files.filter((f) => f.endsWith(".png"));
+
+  it("finds the screenshots it is meant to be checking", () => {
+    expect(pngs.length).toBeGreaterThan(3);
+  });
+
+  it("has a webp beside every png", () => {
+    const missing = pngs.filter((f) => !files.includes(f.replace(/\.png$/, ".webp"))).sort();
+    expect(
+      missing,
+      "run: node scripts/optimize-marketing-images.mjs",
+    ).toEqual([]);
+  });
+
+  it("keeps every webp actually smaller than its png", () => {
+    // A re-encode that came out bigger means the quality setting was raised past the point of
+    // the exercise, and serving it would be strictly worse than the PNG.
+    const { statSync } = require("node:fs");
+    for (const png of pngs) {
+      const webp = png.replace(/\.png$/, ".webp");
+      if (!files.includes(webp)) continue;
+      expect(statSync(join(dir, webp)).size, `${webp} is not smaller than ${png}`).toBeLessThan(
+        statSync(join(dir, png)).size,
+      );
+    }
+  });
+});

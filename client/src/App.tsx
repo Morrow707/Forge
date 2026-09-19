@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { PUBLIC_ROUTES, isIndexable } from "@shared/public-routes";
 import { SITE_NAME, usePageMeta } from "@/lib/page-meta";
+import { trackPageView } from "@/lib/analytics";
 import { Capacitor } from "@capacitor/core";
 import { queryClient, persistOptions } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -46,6 +47,8 @@ import NotFound from "@/pages/not-found";
 const ForHighSchoolsPage = lazy(withLoadTimeout(() => import("@/pages/for-high-schools")));
 const ForAthletesPage = lazy(withLoadTimeout(() => import("@/pages/for-athletes")));
 const CameraValidationPage = lazy(withLoadTimeout(() => import("@/pages/camera-validation")));
+const MovementIndexPage = lazy(withLoadTimeout(() => import("@/pages/movement").then((m) => ({ default: m.MovementIndexPage }))));
+const MovementPage = lazy(withLoadTimeout(() => import("@/pages/movement")));
 const AvPreviewTestPage = lazy(withLoadTimeout(() => import("@/pages/dev/av-preview-test")));
 
 const CoachDashboard = lazy(withLoadTimeout(() => import("@/pages/coach/dashboard")));
@@ -267,6 +270,12 @@ function HomeRedirect() {
  * crawlable because nobody remembered to exclude it. */
 function RouteMeta() {
   const [location] = useLocation();
+  // Counted here because this is the one component that already sees every navigation. Off
+  // unless VITE_ANALYTICS_ENDPOINT is set, and it must stay off until the privacy policy names
+  // the processor -- see lib/analytics.ts for why that ordering is not optional.
+  useEffect(() => {
+    trackPageView(location);
+  }, [location]);
   const known = PUBLIC_ROUTES.find((r) => r.path === location);
   usePageMeta(
     known
@@ -338,6 +347,10 @@ function Router() {
         {/* What the camera has actually been validated on. Public deliberately: the value of the
             page is entirely in it being readable before somebody buys. */}
         <Route path="/camera-validation" component={CameraValidationPage} />
+        {/* The movement library: four pages, one per validated movement, plus an index. Kept to
+            the validated set on purpose -- see shared/movement-library.ts. */}
+        <Route path="/movements" component={MovementIndexPage} />
+        <Route path="/movements/:slug" component={MovementPage} />
         {/* Public, no account -- the link a coach can put on a flyer. See
             PublicTeamPage: Team Identity sells a public About page and contact email,
             and the only About page Forge had was behind a login. */}
