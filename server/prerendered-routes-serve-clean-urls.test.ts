@@ -4,7 +4,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Server } from "node:http";
-import { PUBLIC_STATIC_OPTIONS, prerenderedFileFor, servePrerendered, spaFallback } from "./public-static";
+import {
+  PUBLIC_STATIC_OPTIONS,
+  prerenderedFileFor,
+  servePrerendered,
+  spaFallback,
+  staticLimiter,
+} from "./public-static";
 
 /** A prerendered public route has to answer at its CLEAN URL with a 200 and its own head.
  *
@@ -33,6 +39,9 @@ beforeAll(async () => {
   fs.mkdirSync(path.join(dir, "pricing"), { recursive: true });
 
   const app = express();
+  // The same limiter serveStatic mounts first, so this app has the production shape -- and so
+  // CodeQL, which flagged the file-serving handlers here as unlimited, sees what it sees there.
+  app.use(staticLimiter);
   app.use(servePrerendered(dir));
   app.use(express.static(dir, PUBLIC_STATIC_OPTIONS));
   app.use("*", spaFallback(dir));
