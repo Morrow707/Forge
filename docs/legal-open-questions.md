@@ -97,13 +97,14 @@ whether a coaching recommendation is a fitness purpose, whether the Health-sync 
 permission, and whether the switch itself needs to say Health values may be sent to the AI
 provider.
 
-## 7. The biometric paragraph still says "not yet been finalized by counsel" -- OPEN, on purpose
+## 7. The biometric paragraph said "not yet been finalized by counsel" -- CLOSED, 2026-09-19
 
-Privacy Policy s4 ends with that sentence and it is live. Every other note-to-self in the four
-documents was removed on 2026-09-19; this one was left because replacing it is a compliance claim
-(BIPA, and the Texas and Washington equivalents) that counsel should make, not engineering. The
-proposed replacement is in the review packet under question 3. Delete this entry and the sentence
-together when counsel answers.
+Replaced later the same day, on Scott's decision, with the biometric-consent statement (question 3
+in the review packet). The same decision published the COPPA sentence in Privacy s5, the consent
+sentence in the Notice, the minors sentence in Terms s15, and the paid-plans text in Terms s8
+ahead of billing going live ("I don't want to have to change paperwork when we launch"). All four
+are therefore LIVE and are what counsel is reviewing; questions 1, 2 and 3 still stand, and an
+answer that softens any of them is a change to a live document, recorded by version tracking.
 
 ## How these reach a reviewer
 

@@ -100,6 +100,9 @@ export const PARENTAL_NOTICE_PRIOR_SHIPPED = [
   // 2026-09-19 launch-readiness pass: the collected-data list gained nutrition and Apple Health, and
   // the retention section gained the per-program cap.
   "ac5af50708b3d388629bb0bd8aba61168c4fe0b61078c53e56fc2e1785ae4711",
+  // 2026-09-19, later the same day: s1 gained the sentence saying the claim is the federally
+  // required consent for an under-13 and that a confirming email follows. Scott's decision.
+  "9589612c71d41d988fca862a5f1379aa5d79519285f1eff10cb018e647dffb0b",
 ] as const;
 
 /** EVERY stored shape of the privacy policy Forge ever shipped, current one excluded.
@@ -124,6 +127,9 @@ export const PRIVACY_POLICY_PRIOR_SHIPPED = [
   // IP geolocation), the under-13 signup sentence corrected, retention given real numbers, the
   // 'not yet reviewed by counsel' admission and the 'no version tracking' sentence removed.
   "ea972e2aebe9e2cf87aeb3658ae5eaba344add1b274041347b2e281d6ddfcfcc",
+  // 2026-09-19, later the same day: s4's 'not yet finalized by counsel' sentence replaced with the
+  // biometric-consent statement, s5 gained the COPPA sentence. Scott's decision, pending review.
+  "ffd2e131d663bcee3b3d89ffba251b995343fdf2e2f4f14c5891f5ea8afa5b74",
 ] as const;
 /** EVERY stored shape of the terms of service Forge ever shipped, current one excluded.
 
@@ -144,4 +150,7 @@ export const TERMS_OF_SERVICE_PRIOR_SHIPPED = [
   // 2026-09-19 launch-readiness pass: guardian acceptance sentence, framework names dropped from s2,
   // the under-13 signup sentence corrected in s4, parent (not coach) permission in s6.
   "0587dbda49107e1d7718a6ee1b4230aee8fab13c0950a6fe34f84bec15aa66ae",
+  // 2026-09-19, later the same day: s8 describes the paid plans ahead of billing going live so the
+  // paperwork does not change at launch (Scott), s15 gained the minors sentence.
+  "402bd7e07d5fa16bf3b647fd58f1ab8d4b3796804b5e724f76626d28e22f7a90",
 ] as const;
