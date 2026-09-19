@@ -706,12 +706,14 @@ change it HERE rather than arguing it again from scratch.
   never present at a session, so a treatment authorization has no recipient,
   and an emergency contact is a third party's personal data with no operational
   path. The coach knows who to call. Asked and answered, 2026-09-06.
-- **Payments stay off through beta.** The public Terms of Service says Forge
-  does not currently charge, and that is correct TODAY. The signup Terms of Use
-  describes paid plans because that is the text wanted AT LAUNCH. The two
-  reading differently is deliberate, not a contradiction to tidy up. Scott,
-  2026-09-17: "we are still in beta, so payments are turned off ... keep
-  payments off".
+- **Payments stay off through beta, but the paperwork already describes them.**
+  Scott, 2026-09-17: "we are still in beta, so payments are turned off ... keep
+  payments off". Scott, 2026-09-19: "when it goes live I don't want to have to
+  change paperwork when we launch" -- so the public Terms of Service s8 now
+  describes the paid plans (Apple in-app, Stripe on the web) even though
+  BILLING_LIVE is off and nobody is charged. The pricing page still says Forge
+  is not charging yet, which is the truthful statement of TODAY; the Terms
+  state the launch position. Do not "fix" either to match the other.
 
 ## What deletion keeps, and what it does not
 
