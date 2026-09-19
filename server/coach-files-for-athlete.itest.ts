@@ -27,16 +27,12 @@ import {
  * the file the way the browser does, and check it landed on the ATHLETE's record.
  */
 async function loginCookie(baseUrl: string, email: string): Promise<string> {
-  const res = await fetch(`${baseUrl}/api/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password: TEST_PASSWORD }),
-  });
-  if (res.status !== 200) throw new Error(`login failed: ${res.status}`);
-  return res.headers
-    .getSetCookie()
-    .map((raw) => raw.split(";")[0])
-    .join("; ");
+  // A raw fetch here sends no device id, so since new-device approval it
+  // would get the "check your email" step instead of a cookie. Sign in
+  // through the harness client, which pre-trusts its own device, and lift
+  // the cookie off it for the multipart fetches below.
+  const client = await loginAs(baseUrl, { email });
+  return client.cookieHeader();
 }
 
 /** The smallest thing the upload route will accept: a real PDF header, so multer's mime check

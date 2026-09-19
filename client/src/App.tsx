@@ -32,6 +32,7 @@ import GuardianPendingPage from "@/pages/guardian-pending";
 import DateOfBirthRequiredPage from "@/pages/date-of-birth-required";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import DeviceApprovalPage from "@/pages/device-approval";
 import VerifyEmailPage from "@/pages/verify-email";
 import LegalPage from "@/pages/legal";
 import {
@@ -359,6 +360,7 @@ function Router() {
         <Route path="/guardian/claim" component={GuardianClaimPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route path="/device-approval" component={DeviceApprovalPage} />
         <Route path="/verify-email" component={VerifyEmailPage} />
         <Route path="/legal" component={LegalPage} />
         <Route path="/terms" component={TermsOfServicePage} />

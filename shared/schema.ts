@@ -5965,6 +5965,79 @@ export const userSessions = pgTable(
 );
 export type UserSession = typeof userSessions.$inferSelect;
 
+// ---------- Trusted devices and new-device approval ----------
+// A sign-in from a device this account has never used has to be approved
+// from the account's email before it gets a session (server/trusted-devices.ts
+// owns the rule; auth.ts's login route asks it). Every role, every device;
+// Scott, 2026-09-19: "if we notice a device that is not trusted, then have
+// the app send a message saying we don't recognize this device ... if they
+// deny it have them be guided to a new password screen because obviously
+// they were hacked."
+//
+// The device is identified by an id the CLIENT generates once and keeps
+// (client/src/lib/device-id.ts) -- never by User-Agent, which every phone
+// of the same model shares. Only the sha256 of that id is stored, same as
+// the password-reset tokens, so a dump of this table trusts nobody.
+export const trustedDevices = pgTable(
+  "trusted_devices",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceIdHash: text("device_id_hash").notNull(),
+    deviceLabel: text("device_label"),
+    ipAddress: text("ip_address"),
+    location: text("location"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Trust lasts TRUSTED_DEVICE_TTL_MS from here, and every sign-in on the
+    // device moves it forward -- the same resetting-timer rule the session
+    // cookie follows.
+    lastUsedAt: timestamp("last_used_at").notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (table) => ({
+    userIdx: index("trusted_devices_user_idx").on(table.userId),
+  }),
+);
+export type TrustedDevice = typeof trustedDevices.$inferSelect;
+
+// One row per sign-in attempt from an unrecognised device. Two tokens, both
+// hashed: the ACTION token goes in the email and is the only thing that can
+// approve or deny; the POLL token goes back to the waiting device and can
+// only ask "has it been decided yet?" and then claim the session once it
+// has. Neither is any use to the other side.
+export const deviceApprovals = pgTable(
+  "device_approvals",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceIdHash: text("device_id_hash").notNull(),
+    deviceLabel: text("device_label"),
+    ipAddress: text("ip_address"),
+    location: text("location"),
+    actionTokenHash: text("action_token_hash").notNull(),
+    pollTokenHash: text("poll_token_hash").notNull(),
+    // pending | approved | denied. Expiry is a time, not a status, so a
+    // row never has to be swept to become invalid.
+    status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at").notNull(),
+    decidedAt: timestamp("decided_at"),
+    // Set when the waiting device claims its session, so an approval is
+    // spent exactly once.
+    consumedAt: timestamp("consumed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("device_approvals_user_idx").on(table.userId),
+    actionIdx: index("device_approvals_action_idx").on(table.actionTokenHash),
+    pollIdx: index("device_approvals_poll_idx").on(table.pollTokenHash),
+  }),
+);
+export type DeviceApproval = typeof deviceApprovals.$inferSelect;
+
 // ---------- Legal documents (draft, admin-editable) ----------
 // A real Terms of Service and Privacy Policy, kept separate from
 // legalAgreement above -- that table is specifically the short clickwrap

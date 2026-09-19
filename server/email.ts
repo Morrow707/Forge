@@ -45,6 +45,13 @@ if (!emailEnabled) {
   );
 }
 
+/** Only populated under vitest (NODE_ENV=test) with no Resend key -- see sendEmail. */
+export const testOutbox: { to: string; subject: string; html: string }[] = [];
+
+export function isEmailConfigured(): boolean {
+  return emailEnabled || process.env.NODE_ENV === "test";
+}
+
 export async function sendEmail({
   to,
   subject,
@@ -54,7 +61,19 @@ export async function sendEmail({
   subject: string;
   html: string;
 }): Promise<{ sent: boolean; error?: string }> {
-  if (!emailEnabled) return { sent: false, error: "not_configured" };
+  if (!emailEnabled) {
+    // Under vitest nothing is configured and nothing should leave the
+    // process -- but a test of a flow that RUNS on an email (the
+    // new-device approval link, for one) has to be able to read what would
+    // have been sent. Captured as if delivered, so the code under test
+    // takes its real "sent" branch.
+    if (process.env.NODE_ENV === "test") {
+      testOutbox.push({ to, subject, html });
+      if (testOutbox.length > 50) testOutbox.shift();
+      return { sent: true };
+    }
+    return { sent: false, error: "not_configured" };
+  }
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
