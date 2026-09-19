@@ -79,6 +79,9 @@
 
 ## Camera tracking
 
+- **Read the camera architecture section below first.** Three parts -- body
+  tracker, object tracker, overwatch -- and everything here sits inside that
+  shape. This section is the older, mode-specific notes; it is not the design.
 - Read `docs/camera-tracking-notes.md` before changing anything in the tracking
   pipeline or adding a capture mode. Two constraints in particular are not
   visible from the code and will produce plausible, wrong numbers if missed:
@@ -93,14 +96,30 @@
 - Only back squat, Pendlay row, bench press and box jump have been tested
   against real lifts. Everything else is unvalidated.
 
-## The camera is THREE parts, and they answer to each other
+## THE CAMERA ARCHITECTURE: three parts, answering to each other
+
+**This is how the camera system works. Not one fix among several -- the shape
+the whole pipeline is built to, and the shape anything added to it has to
+fit.** Ratified by Scott 2026-09-19: "camera should work cohesively, all three
+parts, body tracker tracking body things, object tracker tracking object,
+overwatch making sure both are working properly, everything is cohesive" /
+"that should be how our camera system works."
 
 Added 2026-09-19, revised the same day when the first version turned out to be
-one-way. Scott: "body tracker tracking body things, object tracker tracking
-object, overwatch making sure both are working properly, everything is
-cohesive." These are invariants, not preferences. Read
+one-way. These are invariants, not preferences. Read
 `docs/camera-tracking-notes.md` ("The two trackers now share one referee")
 before touching any of it.
+
+**Before adding a capture mode, a tracker, or a check, say which of the three
+parts it is.** A change that does not fit one of them is either in the wrong
+place or is a fourth part nobody agreed to, and a fourth part is how this got
+into trouble the first time: the object tracker grew three checks of its own,
+each perfectly reasonable, none of which could see the athlete. If a new signal
+genuinely belongs to none of the three, that is a design conversation, not a
+commit. The four modes with no implement in the scene (jump, sprint, mechanics,
+horizontal_load) are the standing exception and are documented as such -- they
+have a body tracker and nothing for overwatch to hold it against, which is a
+known ceiling rather than a gap to fill.
 
 The three parts and their jobs, which do not overlap:
 
