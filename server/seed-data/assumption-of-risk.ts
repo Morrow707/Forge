@@ -9,12 +9,24 @@ import {
 // other legal document here either grants a licence, describes data handling, or
 // takes a consent. This one asks somebody to give up a right.
 //
-// NOT REVIEWED BY A LAWYER, and of everything in this directory this is the one
-// where that caveat carries the most weight -- an unenforceable release is not a
-// weak release, it is no release, and the question of whether a parent can waive
-// a child's own future claims is decided by state law rather than by wording.
-// Section 8 says so inside the document instead of hiding it, because a parent
-// reading this deserves to know what they are and are not giving up.
+// REVIEWED BY COUNSEL, 2026-09-19 (opinion relayed by Scott, text unchanged).
+// Section 6: the release isolates the physical act of training, which Forge
+// does not control, from the software, which it does; under Arizona law a
+// prospective exculpatory clause is enforceable against ordinary negligence when
+// clear, unambiguous and voluntary, construed strictly against the drafter, and
+// section 7's carve-out of gross negligence and intentional misconduct (which
+// Arizona does not allow to be waived) is what positions section 6 to hold.
+// Section 8: the "honest framing" for minors is the preferred approach for a
+// national app -- state-specific parental waivers are unmaintainable, a blanket
+// parental waiver that fails in the user's state invites an unconscionability
+// attack on the whole agreement, and stating plainly that the release applies
+// only where the law allows preserves the parent's waiver of their OWN claims
+// while acknowledging the child's. No wording change was asked for.
+//
+// Before that, the caveat here read "not reviewed by a lawyer" and carried the
+// most weight of any in this directory: an unenforceable release is not a weak
+// release, it is no release. Changing the wording from here is changing a
+// reviewed document, so it wants the same care as changing a contract.
 //
 // WRITTEN BECAUSE THE TEMPLATE DID NOT FIT. A Rocket Lawyer "Activity Release of
 // Liability" was reviewed first, and its operative clauses -- assumption of risk,
