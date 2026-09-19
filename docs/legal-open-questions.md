@@ -106,12 +106,23 @@ ahead of billing going live ("I don't want to have to change paperwork when we l
 are therefore LIVE and are what counsel is reviewing; questions 1, 2 and 3 still stand, and an
 answer that softens any of them is a change to a live document, recorded by version tracking.
 
+## 8. Assumption of Risk and Release -- REVIEWED, 2026-09-19
+
+Counsel's opinion, relayed by Scott the same day the document was put in front of them.
+Section 6's release is well-targeted: it isolates the physical act of training from the
+software, and with section 7 carving out gross negligence and intentional misconduct it is
+positioned to be enforceable against ordinary negligence under Arizona law. Section 8's
+plain statement that a parent cannot release a minor's own claim where state law forbids it
+is the preferred approach for a national app over state-specific language. No change to the
+text. `server/seed-data/assumption-of-risk.ts` records the opinion in its header. The
+Rocket Lawyer Activity Release that this replaced is retired.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
 biometric consent plus the engineering facts behind each of its claims.
 
-**Five documents under review** (factual corrections from the 2026-09-19 pass already
+**Four documents still under review** (the Assumption of Risk was reviewed 2026-09-19, question 8) (factual corrections from the 2026-09-19 pass already
 applied; see `git log -- server/seed-data/legal-documents-draft.ts`): the Terms of Service,
 the Privacy Policy, the EULA, the Notice to Parent or Guardian, and the Institutional
 Service Agreement. The Notice is also the parental consent document, so question 5 should
