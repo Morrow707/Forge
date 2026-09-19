@@ -131,6 +131,15 @@ the store.
 The AI Terms of Use is REVIEWED: Scott, 2026-09-19, "we used the AI terms of use as a
 draft, a lawyer modified that". Its file header says so.
 
+## 10. Signup Terms of Use -- OPEN, packet prepared 2026-09-19
+
+The last live document with no lawyer's eyes on it. `docs/signup-terms-for-counsel.md`
+carries four factual additions Forge wants regardless (the guardian's fourth agreement,
+Apple Health, error monitoring, what deletion leaves behind), five questions (two Terms
+documents and precedence, a zero liability cap for non-paying users, changes without notice,
+promising a technical control, general), and the full text. Every claim in the document was
+checked against the code that day and holds.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
