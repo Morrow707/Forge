@@ -85,12 +85,32 @@ confirmation step, a small authorising card transaction, or not accepting under-
 all until it is settled. The third is a product decision, not a technicality:
 `tier1_under13` is a live tier and an under-13 can sign up today.
 
+## 6. Apple Health data reaching the AI provider -- OPEN
+
+Added 2026-09-19 during the launch-readiness pass on the four documents. The app pre-fills an
+athlete's daily check-in from Apple Health (sleep, resting heart rate, HRV, VO2 max, respiratory
+rate, weight, session heart rate), and the AI coach reads the check-in when it adjusts
+recommendations, so a Health-derived value can reach Anthropic inside a prompt. Apple's HealthKit
+rules allow sharing with third parties only for health or fitness purposes with the user's
+permission. The Privacy Policy now discloses both the collection and the AI use; ask counsel
+whether a coaching recommendation is a fitness purpose, whether the Health-sync switch is the
+permission, and whether the switch itself needs to say Health values may be sent to the AI
+provider.
+
+## 7. The biometric paragraph still says "not yet been finalized by counsel" -- OPEN, on purpose
+
+Privacy Policy s4 ends with that sentence and it is live. Every other note-to-self in the four
+documents was removed on 2026-09-19; this one was left because replacing it is a compliance claim
+(BIPA, and the Texas and Washington equivalents) that counsel should make, not engineering. The
+proposed replacement is in the review packet under question 3. Delete this entry and the sentence
+together when counsel answers.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
 biometric consent plus the engineering facts behind each of its claims.
 
-**Four documents under review:** the Terms of Service, the Privacy Policy, the EULA,
+**Four documents under review** (factual corrections from the 2026-09-19 pass already applied; see `git log -- server/seed-data/legal-documents-draft.ts`)**:** the Terms of Service, the Privacy Policy, the EULA,
 and the Notice to Parent or Guardian. That last one is also the parental consent
 document, so question 5 should be put to whoever reads it, at the same time. It was five; the Institutional Service Agreement
 outline is gone, superseded by the Rocket Lawyer Service Agreement, which is a signed
