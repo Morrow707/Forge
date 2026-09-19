@@ -198,13 +198,16 @@ can install. Delete entries as a `beta` ships them.
   Programs tab, Skill Bank and skill sessions), and the SEO and first-paint
   work (marketing pages, movement library, the 412kB lighter chunk split,
   WebP screenshots). Nothing on `main` is waiting on an upload.
-- **NOT in 462:** the two fixes from the post-merge audit, queued on PR #121. The
+- **NOT in 462:** the fixes from the post-merge audit, merged via PR #121. The
   prerendered public routes no longer 301 to a trailing-slash URL (server-side:
   `server/public-static.ts`, ships on Render, not in a build). The
   `useSkillsAccess` / `useCameraAccess` hooks now report a failed read, the
   skills gate renders `ReadFailed` instead of spinning forever, and both
   workout pages say so where the camera control would have been. That half is
-  client-side and reaches the app; 462 still has the infinite spinner.
+  client-side and reaches the app; 462 still has the infinite spinner. Also
+  server-side: the SPA catch-all now really answers a missing asset with a 404
+  (it never had, `req.path` is "/" under `app.use("*")`), which is what the
+  client's stale-chunk reload recovery waits for.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

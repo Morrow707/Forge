@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Server } from "node:http";
-import { PUBLIC_STATIC_OPTIONS, prerenderedFileFor, servePrerendered } from "./public-static";
+import { PUBLIC_STATIC_OPTIONS, prerenderedFileFor, servePrerendered, spaFallback } from "./public-static";
 
 /** A prerendered public route has to answer at its CLEAN URL with a 200 and its own head.
  *
@@ -35,7 +35,7 @@ beforeAll(async () => {
   const app = express();
   app.use(servePrerendered(dir));
   app.use(express.static(dir, PUBLIC_STATIC_OPTIONS));
-  app.use("*", (_req, res) => res.sendFile(path.join(dir, "index.html")));
+  app.use("*", spaFallback(dir));
   await new Promise<void>((resolve) => {
     server = app.listen(0, () => resolve());
   });
@@ -46,6 +46,25 @@ beforeAll(async () => {
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+describe("the SPA fallback", () => {
+  it("answers a client route with the app", async () => {
+    const res = await fetch(`${base}/admin/exercises`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("<title>ROOT</title>");
+  });
+
+  it("answers a missing asset with a real 404, not the app's HTML", async () => {
+    // This was a 200 with index.html for as long as the check existed: mounted under
+    // app.use("*"), req.path is "/" and the extension test never matched. A stale tab asking
+    // for a replaced chunk needs the 404 to trigger its own reload.
+    for (const u of ["/assets/index-deadbeef.js", "/missing.css", "/x.js?v=1"]) {
+      const res = await fetch(`${base}${u}`);
+      expect(res.status, u).toBe(404);
+      expect(res.headers.get("content-type")).toContain("text/plain");
+    }
+  });
 });
 
 describe("prerendered public routes", () => {
@@ -63,10 +82,8 @@ describe("prerendered public routes", () => {
   });
 
   it("a path outside dist or with an extension is not served by the prerender handler", async () => {
-    // The test's own catch-all hands back the root page for anything unmatched (the real one
-    // 404s asset paths), so the check is what was served, not the status.
     const asset = await fetch(`${base}/pricing.css`, { redirect: "manual" });
-    expect(await asset.text()).toBe("<title>ROOT</title>");
+    expect(asset.status).toBe(404);
     const escape = await fetch(`${base}/..%2Fpricing`, { redirect: "manual" });
     expect(await escape.text()).not.toBe("<title>/pricing</title>");
   });

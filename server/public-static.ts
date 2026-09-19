@@ -60,3 +60,32 @@ export function servePrerendered(distPath: string): RequestHandler {
     });
   };
 }
+
+/** The SPA catch-all: a client route gets index.html, a missing ASSET gets a real 404.
+ *
+ * WHY THE 404 MATTERS. Everything unmatched used to fall through to index.html, including a
+ * request for a hashed chunk that no longer exists -- which is exactly what a browser does for
+ * the minutes after a deploy, with a tab still open on the previous build. Handing back
+ * index.html with a 200 and text/html means dynamic import() gets a document where a module
+ * should be, and the failure surfaces as "Cannot read properties of undefined (reading
+ * 'default')" rather than as what it is. A real 404 is also what the client's own recovery waits
+ * for: main.tsx's vite:preloadError listener and lazy-load-recovery.ts turn a failed chunk fetch
+ * into one reload onto the current build. A 200 never reaches either of them.
+ *
+ * THE BUG THAT MADE IT A NO-OP. The check was written against `req.path`, and this handler is
+ * mounted with `app.use("*", ...)`. Under a mounted handler Express strips the matched prefix, so
+ * `req.path` is always "/" here and the extension test never matched: /missing.js came back as
+ * the app's HTML with a 200 for as long as the check existed. `req.originalUrl` is the request as
+ * sent, which is the thing to test. The test beside this file requests a missing .js and
+ * asserts the 404, so the check cannot go quiet again.
+ */
+export function spaFallback(distPath: string): RequestHandler {
+  const index = path.resolve(distPath, "index.html");
+  return (req, res) => {
+    const requested = req.originalUrl.split("?")[0];
+    if (/\.[a-zA-Z0-9]+$/.test(requested)) {
+      return res.status(404).type("text/plain").send("Not found");
+    }
+    res.sendFile(index);
+  };
+}
