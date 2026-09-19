@@ -96,6 +96,40 @@ describe("the plan a school picks at signup", () => {
     expect(status.body.onFile).toBe(false);
   });
 
+  it("lets an assistant join an existing program's staff at signup with no headcount", async () => {
+    // The plan is the head coach's. An assistant carrying a staff invite code is not asked
+    // for a number, gets no tier of their own, and lands on the staff -- so the primary's
+    // plan, roster and agreement all resolve for them the way they do for any staff coach.
+    const head = coachSignupBody({ expectedAthletes: 60 });
+    expect((await new TestClient(server.baseUrl).post("/api/auth/signup", head)).status).toBe(201);
+    const headRow = await db.query.users.findFirst({ where: eq(users.email, head.email) });
+    const code = await storage.getOrCreateStaffInviteCode(headRow!.id);
+
+    const assistant = coachSignupBody({ staffInviteCode: code });
+    delete (assistant as any).expectedAthletes;
+    const client = new TestClient(server.baseUrl);
+    const res = await client.post("/api/auth/signup", assistant);
+    expect(res.status).toBe(201);
+    const row = await db.query.users.findFirst({ where: eq(users.email, assistant.email) });
+    expect(row!.plannedAthleteCount).toBeNull();
+    expect(row!.billingTier).toBeNull();
+    const link = await db.query.coachStaff.findFirst({ where: eq(coachStaff.staffCoachId, row!.id) });
+    expect(link?.primaryCoachId).toBe(headRow!.id);
+    // And what they see is the head coach's plan, not an empty one of their own.
+    const plan = await client.get("/api/coach/plan");
+    expect(plan.status).toBe(200);
+    expect(plan.body.plannedAthleteCount).toBe(60);
+  });
+
+  it("refuses a bad staff invite code before creating the account", async () => {
+    const assistant = coachSignupBody({ staffInviteCode: "NOPE-000" });
+    delete (assistant as any).expectedAthletes;
+    const res = await new TestClient(server.baseUrl).post("/api/auth/signup", assistant);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/staff invite code/);
+    expect(await db.query.users.findFirst({ where: eq(users.email, assistant.email) })).toBeUndefined();
+  });
+
   it("ignores the field on an athlete signup", async () => {
     const body = athleteSignupBody({ expectedAthletes: 500 });
     const res = await new TestClient(server.baseUrl).post("/api/auth/signup", body);

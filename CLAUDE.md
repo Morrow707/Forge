@@ -226,9 +226,10 @@ billing uses the larger (`getBilledAthleteCountForCoach`).
   and `plannedAthleteCount` only ever moves up from it. Nothing writes it on the Apple path.
 - **At the ceiling the join is refused**, and the message says the coach must move up a plan.
   Moving up is the same $4 a head, so guessing low costs nothing. Enforcement semantics unchanged.
-- Every fresh coach signup is asked the number, including a future assistant who joins a staff
-  afterwards; their own answer is never read once they are on a staff. A staff-invite signal at
-  signup would let them skip it and was not built.
+- **An assistant coach skips the question.** Ticking "I'm joining a program that's already on
+  Forge" at signup swaps the headcount for the head coach's staff invite code
+  (`staffInviteCode` on `signupSchema`). The code is checked before the account is created, the
+  row gets no plan of its own, and the account lands on the staff in the same request.
 
 ## Per-team coach assignment
 

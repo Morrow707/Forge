@@ -82,6 +82,10 @@ export default function SignupPage() {
   // what the plan costs. Kept as a string like every other numeric field on
   // this page so a half-typed value doesn't get coerced to 0.
   const [expectedAthletes, setExpectedAthletes] = useState("");
+  // Assistant coach joining a program that already has a plan: they type the head
+  // coach's staff invite code instead of a headcount.
+  const [joiningStaff, setJoiningStaff] = useState(false);
+  const [staffInviteCode, setStaffInviteCode] = useState("");
   // Plain-English validation message, shown above the submit button. The
   // page had no error display of its own -- signup failures come back as a
   // toast from the mutation -- so this is only for the things we can catch
@@ -164,7 +168,11 @@ export default function SignupPage() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!agreedToTerms) return;
-    if (role === "coach" && !expectedAthletesValid) {
+    if (role === "coach" && joiningStaff && !staffInviteCode.trim()) {
+      setFormError("Enter the staff invite code your head coach gave you.");
+      return;
+    }
+    if (role === "coach" && !joiningStaff && !expectedAthletesValid) {
       setFormError(
         `Tell us roughly how many athletes you'll have -- a whole number between ${MIN_EXPECTED_ATHLETES} and ${MAX_EXPECTED_ATHLETES}. You can change it any time.`,
       );
@@ -178,13 +186,15 @@ export default function SignupPage() {
       password,
       role,
       coachCode: role === "athlete" ? coachCode || undefined : undefined,
+      staffInviteCode:
+        role === "coach" && joiningStaff ? staffInviteCode.trim().toUpperCase() : undefined,
       dateOfBirth,
       guardianEmail: isMinorAthlete ? guardianEmail.trim() || undefined : undefined,
       sport: role === "athlete" ? sport : undefined,
       position: role === "athlete" ? position.trim() : undefined,
       heightIn: role === "athlete" && heightIn ? Number(heightIn) : undefined,
       bodyWeightLbs: role === "athlete" && bodyWeightLbs ? Number(bodyWeightLbs) : undefined,
-      expectedAthletes: role === "coach" ? expectedAthletesNum : undefined,
+      expectedAthletes: role === "coach" && !joiningStaff ? expectedAthletesNum : undefined,
       agreedToTerms: true,
       researchDataConsent: researchConsent,
     });
@@ -314,6 +324,35 @@ export default function SignupPage() {
                 )}
               </div>
               {role === "coach" && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={joiningStaff}
+                    onChange={(e) => setJoiningStaff(e.target.checked)}
+                  />
+                  <span>
+                    I'm joining a program that's already on Forge
+                    <span className="block text-xs text-muted-foreground">
+                      Assistant coaches use the head coach's staff invite code. The plan stays
+                      with the head coach.
+                    </span>
+                  </span>
+                </label>
+              )}
+              {role === "coach" && joiningStaff && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="staffInviteCode">Staff invite code</Label>
+                  <Input
+                    id="staffInviteCode"
+                    autoCapitalize="characters"
+                    value={staffInviteCode}
+                    onChange={(e) => setStaffInviteCode(e.target.value.toUpperCase())}
+                    placeholder="From your head coach"
+                  />
+                </div>
+              )}
+              {role === "coach" && !joiningStaff && (
                 <div className="space-y-1.5">
                   <Label htmlFor="expectedAthletes">How many athletes will you have?</Label>
                   <Input
