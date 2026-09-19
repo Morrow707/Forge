@@ -192,6 +192,7 @@ export const NOINDEX_PREFIXES = [
   "/claim",
   "/guardian/claim",
   "/reset-password",
+  "/device-approval",
   "/verify-email",
   "/dev",
 ];

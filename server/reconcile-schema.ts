@@ -1997,6 +1997,40 @@ CREATE TABLE IF NOT EXISTS "user_sessions" (
 );
 CREATE INDEX IF NOT EXISTS "user_sessions_user_idx" ON "user_sessions" ("user_id");
 
+-- Trusted devices and new-device approval -- see shared/schema.ts's own
+-- comment above each table.
+CREATE TABLE IF NOT EXISTS "trusted_devices" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "device_id_hash" text NOT NULL,
+  "device_label" text,
+  "ip_address" text,
+  "location" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "last_used_at" timestamp NOT NULL DEFAULT now(),
+  "revoked_at" timestamp
+);
+CREATE INDEX IF NOT EXISTS "trusted_devices_user_idx" ON "trusted_devices" ("user_id");
+
+CREATE TABLE IF NOT EXISTS "device_approvals" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "device_id_hash" text NOT NULL,
+  "device_label" text,
+  "ip_address" text,
+  "location" text,
+  "action_token_hash" text NOT NULL,
+  "poll_token_hash" text NOT NULL,
+  "status" text NOT NULL DEFAULT 'pending',
+  "expires_at" timestamp NOT NULL,
+  "decided_at" timestamp,
+  "consumed_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "device_approvals_user_idx" ON "device_approvals" ("user_id");
+CREATE INDEX IF NOT EXISTS "device_approvals_action_idx" ON "device_approvals" ("action_token_hash");
+CREATE INDEX IF NOT EXISTS "device_approvals_poll_idx" ON "device_approvals" ("poll_token_hash");
+
 -- One guardian per athlete, ever -- athlete_id is unique (shared/schema.ts
 -- guardianLinks' own comment explains why). guardian_id is NOT unique: one
 -- guardian account can be linked to multiple athletes.

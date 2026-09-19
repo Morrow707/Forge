@@ -1,6 +1,7 @@
 import { QueryCache, QueryClient, QueryFunction, type Query } from "@tanstack/react-query";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { Capacitor } from "@capacitor/core";
+import { getDeviceId } from "@/lib/device-id";
 
 // The web deployment serves the frontend and backend from the same origin,
 // so a relative "/api/..." path resolves correctly there on its own. A
@@ -51,6 +52,10 @@ function authHeaders(): Record<string, string> {
   const token = getNativeToken();
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    // Which device this is, for new-device approval -- see lib/device-id.ts.
+    // On every request, not only login: logout uses it to forget this
+    // device, and the trusted-devices list uses it to mark "this one".
+    "X-Forge-Device-Id": getDeviceId(),
     // Tells the server this request came from inside the native app.
     //
     // Apple requires digital purchases made in the app to go through

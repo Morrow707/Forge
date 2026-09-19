@@ -196,8 +196,15 @@ can install. Delete entries as a `beta` ships them.
   read (skills gate shows ReadFailed instead of spinning, both workout pages
   say so where the camera control would be), plus the server-side clean-URL
   prerender, the real 404 for missing assets and the shared color helper,
-  which ship on Render rather than in the binary. Nothing on `main` is
-  waiting on an upload.
+  which ship on Render rather than in the binary.
+- **NOT in 465:** new-device approval (the section below). The server half
+  ships on Render; the client half -- the device id header, the "check your
+  email" step on both login screens, the review page, the trusted-devices
+  list -- reaches the app. Until the next upload the iOS app sends no device
+  id, so every sign-in from it is an unrecognised device that waits on the
+  email and can be approved but never trusted. That is the intended
+  behaviour for an app that cannot identify itself, and it goes away with
+  the next build.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
@@ -292,6 +299,53 @@ rejects.
   AI Coach) the AI chat coach and program builder. The landing and pricing feature lists are
   derived from the flags now -- two lines there were hardcoded and both were wrong, promising the
   AI program builder on Basic and the camera on all three.
+
+## A new device waits on the email
+
+Added 2026-09-19. Scott: "if we notice a device that is not trusted, then have the app send a
+message saying we don't recognize this device ... then they click the email tab, then accept the
+new device, or deny it, if they deny it have them be guided to a new password screen because
+obviously they were hacked." Every role, every device, including athletes; decided over the
+coach-and-admin-only option with eyes open to the cost (an athlete whose email a coach typed
+wrong cannot get in on a new phone until it is fixed).
+
+`server/trusted-devices.ts` owns the rule; `server/new-device-approval.itest.ts` proves every
+branch through the real login route and the real email.
+
+- **A password alone signs in only on a device this account has used before.** Anywhere else the
+  sign-in waits, an email goes to the account's address naming the device and its approximate
+  location, and the person approves or denies it from there. The waiting device polls and signs
+  itself in the moment it is approved. Deny drops every session and every trusted device and
+  lands the denier on the new-password screen with a fresh reset token.
+- **The question is put to something the owner already holds, never to the new device.** A
+  "trust this device?" prompt on the new device is a checkbox a thief ticks. The email is the
+  only thing that can decide, and the new device can only ask and, once approved, claim.
+- **Order: password, device, then the authenticator code.** The device check runs BEFORE the
+  TOTP step so a stolen password meets the inbox first. `server/trusted-devices.test.ts` scans
+  the login route for that order.
+- **A device is an id the client made up and kept**, `client/src/lib/device-id.ts`, sent on every
+  request as `X-Forge-Device-Id`. It is not the User-Agent (every phone of one model shares that;
+  session-tracking.ts uses it only for the friendlier "new login" notice) and only its hash is
+  stored. A sign-in that sends no id is an unrecognised device that can be approved but never
+  trusted.
+- **The link in the email never acts.** Mail scanners fetch every link. The email has ONE button
+  to a review page; the page has the two choices; only the POST decides. The unit test counts the
+  hrefs and refuses a GET decide route.
+- **The timer resets.** Trust lasts 30 days from the last sign-in on that device and every sign-in
+  moves it forward -- the rule the session cookie already follows. Signing out forgets the device.
+  Changing the password keeps the device in hand and forgets the rest; a reset forgets all.
+  The account was created on its first trusted device, so signup never meets the email.
+- **The App Review demo accounts are exempt by email**, `DEVICE_VERIFICATION_EXEMPT_EMAILS` on
+  Render, because they sign in on Apple's devices and cannot open the inbox.
+  `DEVICE_VERIFICATION_DISABLED=true` is the kill switch for an email-provider outage. With no
+  email provider configured at all (a dev box) the gate stands down and says so once.
+- **The test harness pre-trusts its client.** `loginAs` calls `trustClientDevice` first, so the
+  sixty-odd HTTP tests that are not about this gate never meet it. Under vitest `sendEmail`
+  captures to `testOutbox` instead of returning not_configured, which is how the approval test
+  reads its own link.
+- **Existing sessions were not touched by the rollout.** Nobody was signed out; the first sign-in
+  after a session ends or a sign-out goes through the email once, and that device is trusted
+  from then on.
 
 ## Who may use the camera, and who is told not to trust it
 

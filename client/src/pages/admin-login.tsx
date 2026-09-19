@@ -8,13 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ShieldCheck } from "lucide-react";
 import { MfaLoginStep } from "@/components/mfa-login-step";
+import { DeviceApprovalStep } from "@/components/device-approval-step";
 
 /** A dedicated, shareable login link for admins -- functionally identical
  * to /login (same auth endpoint, same role-based redirect), just framed
  * for someone who's landing directly on this URL rather than the general
  * coach/athlete login. */
 export default function AdminLoginPage() {
-  const { user, isLoading, loginMutation } = useAuth();
+  const { user, isLoading, loginMutation, deviceApprovalCompleteMutation } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -31,8 +32,17 @@ export default function AdminLoginPage() {
     loginMutation.mutate({ email, password });
   }
 
+  // Two ways to reach the authenticator step: straight from the password on a
+  // trusted device, or after the email has approved a new one. Device first,
+  // then code -- see server/trusted-devices.ts.
   const mfaPending =
-    loginMutation.data && "mfaRequired" in loginMutation.data ? loginMutation.data : null;
+    loginMutation.data && "mfaRequired" in loginMutation.data
+      ? loginMutation.data
+      : deviceApprovalCompleteMutation.data && "mfaRequired" in deviceApprovalCompleteMutation.data
+        ? deviceApprovalCompleteMutation.data
+        : null;
+  const devicePending =
+    !mfaPending && loginMutation.data && "deviceApprovalRequired" in loginMutation.data ? loginMutation.data : null;
 
   return (
     <div
@@ -53,7 +63,18 @@ export default function AdminLoginPage() {
           <p className="text-sm text-muted-foreground">Curate the official exercise library.</p>
         </div>
 
-        {mfaPending ? (
+        {devicePending ? (
+          <DeviceApprovalStep
+            email={email}
+            password={password}
+            pollToken={devicePending.pollToken}
+            emailHint={devicePending.emailHint}
+            onBack={() => {
+              loginMutation.reset();
+              deviceApprovalCompleteMutation.reset();
+            }}
+          />
+        ) : mfaPending ? (
           <MfaLoginStep
             email={email}
             password={password}

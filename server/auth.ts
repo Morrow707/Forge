@@ -8,10 +8,31 @@ import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
-import { sendEmail } from "./email";
+import { sendEmail, isEmailConfigured } from "./email";
 import { buildWelcomeEmail } from "./welcome-email";
 import { buildPasswordResetEmail } from "./password-reset-email";
 import { buildNewDeviceLoginEmail } from "./new-device-login-email";
+import { buildDeviceApprovalEmail } from "./device-approval-email";
+import {
+  approvalState,
+  consumeApproval,
+  createDeviceApproval,
+  decideApproval,
+  findApprovalByActionToken,
+  findApprovalByPollToken,
+  findTrustedDevice,
+  forgetAllDevices,
+  forgetDevice,
+  forgetDeviceById,
+  hashDeviceId,
+  isDeviceVerificationDisabled,
+  isDeviceVerificationExempt,
+  listTrustedDevices,
+  normalizeDeviceId,
+  setApprovalLocation,
+  touchTrustedDevice,
+  trustDevice,
+} from "./trusted-devices";
 import { buildPasswordChangedEmail } from "./password-changed-email";
 import { buildVerifyEmailEmail } from "./verify-email-email";
 import { buildGuardianInviteEmail } from "./guardian-invite-email";
@@ -19,7 +40,7 @@ import { buildGuardianConsentConfirmationEmail } from "./guardian-consent-confir
 import { reportJobFailure } from "./job-errors";
 import { apiLimiter } from "./rate-limiters";
 import { totpOtpauthUri } from "./mfa";
-import { isNativeAppRequest, normalizeIp, resolveLocation, shouldTouchLastSeen, type SessionKind } from "./session-tracking";
+import { formatDeviceLabel, isNativeAppRequest, normalizeIp, resolveLocation, shouldTouchLastSeen, type SessionKind } from "./session-tracking";
 import {
   signupSchema,
   requestPasswordResetSchema,
@@ -179,6 +200,25 @@ const mfaCodeLimiter = rateLimit({
 // Guards repeated wrong-current-password guesses against
 // /api/account/change-password -- same shape as mfaCodeLimiter, just for a
 // different secret being guessed.
+// The new-device approval endpoints. Status polling is one request every
+// few seconds from a device that is waiting, so it gets room; the ones that
+// decide or claim get the same budget as a code entry, because a token is
+// a thing that can be guessed at.
+const deviceApprovalPollLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please try again shortly." },
+});
+const deviceApprovalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Please try again shortly." },
+});
+
 const changePasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 15,
@@ -291,6 +331,21 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
 // own session table).
 const NATIVE_TOKEN_SECRET = SESSION_SECRET;
 const NATIVE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // matches the cookie session's own maxAge
+
+let warnedNoEmailForDeviceGate = false;
+
+// "s\u2022\u2022\u2022@live.com" -- enough for the person to know which inbox to open
+// without the login screen echoing the whole address back to whoever typed
+// a password into it.
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 0) return "your email";
+  return `${email[0]}\u2022\u2022\u2022${email.slice(at)}`;
+}
+
+function approvalNonce(): string {
+  return crypto.randomBytes(8).toString("hex");
+}
 
 function signNativeToken(userId: number, sessionRecordId: number): string {
   const expiresAt = Date.now() + NATIVE_TOKEN_TTL_MS;
@@ -748,6 +803,12 @@ export function setupAuth(app: Express) {
         // committed by this point, which is why this reports the failure rather than undoing it.
         try {
           const { nativeToken } = await trackNewSession(req, user.id);
+          // The device an account is created on is its first trusted device:
+          // the person just typed the email in, and an approval mail to an
+          // address that may not even be verified yet would gate the first
+          // minute of the product on the inbox.
+          const createdOn = requestDeviceId(req);
+          if (createdOn) await trustDevice(user.id, createdOn, deviceMeta(req));
           res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
         } catch (sessionErr) {
           next(sessionErr);
@@ -830,6 +891,12 @@ export function setupAuth(app: Express) {
         // rejection in a req.login callback crashes the process rather than erroring the request.
         try {
           const { nativeToken } = await trackNewSession(req, user.id);
+          // The device an account is created on is its first trusted device:
+          // the person just typed the email in, and an approval mail to an
+          // address that may not even be verified yet would gate the first
+          // minute of the product on the inbox.
+          const createdOn = requestDeviceId(req);
+          if (createdOn) await trustDevice(user.id, createdOn, deviceMeta(req));
           res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
         } catch (sessionErr) {
           next(sessionErr);
@@ -881,6 +948,12 @@ export function setupAuth(app: Express) {
         // rejection in a req.login callback crashes the process rather than erroring the request.
         try {
           const { nativeToken } = await trackNewSession(req, user.id);
+          // The device an account is created on is its first trusted device:
+          // the person just typed the email in, and an approval mail to an
+          // address that may not even be verified yet would gate the first
+          // minute of the product on the inbox.
+          const createdOn = requestDeviceId(req);
+          if (createdOn) await trustDevice(user.id, createdOn, deviceMeta(req));
           res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
         } catch (sessionErr) {
           next(sessionErr);
@@ -1110,6 +1183,86 @@ export function setupAuth(app: Express) {
     });
   }
 
+  // The device id the client keeps for itself -- sent as a header on every
+  // request (see authHeaders in client/src/lib/queryClient.ts) and, for the
+  // login body, also accepted there. See server/trusted-devices.ts for what
+  // it is and is not.
+  function requestDeviceId(req: any): string | null {
+    return normalizeDeviceId(req.headers["x-forge-device-id"]) ?? normalizeDeviceId(req.body?.deviceId);
+  }
+
+  function deviceMeta(req: any): { deviceLabel: string; ipAddress: string | undefined } {
+    const kind: SessionKind = isNativeAppRequest(req) ? "native" : "web";
+    return { deviceLabel: formatDeviceLabel(req.headers["user-agent"], kind), ipAddress: normalizeIp(req.ip) };
+  }
+
+  function publicOrigin(req: any): string {
+    return process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+  }
+
+  async function sendDeviceApprovalEmail(
+    req: any,
+    user: { email: string; name: string },
+    approval: { id: number; deviceLabel: string | null; location: string | null; createdAt: Date },
+    actionToken: string,
+  ): Promise<boolean> {
+    const reviewLink = `${publicOrigin(req)}/device-approval?token=${actionToken}`;
+    const { sent } = await sendEmail({
+      to: user.email,
+      subject: "Was this you? New device signing in to Forge",
+      html: buildDeviceApprovalEmail({
+        name: user.name,
+        deviceLabel: approval.deviceLabel ?? "Unknown device",
+        location: approval.location,
+        when: approval.createdAt,
+        reviewLink,
+      }),
+    });
+    return sent;
+  }
+
+  type DeviceGate =
+    | { kind: "trusted" }
+    | { kind: "approval"; pollToken: string }
+    | { kind: "unavailable" };
+
+  // Password was right. Is this a device we know? See trusted-devices.ts for
+  // the rule; this is where it is applied, and it runs BEFORE the
+  // authenticator step so a stolen password meets the inbox first.
+  async function deviceGate(req: any, user: { id: number; email: string; name: string }): Promise<DeviceGate> {
+    if (isDeviceVerificationDisabled() || isDeviceVerificationExempt(user.email)) return { kind: "trusted" };
+    if (!isEmailConfigured()) {
+      // A dev box with no Resend key. Locking every login here would help
+      // nobody; say so once per process instead.
+      if (!warnedNoEmailForDeviceGate) {
+        warnedNoEmailForDeviceGate = true;
+        console.warn("New-device approval is standing down: no email provider is configured, so the approval email could not be sent.");
+      }
+      return { kind: "trusted" };
+    }
+    const deviceId = requestDeviceId(req);
+    if (deviceId) {
+      const known = await findTrustedDevice(user.id, deviceId);
+      if (known) {
+        await touchTrustedDevice(known.id);
+        return { kind: "trusted" };
+      }
+    }
+    const meta = deviceMeta(req);
+    // A device that sent no id at all is still a device somebody is holding;
+    // it can be approved, it just can never become trusted (there is nothing
+    // to trust). Hashing a placeholder keeps the row shape uniform.
+    const { approval, actionToken, pollToken } = await createDeviceApproval(user.id, deviceId ?? `anonymous:${approvalNonce()}`, meta);
+    // Location is best-effort and must not sit in the login path -- but the
+    // email is the whole point here, so it waits on a bounded lookup rather
+    // than always saying "Unknown". resolveLocation caps itself at 3s.
+    const location = await resolveLocation(meta.ipAddress);
+    if (location) await setApprovalLocation(approval.id, location).catch(() => {});
+    const sent = await sendDeviceApprovalEmail(req, user, { ...approval, location }, actionToken);
+    if (!sent) return { kind: "unavailable" };
+    return { kind: "approval", pollToken };
+  }
+
   function completeLogin(req: any, res: any, next: any, user: any) {
     loginWithFreshSession(req, user, async (err2: any) => {
       if (err2) return next(err2);
@@ -1135,11 +1288,145 @@ export function setupAuth(app: Express) {
       // back a short-lived token identifying who's mid-login instead of
       // establishing the real session yet; the client collects a code and
       // finishes at /api/auth/mfa/verify-login below.
+      (async () => {
+        const gate = await deviceGate(req, user);
+        if (gate.kind === "unavailable") {
+          return res.status(503).json({
+            message: "We couldn't send the email needed to confirm this device. Please try again in a few minutes.",
+          });
+        }
+        if (gate.kind === "approval") {
+          return res.json({ deviceApprovalRequired: true, pollToken: gate.pollToken, emailHint: maskEmail(user.email) });
+        }
+        if (user.mfaEnabled) {
+          return res.json({ mfaRequired: true, mfaToken: signMfaPendingToken(user.id) });
+        }
+        completeLogin(req, res, next, user);
+      })().catch(next);
+    })(req, res, next);
+  });
+
+  // ---------- New-device approval ----------
+  // See server/trusted-devices.ts. The waiting device holds a poll token and
+  // can only ask and, once approved, claim. The email holds an action token
+  // and can only decide. Nothing here needs a session, because the whole
+  // point is that there is not one yet.
+
+  app.get("/api/auth/device-approval/status", deviceApprovalPollLimiter, async (req, res) => {
+    const pollToken = typeof req.query.pollToken === "string" ? req.query.pollToken : "";
+    const row = pollToken ? await findApprovalByPollToken(pollToken) : null;
+    if (!row) return res.status(404).json({ message: "That sign-in attempt was not found." });
+    res.json({ status: approvalState(row) });
+  });
+
+  app.post("/api/auth/device-approval/resend", deviceApprovalLimiter, async (req, res, next) => {
+    try {
+      const pollToken = typeof req.body?.pollToken === "string" ? req.body.pollToken : "";
+      const row = pollToken ? await findApprovalByPollToken(pollToken) : null;
+      if (!row || approvalState(row) !== "pending") {
+        return res.status(400).json({ message: "That sign-in attempt is no longer waiting." });
+      }
+      // A fresh row, not the old one re-mailed: the action token was only
+      // ever known in the clear at creation, so a resend has to be a new
+      // approval. The old row stays pending until it expires and is harmless.
+      const user = await storage.getUser(row.userId);
+      if (!user) return res.status(400).json({ message: "Account not found" });
+      const meta = deviceMeta(req);
+      const deviceId = requestDeviceId(req) ?? `anonymous:${approvalNonce()}`;
+      const fresh = await createDeviceApproval(user.id, deviceId, { ...meta, location: row.location });
+      const sent = await sendDeviceApprovalEmail(req, user, fresh.approval, fresh.actionToken);
+      if (!sent) return res.status(503).json({ message: "We couldn't send the email. Please try again in a few minutes." });
+      res.json({ pollToken: fresh.pollToken });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/auth/device-approval/complete", deviceApprovalLimiter, async (req, res, next) => {
+    try {
+      const pollToken = typeof req.body?.pollToken === "string" ? req.body.pollToken : "";
+      const row = pollToken ? await findApprovalByPollToken(pollToken) : null;
+      if (!row) return res.status(404).json({ message: "That sign-in attempt was not found." });
+      const state = approvalState(row);
+      if (state !== "approved") {
+        return res.status(state === "denied" ? 403 : 409).json({ message: `This sign-in was ${state}.`, status: state });
+      }
+      const consumed = await consumeApproval(row.id);
+      if (!consumed) return res.status(409).json({ message: "This approval has already been used." });
+      const user = await storage.getUser(row.userId);
+      if (!user) return res.status(401).json({ message: "Account not found" });
+      // Only a device that can identify itself becomes trusted; the claim
+      // has to come from the device that started the attempt, which is what
+      // matching the hash asserts.
+      const deviceId = requestDeviceId(req);
+      if (deviceId && hashDeviceId(deviceId) === row.deviceIdHash) {
+        await trustDevice(user.id, deviceId, { deviceLabel: row.deviceLabel, ipAddress: row.ipAddress, location: row.location });
+      }
       if (user.mfaEnabled) {
         return res.json({ mfaRequired: true, mfaToken: signMfaPendingToken(user.id) });
       }
       completeLogin(req, res, next, user);
-    })(req, res, next);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // What the email link lands on. A GET shows; only the POST below acts --
+  // see device-approval-email.ts for why a link must never approve.
+  app.get("/api/auth/device-approval/review", deviceApprovalLimiter, async (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+    const row = token ? await findApprovalByActionToken(token) : null;
+    if (!row) return res.status(404).json({ message: "This link is invalid." });
+    res.json({
+      status: approvalState(row),
+      deviceLabel: row.deviceLabel ?? "Unknown device",
+      location: row.location,
+      createdAt: row.createdAt,
+    });
+  });
+
+  app.post("/api/auth/device-approval/decide", deviceApprovalLimiter, async (req, res, next) => {
+    try {
+      const token = typeof req.body?.token === "string" ? req.body.token : "";
+      const decision = req.body?.decision === "approve" ? "approved" : req.body?.decision === "deny" ? "denied" : null;
+      if (!decision) return res.status(400).json({ message: "Choose approve or deny." });
+      const row = token ? await findApprovalByActionToken(token) : null;
+      if (!row) return res.status(404).json({ message: "This link is invalid." });
+      const decided = await decideApproval(row.id, decision);
+      if (!decided) {
+        return res.status(409).json({ message: `This sign-in was already ${approvalState(row)}.`, status: approvalState(row) });
+      }
+      if (decision === "approved") return res.json({ decision });
+      // Denied: somebody else has the password. Every session and every
+      // trusted device goes, and the person is handed straight to a new
+      // password rather than told to go and find the forgot-password page.
+      await forgetAllDevices(row.userId);
+      const revoked = await storage.revokeAllOtherSessions(row.userId, null);
+      if (revoked.webSessionIds.length > 0) {
+        await pool.query('DELETE FROM "session" WHERE sid = ANY($1)', [revoked.webSessionIds]);
+      }
+      const resetToken = await storage.createPasswordResetToken(row.userId);
+      res.json({ decision, resetToken });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get("/api/auth/trusted-devices", requireAuth, async (req, res) => {
+    const user = req.user as any;
+    const deviceId = requestDeviceId(req);
+    const currentHash = deviceId ? hashDeviceId(deviceId) : null;
+    const rows = await listTrustedDevices(user.id);
+    res.json(
+      rows.map(({ deviceIdHash, ...d }) => ({ ...d, isCurrent: currentHash !== null && deviceIdHash === currentHash })),
+    );
+  });
+
+  app.post("/api/auth/trusted-devices/:id/forget", requireAuth, async (req, res) => {
+    const user = req.user as any;
+    const ok = await forgetDeviceById(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Device not found" });
+    res.json({ ok: true });
   });
 
   app.post("/api/auth/mfa/verify-login", mfaCodeLimiter, async (req, res, next) => {
@@ -1248,6 +1535,11 @@ export function setupAuth(app: Express) {
     try {
       const user = req.user as { id: number } | undefined;
       const sessionRecordId = currentSessionRecordId(req);
+      // Signing out is the one gesture that means "this device is not mine to
+      // keep" -- a shared computer, a phone being handed on. The next sign-in
+      // here goes through the email again.
+      const deviceId = user ? requestDeviceId(req) : null;
+      if (user && deviceId) await forgetDevice(user.id, deviceId);
       if (user && sessionRecordId !== null) {
         const revoked = await storage.revokeSession(user.id, sessionRecordId);
         if (revoked?.webSessionId) {
@@ -1340,6 +1632,7 @@ export function setupAuth(app: Express) {
       }
       const passwordHash = await hashPassword(parsed.data.password);
       await storage.consumePasswordResetToken(record.id, record.userId, passwordHash);
+      await forgetAllDevices(record.userId);
       // Log out everywhere -- if someone reset this password because an
       // attacker had it, leaving the attacker's existing session/native
       // token alive would defeat the whole point. Awaited (unlike the
@@ -1381,6 +1674,11 @@ export function setupAuth(app: Express) {
       const user = req.user as any;
       const result = await storage.changeOwnPassword(user.id, parsed.data.currentPassword, parsed.data.newPassword);
       if ("error" in result) return res.status(400).json({ message: result.error });
+      // Same shape as the sessions: everything else is dropped, the device in
+      // hand stays, since it just proved the current password.
+      const keep = requestDeviceId(req);
+      await forgetAllDevices(user.id);
+      if (keep) await trustDevice(user.id, keep, deviceMeta(req));
       const currentId = currentSessionRecordId(req);
       const revoked = await storage.revokeAllOtherSessions(user.id, currentId);
       if (revoked.webSessionIds.length > 0) {

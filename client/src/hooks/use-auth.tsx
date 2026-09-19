@@ -28,7 +28,9 @@ type SignupPayload = {
 };
 
 type LoginPayload = { email: string; password: string };
-type LoginResult = { mfaRequired: true; mfaToken: string } | (PublicUser & { nativeToken?: string });
+export type MfaPending = { mfaRequired: true; mfaToken: string };
+export type DeviceApprovalPending = { deviceApprovalRequired: true; pollToken: string; emailHint: string };
+type LoginResult = MfaPending | DeviceApprovalPending | (PublicUser & { nativeToken?: string });
 
 type AuthContextValue = {
   user: PublicUser | null | undefined;
@@ -40,6 +42,7 @@ type AuthContextValue = {
   isError: boolean;
   loginMutation: ReturnType<typeof useLoginMutation>;
   mfaVerifyMutation: ReturnType<typeof useMfaVerifyMutation>;
+  deviceApprovalCompleteMutation: ReturnType<typeof useDeviceApprovalCompleteMutation>;
   signupMutation: ReturnType<typeof useSignupMutation>;
   logoutMutation: ReturnType<typeof useLogoutMutation>;
 };
@@ -79,12 +82,39 @@ function useLoginMutation() {
       if ("mfaRequired" in result) {
         return;
       }
+      // Password was right, but this device has never signed in to this
+      // account -- the login page switches to the "check your email" step
+      // and waits. Nothing about a session exists yet. See
+      // server/trusted-devices.ts.
+      if ("deviceApprovalRequired" in result) {
+        return;
+      }
       const { nativeToken, ...user } = result;
       applyLoginSuccess(qc, nativeToken, user, variables);
     },
     onError: (err: ApiError) => {
       toast.error(err.message || "Login failed");
     },
+  });
+}
+
+// Claims the session once the email has approved this device. The answer
+// is either a logged-in user or, for an account with an authenticator, the
+// same mfaRequired hand-off the password step gives -- device first, then
+// code, in that order on purpose.
+function useDeviceApprovalCompleteMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { pollToken: string; email: string; password: string }) => {
+      const res = await apiRequest("POST", "/api/auth/device-approval/complete", { pollToken: payload.pollToken });
+      return (await res.json()) as MfaPending | (PublicUser & { nativeToken?: string });
+    },
+    onSuccess: (result, variables) => {
+      if ("mfaRequired" in result) return;
+      const { nativeToken, ...user } = result;
+      applyLoginSuccess(qc, nativeToken, user, variables);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't finish signing in"),
   });
 }
 
@@ -183,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useLoginMutation();
   const mfaVerifyMutation = useMfaVerifyMutation();
+  const deviceApprovalCompleteMutation = useDeviceApprovalCompleteMutation();
   const signupMutation = useSignupMutation();
   const logoutMutation = useLogoutMutation();
 
@@ -260,7 +291,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, isError, loginMutation, mfaVerifyMutation, signupMutation, logoutMutation }}
+      value={{
+        user,
+        isLoading,
+        isError,
+        loginMutation,
+        mfaVerifyMutation,
+        deviceApprovalCompleteMutation,
+        signupMutation,
+        logoutMutation,
+      }}
     >
       {children}
     </AuthContext.Provider>

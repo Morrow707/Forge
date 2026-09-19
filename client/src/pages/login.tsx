@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ForgeMark } from "@/components/forge-mark";
 import { MfaLoginStep } from "@/components/mfa-login-step";
+import { DeviceApprovalStep } from "@/components/device-approval-step";
 import { isNativeLoginAvailable, presentNativeLogin } from "@/lib/native-auth";
 
 export default function LoginPage() {
-  const { user, isLoading, loginMutation } = useAuth();
+  const { user, isLoading, loginMutation, deviceApprovalCompleteMutation } = useAuth();
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -87,8 +88,17 @@ export default function LoginPage() {
     loginMutation.mutate({ email, password });
   }
 
+  // Two ways to reach the authenticator step: straight from the password on a
+  // trusted device, or after the email has approved a new one. Device first,
+  // then code -- see server/trusted-devices.ts.
   const mfaPending =
-    loginMutation.data && "mfaRequired" in loginMutation.data ? loginMutation.data : null;
+    loginMutation.data && "mfaRequired" in loginMutation.data
+      ? loginMutation.data
+      : deviceApprovalCompleteMutation.data && "mfaRequired" in deviceApprovalCompleteMutation.data
+        ? deviceApprovalCompleteMutation.data
+        : null;
+  const devicePending =
+    !mfaPending && loginMutation.data && "deviceApprovalRequired" in loginMutation.data ? loginMutation.data : null;
 
   return (
     <div
@@ -107,7 +117,7 @@ export default function LoginPage() {
           <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>
         </div>
 
-        {nativeShowing && !mfaPending ? (
+        {nativeShowing && !mfaPending && !devicePending ? (
           // What sits behind the native screen. It is presented full screen and cannot be swiped
           // away, so this is only ever seen for the instant between a sign-in attempt and the
           // screen coming back or the redirect firing -- but a half-drawn form flashing there is
@@ -115,6 +125,18 @@ export default function LoginPage() {
           <p className="text-center text-sm text-muted-foreground">
             {loginMutation.isPending ? "Logging in\u2026" : "Opening sign in\u2026"}
           </p>
+        ) : devicePending ? (
+          <DeviceApprovalStep
+            email={email}
+            password={password}
+            pollToken={devicePending.pollToken}
+            emailHint={devicePending.emailHint}
+            onBack={() => {
+              loginMutation.reset();
+              deviceApprovalCompleteMutation.reset();
+              if (nativeShowing) present();
+            }}
+          />
         ) : mfaPending ? (
           <MfaLoginStep
             email={email}

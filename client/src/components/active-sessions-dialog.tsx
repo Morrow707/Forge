@@ -10,9 +10,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { Laptop, Smartphone, MapPin, LogOut } from "lucide-react";
+import { Laptop, Smartphone, MapPin, LogOut, ShieldCheck, X } from "lucide-react";
 
 const QUERY_KEY = ["/api/auth/sessions"];
+const TRUSTED_KEY = ["/api/auth/trusted-devices"];
+
+type TrustedRow = {
+  id: number;
+  deviceLabel: string | null;
+  location: string | null;
+  lastUsedAt: string;
+  isCurrent: boolean;
+};
 
 type SessionRow = {
   id: number;
@@ -63,6 +72,25 @@ export function ActiveSessionsDialog({
   });
 
   const others = data?.filter((s) => !s.isCurrent) ?? [];
+
+  // Trusted devices are a different list from sessions: a session is "signed
+  // in right now", a trusted device is "a password alone signs in here for
+  // 30 days from last use" -- see server/trusted-devices.ts. Forgetting one
+  // does not sign it out; it means the next sign-in there goes through the
+  // email again.
+  const trusted = useQuery<TrustedRow[]>({
+    queryKey: TRUSTED_KEY,
+    queryFn: () => getJson("/api/auth/trusted-devices"),
+    enabled: open,
+  });
+  const forgetMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/auth/trusted-devices/${id}/forget`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: TRUSTED_KEY });
+      toast.success("That device will need email approval next time");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't forget that device"),
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -138,6 +166,55 @@ export function ActiveSessionsDialog({
             {revokeOthersMutation.isPending ? "Logging out…" : `Log out of ${others.length} other device${others.length === 1 ? "" : "s"}`}
           </Button>
         )}
+
+        <div className="mt-2 border-t border-border pt-4">
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <ShieldCheck className="h-4 w-4" /> Trusted devices
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Devices where your password alone signs you in. Any other device has to be approved
+            from your email first. Trust lasts 30 days from the last sign-in there.
+          </p>
+          {trusted.isLoading ? (
+            <div className="mt-3 h-16 animate-pulse rounded-md bg-surface" />
+          ) : trusted.isError ? (
+            <p className="mt-3 text-sm text-muted-foreground">Couldn't load trusted devices.</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {trusted.data?.map((d) => (
+                <div key={d.id} className="flex items-start justify-between gap-3 rounded-md border border-border p-3">
+                  <div className="min-w-0">
+                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                      <span className="truncate">{d.deviceLabel ?? "Unknown device"}</span>
+                      {d.isCurrent && (
+                        <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                          This device
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {d.location ?? "Unknown location"} · used {formatDistanceToNow(new Date(d.lastUsedAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => forgetMutation.mutate(d.id)}
+                    disabled={forgetMutation.isPending}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Forget
+                  </Button>
+                </div>
+              ))}
+              {!trusted.data?.length && (
+                <p className="text-sm text-muted-foreground">No trusted devices yet.</p>
+              )}
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

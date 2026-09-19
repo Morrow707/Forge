@@ -90,6 +90,22 @@ services:
       # testingUnlockAllPaywalls's own comment for the exact routes it gates.
       - key: PAYWALLS_DISABLED
         value: "true"
+      # NEW-DEVICE APPROVAL -- see server/trusted-devices.ts. A password alone
+      # signs in only on a device the account has used before; any other
+      # device waits on an email. Two ways to stand it down, both off by
+      # default (absent here on purpose, so a blueprint sync cannot switch
+      # either on):
+      #   DEVICE_VERIFICATION_DISABLED="true" turns the gate off entirely --
+      #   for an email-provider outage, when nobody could otherwise sign in
+      #   on a new phone. Set it, fix the email, unset it.
+      #   DEVICE_VERIFICATION_EXEMPT_EMAILS is a comma-separated list of
+      #   accounts that sign in with a password alone: the App Review demo
+      #   logins, which sign in on Apple's devices and cannot open the email.
+      #   Nothing else belongs in it.
+      - key: DEVICE_VERIFICATION_DISABLED
+        sync: false
+      - key: DEVICE_VERIFICATION_EXEMPT_EMAILS
+        sync: false
       # THE TWO SWITCHES THAT DECIDE WHETHER ANYONE CAN BE CHARGED.
       # Both absent, both therefore off. Declared here as sync:false rather
       # than left undeclared so that "can Forge take money right now" is a

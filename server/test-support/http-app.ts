@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { trustDevice } from "../trusted-devices";
 import express from "express";
 import cors from "cors";
 import type { AddressInfo } from "node:net";
@@ -8,6 +10,7 @@ import { NATIVE_APP_ORIGINS } from "../native-app-origins";
 import { hashPassword } from "../auth-utils";
 import { db } from "../db";
 import { users, coachAthletes } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Boots the real Express stack on a real port, so a test can attack it the
@@ -67,6 +70,11 @@ export type Response = { status: number; body: any; headers: Headers };
  */
 export class TestClient {
   private cookies = new Map<string, string>();
+  /** The id this client is known by for new-device approval (see
+   * server/trusted-devices.ts). One per client, like a real browser. loginAs
+   * trusts it before signing in, so a test that is not ABOUT the device gate
+   * never meets it; new-device-approval.itest.ts is the one that does. */
+  readonly deviceId = `test-device-${randomBytes(8).toString("hex")}`;
 
   constructor(private readonly baseUrl: string) {}
 
@@ -75,7 +83,7 @@ export class TestClient {
     path: string,
     options: { body?: unknown; headers?: Record<string, string> } = {},
   ): Promise<Response> {
-    const headers: Record<string, string> = { ...options.headers };
+    const headers: Record<string, string> = { "x-forge-device-id": this.deviceId, ...options.headers };
     if (options.body !== undefined) headers["content-type"] = "application/json";
     if (this.cookies.size > 0) {
       headers["cookie"] = [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
@@ -121,6 +129,12 @@ export class TestClient {
 
   hasSessionCookie(): boolean {
     return this.cookies.size > 0;
+  }
+
+  /** The Cookie header this client would send -- for a test that has to make its own fetch
+   * (a multipart upload, say) but still wants a session this client established. */
+  cookieHeader(): string {
+    return [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
   }
 }
 
@@ -173,6 +187,7 @@ export async function loginAs(
   password = TEST_PASSWORD,
 ): Promise<TestClient> {
   const client = new TestClient(baseUrl);
+  await trustClientDevice(client, user);
   const res = await client.login(user.email, password);
   if (res.status !== 200) {
     throw new Error(
@@ -181,4 +196,13 @@ export async function loginAs(
     );
   }
   return client;
+}
+
+/** Makes `client` a trusted device for `user`, so a password alone signs in there -- the state
+ * a real person's own phone is in after their first approved sign-in. Tests of the gate itself
+ * skip this and go through the email. */
+export async function trustClientDevice(client: TestClient, user: { email: string }): Promise<void> {
+  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.email, user.email));
+  if (!row) throw new Error(`trustClientDevice: no user with email ${user.email}`);
+  await trustDevice(row.id, client.deviceId, { deviceLabel: "test client" });
 }
