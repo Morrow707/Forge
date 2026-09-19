@@ -21,7 +21,7 @@ import { BIOMETRIC_RELEASE, nextBiometricRelease } from "./biometric-release";
 describe("the pinned current versions", () => {
   it("signup agreement", () => {
     expect(sha256(SIGNUP_AGREEMENT)).toBe(
-      "9394f4dcc0e4bbcfb81d23af9b8c3d814bd14fae4d6b73ea3d5102c7504e3276",
+      "68cf3176429335312b49d38ad193a34806df3a33e316b49da5f7a4e323bd1c95",
     );
   });
 
@@ -53,6 +53,11 @@ describe("migrating a previously shipped version", () => {
       "3ab92c73e1c270a98c3302241dba317464035cdc689633aea98234a6fb829e02",
     );
     expect(SIGNUP_AGREEMENT_PRIOR_LENGTHS).toContain(12114);
+    // And the rewrite itself, as it shipped before the two Terms were merged into it.
+    expect(SIGNUP_AGREEMENT_PRIOR_SHIPPED).toContain(
+      "9394f4dcc0e4bbcfb81d23af9b8c3d814bd14fae4d6b73ea3d5102c7504e3276",
+    );
+    expect(SIGNUP_AGREEMENT_PRIOR_LENGTHS).toContain(19178);
   });
 
   it("is a no-op once the current text is live", () => {

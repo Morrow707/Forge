@@ -102,8 +102,12 @@ describe("the terms themselves", () => {
     // 3. Notice and re-acceptance on a material change -- the promise server/storage.ts's
     //    getTermsAcceptanceStatus and the accept-terms routes exist to keep.
     expect(SIGNUP_AGREEMENT).toMatch(/ask you to review and accept the revised Terms/);
-    // 4. These Terms govern over the publicly posted Terms of Service.
-    expect(SIGNUP_AGREEMENT).toMatch(/these Terms of Use shall govern/);
+    // 4. WAS a precedence clause over the publicly posted Terms of Service. That document was
+    //    retired in the 2026-09-19 merge, so the sentence went with it -- a document cannot take
+    //    precedence over one that no longer exists, and leaving it would point a reader at a
+    //    Terms of Service they cannot find. Asserted as ABSENT so it cannot drift back in.
+    expect(SIGNUP_AGREEMENT).not.toMatch(/these Terms of Use shall govern/);
+    expect(SIGNUP_AGREEMENT).not.toMatch(/publicly posted Terms of Service/);
     // 5. DMCA notice-and-takedown, naming the designated agent.
     expect(SIGNUP_AGREEMENT).toMatch(/Digital Millennium Copyright Act/);
     expect(SIGNUP_AGREEMENT).toMatch(/designated copyright agent/);
@@ -120,5 +124,60 @@ describe("the terms themselves", () => {
       (SIGNUP_AGREEMENT.match(/[\w.+-]+@[\w.-]+/g) ?? []).map((a) => a.replace(/\.+$/, "")),
     );
     expect(addresses.size).toBe(1);
+  });
+});
+
+/** THE MERGE OF THE TWO TERMS, 2026-09-19.
+ *
+ * Scott: "merge them, just one less document that gets in the way". The public Terms of Service
+ * (TERMS_OF_SERVICE_DRAFT, now deleted) said six things this document did not, and each was
+ * carried over in the retired document's OWN words rather than paraphrased -- it was the only
+ * lawyer-touched text Forge had for those clauses. A paraphrase would silently drop the carve-outs
+ * ("except where the law says otherwise", the minors sentence on indemnification) that are the
+ * whole reason those sentences are worded the way they are. So each is pinned verbatim here: a
+ * later tidy that rewords one has to argue with a failing test. */
+describe("clauses carried over from the retired Terms of Service", () => {
+  it("carries the indemnification section, minors sentence included", () => {
+    expect(SIGNUP_AGREEMENT).toContain(
+      "You agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. Where you are under 18, or are a parent or guardian accepting these Terms on behalf of someone under 18, this Section applies only to the extent permitted by the law of the state where the minor lives, and nothing in it removes any protection that law gives a minor or a parent.",
+    );
+    // It is s16, and the sections after it moved up by one. Open question 1 in
+    // docs/legal-open-questions.md names that number.
+    expect(SIGNUP_AGREEMENT).toContain("16. INDEMNIFICATION");
+    expect(SIGNUP_AGREEMENT).toContain("17. MODIFICATIONS TO TERMS");
+    expect(SIGNUP_AGREEMENT).toContain("21. CONTACT INFORMATION");
+  });
+
+  it("carries the automated-access prohibition with its legal carve-out", () => {
+    expect(SIGNUP_AGREEMENT).toContain(
+      "You may not copy, scrape, or harvest them, access the Service by automated means, or reverse-engineer the software, except where the law says otherwise.",
+    );
+  });
+
+  it("names the two payment processors", () => {
+    expect(SIGNUP_AGREEMENT).toContain(
+      "Purchases made inside the iOS app are billed by Apple under Apple's terms; purchases made on the website are billed by Stripe.",
+    );
+  });
+
+  it("carries the COPPA sentence about what a guardian's claim is", () => {
+    expect(SIGNUP_AGREEMENT).toContain(
+      "For an athlete under 13, that claim is also the parental consent required by federal law.",
+    );
+    expect(SIGNUP_AGREEMENT).toContain(
+      "By creating an account, you confirm the age information you provide is accurate.",
+    );
+  });
+
+  it("carries the minors half of the third-party information rule", () => {
+    expect(SIGNUP_AGREEMENT).toContain(
+      "without obtaining their explicit prior consent or, for a minor, their parent or guardian's permission.",
+    );
+  });
+
+  it("drops the precedence sentence, because there is nothing left to precede", () => {
+    expect(SIGNUP_AGREEMENT).not.toContain(
+      "In the event of any conflict between these Terms of Use and the publicly posted Terms of Service, these Terms of Use shall govern.",
+    );
   });
 });

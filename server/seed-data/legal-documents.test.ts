@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { legalDocumentTypeEnum } from "@shared/schema";
 import {
-  TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
   PARENTAL_NOTICE_DRAFT,
   EULA_DRAFT,
@@ -11,7 +10,6 @@ import { BIOMETRIC_RELEASE } from "./biometric-release";
 import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
 
 const DRAFT_FOR_TYPE: Record<string, string> = {
-  terms_of_service: TERMS_OF_SERVICE_DRAFT,
   privacy_policy: PRIVACY_POLICY_DRAFT,
   // Not a draft, and never was one in production: the seed writes the real document
   // straight from nextBiometricRelease(null).
@@ -29,8 +27,13 @@ const DRAFT_FOR_TYPE: Record<string, string> = {
  * institutional_agreement: the outline under that name is deleted (see
  * legal-documents-draft.ts). The real contract is signed outside the app and
  * uploaded as an external waiver. Postgres cannot drop an enum value, so the
- * value remains with nothing behind it. */
-const RETIRED: ReadonlySet<string> = new Set(["institutional_agreement"]);
+ * value remains with nothing behind it.
+ *
+ * terms_of_service: the two Terms were merged on 2026-09-19 (Scott: "just one less document that
+ * gets in the way"). The signup clickwrap is the surviving one, it lives in legalAgreement rather
+ * than legalDocuments, and GET /api/legal-documents/terms_of_service serves IT -- so this type
+ * still resolves to text for a reader while seeding nothing of its own. */
+const RETIRED: ReadonlySet<string> = new Set(["institutional_agreement", "terms_of_service"]);
 
 describe("legal document types", () => {
   it("has starting text for every type in the enum", () => {
@@ -63,9 +66,12 @@ describe("legal document types", () => {
     expect(EULA_DRAFT).toMatch(/not located in a country subject to a United States Government embargo/);
   });
 
-  it("keeps the EULA distinct from the terms of service", () => {
+  it("keeps the EULA distinct from the terms", () => {
     // They answer different questions -- the software licence vs the service. Collapsing them is
     // the likeliest future "simplification", and it would drop the Apple clauses above with it.
-    expect(EULA_DRAFT).toMatch(/governed separately by the Terms of Service/);
+    // "Terms of Use" since the 2026-09-19 merge: the EULA names the other document, and the other
+    // document's name changed. Nothing else in the EULA did.
+    expect(EULA_DRAFT).toMatch(/governed separately by the Terms of Use/);
+    expect(EULA_DRAFT).not.toMatch(/Terms of Service/);
   });
 });

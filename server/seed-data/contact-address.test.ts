@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { FORGE_CONTACT_EMAIL } from "@shared/contact";
 import { SIGNUP_AGREEMENT, patchLiveDocuments } from "./signup-agreement";
 import {
-  TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
   PARENTAL_NOTICE_DRAFT,
   EULA_DRAFT,
@@ -17,7 +16,6 @@ import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
  * like it ignored them. So the rule is asserted rather than remembered. */
 const DOCUMENTS: Array<[string, string]> = [
   ["signup agreement (live)", SIGNUP_AGREEMENT],
-  ["terms of service", TERMS_OF_SERVICE_DRAFT],
   ["privacy policy", PRIVACY_POLICY_DRAFT],
   ["video and biometric consent", BIOMETRIC_RELEASE],
   ["parental notice", PARENTAL_NOTICE_DRAFT],

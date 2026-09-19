@@ -66,6 +66,12 @@ export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
   // the one production is carrying -- and it is what the migration recognises in order to move an
   // existing installation onto the reviewed text.
   "3ab92c73e1c270a98c3302241dba317464035cdc689633aea98234a6fb829e02",
+  // Counsel's 2026-09-19 rewrite, as it shipped before the two Terms were merged. The public
+  // Terms of Service is retired and /terms now serves THIS document, so six of its clauses were
+  // carried over (see signup-agreement.ts's header) and its precedence sentence was dropped.
+  // This is a TEXT change to a live clickwrap, so it re-asks every account to accept once --
+  // the designed behaviour of getTermsAcceptanceStatus, not a side effect to avoid.
+  "9394f4dcc0e4bbcfb81d23af9b8c3d814bd14fae4d6b73ea3d5102c7504e3276",
 ] as const;
 
 /** Character length of each entry in SIGNUP_AGREEMENT_PRIOR_SHIPPED, same order.
@@ -75,7 +81,7 @@ export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
  * than derived, since deriving it would mean keeping the full prior texts -- which is the thing
  * hashes exist to avoid. A wrong length simply fails to match and the document is left alone,
  * which is the safe direction. */
-export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274, 11937, 12126, 12114] as const;
+export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274, 11937, 12126, 12114, 19178] as const;
 
 /** PREVIOUS versions of the video and biometric release, oldest first. See above. */
 export const BIOMETRIC_RELEASE_PRIOR_SHIPPED = [

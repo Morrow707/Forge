@@ -246,7 +246,7 @@ export default function ClaimPage() {
             </div>
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
               <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
-              <span>I agree to the terms of service</span>
+              <span>I agree to the Terms of Use</span>
             </label>
             {/* The checkbox is mandatory and this page carried no terms text --
                 agreeing to something you cannot read is not a clickwrap. It was a
@@ -256,7 +256,7 @@ export default function ClaimPage() {
                 opening the terms would have ticked "I agree" by itself. */}
             <LegalDocumentReader
               docType="signup_agreement"
-              label="Read the terms of service"
+              label="Read the Terms of Use"
               className="pl-6 text-xs"
             />
             <Button

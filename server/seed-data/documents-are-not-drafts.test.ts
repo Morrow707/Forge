@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
   PARENTAL_NOTICE_DRAFT,
   EULA_DRAFT,
@@ -25,7 +24,8 @@ import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
  * docs/legal-open-questions.md, where a reviewer reads it and a user does not.
  */
 const SHOWN_TO_SOMEBODY: Array<[string, string]> = [
-  ["terms of service", TERMS_OF_SERVICE_DRAFT],
+  // No "terms of service": it was retired in the 2026-09-19 merge and the signup agreement
+  // below IS the Terms now, covered by this same list.
   ["privacy policy", PRIVACY_POLICY_DRAFT],
   ["notice to parent or guardian", PARENTAL_NOTICE_DRAFT],
   ["eula", EULA_DRAFT],

@@ -3887,6 +3887,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // literal values directly rather than a full zod schema, same weight as
   // validating any other route param.
   const LEGAL_DOC_TYPES = [
+    // Kept, but it no longer names a document an admin edits. The two Terms were merged on
+    // 2026-09-19 (Scott: "just one less document that gets in the way") and the signup clickwrap
+    // won: everything below that RESOLVES a terms_of_service to text -- the public page, the PDF,
+    // the email -- serves storage.getLegalAgreement() instead of the stored row, and the PUT
+    // refuses it. The type stays because the enum keeps the value, /terms and
+    // /api/legal-documents/terms_of_service are URLs people already hold, and consent records
+    // name it too.
     "terms_of_service",
     "privacy_policy",
     "biometric_waiver",
@@ -3900,7 +3907,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   type LegalDocType = (typeof LEGAL_DOC_TYPES)[number];
   const isLegalDocType = (v: string): v is LegalDocType => (LEGAL_DOC_TYPES as readonly string[]).includes(v);
   const LEGAL_DOC_TITLES: Record<LegalDocType, string> = {
-    terms_of_service: "Terms of Service",
+    terms_of_service: "Terms of Use",
     privacy_policy: "Privacy Policy",
     biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
     parental_notice: "Notice to Parent or Guardian",
@@ -3935,6 +3942,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const isPublicLegalDocType = (v: string): v is (typeof PUBLIC_LEGAL_DOC_TYPES)[number] =>
     (PUBLIC_LEGAL_DOC_TYPES as readonly string[]).includes(v);
 
+  /** The text and timestamp behind a legal document type -- the one place the merge is applied.
+   *
+   * "terms_of_service" resolves to the SIGNUP AGREEMENT, exactly as it is stored: the appended
+   * healthcare-provider notice included, because /terms exists to show people what they agreed to
+   * and the notice is part of what they agreed to. Everything else reads its own legalDocuments
+   * row. Resolving in one place is deliberate -- the public page, the PDF and the email each used
+   * to fetch the row themselves, and three copies of a rule like this disagree eventually. */
+  const resolveLegalDocument = async (
+    type: LegalDocType,
+  ): Promise<{ content: string; updatedAt: Date | null } | null> => {
+    if (type === "terms_of_service") {
+      const content = await storage.getLegalAgreement();
+      const updatedAt = await storage.getLegalAgreementUpdatedAt();
+      return { content, updatedAt };
+    }
+    const doc = await storage.getLegalDocument(type);
+    return doc ? { content: doc.content, updatedAt: doc.updatedAt ?? null } : null;
+  };
+
   app.get("/api/admin/legal-documents", requireRole("admin"), async (_req, res) => {
     res.json(await storage.listLegalDocuments());
   });
@@ -3942,6 +3968,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/admin/legal-documents/:type", requireRole("admin"), async (req, res) => {
     const type = String(req.params.type);
     if (!isLegalDocType(type)) return res.status(400).json({ message: "Invalid document type" });
+    // The Terms are the signup agreement now, and they are edited in the signup agreement editor
+    // (PUT /api/admin/legal-agreement) -- the one whose edit re-asks every account to accept. A
+    // second editor writing a row nothing renders is how the two documents drifted apart in the
+    // first place.
+    if (type === "terms_of_service") {
+      return res.status(400).json({
+        message: "The Terms of Use are the signup agreement -- edit them in the signup agreement editor.",
+      });
+    }
     const parsed = updateLegalDocumentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const doc = await storage.updateLegalDocument(type, parsed.data.content);
@@ -3951,7 +3986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/legal-documents/:type.pdf", requireRole("admin"), async (req, res) => {
     const type = String(req.params.type).replace(/\.pdf$/, "");
     if (!isLegalDocType(type)) return res.status(400).json({ message: "Invalid document type" });
-    const doc = await storage.getLegalDocument(type);
+    const doc = await resolveLegalDocument(type);
     if (!doc) return res.status(404).json({ message: "Not found" });
     const title = `Forge -- ${LEGAL_DOC_TITLES[type]} (Draft)`;
     const pdf = await buildLegalDocumentPdf(title, doc.content);
@@ -3965,7 +4000,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!isLegalDocType(type)) return res.status(400).json({ message: "Invalid document type" });
     const parsed = emailLegalDocumentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const doc = await storage.getLegalDocument(type);
+    const doc = await resolveLegalDocument(type);
     if (!doc) return res.status(404).json({ message: "Not found" });
     const title = `Forge ${LEGAL_DOC_TITLES[type]} (Draft)`;
     const html = `<h2>${title}</h2><p style="white-space:pre-wrap;font-family:sans-serif;">${doc.content
@@ -3987,7 +4022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/legal-documents/:type", async (req, res) => {
     const type = String(req.params.type);
     if (!isPublicLegalDocType(type)) return res.status(404).json({ message: "Unknown document type" });
-    const doc = await storage.getLegalDocument(type);
+    const doc = await resolveLegalDocument(type);
     res.json({ content: doc?.content ?? "", updatedAt: doc?.updatedAt ?? null });
   });
 

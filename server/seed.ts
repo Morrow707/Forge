@@ -24,7 +24,7 @@ import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content"
 // carrying the draft is recognised by BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX, which is its own
 // constant in biometric-release.ts. The draft body is kept only as the evidence that prefix is
 // right -- see biometric-release.test.ts.
-import { TERMS_OF_SERVICE_DRAFT, PRIVACY_POLICY_DRAFT, EULA_DRAFT, nextParentalNotice, nextPrivacyPolicy, nextTermsOfService } from "./seed-data/legal-documents-draft";
+import { PRIVACY_POLICY_DRAFT, EULA_DRAFT, nextParentalNotice, nextPrivacyPolicy } from "./seed-data/legal-documents-draft";
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments, HEALTHCARE_NOTICE_MARKER } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
@@ -6255,18 +6255,13 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
     await storage.updateLegalAgreement(agreementForSentryFix.replace(STALE_SENTRY_CLAIM, CORRECTED_SENTRY_CLAIM));
   }
 
-  // Draft Terms of Service / Privacy Policy -- same
-  // "only if not already there" guard as the legalAgreement placeholder
-  // above, so a redeploy never overwrites an admin's edits to any of them.
-  // The terms, like the privacy policy and the parental notice, have a version lane: the oldest
-  // shipped text names Forge Athletic Technologies LLC and leaves governing law unfilled, which
-  // is a different document rather than a few stale sentences.
-  const storedTerms = await storage.getLegalDocument("terms_of_service");
-  const nextTerms = nextTermsOfService(storedTerms?.content ?? null);
-  if (nextTerms) {
-    await storage.updateLegalDocument("terms_of_service", nextTerms);
-    if (storedTerms) console.log("Replaced a superseded terms of service with the current one.");
-  }
+  // NOTHING SEEDS terms_of_service ANY MORE. The two Terms were merged on 2026-09-19 and the
+  // signup clickwrap is the one that survived: /terms serves it, the admin documents page has no
+  // editor for the retired document, and there is no version lane to move anybody onto, because
+  // there is no newer version of it to move them onto. An installation that already has a
+  // terms_of_service row KEEPS IT, unread -- see the retirement comment in
+  // seed-data/legal-documents-draft.ts for why it is left rather than deleted. A fresh install
+  // simply never gets one.
   // The privacy policy, like the parental notice, has a version lane rather than only patches --
   // its oldest shipped text predates both the research-sharing section and the subject-code
   // paragraph, so an installation holding it describes an analytics surface Forge no longer has.

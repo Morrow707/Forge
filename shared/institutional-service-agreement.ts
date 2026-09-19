@@ -2,6 +2,12 @@ import { z } from "zod";
 
 /** THE INSTITUTIONAL SERVICE AGREEMENT, AS A SCHOOL RECEIVES IT.
  *
+ * NAME REFERENCE UPDATED 2026-09-19: s1.2's list of User Documents said "the Terms of Service",
+ * a document retired that day when the two Terms were merged. It now says "the Terms of Use",
+ * which is what every person under the Institution's program actually accepts. Nothing else in
+ * this contract changed. It changes the text hash stored on signatures made from here on, which
+ * is what that hash is for; copies already signed are untouched.
+ *
  * `docs/institutional-service-agreement.md` used to be the only copy, which meant a school got
  * its agreement by Scott opening that file, deleting the review marks, typing the school's name
  * into six places and mailing a PDF. This module is that text as data so the app can do it.
@@ -44,7 +50,7 @@ export const INSTITUTIONAL_AGREEMENT_SECTIONS: InstitutionalAgreementSection[] =
     heading: "1. WHAT THIS AGREEMENT COVERS",
     paragraphs: [
       '1.1 Forge provides a strength and conditioning platform (the "Service") through which coaches program training for a roster of athletes, athletes log their training on their own devices, and the Service can measure movement from video an athlete records on their own phone.',
-      '1.2 This Agreement governs the Institution\'s use of the Service on an organizational plan. It sits on top of, and does not replace, the documents each individual person accepts when they use the Service: the Terms of Service, the Privacy Policy, the End User License Agreement, the Video and Biometric Consent, the Assumption of Risk, the AI Terms of Use and, for a minor, the Notice to Parent or Guardian (together the "User Documents"). Every coach, staff member, athlete and guardian using the Service under the Institution\'s program accepts the User Documents individually, and this Agreement does not waive or alter anything they accepted.',
+      '1.2 This Agreement governs the Institution\'s use of the Service on an organizational plan. It sits on top of, and does not replace, the documents each individual person accepts when they use the Service: the Terms of Use, the Privacy Policy, the End User License Agreement, the Video and Biometric Consent, the Assumption of Risk, the AI Terms of Use and, for a minor, the Notice to Parent or Guardian (together the "User Documents"). Every coach, staff member, athlete and guardian using the Service under the Institution\'s program accepts the User Documents individually, and this Agreement does not waive or alter anything they accepted.',
       "1.3 If this Agreement and a User Document conflict on a matter between Forge and the Institution, this Agreement governs. On a matter between Forge and an individual user, the User Document governs. Nothing in this Agreement reduces a right the Privacy Policy or a consent document gives to an athlete or a parent.",
     ],
   },
