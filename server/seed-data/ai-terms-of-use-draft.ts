@@ -1,5 +1,9 @@
 /** The Artificial Intelligence Terms of Use, second revision, 2026-09-17. VERBATIM.
  *
+ * REVIEWED BY COUNSEL (Scott, 2026-09-19: "we used the AI terms of use as a draft, a lawyer
+ * modified that"). The Rocket Lawyer text was the draft; the version here is what the lawyer
+ * returned. Changing it from here is changing a reviewed document.
+ *
  * Generated on Rocket Lawyer, then revised by Scott against the four conflicts the first version
  * carried. All four are genuinely fixed rather than softened:
  *

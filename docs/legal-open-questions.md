@@ -117,6 +117,17 @@ is the preferred approach for a national app over state-specific language. No ch
 text. `server/seed-data/assumption-of-risk.ts` records the opinion in its header. The
 Rocket Lawyer Activity Release that this replaced is retired.
 
+## 9. Research consent -- OPEN, packet prepared 2026-09-19
+
+The one live consent no lawyer has read; Rocket Lawyer has no template for it.
+`docs/research-consent-for-counsel.md` carries the collection mechanics, what the software
+does with a yes, the five questions (de-identified video-derived data, coach-relayed guardian
+consent, retention after deletion, re-consent on text change, what is missing) and the full
+text. Sent to Scott for the attorney the same day.
+
+The AI Terms of Use is REVIEWED: Scott, 2026-09-19, "we used the AI terms of use as a
+draft, a lawyer modified that". Its file header says so.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
