@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Toaster } from "sonner";
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
+import { PUBLIC_ROUTES, isIndexable } from "@shared/public-routes";
+import { SITE_NAME, usePageMeta } from "@/lib/page-meta";
 import { Capacitor } from "@capacitor/core";
 import { queryClient, persistOptions } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -41,6 +43,9 @@ import {
 } from "@/pages/legal-document";
 import DeleteAccountPage from "@/pages/delete-account";
 import NotFound from "@/pages/not-found";
+const ForHighSchoolsPage = lazy(withLoadTimeout(() => import("@/pages/for-high-schools")));
+const ForAthletesPage = lazy(withLoadTimeout(() => import("@/pages/for-athletes")));
+const CameraValidationPage = lazy(withLoadTimeout(() => import("@/pages/camera-validation")));
 const AvPreviewTestPage = lazy(withLoadTimeout(() => import("@/pages/dev/av-preview-test")));
 
 const CoachDashboard = lazy(withLoadTimeout(() => import("@/pages/coach/dashboard")));
@@ -248,6 +253,35 @@ function HomeRedirect() {
   return <Redirect to={homeFor(user.role)} />;
 }
 
+/** THE HEAD FOR WHATEVER ROUTE IS SHOWING.
+ *
+ * Deliberately one component driven off the route list rather than a usePageMeta call added to
+ * each of fifteen page files. Two reasons: the same list already feeds the sitemap and the
+ * prerenderer, so the three cannot drift apart; and a page added without metadata gets the
+ * indexable-by-default fallback in index.html rather than silently inheriting the title of
+ * whatever the visitor looked at last.
+ *
+ * Anything not in the list -- every signed-in app route, and the token landings -- is marked
+ * noindex here. That is the safe default for an app whose public surface is a short list and
+ * whose private surface is hundreds of routes: a new coach screen is not accidentally
+ * crawlable because nobody remembered to exclude it. */
+function RouteMeta() {
+  const [location] = useLocation();
+  const known = PUBLIC_ROUTES.find((r) => r.path === location);
+  usePageMeta(
+    known
+      ? { title: known.title, description: known.description, path: known.path, image: known.image, noindex: !known.index }
+      : {
+          title: SITE_NAME,
+          description:
+            "Coaching software for strength and conditioning: build exercise libraries, program training blocks, and keep a whole roster's calendar in one place.",
+          path: location,
+          noindex: !isIndexable(location),
+        },
+  );
+  return null;
+}
+
 function Router() {
   const [location] = useLocation();
 
@@ -282,6 +316,9 @@ function Router() {
 
   return (
     <Suspense fallback={<FullScreenSpinner />}>
+      {/* OUTSIDE the location-keyed wrapper below, so it is not torn down and remounted on every
+          navigation -- it reads the location itself and rewrites the head in place. */}
+      <RouteMeta />
       {/* Keyed on location so React remounts this wrapper -- not the routes
           inside it -- on every navigation, replaying the fade/slide-in each
           time. motion-safe: (rather than a plain class) makes the animation
@@ -294,6 +331,13 @@ function Router() {
         <Route path="/admin/login" component={AdminLoginPage} />
         <Route path="/signup" component={SignupPage} />
         <Route path="/pricing" component={PricingPage} />
+        {/* The audience pages. Public and indexed -- see shared/public-routes.ts, which is also
+            what the sitemap and the prerenderer read. */}
+        <Route path="/for-high-schools" component={ForHighSchoolsPage} />
+        <Route path="/for-athletes" component={ForAthletesPage} />
+        {/* What the camera has actually been validated on. Public deliberately: the value of the
+            page is entirely in it being readable before somebody buys. */}
+        <Route path="/camera-validation" component={CameraValidationPage} />
         {/* Public, no account -- the link a coach can put on a flyer. See
             PublicTeamPage: Team Identity sells a public About page and contact email,
             and the only About page Forge had was behind a login. */}

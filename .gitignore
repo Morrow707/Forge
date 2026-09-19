@@ -169,3 +169,9 @@ server/test-support/.uploads/
 # and carries a ~2.5MB editor payload -- the sources are what is worth keeping.
 .design/*.html
 !.design/*.dc.html
+
+# Generated at build time by scripts/generate-seo-files.mjs from shared/public-routes.ts.
+# Not committed, for the same reason the sitemap is generated at all: a checked-in copy is one
+# that silently disagrees with the route list the moment a page is added.
+client/public/robots.txt
+client/public/sitemap.xml
