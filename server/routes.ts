@@ -10,6 +10,7 @@ import fsPromises from "fs/promises";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { setupAuth, requireAuth, requireRole, toPublicUser } from "./auth";
+import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
@@ -1133,6 +1134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // place rather than at ~250 call sites, and why it answers 404.
   registerNumericParamGuards(app);
   setupAuth(app);
+  registerInstitutionalAgreementRoutes(app);
   // attachNativeTokenAuth is mounted inside setupAuth itself now (before the
   // auth routes it needs to cover) -- see its own comment there for why.
   // Keeps "see who's logged in"'s lastSeenAt reasonably fresh -- reads
@@ -7519,6 +7521,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const teams = await storage.getTeamsForCoach(coachId);
     return teams.some((t) => t.id === teamId);
   }
+
+  // Per-team coach assignment (see teamCoaches in shared/schema.ts for the
+  // rules). Primary coach only: they are the one who can see the whole
+  // staff, and letting an assigned coach widen their own assignment would
+  // make the scoping decorative. Every id must already be on this staff --
+  // otherwise this route is a way to hand an outside coach a team.
+  app.put("/api/coach/teams/:id/coaches", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const teamId = Number(req.params.id);
+    if (!(await assertOwnsTeam(user.id, teamId))) {
+      return res.status(404).json({ message: "Team not found" });
+    }
+    const schema = z.object({ coachIds: z.array(z.number().int().positive()).max(200) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const staff = await storage.getStaffForCoach(user.id);
+    if (staff.primaryCoachId !== user.id) {
+      return res.status(403).json({ message: "Only the primary coach can assign coaches to a team" });
+    }
+    const onStaff = new Set([staff.primaryCoachId, ...staff.staff.map((s) => s.id)]);
+    const stranger = parsed.data.coachIds.find((id) => !onStaff.has(id));
+    if (stranger !== undefined) {
+      return res.status(400).json({ message: "That coach is not on your staff" });
+    }
+    const coachIds = await storage.setTeamCoaches(teamId, parsed.data.coachIds);
+    res.json({ coachIds });
+  });
 
   app.post("/api/coach/teams/:id/members", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);

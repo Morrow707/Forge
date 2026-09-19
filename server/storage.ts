@@ -17,6 +17,7 @@ import {
   coachStaff,
   teams,
   teamMembers,
+  teamCoaches,
   teamChallenges,
   teamGameDays,
   exercises,
@@ -4964,6 +4965,75 @@ export const storage = {
     return Array.from(new Set([primaryId, ...staffRows.map((r) => r.staffCoachId)]));
   },
 
+  // Per-team coach assignment -- see teamCoaches in shared/schema.ts for
+  // the rules this implements. Returns the set of team ids this coach is
+  // narrowed to, or null meaning "not narrowed, sees the whole staff".
+  //
+  // Null is returned for the staff's primary coach (they do the assigning)
+  // and for any staff coach with no assignment anywhere in the staff, which
+  // is what keeps an existing staff behaving exactly as it did before this
+  // table existed. A coach WITH assignments still always keeps the teams
+  // they own outright (teams.coachId), so nobody is locked out of a team
+  // they created.
+  async getCoachTeamScope(coachId: number): Promise<number[] | null> {
+    const asStaff = await db.query.coachStaff.findFirst({
+      where: eq(coachStaff.staffCoachId, coachId),
+    });
+    if (!asStaff) return null; // primary coach (or a solo coach)
+    const assigned = await db
+      .select({ teamId: teamCoaches.teamId })
+      .from(teamCoaches)
+      .where(eq(teamCoaches.coachId, coachId));
+    if (assigned.length === 0) return null;
+    const owned = await db
+      .select({ id: teams.id })
+      .from(teams)
+      .where(eq(teams.coachId, coachId));
+    return Array.from(new Set([...assigned.map((a) => a.teamId), ...owned.map((t) => t.id)]));
+  },
+
+  // The team ids one coach is explicitly assigned to (no owned-team union,
+  // no null) -- for the client and for callers that want the raw list.
+  async getTeamAssignmentsForCoach(coachId: number): Promise<number[]> {
+    const rows = await db
+      .select({ teamId: teamCoaches.teamId })
+      .from(teamCoaches)
+      .where(eq(teamCoaches.coachId, coachId));
+    return rows.map((r) => r.teamId);
+  },
+
+  async getTeamCoaches(teamId: number) {
+    const rows = await db
+      .select({ coachId: teamCoaches.coachId })
+      .from(teamCoaches)
+      .where(eq(teamCoaches.teamId, teamId));
+    return rows.map((r) => r.coachId);
+  },
+
+  // Replace-the-whole-set, which is the shape the UI has (a checkbox list
+  // saved as one PUT). Validation of WHO may be assigned lives in the route
+  // -- this is the write.
+  async setTeamCoaches(teamId: number, coachIds: number[]) {
+    await db.delete(teamCoaches).where(eq(teamCoaches.teamId, teamId));
+    const unique = Array.from(new Set(coachIds));
+    if (unique.length > 0) {
+      await db.insert(teamCoaches).values(unique.map((coachId) => ({ teamId, coachId })));
+    }
+    return unique;
+  },
+
+  // Athlete ids a scoped staff coach may see: the members of the teams they
+  // are assigned to. An empty scope is a real answer (assigned to a team
+  // with nobody on it yet) and must not be read as "no restriction".
+  async getScopedRosterAthleteIds(teamIds: number[]): Promise<number[]> {
+    if (teamIds.length === 0) return [];
+    const rows = await db
+      .select({ athleteId: teamMembers.athleteId })
+      .from(teamMembers)
+      .where(inArray(teamMembers.teamId, teamIds));
+    return Array.from(new Set(rows.map((r) => r.athleteId)));
+  },
+
   async getAdmins() {
     return db.query.users.findMany({ where: eq(users.role, "admin") });
   },
@@ -5246,6 +5316,13 @@ export const storage = {
 
   async getRosterForCoach(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
+    // Per-team assignment narrows the roster to the members of the teams
+    // this coach is assigned to -- see teamCoaches in shared/schema.ts. A
+    // null scope is "not narrowed" and is what every existing staff gets.
+    const scope = await this.getCoachTeamScope(coachId);
+    const scopedAthleteIds =
+      scope === null ? null : await this.getScopedRosterAthleteIds(scope);
+    if (scopedAthleteIds !== null && scopedAthleteIds.length === 0) return [];
     const rows = await db
       .select({
         id: users.id,
@@ -5274,7 +5351,14 @@ export const storage = {
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
-      .where(inArray(coachAthletes.coachId, coachIds))
+      .where(
+        scopedAthleteIds === null
+          ? inArray(coachAthletes.coachId, coachIds)
+          : and(
+              inArray(coachAthletes.coachId, coachIds),
+              inArray(coachAthletes.athleteId, scopedAthleteIds),
+            ),
+      )
       .orderBy(asc(users.name));
     // One row per coach-athlete LINK, and a staff has several coaches, so an
     // athlete both coaches had on their own roster before they formed a staff
@@ -5301,8 +5385,17 @@ export const storage = {
   // Single roster athlete's full profile, scoped to this coach's whole
   // staff -- returns null if the athlete isn't on the staff's roster so
   // callers can 404.
+  // Scoped exactly as getRosterForCoach above, and it has to be: every
+  // per-athlete coach route 404s through this, so a narrowed staff coach
+  // that could still read one athlete by id here would have the scoping in
+  // the list view only -- which is not scoping.
   async getRosterAthleteForCoach(coachId: number, athleteId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
+    const scope = await this.getCoachTeamScope(coachId);
+    if (scope !== null) {
+      const allowed = await this.getScopedRosterAthleteIds(scope);
+      if (!allowed.includes(athleteId)) return null;
+    }
     const rows = await db
       .select({
         id: users.id,
@@ -9246,11 +9339,21 @@ Hard rules, no exceptions:
   // ---------- Teams ----------
   async getTeamsForCoach(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
-    const rows = await db.query.teams.findMany({
-      where: inArray(teams.coachId, coachIds),
-      with: { members: { with: { athlete: true } } },
-      orderBy: asc(teams.name),
-    });
+    const scope = await this.getCoachTeamScope(coachId);
+    // staffTitle lives on the coach_staff link, not on the user, so the
+    // team card can label "Nutritionist" rather than a bare name.
+    const staffRows = await db
+      .select({ staffCoachId: coachStaff.staffCoachId, staffTitle: coachStaff.staffTitle })
+      .from(coachStaff)
+      .where(eq(coachStaff.primaryCoachId, coachIds[0]));
+    const titleByCoach = new Map(staffRows.map((r) => [r.staffCoachId, r.staffTitle]));
+    const rows = (
+      await db.query.teams.findMany({
+        where: inArray(teams.coachId, coachIds),
+        with: { members: { with: { athlete: true } }, coaches: { with: { coach: true } } },
+        orderBy: asc(teams.name),
+      })
+    ).filter((team) => scope === null || scope.includes(team.id));
     // The `with: { athlete: true }` join above pulls the full user row --
     // strip passwordHash before this ever reaches a response; a coach
     // legitimately sees the rest (including healthStatus).
@@ -9260,6 +9363,14 @@ Hard rules, no exceptions:
         const { passwordHash, ...athlete } = m.athlete;
         return { ...m, athlete };
       }),
+      // Assigned coaches, for the roster page's team card. Name and title
+      // only -- the full user row is joined (same as members above) and
+      // must never reach a response with passwordHash on it.
+      coaches: team.coaches.map((c) => ({
+        id: c.coach.id,
+        name: c.coach.name,
+        staffTitle: titleByCoach.get(c.coach.id) ?? null,
+      })),
     }));
     // Teams created before the join-code column existed have none yet --
     // backfill lazily so every team the coach sees always has one to share.

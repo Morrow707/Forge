@@ -1073,6 +1073,47 @@ export const teamMembers = pgTable(
   }),
 );
 
+// Which coaches on the staff are assigned to this team. Without a row
+// here nothing changes: a staff coach with NO assignment on ANY team of
+// the staff still sees every team and the whole roster, exactly as before
+// this table existed, so an existing staff is untouched until somebody
+// actually assigns someone.
+//
+// The rules, in full:
+//   - The team owner (teams.coachId) and the staff's primary coach always
+//     see every team of the staff and the whole roster. Neither is ever
+//     narrowed by this table -- the primary is who does the assigning, and
+//     an owner locked out of the team they made is a support ticket.
+//   - A staff coach with at least one assignment anywhere in the staff
+//     sees only the teams they are assigned to (plus any they own), and on
+//     the roster only the athletes who are members of those teams. That is
+//     the whole point: a position coach at a school gets their group, not
+//     the entire athletic department.
+//   - Only the primary coach may assign or unassign, and only coaches
+//     already on the same staff can be assigned.
+// Scoping is enforced in getTeamsForCoach/getRosterForCoach/
+// getRosterAthleteForCoach (server/storage.ts) -- routes.ts's
+// assertOwnsTeam derives from getTeamsForCoach, so the team member,
+// branding and challenge routes are scoped by that alone, and every
+// per-athlete coach route 404s through getRosterAthleteForCoach.
+export const teamCoaches = pgTable(
+  "team_coaches",
+  {
+    id: serial("id").primaryKey(),
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: uniqueIndex("team_coach_pair_idx").on(table.teamId, table.coachId),
+    coachIdx: index("team_coaches_coach_idx").on(table.coachId),
+  }),
+);
+
 export const challengeMetricEnum = pgEnum("challenge_metric", [
   "workouts_completed",
   "total_reps",
@@ -6909,8 +6950,17 @@ export const coachAthletesRelations = relations(coachAthletes, ({ one }) => ({
 export const teamsRelations = relations(teams, ({ one, many }) => ({
   coach: one(users, { fields: [teams.coachId], references: [users.id] }),
   members: many(teamMembers),
+  coaches: many(teamCoaches),
   challenges: many(teamChallenges),
   gameDays: many(teamGameDays),
+}));
+
+export const teamCoachesRelations = relations(teamCoaches, ({ one }) => ({
+  team: one(teams, { fields: [teamCoaches.teamId], references: [teams.id] }),
+  coach: one(users, {
+    fields: [teamCoaches.coachId],
+    references: [users.id],
+  }),
 }));
 
 export const teamMembersRelations = relations(teamMembers, ({ one }) => ({

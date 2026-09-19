@@ -1,21 +1,35 @@
 # Institutional Service Agreement
 
-The contract a school, district or club signs with Forge. It is NOT a page in the app and
-is not seeded anywhere; it lives in Rocket Lawyer for e-signature and here so its text is
-versioned like everything else. The signed PDF a school returns is uploaded under the
-school's primary coach (see `institutional-agreement-signed.itest.ts`).
+The contract a school, district or club signs with Forge.
 
-Written 2026-09-19 to match the four public documents as they read that day. The Rocket
-Lawyer copy Scott holds is this text inside Rocket Lawyer's "Service Agreement" wrapper,
-with that wrapper's Default, Remedies and Attorneys' Fees sections removed and its dispute
-clause replaced with the talk-first clause every other Forge document carries. If the two
-ever differ, this file is the reference; the wrapper is the one that gets signed.
+**The text below is not the source any more.** `shared/institutional-service-agreement.ts`
+holds it, the app renders a school's own filled-in copy from that constant, and this file is the
+human-readable mirror of it. `shared/institutional-service-agreement.test.ts` fails if the two
+drift. Edit the constant; regenerate or hand-edit this file to match.
 
-Marks in the text: `[BLANK 1]` is the school's details, filled in per school at signing.
-`[BLANK 2]` is Forge's side. `[FOR SCOTT]` are three defaults Scott can change (72-hour
-incident notice, 30-day export window, $1,000 liability cap while the beta is free).
-`[FOR COUNSEL]` are the three clauses in the review packet, `docs/legal-open-questions.md`
-questions 4 and 5 plus the public-body carve-out.
+A school's primary coach downloads their own copy from /documents
+(`POST /api/coach/institutional-agreement/download`), signs it, and uploads the signed PDF back
+on the same page as an `externalWaivers` kind `institutional_agreement` (see
+`institutional-agreement-signed.itest.ts`). Scott no longer fills anything in by hand.
+
+The header block below is shown with its fields empty. In a rendered agreement they are filled:
+INSTITUTION, ADDRESS, AUTHORIZED REPRESENTATIVE and NOTICES TO THE INSTITUTION come from the form
+the coach completes; EFFECTIVE DATE is the date the copy is generated; PLAN is always
+"as selected in the Service from time to time"; and Forge's signer name and title come from
+`INSTITUTIONAL_AGREEMENT_SIGNER_NAME` / `INSTITUTIONAL_AGREEMENT_SIGNER_TITLE` on Render,
+defaulting to Scott Morrow, Founder.
+
+**The review marks are gone from the text on purpose.** The three `[FOR SCOTT]` decisions are
+settled and stand as written -- 72-hour incident notice (5.7), 30-day export window (5.8),
+$1,000 liability cap while the beta is free (12.2). The two `[FOR COUNSEL]` questions (4.3 and
+13.1) are still live and are tracked in `docs/legal-open-questions.md` questions 4 and 5, along
+with the public-body carve-out in 13.4; they are questions about this text, not annotations that
+belong inside a document a school reads.
+
+Written 2026-09-19 to match the four public documents as they read that day. The Rocket Lawyer
+copy Scott holds is this text inside Rocket Lawyer's "Service Agreement" wrapper, with that
+wrapper's Default, Remedies and Attorneys' Fees sections removed and its dispute clause replaced
+with the talk-first clause every other Forge document carries.
 
 Under attorney review as of 2026-09-19. Not yet sent to any school.
 
@@ -25,12 +39,12 @@ FORGE PERFORMANCE SYSTEMS -- INSTITUTIONAL SERVICE AGREEMENT
 
 This Institutional Service Agreement (the "Agreement") is between Forge Performance Systems LLC, an Arizona limited liability company with its principal office at 5145 North 7th Street, D-237, Phoenix, Arizona 85014 ("Forge"), and the organization named below (the "Institution"). It takes effect on the Effective Date below.
 
-INSTITUTION: [BLANK 1 -- legal name of the school, district, club or program]
-ADDRESS: [BLANK 1 -- mailing address]
-AUTHORIZED REPRESENTATIVE: [BLANK 1 -- name and title of the person signing]
-NOTICES TO THE INSTITUTION: [BLANK 1 -- email address for legal notices]
-EFFECTIVE DATE: [BLANK 2 -- date]
-PLAN: [BLANK 2 -- the organizational plan and athlete band selected in the Service, or "as selected in the Service from time to time"]
+INSTITUTION:
+ADDRESS:
+AUTHORIZED REPRESENTATIVE:
+NOTICES TO THE INSTITUTION:
+EFFECTIVE DATE:
+PLAN:
 
 1. WHAT THIS AGREEMENT COVERS
 1.1 Forge provides a strength and conditioning platform (the "Service") through which coaches program training for a roster of athletes, athletes log their training on their own devices, and the Service can measure movement from video an athlete records on their own phone.
@@ -48,7 +62,7 @@ PLAN: [BLANK 2 -- the organizational plan and athlete band selected in the Servi
 4. ATHLETES UNDER 18
 4.1 How the Service handles minors. An account for an athlete under 18 does not function until a parent or legal guardian has claimed a linked guardian account through the link the Service emails them and has accepted the Notice to Parent or Guardian, the Video and Biometric Consent, the Assumption of Risk and the Privacy Policy. The Service records the exact text accepted and when. For an athlete under 13, camera tracking stays off until the guardian turns it on. The Institution acknowledges that this gate is enforced by the Service and cannot be bypassed by a coach.
 4.2 The Institution's duties. Because the gate depends on reaching the right parent, the Institution will (a) provide, or have the athlete provide, a current email address for the athlete's parent or legal guardian and not for anyone else; (b) not represent to Forge that a person is a parent or guardian when they are not; (c) obtain and keep any consent, authorization or waiver that the Institution's own policies, its governing body, its athletic association or applicable law require of the Institution for its athletes' participation in its program, independently of the Service; and (d) tell Forge promptly if it learns that a guardian consent recorded in the Service was given by someone without authority.
-4.3 Allocation. Forge is responsible for obtaining and recording the parent or guardian's consent to the Service's own collection and use of the athlete's information, through the gate in Section 4.1. The Institution is responsible for the accuracy of the guardian contact it supplies and for the consents in Section 4.2(c). Neither party is responsible for the other's part. [FOR COUNSEL -- Question 4: confirm this allocation is enforceable and complete.]
+4.3 Allocation. Forge is responsible for obtaining and recording the parent or guardian's consent to the Service's own collection and use of the athlete's information, through the gate in Section 4.1. The Institution is responsible for the accuracy of the guardian contact it supplies and for the consents in Section 4.2(c). Neither party is responsible for the other's part.
 
 5. THE INSTITUTION'S DATA
 5.1 Ownership. As between Forge and the Institution, information about the Institution's athletes and staff entered into or generated by the Service under the Institution's program ("Institution Data") belongs to the Institution and its athletes, subject to each athlete's own rights under the User Documents. Forge receives only the license it needs to provide the Service.
@@ -57,8 +71,8 @@ PLAN: [BLANK 2 -- the organizational plan and athlete band selected in the Servi
 5.4 What Forge does with it. Forge uses Institution Data only to provide the Service to the Institution and its users, to secure and support the Service, and for platform-level analytics from which names, emails and team affiliation have been removed. Forge does not sell Institution Data, does not use it for advertising, and does not share it with any third party except the processors in Section 5.5 and as required by law.
 5.5 Processors. Forge uses the following third parties to run the Service and will not add one that receives Institution Data without updating the Privacy Policy: Render (hosting and database, United States); Anthropic (AI features; receives the text of a request at the moment it is made and does not retain it to train models); Resend (email); Apple and Google (app distribution and push notifications); Stripe (payments on the web); Sentry (error reporting); an IP geolocation lookup (approximate sign-in location shown to the user); and public food databases (nutrition lookups). Forge remains responsible to the Institution for its processors.
 5.6 Research use. Forge prepares de-identified group statistics for research only for athletes whose parent or guardian, or the athlete if 18 or over, has separately opted in. The Institution's signature does not opt anyone in, and the Institution cannot opt an athlete in on their behalf.
-5.7 Security. Forge protects Institution Data with encrypted connections, access controls, encryption of sensitive fields at rest, and a log of every occasion on which Forge staff or a coach opens an individual athlete's video or record. Forge will notify the Institution's notice address without undue delay, and in any case within 72 hours of confirming it, of any security incident that Forge determines has resulted in unauthorized access to Institution Data, with the information the Institution needs to meet its own obligations. [FOR SCOTT -- decision: 72 hours is a commitment; confirm or change.]
-5.8 Retention and deletion. Raw video of an athlete under 13 is deleted 30 days after it was recorded and of an athlete aged 13 to 17 after 90 days; the Institution may set a shorter limit for its own athletes in the Service. Numeric measurements are kept as part of the athlete's training record. When an athlete or guardian deletes an account, its data is permanently removed. On termination of this Agreement, Forge will make Institution Data available for export for 30 days and then delete it, except where an individual athlete keeps their own account under the User Documents or where law requires retention. [FOR SCOTT -- decision: 30-day export window; confirm or change.]
+5.7 Security. Forge protects Institution Data with encrypted connections, access controls, encryption of sensitive fields at rest, and a log of every occasion on which Forge staff or a coach opens an individual athlete's video or record. Forge will notify the Institution's notice address without undue delay, and in any case within 72 hours of confirming it, of any security incident that Forge determines has resulted in unauthorized access to Institution Data, with the information the Institution needs to meet its own obligations.
+5.8 Retention and deletion. Raw video of an athlete under 13 is deleted 30 days after it was recorded and of an athlete aged 13 to 17 after 90 days; the Institution may set a shorter limit for its own athletes in the Service. Numeric measurements are kept as part of the athlete's training record. When an athlete or guardian deletes an account, its data is permanently removed. On termination of this Agreement, Forge will make Institution Data available for export for 30 days and then delete it, except where an individual athlete keeps their own account under the User Documents or where law requires retention.
 5.9 Access requests. Forge will pass to the Institution any request it receives from an athlete or parent that the Institution is the right party to answer, and will support the Institution in answering requests that Forge is the right party to answer.
 
 6. EDUCATION RECORDS
@@ -88,11 +102,11 @@ PLAN: [BLANK 2 -- the organizational plan and athlete band selected in the Servi
 
 12. LIMITATION OF LIABILITY
 12.1 Neither party is liable to the other for indirect, incidental, consequential, special or punitive damages, or for lost profits or revenue, arising out of this Agreement, however caused.
-12.2 Each party's total liability to the other arising out of this Agreement is limited to the fees paid or payable by the Institution to Forge in the twelve months before the event giving rise to the claim, or, if no fees have been paid, to one thousand US dollars. [FOR SCOTT -- decision: the cap during the free beta; confirm or change.]
+12.2 Each party's total liability to the other arising out of this Agreement is limited to the fees paid or payable by the Institution to Forge in the twelve months before the event giving rise to the claim, or, if no fees have been paid, to one thousand US dollars.
 12.3 The limits in this Section do not apply to a party's indemnification obligations under Section 13, to a breach of Section 5 (Institution Data) or Section 14 (Confidentiality), to a party's gross negligence or willful misconduct, or to any liability that cannot lawfully be limited.
 
 13. INDEMNIFICATION
-13.1 By the Institution. The Institution will defend Forge and its officers, employees and affiliates against, and pay any resulting damages, costs and reasonable attorneys' fees from, a third-party claim arising out of (a) the Institution supplying a guardian contact that did not belong to the athlete's parent or legal guardian, or representing that a person was a parent or guardian when they were not; (b) the Institution's failure to obtain a consent, authorization or waiver that Section 4.2(c) makes its responsibility; (c) a document the Institution uploaded that it was not entitled to hold or share; (d) the Institution's supervision of, or decisions about, its athletes; or (e) the Institution's use of the Service in breach of this Agreement or applicable law. [FOR COUNSEL -- Question 5: this is the indemnity for a consent failure; confirm the trigger in (a) and (b) is drafted correctly and is enforceable against a public institution.]
+13.1 By the Institution. The Institution will defend Forge and its officers, employees and affiliates against, and pay any resulting damages, costs and reasonable attorneys' fees from, a third-party claim arising out of (a) the Institution supplying a guardian contact that did not belong to the athlete's parent or legal guardian, or representing that a person was a parent or guardian when they were not; (b) the Institution's failure to obtain a consent, authorization or waiver that Section 4.2(c) makes its responsibility; (c) a document the Institution uploaded that it was not entitled to hold or share; (d) the Institution's supervision of, or decisions about, its athletes; or (e) the Institution's use of the Service in breach of this Agreement or applicable law.
 13.2 By Forge. Forge will defend the Institution and its officers, employees and board against, and pay any resulting damages, costs and reasonable attorneys' fees from, a third-party claim arising out of (a) an allegation that the Service, used as permitted by this Agreement, infringes that third party's intellectual property rights; or (b) a security incident described in Section 5.7 that resulted from Forge's breach of this Agreement.
 13.3 Procedure. The indemnified party will give prompt notice of the claim, allow the indemnifying party to control the defense and settlement, and cooperate reasonably. The indemnifying party will not settle a claim in a way that admits fault on behalf of, or imposes an obligation on, the indemnified party without its written consent, not to be unreasonably withheld.
 13.4 Public institutions. Where the Institution is a public school, district or other public body whose law prohibits it from agreeing to indemnify, Section 13.1 applies only to the extent that law permits, and the Institution's obligations under Section 4.2 remain in full.
@@ -115,12 +129,12 @@ SIGNED
 
 FORGE PERFORMANCE SYSTEMS LLC
 By: ______________________________
-Name: [BLANK 2 -- Scott's name]
-Title: [BLANK 2 -- title]
-Date: ____________
+Name:
+Title:
+Date:
 
 THE INSTITUTION
 By: ______________________________
-Name: [BLANK 1]
-Title: [BLANK 1]
+Name:
+Title:
 Date: ____________

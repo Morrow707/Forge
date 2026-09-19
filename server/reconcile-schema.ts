@@ -2031,6 +2031,18 @@ CREATE INDEX IF NOT EXISTS "device_approvals_user_idx" ON "device_approvals" ("u
 CREATE INDEX IF NOT EXISTS "device_approvals_action_idx" ON "device_approvals" ("action_token_hash");
 CREATE INDEX IF NOT EXISTS "device_approvals_poll_idx" ON "device_approvals" ("poll_token_hash");
 
+-- Per-team coach assignment -- see shared/schema.ts's teamCoaches comment
+-- for the visibility rules. No row here means nothing changes for an
+-- existing staff.
+CREATE TABLE IF NOT EXISTS "team_coaches" (
+  "id" serial PRIMARY KEY,
+  "team_id" integer NOT NULL REFERENCES "teams"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "team_coach_pair_idx" ON "team_coaches" ("team_id", "coach_id");
+CREATE INDEX IF NOT EXISTS "team_coaches_coach_idx" ON "team_coaches" ("coach_id");
+
 -- One guardian per athlete, ever -- athlete_id is unique (shared/schema.ts
 -- guardianLinks' own comment explains why). guardian_id is NOT unique: one
 -- guardian account can be linked to multiple athletes.

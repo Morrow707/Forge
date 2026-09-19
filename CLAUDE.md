@@ -203,11 +203,30 @@ Two things worth saying out loud when someone tests this:
   but its telemetry is only readable on the admin tracking report, which is
   served from `storage.ts` and ships on a Render deploy. Testing report changes
   by installing a build will show nothing.
-- The Institutional Service Agreement is written (`docs/institutional-service-agreement.md`,
-  2026-09-19) and is with the attorney alongside the four public documents. It has not
-  been sent to any school. It is a contract, not an app page: nothing in the code seeds
-  or renders it, and the only thing the app knows about it is whether a signed copy is on
-  file for a school.
+- The Institutional Service Agreement is with the attorney alongside the four public
+  documents and has not been sent to any school. Since 2026-09-19 a school's primary
+  coach can fill in their own details on /documents and download it as a PDF
+  (`shared/institutional-service-agreement.ts` is the text, `server/institutional-agreement-routes.ts`
+  fills it); signing is still on paper, and the signed copy is uploaded on the same page.
+  Generating never writes a record -- only the upload does.
+
+## Per-team coach assignment
+
+Added 2026-09-19. Scott: "for a school, can they assign more than one coach to a team?"
+It had been discussed and never built. `team_coaches` in `shared/schema.ts` carries the
+rules as a comment; `server/team-coach-assignment.itest.ts` proves each.
+
+- **A staff coach with no assignment anywhere sees everything, as before.** Nothing changes
+  for an existing staff until the primary coach assigns somebody. The first assignment is
+  what turns narrowing on, for the assigned coaches only.
+- **A narrowed coach sees their teams and the athletes ON those teams**, through
+  `getCoachTeamScope`. Both `getRosterForCoach` and `getRosterAthleteForCoach` are scoped,
+  because every per-athlete coach route 404s through the second one; scoping only the list
+  would hide a name and leave every URL working.
+- **Only the primary coach assigns**, and only coaches already on the staff. An assigned
+  coach widening their own assignment would make the scoping decorative.
+- **`assertOwnsTeam` derives from `getTeamsForCoach`**, so the member, branding and
+  challenge routes are scoped without being touched. Keep it derived.
 
 ## AI Coach + Video is ON SALE, with the accuracy warning attached
 
