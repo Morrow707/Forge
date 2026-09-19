@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -346,6 +347,22 @@ function SpeedLeaderboard() {
           </div>
         )}
       </div>
+
+      {/* A RANKING IS THE HIGHEST-STAKES THING A COACH CAN DO WITH AN UNCALIBRATED NUMBER, AND
+          THIS PAGE HAD NO WARNING ON IT AT ALL.
+          Every other coach-facing camera surface carries the caveat; this one was missed, and it
+          is the one where the numbers are hardest to doubt. A chart is one athlete's trend and a
+          coach reads it with their own eyes on that athlete. A leaderboard is a comparative
+          claim about PEOPLE -- it puts names in an order, and an order invites a decision about
+          who runs with the ones and who does not. Camera timing has not been validated against a
+          stopwatch, so the gaps between adjacent rows here may be entirely measurement.
+
+          NOT dismissible, unlike the workout page and analytics. Those are opened every session
+          and a permanent line on them stops being read by the second day. This is not, and more
+          to the point the dismissal flag is shared across every dismissible instance: a coach who
+          cleared it once on their own workout screen weeks ago would never see it here, on the
+          surface that needed it most. */}
+      <CameraMetricCaveat className="mb-4" />
 
       {!skillExerciseId && (
         <Card>

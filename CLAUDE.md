@@ -244,6 +244,58 @@ whose rep counts were wrong and whose fixes are not yet validated against real f
 - **Putting it back is one line**: add `ai_coach_video` to `FREE_AGENT_TIER_ORDER`. Do that when
   the camera has been validated against real lifts, not before.
 
+## Who may use the camera, and who is told not to trust it
+
+Added 2026-09-19. Scott: "they can use it for form checks, but the data can't be trusted yet, and
+look at our other two free agent profiles, they should not have access to the camera."
+
+**ACCESS -- one rule, asked by both sides.** `cameraAccessFor` in `server/routes.ts` is the only
+place the question is answered: a coach or admin filming their own training always may, a coached
+athlete always may (their video is bounded by the team retention cap, not a tier), a Free Agent
+may only on a tier with `hasVideoFormCheck` -- which, since the withdrawal, is `ai_coach_video`
+alone. `requireVideoTrackingAccess` and `GET /api/athlete/camera-access` both delegate to it.
+
+- **The client never re-derives it.** Two copies of a three-branch rule disagree silently, and the
+  disagreement is only visible to the person it strands: a button nobody can use, or a hidden
+  button somebody paid for. `useCameraAccess` asks the server.
+- **Hiding a button is not a permission check.** The upload routes keep their own gate. A client
+  is a thing anybody can edit, and `client/src/lib/self-training-video-upload.test.ts` asserts
+  the routes never come to rely on the UI having asked first.
+- **Unknown is not yes and not no.** `useCameraAccess` returns `undefined` until answered and
+  every call site requires an explicit `true`. Defaulting to yes flashes the button at someone
+  who cannot use it; defaulting to no flashes its absence at a coach who can.
+- **What this fixed:** nothing client-side asked at all. The record button was drawn on
+  `trackingLevel !== "none"` alone, so a Basic or AI Coach Free Agent filmed a set, watched it
+  analyse, and hit a 402 only when the clip tried to save -- numbers on screen, video gone. Worst
+  possible order to meet a paywall, and it reads as a bug rather than a price.
+- **Both workout pages, not one.** `skill-workout.tsx` runs the sprint and mechanics trackers and
+  was missed on the first pass. `client/src/lib/camera-needs-entitlement.test.ts` counts the gate
+  against the `trackingOptOut` checks in both files, so a control added to one branch and
+  forgotten on the others fails.
+- **Watching a clip you already recorded is never gated.** The form-check button previews an
+  existing video or records a new one, and only the second is a purchase. Hiding the first takes
+  something away rather than withholding something unbought, and it would bite hardest on sets
+  filmed before a subscription lapsed.
+
+**TRUST -- the caveat goes on every surface that shows a camera number.**
+`shared/camera-accuracy-copy.ts` is the one copy module and still exists to be deleted when
+calibration lands. What was missing was any check that it had been PUT everywhere.
+`client/src/lib/camera-caveat-coverage.test.ts` scans `client/src/pages` rather than holding a
+list -- same reasoning as the tracker-dialog scan below -- and immediately found five surfaces
+with no warning at all: both leaderboards, the admin query engine, and the skill workout page.
+
+- **A leaderboard is the worst place to miss it.** A chart is one athlete's trend read by someone
+  who knows that athlete. A leaderboard is a comparative claim about PEOPLE: it puts names in an
+  order, and an order invites a decision about who runs with the ones. Camera timing has never
+  been checked against a stopwatch, so the gap between adjacent rows may be entirely measurement.
+- **Both leaderboards and the query engine are PERMANENT, not dismissible.** The dismissal flag is
+  shared across every dismissible instance, so a coach who cleared it once on their own workout
+  screen would never have seen it on the ranking page -- a dismissible caveat there would have
+  been a no-op for exactly the people who use the app most.
+- **An exemption needs a reason, and the reason must be "no reader sees a number here."** Never
+  "this one is fine". `movement-knowledge.tsx` is exempt because its bar-path number is a
+  THRESHOLD somebody is setting, not a measurement of an athlete.
+
 ## Capture diagnostics
 
 Added 2026-09-16, after a bench set that failed three separate ways left no

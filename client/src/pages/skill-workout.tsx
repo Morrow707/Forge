@@ -1,4 +1,6 @@
 import { useRef, useState, type TouchEvent } from "react";
+import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
+import { useCameraAccess } from "@/hooks/use-camera-access";
 import { useParams, useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -104,6 +106,11 @@ export default function SkillWorkoutPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { user } = useAuth();
+  // Same gate as the strength workout page -- see useCameraAccess. The sprint and mechanics
+  // trackers here were ungated too, so a Free Agent on a tier without video form-check could
+  // film a sprint, get a time, and lose the clip to a 402 on save. Requires an explicit true,
+  // so an unanswered query neither flashes the button nor hides it from someone who has it.
+  const cameraAllowed = useCameraAccess()?.allowed === true;
 
   const dayPath = `/api/athlete/skill-day/${assignmentId}/${dayId}?date=${date}`;
   const { data: day, isLoading, isError, refetch } = useQuery<SkillDayInfo>({
@@ -415,6 +422,13 @@ export default function SkillWorkoutPage() {
                           </a>
                         )}
 
+                        {ex.trackingLevel !== "none" && cameraAllowed && (
+                          // Sprint times and mechanics scores come off the same uncalibrated
+                          // pipeline as bar velocity, and this page showed them with no warning
+                          // at all. Dismissible, matching the strength workout page: this is
+                          // opened every session, and a permanent line on it stops being read.
+                          <CameraMetricCaveat dismissible className="mb-1.5" />
+                        )}
                         {visibleSet && (
                           <div className="space-y-2 rounded-md bg-surface-elevated p-2.5">
                             <p className="text-xs font-semibold text-muted-foreground">
@@ -491,7 +505,7 @@ export default function SkillWorkoutPage() {
                               </a>
                             )}
 
-                            {ex.trackingLevel === "sprint" && !user?.trackingOptOut && (
+                            {ex.trackingLevel === "sprint" && cameraAllowed && !user?.trackingOptOut && (
                               <Button
                                 size="sm"
                                 variant="secondary"
@@ -502,7 +516,7 @@ export default function SkillWorkoutPage() {
                                 Record Sprint for Set {visibleSet.setNumber}
                               </Button>
                             )}
-                            {ex.trackingLevel === "mechanics" && !user?.trackingOptOut && (
+                            {ex.trackingLevel === "mechanics" && cameraAllowed && !user?.trackingOptOut && (
                               <Button
                                 size="sm"
                                 variant="secondary"

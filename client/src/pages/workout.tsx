@@ -108,6 +108,7 @@ import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { BiometricReleaseDialog } from "@/components/biometric-release-dialog";
 import { logDebug } from "@/lib/debug-console";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
+import { useCameraAccess } from "@/hooks/use-camera-access";
 import { ReadinessBanner } from "@/components/readiness-banner";
 import { ExerciseSheetTutorial } from "@/components/exercise-sheet-tutorial";
 import { ModifiedWorkoutBanner } from "@/components/modified-workout-banner";
@@ -2728,6 +2729,18 @@ function ExerciseLogContent({
   //
   // Null/undefined here (no profile applied yet) just means every tracker falls
   // back to its own hardcoded defaults, same as before this existed.
+  // MAY THIS PERSON USE THE CAMERA AT ALL -- asked before the record button is drawn, not after
+  // the clip fails to upload. See useCameraAccess: nothing here used to ask, so a Free Agent on
+  // a tier without video form-check got the button, filmed the set, watched it analyse, and then
+  // lost the clip to a 402. Numbers on screen, video gone, which is the worst order to find out
+  // in and reads as a bug rather than a price.
+  //
+  // `undefined` means not answered yet, and every use below requires an explicit true. Treating
+  // unknown as yes flashes the button at somebody who cannot use it; treating it as no flashes
+  // its absence at a coach who can. Neither is worth the frame it saves.
+  const cameraAccess = useCameraAccess();
+  const cameraAllowed = cameraAccess?.allowed === true;
+
   const movementTypeForTracking =
     item.trackingLevel === "bar_path" || item.trackingLevel === "full"
       ? item.movementType
@@ -3174,7 +3187,7 @@ function ExerciseLogContent({
           on the exercise card rather than on each set row: one honest line per
           exercise reads as information, the same line repeated under four sets
           reads as noise and stops being read at all. */}
-      {item.trackingLevel !== "none" && <CameraMetricCaveat dismissible />}
+      {item.trackingLevel !== "none" && cameraAllowed && <CameraMetricCaveat dismissible />}
       {/* Rendered beside the sets rather than at the dialog stack below, because it has to open
           BEFORE any tracker does -- it is the question asked instead of starting the camera. */}
       <BiometricReleaseDialog
@@ -3409,7 +3422,7 @@ function ExerciseLogContent({
                         Same as Set {prevSet!.setNumber} ({prevSet!.weight} {unit})
                       </button>
                     )}
-                    {item.trackingLevel !== "none" && !user?.trackingOptOut && processingSets.has(set.setNumber) && (
+                    {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && processingSets.has(set.setNumber) && (
                       // AvBarTrackerDialog already closed and handed control back here --
                       // this set's recording is analyzing/uploading in the background (see
                       // onAnalysisStarted/onProcessingSettled above). Disabled rather than the
@@ -3422,7 +3435,7 @@ function ExerciseLogContent({
                           : "Processing…"}
                       </span>
                     )}
-                    {item.trackingLevel !== "none" && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
+                    {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
                       <button
                         type="button"
                         disabled={weightMissingForTracking}
@@ -3470,9 +3483,15 @@ function ExerciseLogContent({
                         records the video (see BarTrackerDialog's recordVideo
                         prop below) -- a second, separate video button here
                         would just be the same set recorded twice. */}
+                    {/* One button, two jobs, and only one of them needs the camera. An
+                        already-recorded clip is PREVIEWED here, and that must stay available to
+                        everybody: the video exists, it is theirs, and hiding it would take away
+                        something they already have rather than gate something they have not
+                        bought. Starting a NEW recording is the gated half -- it ends at
+                        /api/athlete/form-video, which answers 402 without the entitlement. */}
                     {videoRequired &&
                       !mergedTracking &&
-                      (set.formCheckVideoUrl || !user?.trackingOptOut) && (
+                      (set.formCheckVideoUrl || (cameraAllowed && !user?.trackingOptOut)) && (
                       <button
                         type="button"
                         onClick={() =>

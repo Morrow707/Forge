@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
@@ -248,6 +249,13 @@ export default function AdminQueryEngine() {
   return (
     <AppShell title="Query Engine">
       <div className="mt-4 space-y-4">
+        {/* Five of the selectable fields -- peak and mean velocity, ROM, velocity loss, trust
+            score -- are camera-derived, and an operator querying a cohort on them is further
+            from the footage than anybody else in the app. There is no set in front of them to
+            sanity-check against, only a number in a column. Permanent rather than dismissible:
+            this is not a surface anyone opens every session, and a conclusion drawn here tends
+            to leave the room. */}
+        <CameraMetricCaveat className="mb-1" />
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="flex gap-3 p-4">
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />

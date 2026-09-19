@@ -798,26 +798,54 @@ function requirePaidAiAccess(entitlement: AiEntitlement) {
   };
 }
 
-// Gates camera-tracking VIDEO specifically -- recording/saving a clip, and
-// the AI form-check that reads it -- distinct from requireFreeAgent (which
-// only checks "do you have a coach"). A coached athlete's video is already
-// bounded by their team's video-retention cap (see
-// shared/video-retention.ts), not a Free Agent AI tier, so this only
-// restricts Free Agents without the "video" (Pro) entitlement; a coached
-// athlete passes through untouched. Unlike requirePaidAiAccess, this is
-// meant to run WITHOUT requireFreeAgent stacked first, since it has to
-// branch on coach status itself rather than assume it.
-async function requireVideoTrackingAccess(req: any, res: any, next: any) {
-  const user = currentUser(req);
+// Camera-tracking access -- recording/saving a clip and the AI form-check that reads it. Distinct
+// from requireFreeAgent, which only asks "do you have a coach". See shared/video-retention.ts for
+// the separate cap a coached athlete's video is already bounded by.
+export type CameraAccess = {
+  allowed: boolean;
+  /** Why, in a form the client can branch on without re-deriving the rule. */
+  reason: "coach_or_admin" | "coached_athlete" | "entitled" | "tier_excludes_camera";
+};
+
+/**
+ * THE ONE ANSWER TO "MAY THIS PERSON USE THE CAMERA", asked by both the route gate below and
+ * the client.
+ *
+ * It exists as a function rather than living inline in the middleware because the UI needs the
+ * same answer and must not re-derive it. Before this, the client did not ask at all: the record
+ * button was drawn whenever an exercise had a tracking level, so a Basic or AI Coach Free Agent
+ * saw the button, filmed a set, watched it analyse, and only then hit a 402 when the clip tried
+ * to upload. They got the numbers on screen and lost the video -- the worst possible order, and
+ * a paywall that reads as a bug.
+ *
+ * Two copies of a rule this shape would drift silently, and the drift is only visible to the
+ * person it strands mid-set. One function, two callers.
+ */
+async function cameraAccessFor(user: { id: number; email: string; role: string }): Promise<CameraAccess> {
   // A coach or admin filming their own training is not a Free Agent deciding
   // whether to pay for video: they already pay for (or are) the platform, and
   // /coach/my and /admin/my render the very same workout page with the very same
   // tracker dialogs. Without this they reached the tracker, recorded, analysed,
   // and then got "And the video didn't save either: Forbidden".
-  if (user.role === "coach" || user.role === "admin") return next();
-  if (await athleteHasCoach(user.id)) return next();
+  if (user.role === "coach" || user.role === "admin") {
+    return { allowed: true, reason: "coach_or_admin" };
+  }
+  // A coached athlete's video is bounded by their team's retention cap rather than by a Free
+  // Agent tier, so the tier question never arises for them.
+  if (await athleteHasCoach(user.id)) return { allowed: true, reason: "coached_athlete" };
   const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email, "video");
-  if (!hasPaid) {
+  return hasPaid
+    ? { allowed: true, reason: "entitled" }
+    : { allowed: false, reason: "tier_excludes_camera" };
+}
+
+// Gates camera-tracking VIDEO specifically -- see cameraAccessFor above for the rule and why it
+// is shared with the client. Unlike requirePaidAiAccess, this is meant to run WITHOUT
+// requireFreeAgent stacked first, since it has to branch on coach status itself.
+async function requireVideoTrackingAccess(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  const access = await cameraAccessFor(user);
+  if (!access.allowed) {
     return res.status(402).json({
       message: "Camera-tracking video is a paid upgrade for Free Agents, coming soon.",
       freeAgentPaywall: true,
@@ -8509,6 +8537,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await storage.applyAppleIapVerification(user.id, verified);
       if (!result.ok) return res.status(422).json({ message: result.error });
       res.status(204).end();
+    },
+  );
+
+  // MAY I USE THE CAMERA -- the same question requireVideoTrackingAccess answers, asked by the UI
+  // before it draws a record button instead of after the clip fails to upload.
+  //
+  // Open to coach and admin as well as athlete, because /coach/my and /admin/my mount the same
+  // workout page and the same tracker dialogs, so the same button needs the same answer there.
+  //
+  // This is a CONVENIENCE for the interface, never the enforcement. The routes that actually
+  // save a clip keep their own gate, because a client is a thing anybody can edit and hiding a
+  // button is not a permission check.
+  app.get(
+    "/api/athlete/camera-access",
+    requireRole(["athlete", "coach", "admin"]),
+    async (req, res) => {
+      res.json(await cameraAccessFor(currentUser(req)));
     },
   );
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -367,6 +368,15 @@ function SpeedLeaderboard({ myId }: { myId: number }) {
           </div>
         )}
       </div>
+
+      {/* Same reasoning as the coach leaderboard, and if anything sharper here: this is an
+          athlete reading their own name against their team-mates'. Camera timing is not
+          validated against a stopwatch, so a place or two of difference between adjacent rows
+          may be entirely measurement rather than anybody being faster.
+
+          Permanent, not dismissible -- the dismissal flag is shared with the workout screen, so
+          a dismissible one here would already be cleared for anybody who trains regularly. */}
+      <CameraMetricCaveat className="mb-4" />
 
       {!skillExerciseId && (
         <Card>
