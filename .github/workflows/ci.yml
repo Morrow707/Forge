@@ -88,8 +88,15 @@ jobs:
       # fix was available, upgraded to 6.15.3, and left the vulnerability in
       # place, every time. The override is what actually patches it without
       # an Express 5 migration.
+      #
+      # Both audit steps go through scripts/npm-audit-retry.sh: on 2026-09-19
+      # npm's audit server answered five runs in a row with a 400 ("Invalid
+      # package tree") on an unchanged lockfile, then passed the same commit
+      # twenty minutes later. The script retries ONLY that case -- the
+      # "audit endpoint returned an error" line -- and never a real advisory,
+      # so a vulnerability still fails on the first try.
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=moderate
+        run: bash scripts/npm-audit-retry.sh --omit=dev --audit-level=moderate
 
       # The build tooling, and now blocking rather than a warning.
       #
@@ -115,7 +122,7 @@ jobs:
       # back to a warning only if that is impossible, and say why here --
       # going back quietly loses the ratchet.
       - name: Audit build tooling
-        run: npm audit --audit-level=moderate
+        run: bash scripts/npm-audit-retry.sh --audit-level=moderate
 
       - name: Build (web + server)
         run: npm run build
