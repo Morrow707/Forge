@@ -115,3 +115,71 @@ deliver's documented behaviour and verified only as far as Ruby and YAML syntax;
 the sandbox this was written in cannot reach apple.com. The first
 `download_metadata` run is the real test, and it is the safe one to fail -- it
 writes nothing to Apple.
+
+---
+
+# App Store search: the fields, and what belongs in them today
+
+Added alongside the web SEO work, for the same reason this file exists at all: so
+the copy is reviewed and versioned rather than typed into App Store Connect from
+memory.
+
+**These are proposals, not files.** `name.txt`, `subtitle.txt` and `keywords.txt`
+are files `download_metadata` produces. Writing them by hand here would be
+assembling a metadata folder nobody has compared against the live listing, which
+is the exact failure the guard in `README.md` exists to stop. Run
+`download_metadata`, commit what comes back, and then apply the text below.
+
+## The app name stays "Forge"
+
+The tempting change is something like "Forge: AI Barbell Tracker" or "Forge:
+Velocity Based Training" — a real ASO gain, since the name is the heaviest
+ranking field Apple has.
+
+**Do not make it.** The name would assert precisely the capability the product
+currently disclaims in a dozen places and withdrew a paid tier over
+(`17b86426`). It is also the hardest field to walk back: a name change goes
+through review, and an app that renamed itself *away* from an AI claim is a
+worse look than one that never made it.
+
+Revisit after calibration lands. It is a good idea then and a liability now.
+
+## Subtitle (30 characters)
+
+```
+Strength programming for teams
+```
+
+Exactly 30. Describes what is finished, carries "strength", "programming" and
+"teams" as search terms, and makes no claim about the camera.
+
+## Keywords (100 characters, comma-separated, no spaces)
+
+Apple ignores words already in the name and subtitle, so neither "forge" nor
+anything from the subtitle above belongs here.
+
+```
+gym,weightlifting,barbell,workout,log,athlete,roster,coaching,squat,bench,powerlifting,highschool
+```
+
+96 characters. Every term describes something Forge does today.
+
+**The second set, for after calibration:** `vbt`, `velocity`, `barpath`,
+`biomechanics`, `kinematics`, `sprint`, `jump`. Each of these ranks the app for
+the camera pipeline, and until the metrics are trustworthy, ranking for them
+sends exactly the buyer most likely to be disappointed. Swapping them in is a
+one-line change to this file plus an `upload_metadata`, so there is no reason to
+do it early.
+
+## Promotional text
+
+Already written, already carries the disclosure, already in this directory. It is
+the one field that can be changed without a review, which makes it the right
+place for the calibration status — and the right thing to update the day
+calibration lands.
+
+## The manual step this does not remove
+
+`docs/app-store-launch-notes.md` records that the camera-accuracy disclosure has
+to be pasted into App Store Connect by hand. That is still true and still
+pending; none of the above does it.

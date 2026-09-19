@@ -7,7 +7,7 @@
     "predev": "node scripts/copy-mediapipe-wasm.mjs && node scripts/copy-onnxruntime-wasm.mjs",
     "dev": "NODE_ENV=development tsx watch server/index.ts",
     "prebuild": "node scripts/copy-mediapipe-wasm.mjs && node scripts/copy-onnxruntime-wasm.mjs",
-    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "npx tsx scripts/generate-seo-files.ts && vite build && npx tsx scripts/prerender.ts && node scripts/check-first-paint.mjs && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "test": "vitest run",

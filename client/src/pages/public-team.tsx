@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
+import { usePageMeta } from "@/lib/page-meta";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ForgeMark } from "@/components/forge-mark";
@@ -34,6 +35,32 @@ export default function PublicTeamPage() {
     queryKey: ["/api/public/team", code],
     queryFn: () => getJson(`/api/public/team/${encodeURIComponent(code)}`),
     retry: false,
+  });
+
+  // THE ONE PAGE THAT EXISTS TO BE SHARED, so it is the one that most needed a share card.
+  //
+  // This is the link a coach puts on a flyer or texts to a parent, and it arrived everywhere as
+  // a bare URL with no title and no picture. It names the team rather than Forge because that is
+  // what the recipient was sent and what they are deciding about.
+  //
+  // Set from the team's own name once the read lands, and left at a neutral placeholder before
+  // then -- a title asserting a team exists while the request is still in flight would be
+  // announcing something not yet known, and would stick if the code turns out to be wrong. Its
+  // own paths are per-code and unknowable at build time, so this page carries its metadata at
+  // runtime instead of appearing in shared/public-routes.ts.
+  usePageMeta({
+    title: data?.teamName ? `${data.teamName} on Forge` : "Team",
+    description: data?.motto?.trim()
+      ? `${data.teamName ?? "This program"} on Forge Performance Systems -- ${data.motto.trim()}`
+      : data?.teamName
+        ? `${data.teamName} trains on Forge Performance Systems. See the program and get in touch with the coaching staff.`
+        : "A coaching program on Forge Performance Systems.",
+    path: `/team/${code}`,
+    // The team's own logo when it has one, so the card carries their identity rather than
+    // Forge's. Falls through to the default screenshot when it does not.
+    image: data?.logoUrl ?? undefined,
+    // A code that resolves to no program is a dead link, not a page worth indexing.
+    noindex: isError || !data,
   });
 
   if (isLoading) {

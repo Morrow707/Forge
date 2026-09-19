@@ -96,6 +96,36 @@ export default defineConfig({
         // nothing to do with charting. Named explicitly so it reads as what
         // it is and stays a stable, cacheable chunk across deploys.
         manualChunks(id) {
+          // REACT FIRST, AND THAT ORDER IS THE WHOLE POINT.
+          //
+          // With only the recharts rule here, Rollup had nowhere else to put React -- it is
+          // imported by recharts AND by the entry -- so it hoisted React INTO the recharts
+          // chunk. The chunk named "vendor-charts" was really "React plus recharts", the entry
+          // had to import it statically to get React at all, and Vite duly emitted a
+          // modulepreload for it. So 560kB of charting library was fetched on every first
+          // paint, including the landing page and the login form, which render no charts. The
+          // comment below claiming recharts is "never on initial load" described the intent and
+          // not the build.
+          //
+          // Naming React explicitly gives it somewhere of its own to go, and recharts goes back
+          // to being what it was supposed to be: lazy, fetched by the handful of pages that
+          // actually draw a chart.
+          if (id.includes("node_modules/react-dom") || id.includes("node_modules/react/")) {
+            return "vendor-react";
+          }
+          if (id.includes("node_modules/scheduler")) return "vendor-react";
+          // Two tiny shared utilities that recharts also uses, pinned here for the same reason
+          // React was: left unassigned, Rollup put them in the recharts chunk (they are shared
+          // between the entry and it), which meant the entry statically imported vendor-charts
+          // for the sake of clsx and a useSyncExternalStore shim -- and dragged 400kB of
+          // charting library along behind them. They are a few hundred bytes and the entry
+          // needs them on every page, so they belong in the always-loaded chunk.
+          if (id.includes("node_modules/use-sync-external-store")) return "vendor-react";
+          if (id.includes("node_modules/clsx")) return "vendor-react";
+          // vendor-charts (recharts) is inherently large but lazy -- only fetched by the pages
+          // that render a chart. Named explicitly so it reads as what it is and stays a stable,
+          // cacheable chunk across deploys, rather than being named after whichever importer
+          // Rollup happened to pick (it was once named after a 28-line metrics helper).
           if (id.includes("node_modules/recharts")) return "vendor-charts";
           if (id.includes("node_modules/date-fns")) return "vendor-date";
         },

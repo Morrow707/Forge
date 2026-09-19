@@ -23,6 +23,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
+import { MarketingNav, MarketingFooter } from "@/components/marketing-shell";
 import { bandForAthleteCount, formatCents } from "@shared/billing-tiers";
 import {
   FREE_AGENT_TIERS,
@@ -48,7 +49,19 @@ function BrowserFrame({ src, alt, className }: { src: string; alt: string; class
         <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
       </div>
-      <img src={src} alt={alt} className="block w-full" />
+      {/* WEBP FIRST, PNG AS THE FALLBACK SOURCE.
+          These screenshots were ~960kB of PNG across five files and are the heaviest thing a
+          first-time visitor downloads -- PNG is lossless, which nothing needs for a picture of a
+          dashboard. The .webp siblings are committed next to the originals (see
+          scripts/optimize-marketing-images.mjs) and cut that by about 60%. The PNG stays as the
+          <source> fallback and as the file a designer edits.
+
+          loading/decoding are set for the same reason: these sit below the fold on every page
+          that uses them, so blocking first paint on them is pure cost. */}
+      <picture>
+        <source srcSet={src.replace(/\.png$/, ".webp")} type="image/webp" />
+        <img src={src} alt={alt} className="block w-full" loading="lazy" decoding="async" />
+      </picture>
     </div>
   );
 }
@@ -176,25 +189,11 @@ const PRICING_SECTION_LIVE = false;
 export default function LandingPage() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
-      {/* ---------------- Nav ---------------- */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
-          <div className="flex items-center gap-2">
-            <ForgeMark className="h-8 w-8 rounded-md" />
-            <span className="font-display text-xl font-extrabold uppercase tracking-wider">
-              Forge
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/login">
-              <Button variant="ghost">Log In</Button>
-            </Link>
-            <Link href="/signup">
-              <Button>Get Started</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      {/* Nav and footer are shared with the audience and validation pages -- see
+          components/marketing-shell.tsx. They were inline here until those pages existed, at
+          which point three hand-kept copies of one nav became three places a new link gets
+          added to two of. */}
+      <MarketingNav />
 
       {/* ---------------- Hero ---------------- */}
       <section className="relative isolate overflow-hidden px-4 pb-20 pt-16 md:px-8 md:pb-28 md:pt-24">
@@ -596,31 +595,7 @@ export default function LandingPage() {
       </section>
 
       {/* ---------------- Footer ---------------- */}
-      <footer className="border-t border-border px-4 py-10 md:px-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm text-muted-foreground sm:flex-row">
-          <div className="flex items-center gap-2">
-            <ForgeMark className="h-6 w-6 rounded" />
-            <span className="font-display font-bold uppercase tracking-wide text-foreground">
-              Forge
-            </span>
-            <span>-- Coach. Program. Perform.</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/login" className="hover:text-foreground">
-              Log In
-            </Link>
-            <Link href="/signup" className="hover:text-foreground">
-              Sign Up
-            </Link>
-            <Link href="/admin/login" className="hover:text-foreground">
-              Admin
-            </Link>
-            <Link href="/privacy" className="hover:text-foreground">
-              Terms &amp; Privacy
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

@@ -17,8 +17,34 @@
       } catch (e) {}
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Forge — Coach. Program. Perform.</title>
-    <meta name="description" content="Forge is a coaching platform for building exercise libraries, programming training blocks, and syncing athlete calendars." />
+    <!-- THE FALLBACK HEAD, not the per-page one.
+         usePageMeta (src/lib/page-meta.ts) rewrites all of this per route, and
+         scripts/prerender.mjs bakes the result into a static file per public route so a crawler
+         that does not run JavaScript still gets the right title and share card. What is here is
+         what a route without its own metadata gets, and what a scraper sees for a path the
+         prerenderer does not cover.
+
+         "Forge" alone is a common noun and a dozen other products, so the brand term carried
+         everywhere is the full one. -->
+    <title>Forge Performance Systems — Coach. Program. Perform.</title>
+    <meta name="description" content="Coaching software for strength and conditioning: build exercise libraries, program training blocks, and keep a whole roster's calendar in one place." />
+    <link rel="canonical" href="https://forgeperformancesystems.com/" />
+
+    <!-- A link to Forge is shared by one coach sending it to another far more often than it is
+         found in a search result. Without these it arrives in Messages, Slack or anywhere else
+         as a bare URL with no title and no picture. summary_large_image rather than summary:
+         the small card crops to a square, which makes a screenshot of a dashboard unreadable. -->
+    <meta property="og:site_name" content="Forge Performance Systems" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Forge Performance Systems — Coach. Program. Perform." />
+    <meta property="og:description" content="Coaching software for strength and conditioning: build exercise libraries, program training blocks, and keep a whole roster's calendar in one place." />
+    <meta property="og:url" content="https://forgeperformancesystems.com/" />
+    <meta property="og:image" content="https://forgeperformancesystems.com/marketing/shot-dashboard.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Forge Performance Systems — Coach. Program. Perform." />
+    <meta name="twitter:description" content="Coaching software for strength and conditioning: build exercise libraries, program training blocks, and keep a whole roster's calendar in one place." />
+    <meta name="twitter:image" content="https://forgeperformancesystems.com/marketing/shot-dashboard.png" />
+
     <meta name="theme-color" content="#F65B23" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
