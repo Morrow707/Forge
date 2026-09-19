@@ -86,6 +86,18 @@ function key(): Buffer {
   return cachedKey;
 }
 
+/** Resolve the key NOW rather than on first use.
+ *
+ * The key was only ever read lazily, the first time something was encrypted or decrypted --
+ * which for this app means the first time somebody set up two-factor login. So a wrong
+ * variable name on the host (it was PII_ENCRYPTION_KEYS on Render, plural, for the whole
+ * beta) let every deploy come up green and only surfaced as an error inside one settings
+ * screen nobody had opened. Called at startup in production, a bad or missing key fails the
+ * deploy with resolveKey's own message, which names the variable and how to generate one. */
+export function assertFieldEncryptionConfigured(): void {
+  key();
+}
+
 /** Only for tests that need to change the key mid-process. */
 export function resetFieldEncryptionKeyForTest(): void {
   cachedKey = null;
