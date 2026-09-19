@@ -148,3 +148,18 @@ describe("the age rule, against the gate that enforces it", () => {
     expect(AI_TERMS_OF_USE).toMatch(/every athlete under 18 however they arrived/);
   });
 });
+
+describe("the AI terms are actually servable", () => {
+  // The runtime audit of 2026-09-19 found /ai-terms rendering "couldn't load": the type was
+  // in the enum, seeded, routed and admin-labelled -- every static check above passed -- but
+  // it was never added to the two route-side lists that make a document readable. Both are
+  // scanned here because each one failing independently was the bug.
+  const routes = readFileSync(join(__dirname, "..", "routes.ts"), "utf8");
+  const listBody = (name: string) => routes.slice(routes.indexOf(`const ${name} = [`), routes.indexOf("] as const;", routes.indexOf(`const ${name} = [`)));
+  it("is a legal document type the routes know", () => {
+    expect(listBody("LEGAL_DOC_TYPES")).toContain('"ai_terms_of_use"');
+  });
+  it("is public, so /ai-terms can fetch it without signing in", () => {
+    expect(listBody("PUBLIC_LEGAL_DOC_TYPES")).toContain('"ai_terms_of_use"');
+  });
+});

@@ -524,6 +524,10 @@ export default function SignupPage() {
                   is not. A minor sees an explanation instead of a checkbox:
                   a sixteen-year-old ticking a box is not a guardian's
                   decision, and the server ignores it for a minor anyway. */}
+              {/* Athletes only: storage.setResearchDataConsent updates only role="athlete" rows, so
+                  a coach ticking this was silently dropped with a 201. A coach has no training data
+                  of their own in the research store; the question is meaningless for them. */}
+              {role === "athlete" && (
               <div className="space-y-2 rounded-md border border-border p-3">
                 <Label className="text-sm">Research (optional)</Label>
                 {isMinorAthlete ? (
@@ -554,6 +558,7 @@ export default function SignupPage() {
                   </>
                 )}
               </div>
+              )}
               {formError && (
                 <p className="text-sm font-medium text-destructive">{formError}</p>
               )}
@@ -567,7 +572,7 @@ export default function SignupPage() {
                   (isMinorAthlete && !guardianEmail.trim()) ||
                   (role === "athlete" && (!sport || !position.trim())) ||
                   (role === "athlete" && (!heightIn.trim() || !bodyWeightLbs.trim())) ||
-                  (role === "coach" && !expectedAthletesValid)
+                  (role === "coach" && !joiningStaff && !expectedAthletesValid)
                 }
               >
                 {signupMutation.isPending ? "Creating account…" : "Create Account"}

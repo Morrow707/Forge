@@ -117,7 +117,12 @@ async function main() {
       passwordHash: await hashPassword(demoPassword("athlete123")),
       name: "Jordan Athlete",
       role: "athlete",
+      // Adult. Without a date of birth the athlete gate refuses every request, so the demo
+      // login printed on the login page could not be used at all (runtime audit 2026-09-19).
+      dateOfBirth: "2001-03-15",
     });
+  } else if (!athlete.dateOfBirth) {
+    await db.update(users).set({ dateOfBirth: "2001-03-15" }).where(eq(users.id, athlete.id));
   }
 
   await storage.linkAthleteToCoach(coach.id, athlete.id);
@@ -247,7 +252,10 @@ async function main() {
       name: "Morgan Freeagent",
       role: "athlete",
       sport: "Basketball",
+      dateOfBirth: "1999-08-22",
     });
+  } else if (!freeAgent.dateOfBirth) {
+    await db.update(users).set({ dateOfBirth: "1999-08-22" }).where(eq(users.id, freeAgent.id));
   }
 
   // Looked up system-wide (not scoped to this coach) since an exercise's
