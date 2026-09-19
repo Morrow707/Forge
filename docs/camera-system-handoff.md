@@ -1,369 +1,611 @@
-# Camera system: a briefing for a session that has not seen any of this
+# Camera system: a deep briefing for a session with no prior context
 
-Written 2026-09-19 for a fresh session picking up the camera work. It assumes no
-prior context and no memory of what has already been tried. Everything here is
-either checkable in the repo or marked as a field observation with its date.
+Written 2026-09-19. Assumes no memory of what has been tried. Everything is
+either checkable in the tree at the cited path or marked as a dated field
+observation.
 
-**Read `docs/camera-tracking-notes.md` after this.** That file is the engineering
-record and is longer and more detailed; this one is the map, the current problem
-list, and -- most usefully -- the list of things that look like fixes and are not.
-Where the two disagree, that file is right and this one is stale.
+**Companion reading, in this order:** this file, then
+`docs/camera-tracking-notes.md` (870 lines, the engineering record), then the
+four camera sections of `CLAUDE.md`. Where any of them disagree with the code,
+the code is right; where the notes disagree with this file, the notes are right.
 
 ---
 
-## 1. What the system is
+## PART 0 — The file map
 
-Three parts, and the split is load-bearing. Anything added has to be one of them.
-
-| Part | What it is | What it knows |
+| Concern | Path | Size |
 |---|---|---|
-| **Body tracker** | Apple `VNDetectHumanBodyPoseRequest` | Where the athlete's joints are. Nothing about equipment. |
-| **Object tracker** | `AvCoreMlImplementDetector` (CoreML) | Where the equipment is. Nothing about the athlete. |
-| **Overwatch / arbiter** | `shared/tracker-arbiter.ts`, ported to `AvTrackerArbiter` in Swift | Whether to believe either of them. **Owns no sensor of its own, on purpose.** |
-
-Native analysis lives in `ios/App/App/AvBodyTrackingPlugin.swift` (~3,600 lines).
-The TypeScript side is `client/src/lib/pose-tracking.ts` (~3,000) and
-`client/src/lib/bar-tracking.ts` (~2,700). Fifteen tracker dialogs in
-`client/src/components/*tracker-dialog.tsx` drive capture.
-
-Nine tracking modes: `bar_path`, `full`, `jump`, `sprint`, `mechanics`,
-`kb_swing`, `horizontal_load`, plus two rotation modes. Olympic lifts
-deliberately have no mode -- see §6.
-
-### How overwatch actually works
-
-`arbitrate()` returns one of four verdicts: `agree`, `object_suspect`,
-`body_suspect`, `cannot_judge`.
-
-- **It judges in BOTH directions.** The first version only judged the object
-  against the body. That is a hierarchy, not cohesion, and it introduced a bug:
-  a single jumped wrist landmark could break a perfectly good object lock.
-- **The response is asymmetric and must stay that way.** A suspect *object*
-  loses its lock (a better answer exists -- re-detect). A suspect *body* gets an
-  abstention: skip the frame, leave the lock alone, report nothing. There is no
-  better body available.
-- **The body is checked FIRST**, before the object gate and before any fresh
-  detection. Every statement overwatch makes about the object is measured with
-  the body's ruler, so a ruler that just changed length cannot convict anyone.
-- **The threshold is in the athlete's own grip widths.** Not pixels, not frame
-  fractions. Grip width is measured every frame, needs no calibration, and
-  scales with camera distance and zoom exactly as the scene does -- so
-  "2.5 grip widths" means the same physical thing at three feet or thirty.
-  Every earlier attempt used a frame fraction and needed per-setup tuning it
-  never got.
-- **A frame overwatch cannot judge PASSES.** No body reading is not evidence the
-  object is wrong. It fires only on a positive finding.
-- **Each part is judged by a signal the other cannot influence.** The object is
-  judged by grip width (the object tracker has no hand in producing it). The
-  body is judged by the constancy of its own span. Neither borrows the other's
-  sensor.
-
-`shared/tracker-arbiter.test.ts` reads the Swift source and fails when the two
-copies of the constants diverge, when the body check stops preceding the object
-gate, or when a rejected span could reach the history. **The Swift is a port.
-Change one, change both.**
+| Native analysis (Vision + CoreML + arbiter port) | `ios/App/App/AvBodyTrackingPlugin.swift` | ~3,600 |
+| Pose, calibration, scale | `client/src/lib/pose-tracking.ts` | ~3,000 |
+| Trace → reps → metrics | `client/src/lib/bar-tracking.ts` | ~2,700 |
+| The referee | `shared/tracker-arbiter.ts` | 479 |
+| Diagnostics assembly | `client/src/lib/tracking-diagnostics.ts` | 459 |
+| Native bridge | `client/src/lib/use-av-body-tracking.ts` | 434 |
+| Per-mode trackers | `client/src/lib/{jump,sprint,mechanics,implement,kb-swing,rotation}-tracking.ts` | 230–570 each |
+| Capture UI | `client/src/components/*tracker-dialog.tsx` | 15 files |
+| Video queue / reattach | `client/src/lib/video-offline-store.ts` | ~430 |
+| Set persistence | `server/storage.ts` → `submitWorkoutLog`, `attachVideoToLoggedSet` | — |
+| Admin report | `server/storage.ts` → `getRecentTrackedSetsForAdmin` | — |
+| Offline replay harness | `client/src/lib/capture-replay.ts`, `scripts/replay-captures.mjs` | — |
 
 ---
 
-## 2. Calibration: what it is and where it breaks
+## PART 1 — The three parts
 
-Scale is metres per pixel. Everything in metres, metres per second or watts
-depends on getting it right; everything that is a duration or a ratio does not.
+### 1.1 The contract
 
-**Two sources of scale, in order of preference:**
+| Part | Implementation | Knows | Does NOT know |
+|---|---|---|---|
+| Body tracker | `VNDetectHumanBodyPoseRequest` | Joint positions, grip span, posture | What equipment is |
+| Object tracker | `AvCoreMlImplementDetector` | Where the equipment is | Where the athlete is |
+| Overwatch | `shared/tracker-arbiter.ts` → `AvTrackerArbiter` (Swift, line ~2346) | Whether to believe either | Owns **no sensor at all**, deliberately |
 
-1. **The athlete's own height**, via `calibrateFromFrames` in `pose-tracking.ts`
-   -- nose-to-ankle, or a shoulder-to-hip fallback.
-2. **A reference object** in frame -- a plate, whose real diameter is known.
+**Before adding anything, say which of the three it is.** A change that fits none
+is a fourth part. A fourth part is how this broke the first time: the object
+tracker grew three guards of its own — an implausible-jump check, a physics
+trajectory fit, a periodic re-classification — each individually reasonable, and
+**none of which could see the athlete**. A lock that has slid onto a plate on the
+rack behind the lifter passes all three, correctly, about the wrong object. It
+jumps nowhere, flies nowhere, and it genuinely *is* a plate.
 
-### Known break #1: supine lifts cannot calibrate from height
+### 1.2 `arbitrate()` — the actual algorithm
 
-An athlete lying flat with their feet out of frame cannot produce a nose-to-ankle
-measurement. **Bench is therefore the movement where a wrong number is most
-likely to be a calibration failure rather than a tracking failure, and the two
-look identical from outside.**
+`shared/tracker-arbiter.ts:441`. Four outcomes:
 
-A previous attempt switched horizontal press/row to a plate-based scale instead.
-Field data the same night showed that made the fused signal noisy enough to
-invent readings, and it was reverted. See `av-bar-tracker-dialog.tsx`'s own
-comment before proposing it again.
+```
+agree          → both look right, they agree about where the equipment is
+object_suspect → body steady, object is where the athlete is not.  BREAK THE LOCK
+body_suspect   → the body's own ruler changed length.  Judge nothing this frame
+cannot_judge   → no anchor available.  Leave the lock alone
+```
 
-### Known break #2: the plate is not always the plate
+Returns `{ outcome, breakLock, distanceInYardsticks, bodyDeviationRatio }`.
+`breakLock` is **true only for `object_suspect`**.
 
-A barbell lift tracks the **plate** (`COREML_TRACKING_MODE_BY_EQUIPMENT` maps
-`Barbell` -> `plate`). A plate further from the camera measures fewer pixels
-across; fewer pixels for the same 0.45m disc means a larger scale, means every
-distance in the take inflated.
+The order inside the function is the design:
 
-This is the mechanism that turned **eleven bench reps into eighteen**. The
-re-classification pass, written to *recover* from drift, was itself capable of
-causing it every thirty frames -- a lock that slid onto a rack plate behind the
-lifter passed every check the object tracker had, because it jumps nowhere,
-flies nowhere, and genuinely *is* a plate.
+1. If there is a yardstick, run `bodyReadIsStable()` **first**. Unstable →
+   return `body_suspect` immediately, `breakLock: false`.
+2. Only then `lockDistanceVerdict()`. `basis === "no_anchor"` → `cannot_judge`.
+3. Otherwise `agree` or `object_suspect` on the distance.
 
-`PLATE_TO_GRIP_RATIO_LOW/HIGH` was tightened from `0.25`-`2.5` to `0.45`-`2.0`,
-derived rather than guessed (the ratio is depth-independent when both objects
-are on the same bar). **Do not widen it back without telemetry.** Widening is
-what made the check decorative the first time.
+**Why body-first:** every statement overwatch can make about the object is
+measured with the body's ruler. A ruler that just changed length cannot convict
+anyone. Checking the object first would mean a jumped wrist landmark had already
+thrown away a good lock by the time the jump was noticed.
 
-### Known break #3 (the big one): rep segmentation was wrong, and the scale took the blame
+### 1.3 The constants, and where each number came from
 
-The relative gate is 40% of "a typical reversal", and the typical reversal was
-the **median of every reversal** an exploratory pass found. That is only the size
-of a rep if reps are the majority of what the pass returns, and they are nowhere
-near it. A ten-rep bench trace with a sticking point came back as five separate
-amplitude populations -- pose noise, the dip, the remainder of the press once
-the dip split it, and two clusters of real reps -- and **the reps were the
-smallest of the five by count.** The median landed a third of the way up a real
-rep, the gate came out below the dip, and the dip became a rep boundary.
+| Constant | Value | Derivation |
+|---|---|---|
+| `MAX_LOCK_DISTANCE_IN_YARDSTICKS` | `2.5` | A loaded plate's centre sits ~1.2 grip widths from the wrist midpoint (hands ~0.55m apart on a bench grip, inner plate ~0.65m out). 2.5 is a little over double — margin for a gate that must never drop a good lock. A plate on a rack 2m behind a lifter is 3.6 yardsticks and fails. |
+| `FALLBACK_LOCK_DISTANCE_FRAME_FRACTION` | `0.45` | Used when the body gave no yardstick. Deliberately loose — with no body measurement there is no way to convert screen distance to real distance, so this only degrades to "not in this half of the room". |
+| `MIN_YARDSTICK_PX` | `24` | Below this, a wrist pair is usually two low-confidence joints that landed near each other. Dividing by it turns a modest screen distance into an enormous yardstick count and rejects every lock in the take. |
+| `MAX_PLATE_ASPECT_RATIO` | `2.5` | A plate is a disc; face-on it boxes square. 2.5 ≈ 66° off square. What it really excludes is a box that is not a disc — **the read that prompted all of this boxed at 3.12, which is a rack upright.** |
+| `MAX_YARDSTICK_DEVIATION_RATIO` | `2.0` | This frame's span over the recent typical, always ≥1 so one threshold covers a jump either way. |
+| `MIN_YARDSTICK_SAMPLES_FOR_STABILITY` | `5` | Below this the arbiter says "stable" rather than electing the first reading it saw as truth — the same mistake the rep gate made (§3.3). |
+| `PLATE_TO_GRIP_RATIO_LOW/HIGH` | `0.45`–`2.0` | Was `0.25`–`2.5`. Tightened because the ratio is **depth-independent when both objects are on the same bar**, so the honest window is much narrower than a factor of ten. |
 
-**A paired session against a bar-mounted sensor (OVR) found: ten presses
-reported as fifteen, per-rep peaks spanning 0.24-1.96 m/s against the sensor's
-0.91-1.10 -- while the set MEAN stayed within 3.5%,** because splitting a rep
+`bodyReadIsStable()` uses a **median** over the recent window, not a mean —
+the failure being looked for is a single wild value, and a mean walks toward the
+very thing it is meant to notice.
+
+### 1.4 The invariant that is NOT enforced inside the arbiter
+
+**`arbitrate()` receives `recentYardstickPx` from its caller. It does not
+maintain that history.** The rule "a rejected body reading never joins the
+history it was judged against" is enforced at the **call site**, in Swift, at
+`AvBodyTrackingPlugin.swift:2928`:
+
+```swift
+if stability.stable {
+    recentYardstickPx.append(yardstick.px)
+    if recentYardstickPx.count > yardstickHistoryWindow { recentYardstickPx.removeFirst() }
+} else {
+    bodySuspectThisFrame = true
+    telemetry.framesBodySuspect += 1
+}
+if bodySuspectThisFrame { return nil }
+```
+
+Window is **8 frames** (`yardstickHistoryWindow`). If a rejected span were
+allowed in, a run of bad landmark frames would teach the stability check to
+accept them and **the guard dissolves exactly when it is needed most.**
+
+Note also: `return nil` skips the **fresh-detection path** as well as the gate. A
+jumped wrist drags `regionOfInterest` with it, so a detection seeded on that
+frame searches the wrong part of the image.
+
+### 1.5 The Swift port
+
+Overwatch must act mid-clip and **there is no Swift test target**, so the
+constants exist twice. `shared/tracker-arbiter.test.ts` reads the Swift source
+and fails when: the constants diverge, the body check stops preceding the object
+gate, or a rejected span could reach the history. **Change one, change both.**
+
+### 1.6 The four modes with no second tracker
+
+`jump`, `sprint`, `mechanics`, `horizontal_load` have **no implement in the
+scene**. There is nothing for overwatch to hold the body against. Internal
+corroboration is the ceiling and it has been reached — jump compares flight-time
+height against peak-ankle-travel height (two estimates that existed separately
+and were never compared); the checkpoint-timed modes derive a precision bound
+from the frame gap straddling each crossing.
+
+**Do not file "add cross-tracker fusion" against these four.**
+
+---
+
+## PART 2 — Calibration
+
+Scale is metres per pixel. Metres, m/s and watts depend on it. Durations and
+ratios do not.
+
+### 2.1 Source A: the athlete's height
+
+`calibrateFromFrames(frames, heightIn)` — `pose-tracking.ts:1644`.
+
+Walks every tracked frame, tracks vertical sign per frame (falling back to the
+last known-good sign rather than guessing), computes `computePixelToMeterScale`
+per frame, and needs `MIN_CALIBRATION_SAMPLES = 5`.
+
+**It does NOT take the median, and the reason is the most subtle thing in the
+calibration path.**
+
+```ts
+const sorted = [...samples].sort((a, b) => a - b);
+const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.1));
+return sorted[idx];          // tenth percentile
+```
+
+The error is **one-sided**. A frame can only ever measure the athlete *shorter*
+than they are — a squat at depth, the dip before a jump, a hinge — never taller.
+Scale is height ÷ span, so every compressed frame produces a scale too **large**,
+and the median of a set of one-sided errors sits *inside* the error rather than
+at the truth.
+
+It bites hardest on the movements that compress most. At the bottom of a back
+squat, nose-to-ankle runs ~⅔ of standing height, and both upstream guards pass
+it: the body is still vertical, and the height-to-shoulder ratio is still ~2.8
+against a 2.5 floor. A whole set of those frames drags the median off, and every
+distance, velocity and power number downstream carries the same factor.
+
+The tenth percentile is the smallest few scales = the largest few spans = the
+athlete at their most extended. **Not the minimum** — one bad landmark can
+stretch a span and a pure minimum would take that outlier every time.
+
+### 2.2 Supine detection is by NAME, not geometry
+
+`SUPINE_MOVEMENT_PATTERNS` / `isKnownSupineMovement()` — `pose-tracking.ts:1629`.
+
+Regexes for bench press, floor press, chest fly, skull crusher, `lying|supine`,
+hip thrust, glute bridge.
+
+**Two attempts to infer "is this athlete lying down" from the landmarks were
+defeated by real footage, and a third was modelled and defeated before
+shipping.** The exercise name is not ambiguous: a bench press is supine from
+every camera angle, on every rep, for every athlete. Reading it off the name is
+something no camera position can fool.
+
+Deliberately narrow, defaulting to false — an unrecognised exercise keeps
+today's behaviour. Deliberately **not** routed through `expectedPatternFromName`,
+which groups presses with rows: a Pendlay row is performed standing and its
+height calibration is fine.
+
+### 2.3 Source B: a reference object
+
+`referenceObjectVerdict()` — `tracker-arbiter.ts:300`. Decides once per take
+whether a reference-object scale read may set the scale at all. Gates on
+`MAX_PLATE_ASPECT_RATIO` and median position relative to the hands.
+
+**A barbell lift tracks the PLATE** (`COREML_TRACKING_MODE_BY_EQUIPMENT` maps
+`Barbell` → `plate`). Which is the whole mechanism of the worst scale bug: a
+plate further from the camera measures fewer pixels across; scale is metres per
+pixel; fewer pixels for the same 0.45m disc means a **larger** scale, means every
+distance inflated, means settling wobble clearing the rep-amplitude gate. **The
+re-classification pass, written to recover from drift, was itself capable of
+causing it every thirty frames.**
+
+### 2.4 Bench is the weak point, and the fix that was tried and reverted
+
+Height calibration needs the full body in frame. An athlete lying flat with feet
+out of frame cannot produce nose-to-ankle. **On bench, a wrong number is more
+likely to be a calibration failure than a tracking failure, and the two look
+identical from outside.**
+
+A previous attempt switched horizontal press/row to a plate-based scale. **Field
+data the same night showed it made the fused signal noisy enough to invent
+readings, and it was reverted.** See `av-bar-tracker-dialog.tsx`'s own comment
+before proposing it again.
+
+### 2.5 The rule about calibration poses
+
+**Do not propose one.** Rejected 2026-09-05. The athlete taps start and gets to
+their lift. Nothing may be added to the capture flow that asks them to pose,
+stand somewhere specific, or hold still first. Scale comes from the footage —
+a plate, the bar, grip width — or not at all.
+
+---
+
+## PART 3 — Segmentation, and why it was blamed on scale
+
+### 3.1 What survives with no scale
+
+Rep count, per-rep duration, velocity loss %, time-to-peak, drift as a share of
+its own travel. All times or ratios; metres cancel. **Deliberately no velocity
+field of any kind** in the scale-free output — a number in trace-units-per-second
+would look like a speed, sort like a speed, and get compared against last week's
+speed by an athlete with no way to know the units changed.
+
+### 3.2 The trace must be normalised first
+
+`NOMINAL_SCALE_FREE_ROM_M` — `bar-tracking.ts:2279`.
+
+The acceleration and velocity filters are stated in metres
+(`MAX_PLAUSIBLE_ACCEL_G = 6`, `MAX_PLAUSIBLE_LIFT_VELOCITY_MPS = 3`). Handed a
+trace in arbitrary units they do not merely stop helping: **one whose numbers
+happen to be large reads as a single continuous physically-impossible event, so
+every frame is rejected and the peak collapses to the ceiling.** The same five
+reps segmented as four at one scale and eight at another until an invariance test
+caught it. Normalising is safe because everything reported is a duration or a
+ratio.
+
+### 3.3 The defect that cost several builds
+
+`segmentPhasesRelative()` — `bar-tracking.ts:2219`. Two passes: a permissive
+exploratory pass at `span * 0.02` enumerates every reversal; the median of those
+amplitudes becomes the take's sense of "a normal movement"; the second pass gates
+at `RELATIVE_REP_AMPLITUDE_FRACTION = 0.4` of it.
+
+**The median used to be taken over EVERY reversal.** That is only the size of a
+rep if reps are the majority of what the exploratory pass returns, and they are
+nowhere near it. A ten-rep bench trace with a sticking point came back as **five
+separate amplitude populations** — pose noise, the dip itself, the remainder of
+the press once the dip had split it, and two clusters of real reps — and **the
+reps were the smallest of the five by count.** The median landed a third of the
+way up a real rep, the gate came out below the dip, and the dip became a rep
+boundary.
+
+**Field evidence (OVR paired session, 2026-09-04):** ten presses reported as
+fifteen. Per-rep peaks spanning **0.24–1.96 m/s** against the sensor's
+**0.91–1.10**. The set **mean** stayed within **3.5%**, because splitting a rep
 produces a fast half and a slow half that average out.
 
 **The scale was never the problem, and several builds were spent looking at it.**
-If you are debugging bad numbers, check segmentation before scale.
+When debugging bad numbers, check segmentation before scale.
 
-### The rule about calibration poses
+### 3.4 The two fixes, both load-bearing
 
-**Do not propose one.** Taking a standing reference at the start of a supine set
-would give real centimetres on bench with code that already exists, and it was
-considered and rejected 2026-09-05. The athlete taps start and gets to their
-lift. Nothing may be added to the capture flow that asks them to pose, stand
-somewhere specific, or hold still first. Scale comes from the footage or not at
-all.
+**(a) The median is taken over large reversals only**, via a cascade:
 
-### What survives having no scale
+```ts
+const LARGE_REVERSAL_FRACTIONS_OF_MAX = [0.5, 0.35, 0.25];
+```
 
-Rep count, per-rep duration, velocity loss %, time-to-peak, and drift as a share
-of its own travel are all times or ratios -- metres cancel. Those are returned.
-Only metres, m/s and watts are withheld.
+Strictest cut first, dropping only when the cut left fewer than
+`MIN_REVERSALS_FOR_RELATIVE_GATE = 3` values. A single cut does not work in both
+directions: too low and the dip's fragments stay in the population and drag the
+gate onto themselves; too high and one wild pose frame is the only thing clearing
+the bar. Against a spike four times the lift height, 0.5 and 0.35 each select
+only the spike; 0.25 admits the presses.
 
-**The trace must be normalised to a nominal size before segmentation.** The
-acceleration and velocity filters are stated in metres; handed a trace in
-arbitrary units, one whose numbers happen to be large reads as a single
-continuous physically-impossible event, every frame is rejected, and the peak
-collapses to the ceiling. The same five reps segmented as four at one scale and
-eight at another until an invariance test caught it.
+A set whose last reps shorten under fatigue must NOT be excluded, and is not: a
+short rep dropping out only moves the estimate, and the gate is 40% of it.
 
-**Known inconsistency, unresolved:** the calibrated and scale-free paths segment
-reps differently (an absolute centimetre floor vs. a relative gate). Same rep
-count, slightly different boundaries, so velocity-loss differs by ~16% relative
-on a synthetic five-rep squat. The tolerance in the test is not calibrated.
+**(b) The calibrated path passes a real-world floor**,
+`MIN_REP_AMPLITUDE_FLOOR_CM = 8` (base `BASE_MIN_REP_AMPLITUDE_CM = 20`, scaled
+by height between `MIN_HEIGHT_SCALE = 0.75` and `MAX_HEIGHT_SCALE = 1.25` off
+`REFERENCE_HEIGHT_IN = 69`).
+
+**This is the only thing that can tell a take of small reps from a take of no
+reps.** A purely relative gate cannot: with nothing but noise, the noise IS the
+large population, elects itself typical, and **400 frames of wobble segment into
+166 reps.** The scale-free path still has no floor and still cannot answer that
+question — correctly, since pixel space has no centimetres, but **anything
+consuming the scale-free path must reject an empty take some other way.**
+
+### 3.5 Known unresolved inconsistency
+
+The calibrated and scale-free paths segment reps differently (absolute floor vs.
+relative gate). Same rep count, different boundaries, so the per-rep means the
+velocity-loss ratio is built from differ — **~1.7 points on a figure near 10,
+roughly 16% relative**, on a synthetic five-rep squat. The tolerance in the test
+is not calibrated and should be replaced with a measured bound once real captures
+have been through the replay harness.
 
 ---
 
-## 3. Video saving and diagnostics upload
+## PART 4 — Video and diagnostics: the full state machine
 
-This is the area Scott reports as actively broken, and it has **three
-independent failure surfaces** that produce similar-looking symptoms.
+This is the area Scott reports as actively broken. **There are five independent
+failure surfaces** and they produce similar-looking symptoms.
 
-### Surface A: the capture -> set save
+### 4.1 The happy path
 
-Dialogs call `onCapture(metrics, videoUrl?, setNumber?, skeletonFrames?)`.
-The workout page folds that into the day's payload and POSTs `/api/athlete/log`.
+```
+tracker dialog
+  → analysis result + TrackingDiagnostics (buildTrackingDiagnostics)
+  → uploadOrQueueVideo(blob, filename, context)
+  → onCapture(metrics, videoUrl?, setNumber?, skeletonFrames?)
+  → workout.tsx folds into the day payload
+  → POST /api/athlete/log
+  → submitWorkoutLogSchema.parse  ← STRIPS UNDECLARED FIELDS
+  → storage.submitWorkoutLog → workout_set_entries insert
+  → getRecentTrackedSetsForAdmin → admin tracking report
+```
 
-**The invariant:** *every exit from a save path hands the metrics up.* Sixteen
-dialogs once had a `catch` that toasted and stopped -- no `onCapture`, no close
--- so a failed video upload took the diagnostics with it and left a set
+### 4.2 Surface A — the dialog catch
+
+**Invariant: every exit from a save path hands the metrics up.**
+
+Sixteen dialogs once had a `catch` that toasted and stopped — no `onCapture`, no
+close — so a failed *video upload* took the *diagnostics* with it and left a set
 indistinguishable from one where record was never pressed. Six more did the same
 under a comment reading "genuinely nothing left to salvage", which was backwards:
 **the failure IS the thing to salvage.**
 
-`client/src/lib/refused-capture-survives.test.ts` enforces this by scanning the
-directory -- if a `try` calls `onCapture`, its `catch` must too. The one escape
-is writing `diagnostics-exempt: <why>` in the catch.
+`client/src/lib/refused-capture-survives.test.ts` scans `*tracker-dialog.tsx` —
+if a `try` calls `onCapture`, its `catch` must too. Escape hatch:
+`diagnostics-exempt: <why>` in the catch.
 
-### Surface B: the zod schema silently stripping fields
+In `av-bar-tracker-dialog.tsx` the two paths are `saveEmptyAndWarn` (~line 630)
+and `finishWithRecording` (~line 745), and **both** call `onCapture` in their
+catch.
+
+### 4.3 Surface B — zod stripping
 
 **A field the client sends must be declared in `trackingDiagnosticsSchema`
 (`shared/schema.ts`).** A zod object strips what it does not declare, silently,
 with no error anywhere.
 
 **This has happened twice.** Once it cost three takes filmed specifically to read
-the scale-source diagnostics. The second time, `scaleFree` was undeclared, so a
+the scale-source diagnostics. The second time `scaleFree` was undeclared, so **a
 bench press that had found 31 reps was reported as "Logged 10 reps but tracking
-only found 0" -- the exact wrong conclusion, on a set where the athlete was
+only found 0"** — the exact wrong conclusion, on a set where the athlete was
 simultaneously being told the app got 31.
 
 `shared/tracking-diagnostics-roundtrip.test.ts` derives the field list from the
 client type rather than restating it.
 
-### Surface C: the admin tracking report dropping rows
+### 4.4 Surface C — the wifi gate and the queue
 
-**This is where I did my own work, and I found three separate silent drops in
-one query (`getRecentTrackedSetsForAdmin` in `server/storage.ts`).** All three
-are fixed on `main`; I am listing them because the *pattern* will recur.
+`uploadOrQueueVideo()` — `video-offline-store.ts:300`:
 
-1. **`programExercises.trackingLevel != 'none'`** was part of the membership
-   test. That column is live and editable, and turning tracking off on an
-   exercise is exactly what somebody does after a few takes come back unusable
-   -- so that one click removed every past capture on it from the report. The
-   takes worth reading about were the takes it hid.
-2. **Membership was four columns** -- diagnostics, peak velocity, bar path
-   deviation, jump height. Those describe bar-path and jump captures and nothing
-   else. **Kettlebell swing, med ball, the golf/baseball swing, sprint and sled
-   push write none of the four, so five capture modes never appeared on that
-   page at all** -- and an absent row looks exactly like a mode nobody filmed.
-3. **`exercises` was INNER-joined on a nullable `exerciseId`.** That does not
-   produce a row with a missing name; it produces no row, for a capture that
-   really happened.
+```ts
+if (!(await isOnWifi())) {            // NOT on wifi → never even tries
+  await persistVideoForUpload(...);
+  return { status: "queued" };
+}
+try { ... return { status: "uploaded", url }; }
+catch (err) {
+  if (err instanceof ApiError) throw err;   // ← RETHROWS
+  await persistVideoForUpload(...);
+  return { status: "queued" };
+}
+```
 
-Membership is now every camera-derived column from `CAMERA_DERIVED_SET_COLUMNS`
-in `shared/schema.ts`, and `shared/camera-columns-are-classified.test.ts` fails
-on any table column classified as neither camera nor not-camera -- so a new
-capture mode cannot silently skip the report.
+Two things a new session should look hard at:
 
-**`server/capture-diagnostics-round-trip.itest.ts`** submits a refused take
-through the real parse and reads it back off the report.
+1. **A set filmed on cellular ALWAYS queues.** `onCapture` gets
+   `videoUrl: undefined`, the set saves with no clip, and the video attaches
+   later — or does not (§4.5).
+2. **`ApiError` is rethrown rather than queued.** `uploadWithProgress` rejects
+   with `ApiError` for *every* non-2xx — including **500, 502, 503, 429**. So a
+   server cold start or a deploy mid-upload propagates to the dialog's catch
+   instead of queueing. Compare `runVideoFlush()` a few lines below, which
+   explicitly classifies and treats a 5xx as retryable, with a comment saying
+   the opposite behaviour "erased every clip filmed that session, from disk,
+   unrecoverably". **The two functions in the same file classify the same error
+   differently. That asymmetry is worth a hard look and is my leading suspect
+   for "videos not saving".**
 
-### THE CRITICAL THING ABOUT SURFACE C
+### 4.5 Surface D — reattachment, with five silent failure conditions
 
-**The tracking report is server-side.** It is served from `storage.ts` through
-`/api/admin/tracking-report/entries`, so a fix to it ships on a **Render
-deploy**, not in a TestFlight build. Somebody testing report changes by
-installing a build will see nothing change, conclude the fix failed, and go
+A queued clip uploads later via `flushPendingVideos()` (guarded by
+`videoFlushInFlight` — a wifi reconnect trips two triggers within milliseconds
+and used to upload the same video twice against a paid storage cap). Then:
+
+```ts
+attached = await attachVideoToSet(entry.reattach, url);
+if (!attached) recordUnattachedUpload({ url, label, uploadedAt });
+```
+
+The clip is addressed by a **(assignmentId, programDayId, date,
+programExerciseId, setNumber) tuple, not a row id** — because the row may not
+exist yet when the clip is queued.
+
+`storage.attachVideoToLoggedSet()` (`server/storage.ts:20887`) returns `false` —
+**silently, no error** — on any of:
+
+1. `assertUploadedFileOwnedBy` throws (file not owned by this athlete)
+2. no assignment matching `(assignmentId, athleteId)`
+3. no workout log matching `(assignmentId, programDayId, date)`
+4. no log entry matching `(workoutLogId, programExerciseId)`
+5. **the UPDATE matches nothing because of `isNull(formCheckVideoUrl)`** — the
+   set already has a video
+
+Condition 3 is the interesting one: **the date.** If the clip was filmed near
+midnight, or the day's log was never saved, or the program day was edited,
+reattachment fails and the clip lands in the Video Bank's unattached list
+(`UNATTACHED_KEY`, capped at `MAX_UNATTACHED = 20`) where nobody is looking.
+
+### 4.6 The omission-vs-null contract on resubmission
+
+Already fixed, and the reasoning matters because it is easy to reintroduce.
+
+A set's video URL is written by `attachVideoToLoggedSet` *separately* from
+whatever the client holds. A client that logs the NEXT set from state built
+before that attach landed sends the earlier set back **with no video url at
+all** — and the resubmission wrote `null` over the column and deleted the file
+off disk as an orphan. **Set 1's clip disappeared the moment Set 2 was saved.**
+
+Now (`server/storage.ts:20760`):
+
+```ts
+const effectiveVideoUrl = s.removeFormCheckVideo ? null : (s.formCheckVideoUrl ?? prior?.url ?? null);
+```
+
+Omission preserves; only an explicit `removeFormCheckVideo` or a different URL
+replaces. The same reasoning was already applied to the capture columns via
+`priorCaptureByKey` and simply never reached the video.
+
+**`?? null` cannot express this** — it collapses `undefined` and `null` to the
+same thing. The test that separates them is `in`.
+
+### 4.7 Surface E — the admin report
+
+Three silent drops were found in `getRecentTrackedSetsForAdmin` in two days. All
+three are fixed; the **pattern** is what matters.
+
+1. **`programExercises.trackingLevel != 'none'`** was part of membership. That
+   column is live and editable, and turning tracking off is exactly what someone
+   does after bad takes — **so that click removed every past capture on that
+   exercise from the report. The takes worth reading about were the takes it
+   hid.**
+2. **Membership was four columns** (diagnostics, peak velocity, bar path
+   deviation, jump height). Those describe bar-path and jump captures and nothing
+   else. **KB swing, med ball, golf/baseball swing, sprint and sled push write
+   none of the four — five modes never appeared on that page at all**, and an
+   absent row looks exactly like a mode nobody filmed.
+3. **`exercises` INNER-joined on a nullable `exerciseId`** — that does not give a
+   row with a missing name, it gives no row.
+
+Now every column in `CAMERA_DERIVED_SET_COLUMNS`;
+`shared/camera-columns-are-classified.test.ts` fails on any table column
+classified as neither camera nor not-camera.
+
+**The report is SERVER-side.** `/api/admin/tracking-report/entries` from
+`storage.ts`. A fix ships on a **Render deploy, not a TestFlight build.** Anyone
+testing report changes by installing a build will see nothing change and go
 looking in the wrong place.
 
-### What I could NOT explain, and it is still open
+---
 
-On 2026-09-18 Scott filmed a bench set. The capture worked, the metrics rendered
-on the set (0.92 m/s avg, 4.3in bar drift, 12 reps on a set prescribed at 10) --
-**and the tracking report's newest entry was still 2026-09-14.**
+## PART 5 — The unexplained case
+
+**2026-09-18.** Scott filmed a bench set. The capture worked; the set screen
+showed 0.92 m/s avg, 4.3 in bar drift, 12 reps on a set prescribed at 10, and a
+"tracking was shaky" note. **The admin tracking report's newest entry was still
+2026-09-14.**
 
 That set writes `peakVelocityMps` and `barPathDeviationCm`, so it satisfied even
-the OLD four-column membership test. **None of the three drops above explain it.**
-Wednesday's session is missing too, so whatever this is affects a run of sets
-starting on or before the 16th, not one set.
+the OLD four-column membership test. **None of the three fixed drops explain it.**
+Wednesday's session is missing too, so this affects a **run** of sets from on or
+before the 16th.
 
-**The next diagnostic step, which was never taken:** the in-app debug console
-(bug icon, bottom-left of the workout screen) logs every save outcome --
-`logDebug("SAVE", ...)` fires on the POST succeeding, on it failing with the
-status, on the classification, and on a queue. **Those lines separate "saved but
-hidden" from "never saved", which are completely different bugs.** Get them
-before theorising further.
+Hypotheses, untested, in the order I would test them:
 
-### A related, already-fixed bug worth knowing
+1. **The set never reached the server.** Screenshot 3 shows local state, not
+   confirmation of a save. → debug console SAVE lines.
+2. **`main` is not deployed on Render**, so the report query running in
+   production is still the old one. → check the service's Events for the merge
+   commit.
+3. **The log entry has a null `exerciseId`**, which the INNER join dropped — now
+   a LEFT join, so this resolves itself once deployed.
+4. Something in the date/assignment chain, the same family as §4.5 condition 3.
 
-`fetch()` rejects with a bare TypeError for a transport failure. That was once
-wrapped in an `ApiError` with status 0 -- and the autosave classifies with
-`err instanceof ApiError && err.status !== 401 && err.status < 500`. Status 0
-satisfies both halves, so **a save that failed because the phone briefly lost
-signal was filed as a payload the server would keep refusing: thrown instead of
-queued, never retried, and the offline rescue that exists for exactly that case
-could not run.** The set was simply gone.
-
-Fixed structurally -- `NetworkError extends Error`, so every `instanceof
-ApiError` branch behaves as it did before the wrapper existed. Guarded by
-`client/src/lib/transport-failure-is-retryable.test.ts`, which both scans the
-source and stubs `fetch` into rejecting.
+**The diagnostic nobody has run:** the in-app debug console (bug icon, bottom
+left of the workout screen). `logDebug("SAVE", ...)` fires on the POST
+succeeding, on it failing with its status, on the permanent/retryable
+classification, and on a queue. **Those lines separate "saved but hidden" from
+"never saved", which are completely different bugs.** There is no console on an
+iPhone; this is the only instrument.
 
 ---
 
-## 4. What has actually been validated
+## PART 6 — What is validated
 
-**Four movements, against real lifts:**
-back squat (bar path, filmed from behind), Pendlay row, bench press (from
-behind), box jump (jump mode).
+**Four movements, against real lifts:** back squat (bar path, from behind),
+Pendlay row, bench press (from behind), box jump (jump mode).
 
-**Everything else is unvalidated:** sprint, mechanics, med ball, kettlebell
-swing, sled push, both rotation modes.
+**Unvalidated:** sprint, mechanics, med ball, kettlebell swing, sled push, both
+rotation modes.
 
-**Every trust-score threshold in the system is uncalibrated.** Trust scores are
-structurally sound and numerically untuned -- treat a score as a relative signal
-only.
+**Every trust-score threshold is uncalibrated.** Structurally sound, numerically
+untuned. Treat a score as a relative signal only.
 
-Planned validation order: deadlift, then med ball throws, then Olympic lifts.
+Planned order: deadlift, then med ball throws, then Olympic lifts.
 
-Current product state: **camera metrics are disclosed as inaccurate throughout
-the app** (`shared/camera-accuracy-copy.ts`), and the $19.99 AI Coach + Video
-tier was **withdrawn from sale** over it (commit `17b86426`).
-
----
-
-## 5. Where to get evidence
-
-- **`client/src/lib/capture-replay.ts` + `scripts/replay-captures.mjs`** -- replays
-  stored bar-path traces and diffs against a previous run, so a threshold change
-  that fixes one set and breaks four is visible. **No device, no camera, no
-  database needed** -- feed it a JSON array of stored set rows. This is the
-  single most useful tool in the repo for this work.
-  It is deliberately **not** a replay of the tracking stage: turning frames into
-  a trace needs Vision and CoreML, which do not run outside the app.
-- **`AvObjectLockTelemetry` -> `TrackingDiagnostics.objectLock` -> the admin
-  tracking report.** Read two numbers first: **re-classify corrections** above
-  zero means the detector changed its mind mid-clip, so any scale derived from
-  it was measured off more than one thing. **Wrist-gate breaks** is the body
-  tracker catching the object tracker somewhere the athlete was not.
-  `framesBodySuspect` distinguishes a body-tracking problem from an
-  object-tracking one.
-- **The in-app debug console** (bug icon) -- the only instrument on an iPhone.
-- **`npm test`** (no database) and **`npm run test:integration`** (needs
-  Postgres; see CLAUDE.md for the local setup).
+Product state: metrics are disclosed as inaccurate throughout the app
+(`shared/camera-accuracy-copy.ts`). The $19.99 AI Coach + Video tier is **on
+sale with a mandatory, non-dismissable purchase warning** — it was withdrawn on
+the morning of 2026-09-19 and put back the same day on the reasoning that the
+*video* works and the *numbers* do not, so sell it and say so.
 
 ---
 
-## 6. Traps: things that look like fixes and are not
+## PART 7 — Where to get evidence
 
-Every one of these has been tried or proposed.
+**`scripts/replay-captures.mjs` + `client/src/lib/capture-replay.ts`** — the most
+useful tool in the repo for this work. Replays stored bar-path traces and diffs
+against a previous run, so a threshold change that fixes one set and breaks four
+is visible. **No device, no camera, no video, no database** — feed it a JSON
+array of stored set rows.
 
-1. **Do not add a calibration pose.** Rejected 2026-09-05. See §2.
-2. **Do not switch bench to a plate-based scale.** Tried; made the fused signal
-   noisy enough to invent readings; reverted.
-3. **Do not widen `PLATE_TO_GRIP_RATIO`.** Widening is what made the check
-   decorative the first time.
-4. **Do not enable bar-path tracking for Olympic lifts.** `barPathDeviationCm`
-   measures departure from a straight vertical line and peak velocity uses the
-   vertical component only. A correct clean has a deliberate S-curve, so a
-   technically perfect lift reports **large** deviation, a lift with no curve at
-   all reports **clean**, and peak velocity understates the bar at exactly the
-   moment that matters. These are **inverted there, not imprecise.** Olympic
-   lifts need their own path model -- the same treatment `kb_swing` (an arc) and
-   `horizontal_load` (straight-line horizontal) already got.
-5. **Do not file "add cross-tracker fusion" against jump, sprint, mechanics or
-   horizontal_load.** There is no implement in the scene. There is no second
-   tracker to fuse with. Internal corroboration is the ceiling and it has been
-   reached.
-6. **Do not make overwatch blame one tracker.** Anything that only ever convicts
-   the object is the original bug wearing a new name.
-7. **Do not make an unjudgeable frame fail.** It passes. Inverting this
-   reproduces the over-eagerness the arbiter exists to cure.
-8. **Do not "simplify" the tracking report's membership test.** Three silent
-   drops have been found in that one query. Treat any narrowing as guilty until
-   tested.
-9. **Do not add a field to the client diagnostics type without declaring it in
-   `trackingDiagnosticsSchema`.** It will be stripped silently. Twice now.
-10. **Do not test tracking-report changes by installing a TestFlight build.**
-    Server-side. Render deploy.
+It is deliberately **not** a replay of the tracking stage. Turning frames into a
+trace needs Vision and CoreML, which do not run outside the app, and pretending
+otherwise builds a harness that tests a reimplementation.
+
+**`AvObjectLockTelemetry` → `TrackingDiagnostics.objectLock` → admin report.**
+Read two numbers first:
+- **re-classify corrections > 0** — the detector changed its mind mid-clip, so
+  any scale derived from it was measured off more than one object.
+- **wrist-gate breaks** — the body tracker catching the object tracker somewhere
+  the athlete was not.
+- **`framesBodySuspect`** — distinguishes a body-tracking problem from an
+  object-tracking one. Without it, the two are indistinguishable.
+
+Every unlock used to be **silent**: a take where the lock broke forty times and
+one where it held all set produced byte-identical diagnostics. That, not the
+missing check, is why this subsystem was audited three times without progress.
+**A guard that cannot be shown to have fired is a guard nobody can tune.**
 
 ---
 
-## 7. Open questions nobody has answered
+## PART 8 — Traps
 
-1. **Why did the 2026-09-18 bench set not reach the tracking report?** (§3.)
-   Start with the debug console SAVE lines.
-2. **Is `main` deployed on Render?** The three membership fixes only exist for a
-   user once it is. This was never confirmed.
-3. **The calibrated vs scale-free velocity-loss discrepancy** (~16% relative)
-   has an uncalibrated tolerance in its test.
-4. **Every trust-score threshold** is an admitted guess with no real footage
-   behind it.
-5. **Bar-path overlay on video** is not built. The trace is stored per set and
-   drawn only as an abstract scatter plot; the skeleton-replay overlay it would
-   sit alongside does exist. The pieces exist and are not connected.
+Each has been tried or proposed.
+
+1. **No calibration pose.** Rejected 2026-09-05. §2.5.
+2. **No plate-based bench scale.** Tried; made the fused signal invent readings; reverted.
+3. **Do not widen `PLATE_TO_GRIP_RATIO`.** Widening made the check decorative the first time.
+4. **Do not enable bar-path tracking for Olympic lifts.** A correct clean has a deliberate S-curve. Under a straight-line model a technically perfect lift reports **large** deviation, a lift with no curve reports **clean**, and peak velocity understates the bar at exactly the moment that matters. **Inverted, not imprecise.** Needs its own path model, like `kb_swing` (an arc) and `horizontal_load` got.
+5. **Do not file cross-tracker fusion against jump/sprint/mechanics/horizontal_load.** §1.6.
+6. **Do not make overwatch blame one tracker.** Anything convicting only the object is the original bug renamed.
+7. **Do not make an unjudgeable frame fail.** It passes. Inverting reproduces the over-eagerness the arbiter cures.
+8. **Do not let a rejected body span into the stability history.** §1.4. Enforced at the call site, not in `arbitrate()`.
+9. **Do not narrow the report's membership test.** Three silent drops in two days. Guilty until tested.
+10. **Do not add a diagnostics field without declaring it in `trackingDiagnosticsSchema`.** Stripped silently. Twice.
+11. **Do not use `?? null` where omission must be preserved.** §4.6.
+12. **Do not test report changes via TestFlight.** Server-side. Render deploy.
+13. **Do not infer supine posture from landmarks.** Three attempts, three defeats. §2.2.
+14. **Do not restore the median in `calibrateFromFrames`.** The error is one-sided. §2.1.
 
 ---
 
-## 8. One process note
+## PART 9 — Open questions
 
-Several sessions work this repo in parallel. **Split by FILE OWNERSHIP, never by
-task.** `server/storage.ts` and `shared/schema.ts` take one owner and cannot be
-shared. The natural disjoint camera slice is
-`client/src/lib/*-tracking.ts`, the tracker dialogs, and `ios/`.
+1. **The 2026-09-18 bench set.** §5. Start with the debug console.
+2. **Is `main` deployed on Render?** The membership fixes do not exist for a user until it is. Never confirmed.
+3. **The `ApiError` asymmetry** between `uploadOrQueueVideo` and `runVideoFlush` (§4.4). My leading suspect, untested.
+4. **Calibrated vs scale-free velocity loss**, ~16% relative, uncalibrated tolerance.
+5. **Every trust threshold** is an admitted guess with no real footage behind it.
+6. **Bar-path overlay on video** is not built. The trace is stored per set and drawn only as an abstract scatter plot; the skeleton-replay overlay it would sit beside exists. Pieces exist, not connected.
+7. **Unattached Video Bank entries** — is anyone checking? Capped at 20, silently evicted after that.
 
-Also: this environment's git checkout has repeatedly reverted `main` to a stale
-commit between tool calls. Run `git fetch origin main && git merge --ff-only
-origin/main` at the **start** of any work, before reading files for research --
-an audit was once run against a checkout 112 commits behind, producing a real
-false report.
+---
+
+## PART 10 — Process
+
+**Several sessions work this repo in parallel. Split by FILE OWNERSHIP, never by
+task.** `server/storage.ts` and `shared/schema.ts` take one owner. The natural
+disjoint camera slice is `client/src/lib/*-tracking.ts`, the tracker dialogs, and
+`ios/`.
+
+**Run `git fetch origin main && git merge --ff-only origin/main` at the START of
+any work**, before reading files for research. This checkout has repeatedly
+reverted to a stale commit between tool calls; an audit was once run against a
+checkout 112 commits behind and produced a real false report.
+
+**Tests:** `npm test` (no database, must stay that way) and
+`npm run test:integration` (needs Postgres; setup in CLAUDE.md).
