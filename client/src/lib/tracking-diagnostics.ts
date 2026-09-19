@@ -77,6 +77,7 @@ export type ObjectLockDiagnostics = {
   reclassifyConfirmations: number;
   reclassifyCorrections: number;
   candidatesRejectedByWristGate: number;
+  framesBodySuspect: number;
   maxAcceptedDistanceInYardsticks?: number;
   yardstickSource?: string;
 };

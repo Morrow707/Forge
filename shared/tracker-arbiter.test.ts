@@ -6,6 +6,10 @@ import {
   handAnchor,
   lockDistanceVerdict,
   referenceObjectVerdict,
+  arbitrate,
+  bodyReadIsStable,
+  MAX_YARDSTICK_DEVIATION_RATIO,
+  MIN_YARDSTICK_SAMPLES_FOR_STABILITY,
   MAX_LOCK_DISTANCE_IN_YARDSTICKS,
   FALLBACK_LOCK_DISTANCE_FRAME_FRACTION,
   MIN_YARDSTICK_PX,
@@ -321,6 +325,8 @@ describe("the Swift port carries the same numbers", () => {
     ["maxLockDistanceInYardsticks", MAX_LOCK_DISTANCE_IN_YARDSTICKS],
     ["fallbackLockDistanceFrameFraction", FALLBACK_LOCK_DISTANCE_FRAME_FRACTION],
     ["minYardstickPx", MIN_YARDSTICK_PX],
+    ["maxYardstickDeviationRatio", MAX_YARDSTICK_DEVIATION_RATIO],
+    ["minYardstickSamplesForStability", MIN_YARDSTICK_SAMPLES_FOR_STABILITY],
   ])("%s matches", (swiftName, tsValue) => {
     expect(swiftConstant(swiftName as string)).toBe(tsValue);
   });
@@ -331,7 +337,29 @@ describe("the Swift port carries the same numbers", () => {
     // ever gets "simplified" to run only at re-classification, the fix is mostly gone and
     // nothing else would notice.
     expect(swift).toMatch(/telemetry\.breaksWristGate \+= 1/);
-    expect(swift).toContain("let wristVerdict = verdict(for: newBox, body: body)");
+    expect(swift).toContain("let call = arbitration(for: newBox, body: body)");
+  });
+
+  it("still checks the BODY before anything else the frame does", () => {
+    // Both halves matter and they fail differently. The body check has to come before the
+    // tracked-lock gate (or a jumped landmark convicts a good lock) AND before the fresh
+    // detection (or a jumped wrist drags regionOfInterest with it and the detector seeds on
+    // whatever happens to be in the wrong part of the image).
+    const bodyCheck = swift.indexOf("var bodySuspectThisFrame = false");
+    const abstain = swift.indexOf("if bodySuspectThisFrame { return nil }");
+    const objectGate = swift.indexOf("let call = arbitration(for: newBox, body: body)");
+    expect(bodyCheck).toBeGreaterThan(-1);
+    expect(abstain).toBeGreaterThan(bodyCheck);
+    expect(objectGate).toBeGreaterThan(abstain);
+  });
+
+  it("never lets a rejected body reading into the history it is judged against", () => {
+    // A run of bad landmark frames would otherwise teach the stability check to accept them, and
+    // the guard dissolves precisely when it is needed most. The append has to sit inside the
+    // stable branch, not after it.
+    expect(swift).toMatch(
+      /if stability\.stable \{[\s\S]{0,400}?recentYardstickPx\.append\(yardstick\.px\)/,
+    );
   });
 
   it("still filters detection candidates BEFORE choosing the most confident one", () => {
@@ -342,5 +370,107 @@ describe("the Swift port carries the same numbers", () => {
     const maxIdx = swift.indexOf("guard let best = plausible.max");
     expect(filterIdx).toBeGreaterThan(-1);
     expect(maxIdx).toBeGreaterThan(filterIdx);
+  });
+});
+
+describe("the referee blows the whistle on the body too", () => {
+  // The gap the first version left, and the regression it introduced. Making the body the ruler
+  // means a jumped wrist landmark can convict a perfectly good object lock, which is two parts
+  // and a one-way hierarchy rather than three parts checking each other.
+  const steady = [380, 384, 386, 382, 385, 384];
+
+  it("accepts a span that only foreshortens as the athlete turns", () => {
+    // The largest honest change available: a bar rotated well off square reads narrower. It must
+    // not be mistaken for a landmark failure, or every angled take loses its object tracking.
+    expect(bodyReadIsStable(384 * 0.55, steady).stable).toBe(true);
+  });
+
+  it("catches a wrist landmark that jumped somewhere a wrist cannot go", () => {
+    const s = bodyReadIsStable(384 * 4, steady);
+    expect(s.stable).toBe(false);
+    expect(s.deviationRatio).toBeCloseTo(4, 5);
+  });
+
+  it("reports the deviation the same way whichever direction it went", () => {
+    // One threshold has to cover a span that doubled and one that halved -- they are the same
+    // failure and a signed ratio would need two constants to say so.
+    expect(bodyReadIsStable(384 * 3, steady).deviationRatio).toBeCloseTo(
+      bodyReadIsStable(384 / 3, steady).deviationRatio!,
+      1,
+    );
+  });
+
+  it("says nothing until there is enough history to have an opinion", () => {
+    // Electing the first reading it saw as the truth is the mistake the rep-amplitude gate made.
+    const s = bodyReadIsStable(9999, [380, 384]);
+    expect(s.stable).toBe(true);
+    expect(s.deviationRatio).toBeNull();
+  });
+});
+
+describe("arbitrate: one call, both trackers, asymmetric response", () => {
+  const steady = [380, 384, 386, 382, 385, 384];
+  const call = (opts: {
+    objectCenter: { x: number; y: number };
+    yardstick?: { px: number; source: "grip" } | null;
+    recent?: number[];
+  }) =>
+    arbitrate({
+      objectCenter: opts.objectCenter,
+      anchor: handAnchor(LEFT_WRIST, RIGHT_WRIST),
+      yardstick: opts.yardstick === undefined ? yardstick() : opts.yardstick,
+      recentYardstickPx: opts.recent ?? steady,
+      frameWidth: W,
+      frameHeight: H,
+    });
+
+  it("agrees when both trackers look right", () => {
+    const a = call({ objectCenter: { x: 0.5 + (1.2 * YARDSTICK_PX) / W, y: 0.5 } });
+    expect(a.outcome).toBe("agree");
+    expect(a.breakLock).toBe(false);
+  });
+
+  it("breaks the lock for an object fault, with a steady body behind the verdict", () => {
+    const a = call({ objectCenter: { x: 0.5 + (3.6 * YARDSTICK_PX) / W, y: 0.5 } });
+    expect(a.outcome).toBe("object_suspect");
+    expect(a.breakLock).toBe(true);
+  });
+
+  it("NEVER breaks the lock for a body fault -- the whole point of the asymmetry", () => {
+    // The object is in exactly the place that would convict it above. It must not be convicted,
+    // because the measurement that would do the convicting is the one that just went wrong.
+    // There is no better body available, so the honest move is to judge nothing this frame.
+    const a = call({
+      objectCenter: { x: 0.5 + (3.6 * YARDSTICK_PX) / W, y: 0.5 },
+      yardstick: { px: YARDSTICK_PX * 4, source: "grip" },
+    });
+    expect(a.outcome).toBe("body_suspect");
+    expect(a.breakLock).toBe(false);
+    expect(a.bodyDeviationRatio).toBeCloseTo(4, 5);
+  });
+
+  it("checks the body BEFORE the object, not after", () => {
+    // Order is the design. If the object were judged first, a jumped landmark would already have
+    // thrown the lock away by the time the jump was noticed -- the verdict would read
+    // "object_suspect" and the lock would be gone. This asserts the opposite outcome on exactly
+    // that input, which is the only way to tell the two orderings apart from outside.
+    const a = call({
+      objectCenter: { x: 0.99, y: 0.99 },
+      yardstick: { px: YARDSTICK_PX / 5, source: "grip" },
+    });
+    expect(a.outcome).toBe("body_suspect");
+  });
+
+  it("abstains rather than guessing when there is no athlete to measure from", () => {
+    const a = arbitrate({
+      objectCenter: { x: 0.9, y: 0.9 },
+      anchor: null,
+      yardstick: null,
+      recentYardstickPx: steady,
+      frameWidth: W,
+      frameHeight: H,
+    });
+    expect(a.outcome).toBe("cannot_judge");
+    expect(a.breakLock).toBe(false);
   });
 });

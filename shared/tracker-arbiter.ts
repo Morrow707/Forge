@@ -330,3 +330,150 @@ export function referenceObjectVerdict(opts: {
     distanceInYardsticks: distance.distanceInYardsticks,
   };
 }
+
+// ===========================================================================================
+// THE THIRD LEG: WHO REFEREES THE REFEREE'S RULER.
+//
+// Everything above judges the object tracker against the body tracker, and that was the hole
+// the audit found. It also opens a new one, and it is worth stating plainly rather than
+// discovering later: by making the body the ruler, a bad BODY read can now break a good OBJECT
+// lock. The hierarchy runs one way, and a one-way hierarchy is not three parts working
+// together -- it is two parts and a referee that only ever blows the whistle on one team.
+//
+// The body tracker fails in its own characteristic way, and it is not subtle: a wrist landmark
+// jumps to a spectator, to the athlete's own knee, or to the other side of the frame. Vision
+// reports it with ordinary confidence, because the landmark is confidently somewhere, just not
+// on a wrist. A single such frame moves the hand anchor metres, and every object lock in view
+// is suddenly "nowhere near the athlete".
+//
+// WHAT CATCHES IT IS THE RULER'S OWN LENGTH. The distance between an athlete's wrists is a
+// physical constant for the duration of a set -- they are holding a bar. Its APPARENT length
+// changes only as fast as the athlete rotates relative to the lens, which is slow. So a grip
+// span that doubles or halves between two sampled frames is not a lift; it is a landmark that
+// moved somewhere a wrist cannot go. The object tracker needs no part in detecting that, which
+// is exactly why it is trustworthy as a check on the body.
+//
+// AND THE RESPONSE IS NOT SYMMETRIC, DELIBERATELY. When the object looks wrong, the lock is
+// broken -- there is a better answer available, which is to re-detect. When the BODY looks
+// wrong there is no better body available, so the arbiter ABSTAINS for that frame: it declines
+// to judge the object at all and leaves the lock alone. Breaking a good lock on the strength of
+// a measurement we have just decided not to trust would be the worst of both, and it is the
+// specific regression this section exists to prevent.
+// ===========================================================================================
+
+/** How far this frame's grip span may sit from the take's recent typical one before the BODY,
+ * not the object, is the thing under suspicion.
+ *
+ * The span is a fixed real length -- hands on a bar -- so all it can legitimately do is
+ * foreshorten as the athlete turns relative to the lens. A bar rotated 60 degrees off square
+ * reads half its true width, which is the largest honest change available, so 2.0 covers the
+ * whole of it with nothing left over for a landmark that has jumped.
+ *
+ * Above that there is no camera geometry that explains it. Two frames 16ms apart cannot show an
+ * athlete's hands at twice the separation unless one of the two readings is not a hand.
+ */
+export const MAX_YARDSTICK_DEVIATION_RATIO = 2.0;
+
+/** Recent spans needed before "typical" means anything.
+ *
+ * Under this the arbiter has no basis for calling the body unstable and says so, rather than
+ * electing the first reading it saw as the truth -- the same mistake the rep-amplitude gate made
+ * when it took the median of every reversal including the noise. */
+export const MIN_YARDSTICK_SAMPLES_FOR_STABILITY = 5;
+
+export type BodyStability = {
+  /** False only when there was enough history to judge AND this frame failed it. */
+  stable: boolean;
+  /** This frame's span over the recent typical one, always >= 1 so one threshold covers a jump
+   * in either direction. Null when there was not enough history to compare against. */
+  deviationRatio: number | null;
+};
+
+/**
+ * Is the body tracker's own measurement behaving like a body?
+ *
+ * Median rather than mean over the recent window, for the reason medians are used everywhere
+ * else in this pipeline: the failure being looked for is a single wild value, and a mean walks
+ * toward the very thing it is supposed to notice.
+ */
+export function bodyReadIsStable(
+  currentPx: number,
+  recentPx: number[],
+): BodyStability {
+  const usable = recentPx.filter((p) => p > 0);
+  if (!(currentPx > 0) || usable.length < MIN_YARDSTICK_SAMPLES_FOR_STABILITY) {
+    return { stable: true, deviationRatio: null };
+  }
+  const sorted = [...usable].sort((a, b) => a - b);
+  const typical = sorted[Math.floor(sorted.length / 2)];
+  if (!(typical > 0)) return { stable: true, deviationRatio: null };
+  const ratio = Math.max(currentPx, typical) / Math.min(currentPx, typical);
+  return { stable: ratio <= MAX_YARDSTICK_DEVIATION_RATIO, deviationRatio: ratio };
+}
+
+export type ArbitrationOutcome =
+  /** Both trackers look right and they agree about where the equipment is. */
+  | "agree"
+  /** The body is steady and the object is somewhere the athlete is not. Break the lock. */
+  | "object_suspect"
+  /** The body's own ruler changed length. Judge nothing this frame; leave the lock alone. */
+  | "body_suspect"
+  /** Not enough to go on -- no athlete visible, or no yardstick yet. Leave the lock alone. */
+  | "cannot_judge";
+
+export type Arbitration = {
+  outcome: ArbitrationOutcome;
+  /** True exactly when the caller should drop the object lock. Never true for a body fault. */
+  breakLock: boolean;
+  distanceInYardsticks: number | null;
+  bodyDeviationRatio: number | null;
+};
+
+/**
+ * THE WHOLE REFEREE, IN ONE CALL. Body, object, and the judgement between them.
+ *
+ * The order is the design. The body is checked FIRST, because every statement the arbiter can
+ * make about the object is measured with the body's ruler, and a ruler that just changed length
+ * cannot be used to convict anybody. Checking the object first and the body afterwards would
+ * mean a jumped wrist landmark had already thrown away a perfectly good lock by the time the
+ * jump was noticed.
+ */
+export function arbitrate(opts: {
+  objectCenter: ArbiterPoint;
+  anchor: ArbiterPoint | null;
+  yardstick: BodyYardstick | null;
+  /** Spans from recent frames, for judging whether THIS frame's body read can be trusted. */
+  recentYardstickPx: number[];
+  frameWidth: number;
+  frameHeight: number;
+}): Arbitration {
+  const { objectCenter, anchor, yardstick, recentYardstickPx, frameWidth, frameHeight } = opts;
+
+  if (yardstick) {
+    const body = bodyReadIsStable(yardstick.px, recentYardstickPx);
+    if (!body.stable) {
+      return {
+        outcome: "body_suspect",
+        breakLock: false,
+        distanceInYardsticks: null,
+        bodyDeviationRatio: body.deviationRatio,
+      };
+    }
+  }
+
+  const verdict = lockDistanceVerdict({ objectCenter, anchor, yardstick, frameWidth, frameHeight });
+  if (verdict.basis === "no_anchor") {
+    return {
+      outcome: "cannot_judge",
+      breakLock: false,
+      distanceInYardsticks: null,
+      bodyDeviationRatio: null,
+    };
+  }
+  return {
+    outcome: verdict.plausible ? "agree" : "object_suspect",
+    breakLock: !verdict.plausible,
+    distanceInYardsticks: verdict.distanceInYardsticks,
+    bodyDeviationRatio: null,
+  };
+}

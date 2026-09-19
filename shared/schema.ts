@@ -8066,6 +8066,10 @@ const objectLockDiagnosticsSchema = z.object({
   reclassifyConfirmations: z.number(),
   reclassifyCorrections: z.number(),
   candidatesRejectedByWristGate: z.number(),
+  // Frames the arbiter refused to judge because the BODY read, not the object, was the suspect
+  // one. Required like the rest: zero means "the body was steady all take", absent would mean
+  // nothing at all, and the report says different things about those.
+  framesBodySuspect: z.number(),
   maxAcceptedDistanceInYardsticks: z.number().optional(),
   yardstickSource: z.string().optional(),
 });

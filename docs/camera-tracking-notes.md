@@ -199,14 +199,59 @@ objects are on the same bar, so the honest window is much narrower than a
 factor of ten). Do not widen it back without telemetry to justify it -- widening
 is what made the check decorative the first time.
 
+### The referee has to referee both teams
+
+The first version of this only judged the object against the body, and that is
+a hierarchy rather than cohesion. It also introduced its own bug: making the
+body the ruler means a jumped wrist landmark can break a perfectly good object
+lock. Vision reports such a landmark with ordinary confidence, because it is
+confidently *somewhere* -- just not on a wrist -- and one such frame moves the
+hand anchor metres, at which point every object in view is "nowhere near the
+athlete".
+
+What catches it is the ruler's own length. The distance between an athlete's
+wrists is a physical constant for a set -- they are holding a bar -- so its
+apparent length can only change as fast as they rotate relative to the lens,
+which is slow. A bar turned well off square reads about half its true width, and
+that is the largest honest change available, so a span that doubles between two
+sampled frames is a landmark that went somewhere a wrist cannot. **The object
+tracker plays no part in detecting that, which is exactly what makes it a
+trustworthy check on the body** -- neither half of the arbitration borrows the
+other's sensor.
+
+`arbitrate()` returns one of four outcomes -- `agree`, `object_suspect`,
+`body_suspect`, `cannot_judge` -- and **the response is deliberately
+asymmetric**. A suspect object loses its lock, because a better answer exists:
+re-detect. A suspect body gets an abstention: the frame is skipped, the lock is
+left exactly as it was, nothing is reported. There is no better body available,
+and convicting the object on a measurement just declared untrustworthy is the
+worst of both.
+
+The body is checked **first**, before the object gate and before any fresh
+detection. Both orderings matter. Judging the object first means a jumped
+landmark has already thrown the lock away by the time the jump is noticed; and a
+jumped wrist also drags `regionOfInterest` with it, so a detection seeded on
+that frame searches the wrong part of the image and locks onto whatever is
+there.
+
+One implementation detail that is load-bearing: **only stable spans join the
+history**. A rejected reading must never enter the window it was rejected
+against, or a run of bad landmark frames teaches the check to accept them and
+the guard dissolves precisely when it is needed most.
+
+`framesBodySuspect` rides along in the lock telemetry and onto the report, so a
+body-tracking problem cannot be read as an object-tracking one -- which, before
+this, is exactly how it would have appeared.
+
 ### If you change the rule, change it in both places
 
 The gate has to run natively to correct a lock mid-clip, and there is no Swift
 test target in this repo, so the constants exist twice: `shared/tracker-arbiter.ts`
 is the source of truth and `AvTrackerArbiter` in `AvBodyTrackingPlugin.swift` is
 a port. `shared/tracker-arbiter.test.ts` reads the Swift source and fails if they
-drift apart, and also asserts that the gate is still applied per frame and that
-candidate filtering still happens before the most-confident pick. It is a text
+drift apart, and also asserts that the gate is still applied per frame, that
+candidate filtering still happens before the most-confident pick, that the body
+check still precedes both, and that a rejected span cannot reach the history. It is a text
 scan and cannot prove the two behave identically -- only that they were handed
 the same numbers, which is the half that actually rots.
 

@@ -2350,6 +2350,10 @@ private enum AvTrackerArbiter {
     static let fallbackLockDistanceFrameFraction = 0.45
     // Keep in sync with MIN_YARDSTICK_PX in shared/tracker-arbiter.ts.
     static let minYardstickPx = 24.0
+    // Keep in sync with MAX_YARDSTICK_DEVIATION_RATIO in shared/tracker-arbiter.ts.
+    static let maxYardstickDeviationRatio = 2.0
+    // Keep in sync with MIN_YARDSTICK_SAMPLES_FOR_STABILITY in shared/tracker-arbiter.ts.
+    static let minYardstickSamplesForStability = 5
 
     struct Yardstick {
         var px: Double
@@ -2367,6 +2371,96 @@ private enum AvTrackerArbiter {
         var plausible: Bool
         var distanceInYardsticks: Double?
         var basis: Basis
+    }
+
+    // THE THIRD LEG: WHO REFEREES THE REFEREE'S RULER.
+    //
+    // Everything above judges the object tracker against the body tracker, which leaves the
+    // hierarchy running one way -- and a one-way hierarchy is two parts and a referee that only
+    // blows the whistle on one team. Worse, making the body the ruler means a bad BODY read can
+    // now break a good OBJECT lock, a regression introduced by the fix itself.
+    //
+    // The body fails in its own way and it is not subtle: a wrist landmark jumps to a spectator,
+    // to the athlete's own knee, to the far side of the frame. Vision reports it with ordinary
+    // confidence, because the landmark is confidently somewhere -- just not on a wrist. One such
+    // frame moves the hand anchor metres and every object in view is suddenly "nowhere near the
+    // athlete".
+    //
+    // What catches it is the ruler's own length. The distance between an athlete's wrists is a
+    // physical constant for a set -- they are holding a bar -- so its apparent length can only
+    // change as fast as they rotate relative to the lens, which is slow. A span that doubles
+    // between two sampled frames is a landmark that went somewhere a wrist cannot. The object
+    // tracker plays no part in detecting that, which is exactly what makes it trustworthy here.
+    //
+    // THE RESPONSE IS NOT SYMMETRIC. A suspect OBJECT loses its lock, because a better answer
+    // exists: re-detect. A suspect BODY gets an abstention -- no judgement on the object at all,
+    // lock untouched -- because there is no better body available, and convicting the object on
+    // a measurement just declared untrustworthy would be the worst of both.
+    //
+    // Full reasoning in shared/tracker-arbiter.ts (arbitrate / bodyReadIsStable).
+    enum Outcome: String {
+        case agree
+        case objectSuspect = "object_suspect"
+        case bodySuspect = "body_suspect"
+        case cannotJudge = "cannot_judge"
+    }
+
+    struct Arbitration {
+        var outcome: Outcome
+        /// True exactly when the caller should drop the lock. Never true for a body fault.
+        var breakLock: Bool
+        var distanceInYardsticks: Double?
+        var bodyDeviationRatio: Double?
+    }
+
+    /// Median rather than mean, for the reason medians are used throughout this pipeline: the
+    /// failure being looked for is one wild value, and a mean walks toward it.
+    static func bodyReadIsStable(currentPx: Double, recentPx: [Double]) -> (stable: Bool, ratio: Double?) {
+        let usable = recentPx.filter { $0 > 0 }
+        guard currentPx > 0, usable.count >= minYardstickSamplesForStability else { return (true, nil) }
+        let sorted = usable.sorted()
+        let typical = sorted[sorted.count / 2]
+        guard typical > 0 else { return (true, nil) }
+        let ratio = max(currentPx, typical) / min(currentPx, typical)
+        return (ratio <= maxYardstickDeviationRatio, ratio)
+    }
+
+    /// The whole referee in one call. The body is checked FIRST, because every statement the
+    /// arbiter can make about the object is measured with the body's ruler, and a ruler that just
+    /// changed length cannot convict anybody. Checking the object first would mean a jumped
+    /// landmark had already thrown away a good lock by the time the jump was noticed.
+    static func arbitrate(
+        objectCenter: (x: Double, y: Double),
+        anchor: (x: Double, y: Double)?,
+        yardstick: Yardstick?,
+        recentYardstickPx: [Double],
+        frameWidth: Double, frameHeight: Double
+    ) -> Arbitration {
+        if let yardstick {
+            let body = bodyReadIsStable(currentPx: yardstick.px, recentPx: recentYardstickPx)
+            if !body.stable {
+                return Arbitration(
+                    outcome: .bodySuspect, breakLock: false,
+                    distanceInYardsticks: nil, bodyDeviationRatio: body.ratio
+                )
+            }
+        }
+        let verdict = lockDistanceVerdict(
+            objectCenter: objectCenter, anchor: anchor, yardstick: yardstick,
+            frameWidth: frameWidth, frameHeight: frameHeight
+        )
+        if verdict.basis == .noAnchor {
+            return Arbitration(
+                outcome: .cannotJudge, breakLock: false,
+                distanceInYardsticks: nil, bodyDeviationRatio: nil
+            )
+        }
+        return Arbitration(
+            outcome: verdict.plausible ? .agree : .objectSuspect,
+            breakLock: !verdict.plausible,
+            distanceInYardsticks: verdict.distanceInYardsticks,
+            bodyDeviationRatio: nil
+        )
     }
 
     /// Distance between two normalized Vision points, in this frame's own pixels.
@@ -2461,6 +2555,11 @@ private struct AvObjectLockTelemetry {
     var breaksTrajectoryDisagreement = 0
     /// The new one. A lock the body tracker says is nowhere near the athlete.
     var breaksWristGate = 0
+    /// Frames where the BODY read was the thing that looked wrong -- the grip span changed length
+    /// faster than an athlete holding a bar can rotate. The arbiter abstained on these and left
+    /// the lock alone. A take with many of them is a body-tracking problem being correctly
+    /// refused permission to masquerade as an object-tracking one.
+    var framesBodySuspect = 0
     /// A re-classification that found the object where the tracker already thought it was.
     var reclassifyConfirmations = 0
     /// A re-classification that MOVED the lock. The interesting number: a take with several of
@@ -2478,8 +2577,8 @@ private struct AvObjectLockTelemetry {
     /// "shoulders", or absent when no frame ever did.
     var yardstickSource: String?
 
-    mutating func recordAccepted(_ verdict: AvTrackerArbiter.Verdict) {
-        guard let d = verdict.distanceInYardsticks else { return }
+    mutating func recordAccepted(_ distanceInYardsticks: Double?) {
+        guard let d = distanceInYardsticks else { return }
         if maxAcceptedDistanceInYardsticks == nil || d > maxAcceptedDistanceInYardsticks! {
             maxAcceptedDistanceInYardsticks = d
         }
@@ -2497,6 +2596,7 @@ private struct AvObjectLockTelemetry {
             "reclassifyConfirmations": reclassifyConfirmations,
             "reclassifyCorrections": reclassifyCorrections,
             "candidatesRejectedByWristGate": candidatesRejectedByWristGate,
+            "framesBodySuspect": framesBodySuspect,
         ]
         if let d = maxAcceptedDistanceInYardsticks {
             out["maxAcceptedDistanceInYardsticks"] = (d * 100).rounded() / 100
@@ -2567,6 +2667,16 @@ private final class AvCoreMlImplementDetector {
     /// end of analysis and shipped with the result; nothing in the tracking maths reads it.
     private(set) var telemetry = AvObjectLockTelemetry()
 
+    /// Recent body yardstick lengths, for judging whether THIS frame's body read can be trusted
+    /// at all -- see AvTrackerArbiter.bodyReadIsStable. Held here rather than passed in because
+    /// it is history, and the caller builds a fresh BodyContext every frame by design.
+    ///
+    /// Only STABLE spans are recorded. A rejected reading must never join the history it was
+    /// rejected against, or a run of bad landmark frames teaches the check to accept them and
+    /// the guard quietly dissolves exactly when it is needed most.
+    private var recentYardstickPx: [Double] = []
+    private let yardstickHistoryWindow = 8
+
     /// Everything the BODY tracker knows that this detector needs in order to be checked against
     /// it. Passed in per frame rather than stored, because it is genuinely per frame: a wrist
     /// drops out and comes back, and the honest answer on the frames in between is "no yardstick
@@ -2579,14 +2689,35 @@ private final class AvCoreMlImplementDetector {
     }
 
     /// The arbiter's rule, applied to a box this detector is considering or already holding.
-    private func verdict(for box: CGRect, body: BodyContext) -> AvTrackerArbiter.Verdict {
+    ///
+    /// Judges BOTH trackers, not just the object: a frame whose body read cannot be trusted comes
+    /// back as .bodySuspect with breakLock false, so a jumped wrist landmark can never be the
+    /// reason a good object lock is thrown away. See AvTrackerArbiter.arbitrate.
+    private func arbitration(for box: CGRect, body: BodyContext) -> AvTrackerArbiter.Arbitration {
+        AvTrackerArbiter.arbitrate(
+            objectCenter: (x: Double(box.midX), y: Double(box.midY)),
+            anchor: body.anchor,
+            yardstick: body.yardstick,
+            recentYardstickPx: recentYardstickPx,
+            frameWidth: body.frameWidth,
+            frameHeight: body.frameHeight
+        )
+    }
+
+    /// Candidate filtering asks only the object half of the question.
+    ///
+    /// By the time freshDetection runs, track() has already established whether this frame's body
+    /// read is trustworthy -- and when it is not, no fresh detection happens at all. Re-running
+    /// the body check per candidate would ask the same question once per plate in the room and
+    /// answer it identically every time.
+    private func objectIsPlausible(_ box: CGRect, body: BodyContext) -> Bool {
         AvTrackerArbiter.lockDistanceVerdict(
             objectCenter: (x: Double(box.midX), y: Double(box.midY)),
             anchor: body.anchor,
             yardstick: body.yardstick,
             frameWidth: body.frameWidth,
             frameHeight: body.frameHeight
-        )
+        ).plausible
     }
     // A detection this weak is more likely a false positive (a shadow, a
     // teammate's shirt) than a real med ball -- untuned starting value, same
@@ -2673,6 +2804,7 @@ private final class AvCoreMlImplementDetector {
         trajectoryRequest = makeTrajectoryRequest()
         latestTrajectoryObservations = []
         telemetry = AvObjectLockTelemetry()
+        recentYardstickPx = []
     }
 
     // Center-to-center normalized distance and area ratio between two boxes -- both in Vision's
@@ -2781,6 +2913,35 @@ private final class AvCoreMlImplementDetector {
         telemetry.framesTracked += 1
         if let source = body.yardstick?.source { telemetry.yardstickSource = source }
 
+        // THE BODY IS CHECKED BEFORE ANYTHING ELSE HAPPENS THIS FRAME, INCLUDING A FRESH
+        // DETECTION.
+        //
+        // Every judgement below is measured with the body's ruler. If that ruler just changed
+        // length there is nothing honest to say about the object, so the frame is skipped
+        // entirely: the lock is left exactly as it was, no detection is attempted, and nothing
+        // is reported. Returning nil here means "no reading this frame", which every caller
+        // already treats as ordinary -- the same as a frame where the implement was occluded.
+        //
+        // Skipping the fresh-detection path matters as much as skipping the gate. A wrist that
+        // has jumped also drags regionOfInterest with it, so a detection seeded on this frame
+        // would search the wrong part of the image and lock onto whatever happens to be there.
+        var bodySuspectThisFrame = false
+        if let yardstick = body.yardstick {
+            let stability = AvTrackerArbiter.bodyReadIsStable(
+                currentPx: yardstick.px, recentPx: recentYardstickPx
+            )
+            if stability.stable {
+                // Only stable spans join the history -- see recentYardstickPx's own comment on
+                // why letting a rejected reading in would dissolve the guard.
+                recentYardstickPx.append(yardstick.px)
+                if recentYardstickPx.count > yardstickHistoryWindow { recentYardstickPx.removeFirst() }
+            } else {
+                bodySuspectThisFrame = true
+                telemetry.framesBodySuspect += 1
+            }
+        }
+        if bodySuspectThisFrame { return nil }
+
         if trackingLabel != targetLabel {
             trackingRequest = nil
             trackingLabel = targetLabel
@@ -2815,14 +2976,19 @@ private final class AvCoreMlImplementDetector {
                 // Ordered before the jump check on purpose: a box that is both far from the
                 // athlete and jumping should be recorded as the former. That is the diagnosis
                 // worth having.
-                let wristVerdict = verdict(for: newBox, body: body)
-                if !wristVerdict.plausible {
+                //
+                // arbitration(), not a bare distance check: it judges BOTH trackers and only
+                // ever sets breakLock for an OBJECT fault. A body fault cannot reach here (the
+                // frame already returned above), but routing through the same call keeps the one
+                // rule in one place rather than letting a second, subtly different copy grow.
+                let call = arbitration(for: newBox, body: body)
+                if call.breakLock {
                     trackingRequest = nil
                     recentBoxes = []
                     telemetry.breaksWristGate += 1
                     return nil
                 }
-                telemetry.recordAccepted(wristVerdict)
+                telemetry.recordAccepted(call.distanceInYardsticks)
                 // Camera overlord: VNTrackObjectRequest only ever verifies visual continuity
                 // of the region it's already following -- it never re-checks "is this still
                 // targetLabel" once locked on. A jump this implausible against the recent
@@ -2991,7 +3157,7 @@ private final class AvCoreMlImplementDetector {
         // better-lit duplicate exists somewhere in the room -- which, for the "plate" class in a
         // gym, is most takes. Filtering first means the choice is made among the candidates the
         // athlete could actually be holding, and the most confident of THOSE wins.
-        let plausible = ofThisClass.filter { verdict(for: $0.boundingBox, body: body).plausible }
+        let plausible = ofThisClass.filter { objectIsPlausible($0.boundingBox, body: body) }
         telemetry.candidatesRejectedByWristGate += ofThisClass.count - plausible.count
         guard let best = plausible.max(by: { $0.confidence < $1.confidence }) else { return nil }
         return (best.boundingBox, best.confidence)

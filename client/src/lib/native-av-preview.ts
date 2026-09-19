@@ -202,6 +202,11 @@ export type AvObjectLockTelemetry = {
   /** Candidate detections the wrist gate refused. A high count with few corrections is a gym
    * with equipment everywhere and the gate doing its job. */
   candidatesRejectedByWristGate: number;
+  /** Frames where the BODY read was the thing that looked wrong -- the grip span changed length
+   * faster than an athlete holding a bar can rotate. The arbiter abstained and left the lock
+   * alone. Many of these is a body-tracking problem being refused permission to masquerade as an
+   * object-tracking one. */
+  framesBodySuspect: number;
   /** The largest distance-from-hands, in body yardsticks, that was ACCEPTED -- how close this
    * take ran to MAX_LOCK_DISTANCE_IN_YARDSTICKS. Absent when no frame had a yardstick. */
   maxAcceptedDistanceInYardsticks?: number;

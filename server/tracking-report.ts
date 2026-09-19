@@ -39,6 +39,7 @@ type ObjectLockLine = {
   reclassifyConfirmations: number;
   reclassifyCorrections: number;
   candidatesRejectedByWristGate: number;
+  framesBodySuspect: number;
   maxAcceptedDistanceInYardsticks?: number;
   yardstickSource?: string;
 };
@@ -525,7 +526,15 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
         (lock.maxAcceptedDistanceInYardsticks != null
           ? `. Furthest accepted: ${lock.maxAcceptedDistanceInYardsticks} grip widths from the hands` +
             (lock.yardstickSource === "shoulders" ? " (measured off the shoulders)" : "")
-          : ". No frame ever gave a body measurement to judge against"),
+          : ". No frame ever gave a body measurement to judge against") +
+        // THE OTHER DIRECTION. Everything above is the body catching the object out. This is the
+        // object tracker's ruler being taken away because the BODY stopped behaving like one --
+        // a wrist landmark that jumped somewhere a wrist cannot go. Worth reading before blaming
+        // the object tracker for a take: a high count here means the body was the unstable half,
+        // and the arbiter correctly declined to let that break a good lock.
+        (lock.framesBodySuspect > 0
+          ? `. ${lock.framesBodySuspect} frame${lock.framesBodySuspect === 1 ? "" : "s"} skipped because the BODY read jumped -- that is a body-tracking problem, not an object one`
+          : ""),
     });
   }
 
