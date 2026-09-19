@@ -195,6 +195,8 @@ can install. Delete entries as a `beta` ships them.
   $19.99 tier and its price are gone from /pricing, the landing page and the
   athlete upgrade screen in that build.
 - **NOT in 459:** `6bca8a8`, the camera entitlement gate and caveat coverage.
+  Verified — `verify_build` run 460 archived, signed and passed
+  `altool --validate-app`, so it will not bounce whenever it does ship.
   Build 459 still draws the camera controls for Basic and AI Coach Free Agents
   — they can film a set and then lose the clip to a 402 on save — and still
   shows both leaderboards and the admin query engine with no accuracy caveat.
