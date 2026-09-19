@@ -189,12 +189,13 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **454** is the newest TestFlight build. It was cut from `b3d6593`
-  (the rep-segmentation fix) and contains nothing after it.
-- `b920289` — the tracker arbiter, first version. `verify_build` run 455 passed
-  including `altool --validate-app`.
-- The three-part overwatch revision (this section's rule) — body-suspect
-  detection and the asymmetric response.
+- Build **457** is the newest TestFlight build, cut from `a4a947d`. It carries
+  the whole camera arbiter: the wrist gate, the gated re-classification, the
+  body-suspect detection and the scale rejection.
+- **NOT in 457:** `17b8642`, withdrawing AI Coach + Video from sale. Build 457
+  still shows the $19.99 tier and its price on /pricing, the landing page and
+  the athlete upgrade screen. Payments are off through beta so nothing can
+  actually be charged, but the option is visible until the next upload.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
