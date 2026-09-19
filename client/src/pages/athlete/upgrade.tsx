@@ -174,7 +174,7 @@ export default function AthleteUpgrade() {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">{tier.description}</p>
-                    {tier.hasVideoFormCheck && <CameraMetricCaveat variant="inline" />}
+                    {tier.hasVideoFormCheck && <CameraMetricCaveat variant="purchase" />}
                     <p className="mt-auto font-display text-2xl font-bold">
                       {formatCents(tier.monthlyPriceCents)}
                       <span className="text-sm font-normal text-muted-foreground">/mo</span>
@@ -221,7 +221,7 @@ export default function AthleteUpgrade() {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">{p.description}</p>
-                  {p.hasVideoFormCheck && <CameraMetricCaveat variant="inline" />}
+                  {p.hasVideoFormCheck && <CameraMetricCaveat variant="purchase" />}
                   <p className="mt-auto font-display text-2xl font-bold">
                     {p.displayPrice ?? "--"}
                     <span className="text-sm font-normal text-muted-foreground">/mo</span>

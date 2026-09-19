@@ -200,6 +200,12 @@ can install. Delete entries as a `beta` ships them.
   Build 459 still draws the camera controls for Basic and AI Coach Free Agents
   — they can film a set and then lose the clip to a 402 on save — and still
   shows both leaderboards and the admin query engine with no accuracy caveat.
+- **NOT in 459 — and it UNDOES what 459 shows:** the tier decisions of 2026-09-19 afternoon.
+  459 was cut with AI Coach + Video withdrawn, so that build has no $19.99 tier on /pricing, the
+  landing page or the upgrade screen at all. `main` now sells it again with the purchase warning
+  attached, and moves skills onto it — so Basic and AI Coach lose the Skill Programs tab, the
+  Skill Bank and skill sessions, which 459 still offers them. Anyone testing tiers on 459 is
+  testing a price list that no longer exists. No `verify_build` has been run on it yet.
 - **NOT in 459:** the SEO and first-paint work on `main` as of 2026-09-19 --
   per-route titles and share cards, the prerendered public routes, three new
   marketing pages (`/for-high-schools`, `/for-athletes`, `/camera-validation`),
@@ -219,44 +225,91 @@ Two things worth saying out loud when someone tests this:
 - The institutional agreement is still an unreviewed draft whose own text says
   not to present it as binding. Scott is handling it.
 
-## AI Coach + Video is withdrawn from sale, not deleted
+## AI Coach + Video is ON SALE, with the accuracy warning attached
 
-Flagged 2026-09-19. Scott: "our camera doesn't work, it does, but isn't accurate, we need to
-stall the $19.99 package for now, keep it in the code, but don't let it be accessible, remove
-the price point from view, remove the option."
+Superseded 2026-09-19 (same day). It was withdrawn that morning -- "we need to stall the $19.99
+package for now, keep it in the code, but don't let it be accessible" -- and put back the same
+day on the other answer: sell it, and say plainly what the buyer is getting. Scott: "list a
+warning for the $19.99, while this does record video, it's not accurate purchase at your own
+risk."
 
-The whole of what that tier adds over AI Coach is `hasVideoFormCheck` -- the camera pipeline,
-whose rep counts were wrong and whose fixes are not yet validated against real footage.
+Both answers were defensible and the second is the one in force. The VIDEO works -- it records,
+it saves, a lift can be watched back, and for a lot of people that alone is the product. What
+does not work is the NUMBERS derived from it. Selling the tier with that stated up front is
+honest; selling it silently is not.
 
+- **The warning is the condition of the sale, not decoration on it.** Every surface that offers
+  the tier carries `CAMERA_ACCURACY_PURCHASE_WARNING` -- /pricing, the landing cards, the athlete
+  upgrade screen -- through `<CameraMetricCaveat variant="purchase" />`.
+  `client/src/lib/video-tier-warns-before-purchase.test.ts` scans for a surface that pairs
+  `hasVideoFormCheck` with a price and fails if it has no warning, and it names the three known
+  surfaces too, so a rename cannot quietly turn the scan green.
+- **The purchase variant can never be dismissed, whatever the caller passes.** Every other caveat
+  tells a reader not to trust a number in front of them; this one is a material fact about what
+  somebody is about to pay for, and it is not something they can acknowledge away before the
+  transaction. `canDismiss` excludes the variant rather than trusting the `dismissible` prop.
+- **The warning follows the ENTITLEMENT, never a tier id.** A sales surface that names
+  `ai_coach_video` as a literal keeps its own idea of which tier is which -- the bug the checkout
+  route already had. The test scans for that literal on all three surfaces.
+- **The withdrawal machinery is KEPT, and this is why the file is still there.**
+  `shared/tier-withdrawal-machinery.test.ts` (was `withdrawn-tier-stays-off-sale.test.ts`) and
+  `WITHDRAWN_FREE_AGENT_TIERS` (empty today) stay because they are the difference between a tier
+  being unsellable and a tier being BROKEN for the people already on it: the admin screen labels
+  withdrawn entries, the checkout route refuses them, and `entitlementsForFreeAgentTier` ignores
+  the list entirely so a withdrawal can never revoke a feature somebody is paying for. Next time
+  something is pulled that is one line in each of two arrays, not a design exercise under time
+  pressure. Do not delete the machinery because the list is empty.
 - **Two lists, and the difference between them is somebody's subscription.**
-  `FREE_AGENT_TIER_ORDER` is WHAT IS FOR SALE and now holds two tiers; every customer surface
-  already maps over it, so the tier left /pricing, the landing cards, the upgrade page, the
-  StoreKit product list and the Stripe price-env requirement in one line.
-  `ALL_FREE_AGENT_TIER_IDS` is WHAT HAS EVER BEEN SOLD and is read by everything that resolves an
-  EXISTING subscription: Apple receipt verification, the stored-value schema, the admin screen.
-- **Withdrawing a tier must never revoke it.** Athletes are already paying for it. They keep
-  video form-check, their renewals keep resolving, and restore keeps working. The silent failure
-  is one direction only -- a cleanup that shrinks one more list to "the tiers we sell" strips a
-  paid feature from a paying customer with no error and nothing on any screen.
-  `shared/withdrawn-tier-stays-off-sale.test.ts` asserts both halves, including that the Swift
-  plugin still asks StoreKit about the withdrawn product id (a restore needs it).
+  `FREE_AGENT_TIER_ORDER` is WHAT IS FOR SALE; `ALL_FREE_AGENT_TIER_IDS` is WHAT HAS EVER BEEN
+  SOLD, read by everything that resolves an EXISTING subscription (Apple receipt verification,
+  the stored-value schema, the admin screen). They are identical today and still separate on
+  purpose.
 - **Never hand-type the tier list.** The checkout route named the three ids as literals, so
   withdrawing a tier elsewhere would have left that one endpoint still selling it. It derives
-  from `FREE_AGENT_TIER_ORDER` now, and the test scans for the literal.
-- **OPEN ACTION, DEFERRED BY SCOTT 2026-09-19: mark the Product unavailable in App Store
-  Connect.** "Flag it, we will update it later." This is the one half of the withdrawal that
-  code cannot do. The `ai_coach_video` auto-renewable subscription Product lives in App Store
-  Connect, not in this repo. Forge no longer OFFERS it -- it is off every price list, every card
-  and the checkout route -- but the Product itself is still live on Apple's side, so it remains
-  reachable there until somebody marks it unavailable. Until that happens the withdrawal is
-  complete in the app and incomplete on the store.
-  Deliberately NOT worked around in code: verification keeps honouring such a purchase, because
-  refusing to grant a tier somebody was genuinely charged for is worse than the sale staying
-  open a while longer. Do not "fix" this by making verification reject the product -- that
-  punishes the customer for Apple-side configuration.
-  Delete this bullet when the Product is marked unavailable.
-- **Putting it back is one line**: add `ai_coach_video` to `FREE_AGENT_TIER_ORDER`. Do that when
-  the camera has been validated against real lifts, not before.
+  from `FREE_AGENT_TIER_ORDER`, and the test scans for the literal.
+- **Nothing to do at Apple.** The withdrawal's one open action was marking the Product
+  unavailable in App Store Connect, and it was deliberately deferred -- so the Product is still
+  live and the tier going back on sale needs nothing doing there. If it is ever withdrawn again,
+  that step comes back with it.
+
+## Skills are part of the camera tier
+
+Added 2026-09-19. Scott: "The 4.99 and 9.99 should not have access to the skills and skills
+library, only exercise."
+
+**Why it rides with the camera rather than sitting beside it:** a skill drill IS a camera
+measurement. A sprint is timed by the camera and a mechanics drill is scored by it, so a skill
+session on a tier with no camera runs a stopwatch nobody can read. `hasSkills` on
+`FreeAgentTierDef` is a third entitlement rather than an alias, but
+`client/src/lib/skills-need-entitlement.test.ts` asserts the set of tiers with skills EQUALS the
+set with the camera -- stated that way, a future tier that adds video gets skills automatically,
+and a tier that gets skills without the camera fails, which is the combination the decision
+rejects.
+
+- **Same shape as the camera gate, deliberately.** `skillsAccessFor` in `server/routes.ts` is the
+  only place the question is answered -- coach or admin, coached athlete, then Free Agent tier --
+  and `requireSkillsAccess`, `requirePaidAiAccess("skillsAi")` and
+  `GET /api/athlete/skills-access` all delegate to it. `useSkillsAccess` asks the server and
+  imports no tier table; `undefined` until answered, and every call site requires an explicit
+  `true`.
+- **Two server gates, not one, and collapsing them breaks something either way.**
+  `requireSkillsAccess` is the three-branch rule, for routes a coached athlete also reaches;
+  `requirePaidAiAccess("skillsAi")` is the Free-Agent-only one, where `requireFreeAgent` has
+  already established there is no coach. One gate everywhere would either lock out coached
+  athletes or stop asking about the tier.
+- **The reads were gated and the writes were not**, which is the wrong way round: a Free Agent on
+  a tier without skills could not LIST their skill programs but could still create, edit and
+  delete them. All three writes carry the gate now and the test asserts each by verb.
+- **Hiding the tab is not the gate, and drawing a tab that always refuses is worse than no tab.**
+  `SkillsGate` wraps all five athlete skills pages (scanned, not listed), and
+  `athlete/programs.tsx` drops the Skill Programs and Skill Bank tabs from the Library strip
+  without access. `FreeAgentGate` goes OUTSIDE `SkillsGate` on the Free-Agent pages: a coached
+  athlete has skills access but does not belong on the Free Agent builder, so the "you have a
+  coach now" answer has to come first.
+- **What Basic and AI Coach keep:** training and nutrition logging, the exercise library, and (on
+  AI Coach) the AI chat coach and program builder. The landing and pricing feature lists are
+  derived from the flags now -- two lines there were hardcoded and both were wrong, promising the
+  AI program builder on Basic and the camera on all three.
 
 ## Who may use the camera, and who is told not to trust it
 
@@ -266,8 +319,8 @@ look at our other two free agent profiles, they should not have access to the ca
 **ACCESS -- one rule, asked by both sides.** `cameraAccessFor` in `server/routes.ts` is the only
 place the question is answered: a coach or admin filming their own training always may, a coached
 athlete always may (their video is bounded by the team retention cap, not a tier), a Free Agent
-may only on a tier with `hasVideoFormCheck` -- which, since the withdrawal, is `ai_coach_video`
-alone. `requireVideoTrackingAccess` and `GET /api/athlete/camera-access` both delegate to it.
+may only on a tier with `hasVideoFormCheck` -- `ai_coach_video` alone, which is on sale and
+carries the purchase warning (see the section above). `requireVideoTrackingAccess` and `GET /api/athlete/camera-access` both delegate to it.
 
 - **The client never re-derives it.** Two copies of a three-branch rule disagree silently, and the
   disagreement is only visible to the person it strands: a button nobody can use, or a hidden

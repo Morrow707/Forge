@@ -1,6 +1,7 @@
 import { useRef, useState, type TouchEvent } from "react";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { useCameraAccess } from "@/hooks/use-camera-access";
+import { SkillsGate } from "@/components/skills-gate";
 import { useParams, useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -95,7 +96,7 @@ function isSetFilled(set: SkillSet): boolean {
  * Record Throw) stay as an add-on layered on top of whichever set is
  * currently showing, exactly like "Record & Analyze" sits alongside
  * REPS/WEIGHT on the strength side rather than replacing them. */
-export default function SkillWorkoutPage() {
+function SkillWorkoutPageInner() {
   const { skillAssignmentId, skillProgramDayId, date } = useParams<{
     skillAssignmentId: string;
     skillProgramDayId: string;
@@ -668,5 +669,18 @@ export default function SkillWorkoutPage() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+// Skills are part of the camera tier now (see FreeAgentTierDef.hasSkills), and a skill session is
+// the sharpest case for it: sprint timing and mechanics scoring ARE camera measurements, so on a
+// tier with no camera there is nothing here to run. SkillsGate passes a coached athlete straight
+// through -- their skill day was assigned by a coach, not bought -- so this only turns away a
+// Free Agent on Basic or AI Coach, whose skill-day route answers 402 regardless.
+export default function SkillWorkoutPage() {
+  return (
+    <SkillsGate title="Skill Session">
+      <SkillWorkoutPageInner />
+    </SkillsGate>
   );
 }

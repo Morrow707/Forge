@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CAMERA_ACCURACY_SHORT, CAMERA_ACCURACY_INLINE } from "@shared/camera-accuracy-copy";
+import {
+  CAMERA_ACCURACY_SHORT,
+  CAMERA_ACCURACY_INLINE,
+  CAMERA_ACCURACY_PURCHASE_WARNING,
+} from "@shared/camera-accuracy-copy";
 
 /** Own flag, deliberately NOT CameraAccuracyNotice's.
  *
@@ -47,13 +51,18 @@ export function CameraMetricCaveat({
 }: {
   /** "short" for a standalone row (under a chart, on a card); "inline" when
    * the surrounding UI already makes it obvious which numbers are meant. */
-  variant?: "short" | "inline";
+  variant?: "short" | "inline" | "purchase";
   /** Let the reader clear it after one acknowledgment. In-app only -- see the
    * note above on why the sales surfaces do not get this. */
   dismissible?: boolean;
   className?: string;
 }) {
-  const [dismissed, setDismissed] = useState(() => dismissible && alreadyAcknowledged());
+  // A purchase warning is never dismissible, whatever the caller passes. It is the one variant
+  // shown to somebody who has not bought yet, and a material fact about what they are paying for
+  // is not something they can acknowledge away before the transaction -- nor something a caller
+  // should be able to soften by passing a flag.
+  const canDismiss = dismissible && variant !== "purchase";
+  const [dismissed, setDismissed] = useState(() => canDismiss && alreadyAcknowledged());
 
   if (dismissed) return null;
 
@@ -72,14 +81,21 @@ export function CameraMetricCaveat({
       className={cn(
         "flex items-start gap-1.5 font-semibold text-destructive",
         variant === "inline" ? "text-[11px]" : "text-xs",
+        variant === "purchase" && "rounded-md border border-destructive/40 bg-destructive/5 p-2",
         className,
       )}
     >
       <AlertTriangle
         className={cn("mt-0.5 shrink-0", variant === "inline" ? "h-3 w-3" : "h-3.5 w-3.5")}
       />
-      <span className="flex-1">{variant === "inline" ? CAMERA_ACCURACY_INLINE : CAMERA_ACCURACY_SHORT}</span>
-      {dismissible && (
+      <span className="flex-1">
+        {variant === "purchase"
+          ? CAMERA_ACCURACY_PURCHASE_WARNING
+          : variant === "inline"
+            ? CAMERA_ACCURACY_INLINE
+            : CAMERA_ACCURACY_SHORT}
+      </span>
+      {canDismiss && (
         <button
           type="button"
           onClick={acknowledge}

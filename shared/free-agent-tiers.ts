@@ -14,6 +14,15 @@ export interface FreeAgentTierDef {
   description: string;
   hasAiChat: boolean;
   hasVideoFormCheck: boolean;
+  /** Skill programs, the Skill Bank, and skill sessions.
+   *
+   * ITS OWN FLAG RATHER THAN RIDING ON hasAiChat, which is what it used to do. A skill session
+   * is largely a CAMERA session -- sprint timing and mechanics scoring are the whole of what a
+   * skill drill measures -- so skills belong with video form-check, not with the AI chat coach.
+   * Riding on hasAiChat put the camera-dependent half of the product in the one tier that was
+   * explicitly sold without camera access. Scott, 2026-09-19: "The 4.99 and 9.99 should not have
+   * access to the skills and skills library, only exercise." */
+  hasSkills: boolean;
 }
 
 export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
@@ -26,25 +35,31 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
     id: "basic",
     label: "Basic",
     monthlyPriceCents: 499,
-    description: "Log your training and your nutrition. No AI coach, no video form-check.",
+    description:
+      "Log your training and your nutrition, and browse the exercise library. No AI coach, no skills, no camera.",
     hasAiChat: false,
     hasVideoFormCheck: false,
+    hasSkills: false,
   },
   ai_coach: {
     id: "ai_coach",
     label: "AI Coach",
     monthlyPriceCents: 999,
-    description: "AI chat coach and AI program builder.",
+    description:
+      "AI chat coach and AI program builder, over the exercise library. No skills, no camera.",
     hasAiChat: true,
     hasVideoFormCheck: false,
+    hasSkills: false,
   },
   ai_coach_video: {
     id: "ai_coach_video",
     label: "AI Coach + Video",
     monthlyPriceCents: 1999,
-    description: "Everything in AI Coach, plus AI form-check on your lifts.",
+    description:
+      "Everything in AI Coach, plus camera form-check on your lifts and the full skills side: skill programs, the Skill Bank and timed skill sessions.",
     hasAiChat: true,
     hasVideoFormCheck: true,
+    hasSkills: true,
   },
 };
 
@@ -62,51 +77,46 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
  */
 export function entitlementsForFreeAgentTier(
   tier: string | null | undefined,
-): { hasAiChat: boolean; hasVideoFormCheck: boolean } {
+): { hasAiChat: boolean; hasVideoFormCheck: boolean; hasSkills: boolean } {
   const def = tier ? FREE_AGENT_TIERS[tier as FreeAgentTierId] : null;
-  if (!def) return { hasAiChat: false, hasVideoFormCheck: false };
-  return { hasAiChat: def.hasAiChat, hasVideoFormCheck: def.hasVideoFormCheck };
+  if (!def) return { hasAiChat: false, hasVideoFormCheck: false, hasSkills: false };
+  return {
+    hasAiChat: def.hasAiChat,
+    hasVideoFormCheck: def.hasVideoFormCheck,
+    hasSkills: def.hasSkills,
+  };
 }
 
-// AI COACH + VIDEO IS WITHDRAWN FROM SALE. THE TIER STAYS; THE OFFER DOES NOT.
+// AI COACH + VIDEO IS BACK ON SALE, WITH THE ACCURACY WARNING ATTACHED.
 //
-// Scott, 2026-09-19: "our camera doesn't work, it does, but isn't accurate, we need to stall the
-// $19.99 package for now, keep it in the code, but don't let it be accessible, remove the price
-// point from view, remove the option."
+// It was withdrawn on 2026-09-19 because the camera it is sold on is not accurate. Same day,
+// Scott chose the other answer instead: sell it, and say plainly what the buyer is getting.
+// "list a warning for the $19.99, while this does record video, it's not accurate purchase at
+// your own risk."
 //
-// The whole of what that tier adds over AI Coach is `hasVideoFormCheck` -- the camera pipeline.
-// Its rep counts were wrong (see docs/camera-tracking-notes.md: a scale read off the wrong plate
-// inflated every distance, and eleven bench reps came back as eighteen), and the fixes for that
-// have not been validated against real footage yet. Charging ten dollars a month more for the
-// half of the product that is currently the least trustworthy is not a thing to leave switched on
-// while it gets sorted out.
+// That is a defensible position and the withdrawal was not the only one. The VIDEO genuinely
+// works -- it records, it saves, a coach or an athlete can watch a lift back, and for a lot of
+// people that alone is the product. What does not work is the NUMBERS derived from it. Selling
+// the tier with that stated up front is honest; selling it silently would not be, which is why
+// the warning is not optional decoration on this tier. See CAMERA_ACCURACY_PURCHASE_WARNING and
+// `client/src/lib/video-tier-warns-before-purchase.test.ts`, which fails if a surface offers
+// this tier without it.
 //
-// TWO LISTS, AND THE DIFFERENCE BETWEEN THEM IS THE WHOLE MECHANISM.
+// FREE_AGENT_TIER_ORDER is WHAT IS FOR SALE. Every customer-facing surface reads it -- /pricing,
+// the landing cards, the athlete upgrade page, the StoreKit product list and the Stripe
+// price-env requirement -- so this one array is the whole on-sale switch, in both directions.
 //
-// FREE_AGENT_TIER_ORDER is now WHAT IS FOR SALE. Every customer-facing surface already reads it
-// -- /pricing, the landing page cards, the athlete upgrade page, the StoreKit product list and
-// the Stripe price-env requirement -- so a tier leaving this list disappears from all of them at
-// once, price included, with no per-page edits and nothing left behind to un-hide later.
+// ALL_FREE_AGENT_TIER_IDS is WHAT HAS EVER BEEN SOLD, and it stays separate even now that
+// nothing is withdrawn. The two lists answering different questions is what made the withdrawal
+// safe (an existing subscriber's Apple receipt still had to resolve to a tier that was no longer
+// on any price list), and collapsing them back into one would mean rebuilding that distinction
+// under pressure the next time something is pulled. Anything that SELLS reads the order list;
+// anything that RESOLVES AN EXISTING SUBSCRIPTION reads the full one.
 //
-// ALL_FREE_AGENT_TIER_IDS is WHAT HAS EVER BEEN SOLD, and it is not decoration. An athlete who is
-// already paying for AI Coach + Video must keep it: their Apple receipt still has to resolve to a
-// tier, their stored `free_agent_tier` still has to validate, and `entitlementsForFreeAgentTier`
-// still has to hand back video form-check. Anything that resolves an EXISTING subscription reads
-// this list. Anything that SELLS a new one reads the other. Confusing the two silently revokes a
-// feature from people who paid for it, which is why
-// `shared/withdrawn-tier-stays-off-sale.test.ts` asserts both halves.
-//
-// NOT DELETED, DELIBERATELY. The definition, the entitlement, the Apple product id and the
-// server-side gating all stay exactly as they were. Putting this back on sale is a one-line
-// change to FREE_AGENT_TIER_ORDER once the camera has been validated against real lifts.
-//
-// ONE THING THIS CODE CANNOT DO, AND IT NEEDS A HUMAN. The App Store subscription Product for
-// this tier lives in App Store Connect, not in this repo. Removing it from FREE_AGENT_TIER_ORDER
-// stops Forge OFFERING it, but the Product itself has to be marked unavailable there or someone
-// could still reach it through the App Store. Verification deliberately keeps honouring such a
-// purchase -- refusing to grant a tier somebody was genuinely charged for would be worse -- so
-// the App Store side is the only place that can actually close it.
-export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["basic", "ai_coach"];
+// NOTE FOR THE APP STORE SIDE: the withdrawal never completed there -- the Product was left
+// live in App Store Connect deliberately, so putting the tier back on sale needs nothing doing
+// at Apple. If it is ever withdrawn again, that step comes back with it.
+export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["basic", "ai_coach", "ai_coach_video"];
 
 /** Every tier that has ever been sold, withdrawn ones included, cheapest first.
  *
@@ -116,9 +126,17 @@ export const FREE_AGENT_TIER_ORDER: FreeAgentTierId[] = ["basic", "ai_coach"];
  */
 export const ALL_FREE_AGENT_TIER_IDS: FreeAgentTierId[] = ["basic", "ai_coach", "ai_coach_video"];
 
-/** Sold before, not sold now. Rendered with a "not for sale" note where it still has to appear
- * at all, which is the admin screen and nowhere else. */
-export const WITHDRAWN_FREE_AGENT_TIERS: readonly FreeAgentTierId[] = ["ai_coach_video"];
+/** Sold before, not sold now. Empty today -- AI Coach + Video went back on sale the same day it
+ * was pulled, once the decision became "sell it with a warning" instead of "stall it".
+ *
+ * KEPT RATHER THAN DELETED, and not out of sentiment: the machinery around it is what made the
+ * withdrawal safe, and it is the difference between a tier being unsellable and a tier being
+ * broken for the people already on it. The admin screen labels entries here, the checkout route
+ * refuses them, and `entitlementsForFreeAgentTier` deliberately ignores the list entirely so a
+ * withdrawal can never revoke a feature somebody is paying for. Next time something is pulled,
+ * that is one line here plus one in FREE_AGENT_TIER_ORDER -- not a design exercise under time
+ * pressure. */
+export const WITHDRAWN_FREE_AGENT_TIERS: readonly FreeAgentTierId[] = [];
 
 /** Tailwind column count for the tier-card grids, sized to however many tiers are on sale.
  *

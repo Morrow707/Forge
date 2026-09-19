@@ -240,7 +240,9 @@ export default function PricingPage() {
                       <p className="text-sm text-muted-foreground">{tier.description}</p>
                     </div>
                     {tier.hasVideoFormCheck && (
-                      <CameraMetricCaveat />
+                      // The purchase variant, not the generic caveat: this card has a price on it
+                      // and a button under it. See CAMERA_ACCURACY_PURCHASE_WARNING.
+                      <CameraMetricCaveat variant="purchase" />
                     )}
                   </CardContent>
                 </Card>

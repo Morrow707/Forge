@@ -37,6 +37,29 @@ export const CAMERA_ACCURACY_SHORT =
 export const CAMERA_ACCURACY_INLINE = "Not accurate yet -- camera metrics are still being calibrated.";
 
 /**
+ * SHOWN WHERE SOMEBODY IS ABOUT TO PAY FOR THE CAMERA, which is a different moment from every
+ * other string here.
+ *
+ * The others tell a reader not to trust a number in front of them. This one tells a buyer what
+ * they are buying before any money moves, on the one tier whose whole premium is the camera
+ * (AI Coach + Video). Scott, 2026-09-19: "list a warning for the $19.99, while this does record
+ * video, it's not accurate purchase at your own risk."
+ *
+ * It says the same two things as the rest -- the video is fine, the numbers are not -- and adds
+ * the part only a price tag needs: buy it for the footage, not the analysis, and know that going
+ * in. Deliberately blunt. A softened version of this would be worse than none, because it would
+ * let somebody pay ten dollars a month more for a number and feel they had been told.
+ *
+ * `client/src/lib/video-tier-warns-before-purchase.test.ts` fails if any surface offers the tier
+ * without it.
+ */
+export const CAMERA_ACCURACY_PURCHASE_WARNING =
+  "Before you buy: the camera records and saves your video normally, and that part works. The " +
+  "numbers calculated from it -- velocity, range of motion, power, rep counts -- are NOT " +
+  "accurate yet and we are still calibrating them. Buy this tier for the video itself, not for " +
+  "the measurements. Purchase at your own risk.";
+
+/**
  * For the research extract's "Method and limitations" section.
  *
  * Deliberately stronger than the bullet it replaces, which said camera

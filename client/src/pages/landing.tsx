@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
@@ -154,17 +155,34 @@ const AUDIENCES = [
 // same product. The pricing section happened to be hidden behind
 // PRICING_SECTION_LIVE, so nobody ever saw the two pages disagree, which is
 // exactly why it survived. Deriving removes the possibility.
+// EVERY LINE HERE IS DERIVED FROM A FLAG, because two of them were not and both were wrong.
+//
+// "AI program builder" was listed unconditionally, including on Basic -- whose own description
+// says "No AI coach" and whose entitlement refuses the builder (requirePaidAiAccess reads
+// hasAiChat for it). And "Camera bar-velocity, sprint & jump tracking" was on all three, which
+// stopped being true the moment camera access was gated to the video tier. A marketing page
+// promising a feature the entitlement refuses is the worst kind of wrong: the buyer finds out
+// after paying.
 const FREE_AGENT_CARDS = FREE_AGENT_TIER_ORDER.map((id) => {
   const tier = FREE_AGENT_TIERS[id];
   return {
     name: tier.label,
     price: formatCents(tier.monthlyPriceCents),
+    // Shown under the feature list on the camera tier only -- see
+    // CAMERA_ACCURACY_PURCHASE_WARNING. This is a price card, so it is the purchase warning
+    // rather than the general caveat.
+    warnsAboutCamera: tier.hasVideoFormCheck,
     features: [
-      "AI program builder",
-      ...(tier.hasAiChat ? ["AI chat coach"] : []),
-      "Camera bar-velocity, sprint & jump tracking",
+      "Training and nutrition logging",
+      "Exercise library",
+      ...(tier.hasAiChat ? ["AI chat coach", "AI program builder"] : []),
+      ...(tier.hasSkills ? ["Skill programs and the Skill Bank", "Timed skill sessions"] : []),
       ...(tier.hasVideoFormCheck
-        ? ["AI form-check on your lifts", "Form-check video logging"]
+        ? [
+            "Camera bar-velocity, sprint and jump tracking",
+            "AI form-check on your lifts",
+            "Form-check video logging",
+          ]
         : []),
     ],
   };
@@ -505,6 +523,7 @@ export default function LandingPage() {
                         </li>
                       ))}
                     </ul>
+                    {t.warnsAboutCamera && <CameraMetricCaveat variant="purchase" className="mt-4" />}
                   </div>
                 ))}
               </div>

@@ -13,24 +13,31 @@ import { entitlementsForFreeAgentTier, FREE_AGENT_TIERS } from "@shared/free-age
 // only the weaker one was wired, which is also how the Stripe webhook came to write
 // the column nothing read.
 describe("a Free Agent SKU decides what it includes", () => {
-  it("gives Basic neither the AI coach nor video", () => {
+  it("gives Basic no AI coach, no video and no skills", () => {
     expect(entitlementsForFreeAgentTier("basic")).toEqual({
       hasAiChat: false,
       hasVideoFormCheck: false,
+      hasSkills: false,
     });
   });
 
-  it("gives AI Coach the chat but not video", () => {
+  it("gives AI Coach the chat but neither video NOR skills", () => {
+    // Skills used to ride on hasAiChat, which put them here. They moved to the camera tier
+    // because a skill drill IS a camera measurement -- sprint timing and mechanics scoring are
+    // the whole of what one records -- so selling them on a tier with no camera was selling the
+    // camera-dependent half of the product to people explicitly not buying the camera.
     expect(entitlementsForFreeAgentTier("ai_coach")).toEqual({
       hasAiChat: true,
       hasVideoFormCheck: false,
+      hasSkills: false,
     });
   });
 
-  it("gives AI Coach + Video both", () => {
+  it("gives AI Coach + Video all three", () => {
     expect(entitlementsForFreeAgentTier("ai_coach_video")).toEqual({
       hasAiChat: true,
       hasVideoFormCheck: true,
+      hasSkills: true,
     });
   });
 
@@ -39,6 +46,7 @@ describe("a Free Agent SKU decides what it includes", () => {
       expect(entitlementsForFreeAgentTier(tier)).toEqual({
         hasAiChat: false,
         hasVideoFormCheck: false,
+        hasSkills: false,
       });
     }
   });
@@ -50,7 +58,18 @@ describe("a Free Agent SKU decides what it includes", () => {
       expect(entitlementsForFreeAgentTier(id)).toEqual({
         hasAiChat: def.hasAiChat,
         hasVideoFormCheck: def.hasVideoFormCheck,
+        hasSkills: def.hasSkills,
       });
+    }
+  });
+
+  it("keeps skills and the camera on the same tier, deliberately", () => {
+    // Not a restatement of the cases above: this is the RELATIONSHIP, and it is the thing a
+    // future "let's throw skills into AI Coach to sweeten it" would quietly break. A skill
+    // session with no camera access records nothing, so a tier with skills and no camera sells
+    // an empty page.
+    for (const def of Object.values(FREE_AGENT_TIERS)) {
+      if (def.hasSkills) expect(def.hasVideoFormCheck).toBe(true);
     }
   });
 

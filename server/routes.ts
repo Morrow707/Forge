@@ -765,7 +765,15 @@ async function hasAthletePaidForAiAccess(
     // list actually sells.
     const account = await storage.getFreeAgentBillingAccount(athleteId);
     const entitlements = entitlementsForFreeAgentTier(account?.freeAgentTier ?? null);
-    return entitlement === "video" ? entitlements.hasVideoFormCheck : entitlements.hasAiChat;
+    // SKILLS HAS ITS OWN FLAG NOW, AND IT USED TO RIDE ON hasAiChat.
+    //
+    // A skill session is largely a CAMERA session -- sprint timing and mechanics scoring are the
+    // whole of what a skill drill measures -- so skills belong with video form-check, not with
+    // the chat coach. Riding on hasAiChat put the camera-dependent half of the product inside
+    // the one tier explicitly sold without camera access. See FreeAgentTierDef.hasSkills.
+    if (entitlement === "video") return entitlements.hasVideoFormCheck;
+    if (entitlement === "skillsAi") return entitlements.hasSkills;
+    return entitlements.hasAiChat;
   }
   return COMPED_FREE_AGENT_ENTITLEMENTS[email]?.has(entitlement) ?? false;
 }
@@ -837,6 +845,52 @@ async function cameraAccessFor(user: { id: number; email: string; role: string }
   return hasPaid
     ? { allowed: true, reason: "entitled" }
     : { allowed: false, reason: "tier_excludes_camera" };
+}
+
+export type SkillsAccess = {
+  allowed: boolean;
+  reason: "coach_or_admin" | "coached_athlete" | "entitled" | "tier_excludes_skills";
+};
+
+/**
+ * MAY THIS PERSON USE THE SKILLS SIDE -- skill programs, the Skill Bank, timed skill sessions.
+ *
+ * Deliberately the same three-branch shape as cameraAccessFor, and for the same reasons: a coach
+ * or admin self-training reaches the same pages, a coached athlete's skills come from their coach
+ * rather than from a tier, and only a Free Agent's access depends on what they bought. Written as
+ * a sibling rather than folded into one function with a mode flag, because the two answer
+ * different questions and a shared implementation would make "turn skills back on for AI Coach"
+ * a change that silently also moved the camera.
+ *
+ * Skills sit with the camera tier because a skill drill IS a camera measurement. See
+ * FreeAgentTierDef.hasSkills.
+ */
+async function skillsAccessFor(user: { id: number; email: string; role: string }): Promise<SkillsAccess> {
+  if (user.role === "coach" || user.role === "admin") {
+    return { allowed: true, reason: "coach_or_admin" };
+  }
+  if (await athleteHasCoach(user.id)) return { allowed: true, reason: "coached_athlete" };
+  const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email, "skillsAi");
+  return hasPaid
+    ? { allowed: true, reason: "entitled" }
+    : { allowed: false, reason: "tier_excludes_skills" };
+}
+
+// Gates the skills side for a Free Agent, passing a coached athlete and a self-training coach
+// through untouched -- see skillsAccessFor. Stacked on routes that BOTH populations reach; the
+// Free-Agent-only skill routes use requirePaidAiAccess("skillsAi") directly, since
+// requireFreeAgent has already established there is no coach by the time they run.
+async function requireSkillsAccess(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  const access = await skillsAccessFor(user);
+  if (!access.allowed) {
+    return res.status(402).json({
+      message: "Skills are part of the AI Coach + Video plan for Free Agents.",
+      freeAgentPaywall: true,
+      entitlement: "skillsAi",
+    });
+  }
+  next();
 }
 
 // Gates camera-tracking VIDEO specifically -- see cameraAccessFor above for the rule and why it
@@ -8474,7 +8528,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(rows);
   });
 
-  app.get("/api/athlete/leaderboard/skill-exercises", requireRole("athlete"), async (req, res) => {
+  app.get(
+    "/api/athlete/leaderboard/skill-exercises",
+    requireRole("athlete"),
+    // Reached by coached athletes too, so the three-branch rule rather than the
+    // Free-Agent-only one -- see skillsAccessFor.
+    requireSkillsAccess,
+    async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getSpeedLeaderboardExercisesForAthlete(user.id);
     res.json(list);
@@ -8549,6 +8609,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // This is a CONVENIENCE for the interface, never the enforcement. The routes that actually
   // save a clip keep their own gate, because a client is a thing anybody can edit and hiding a
   // button is not a permission check.
+  // MAY I USE THE SKILLS SIDE -- the UI's copy of the question requireSkillsAccess answers, so a
+  // tab is never drawn for somebody the routes behind it will refuse. Same convenience-not-
+  // enforcement standing as camera-access above: the routes keep their own gates.
+  app.get(
+    "/api/athlete/skills-access",
+    requireRole(["athlete", "coach", "admin"]),
+    async (req, res) => {
+      res.json(await skillsAccessFor(currentUser(req)));
+    },
+  );
+
   app.get(
     "/api/athlete/camera-access",
     requireRole(["athlete", "coach", "admin"]),
@@ -9001,7 +9072,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
-  app.get("/api/athlete/skill-exercises-with-history", requireRole("athlete"), async (req, res) => {
+  app.get(
+    "/api/athlete/skill-exercises-with-history",
+    requireRole("athlete"),
+    // Reached by coached athletes too, so the three-branch rule rather than the
+    // Free-Agent-only one -- see skillsAccessFor.
+    requireSkillsAccess,
+    async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getSkillExercisesWithHistoryForAthlete(user.id);
     res.json(list);
@@ -9360,6 +9437,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get(
     "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId",
     requireRole("athlete"),
+    // Reached by coached athletes too, so the three-branch rule rather than the
+    // Free-Agent-only one -- see skillsAccessFor.
+    requireSkillsAccess,
     async (req, res) => {
       const user = currentUser(req);
       const date = typeof req.query.date === "string" ? req.query.date : undefined;
@@ -9377,6 +9457,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId/complete",
     requireRole("athlete"),
+    // Reached by coached athletes too, so the three-branch rule rather than the
+    // Free-Agent-only one -- see skillsAccessFor.
+    requireSkillsAccess,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = setSkillDayCompleteSchema.safeParse(req.body);
@@ -9403,6 +9486,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put(
     "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId/:skillProgramExerciseId/sets/:setNumber",
     requireRole("athlete"),
+    // Reached by coached athletes too, so the three-branch rule rather than the
+    // Free-Agent-only one -- see skillsAccessFor.
+    requireSkillsAccess,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = upsertSkillSetEntrySchema.safeParse(req.body);
@@ -9427,6 +9513,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get(
     "/api/athlete/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
     requireRole("athlete"),
+    // Reached by coached athletes too, so the three-branch rule rather than the
+    // Free-Agent-only one -- see skillsAccessFor.
+    requireSkillsAccess,
     async (req, res) => {
       const user = currentUser(req);
       const assignmentId = Number(req.params.assignmentId);
@@ -9441,6 +9530,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/athlete/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
     requireRole("athlete"),
+    // Reached by coached athletes too, so the three-branch rule rather than the
+    // Free-Agent-only one -- see skillsAccessFor.
+    requireSkillsAccess,
     async (req, res) => {
       const user = currentUser(req);
       const assignmentId = Number(req.params.assignmentId);
@@ -9482,7 +9574,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "3-cone": "threeConeSeconds",
   };
 
-  app.post("/api/athlete/skill-session-logs", requireRole("athlete"), async (req, res) => {
+  app.post(
+    "/api/athlete/skill-session-logs",
+    requireRole("athlete"),
+    // Reached by coached athletes too, so the three-branch rule rather than the
+    // Free-Agent-only one -- see skillsAccessFor.
+    requireSkillsAccess,
+    async (req, res) => {
     const user = currentUser(req);
     const parsed = createSkillSessionLogSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -9566,7 +9664,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(log);
   });
 
-  app.get("/api/athlete/skill-session-logs", requireRole("athlete"), async (req, res) => {
+  app.get(
+    "/api/athlete/skill-session-logs",
+    requireRole("athlete"),
+    // Reached by coached athletes too, so the three-branch rule rather than the
+    // Free-Agent-only one -- see skillsAccessFor.
+    requireSkillsAccess,
+    async (req, res) => {
     const user = currentUser(req);
     const schema = z.object({ skillProgramExerciseId: z.coerce.number() });
     const parsed = schema.safeParse(req.query);
@@ -10300,7 +10404,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // requireFreeAgent gate, same plain-CRUD-free/AI-paywalled split -- but
   // against skillPrograms/skillExercises and gated behind "skillsAi"
   // instead of "strengthAi", since paying for one never unlocks the other.
-  app.get("/api/athlete/skill-exercises", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+  app.get(
+    "/api/athlete/skill-exercises",
+    requireRole("athlete"),
+    requireFreeAgent,
+    // The Skill BANK itself. Browsing was never gated -- only the AI features inside were -- so a
+    // Basic Free Agent could read the whole skills library on a tier sold without skills.
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getVisibleSkillExercisesForFreeAgent(user.id);
     res.json(list);
@@ -10321,54 +10432,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  app.get("/api/athlete/skill-programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const list = await storage.getVisibleSkillProgramsForCoach(user.id);
-    res.json(list);
-  });
+  app.get(
+    "/api/athlete/skill-programs",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const list = await storage.getVisibleSkillProgramsForCoach(user.id);
+      res.json(list);
+    },
+  );
 
-  app.get("/api/athlete/skill-programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    // Readable set, not owned set -- same reasoning as GET /api/athlete/programs/:id
-    // above. The list this page is reached from (getVisibleSkillProgramsForCoach)
-    // already includes every admin-authored Forge skill program, and the card's
-    // Duplicate button reads the detail before re-posting it, so an owned-only
-    // fetch 404'd every Forge skill program the list had just offered. Ownership
-    // is reported honestly instead of hardcoded to YOU/editable.
-    const program = await storage.getSkillProgramFull(id);
-    if (!program) return res.status(404).json({ message: "Skill program not found" });
-    const { ownerIds } = await storage.getCoachAndAdminOwnerIds(user.id);
-    if (!ownerIds.includes(program.coachId)) {
-      return res.status(404).json({ message: "Skill program not found" });
-    }
-    const isOwn = program.coachId === user.id;
-    res.json({
-      ...program,
-      isForgeOfficial: !isOwn,
-      ownerLabel: isOwn ? "YOU" : "FORGE",
-      editable: isOwn,
-    });
-  });
-
-  app.post("/api/athlete/skill-programs", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const parsed = skillProgramStructureSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const skillExerciseIds = parsed.data.weeks.flatMap((w) =>
-      w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId)),
-    );
-    const locked = await storage.assertSkillExercisesUnlockedForFreeAgent(user.id, skillExerciseIds);
-    if (locked.length > 0) {
-      return res.status(403).json({
-        message: `Unlock these drills' sport to use them: ${locked.join(", ")}`,
+  app.get(
+    "/api/athlete/skill-programs/:id",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      // Readable set, not owned set -- same reasoning as GET /api/athlete/programs/:id
+      // above. The list this page is reached from (getVisibleSkillProgramsForCoach)
+      // already includes every admin-authored Forge skill program, and the card's
+      // Duplicate button reads the detail before re-posting it, so an owned-only
+      // fetch 404'd every Forge skill program the list had just offered. Ownership
+      // is reported honestly instead of hardcoded to YOU/editable.
+      const program = await storage.getSkillProgramFull(id);
+      if (!program) return res.status(404).json({ message: "Skill program not found" });
+      const { ownerIds } = await storage.getCoachAndAdminOwnerIds(user.id);
+      if (!ownerIds.includes(program.coachId)) {
+        return res.status(404).json({ message: "Skill program not found" });
+      }
+      const isOwn = program.coachId === user.id;
+      res.json({
+        ...program,
+        isForgeOfficial: !isOwn,
+        ownerLabel: isOwn ? "YOU" : "FORGE",
+        editable: isOwn,
       });
-    }
-    const program = await storage.createSkillProgramWithStructure(user.id, parsed.data);
-    res.status(201).json(program);
-  });
+    },
+  );
+
+  // Gated like the reads beside it. The reads carried requirePaidAiAccess("skillsAi") and the
+  // three writes did not, which is the wrong way round: a Free Agent on a tier without skills
+  // could not LIST their skill programs but could still create, edit and delete them.
+  app.post(
+    "/api/athlete/skill-programs",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = skillProgramStructureSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const skillExerciseIds = parsed.data.weeks.flatMap((w) =>
+        w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId)),
+      );
+      const locked = await storage.assertSkillExercisesUnlockedForFreeAgent(user.id, skillExerciseIds);
+      if (locked.length > 0) {
+        return res.status(403).json({
+          message: `Unlock these drills' sport to use them: ${locked.join(", ")}`,
+        });
+      }
+      const program = await storage.createSkillProgramWithStructure(user.id, parsed.data);
+      res.status(201).json(program);
+    },
+  );
 
   app.post(
     "/api/athlete/skill-programs/ai-draft",
@@ -10386,37 +10518,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  app.put("/api/athlete/skill-programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    const owned = await assertCoachOwnsSkillProgram(user.id, id);
-    if (!owned) return res.status(404).json({ message: "Skill program not found" });
-    const parsed = skillProgramStructureSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    }
-    const skillExerciseIds = parsed.data.weeks.flatMap((w) =>
-      w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId)),
-    );
-    const locked = await storage.assertSkillExercisesUnlockedForFreeAgent(user.id, skillExerciseIds);
-    if (locked.length > 0) {
-      return res.status(403).json({
-        message: `Unlock these drills' sport to use them: ${locked.join(", ")}`,
-      });
-    }
-    await storage.updateSkillProgramStructure(id, parsed.data, user.id);
-    const updated = await storage.getSkillProgramFull(id);
-    res.json(updated);
-  });
+  app.put(
+    "/api/athlete/skill-programs/:id",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsSkillProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Skill program not found" });
+      const parsed = skillProgramStructureSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const skillExerciseIds = parsed.data.weeks.flatMap((w) =>
+        w.days.flatMap((d) => d.exercises.map((ex) => ex.skillExerciseId)),
+      );
+      const locked = await storage.assertSkillExercisesUnlockedForFreeAgent(user.id, skillExerciseIds);
+      if (locked.length > 0) {
+        return res.status(403).json({
+          message: `Unlock these drills' sport to use them: ${locked.join(", ")}`,
+        });
+      }
+      await storage.updateSkillProgramStructure(id, parsed.data, user.id);
+      const updated = await storage.getSkillProgramFull(id);
+      res.json(updated);
+    },
+  );
 
-  app.delete("/api/athlete/skill-programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    const owned = await assertCoachOwnsSkillProgram(user.id, id);
-    if (!owned) return res.status(404).json({ message: "Skill program not found" });
-    await storage.deleteSkillProgram(id);
-    res.status(204).end();
-  });
+  app.delete(
+    "/api/athlete/skill-programs/:id",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requirePaidAiAccess("skillsAi"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const id = Number(req.params.id);
+      const owned = await assertCoachOwnsSkillProgram(user.id, id);
+      if (!owned) return res.status(404).json({ message: "Skill program not found" });
+      await storage.deleteSkillProgram(id);
+      res.status(204).end();
+    },
+  );
 
   app.get(
     "/api/athlete/skill-programs/:id/chat",
