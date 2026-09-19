@@ -13,6 +13,8 @@ import {
   guardianLinks,
   externalWaivers,
   externalWaiverViewGrants,
+  externalWaiverStatusEnum,
+  institutionalAgreementSignatures,
   externalWaiverKindEnum,
   guardianInvites,
   coachStaff,
@@ -257,6 +259,7 @@ import type {
   LegalDocument,
   LegalDocumentType,
   ExternalWaiver,
+  InstitutionalAgreementSignature,
 } from "@shared/schema";
 import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
@@ -25920,6 +25923,15 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     sizeBytes?: number | null;
     signedOn?: string | null;
     expiresOn?: string | null;
+    // Normally left alone: an uploaded document lands pending_review and a person or the model
+    // decides it. An agreement SIGNED IN THE APP has already been decided -- Forge generated the
+    // PDF from its own text and the coach signed it in this request, so there is nothing for a
+    // reviewer to read off the page. See the sign route in institutional-agreement-routes.ts.
+    reviewStatus?: (typeof externalWaiverStatusEnum.enumValues)[number];
+    reviewedByUserId?: number | null;
+    reviewedAt?: Date | null;
+    reviewNote?: string | null;
+    reviewSource?: string | null;
   }): Promise<ExternalWaiver> {
     // A NEW UPLOAD OF THE SAME KIND RETIRES THE OLD ONE RATHER THAN DELETING IT.
     //
@@ -25950,6 +25962,11 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         sizeBytes: input.sizeBytes ?? null,
         signedOn: input.signedOn ?? null,
         expiresOn: input.expiresOn ?? null,
+        ...(input.reviewStatus ? { reviewStatus: input.reviewStatus } : {}),
+        reviewedByUserId: input.reviewedByUserId ?? null,
+        reviewedAt: input.reviewedAt ?? null,
+        reviewNote: input.reviewNote ?? null,
+        reviewSource: input.reviewSource ?? null,
       })
       .returning();
     return row;
@@ -26999,14 +27016,38 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * school's participation waiver -- the signed PDF is uploaded, an admin reviews it, and the row
    * is the record. `onFile` is true only once that review has accepted it: a document nobody has
    * looked at is a document that might be the wrong one, or blank, or unsigned. */
-  async getInstitutionalAgreementStatus(
-    coachId: number,
-  ): Promise<{ required: boolean; onFile: boolean; signedAt: Date | null; reviewPending: boolean }> {
+  async getInstitutionalAgreementStatus(coachId: number): Promise<{
+    required: boolean;
+    onFile: boolean;
+    signedAt: Date | null;
+    reviewPending: boolean;
+    /** The in-app electronic signature, if this school signed rather than uploading paper.
+     * Null for a school that uploaded a scan -- both are equally "on file", and nothing else in
+     * the app treats them differently; this only says HOW, so a page can show "signed in the app
+     * by X on Y" instead of the upload instructions. */
+    signature: {
+      signedAt: Date;
+      signerName: string;
+      signerTitle: string;
+      institutionName: string;
+    } | null;
+    /** Whether the in-app signing flow should be offered at all. Exactly "required and not yet on
+     * file" -- computed here rather than re-derived on the client, for the same reason every
+     * other two-branch rule in this app is asked of the server once. */
+    canSignInApp: boolean;
+  }> {
     const coach = await this.getUser(coachId);
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const isPrimary = coachIds[0] === coachId;
     if (!isPrimary || !coach?.billingTier) {
-      return { required: false, onFile: false, signedAt: null, reviewPending: false };
+      return {
+        required: false,
+        onFile: false,
+        signedAt: null,
+        reviewPending: false,
+        signature: null,
+        canSignInApp: false,
+      };
     }
     const rows = await db
       .select({ reviewStatus: externalWaivers.reviewStatus, signedOn: externalWaivers.signedOn, createdAt: externalWaivers.createdAt })
@@ -27014,14 +27055,103 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .where(and(eq(externalWaivers.athleteId, coachId), eq(externalWaivers.kind, "institutional_agreement")))
       .orderBy(desc(externalWaivers.createdAt));
     const accepted = rows.find((r) => r.reviewStatus === "accepted");
+    const signature = await this.getLatestInstitutionalAgreementSignature(coachId);
     return {
       required: true,
       onFile: Boolean(accepted),
       signedAt: accepted ? (accepted.signedOn ? new Date(accepted.signedOn) : accepted.createdAt) : null,
+      signature: signature
+        ? {
+            signedAt: signature.signedAt,
+            signerName: signature.signerName,
+            signerTitle: signature.signerTitle,
+            institutionName: signature.institutionName,
+          }
+        : null,
+      canSignInApp: !accepted,
       // Uploaded but not yet reviewed. Worth saying out loud rather than showing the same "not on
       // file" banner as somebody who has sent nothing -- one of them has already done their part.
       reviewPending: !accepted && rows.some((r) => r.reviewStatus === "pending_review"),
     };
+  },
+
+  /** The evidentiary row for an agreement signed in the app. Insert-only (see
+   * institutionalAgreementSignatures in shared/schema.ts) -- there is no update and no delete. */
+  async recordInstitutionalAgreementSignature(input: {
+    coachUserId: number;
+    waiverId: number | null;
+    institutionName: string;
+    address: string;
+    signerName: string;
+    signerTitle: string;
+    noticeEmail: string;
+    typedSignature: string;
+    agreementHash: string;
+    forgeSignerName: string;
+    forgeSignerTitle: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<InstitutionalAgreementSignature> {
+    const [row] = await db
+      .insert(institutionalAgreementSignatures)
+      .values({
+        coachUserId: input.coachUserId,
+        waiverId: input.waiverId,
+        institutionName: input.institutionName,
+        address: input.address,
+        signerName: input.signerName,
+        signerTitle: input.signerTitle,
+        noticeEmail: input.noticeEmail,
+        typedSignature: input.typedSignature,
+        agreementHash: input.agreementHash,
+        forgeSignerName: input.forgeSignerName,
+        forgeSignerTitle: input.forgeSignerTitle,
+        ipAddress: input.ipAddress ?? null,
+        userAgent: input.userAgent ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  /** Latest first: a school that signs again writes another row and the old one stays. */
+  async getLatestInstitutionalAgreementSignature(
+    coachId: number,
+  ): Promise<InstitutionalAgreementSignature | null> {
+    const [row] = await db
+      .select()
+      .from(institutionalAgreementSignatures)
+      .where(eq(institutionalAgreementSignatures.coachUserId, coachId))
+      .orderBy(desc(institutionalAgreementSignatures.signedAt), desc(institutionalAgreementSignatures.id))
+      .limit(1);
+    return row ?? null;
+  },
+
+  /** The accepted agreement row for a staff, so any coach on it can read the signed PDF back.
+   * Kind and status are both part of the question: a rejected or superseded row is not the
+   * document, and returning one would serve a school a copy of something not in force. */
+  async getAcceptedInstitutionalAgreementWaiver(coachId: number): Promise<ExternalWaiver | null> {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const [row] = await db
+      .select()
+      .from(externalWaivers)
+      .where(
+        and(
+          inArray(externalWaivers.athleteId, coachIds),
+          eq(externalWaivers.kind, "institutional_agreement"),
+          eq(externalWaivers.reviewStatus, "accepted"),
+        ),
+      )
+      .orderBy(desc(externalWaivers.createdAt))
+      .limit(1);
+    return row ?? null;
+  },
+
+  /** COMPENSATION ONLY. The sign route writes the waiver row before the signature row; if the
+   * second insert fails, the first has to go, or `onFile` would read true for an agreement with
+   * no evidence of who signed it. Nothing else may call this -- a waiver row is otherwise
+   * retired, never removed (see createExternalWaiver). */
+  async deleteExternalWaiverRow(waiverId: number): Promise<void> {
+    await db.delete(externalWaivers).where(eq(externalWaivers.id, waiverId));
   },
 
   async logConsentRecord(input: {

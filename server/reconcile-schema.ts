@@ -3285,6 +3285,31 @@ CREATE INDEX IF NOT EXISTS "external_waiver_view_grants_admin_idx"
 -- never stated. See shared/schema.ts.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "planned_athlete_count" integer;
 
+-- The evidentiary record of an Institutional Service Agreement signed IN THE APP: who signed,
+-- the sha256 of the exact text they were shown, when, and from where. Insert-only, like
+-- consent_records. waiver_id points at the generated signed PDF filed as an accepted
+-- external_waivers row -- nullable and SET NULL, because the evidence of a signature must not
+-- disappear with the file row. See shared/schema.ts.
+CREATE TABLE IF NOT EXISTS "institutional_agreement_signatures" (
+  "id" serial PRIMARY KEY,
+  "coach_user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "waiver_id" integer REFERENCES "external_waivers"("id") ON DELETE SET NULL,
+  "institution_name" text NOT NULL,
+  "address" text NOT NULL,
+  "signer_name" text NOT NULL,
+  "signer_title" text NOT NULL,
+  "notice_email" text NOT NULL,
+  "typed_signature" text NOT NULL,
+  "agreement_hash" text NOT NULL,
+  "forge_signer_name" text NOT NULL,
+  "forge_signer_title" text NOT NULL,
+  "ip_address" text,
+  "user_agent" text,
+  "signed_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "institutional_agreement_signatures_coach_idx"
+  ON "institutional_agreement_signatures" ("coach_user_id", "signed_at");
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN

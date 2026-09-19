@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, X, Minus, Clock, Upload, FileWarning, FileDown } from "lucide-react";
+import { Check, X, Minus, Clock, Upload, FileWarning } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,12 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
-import { ApiError, getNativeToken, resolveApiUrl, uploadWithProgress } from "@/lib/queryClient";
-import { shareOrDownloadBlob } from "@/lib/share-file";
+import { ApiError, resolveApiUrl, uploadWithProgress } from "@/lib/queryClient";
+import {
+  InstitutionalAgreementSigning,
+  type InstitutionalAgreementStatus,
+} from "@/components/institutional-agreement-signing";
 import { cn } from "@/lib/utils";
-import { institutionalAgreementFormSchema } from "@shared/institutional-service-agreement";
 import {
   DOCUMENT_LABEL,
   REQUIRED_DOCUMENTS,
@@ -147,94 +149,11 @@ export default function DocumentsPage() {
   // to do with it -- so it is offered as an upload kind only to the coach the server says needs
   // it. Same reasoning as the checklist's own rule about never showing somebody a row they cannot
   // satisfy.
-  const { data: institutional } = useQuery<{ required: boolean; onFile: boolean }>({
+  const { data: institutional } = useQuery<InstitutionalAgreementStatus>({
     queryKey: ["/api/coach/institutional-agreement"],
     enabled: user?.role === "coach" && !forSomeoneElse,
   });
   const offerInstitutional = institutional?.required === true;
-
-  // THE AGREEMENT IS GENERATED HERE, NOT MAILED OUT BY HAND.
-  //
-  // A school used to get its Service Agreement by Scott opening the markdown file, deleting the
-  // review marks, typing the school's details into six places and emailing a PDF -- a person in
-  // the middle of a signup. The coach fills in their own side, downloads a complete copy, signs
-  // it, and uploads it through the control directly below, which is the same row the checklist
-  // already reads. Generating a copy is not signing one: nothing is recorded until the signed
-  // PDF comes back.
-  const [agreement, setAgreement] = useState({
-    institutionName: "",
-    address: "",
-    signerName: "",
-    signerTitle: "",
-    noticeEmail: "",
-  });
-  // Keyed by field name, from whichever side found the problem. The client validates with the
-  // same zod schema the route uses, so the two cannot disagree about what a valid address is --
-  // and the server still validates, because a form is a thing anybody can edit.
-  const [agreementErrors, setAgreementErrors] = useState<Record<string, string>>({});
-  const [generating, setGenerating] = useState(false);
-  const [generated, setGenerated] = useState(false);
-
-  const AGREEMENT_FIELDS: { name: keyof typeof agreement; label: string; placeholder: string }[] = [
-    { name: "institutionName", label: "Legal name of your school, district or club", placeholder: "Ironwood Ridge High School" },
-    { name: "address", label: "Mailing address", placeholder: "2475 W Naranja Dr, Oro Valley, AZ 85742" },
-    { name: "signerName", label: "Who will sign it", placeholder: "Dana Whitfield" },
-    { name: "signerTitle", label: "Their title", placeholder: "Athletic Director" },
-    { name: "noticeEmail", label: "Email for legal notices", placeholder: "athletics@yourschool.org" },
-  ];
-
-  async function downloadAgreement() {
-    const parsed = institutionalAgreementFormSchema.safeParse(agreement);
-    if (!parsed.success) {
-      const next: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        const key = String(issue.path[0]);
-        if (!next[key]) next[key] = issue.message;
-      }
-      setAgreementErrors(next);
-      return;
-    }
-    setAgreementErrors({});
-    setGenerating(true);
-    try {
-      // A raw fetch rather than apiRequest: apiRequest throws an ApiError carrying only `message`,
-      // and the whole point of the 400 here is the per-field detail underneath it.
-      const token = getNativeToken();
-      const res = await fetch(resolveApiUrl("/api/coach/institutional-agreement/download"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: "include",
-        body: JSON.stringify(parsed.data),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({} as any));
-        if (body.fieldErrors) {
-          const next: Record<string, string> = {};
-          for (const [field, messages] of Object.entries(body.fieldErrors as Record<string, string[]>)) {
-            if (messages?.[0]) next[field] = messages[0];
-          }
-          setAgreementErrors(next);
-        }
-        toast.error(body.message || "Couldn't generate that agreement.");
-        return;
-      }
-      // shareOrDownloadBlob, not an <a download>: WKWebView ignores the attribute, so inside the
-      // native app the file would generate and vanish. Same helper the research extract uses.
-      await shareOrDownloadBlob(
-        await res.blob(),
-        "forge-service-agreement.pdf",
-        "Forge Institutional Service Agreement",
-      );
-      setGenerated(true);
-    } catch {
-      toast.error("Couldn't reach the server. Try again when you have a signal.");
-    } finally {
-      setGenerating(false);
-    }
-  }
 
   const key = [`/api/waivers/${targetId ?? 0}`];
   const { data, isLoading } = useQuery<{
@@ -369,60 +288,7 @@ export default function DocumentsPage() {
             </p>
           ))}
 
-        {offerInstitutional && institutional?.onFile === false && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <FileDown className="h-4 w-4 text-primary" />
-                Your Service Agreement
-              </CardTitle>
-              <CardDescription>
-                Your organisation needs a signed Institutional Service Agreement on file. Fill in
-                your details and we'll generate your copy -- there is nothing to request and
-                nothing to wait for.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {AGREEMENT_FIELDS.map((field) => (
-                <div key={field.name} className="space-y-1.5">
-                  <Label className="text-xs">{field.label}</Label>
-                  <Input
-                    className="h-9 text-sm"
-                    value={agreement[field.name]}
-                    placeholder={field.placeholder}
-                    onChange={(e) => {
-                      setAgreement((a) => ({ ...a, [field.name]: e.target.value }));
-                      setAgreementErrors((errs) => {
-                        if (!errs[field.name]) return errs;
-                        const { [field.name]: _gone, ...rest } = errs;
-                        return rest;
-                      });
-                    }}
-                    aria-invalid={!!agreementErrors[field.name]}
-                  />
-                  {agreementErrors[field.name] && (
-                    <p className="text-xs text-destructive">{agreementErrors[field.name]}</p>
-                  )}
-                </div>
-              ))}
-              <Button className="w-full" onClick={downloadAgreement} disabled={generating}>
-                {generating ? "Generating..." : "Download agreement"}
-              </Button>
-              {generated && (
-                <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                  Saved. Print it or open it in a signing app, have{" "}
-                  {agreement.signerName || "your authorised representative"} sign it, then come
-                  back and upload the signed copy in the box below -- choose{" "}
-                  <span className="font-medium">
-                    {DOCUMENT_LABEL.institutional_agreement}
-                  </span>{" "}
-                  as the document type. It isn't on file until the signed copy has been uploaded
-                  and checked.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        {offerInstitutional && <InstitutionalAgreementSigning />}
 
         <Card ref={uploadRef}>
           <CardHeader>
