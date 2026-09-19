@@ -18,13 +18,21 @@
  * The last one is the only place the product does something a person would
  * not guess, so leaving it out would make the whole document dishonest.
  */
-export const RESEARCH_CONSENT_VERSION = "2026-09-17";
+export const RESEARCH_CONSENT_VERSION = "2026-09-19";
 
-/** The heading of the section that discloses retention after deletion. Used to
- * recognise the disclosure inside a STORED consent record, so it has to stay
- * byte-identical to the heading in RESEARCH_CONSENT_TEXT below --
- * researchConsentDisclosesDeletionRetention is asserted against that text. */
-export const DELETION_RETENTION_HEADING = "IF YOU DELETE YOUR ACCOUNT";
+/** The heading of the section that discloses retention after deletion in the
+ * CURRENT text. Used to recognise the disclosure inside a STORED consent
+ * record, so it has to stay byte-identical to the heading in
+ * RESEARCH_CONSENT_TEXT below -- researchConsentDisclosesDeletionRetention is
+ * asserted against that text. */
+export const DELETION_RETENTION_HEADING = "6. RETENTION AND ACCOUNT DELETION";
+
+/** Headings the same disclosure carried in EARLIER texts people agreed to.
+ * A consent given under the 2026-09-17 wording told them exactly what the
+ * current text tells them, so it still counts; only text with none of these
+ * headings predates the disclosure. Append, never edit: a stored record
+ * cannot be re-worded. */
+export const PRIOR_DELETION_RETENTION_HEADINGS: readonly string[] = ["IF YOU DELETE YOUR ACCOUNT"];
 
 /**
  * Whether the text somebody actually agreed to told them the scrubbed record
@@ -44,54 +52,46 @@ export const DELETION_RETENTION_HEADING = "IF YOU DELETE YOUR ACCOUNT";
  * moved onto the new terms retroactively; they would have to consent again.
  */
 export function researchConsentDisclosesDeletionRetention(documentText: string | null | undefined) {
-  return !!documentText && documentText.includes(DELETION_RETENTION_HEADING);
+  if (!documentText) return false;
+  return (
+    documentText.includes(DELETION_RETENTION_HEADING) ||
+    PRIOR_DELETION_RETENTION_HEADINGS.some((h) => documentText.includes(h))
+  );
 }
 
-export const RESEARCH_CONSENT_TEXT = `Allowing your training data to be used for research
+/** REVIEWED BY COUNSEL, 2026-09-19. This is the text the attorney returned,
+ * verbatim, replacing the 2026-09-17 plain-English draft that
+ * docs/research-consent-for-counsel.md sent for review. Every factual claim
+ * in it was checked against the code before it went live (that file records
+ * the check). Changing a word here is changing a reviewed document, and it
+ * re-asks every athlete and guardian who consented under the old wording. */
+export const RESEARCH_CONSENT_TEXT = `FORGE -- RESEARCH CONSENT AND DATA USE AUTHORIZATION
 
-Forge is sometimes asked to share what it has learned across many athletes
-with researchers studying training and injury.
+1. PURPOSE OF AUTHORIZATION
+Forge Performance Systems LLC ("Forge") is periodically requested to provide aggregated, de-identified athletic performance data to independent research organizations studying athletic training, biomechanics, and injury prevention. This document authorizes Forge to include the undersigned user's (the "Subject") de-identified training metrics in such research extracts.
 
-If you agree, here is exactly what happens.
+2. VOLUNTARY PARTICIPATION
+This authorization is strictly voluntary. Agreement to this document is not a condition of using the Forge application or receiving services. A decision to decline or withdraw this authorization will not affect the Subject's training programs, coaching access, account functionality, or subscription fees in any manner.
 
-WHAT GETS SHARED
-Only group numbers. A researcher might see "the average vertical jump of
-240 seventeen-year-old football athletes was 28.4 inches". They never see
-one athlete's results on their own.
+3. SCOPE OF AUTHORIZED DATA (WHAT IS SHARED)
+The data provided for research shall consist exclusively of aggregated group statistics (e.g., "the average vertical jump of 240 seventeen-year-old football athletes was 28.4 inches"). The Subject's individual performance metrics shall only be shared as part of an aggregated dataset. Any aggregated group comprising fewer than ten (10) individuals shall be excluded from any extract provided to a researcher to prevent reverse-identification.
 
-Any group smaller than ten people is left out entirely, so nobody can work
-backwards from a small group to a single person.
+4. EXCLUDED DATA (WHAT IS NEVER SHARED)
+Under no circumstances shall the following personally identifiable information (PII) be included in any research extract:
+- Name, email address, physical address, or date of birth.
+- Affiliated school, club, team, or specific coach identity.
+- Raw video files, images, or media recordings.
+- Free-text entries, notes, or written injury descriptions provided by the Subject or their coach.
+- Specific calendar dates capable of correlating an event to a specific day.
 
-WHAT NEVER GETS SHARED
-Your name, email, birthday, address, school, team, or coach. Your videos.
-Anything you or your coach typed in your own words, including how you
-described an injury. Any date that could pin an event to a particular day.
+The data provided to researchers is designed so that it cannot be traced back to the Subject. Forge does not maintain a cross-reference key or index that connects an aggregated research dataset back to an individual user's identifying profile.
 
-Nothing shared with a researcher can be traced back to you. There is no
-list anywhere that connects the numbers to your name, because Forge does
-not keep one.
+5. WITHDRAWAL OF CONSENT
+The Subject (or the Subject's parent/legal guardian) may revoke this authorization at any time by updating their preferences within the application settings. Upon withdrawal, the Subject's data shall be immediately removed from the designated research database and excluded from any future extracts. The Subject acknowledges that Forge cannot recall or retroactively modify statistical reports or datasets that were already compiled and delivered to researchers prior to the date of withdrawal.
 
-SAYING NO CHANGES NOTHING ELSE
-Your training, your program, your coach, and everything else about Forge
-works exactly the same whether you agree or not. This is not part of your
-membership and it does not affect what you pay.
+6. RETENTION AND ACCOUNT DELETION
+In the event the Subject deletes their Forge account, all personally identifiable information, video files, and account access shall be permanently removed in accordance with the Forge Privacy Policy. However, the de-identified, aggregated numeric data (including age bracket, sport, position, and performance metrics) authorized under this document shall be retained for ongoing longitudinal research, as it contains no identifying linkages to the Subject.
+- Opt-Out Procedure: If the Subject requires the permanent deletion of their de-identified numeric metrics from the research database, the Subject must expressly withdraw this authorization (as described in Section 5) prior to initiating the account deletion process.
 
-CHANGING YOUR MIND
-You can withdraw at any time, and your data is left out of everything
-prepared afterwards. A report that was already sent cannot be recalled,
-which is the honest limit of withdrawing rather than a loophole.
-
-IF YOU DELETE YOUR ACCOUNT
-Deleting your account removes your account, your videos, and everything
-that identifies you. The group numbers you agreed to share stay -- age,
-sport, position, and the training numbers themselves, with nothing in them
-that points back to you. That is what makes it possible to study how
-athletes train over years rather than only while they are still members.
-
-If you would rather nothing of yours remained, withdraw from research
-FIRST and then delete your account. Withdrawing removes your numbers from
-the research store; deleting afterwards leaves nothing behind.
-
-IF YOU ARE UNDER 18
-A parent or guardian makes this decision. It is theirs to give and theirs
-to withdraw.`;
+7. MINOR SUBJECTS
+If the Subject is under eighteen (18) years of age, this authorization must be granted by the Subject's parent or legal guardian. The parent or legal guardian retains the sole right to grant, manage, and withdraw this authorization on behalf of the minor Subject.`;

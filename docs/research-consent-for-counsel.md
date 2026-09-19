@@ -1,7 +1,19 @@
 # Forge -- research consent: review request
 
-Prepared 2026-09-19 for attorney review. This is the one live consent document no
-lawyer has read. It is short (356 words) and written for a sixteen-year-old and their
+**Reviewed.** Prepared 2026-09-19 for attorney review; counsel returned a rewritten text
+the same day and it went live verbatim (`shared/research-consent.ts`, version 2026-09-19).
+Everyone who consented under the 2026-09-17 wording is asked again; their earlier
+consent still counts for what it said, including the deletion-retention disclosure,
+which the gate recognises under either heading. Kept as the record of the engineering
+facts behind each claim.
+
+**One word checked and flagged to Scott:** section 6 of the reviewed text says the retained
+record includes an "age bracket". The research store keeps the athlete's age as a whole
+number of years, not a bracket; extracts only ever show it inside a group. Either the word
+becomes "age" or the store starts keeping a band -- a one-line decision, open as of
+2026-09-19.
+
+Before review this was the one live consent document no lawyer had read. It is short (356 words) and written for a sixteen-year-old and their
 parent. Rocket Lawyer has no template for it. The text below is asserted against the
 live constant (`shared/research-consent.ts`) by `shared/research-consent-disclosure.test.ts`,
 so this copy cannot drift from what is in use.

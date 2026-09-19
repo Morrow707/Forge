@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   RESEARCH_CONSENT_TEXT,
   DELETION_RETENTION_HEADING,
+  PRIOR_DELETION_RETENTION_HEADINGS,
   researchConsentDisclosesDeletionRetention,
 } from "./research-consent";
 
@@ -21,14 +22,20 @@ describe("the deletion-retention disclosure", () => {
     );
     // The three facts a person needs to decide: their identity goes, the group
     // numbers stay, and there is an order to follow if they want neither.
-    expect(section).toContain("videos");
-    expect(section).toContain("stay");
-    expect(section).toMatch(/withdraw[\s\S]*FIRST/);
+    expect(section).toContain("video files");
+    expect(section).toContain("retained");
+    expect(section).toMatch(/withdraw[\s\S]*prior to initiating the account deletion/);
   });
 
   it("answers no for the text as it read before the section existed", () => {
     const older = RESEARCH_CONSENT_TEXT.split(DELETION_RETENTION_HEADING)[0];
     expect(researchConsentDisclosesDeletionRetention(older)).toBe(false);
+  });
+
+  it("still answers yes for the 2026-09-17 wording people already agreed to", () => {
+    for (const h of PRIOR_DELETION_RETENTION_HEADINGS) {
+      expect(researchConsentDisclosesDeletionRetention(`Allowing your training data...\n\n${h}\nDeleting your account removes...`)).toBe(true);
+    }
   });
 
   it("answers no for nothing at all, rather than throwing", () => {

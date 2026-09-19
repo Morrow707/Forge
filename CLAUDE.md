@@ -716,11 +716,14 @@ have to stay.
 
 **The only legal work left is REVIEW**: the four public documents, the Institutional
 Service Agreement (`docs/institutional-service-agreement.md`), the signup Terms of Use,
-the research consent, and the questions in `docs/legal-open-questions.md`. Nothing needs
-writing. Three documents ARE reviewed: the Video and Biometric Consent (built with counsel,
-2026-09-17), the Assumption of Risk (counsel's opinion 2026-09-19, question 8) and the AI
-Terms of Use (lawyer-modified from the Rocket Lawyer draft). The research consent's review
-request is `docs/research-consent-for-counsel.md` (question 9).
+and the questions in `docs/legal-open-questions.md`. Nothing needs
+writing. Four documents ARE reviewed: the Video and Biometric Consent (built with counsel,
+2026-09-17), the Assumption of Risk (counsel's opinion 2026-09-19, question 8), the AI
+Terms of Use (lawyer-modified from the Rocket Lawyer draft) and the research consent
+(counsel's rewrite, live verbatim 2026-09-19, question 9; `shared/research-consent.ts`).
+A change to the research consent text re-asks everyone; the deletion-retention gate
+recognises the disclosure under the current heading and every prior one
+(`PRIOR_DELETION_RETENTION_HEADINGS`), so an earlier yes keeps counting for what it said.
 
 **Do not regenerate a document in Rocket Lawyer to "improve" one of these.** A
 generic template is a worse fit, not a better one. The EULA is the proof: the
