@@ -9,7 +9,7 @@ questions live here and the clauses stand on their own.
 Nothing here is resolved unless it says so. They move out of this file when counsel
 answers them, and the answer changes the clause rather than this list.
 
-## 1. Terms of Service, s14 Indemnification -- OPEN
+## 1. Terms of Use, s16 Indemnification -- OPEN
 
 Confirm with counsel whether and how this section can apply where the person being
 asked to indemnify is a minor athlete or their parent/guardian; several states limit
@@ -17,6 +17,13 @@ or void an indemnification obligation imposed on a minor.
 
 This is the one question in this file that is unambiguously still live, and it is
 about a document people accept today.
+
+It used to be s14 of the public Terms of Service. That document was retired on
+2026-09-19 when the two Terms were merged, and the clause moved UNCHANGED into the
+signup Terms of Use (`server/seed-data/signup-agreement.ts`), where it is now s16 --
+minors sentence and all. Nothing about the question changed with the move; what
+changed is that the clause is now in a document every account accepts, rather than
+one nobody did.
 
 ## 2. Service Agreement: who obtains guardian consent -- OPEN, and re-pointed
 
@@ -34,7 +41,7 @@ Service Agreement, which is what a school actually signs.
 
 The core liability-shifting mechanism of the Agreement, and the clause most in need of
 real counsel drafting. Note that moving the obligation onto the Institution does not
-resolve question 1: the consumer Terms of Service carries its own unresolved flag for
+resolve question 1: the consumer Terms of Use carries its own unresolved flag for
 minor athletes, and that is a separate problem with the same root.
 
 Re-pointed from the deleted outline to the Service Agreement, for the reason given in
@@ -139,13 +146,16 @@ text (`server/seed-data/signup-agreement.ts`) is their rewrite with the answers 
 verbatim (`docs/signup-terms-counsel-2026-09-19.txt`): no software-enforcement warranty in
 s3; a $50 floor on the liability cap and a gross-negligence carve-out in s15; notice and
 in-app re-acceptance for material changes in s16 (built, see CLAUDE.md); a precedence clause
-over the public Terms of Service; DMCA, severability and entire-agreement clauses. Every
+over the public Terms of Service (since removed -- see below); DMCA, severability and
+entire-agreement clauses. Every
 existing user is asked to accept it once.
 
 Two follow-ups from the answers, both decided by Scott 2026-09-19: the public Terms of
-Service is to be MERGED into this document ("just one less document that gets in the way";
-the clause-by-clause comparison and the three carry-over decisions are in the session record
-and in the merge PR), and the DMCA agent is to be registered (`docs/app-store-launch-notes.md`).
+Service was MERGED into this document the same day ("just one less document that gets in the
+way"): six of its clauses were carried over verbatim, the precedence sentence was dropped
+because there is nothing left to take precedence over, /terms now serves this document, and
+`TERMS_OF_SERVICE_DRAFT` is retired. The DMCA agent is still to be registered
+(`docs/app-store-launch-notes.md`).
 
 ## How these reach a reviewer
 
@@ -153,9 +163,10 @@ Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
 biometric consent plus the engineering facts behind each of its claims.
 
 **Four documents still under review** (the Assumption of Risk, the AI Terms of Use, the research consent and the signup Terms of Use were reviewed 2026-09-19, questions 8 to 10) (factual corrections from the 2026-09-19 pass already
-applied; see `git log -- server/seed-data/legal-documents-draft.ts`): the Terms of Service,
-the Privacy Policy, the EULA, the Notice to Parent or Guardian, and the Institutional
-Service Agreement. The Notice is also the parental consent document, so question 5 should
+applied; see `git log -- server/seed-data/legal-documents-draft.ts`): the Privacy Policy,
+the EULA, the Notice to Parent or Guardian, and the Institutional Service Agreement. The
+Terms of Service is no longer on this list because it no longer exists -- it was merged into
+the (reviewed) Terms of Use on 2026-09-19. The Notice is also the parental consent document, so question 5 should
 be put to whoever reads it, at the same time. The Service Agreement's text lives in
 `shared/institutional-service-agreement.ts` (mirrored in
 `docs/institutional-service-agreement.md`) and since 2026-09-19 is signed in the app, with

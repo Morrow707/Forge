@@ -15632,6 +15632,15 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     return row?.content.trim() || "No agreement has been configured yet.";
   },
 
+  // When the clickwrap was last changed. Split from getLegalAgreement rather than widening its
+  // return type: that one is read unauthenticated by the signup page and deliberately returns
+  // nothing about the row but its text. Used by /terms, which serves this document since the two
+  // Terms were merged, to show the same "last updated" line every other legal page shows.
+  async getLegalAgreementUpdatedAt(): Promise<Date | null> {
+    const [row] = await db.select().from(legalAgreement).where(eq(legalAgreement.id, 1));
+    return row?.updatedAt ?? null;
+  },
+
   async updateLegalAgreement(content: string): Promise<string> {
     await db
       .insert(legalAgreement)

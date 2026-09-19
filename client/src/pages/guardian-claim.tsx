@@ -140,11 +140,15 @@ export default function GuardianClaimPage() {
             <div className="space-y-1">
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
-                <span>I agree to the terms of service</span>
+                <span>I agree to the Terms of Use</span>
               </label>
+              {/* The signup agreement, not the retired legalDocuments row: the two Terms were
+                  merged on 2026-09-19 and this is the document the guardian's consent record
+                  snapshots, so it has to be the one they can read here. Same docType claim.tsx
+                  uses. */}
               <LegalDocumentReader
-                docType="terms_of_service"
-                label="Read the terms of service"
+                docType="signup_agreement"
+                label="Read the Terms of Use"
                 className="pl-6 text-xs"
               />
             </div>

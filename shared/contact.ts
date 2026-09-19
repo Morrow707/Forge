@@ -58,6 +58,12 @@ export const FORGE_LEGAL_ENTITY = "Forge Performance Systems LLC";
  * is a decision for counsel, not a consistency edit -- so if it comes back it comes
  * back to every document at once. server/seed-data/arbitration-dropped.test.ts holds
  * the line; see also docs/legal-clause-revisions.md.
+ *
+ * Since 2026-09-19 the two documents in that account are ONE: the public Terms of
+ * Service is retired and /terms serves the signup agreement itself, so there is no
+ * longer a second Terms for a dispute clause to disagree with. That makes the rule
+ * above easier to keep, not obsolete -- the same clause still has to match the
+ * biometric consent, the assumption of risk and the Service Agreement.
  */
 export const GOVERNING_LAW_CLAUSE =
   "This agreement, and any dispute arising out of it or out of your use of Forge, is governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. The parties will first try to resolve any dispute by talking to each other. Anything not resolved that way lies in the state and federal courts located in Maricopa County, Arizona, and both sides consent to the jurisdiction of those courts. Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.";

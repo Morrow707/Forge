@@ -6,7 +6,6 @@ import {
   patchLiveDocuments,
 } from "./signup-agreement";
 import {
-  TERMS_OF_SERVICE_DRAFT,
   PRIVACY_POLICY_DRAFT,
   PARENTAL_NOTICE_DRAFT,
   EULA_DRAFT,
@@ -26,7 +25,8 @@ import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
  * it comes back into BOTH documents at once or into neither. This test is the "or neither" half. */
 const PUBLISHED: Array<[string, string]> = [
   ["signup agreement (live)", SIGNUP_AGREEMENT],
-  ["terms of service", TERMS_OF_SERVICE_DRAFT],
+  // The terms of service was the OTHER live document in the story above. It is retired: the
+  // two Terms were merged on 2026-09-19 and the signup agreement listed first is the one Terms.
   ["privacy policy", PRIVACY_POLICY_DRAFT],
   ["parental notice", PARENTAL_NOTICE_DRAFT],
   ["eula", EULA_DRAFT],

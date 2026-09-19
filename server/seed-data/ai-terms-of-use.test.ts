@@ -132,8 +132,14 @@ describe("the age rule, against the gate that enforces it", () => {
     const signup = read("server/seed-data/signup-agreement.ts");
     // Both documents describe one gate. If they ever disagree, one of them is lying to somebody
     // about whether a child's account works.
+    // Reworded in the 2026-09-19 merge, which carried the retired Terms of Service's more
+    // accurate account of who may CREATE a minor's account across. The gate itself is unchanged:
+    // an adult on their own, a minor only after a guardian claim.
     expect(signup).toContain(
-      "You may create an account for yourself only if you are eighteen (18) years of age or older.",
+      "You may create and use an account for yourself if you are eighteen (18) years of age or older.",
+    );
+    expect(signup).toContain(
+      "it may not be used until a parent or legal guardian has claimed it and consented",
     );
     expect(AI_TERMS_OF_USE).toContain("A User who is 18 or older may register and use the Service on their own");
     // Counsel's 2026-09-19 rewrite states the same reach in its own words, so the two documents

@@ -130,7 +130,10 @@ describe("every document a user is asked to accept is reachable", () => {
     // Three consent records, each snapshotting different text, used to offer one link between
     // them.
     const claim = read("client/src/pages/guardian-claim.tsx");
-    expect(claim).toContain('docType="terms_of_service"');
+    // The TERMS checkbox reads the signup agreement, not a legalDocuments row: the two Terms were
+    // merged on 2026-09-19 and the signup agreement is what the guardian's consent record
+    // snapshots, so it has to be the text they can open here.
+    expect(claim).toContain('docType="signup_agreement"');
     expect(claim).toContain('docType="privacy_policy"');
     expect(claim).toContain('docType="biometric_waiver"');
     expect(claim).not.toContain('href="/legal"');

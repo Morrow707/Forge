@@ -4,9 +4,14 @@ import { Link } from "wouter";
 import { ForgeMark } from "@/components/forge-mark";
 
 /**
- * Public, unauthenticated pages for the real Terms of Service / Privacy
- * Policy (shared/schema.ts legalDocuments) -- distinct from legal.tsx,
- * which serves the shorter signup clickwrap agreement. This is the
+ * Public, unauthenticated pages for Forge's legal documents (shared/schema.ts
+ * legalDocuments).
+ *
+ * /terms is the exception and is no longer a legalDocuments row at all: the two
+ * Terms were merged on 2026-09-19 and TermsOfServicePage now renders the signup
+ * clickwrap, titled "Terms of Use", which the server serves behind the unchanged
+ * terms_of_service URL. Its docType and route are kept so links people already
+ * hold keep working. This is the
  * document App Store Connect's "Privacy Policy URL" field actually wants:
  * the fuller draft with data-collection specifics, COPPA/BIPA language,
  * and retention windows, written for that purpose but never wired to a
@@ -79,7 +84,7 @@ export function TermsOfServicePage() {
   return (
     <LegalDocumentPage
       docType="terms_of_service"
-      title="Terms of Service"
+      title="Terms of Use"
       otherHref="/privacy"
       otherLabel="Privacy Policy →"
     />
@@ -92,7 +97,7 @@ export function PrivacyPolicyPage() {
       docType="privacy_policy"
       title="Privacy Policy"
       otherHref="/terms"
-      otherLabel="Terms of Service →"
+      otherLabel="Terms of Use →"
     />
   );
 }
@@ -103,7 +108,7 @@ export function EulaPage() {
       docType="eula"
       title="End User License Agreement"
       otherHref="/terms"
-      otherLabel="Terms of Service →"
+      otherLabel="Terms of Use →"
     />
   );
 }
@@ -125,7 +130,7 @@ export function AssumptionOfRiskPage() {
       docType="assumption_of_risk"
       title="Assumption of Risk and Release"
       otherHref="/terms"
-      otherLabel="Terms of Service →"
+      otherLabel="Terms of Use →"
     />
   );
 }

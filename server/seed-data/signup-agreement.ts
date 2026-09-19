@@ -4,11 +4,32 @@
 // REVIEWED BY COUNSEL 2026-09-19. The text below is the attorney's rewrite,
 // VERBATIM, with their five answers folded in: section 3 no longer promises
 // software enforcement Forge does not perform, section 15 carries the $50
-// liability floor and the gross-negligence carve-out, section 16 promises
-// notice and re-acceptance on a material change (and section 1 states that
-// these Terms govern over the publicly posted Terms of Service), section 18 is
-// DMCA notice-and-takedown naming Forge's designated agent, and section 19 is
+// liability floor and the gross-negligence carve-out, section 17 promises
+// notice and re-acceptance on a material change, section 19 is DMCA
+// notice-and-takedown naming Forge's designated agent, and section 20 is
 // severability and entire agreement.
+//
+// THIS IS NOW THE ONLY TERMS. Scott, 2026-09-19: "merge them, just one less
+// document that gets in the way". The public, admin-editable Terms of Service
+// (TERMS_OF_SERVICE_DRAFT) is retired, /terms serves THIS text, and the
+// preamble's precedence sentence went with it -- there is no other document to
+// govern over. Six clauses were carried over from the retired document, in its
+// own words rather than paraphrased, because they were the only places it said
+// something this one did not:
+//   1. s3  -- who may create a minor's account, and the COPPA sentence "For an
+//             athlete under 13, that claim is also the parental consent
+//             required by federal law", plus the age-accuracy confirmation.
+//   2. s4  -- third-party information now also names "for a minor, their
+//             parent or guardian's permission".
+//   3. s11 -- the named processors: Apple in the iOS app, Stripe on the web.
+//   4. s13 -- the automated-access and reverse-engineering prohibition, with
+//             its "except where the law says otherwise" carve-out.
+//   5. s16 -- INDEMNIFICATION, verbatim including its final minors sentence.
+//             This clause is OPEN QUESTION 1 in docs/legal-open-questions.md:
+//             counsel has still to confirm how it applies to a minor or a
+//             guardian accepting on a minor's behalf. It moved here unchanged
+//             rather than being reworded, so the question travels with it.
+//   6. The renumbering that followed: old 16-20 are now 17-21.
 //
 // CHANGING THIS TEXT IS CHANGING A REVIEWED DOCUMENT. Not a copy edit: every
 // user's consent record snapshots it, the re-acceptance gate compares against
@@ -65,7 +86,7 @@ Forge stores the training, health-status, and performance data you provide in or
 
 export const SIGNUP_AGREEMENT = `FORGE -- TERMS OF USE
 
-These Terms of Use ("Terms") govern your access to and use of the Forge application and website (collectively, the "Service" or "Forge"). By creating an account or otherwise accessing the Service, you agree to be bound by these Terms. In the event of any conflict between these Terms of Use and the publicly posted Terms of Service, these Terms of Use shall govern.
+These Terms of Use ("Terms") govern your access to and use of the Forge application and website (collectively, the "Service" or "Forge"). By creating an account or otherwise accessing the Service, you agree to be bound by these Terms.
 
 1. SCOPE OF SERVICES AND MEDICAL DISCLAIMER
 
@@ -85,11 +106,11 @@ Coaches utilizing Forge to program for athletes remain solely responsible for su
 
 3. ELIGIBILITY AND MINOR GUARDIAN CONSENT
 
-You may create an account for yourself only if you are eighteen (18) years of age or older.
+You may create and use an account for yourself if you are eighteen (18) years of age or older. An account for an athlete under 18 may be created by the athlete, by a coach, or by a parent or legal guardian, but it may not be used until a parent or legal guardian has claimed it and consented as described below. By creating an account, you confirm the age information you provide is accurate.
 
 An athlete under the age of 18 may utilize Forge only if a parent or legal guardian has created a linked guardian account and explicitly provided consent on the minor's behalf. A minor athlete's account will be suspended until a legal guardian has successfully claimed it and provided the requisite consent. This restriction applies to all minor athletes, regardless of whether they initiated registration independently, were invited by a coach, or were transferred between rosters. Accounts lacking a date of birth are similarly suspended until one is provided.
 
-At the point of claiming, the guardian agrees separately to these terms, to the privacy policy, to the video and biometric consent, and to the assumption of risk and release, and a confirmation is emailed to them describing what was agreed and how to withdraw it.
+At the point of claiming, the guardian agrees separately to these terms, to the privacy policy, to the video and biometric consent, and to the assumption of risk and release, and a confirmation is emailed to them describing what was agreed and how to withdraw it. For an athlete under 13, that claim is also the parental consent required by federal law.
 
 A guardian retains the right to withdraw consent at any time. Withdrawal of consent results in the immediate deletion of all stored video associated with the minor's account and returns the account to a suspended state; the minor athlete may not resume use of the Service until a guardian provides new consent.
 
@@ -101,7 +122,7 @@ Forge stores the data you submit, including your profile information, training l
 
 Certain submissions may constitute health-related information. By electing to enter this data, you acknowledge that your designated coaches and organizational staff will have access to it, as this visibility is necessary to provide the coaching functionality of the Service. A parent or legal guardian is granted full visibility into their minor athlete's records, including training history, video media, wellness entries, injury logs, and nutrition tracking. Forge administrators may access this data strictly for technical support, auditing, and video management purposes; every instance of an administrator or coach accessing an athlete's video is permanently recorded in a secure audit log.
 
-Athlete media and performance data are never made visible to the general public through the Service. You must not enter personal information regarding any third party without obtaining their explicit prior consent.
+Athlete media and performance data are never made visible to the general public through the Service. You must not enter personal information regarding any third party without obtaining their explicit prior consent or, for a minor, their parent or guardian's permission.
 
 5. NUTRITION AND DIETARY INFORMATION
 
@@ -143,7 +164,7 @@ Forge may share de-identified, aggregated data extracts with independent researc
 
 11. PAYMENT TERMS
 
-Paid subscription plans are billed through the specific payment processor or app store designated at checkout. Subscriptions are billed on the stated interval and renew automatically until formally cancelled. Cancellations must be processed through the original billing platform; purchases made via third-party app stores are governed solely by that store's management and refund policies, not by Forge. Forge reserves the right to modify pricing for future billing periods upon notice to the user.
+Paid subscription plans are billed through the specific payment processor or app store designated at checkout. Subscriptions are billed on the stated interval and renew automatically until formally cancelled. Cancellations must be processed through the original billing platform; purchases made via third-party app stores are governed solely by that store's management and refund policies, not by Forge. Forge reserves the right to modify pricing for future billing periods upon notice to the user. Purchases made inside the iOS app are billed by Apple under Apple's terms; purchases made on the website are billed by Stripe.
 
 Any payment processed by a parent or legal guardian on behalf of a minor athlete also serves as a recorded verification step within the guardian consent protocol.
 
@@ -156,6 +177,8 @@ All proprietary content provided by Forge -- including training programming, edu
 13. ACCEPTABLE USE POLICY
 
 Users shall not utilize Forge to harass or abuse any individual, upload content they do not possess the legal right to distribute, attempt unauthorized access to data belonging to other users, disrupt or interfere with the operation of the Service, or violate any applicable local, state, or federal law. Users are strictly prohibited from attempting to reverse-engineer or re-identify any individual from aggregated or de-identified datasets provided within the Service.
+
+Forge, its software, its exercise and coaching library, and the content of its website are Forge's property. You may use them through the Service as it is intended to be used. You may not copy, scrape, or harvest them, access the Service by automated means, or reverse-engineer the software, except where the law says otherwise. This does not affect your own content, which is covered by Section 12.
 
 14. TERMINATION AND ACCOUNT DELETION
 
@@ -171,27 +194,31 @@ To the maximum extent permitted by applicable law, Forge shall not be liable for
 
 You expressly accept the physical risks outlined in Section 2 as inherent risks of athletic training that exist independently of the use of this software.
 
-16. MODIFICATIONS TO TERMS
+16. INDEMNIFICATION
+
+You agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct. Where you are under 18, or are a parent or guardian accepting these Terms on behalf of someone under 18, this Section applies only to the extent permitted by the law of the state where the minor lives, and nothing in it removes any protection that law gives a minor or a parent.
+
+17. MODIFICATIONS TO TERMS
 
 Forge may modify these Terms. The current, effective version of the Terms is consistently accessible within the application and displayed during the registration process, and the specific version of the Terms accepted by you is permanently logged alongside the timestamp of acceptance.
 
 When Forge makes a material change to these Terms, Forge will give you notice and will ask you to review and accept the revised Terms within the application before you continue to use the Service. For a minor athlete, the notice goes to the parent or legal guardian, who accepts or declines on the athlete's behalf. If you do not accept the revised Terms, you may stop using the Service and delete your account, and the version you previously accepted continues to govern your use up to that point.
 
-17. GOVERNING LAW AND DISPUTE RESOLUTION
+18. GOVERNING LAW AND DISPUTE RESOLUTION
 
 This Agreement, and any dispute arising out of it or relating to your use of Forge, shall be governed by and construed in accordance with the laws of the State of Arizona, without regard to its conflict-of-laws provisions. In the event of a dispute, the parties agree to first attempt resolution through good-faith informal discussions. Any dispute not resolved informally shall be subject to the exclusive jurisdiction of the state and federal courts located in Maricopa County, Arizona, and both parties hereby consent to the personal jurisdiction of such courts. Nothing in this provision operates to waive any legal right that cannot be lawfully waived, including rights statutorily guaranteed to individuals under the age of 18.
 
-18. COPYRIGHT COMPLAINTS
+19. COPYRIGHT COMPLAINTS
 
 Forge respects the intellectual property of others and responds to notices of alleged copyright infringement that comply with the Digital Millennium Copyright Act (DMCA). If you believe that content uploaded to the Service infringes a copyright you own or control, send a written notice to Forge's designated copyright agent at ${FORGE_CONTACT_EMAIL} containing: identification of the copyrighted work; identification of the material claimed to be infringing and information sufficient to locate it within the Service; your name, address, telephone number, and email address; a statement that you have a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law; a statement, under penalty of perjury, that the information in the notice is accurate and that you are the owner or authorized to act on the owner's behalf; and your physical or electronic signature. Forge will remove or disable access to material identified in a compliant notice, will notify the user who uploaded it, and will accept a counter-notice that complies with the DMCA. Forge may terminate the accounts of repeat infringers.
 
-19. SEVERABILITY AND ENTIRE AGREEMENT
+20. SEVERABILITY AND ENTIRE AGREEMENT
 
 If any provision of these Terms is held to be invalid or unenforceable, that provision shall be enforced to the maximum extent permissible and the remaining provisions shall remain in full force and effect.
 
 These Terms, together with the Privacy Policy, the Video and Biometric Consent, the Assumption of Risk and Release, the AI Terms of Use, and, where applicable, the Research Consent and Data Use Authorization and any Institutional Service Agreement, constitute the entire agreement between you and Forge regarding the Service and supersede any prior or contemporaneous agreements, communications, or understandings, whether written or oral, relating to the Service.
 
-20. CONTACT INFORMATION
+21. CONTACT INFORMATION
 
 Forge is operated by ${FORGE_LEGAL_ENTITY}, located at ${FORGE_POSTAL_ADDRESS}.
 
@@ -330,8 +357,9 @@ export const LIVE_DOCUMENT_PATCHES: ReadonlyArray<readonly [string, string]> = [
   // --- The "this is a draft" notice, removed from the four documents people are shown.
   //
   // Every one of these opened with "DRAFT -- not reviewed by a lawyer ... do not treat it as
-  // legally sufficient", and three of them are served on PUBLIC pages: /terms, /privacy and
-  // /eula, the last of which is the licence URL App Store Connect points at. So Forge's own
+  // legally sufficient", and three of them were served on PUBLIC pages: /terms, /privacy and
+  // /eula, the last of which is the licence URL App Store Connect points at. (/terms serves THIS
+  // document since the 2026-09-19 merge; the notice still had to come off the other two.) So Forge's own
   // answer to "are these terms any good" was printed above the terms, by Forge, where every
   // reader and every counterparty could quote it back. A disclaimer like that does not make an
   // unreviewed document safer; it makes a document that would otherwise be relied on into one
@@ -409,7 +437,8 @@ FORGE -- END USER LICENSE AGREEMENT (DRAFT)`,
   // /terms was told disputes go to arbitration while every other Forge document, including the
   // one they actually accept at signup, said Maricopa County courts. A counterparty gets to
   // pick between two live documents that disagree, so this is the direction the contradiction
-  // gets resolved in: drop it, because adopting a consumer's waiver of court access and of
+  // gets resolved in -- and since the 2026-09-19 merge there is only one Terms left to get it
+  // wrong in. Drop it, because adopting a consumer's waiver of court access and of
   // class participation -- on a platform whose users include minors -- is counsel's call, not
   // a consistency edit. Adopting it later means adding it to BOTH documents at once.
   //
@@ -468,6 +497,24 @@ The Terms of Service propose binding arbitration with a class-action waiver for 
   [
     "10. TERMINATION\nWe may suspend or terminate an account that violates these Terms. You may stop using Forge and delete your account at any time.\n\n11. DISCLAIMER OF WARRANTIES\nThe Service is provided \"as is,\" without warranties of any kind, to the fullest extent the law allows.\n\n12. LIMITATION OF LIABILITY\nTo the fullest extent the law allows, Forge Performance Systems LLC is not liable for indirect, incidental, or consequential damages arising from use of the Service, including injuries arising from training activity -- athletic training carries inherent physical risk that using this app does not create or increase.\n\n13. ASSUMPTION OF RISK\nAthletic training -- including weightlifting, sprinting, jumping, and other movements tracked or programmed through Forge -- carries inherent risks of physical injury, up to and including severe injury or death. By using the Service, you expressly acknowledge and assume these risks. As stated in Section 3, Forge's camera-based tracking, AI-generated suggestions, and form-fault flags are informational aids only; they do not guarantee safety, correct execution of any movement, or the absence of injury. A coach using the Service remains responsible for appropriately supervising and modifying training for their own athletes.\n\n14. INDEMNIFICATION\nYou agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct.\n\n15. GOVERNING LAW\nThis agreement, and any dispute arising out of it or out of your use of Forge, is governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. The parties will first try to resolve any dispute by talking to each other. Anything not resolved that way lies in the state and federal courts located in Maricopa County, Arizona, and both sides consent to the jurisdiction of those courts. Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.\n\n16. CHANGES TO THESE TERMS\nWe may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.\n\n17. CONTACT\nForge is operated by Forge Performance Systems LLC, 5145 North 7th Street, D-237, Phoenix, Arizona 85014.\n\nQuestions about these Terms, or about your account: forgeperformancesystems@outlook.com",
     "10. INTELLECTUAL PROPERTY AND AUTOMATED ACCESS\nForge, its software, its exercise and coaching library, and the content of its website are Forge's property. You may use them through the Service as it is intended to be used. You may not copy, scrape, or harvest them, access the Service by automated means, or reverse-engineer the software, except where the law says otherwise. This does not affect your own content, which is covered by Section 6.\n\n11. TERMINATION\nWe may suspend or terminate an account that violates these Terms. You may stop using Forge and delete your account at any time.\n\n12. DISCLAIMER OF WARRANTIES\nThe Service is provided \"as is,\" without warranties of any kind, to the fullest extent the law allows.\n\n13. LIMITATION OF LIABILITY\nTo the fullest extent the law allows, Forge Performance Systems LLC is not liable for indirect, incidental, or consequential damages arising from use of the Service, including injuries arising from training activity -- athletic training carries inherent physical risk that using this app does not create or increase.\n\n14. ASSUMPTION OF RISK\nAthletic training -- including weightlifting, sprinting, jumping, and other movements tracked or programmed through Forge -- carries inherent risks of physical injury, up to and including severe injury or death. By using the Service, you expressly acknowledge and assume these risks. As stated in Section 3, Forge's camera-based tracking, AI-generated suggestions, and form-fault flags are informational aids only; they do not guarantee safety, correct execution of any movement, or the absence of injury. A coach using the Service remains responsible for appropriately supervising and modifying training for their own athletes.\n\n15. INDEMNIFICATION\nYou agree to defend, indemnify, and hold harmless Forge Performance Systems LLC, its affiliates, officers, and employees from any claim, damage, liability, or expense (including reasonable attorneys' fees) arising from: (a) your use of the Service, (b) your violation of these Terms, or (c) injury or harm arising from athletic training you directed, supervised, or performed. This section does not extend to a claim arising from Forge's own gross negligence or willful misconduct.\n\n16. GOVERNING LAW\nThis agreement, and any dispute arising out of it or out of your use of Forge, is governed by the laws of the State of Arizona, without regard to its conflict-of-laws provisions. The parties will first try to resolve any dispute by talking to each other. Anything not resolved that way lies in the state and federal courts located in Maricopa County, Arizona, and both sides consent to the jurisdiction of those courts. Nothing here waives a right that cannot lawfully be waived, including a right belonging to a person under 18.\n\n17. CHANGES TO THESE TERMS\nWe may update these Terms; continued use after an update means you accept the revised Terms. Material changes will be reflected in the version an athlete is asked to accept at signup.\n\n18. CONTACT\nForge is operated by Forge Performance Systems LLC, 5145 North 7th Street, D-237, Phoenix, Arizona 85014.\n\nQuestions about these Terms, or about your account: forgeperformancesystems@outlook.com",
+  ],
+  // --- NAME REFERENCE ONLY, 2026-09-19. The two Terms were merged: the public Terms of Service
+  // is retired and the signup clickwrap, titled "Terms of Use", is served at /terms. The EULA
+  // named the other document three times, so a stored copy points at a title that no longer
+  // exists. Nothing else in the EULA changed, and it has no version lane of its own (seed.ts
+  // writes it only when absent), so these three patches ARE how the correction reaches an
+  // installation that already has it.
+  [
+    "is governed separately by the Terms of Service and the Privacy Policy.",
+    "is governed separately by the Terms of Use and the Privacy Policy.",
+  ],
+  [
+    "This section does not replace the assumption of risk in the Terms of Service;",
+    "This section does not replace the assumption of risk in the Terms of Use;",
+  ],
+  [
+    "Deleting your Forge account is governed by the Terms of Service.",
+    "Deleting your Forge account is governed by the Terms of Use.",
   ],
 ];
 

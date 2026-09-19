@@ -692,7 +692,7 @@ value, and then one of two things happens:
   writes that emptiness over the real record. `manage-roster-groups-dialog`
   (a rename would PATCH the default Group A/B/C over the coach's real groups),
   `SignupAgreementEditor` and `LegalDocEditor` (an empty box over the live
-  signup agreement or the Terms of Service), `academy-track-builder` (Save
+  signup agreement or a legal document), `academy-track-builder` (Save
   deletes every lesson and quiz question in the track). Nothing is corrupted
   here -- a whole record is REPLACED, which no field-level validation catches.
 - **The invisible one.** The page guards on `isLoading || !hydrated`, and
@@ -720,16 +720,15 @@ list headed "four documents under review", which meant "these need a lawyer's
 eyes" and read as "these need producing". Do not repeat that: when asked what
 legal work is left, say the state of each document before naming any task.
 
-**Nine documents, all with usable text, none carrying draft language**
+**Eight documents, all with usable text, none carrying draft language**
 (`server/seed-data/documents-are-not-drafts.test.ts` enforces the last part):
 
 | Document | Where |
 |---|---|
-| Terms of Service | `legal-documents-draft.ts` |
 | Privacy Policy | `legal-documents-draft.ts` |
 | Notice to Parent or Guardian | `legal-documents-draft.ts` |
 | EULA | `legal-documents-draft.ts` |
-| Terms of Use (signup) | `signup-agreement.ts` |
+| Terms of Use (signup AND /terms) | `signup-agreement.ts` |
 | Video and Biometric Consent | `biometric-release.ts` |
 | Assumption of Risk | `assumption-of-risk.ts` |
 | AI Terms of Use | `ai-terms-of-use-draft.ts` |
@@ -740,7 +739,12 @@ The `_DRAFT` suffixes are historical variable names, not banners. The remaining
 which strip that language out of documents an older installation stored; they
 have to stay.
 
-**The only legal work left is REVIEW**: the four public documents, the Institutional
+There used to be nine. Scott merged the two Terms on 2026-09-19 ("merge them, just one less
+document that gets in the way"): `TERMS_OF_SERVICE_DRAFT` is retired, six of its clauses were
+carried into `SIGNUP_AGREEMENT` in its own words, and /terms now serves the document people
+actually accept. Do not add a public Terms of Service back.
+
+**The only legal work left is REVIEW**: the remaining public documents, the Institutional
 Service Agreement (`docs/institutional-service-agreement.md`), the signup Terms of Use,
 and the questions in `docs/legal-open-questions.md`. Nothing needs
 writing. Five documents ARE reviewed: the Video and Biometric Consent (built with counsel,
@@ -794,7 +798,7 @@ change it HERE rather than arguing it again from scratch.
 - **Payments stay off through beta, but the paperwork already describes them.**
   Scott, 2026-09-17: "we are still in beta, so payments are turned off ... keep
   payments off". Scott, 2026-09-19: "when it goes live I don't want to have to
-  change paperwork when we launch" -- so the public Terms of Service s8 now
+  change paperwork when we launch" -- so the Terms of Use s11 now
   describes the paid plans (Apple in-app, Stripe on the web) even though
   BILLING_LIVE is off and nobody is charged. The pricing page still says Forge
   is not charging yet, which is the truthful statement of TODAY; the Terms

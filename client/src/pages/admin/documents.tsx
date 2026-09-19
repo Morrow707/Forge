@@ -35,7 +35,7 @@ const TIER_LABEL: Record<string, string> = {
 };
 
 const DOC_LABEL: Record<LegalDocType, string> = {
-  terms_of_service: "Terms of Service",
+  terms_of_service: "Terms of Use",
   privacy_policy: "Privacy Policy",
   biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
   parental_notice: "Notice to Parent or Guardian",
@@ -49,7 +49,7 @@ const DOC_LABEL: Record<LegalDocType, string> = {
 };
 
 const CONSENT_LABEL: Record<string, string> = {
-  terms_of_service: "Terms of Service",
+  terms_of_service: "Terms of Use",
   biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
   coach_coppa_consent: "Coach/Program Consent (Tier 1 agent)",
   parental_notice_ack: "Parental Notice Acknowledgment",
@@ -337,22 +337,25 @@ export default function AdminDocuments() {
           </CardContent>
         </Card>
 
+        {/* A POINTER, NOT AN EDITOR. There is one Terms now (Scott, 2026-09-19: "merge them,
+            just one less document that gets in the way"): the signup agreement above. It is what
+            people accept AND what /terms serves. A second editor here would write a row nothing
+            renders, which is how the two documents drifted apart to begin with -- so the card
+            says where to edit instead. PublishedBadge still points at /terms because /terms is
+            still published; it just shows the signup agreement now. */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              Terms of Service
+              Terms of Use
               <PublishedBadge at="/terms" />
             </CardTitle>
             <CardDescription>
-              Served on a public page anyone can open. It is not what anybody accepts -- the
-              signup Terms of Use is -- so editing it does not re-consent existing accounts. It
-              is still published under Forge's name, so it is read as Forge's word. Not yet
-              reviewed by counsel; the open questions are in docs/legal-open-questions.md.
+              The signup agreement is the one Terms now; edit it in the Signup agreement editor
+              above. Served at /terms, where anyone can read exactly what they accepted. The old
+              public Terms of Service is retired -- its clauses were carried into the signup
+              agreement and the open questions are in docs/legal-open-questions.md.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <LegalDocEditor docType="terms_of_service" />
-          </CardContent>
         </Card>
 
         <Card>
@@ -362,7 +365,7 @@ export default function AdminDocuments() {
               <PublishedBadge at="/privacy" />
             </CardTitle>
             <CardDescription>
-              Same treatment as the Terms of Service above, and the one most likely to be read by
+              Admin-editable and served on a public page, and the one most likely to be read by
               somebody deciding whether to let their child use this.
             </CardDescription>
           </CardHeader>
@@ -437,7 +440,7 @@ export default function AdminDocuments() {
               <PublishedBadge at="/eula" />
             </CardTitle>
             <CardDescription>
-              The SOFTWARE licence, distinct from the Terms of Service, which govern the service.
+              The SOFTWARE licence, distinct from the Terms of Use, which govern the service.
               It carries the clauses Apple requires of an app that replaces the standard licence
               with its own -- Apple as a third-party beneficiary, and Apple disclaiming
               maintenance and warranty -- and App Store Connect's licence URL points at this page.
@@ -596,7 +599,7 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
   });
 
   // Same as SignupAgreementEditor above, and this one had no loading guard at all: an
-  // empty box, enabled, over the live Terms of Service, Privacy Policy or EULA. Save
+  // empty box, enabled, over the live signup agreement, Privacy Policy or EULA. Save
   // replaces the document wholesale, so an admin acting on a failed read does not
   // corrupt a field, they replace a legal document with a paragraph.
   if (isError) {

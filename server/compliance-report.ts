@@ -9,7 +9,7 @@ const TIER_LABEL: Record<string, string> = {
 };
 
 const CONSENT_LABEL: Record<string, string> = {
-  terms_of_service: "Terms of Service",
+  terms_of_service: "Terms of Use",
   biometric_waiver: BIOMETRIC_DOCUMENT_NAME,
   coach_coppa_consent: "Coach/Program Consent (Tier 1 agent)",
   parental_notice_ack: "Parental Notice Acknowledgment",

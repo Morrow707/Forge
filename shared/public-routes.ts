@@ -93,8 +93,8 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
   },
   {
     path: "/terms",
-    title: "Terms of Service",
-    description: "The agreement between you and Forge Performance Systems for using the platform.",
+    title: "Terms of Use",
+    description: "The agreement you accept when you create a Forge account, in full.",
     index: true,
     priority: 0.3,
   },
