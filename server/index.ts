@@ -86,6 +86,7 @@ import { warnIfUploadsAreEphemeral, reportUploadsStorageHealth } from "./uploade
 import { resumeInterruptedIngests } from "./resume-ingest";
 import { setupVite, serveStatic, log } from "./vite";
 import { startReflectionJob } from "./reflection-job";
+import { assertFieldEncryptionConfigured } from "./field-encryption";
 import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { startResearchMirrorJob } from "./research-mirror-job";
@@ -390,6 +391,9 @@ app.get("/healthz", async (_req, res) => {
 });
 
 (async () => {
+  // Fail the deploy, not the first two-factor setup: see assertFieldEncryptionConfigured.
+  if (process.env.NODE_ENV === "production") assertFieldEncryptionConfigured();
+
   const server = await registerRoutes(app);
 
   // An unmatched /api path is a 404, not the app's HTML.
