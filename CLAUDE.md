@@ -189,22 +189,14 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **465** is the newest TestFlight build, cut from `efdf9d0` on
-  2026-09-19 (Scott: "upload whatever you need to upload"). `verify_build`
-  run 464 had passed `altool --validate-app` on the merge it carries. On top
-  of 462 it adds the post-merge audit fixes: the access hooks report a failed
-  read (skills gate shows ReadFailed instead of spinning, both workout pages
-  say so where the camera control would be), plus the server-side clean-URL
-  prerender, the real 404 for missing assets and the shared color helper,
-  which ship on Render rather than in the binary.
-- **NOT in 465:** new-device approval (the section below). The server half
-  ships on Render; the client half -- the device id header, the "check your
-  email" step on both login screens, the review page, the trusted-devices
-  list -- reaches the app. Until the next upload the iOS app sends no device
-  id, so every sign-in from it is an unrecognised device that waits on the
-  email and can be approved but never trusted. That is the intended
-  behaviour for an app that cannot identify itself, and it goes away with
-  the next build.
+- Build **469** is the newest TestFlight build, cut from `0e39ef2` on
+  2026-09-19 (Scott: "upload to apple"). `verify_build` run 468 passed
+  `altool --validate-app` on the same commit. On top of 465 it adds
+  new-device approval on the client side: the device id header, the
+  "check your email" step on both login screens, the review page and the
+  trusted-devices list. The first sign-in from this build goes through the
+  email once and the phone is trusted from then on. Nothing on `main` is
+  waiting on an upload.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
