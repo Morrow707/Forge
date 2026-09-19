@@ -132,10 +132,13 @@ describe("the age rule, against the gate that enforces it", () => {
     const signup = read("server/seed-data/signup-agreement.ts");
     // Both documents describe one gate. If they ever disagree, one of them is lying to somebody
     // about whether a child's account works.
-    expect(signup).toContain("You may create an account for yourself if you are 18 or older.");
+    expect(signup).toContain(
+      "You may create an account for yourself only if you are eighteen (18) years of age or older.",
+    );
     expect(AI_TERMS_OF_USE).toContain("A User who is 18 or older may register and use the Service on their own");
-    for (const doc of [signup, AI_TERMS_OF_USE]) {
-      expect(doc).toMatch(/every athlete under 18 however they arrived/);
-    }
+    // Counsel's 2026-09-19 rewrite states the same reach in its own words, so the two documents
+    // are checked against their own phrasing of the one rule rather than a shared sentence.
+    expect(signup).toMatch(/applies to all minor athletes, regardless of whether they initiated/);
+    expect(AI_TERMS_OF_USE).toMatch(/every athlete under 18 however they arrived/);
   });
 });

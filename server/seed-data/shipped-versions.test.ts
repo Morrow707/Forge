@@ -21,7 +21,7 @@ import { BIOMETRIC_RELEASE, nextBiometricRelease } from "./biometric-release";
 describe("the pinned current versions", () => {
   it("signup agreement", () => {
     expect(sha256(SIGNUP_AGREEMENT)).toBe(
-      "3ab92c73e1c270a98c3302241dba317464035cdc689633aea98234a6fb829e02",
+      "9394f4dcc0e4bbcfb81d23af9b8c3d814bd14fae4d6b73ea3d5102c7504e3276",
     );
   });
 
@@ -41,6 +41,18 @@ describe("migrating a previously shipped version", () => {
   it("does not list the current text as something to migrate away from", () => {
     expect(SIGNUP_AGREEMENT_PRIOR_SHIPPED).not.toContain(sha256(SIGNUP_AGREEMENT));
     expect(BIOMETRIC_RELEASE_PRIOR_SHIPPED).not.toContain(sha256(BIOMETRIC_RELEASE));
+  });
+
+  it("knows counsel's rewrite from the version it replaced", () => {
+    // The two halves of the edit, asserted separately: the new text must not list itself (or the
+    // migration reads the live document as something to migrate away from), and the text it
+    // REPLACED must be listed (or production, which is carrying it, never moves onto the
+    // reviewed document at all -- the silent failure this whole file exists for).
+    expect(SIGNUP_AGREEMENT_PRIOR_SHIPPED).not.toContain(sha256(SIGNUP_AGREEMENT));
+    expect(SIGNUP_AGREEMENT_PRIOR_SHIPPED).toContain(
+      "3ab92c73e1c270a98c3302241dba317464035cdc689633aea98234a6fb829e02",
+    );
+    expect(SIGNUP_AGREEMENT_PRIOR_LENGTHS).toContain(12114);
   });
 
   it("is a no-op once the current text is live", () => {

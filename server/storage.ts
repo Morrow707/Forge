@@ -157,6 +157,7 @@ import {
   TIER2_VIDEO_RETENTION_DAYS,
   type PrivacyTier,
 } from "@shared/privacy-tiers";
+import { coreAgreementText } from "./seed-data/signup-agreement";
 import {
   REQUIRED_DOCUMENTS,
   documentAudienceFor,
@@ -15640,6 +15641,141 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
         set: { content, updatedAt: new Date() },
       });
     return content;
+  },
+
+  /**
+   * WHETHER THIS USER IS ON THE CURRENT TERMS.
+   *
+   * Counsel, 2026-09-19: "for an update to be legally binding against an existing user, they
+   * must be given actual notice and an opportunity to accept or reject", and the agreement text
+   * now promises exactly that. Before this, `agreedToTermsText` was written once at signup and
+   * nothing ever asked again, so every edit to the clickwrap bound nobody who already had an
+   * account.
+   *
+   * The comparison is on the text, not on a version number anybody has to remember to bump: the
+   * document IS the version. Both sides are reduced by coreAgreementText, so the clinician
+   * notice the seed appends does not read as a change of terms.
+   *
+   * THE SERVER REPORTS; IT DOES NOT BLOCK. An adult is held at the acceptance screen by the
+   * client. Nothing here refuses a request from someone whose terms are stale, and a minor
+   * waiting on a guardian keeps full use of the app -- Scott's call, and the right one: locking
+   * a child out of their training because a parent has not opened an email punishes the wrong
+   * person.
+   */
+  async getTermsAcceptanceStatus(userId: number): Promise<{
+    needsAcceptance: boolean;
+    guardianDecides: boolean;
+    version: string;
+    text: string;
+  }> {
+    const text = await this.getLegalAgreement();
+    const [row] = await db
+      .select({
+        agreedToTermsText: users.agreedToTermsText,
+        role: users.role,
+        dateOfBirth: users.dateOfBirth,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const live = coreAgreementText(text);
+    return {
+      // Null counts as needing acceptance: an account created before this column existed, or by
+      // an admin directly, has no record of agreeing to anything.
+      needsAcceptance: coreAgreementText(row?.agreedToTermsText ?? "") !== live,
+      // Same rule the research consent uses, including its treatment of an unknown date of
+      // birth as a minor: when nobody can say whether an adult is answering, the answer has to
+      // come from one.
+      guardianDecides:
+        row?.role === "athlete" &&
+        (row.dateOfBirth ? derivePrivacyTier(row.dateOfBirth) !== "tier3_adult_18plus" : true),
+      version: createHash("sha256").update(live).digest("hex").slice(0, 12),
+      text,
+    };
+  },
+
+  /** Records an acceptance of the CURRENT terms. `byUserId` is the person who clicked, which is
+   * the athlete themselves for an adult and the guardian on the guardian route. */
+  async acceptCurrentTerms(input: {
+    userId: number;
+    byUserId?: number;
+    documentTextPrefix?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<{ acceptedAt: Date }> {
+    const text = await this.getLegalAgreement();
+    const acceptedAt = new Date();
+    await db
+      .update(users)
+      .set({
+        agreedToTermsText: text,
+        agreedToTermsAt: acceptedAt,
+        // The question has been answered, so the next change starts a fresh notice rather than
+        // finding this one already marked sent.
+        termsReacceptNotifiedAt: null,
+      })
+      .where(eq(users.id, input.userId));
+    await this.logConsentRecord({
+      userId: input.userId,
+      consentType: "terms_of_service",
+      documentText: `${input.documentTextPrefix ?? ""}${text}`,
+      givenByUserId: input.byUserId ?? input.userId,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    });
+    return { acceptedAt };
+  },
+
+  /** Linked minors whose acceptance is stale. Same shape as listResearchReConsentsForGuardian,
+   * and for the same reason: without it a change to the terms reaches adults only. */
+  async listTermsReacceptanceForGuardian(
+    guardianId: number,
+  ): Promise<Array<{ athleteId: number; athleteName: string; version: string }>> {
+    const rows = await db
+      .select({
+        athleteId: users.id,
+        athleteName: users.name,
+        agreedToTermsText: users.agreedToTermsText,
+      })
+      .from(guardianLinks)
+      .innerJoin(users, eq(users.id, guardianLinks.athleteId))
+      .where(eq(guardianLinks.guardianId, guardianId))
+      .orderBy(asc(users.name));
+    const live = coreAgreementText(await this.getLegalAgreement());
+    const version = createHash("sha256").update(live).digest("hex").slice(0, 12);
+    return rows
+      .filter((r) => coreAgreementText(r.agreedToTermsText ?? "") !== live)
+      .map((r) => ({ athleteId: r.athleteId, athleteName: r.athleteName, version }));
+  },
+
+  /** The guardian answering for their athlete. Linkage is the whole authorization -- a guardian
+   * may accept for an athlete of theirs and for nobody else. */
+  async acceptTermsAsGuardian(
+    guardianId: number,
+    input: { athleteId: number; ipAddress?: string; userAgent?: string },
+  ): Promise<{ ok: true; acceptedAt: Date } | { ok: false; message: string }> {
+    const [link] = await db
+      .select({ athleteId: guardianLinks.athleteId })
+      .from(guardianLinks)
+      .where(
+        and(eq(guardianLinks.guardianId, guardianId), eq(guardianLinks.athleteId, input.athleteId)),
+      )
+      .limit(1);
+    if (!link) return { ok: false as const, message: "That athlete is not linked to you." };
+    const [guardian] = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, guardianId))
+      .limit(1);
+    const { acceptedAt } = await this.acceptCurrentTerms({
+      userId: input.athleteId,
+      byUserId: guardianId,
+      // The record has to read as an adult's decision about a child, not as the child agreeing.
+      documentTextPrefix: `Accepted by guardian ${guardian?.name ?? `#${guardianId}`} on behalf of the athlete\n\n`,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    });
+    return { ok: true as const, acceptedAt };
   },
 
   // ---------- Legal documents (draft ToS/Privacy Policy) ----------

@@ -5434,6 +5434,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ok: true });
   });
 
+  // TERMS RE-ACCEPTANCE, GUARDIAN SIDE. Same reasoning as the research re-consent above: a minor
+  // cannot accept the terms for themselves, so without this a change to the clickwrap would bind
+  // adults only. The athlete keeps using Forge while this sits unanswered -- nothing here gates
+  // anything, it only reports and records.
+  app.get("/api/guardian/terms-reacceptance", requireGuardianAccess, async (req, res) => {
+    res.json(await storage.listTermsReacceptanceForGuardian(currentUser(req).id));
+  });
+
+  app.post("/api/guardian/terms-reacceptance", requireGuardianAccess, async (req, res) => {
+    const parsed = z
+      .object({ athleteId: z.number().int().positive(), agreed: z.literal(true) })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "athleteId and agreed are required" });
+    }
+    const result = await storage.acceptTermsAsGuardian(currentUser(req).id, {
+      athleteId: parsed.data.athleteId,
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
+    if (!result.ok) return res.status(404).json({ message: result.message });
+    res.json({ acceptedAt: result.acceptedAt });
+  });
+
   // The guardian's side of the same request: see what has been asked, and sign it off or not.
   app.get("/api/guardian/research-consent-requests", requireGuardianAccess, async (req, res) => {
     res.json(await storage.listPendingResearchConsentRequestsForGuardian(currentUser(req).id));

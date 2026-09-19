@@ -61,6 +61,11 @@ export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
   // had been retitled to a consent. The agreement a user accepts must name the other document
   // they are being pointed at by the name that document actually carries.
   "6c195eafbf7c4b884f4664756aec7d74444db12024e90bb5574b7e071efc9d5e",
+  // Counsel's rewrite of 2026-09-19 replaced this one wholesale: the whole document was redrafted
+  // by the attorney, so there is no sentence to patch. This is the last Forge-written version --
+  // the one production is carrying -- and it is what the migration recognises in order to move an
+  // existing installation onto the reviewed text.
+  "3ab92c73e1c270a98c3302241dba317464035cdc689633aea98234a6fb829e02",
 ] as const;
 
 /** Character length of each entry in SIGNUP_AGREEMENT_PRIOR_SHIPPED, same order.
@@ -70,7 +75,7 @@ export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
  * than derived, since deriving it would mean keeping the full prior texts -- which is the thing
  * hashes exist to avoid. A wrong length simply fails to match and the document is left alone,
  * which is the safe direction. */
-export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274, 11937, 12126] as const;
+export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274, 11937, 12126, 12114] as const;
 
 /** PREVIOUS versions of the video and biometric release, oldest first. See above. */
 export const BIOMETRIC_RELEASE_PRIOR_SHIPPED = [

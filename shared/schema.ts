@@ -453,6 +453,16 @@ export const users = pgTable(
     // actually agreed to regardless of any later edit.
     agreedToTermsAt: timestamp("agreed_to_terms_at"),
     agreedToTermsText: text("agreed_to_terms_text"),
+    // When the guardian of THIS (minor) athlete was emailed that the terms
+    // changed and their athlete needs re-accepting. On the minor's row rather
+    // than the guardian's because the question is per-athlete: one guardian
+    // with two athletes is asked about each, and a second athlete going stale
+    // must not be silenced by an email sent about the first. Nullable, set by
+    // the seed after it writes a new agreement version so a redeploy does not
+    // re-send, and cleared when that athlete's terms are accepted so the next
+    // change asks again. Adults get no email -- they meet the in-app gate at
+    // next sign-in, which is the notice.
+    termsReacceptNotifiedAt: timestamp("terms_reaccept_notified_at"),
     // Coach-only white-label identity, applied for their whole staff (see
     // getEffectiveCoachIds) and every athlete on their roster -- overrides
     // the app's own Forge/orange look with the program's own name/logo/
@@ -8840,6 +8850,13 @@ export type PublicUser = Omit<
   // is also a parent both get the guardian view. UI convenience only;
   // requireGuardianAccess on the server is the enforcement.
   hasGuardianLinks?: boolean;
+  /** True when the live signup agreement differs from the text this account
+   * last accepted (healthcare notice ignored -- an append is not a new set of
+   * terms). Counsel's rule: an updated agreement binds an existing user only
+   * if they were given actual notice and a chance to accept or reject, so the
+   * client re-asks. A minor still reports true; only their guardian can
+   * answer, and the server refuses their own acceptance. */
+  needsTermsAcceptance?: boolean;
 };
 
 export const updateHealthStatusSchema = z.object({

@@ -10,6 +10,7 @@ import { Capacitor } from "@capacitor/core";
 import { queryClient, persistOptions } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { BiometricLockGate } from "@/components/biometric-lock-gate";
+import { TermsReacceptanceGate } from "@/components/terms-reacceptance-gate";
 import { watchAppleIapTransactionUpdates } from "@/lib/apple-iap";
 import { DebugConsole } from "@/components/debug-console";
 import { withLoadTimeout } from "@/lib/lazy-load-recovery";
@@ -658,6 +659,10 @@ export default function App() {
       <AuthProvider>
         <BiometricLockGate>
           <Router />
+          {/* Beside the router, not inside a screen: a change to the signup Terms of Use has to
+              be answered before continuing on ANY route, and a minor athlete sees nothing here
+              because their guardian answers it for them. Renders null for everybody else. */}
+          <TermsReacceptanceGate />
           {/* expand: without it, Sonner collapses multiple toasts into a
               peek-behind-the-front-one stack that only un-collapses on
               hover -- fine on desktop, but there's no hover on a touch

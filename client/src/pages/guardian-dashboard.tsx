@@ -358,6 +358,7 @@ export default function GuardianDashboardPage() {
       <main className="mx-auto max-w-2xl space-y-4 p-4">
         <ResearchReConsent />
       <ResearchConsentRequests />
+        <TermsReacceptanceRequests />
         {athletesFailed ? (
           <ReadFailed what="your athletes" onRetry={() => void refetchAthletes()} />
         ) : athletesLoading || !athletes ? (
@@ -872,6 +873,103 @@ function ResearchReConsent() {
                 Withdraw instead
               </Button>
             </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** THE GUARDIAN ACCEPTS THE NEW TERMS FOR A MINOR.
+ *
+ * Section 16 of the signup Terms of Use promises a material change is put in front of the person
+ * bound by it before they carry on. For a minor that person is the guardian, so the in-app gate
+ * (terms-reacceptance-gate.tsx) renders nothing on the athlete's own device -- they keep training
+ * -- and the question lands here instead. Nothing is blocked while it waits: locking a child out
+ * of their training because an adult has not opened an app punishes the wrong person.
+ *
+ * The terms text is the guardian's own status endpoint, which serves the same live document.
+ * Fetched only when somebody opens the expander, because most visits are not this.
+ */
+function TermsReacceptanceRequests() {
+  const qc = useQueryClient();
+  const [readingFor, setReadingFor] = useState<number | null>(null);
+
+  const { data: pending = [] } = useQuery<
+    { athleteId: number; athleteName: string; version: string }[]
+  >({
+    queryKey: ["/api/guardian/terms-reacceptance"],
+    queryFn: () => getJson("/api/guardian/terms-reacceptance"),
+  });
+
+  const {
+    data: terms,
+    isError: termsFailed,
+    refetch: refetchTerms,
+  } = useQuery<{ version: string; text: string }>({
+    queryKey: ["/api/auth/terms-status"],
+    queryFn: () => getJson("/api/auth/terms-status"),
+    enabled: readingFor != null,
+  });
+
+  const accept = useMutation({
+    mutationFn: async (athleteId: number) => {
+      await apiRequest("POST", "/api/guardian/terms-reacceptance", { athleteId, agreed: true });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/guardian/terms-reacceptance"] });
+      toast.success("Thanks — that's recorded.");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+  });
+
+  if (pending.length === 0) return null;
+
+  return (
+    <Card className="border-primary/40">
+      <CardHeader>
+        <CardTitle>Updated Terms of Use</CardTitle>
+        <CardDescription>
+          Forge's Terms of Use have changed. Your athlete can keep training while you read them,
+          but they are bound by the new version only once you accept it for them.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {pending.map((p) => (
+          <div key={p.athleteId} className="rounded-md border border-border p-3">
+            <p className="text-sm">
+              <span className="font-semibold">{p.athleteName}</span> — version {p.version}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setReadingFor(readingFor === p.athleteId ? null : p.athleteId)}
+              >
+                {readingFor === p.athleteId ? "Hide the terms" : "Read the terms"}
+              </Button>
+              <Button
+                size="sm"
+                disabled={accept.isPending}
+                onClick={() => accept.mutate(p.athleteId)}
+              >
+                Accept for {p.athleteName}
+              </Button>
+            </div>
+            {readingFor === p.athleteId &&
+              (termsFailed ? (
+                <ReadFailed
+                  what="the updated Terms of Use"
+                  onRetry={() => void refetchTerms()}
+                  className="py-4"
+                />
+              ) : !terms ? (
+                <p className="mt-2 text-sm text-muted-foreground">Loading…</p>
+              ) : (
+                <div className="mt-2 max-h-[60vh] overflow-y-auto rounded-md border border-border bg-background/40 p-3 text-sm whitespace-pre-wrap">
+                  {terms.text}
+                </div>
+              ))}
           </div>
         ))}
       </CardContent>

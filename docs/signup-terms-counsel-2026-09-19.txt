@@ -1,0 +1,133 @@
+FORGE -- TERMS OF USE
+
+These Terms of Use ("Terms") govern your access to and use of the Forge application and website (collectively, the "Service" or "Forge"). By creating an account or otherwise accessing the Service, you agree to be bound by these Terms. In the event of any conflict between these Terms of Use and the publicly posted Terms of Service, these Terms of Use shall govern.
+
+1. SCOPE OF SERVICES AND MEDICAL DISCLAIMER
+
+Forge provides a software platform designed for athletic training and coaching. The Service hosts training programming, records user-logged performance data, analyzes training video, and generates written feedback and coaching suggestions.
+
+Forge is not a medical device and does not provide medical advice, diagnosis, or treatment. The measurements, analytics, and AI-generated suggestions provided by the Service are informational aids intended for athletes and coaches; they are not a substitute for the professional judgment of a physician, physical therapist, athletic trainer, registered dietitian, or qualified coach. If any information provided by Forge conflicts with the guidance of a qualified medical or training professional, you must defer to the professional.
+
+Forge is not a clinical system of record and is not compliant with the Health Insurance Portability and Accountability Act (HIPAA). Licensed clinicians must not enter Protected Health Information (PHI) or utilize Forge to document patient care.
+
+2. ASSUMPTION OF RISK
+
+The User acknowledges that athletic activities, including but not limited to strength training, jumping, sprinting, and skill work, carry inherent risks of injury, including serious and permanent bodily harm. This risk exists independently of the use of any software, and Forge does not mitigate or remove this risk.
+
+You are solely responsible for determining whether a specific exercise is appropriate for you, for utilizing equipment correctly, and for ceasing activity immediately if you experience pain or feel unsafe. You must not train through pain merely because a program suggests doing so. Any prescribed weight, repetition count, or progression displayed in Forge is an automated suggestion generated from user-logged data; it is not an individualized instruction from a supervising professional.
+
+Coaches utilizing Forge to program for athletes remain solely responsible for supervising and modifying their athletes' training. Forge does not independently assess an athlete's physical readiness for any movement. You must consult a physician prior to commencing or substantially altering any training program, particularly if you have a pre-existing medical condition, an injury, are pregnant, or have been previously inactive.
+
+3. ELIGIBILITY AND MINOR GUARDIAN CONSENT
+
+You may create an account for yourself only if you are eighteen (18) years of age or older.
+
+An athlete under the age of 18 may utilize Forge only if a parent or legal guardian has created a linked guardian account and explicitly provided consent on the minor's behalf. A minor athlete's account will be suspended until a legal guardian has successfully claimed it and provided the requisite consent. This restriction applies to all minor athletes, regardless of whether they initiated registration independently, were invited by a coach, or were transferred between rosters. Accounts lacking a date of birth are similarly suspended until one is provided.
+
+At the point of claiming, the guardian agrees separately to these terms, to the privacy policy, to the video and biometric consent, and to the assumption of risk and release, and a confirmation is emailed to them describing what was agreed and how to withdraw it.
+
+A guardian retains the right to withdraw consent at any time. Withdrawal of consent results in the immediate deletion of all stored video associated with the minor's account and returns the account to a suspended state; the minor athlete may not resume use of the Service until a guardian provides new consent.
+
+You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You must notify Forge promptly if you suspect unauthorized access to your account.
+
+4. USER-SUBMITTED DATA AND PRIVACY
+
+Forge stores the data you submit, including your profile information, training logs, and -- at your discretion -- optional metrics such as sleep quality, wellness self-reports, recorded injuries, and dietary intake. If you turn on Health sync, Forge also reads from Apple Health: sleep, resting heart rate, heart rate variability, VO2 max, respiratory rate, weight, and heart rate around a training session. It uses them to pre-fill your daily check-in and never writes anything to Apple Health.
+
+Certain submissions may constitute health-related information. By electing to enter this data, you acknowledge that your designated coaches and organizational staff will have access to it, as this visibility is necessary to provide the coaching functionality of the Service. A parent or legal guardian is granted full visibility into their minor athlete's records, including training history, video media, wellness entries, injury logs, and nutrition tracking. Forge administrators may access this data strictly for technical support, auditing, and video management purposes; every instance of an administrator or coach accessing an athlete's video is permanently recorded in a secure audit log.
+
+Athlete media and performance data are never made visible to the general public through the Service. You must not enter personal information regarding any third party without obtaining their explicit prior consent.
+
+5. NUTRITION AND DIETARY INFORMATION
+
+Any nutrition-related functionality provided by Forge -- including caloric and macronutrient targets, food logging tools, and AI-generated dietary suggestions -- is strictly for general informational purposes. It does not constitute dietetic, medical, or nutritional advice, nor is it individually prescribed by a qualified healthcare professional.
+
+These features are not designed as a weight-loss program and are not suitable for individuals diagnosed with, or at risk of, eating disorders. You must consult a physician or registered dietitian before implementing any dietary suggestions, and particularly before applying such guidance to a minor athlete. Nutritional intake targets for growing minors require clinical evaluation, not automated calculation. Coaches and guardians are solely responsible for supervising and evaluating any dietary guidance presented to a minor user's account.
+
+6. CAMERA TRACKING AND BIOMETRIC DATA
+
+If you utilize the video recording features, Forge captures media on your local device to measure biomechanical movement, including joint positioning over time, bar speed, range of motion, and jump height. Pose analysis is executed locally on your device; only the finalized video file and the resulting numeric metrics are transmitted to Forge's servers for storage.
+
+Forge does not conduct facial recognition, does not scan fingerprints, and does not record audio. The video capture interface processes no audio input, and the application does not request device microphone permissions.
+
+The collection and processing of this data are governed strictly by the separate Video and Biometric Consent, not by these Terms. Adult athletes must agree to that document independently; for minors, consent must be provided by the legal guardian. Camera-based tracking is entirely optional -- users may log training normally without it -- and a guardian may disable the feature for their minor athlete at any time.
+
+7. DATA RETENTION POLICY FOR VIDEO
+
+Raw video files depicting athletes under the age of 13 are permanently deleted thirty (30) days following the recorded set. Video files depicting athletes aged 13 to 17 are deleted ninety (90) days following the set. This retention policy is executed automatically and unconditionally.
+
+For all athletes, Forge retains a limited quota of recent videos per exercise. Users may designate a select number of videos as "favorites," which exempts them from automatic deletion. The Service displays current retention limits and provides advance warning, including a link to the media, before any non-favorited video is deleted under this quota limit.
+
+The deletion of a video file does not delete the numeric metrics derived from it. Range of motion, velocity, jump height, repetition counts, and personal records constitute your permanent training record and are retained. You may request the deletion of the training record separately, or permanently delete your entire account at any time.
+
+8. ARTIFICIAL INTELLIGENCE (AI) FEATURES
+
+When you utilize an AI-powered feature, Forge transmits the necessary data to a third-party AI model provider. For AI coaching and written feedback generation, this data includes your profile information and training data, including check-in values, some of which may have been pre-filled from Apple Health. For AI form-check analysis, the transmitted data also includes extracted still images from your submitted training video, alongside your height, physical build, and any movement restrictions or asymmetries noted in your profile. This requires images of the athlete to be processed outside of Forge's proprietary servers.
+
+AI features are executed only upon the explicit request of the user or their coach. AI-generated outputs are produced by automated software and may contain errors or inaccuracies. The medical and safety disclaimers outlined in Section 1 apply entirely to all AI-generated content.
+
+9. THIRD-PARTY SERVICE PROVIDERS
+
+Forge does not sell, rent, or trade your personal information, nor does it sell biometric data. Information is shared strictly with the third-party service providers necessary to operate the Service, which include: application and database hosting, payment processing, app store billing, push notification delivery, transactional email infrastructure, an IP-based geolocation service utilized exclusively to identify the origin of a new device sign-in, an error-monitoring service that receives technical details when something in Forge fails, public food and nutrition databases for user-initiated search queries, and the designated AI model provider. Each provider receives only the minimum data necessary to execute their specific function.
+
+Forge reserves the right to disclose information when required by law, to enforce its legal rights or property, or in emergency situations to protect the physical safety of any individual.
+
+10. RESEARCH OPT-IN
+
+Forge may share de-identified, aggregated data extracts with independent research organizations, but only regarding athletes who have explicitly opted in via a standalone authorization setting. This setting defaults to "off" and operates independently of all other account preferences. For minor athletes, this opt-in must be authorized by a legal guardian. Research extracts are generated from a pre-processed, de-identified mirror database rather than live user records; no demographic or performance group smaller than ten (10) individuals is included in any exported dataset, and withdrawal of consent immediately removes the athlete from the research mirror. If you opted in and later delete your account, the de-identified numbers already in the research store stay, unless you withdraw from research first; the research consent explains this.
+
+11. PAYMENT TERMS
+
+Paid subscription plans are billed through the specific payment processor or app store designated at checkout. Subscriptions are billed on the stated interval and renew automatically until formally cancelled. Cancellations must be processed through the original billing platform; purchases made via third-party app stores are governed solely by that store's management and refund policies, not by Forge. Forge reserves the right to modify pricing for future billing periods upon notice to the user.
+
+Any payment processed by a parent or legal guardian on behalf of a minor athlete also serves as a recorded verification step within the guardian consent protocol.
+
+12. INTELLECTUAL PROPERTY AND USER CONTENT
+
+You retain ownership of all content you upload to the Service. By uploading content, you grant Forge the necessary licenses to store, process, and display said content to the authorized individuals outlined in Section 4 to facilitate the functionality of the Service. Forge will never utilize athlete video or imagery for marketing, advertising, or promotional purposes. The utilization of an athlete's physical likeness is governed exclusively by the separate Video and Biometric Consent.
+
+All proprietary content provided by Forge -- including training programming, educational lessons, written materials, and the underlying software architecture -- remains the exclusive intellectual property of Forge Performance Systems LLC.
+
+13. ACCEPTABLE USE POLICY
+
+Users shall not utilize Forge to harass or abuse any individual, upload content they do not possess the legal right to distribute, attempt unauthorized access to data belonging to other users, disrupt or interfere with the operation of the Service, or violate any applicable local, state, or federal law. Users are strictly prohibited from attempting to reverse-engineer or re-identify any individual from aggregated or de-identified datasets provided within the Service.
+
+14. TERMINATION AND ACCOUNT DELETION
+
+You may terminate this Agreement and delete your account at any time, which permanently removes the account and all video media associated with it; Section 10 describes the one thing that can remain.
+
+Forge reserves the right to suspend or terminate any account found in breach of these Terms, and retains the right to discontinue specific platform features. In the event a legal guardian withdraws consent for a minor athlete, the minor's account will be suspended as outlined in Section 3.
+
+15. DISCLAIMER OF WARRANTIES AND LIMITATION OF LIABILITY
+
+The Service is provided strictly on an "as is" and "as available" basis. Forge makes no representations regarding uninterrupted availability, error-free operation, or the absolute accuracy of generated measurements. Camera-derived metrics are dependent on environmental filming conditions and constitute estimates, not clinical instrument readings. To the maximum extent permitted by applicable law, Forge expressly disclaims all warranties, whether express or implied, including but not limited to the implied warranties of merchantability and fitness for a particular purpose.
+
+To the maximum extent permitted by applicable law, Forge shall not be liable for any indirect, incidental, special, consequential, or punitive damages. Forge's total cumulative liability arising from or relating to your use of the Service shall not exceed the total amount paid by you to Forge during the twelve (12) months immediately preceding the event giving rise to the claim, or fifty US dollars ($50.00), whichever is greater. Nothing in these Terms shall limit or exclude liability that cannot be lawfully limited, including liability for death or personal injury caused by gross negligence, or for fraudulent misrepresentation.
+
+You expressly accept the physical risks outlined in Section 2 as inherent risks of athletic training that exist independently of the use of this software.
+
+16. MODIFICATIONS TO TERMS
+
+Forge may modify these Terms. The current, effective version of the Terms is consistently accessible within the application and displayed during the registration process, and the specific version of the Terms accepted by you is permanently logged alongside the timestamp of acceptance.
+
+When Forge makes a material change to these Terms, Forge will give you notice and will ask you to review and accept the revised Terms within the application before you continue to use the Service. For a minor athlete, the notice goes to the parent or legal guardian, who accepts or declines on the athlete's behalf. If you do not accept the revised Terms, you may stop using the Service and delete your account, and the version you previously accepted continues to govern your use up to that point.
+
+17. GOVERNING LAW AND DISPUTE RESOLUTION
+
+This Agreement, and any dispute arising out of it or relating to your use of Forge, shall be governed by and construed in accordance with the laws of the State of Arizona, without regard to its conflict-of-laws provisions. In the event of a dispute, the parties agree to first attempt resolution through good-faith informal discussions. Any dispute not resolved informally shall be subject to the exclusive jurisdiction of the state and federal courts located in Maricopa County, Arizona, and both parties hereby consent to the personal jurisdiction of such courts. Nothing in this provision operates to waive any legal right that cannot be lawfully waived, including rights statutorily guaranteed to individuals under the age of 18.
+
+18. COPYRIGHT COMPLAINTS
+
+Forge respects the intellectual property of others and responds to notices of alleged copyright infringement that comply with the Digital Millennium Copyright Act (DMCA). If you believe that content uploaded to the Service infringes a copyright you own or control, send a written notice to Forge's designated copyright agent at forgeperformancesystems@outlook.com containing: identification of the copyrighted work; identification of the material claimed to be infringing and information sufficient to locate it within the Service; your name, address, telephone number, and email address; a statement that you have a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law; a statement, under penalty of perjury, that the information in the notice is accurate and that you are the owner or authorized to act on the owner's behalf; and your physical or electronic signature. Forge will remove or disable access to material identified in a compliant notice, will notify the user who uploaded it, and will accept a counter-notice that complies with the DMCA. Forge may terminate the accounts of repeat infringers.
+
+19. SEVERABILITY AND ENTIRE AGREEMENT
+
+If any provision of these Terms is held to be invalid or unenforceable, that provision shall be enforced to the maximum extent permissible and the remaining provisions shall remain in full force and effect.
+
+These Terms, together with the Privacy Policy, the Video and Biometric Consent, the Assumption of Risk and Release, the AI Terms of Use, and, where applicable, the Research Consent and Data Use Authorization and any Institutional Service Agreement, constitute the entire agreement between you and Forge regarding the Service and supersede any prior or contemporaneous agreements, communications, or understandings, whether written or oral, relating to the Service.
+
+20. CONTACT INFORMATION
+
+Forge is operated by Forge Performance Systems LLC, located at 5145 North 7th Street, D-237, Phoenix, Arizona 85014.
+
+For questions regarding these Terms, requests concerning data privacy, or to withdraw a previously granted consent, please contact: forgeperformancesystems@outlook.com.
