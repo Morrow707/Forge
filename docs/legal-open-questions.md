@@ -111,17 +111,13 @@ answer that softens any of them is a change to a live document, recorded by vers
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
 biometric consent plus the engineering facts behind each of its claims.
 
-**Four documents under review** (factual corrections from the 2026-09-19 pass already applied; see `git log -- server/seed-data/legal-documents-draft.ts`)**:** the Terms of Service, the Privacy Policy, the EULA,
-and the Notice to Parent or Guardian. That last one is also the parental consent
-document, so question 5 should be put to whoever reads it, at the same time. It was five; the Institutional Service Agreement
-outline is gone, superseded by the Rocket Lawyer Service Agreement, which is a signed
-contract rather than a document in this repo -- questions 2 and 3 travel with it and
-should reach whoever reviews it.
-
-**Five documents people accept in the product,** separate from the above and not
-drafts: the signup Terms of Use, the video and biometric consent, the assumption of
-risk, the AI Terms of Use, and the research consent.
-
-No live document carries draft, placeholder or "do not send" language. That is
-asserted by server/seed-data/documents-are-not-drafts.test.ts rather than by this
-sentence.
+**Five documents under review** (factual corrections from the 2026-09-19 pass already
+applied; see `git log -- server/seed-data/legal-documents-draft.ts`): the Terms of Service,
+the Privacy Policy, the EULA, the Notice to Parent or Guardian, and the Institutional
+Service Agreement. The Notice is also the parental consent document, so question 5 should
+be put to whoever reads it, at the same time. The Service Agreement's text lives in
+`shared/institutional-service-agreement.ts` (mirrored in
+`docs/institutional-service-agreement.md`) and since 2026-09-19 is signed in the app, with
+a hash of the signed text kept on every signature -- questions 2 and 3 travel with it. An
+answer that changes its wording changes the hash for later signatures and leaves earlier
+signed copies as they were.
