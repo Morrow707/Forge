@@ -189,13 +189,15 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **457** is the newest TestFlight build, cut from `a4a947d`. It carries
-  the whole camera arbiter: the wrist gate, the gated re-classification, the
-  body-suspect detection and the scale rejection.
-- **NOT in 457:** `17b8642`, withdrawing AI Coach + Video from sale. Build 457
-  still shows the $19.99 tier and its price on /pricing, the landing page and
-  the athlete upgrade screen. Payments are off through beta so nothing can
-  actually be charged, but the option is visible until the next upload.
+- Build **459** is the newest TestFlight build, cut from `57b13d0`. It carries
+  the camera arbiter (wrist gate, gated re-classification, body-suspect
+  detection, scale rejection) AND the AI Coach + Video withdrawal, so the
+  $19.99 tier and its price are gone from /pricing, the landing page and the
+  athlete upgrade screen in that build.
+- **NOT in 459:** `6bca8a8`, the camera entitlement gate and caveat coverage.
+  Build 459 still draws the camera controls for Basic and AI Coach Free Agents
+  — they can film a set and then lose the clip to a 402 on save — and still
+  shows both leaderboards and the admin query engine with no accuracy caveat.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
