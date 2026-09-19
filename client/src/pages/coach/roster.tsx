@@ -55,6 +55,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Users,
   UserPlus,
@@ -133,11 +134,18 @@ type TeamEntry = {
   name: string;
   code: string | null;
   members: TeamMember[];
+  // Which coaches on the staff are assigned to this team (see teamCoaches
+  // in shared/schema.ts). Empty means everyone on the staff sees it.
+  coaches: { id: number; name: string; staffTitle: string | null }[];
   brandLogoUrl: string | null;
   brandPrimaryColor: string | null;
   brandSecondaryColor: string | null;
 };
 type ProgramSummary = { id: number; name: string };
+type StaffResponse = {
+  primaryCoachId: number;
+  staff: { id: number; name: string; staffTitle: string | null }[];
+};
 
 type RosterSortColumn = "name" | "sport" | "position" | "health" | "email";
 
@@ -203,6 +211,16 @@ export default function CoachRoster() {
   const { data: teams = [], refetch: refetchTeams } = useQuery<TeamEntry[]>({
     queryKey: ["/api/coach/teams"],
   });
+  // Who is on this coach's staff, and whether this coach is the staff's
+  // primary -- same signal CoachingStaffDialog uses (primaryCoachId ===
+  // my id). Only the primary may assign coaches to a team; everyone else
+  // just reads the assignment off the card.
+  const { user: currentCoach } = useAuth();
+  const { data: staffData } = useQuery<StaffResponse>({
+    queryKey: ["/api/coach/staff"],
+    queryFn: () => getJson("/api/coach/staff"),
+  });
+  const isPrimaryCoach = staffData?.primaryCoachId === currentCoach?.id;
   // Coach-named roster subdivisions (see shared/roster-groups.ts) -- raw
   // stored value comes back null until a coach customizes it, so this page
   // (like ManageRosterGroupsDialog) applies resolveRosterGroups itself
@@ -1105,6 +1123,11 @@ export default function CoachRoster() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <TeamCoachAssignment
+                    team={team}
+                    staff={staffData}
+                    isPrimaryCoach={isPrimaryCoach}
+                  />
                   <div className="mb-3 space-y-1.5">
                     {team.members.length === 0 && (
                       <p className="text-sm text-muted-foreground">No members yet.</p>
@@ -1425,6 +1448,113 @@ export default function CoachRoster() {
       />
       </AppShell>
     </Tabs>
+  );
+}
+
+/** Per-team coach assignment on the team card (see teamCoaches in
+ * shared/schema.ts for the rules). Everyone on the staff sees WHO is
+ * assigned; only the primary coach gets the checkbox list that changes it.
+ * No assignments at all is a real state and says so -- that is the default,
+ * and it means every staff coach still sees this team. */
+function TeamCoachAssignment({
+  team,
+  staff,
+  isPrimaryCoach,
+}: {
+  team: TeamEntry;
+  staff: StaffResponse | undefined;
+  isPrimaryCoach: boolean;
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<number[] | null>(null);
+  const assigned = team.coaches.map((c) => c.id);
+  const selected = draft ?? assigned;
+
+  const saveMutation = useMutation({
+    mutationFn: async (coachIds: number[]) => {
+      await apiRequest("PUT", `/api/coach/teams/${team.id}/coaches`, { coachIds });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
+      setOpen(false);
+      setDraft(null);
+      toast.success("Coach assignments saved");
+    },
+    onError: (err) =>
+      toast.error(err instanceof ApiError ? err.message : "Could not save assignments"),
+  });
+
+  // The primary coach plus every staff member -- the primary can be
+  // assigned like anyone else, which is how a team gets a named owner on
+  // the card without changing what they can see.
+  const assignable = staff
+    ? [
+        { id: staff.primaryCoachId, name: "Me (primary)", staffTitle: null as string | null },
+        ...staff.staff,
+      ]
+    : [];
+
+  return (
+    <div className="mb-3 rounded-md bg-surface-elevated px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="label-xs">Coaches</p>
+          <p className="truncate text-sm">
+            {team.coaches.length === 0 ? (
+              <span className="text-muted-foreground">All staff</span>
+            ) : (
+              team.coaches
+                .map((c) => (c.staffTitle ? `${c.name} (${c.staffTitle})` : c.name))
+                .join(", ")
+            )}
+          </p>
+        </div>
+        {isPrimaryCoach && staff && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? "Cancel" : "Assign"}
+          </Button>
+        )}
+      </div>
+      {open && isPrimaryCoach && (
+        <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
+          {assignable.map((c) => (
+            <label key={c.id} className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={selected.includes(c.id)}
+                onCheckedChange={() =>
+                  setDraft(
+                    selected.includes(c.id)
+                      ? selected.filter((id) => id !== c.id)
+                      : [...selected, c.id],
+                  )
+                }
+              />
+              <span className="truncate">
+                {c.name}
+                {c.staffTitle ? ` (${c.staffTitle})` : ""}
+              </span>
+            </label>
+          ))}
+          <p className="text-xs text-muted-foreground">
+            With nobody selected, every coach on the staff sees this team.
+          </p>
+          <Button
+            size="sm"
+            className="mt-1"
+            disabled={saveMutation.isPending}
+            onClick={() => saveMutation.mutate(selected)}
+          >
+            Save
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
