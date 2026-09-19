@@ -94,6 +94,26 @@ always builds; the signed release AAB/APK builds once the four keystore
 secrets exist; the Play Console internal-testing upload happens only if
 `GOOGLE_PLAY_JSON_KEY` is also set.
 
+## Launch-day items only Scott can do
+
+Kept here so they are not lost between sessions. None of these is code.
+
+- **Register the DMCA agent** at dmca.copyright.gov: service provider Forge Performance
+  Systems LLC, 5145 North 7th Street, D-237, Phoenix, Arizona 85014; agent contact
+  forgeperformancesystems@outlook.com; $6, renew every three years. The signup Terms of
+  Use (section 18, counsel's 2026-09-19 text) names that address as the designated agent,
+  and the safe harbour is weaker until the registration exists. Scott, 2026-09-19: "ok file
+  it".
+- **Turn billing on**: `BILLING_LIVE=true` and the Apple IAP secrets on Render, and flip
+  `isBetaAccount` off per account from the admin billing panel.
+- **Delete the App Review demo accounts** and remove them from
+  `DEVICE_VERIFICATION_EXEMPT_EMAILS`.
+- **Confirm the Forge signer on the Service Agreement PDF**
+  (`INSTITUTIONAL_AGREEMENT_SIGNER_NAME` / `_TITLE` on Render; defaults "Scott Morrow" /
+  "Founder").
+- **Send the remaining documents to the attorney** if any are still open in
+  `docs/legal-open-questions.md`.
+
 ## What this doc does NOT cover
 
 - **The actual App Store Connect / Play Console listings** -- description
