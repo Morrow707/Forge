@@ -154,7 +154,7 @@ describe("the AI terms are actually servable", () => {
   // in the enum, seeded, routed and admin-labelled -- every static check above passed -- but
   // it was never added to the two route-side lists that make a document readable. Both are
   // scanned here because each one failing independently was the bug.
-  const routes = readFileSync(join(__dirname, "..", "routes.ts"), "utf8");
+  const routes = read("server/routes.ts");
   const listBody = (name: string) => routes.slice(routes.indexOf(`const ${name} = [`), routes.indexOf("] as const;", routes.indexOf(`const ${name} = [`)));
   it("is a legal document type the routes know", () => {
     expect(listBody("LEGAL_DOC_TYPES")).toContain('"ai_terms_of_use"');
