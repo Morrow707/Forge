@@ -1,3 +1,4 @@
+import { MAX_EXPECTED_ATHLETES } from "@shared/schema";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +33,14 @@ import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
 import { SPORTS } from "@shared/exercise-taxonomy";
 import { todayIso } from "@/lib/local-date";
+import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
+
+/** The signup form only accepts a whole number of athletes in this range --
+ * the upper bound is the server's own (MAX_EXPECTED_ATHLETES on signupSchema)
+ * rather than a second copy, so a school gets a sentence instead of a 400
+ * and the two can never disagree. */
+export const MIN_EXPECTED_ATHLETES = 1;
+export { MAX_EXPECTED_ATHLETES };
 
 /** Debounces a fast-changing value (here, the invite-code input) so a
  * lookup only fires once someone pauses typing, not on every keystroke. */
@@ -68,6 +77,16 @@ export default function SignupPage() {
   // profile-fields-form.tsx already uses for editing this later.
   const [heightIn, setHeightIn] = useState("");
   const [bodyWeightLbs, setBodyWeightLbs] = useState("");
+  // Coach-only. A school tells us how many athletes it expects and that
+  // picks the billing band right here, so nobody signs up without knowing
+  // what the plan costs. Kept as a string like every other numeric field on
+  // this page so a half-typed value doesn't get coerced to 0.
+  const [expectedAthletes, setExpectedAthletes] = useState("");
+  // Plain-English validation message, shown above the submit button. The
+  // page had no error display of its own -- signup failures come back as a
+  // toast from the mutation -- so this is only for the things we can catch
+  // before sending anything.
+  const [formError, setFormError] = useState("");
 
   // Looks up whichever coach/team invite code is currently typed in so
   // the page can re-skin itself before an account even exists -- the
@@ -131,9 +150,27 @@ export default function SignupPage() {
     );
   }
 
+  // Live as they type. Never a hand-typed price: bandForAthleteCount is the
+  // same function the pricing page and the coach billing page read, so the
+  // number quoted at signup cannot disagree with the one billed later.
+  const expectedAthletesNum = Number(expectedAthletes);
+  const expectedAthletesValid =
+    expectedAthletes.trim() !== "" &&
+    Number.isInteger(expectedAthletesNum) &&
+    expectedAthletesNum >= MIN_EXPECTED_ATHLETES &&
+    expectedAthletesNum <= MAX_EXPECTED_ATHLETES;
+  const expectedBand = expectedAthletesValid ? bandForAthleteCount(expectedAthletesNum) : null;
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!agreedToTerms) return;
+    if (role === "coach" && !expectedAthletesValid) {
+      setFormError(
+        `Tell us roughly how many athletes you'll have -- a whole number between ${MIN_EXPECTED_ATHLETES} and ${MAX_EXPECTED_ATHLETES}. You can change it any time.`,
+      );
+      return;
+    }
+    setFormError("");
     isFreeAgentAttemptRef.current = role === "athlete" && !coachCode.trim();
     signupMutation.mutate({
       name,
@@ -147,6 +184,7 @@ export default function SignupPage() {
       position: role === "athlete" ? position.trim() : undefined,
       heightIn: role === "athlete" && heightIn ? Number(heightIn) : undefined,
       bodyWeightLbs: role === "athlete" && bodyWeightLbs ? Number(bodyWeightLbs) : undefined,
+      expectedAthletes: role === "coach" ? expectedAthletesNum : undefined,
       agreedToTerms: true,
       researchDataConsent: researchConsent,
     });
@@ -275,6 +313,33 @@ export default function SignupPage() {
                   </p>
                 )}
               </div>
+              {role === "coach" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="expectedAthletes">How many athletes will you have?</Label>
+                  <Input
+                    id="expectedAthletes"
+                    type="number"
+                    inputMode="numeric"
+                    required
+                    step={1}
+                    min={MIN_EXPECTED_ATHLETES}
+                    max={MAX_EXPECTED_ATHLETES}
+                    value={expectedAthletes}
+                    onChange={(e) => setExpectedAthletes(e.target.value)}
+                    placeholder="e.g. 34"
+                  />
+                  {expectedBand && (
+                    <p className="rounded-md bg-surface-elevated p-3 text-sm font-semibold">
+                      {expectedBand.label} · {formatCents(expectedBand.monthlyPriceCents)}/month ·{" "}
+                      {formatCents(ORG_PER_ATHLETE_CENTS)} per athlete
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Just a starting point -- you can change it any time, and nothing is charged
+                    while Forge is in beta.
+                  </p>
+                </div>
+              )}
               {isMinorAthlete && (
                 <div className="space-y-1.5">
                   <Label htmlFor="guardianEmail">Parent/guardian email</Label>
@@ -425,6 +490,9 @@ export default function SignupPage() {
                   </>
                 )}
               </div>
+              {formError && (
+                <p className="text-sm font-medium text-destructive">{formError}</p>
+              )}
               <Button
                 type="submit"
                 size="lg"
@@ -434,7 +502,8 @@ export default function SignupPage() {
                   !agreedToTerms ||
                   (isMinorAthlete && !guardianEmail.trim()) ||
                   (role === "athlete" && (!sport || !position.trim())) ||
-                  (role === "athlete" && (!heightIn.trim() || !bodyWeightLbs.trim()))
+                  (role === "athlete" && (!heightIn.trim() || !bodyWeightLbs.trim())) ||
+                  (role === "coach" && !expectedAthletesValid)
                 }
               >
                 {signupMutation.isPending ? "Creating account…" : "Create Account"}

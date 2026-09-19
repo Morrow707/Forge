@@ -108,7 +108,8 @@ describe("the athlete's own acknowledgment of the risk terms", () => {
   });
 
   it("is only for athletes", async () => {
-    const body = { ...signupBody(), role: "coach" };
+    // expectedAthletes because a coach signup picks its plan -- see server/plan-at-signup.itest.ts.
+    const body = { ...signupBody(), role: "coach", expectedAthletes: 25 };
     const client = new TestClient(server.baseUrl);
     await client.post("/api/auth/signup", body);
     const ack = await client.post("/api/account/assumption-of-risk", {});

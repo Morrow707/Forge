@@ -3280,6 +3280,11 @@ CREATE INDEX IF NOT EXISTS "external_waiver_view_grants_waiver_idx"
 CREATE INDEX IF NOT EXISTS "external_waiver_view_grants_admin_idx"
   ON "external_waiver_view_grants" ("admin_user_id", "created_at");
 
+-- What the school SAID they expect to have, typed in at signup; the roster is what they HAVE,
+-- and billing uses the larger of the two (storage.getBilledAthleteCountForCoach). Null means
+-- never stated. See shared/schema.ts.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "planned_athlete_count" integer;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN

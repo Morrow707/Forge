@@ -9,6 +9,7 @@ const updateSubscriptionByUserId = vi.fn();
 const updateSubscriptionByStripeId = vi.fn();
 const logBillingEvent = vi.fn();
 const wasStripeEventProcessed = vi.fn();
+const applyCoachSubscriptionBand = vi.fn();
 
 vi.mock("./storage", () => ({
   storage: {
@@ -16,6 +17,7 @@ vi.mock("./storage", () => ({
     updateSubscriptionByStripeId,
     logBillingEvent,
     wasStripeEventProcessed,
+    applyCoachSubscriptionBand,
   },
 }));
 
@@ -81,6 +83,47 @@ describe("checkout.session.completed", () => {
 
     expect(updateSubscriptionByUserId).not.toHaveBeenCalled();
     expect(logBillingEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("a completed coach subscription checkout", () => {
+  // The school paid for a band and the account used to keep saying "no plan assigned": no
+  // entitlements once enforcement is on, and no Institutional Service Agreement asked for,
+  // since getInstitutionalAgreementStatus keys off billingTier.
+  it("writes the band it was bought on, and the band's ceiling as the expected count", async () => {
+    const event = fakeEvent("evt_band", "checkout.session.completed", {
+      id: "cs_band",
+      client_reference_id: "7",
+      subscription: "sub_band",
+      customer: "cus_band",
+      metadata: { kind: "coach_subscription", userId: "7", band: "21-40", bandAthleteCap: "40" },
+    });
+    await handleStripeWebhookEvent(event);
+    expect(applyCoachSubscriptionBand).toHaveBeenCalledWith(7, "21-40", 40);
+  });
+
+  it("refuses a band id that is not a real band", async () => {
+    // metadata is a string that came back from an external system. An unknown id written onto
+    // the account is a tier nothing can resolve.
+    const event = fakeEvent("evt_badband", "checkout.session.completed", {
+      id: "cs_badband",
+      client_reference_id: "7",
+      subscription: "sub_badband",
+      metadata: { kind: "coach_subscription", band: "enterprise_unlimited" },
+    });
+    await handleStripeWebhookEvent(event);
+    expect(applyCoachSubscriptionBand).not.toHaveBeenCalled();
+  });
+
+  it("leaves a non-coach checkout alone", async () => {
+    const event = fakeEvent("evt_fa", "checkout.session.completed", {
+      id: "cs_fa",
+      client_reference_id: "7",
+      subscription: "sub_fa",
+      metadata: { kind: "something_else" },
+    });
+    await handleStripeWebhookEvent(event);
+    expect(applyCoachSubscriptionBand).not.toHaveBeenCalled();
   });
 });
 

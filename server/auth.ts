@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
+import { bandForAthleteCount } from "@shared/billing-tiers";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
 import { sendEmail, isEmailConfigured } from "./email";
@@ -564,6 +565,7 @@ export function setupAuth(app: Express) {
         researchDataConsent,
         agreedToBiometricRelease,
         agreedToAssumptionOfRisk,
+        expectedAthletes,
       } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
@@ -575,6 +577,18 @@ export function setupAuth(app: Express) {
       // guardianEmail below, since the schema alone can't see role.
       if (role === "athlete" && (!sport || !position)) {
         return res.status(400).json({ message: "Sport and position are required." });
+      }
+
+      // Same "required by the route, not the schema" posture as the athlete fields below: only
+      // a coach signup picks a plan, and the schema alone cannot see role. This is what makes
+      // the plan self-serve -- the number the school types here picks the band (see
+      // bandForAthleteCount), so nobody waits on an admin to be assigned a tier.
+      //
+      // A coach who arrives any other way is NOT put through this: a staff coach joining an
+      // existing org (POST /api/auth/join-staff) does not pick a plan, because the plan is the
+      // primary coach's and lives on the primary's row.
+      if (role === "coach" && expectedAthletes === undefined) {
+        return res.status(400).json({ message: "Tell us roughly how many athletes you'll have" });
       }
 
       // Same "required by the route, not the schema" posture as sport/position above -- height
@@ -651,6 +665,15 @@ export function setupAuth(app: Express) {
         // own comment for why this never gets touched again even if the
         // athlete's `sport` profile field changes later.
         signupSport: role === "athlete" ? sport : null,
+        // What the school said they expect (never an athlete's -- the field is meaningless on
+        // an athlete row), and the band that number falls into. isBetaAccount is deliberately
+        // NOT touched: it defaults true and is the one switch that makes any of this actually
+        // restrict an account, flipped by an admin and nothing else. Setting a tier here is a
+        // price quote, not enforcement.
+        plannedAthleteCount: role === "coach" ? expectedAthletes ?? null : null,
+        billingTier: role === "coach" && expectedAthletes !== undefined
+          ? bandForAthleteCount(expectedAthletes).id
+          : null,
         // Every minor, not just 13-17: an under-13 athlete needs the
         // coach-facing "get a guardian waiver on file" nudge at least as
         // much as a 15-year-old does.

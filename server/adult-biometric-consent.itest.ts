@@ -109,6 +109,9 @@ describe("biometric consent at adult signup", () => {
   it("does not record a release for a coach", async () => {
     const { row } = await signUp({
       role: "coach",
+      // A coach signup picks its plan (see server/plan-at-signup.itest.ts); without it the
+      // route 400s before this test's subject is reached.
+      expectedAthletes: 25,
       sport: undefined,
       position: undefined,
       heightIn: undefined,

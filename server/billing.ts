@@ -601,6 +601,25 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       if (purchasedFreeAgentTier) {
         await storage.updateFreeAgentBilling(userId, { freeAgentTier: purchasedFreeAgentTier });
       }
+
+      // THE COACH SIDE OF THE SAME BUG. A school checked out on a band (the quantity and the
+      // metadata both say which one -- see createCoachSubscriptionCheckout) and this handler
+      // wrote no billingTier at all, so the money arrived and the account still read "no plan
+      // assigned": no entitlements once enforcement is on, and no Institutional Service
+      // Agreement asked for, since getInstitutionalAgreementStatus keys off billingTier.
+      //
+      // The band is validated against BILLING_TIERS rather than trusted -- metadata is a string
+      // that came back from an external system, and an unknown id would otherwise be written
+      // onto the account as a tier nothing can resolve.
+      //
+      // isBetaAccount is deliberately left alone. It defaults true and is the one per-account
+      // admin switch that makes any of this actually restrict anybody (see its comment in
+      // shared/schema.ts); a completed payment is not an instruction to begin enforcing.
+      if (kind === "coach_subscription") {
+        const bandId = session.metadata?.band;
+        const band = bandId && bandId in BILLING_TIERS ? BILLING_TIERS[bandId] : null;
+        if (band) await storage.applyCoachSubscriptionBand(userId, band.id, band.athleteCapIncluded);
+      }
       await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind }, event.id);
       // A card was charged on an account that may belong to, or be responsible for, a minor.
       // The FTC counts that as one of its verifiable-parental-consent methods, so it is recorded

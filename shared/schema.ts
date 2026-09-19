@@ -593,6 +593,17 @@ export const users = pgTable(
     // today.
     billingTier: text("billing_tier"),
     billingAddOns: json("billing_add_ons").$type<string[]>(),
+    // What the school SAID they expect to have, typed in at signup (see
+    // signupSchema's expectedAthletes and server/auth.ts's signup handler).
+    // The roster is what they HAVE; this is what they told us they will
+    // have, and billing uses the LARGER of the two -- see
+    // storage.getBilledAthleteCountForCoach. Without it a school that
+    // signs up and subscribes before adding anybody is quoted the
+    // zero-athlete band, which is the cheapest one, for a program of two
+    // hundred. Null means never stated (every account created before this
+    // field existed, and every staff coach, whose org's number lives on
+    // the primary's row).
+    plannedAthleteCount: integer("planned_athlete_count"),
     // Defaults true so every existing row and every new signup starts
     // exempt from billing enforcement -- flipping this to false (via the
     // admin billing panel) is the only thing that makes billingTier/
@@ -7282,6 +7293,12 @@ export const insertUserSchema = createInsertSchema(users)
 
 // role is deliberately restricted to coach/athlete -- admin accounts are
 // never self-service, only promoted directly in the database.
+/** Upper bound on the "how many athletes do you expect?" answer, shared by signupSchema,
+ * PUT /api/coach/plan and the signup form. 5,000 is well past the largest band the pricing
+ * table enumerates (1,000) -- bandForAthleteCount clamps above that rather than failing -- and
+ * is here to refuse a typo, not to cap a customer. */
+export const MAX_EXPECTED_ATHLETES = 5000;
+
 export const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -7317,6 +7334,15 @@ export const signupSchema = z.object({
   // tracked mode silently produces nothing, which is exactly the gap this closes.
   heightIn: z.number().int().min(1).max(120).optional(),
   bodyWeightLbs: z.number().min(1).max(1500).optional(),
+  // How many athletes this school expects to have. Same "required by the route, not here"
+  // posture as sport/position/height above -- only a COACH signup needs it (an athlete has no
+  // plan to pick), and the route is what knows role. It is what picks the billing band at
+  // signup, so a school never waits on an admin to be put on a plan: see bandForAthleteCount
+  // in shared/billing-tiers.ts and users.plannedAthleteCount.
+  //
+  // The upper bound is MAX_EXPECTED_ATHLETES rather than a literal so the signup form, the
+  // plan route and this schema cannot disagree about it.
+  expectedAthletes: z.number().int().min(1).max(MAX_EXPECTED_ATHLETES).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),

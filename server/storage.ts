@@ -4,6 +4,7 @@ import {
   COACH_COPPA_ATTESTATION_NOT_TAKEN,
   needsCoppaAttestation,
 } from "@shared/coach-attestation";
+import { bandForAthleteCount } from "@shared/billing-tiers";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import {
   users,
@@ -4838,6 +4839,66 @@ export const storage = {
     return new Set(rows.map((r) => r.athleteId)).size;
   },
 
+  // WHAT THE ORG IS BILLED FOR: the larger of what they HAVE and what they SAID.
+  //
+  // A school types "we expect about 180 athletes" at signup (users.plannedAthleteCount) and
+  // subscribes the same afternoon, with a roster of zero. Billing the roster alone quotes them
+  // the cheapest band for a program of a hundred and eighty. Billing the stated number alone
+  // goes the other way once they outgrow it. The larger of the two is the only answer that is
+  // never wrong in the customer's favour AND never wrong in ours, and it needs no bookkeeping:
+  // the roster overtakes the estimate on its own as athletes join.
+  //
+  // Read off the PRIMARY coach's row -- the plan is the org's, not an assistant's, same as
+  // billingTier and branding.
+  async getBilledAthleteCountForCoach(coachId: number): Promise<number> {
+    const primaryId = await this.getPrimaryCoachId(coachId);
+    const [seats, primary] = await Promise.all([
+      this.getRosterSeatCountForCoach(coachId),
+      this.getUser(primaryId),
+    ]);
+    return Math.max(seats, primary?.plannedAthleteCount ?? 0);
+  },
+
+  /** Restates how many athletes the org expects, and re-derives the band from it. The two are
+   * written together on purpose: a stated count with a tier that does not match it is how the
+   * quote on the billing page stops agreeing with the plan on the account. Primary coach only
+   * (the route refuses a staff coach outright); isBetaAccount is untouched, as everywhere else
+   * -- assigning a band is a price, not enforcement. */
+  async setPlannedAthleteCount(coachId: number, expectedAthletes: number) {
+    const primaryId = await this.getPrimaryCoachId(coachId);
+    const band = bandForAthleteCount(expectedAthletes);
+    const [row] = await db
+      .update(users)
+      .set({ plannedAthleteCount: expectedAthletes, billingTier: band.id })
+      .where(eq(users.id, primaryId))
+      .returning({ plannedAthleteCount: users.plannedAthleteCount, billingTier: users.billingTier });
+    return row ?? null;
+  },
+
+  /** What a completed Stripe coach-subscription checkout actually bought, written onto the
+   * account. The webhook used to flip the subscription row to active and write no tier at all,
+   * so a school paid for a band and the account still said "no plan assigned" -- the same defect
+   * the Free Agent branch above it fixes for individuals.
+   *
+   * plannedAthleteCount only ever moves UP here: they paid for the band's ceiling, so that is
+   * at least what they expect, but a school that stated a bigger number and bought a smaller
+   * band should not have its own statement quietly reduced by the purchase.
+   *
+   * isBetaAccount is deliberately NOT touched. It defaults true and is the one deliberate,
+   * per-account admin switch that makes billingTier actually restrict anybody (see its comment
+   * in shared/schema.ts); a payment is not an instruction to start enforcing. */
+  async applyCoachSubscriptionBand(userId: number, bandId: string, bandAthleteCap: number) {
+    const current = await this.getUser(userId);
+    if (!current) return null;
+    const planned = Math.max(current.plannedAthleteCount ?? 0, bandAthleteCap);
+    const [row] = await db
+      .update(users)
+      .set({ billingTier: bandId, plannedAthleteCount: planned })
+      .where(eq(users.id, userId))
+      .returning({ plannedAthleteCount: users.plannedAthleteCount, billingTier: users.billingTier });
+    return row ?? null;
+  },
+
   // The actual roster-seat guardrail -- always true (unlimited roster,
   // today's real behavior) unless BILLING_LIVE is set AND this coach has a
   // real subscription row with a seatCap. No subscription row yet (every
@@ -4885,7 +4946,16 @@ export const storage = {
       if (existing) return { ok: true as const, athlete: existing };
 
       if (!(await this.hasRosterSeatAvailable(coachId))) {
-        return { ok: false as const, error: "This coach's roster is full -- ask them to upgrade their plan." };
+        // Says what is actually wrong and who can fix it: the program is full, and the fix is
+        // the coach moving up a band (the plan is roster bands -- see shared/billing-tiers.ts),
+        // not anything this athlete can do. The coach sees the same state from their side as
+        // atCap on GET /api/coach/plan. Enforcement semantics are unchanged -- this only fires
+        // where it already did.
+        return {
+          ok: false as const,
+          error:
+            "This program is full -- its coach needs to move up to a bigger plan before anyone else can join.",
+        };
       }
 
       const [row] = await tx.insert(coachAthletes).values({ coachId, athleteId }).returning();
