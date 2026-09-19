@@ -200,6 +200,16 @@ can install. Delete entries as a `beta` ships them.
   Build 459 still draws the camera controls for Basic and AI Coach Free Agents
   — they can film a set and then lose the clip to a 402 on save — and still
   shows both leaderboards and the admin query engine with no accuracy caveat.
+- **NOT in 459:** the SEO and first-paint work on `main` as of 2026-09-19 --
+  per-route titles and share cards, the prerendered public routes, three new
+  marketing pages (`/for-high-schools`, `/for-athletes`, `/camera-validation`),
+  the movement library, and the manualChunks fix that takes 412kB off every cold
+  load. Queued deliberately at Scott's instruction, not blocked on anything.
+  **Most of it cannot reach the app anyway**: robots.txt, the sitemap and the
+  prerendered HTML are web-only, and the native binary is not served through
+  them. What DOES reach it is the marketing pages, the lighter chunk split and
+  the WebP screenshots, all of which only show on surfaces a native user reaches
+  through the web bundle. No `verify_build` has been run on it.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
