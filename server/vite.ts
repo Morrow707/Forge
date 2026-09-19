@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import { createServer as createViteServer, createLogger } from "vite";
 import type { Server } from "http";
 import viteConfig from "../vite.config";
+import { PUBLIC_STATIC_OPTIONS, servePrerendered, spaFallback } from "./public-static";
 
 const viteLogger = createLogger();
 
@@ -90,27 +91,13 @@ export function serveStatic(app: Express) {
   }
 
   app.use(staticLimiter);
-  app.use(express.static(distPath));
-  // A MISSING BUILD ASSET IS A 404, NOT THE APP'S HTML.
-  //
-  // Everything unmatched fell through to index.html, including a request for a hashed asset
-  // that no longer exists -- which is exactly what a browser does for the seconds and minutes
-  // after a deploy, with a tab still open on the previous build asking for chunks that were
-  // just replaced. Handing back index.html with a 200 and text/html means the browser's
-  // dynamic import() gets a document where a module should be, and the failure surfaces as
-  // something incomprehensible ("Cannot read properties of undefined (reading 'default')")
-  // rather than as what it is.
-  //
-  // A real 404 makes it legible, and it is also what the client's own recovery is waiting
-  // for: main.tsx's vite:preloadError listener and lazy-load-recovery.ts turn a failed chunk
-  // fetch into one reload onto the current build. A 200 never reaches either of them.
-  //
-  // Anything with a file extension is an asset request; a client route (/admin/exercises) has
-  // none and still gets the app.
-  app.use("*", (req, res) => {
-    if (/\.[a-zA-Z0-9]+$/.test(req.path)) {
-      return res.status(404).type("text/plain").send("Not found");
-    }
-    res.sendFile(path.resolve(distPath, "index.html"));
-  });
+  // A public route's prerendered head, at its clean URL, BEFORE express.static can see a
+  // directory of the same name and answer with a redirect or fall through to the root page.
+  // See server/public-static.ts for the two ways that went wrong.
+  app.use(servePrerendered(distPath));
+  app.use(express.static(distPath, PUBLIC_STATIC_OPTIONS));
+  // A missing build asset is a 404, not the app's HTML -- see spaFallback in
+  // server/public-static.ts for why, and for the mount-path bug that had it silently
+  // answering every missing chunk with a 200 for as long as it existed.
+  app.use("*", spaFallback(distPath));
 }

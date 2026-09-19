@@ -3188,6 +3188,11 @@ function ExerciseLogContent({
           exercise reads as information, the same line repeated under four sets
           reads as noise and stops being read at all. */}
       {item.trackingLevel !== "none" && cameraAllowed && <CameraMetricCaveat dismissible />}
+      {/* The access read failed, so no tracker control is drawn -- and that has to be SAID, or a
+          coach with every right to film sees the button missing and has nothing to act on. */}
+      {item.trackingLevel !== "none" && cameraAccess.failed && (
+        <ReadFailed what="whether the camera is available to you" onRetry={cameraAccess.retry} className="flex flex-col items-start gap-2 py-2" />
+      )}
       {/* Rendered beside the sets rather than at the dialog stack below, because it has to open
           BEFORE any tracker does -- it is the question asked instead of starting the camera. */}
       <BiometricReleaseDialog

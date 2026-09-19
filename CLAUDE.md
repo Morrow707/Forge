@@ -189,33 +189,25 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **459** is the newest TestFlight build, cut from `57b13d0`. It carries
-  the camera arbiter (wrist gate, gated re-classification, body-suspect
-  detection, scale rejection) AND the AI Coach + Video withdrawal, so the
-  $19.99 tier and its price are gone from /pricing, the landing page and the
-  athlete upgrade screen in that build.
-- **NOT in 459:** `6bca8a8`, the camera entitlement gate and caveat coverage.
-  Verified — `verify_build` run 460 archived, signed and passed
-  `altool --validate-app`, so it will not bounce whenever it does ship.
-  Build 459 still draws the camera controls for Basic and AI Coach Free Agents
-  — they can film a set and then lose the clip to a 402 on save — and still
-  shows both leaderboards and the admin query engine with no accuracy caveat.
-- **NOT in 459 — and it UNDOES what 459 shows:** the tier decisions of 2026-09-19 afternoon.
-  459 was cut with AI Coach + Video withdrawn, so that build has no $19.99 tier on /pricing, the
-  landing page or the upgrade screen at all. `main` now sells it again with the purchase warning
-  attached, and moves skills onto it — so Basic and AI Coach lose the Skill Programs tab, the
-  Skill Bank and skill sessions, which 459 still offers them. Anyone testing tiers on 459 is
-  testing a price list that no longer exists. No `verify_build` has been run on it yet.
-- **NOT in 459:** the SEO and first-paint work on `main` as of 2026-09-19 --
-  per-route titles and share cards, the prerendered public routes, three new
-  marketing pages (`/for-high-schools`, `/for-athletes`, `/camera-validation`),
-  the movement library, and the manualChunks fix that takes 412kB off every cold
-  load. Queued deliberately at Scott's instruction, not blocked on anything.
-  **Most of it cannot reach the app anyway**: robots.txt, the sitemap and the
-  prerendered HTML are web-only, and the native binary is not served through
-  them. What DOES reach it is the marketing pages, the lighter chunk split and
-  the WebP screenshots, all of which only show on surfaces a native user reaches
-  through the web bundle. No `verify_build` has been run on it.
+- Build **462** is the newest TestFlight build, cut from `c089279` on
+  2026-09-19 (Scott: "Upload all"). `verify_build` run 461 passed
+  `altool --validate-app` on the same commit first. It carries everything
+  accumulated since 459: the camera entitlement gate and caveat coverage
+  (`6bca8a8`), the tier reversal (AI Coach + Video back on sale with the
+  purchase warning, skills moved onto it, so Basic and AI Coach lose the Skill
+  Programs tab, Skill Bank and skill sessions), and the SEO and first-paint
+  work (marketing pages, movement library, the 412kB lighter chunk split,
+  WebP screenshots). Nothing on `main` is waiting on an upload.
+- **NOT in 462:** the fixes from the post-merge audit, merged via PR #121. The
+  prerendered public routes no longer 301 to a trailing-slash URL (server-side:
+  `server/public-static.ts`, ships on Render, not in a build). The
+  `useSkillsAccess` / `useCameraAccess` hooks now report a failed read, the
+  skills gate renders `ReadFailed` instead of spinning forever, and both
+  workout pages say so where the camera control would have been. That half is
+  client-side and reaches the app; 462 still has the infinite spinner. Also
+  server-side: the SPA catch-all now really answers a missing asset with a 404
+  (it never had, `req.path` is "/" under `app.use("*")`), which is what the
+  client's stale-chunk reload recovery waits for.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

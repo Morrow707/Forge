@@ -86,4 +86,20 @@ describe("both workout pages ask before drawing a camera control", () => {
       "cameraAccess?.allowed === true",
     );
   });
+
+  it("a failed read is said on the page, not shown as a missing button", () => {
+    // `allowed` stays undefined on a failed request, so no control is drawn -- correct. But a
+    // coach with every right to film then sees the button missing with nothing to act on. The
+    // hook reports the failure and both pages render ReadFailed with its retry.
+    const hook = read("client", "src", "hooks", "use-camera-access.ts");
+    expect(hook).toContain("failed: isError");
+    for (const parts of [
+      ["client", "src", "pages", "workout.tsx"],
+      ["client", "src", "pages", "skill-workout.tsx"],
+    ]) {
+      const src = read(...parts);
+      expect(src).toMatch(/cameraAccess\.failed && \(\s*<ReadFailed/);
+      expect(src).toContain("onRetry={cameraAccess.retry}");
+    }
+  });
 });

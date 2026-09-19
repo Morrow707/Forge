@@ -9,6 +9,17 @@ export type CameraAccessReason =
 
 export type CameraAccess = { allowed: boolean; reason: CameraAccessReason };
 
+/** What a caller gets back. `allowed` is undefined until the server answers AND after a failed
+ * read, so `?.allowed === true` stays the only way to draw a camera control. `failed` is what was
+ * missing: a failed read used to look exactly like a slow one, so a coach whose record button
+ * never appeared had nothing to act on and no way to tell the two apart. */
+export type CameraAccessState = {
+  allowed: boolean | undefined;
+  reason: CameraAccessReason | undefined;
+  failed: boolean;
+  retry: () => void;
+};
+
 /**
  * Whether this person may use camera tracking at all.
  *
@@ -33,18 +44,26 @@ export type CameraAccess = { allowed: boolean; reason: CameraAccessReason };
  * NOT A PERMISSION CHECK. Hiding a button is presentation. The routes that save a clip keep
  * their own gate, which is the one that actually decides.
  */
-export function useCameraAccess(): CameraAccess | undefined {
+export function useCameraAccess(): CameraAccessState {
   const { user } = useAuth();
-  const { data } = useQuery<CameraAccess>({
+  const eligible = !!user && ["athlete", "coach", "admin"].includes(user.role);
+  const { data, isError, refetch } = useQuery<CameraAccess>({
     queryKey: ["/api/athlete/camera-access"],
-    enabled: !!user && ["athlete", "coach", "admin"].includes(user.role),
+    enabled: eligible,
     // The answer changes only when somebody's subscription or roster does, neither of which
     // happens mid-workout. Re-asking on every window focus would put a request behind every
     // glance at the screen during a set.
     staleTime: 5 * 60 * 1000,
   });
-  if (!user || !["athlete", "coach", "admin"].includes(user.role)) {
-    return { allowed: false, reason: "tier_excludes_camera" };
+  if (!eligible) {
+    return { allowed: false, reason: "tier_excludes_camera", failed: false, retry: () => {} };
   }
-  return data;
+  // A failed read stays "not allowed" for the controls -- undefined is never a yes -- but it is
+  // reported as failed so the page can say so and offer a retry, rather than a silent absence.
+  return {
+    allowed: data?.allowed,
+    reason: data?.reason,
+    failed: isError,
+    retry: () => void refetch(),
+  };
 }

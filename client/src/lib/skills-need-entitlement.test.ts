@@ -99,8 +99,20 @@ describe("the client asks the server and never works the rule out itself", () =>
     // an explicit true. Defaulting to yes flashes a tab at somebody who cannot use it;
     // defaulting to no flashes its absence at a coached athlete who can.
     const src = read("hooks", "use-skills-access.ts");
-    expect(src).toMatch(/SkillsAccess \| undefined/);
-    expect(src).toContain("return data;");
+    expect(src).toMatch(/allowed: boolean \| undefined/);
+    expect(src).toContain("allowed: data?.allowed");
+  });
+
+  it("a failed read is reported, not spun through", () => {
+    // Leaving `allowed` undefined on error made a failed request look like a slow one, and the
+    // gate's spinner never resolved. The hook has to surface the error and a retry, and the gate
+    // has to render ReadFailed on it BEFORE it decides to spin.
+    const hook = read("hooks", "use-skills-access.ts");
+    expect(hook).toContain("failed: isError");
+    expect(hook).toContain("refetch");
+    const gate = read("components", "skills-gate.tsx");
+    expect(gate).toContain("ReadFailed");
+    expect(gate.indexOf("access.failed")).toBeLessThan(gate.indexOf("access.allowed === undefined"));
   });
 
   it("the Library tab strip stops offering skills without access", () => {

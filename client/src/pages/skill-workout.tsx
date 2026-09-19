@@ -111,7 +111,8 @@ function SkillWorkoutPageInner() {
   // trackers here were ungated too, so a Free Agent on a tier without video form-check could
   // film a sprint, get a time, and lose the clip to a 402 on save. Requires an explicit true,
   // so an unanswered query neither flashes the button nor hides it from someone who has it.
-  const cameraAllowed = useCameraAccess()?.allowed === true;
+  const cameraAccess = useCameraAccess();
+  const cameraAllowed = cameraAccess?.allowed === true;
 
   const dayPath = `/api/athlete/skill-day/${assignmentId}/${dayId}?date=${date}`;
   const { data: day, isLoading, isError, refetch } = useQuery<SkillDayInfo>({
@@ -423,6 +424,9 @@ function SkillWorkoutPageInner() {
                           </a>
                         )}
 
+                        {ex.trackingLevel !== "none" && cameraAccess.failed && (
+                          <ReadFailed what="whether the camera is available to you" onRetry={cameraAccess.retry} className="flex flex-col items-start gap-2 py-2" />
+                        )}
                         {ex.trackingLevel !== "none" && cameraAllowed && (
                           // Sprint times and mechanics scores come off the same uncalibrated
                           // pipeline as bar velocity, and this page showed them with no warning
