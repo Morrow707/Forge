@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { resolveMovementScreenUnitLabel, type MovementScreenScoreType } from "@shared/movement-screen";
+import { pickReadableTextHex } from "@shared/color-contrast";
 
 export interface MovementScreenSheetTest {
   label: string;
@@ -22,21 +23,6 @@ export interface MovementScreenSheetBranding {
 const ORANGE = "#F65B23";
 const DARK = "#111111";
 const GREY = "#666666";
-
-// Simple luminance heuristic for picking readable band text -- same
-// "weighted RGB average, not true WCAG relative luminance" tradeoff
-// client/src/lib/color.ts's contrastForegroundHsl makes, kept independent
-// (not imported from there) since this runs server-side against a raw hex,
-// not the CSS-variable triplet shape that file's other exports assume.
-function pickBandTextHex(bgHex: string): string {
-  const match = /^#([0-9a-f]{6})$/i.exec(bgHex.trim());
-  if (!match) return "#ffffff";
-  const r = parseInt(match[1].slice(0, 2), 16) / 255;
-  const g = parseInt(match[1].slice(2, 4), 16) / 255;
-  const b = parseInt(match[1].slice(4, 6), 16) / 255;
-  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-  return luminance > 0.6 ? "#111111" : "#ffffff";
-}
 
 /** A blank, printable score sheet for one battery -- filled out on paper,
  * then photographed back in through the analyze-photo/apply flow (same
@@ -63,7 +49,7 @@ export function buildMovementScreenSheetPdf(
     doc.on("error", reject);
 
     const bandColor = branding?.primaryColor || ORANGE;
-    const bandText = pickBandTextHex(bandColor);
+    const bandText = pickReadableTextHex(bandColor);
     doc.rect(0, 0, doc.page.width, 90).fill(bandColor);
 
     if (branding?.logoBuffer) {

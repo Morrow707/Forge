@@ -88,7 +88,7 @@ These are the best remaining return per unit of effort. All follow the
 ### Pure shared modules still untested
 
 Not in scope for this session, none security-critical, all trivially
-testable: `billing-tiers`, `coach-sections`, `color-contrast`,
+testable: `billing-tiers`, `coach-sections`,
 `dashboard-widgets`, `exercise-family`, `exercise-taxonomy`,
 `fault-correctives`, `free-agent-tiers`, `goniometer`, `movement-screen`,
 `muscle-map`, `notification-categories`, `roster-groups`,
