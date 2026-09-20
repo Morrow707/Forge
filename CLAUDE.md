@@ -193,8 +193,10 @@ can install. Delete entries as a `beta` ships them.
   2026-09-20 (Scott: "upload to apple"). `verify_build` run 484 passed
   `altool --validate-app` on the same code. On top of 483 it adds #150: a
   coach or admin filming their own training can link a stranded clip from
-  /coach/video-bank or /admin/video-bank. Nothing on `main` is waiting on an
-  upload.
+  /coach/video-bank or /admin/video-bank.
+- Waiting on an upload since 485: #152 (documents audit: public PDF download button on every
+  legal page, honest statuses on /documents, admin AI Terms card, kind-belongs-on-profile
+  upload rule).
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
