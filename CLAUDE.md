@@ -189,17 +189,15 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **477** is the newest TestFlight build, cut from `22bfc21` on
-  2026-09-19 (Scott: "upload to apple"). `verify_build` run 476 passed
-  `altool --validate-app` on the same commit. On top of 469 it adds, in
-  order: per-team coach assignment, the Service Agreement download and
-  in-app signing, the plan picked at signup (athlete count → band), the
-  assistant-coach staff-code signup, counsel's research consent, counsel's
-  signup Terms of Use with re-acceptance on change, and the merged Terms
-  (one document at signup, /terms and both claim pages). The first sign-in
-  from this build asks every existing account to accept the new Terms once;
-  a minor's guardian is asked instead. Nothing on `main` is waiting on an
-  upload.
+- Build **483** is the newest TestFlight build, cut from `bfb23fc` on
+  2026-09-20 (Scott: "yes do all 6, and upload to apple after"). `verify_build`
+  run 482 passed `altool --validate-app` on the same commit. On top of 477 it
+  adds the surface-audit fixes (#145, #146), immediate-upload queueing (#147),
+  the camera save-path fixes (#148: whole-workout deletion, queued clips get
+  their form check, trimmed replays no longer clear frames) and the six
+  approved camera items (#149: overwatch on the web path, the Swift overwatch
+  gaps, honest camera alignment, frozen-frame dedup, reattach by row id with
+  the unattached-clips card). Nothing on `main` is waiting on an upload.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
