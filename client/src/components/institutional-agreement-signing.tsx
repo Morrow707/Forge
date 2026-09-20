@@ -54,6 +54,8 @@ export type InstitutionalAgreementStatus = {
     institutionName: string;
   } | null;
   canSignInApp: boolean;
+  /** Set for a staff coach whose primary has the agreement on file; see StaffAgreementView. */
+  primaryCoachName?: string | null;
 };
 
 const AGREEMENT_QUERY_KEY = ["/api/coach/institutional-agreement"];
@@ -119,6 +121,47 @@ function SignedConfirmation({
           Signed by {signature.signerName}
           {signature.signerTitle ? `, ${signature.signerTitle},` : ""} on{" "}
           {formatDate(signature.signedAt)} for {signature.institutionName}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" className="w-full" onClick={downloadSignedCopy}>
+          Download signed copy
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** A STAFF COACH SEES THE ORGANISATION'S SIGNED AGREEMENT, AND CAN DO NOTHING TO IT.
+ *
+ * The status for a non-primary coach carries the primary's agreement (`required: false`, so no
+ * form is ever offered; `onFile` and `signature` from the primary's record). This is the only
+ * branch that renders for them: who signed, when, for which institution, and the download, which
+ * the signed-PDF route already serves to any coach on the staff. No sign form, no paper path and
+ * no upload box -- signing is the primary coach's act, and the server refuses a staff coach on
+ * both routes regardless of what is drawn here. */
+function StaffAgreementView({ status }: { status: InstitutionalAgreementStatus }) {
+  const { signature } = status;
+  return (
+    <Card data-testid="staff-agreement-view">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FileCheck2 className="h-4 w-4 text-success" />
+          Your organisation's Service Agreement
+        </CardTitle>
+        <CardDescription>
+          {signature ? (
+            <>
+              Signed by {signature.signerName}
+              {signature.signerTitle ? `, ${signature.signerTitle},` : ""} on{" "}
+              {formatDate(signature.signedAt)} for {signature.institutionName}.
+            </>
+          ) : (
+            <>On file, signed on paper and uploaded on {formatDate(status.signedAt)}.</>
+          )}
+          {status.primaryCoachName
+            ? ` It is held on ${status.primaryCoachName}'s account, your program's primary coach.`
+            : ""}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -280,6 +323,11 @@ export function InstitutionalAgreementSigning() {
     },
   });
 
+  // Staff coach: the primary's agreement, read-only. Checked before `required`, which is false
+  // for them by design, so this is the one thing they can ever see here.
+  if (status && !status.required && status.onFile) {
+    return <StaffAgreementView status={status} />;
+  }
   if (!status?.required) return null;
 
   // A filed agreement that carries a signature record shows the confirmation -- whether it was

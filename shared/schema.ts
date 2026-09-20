@@ -8925,6 +8925,11 @@ export type PublicUser = Omit<
   // what lets the client ask before they film rather than dropping what they filmed afterwards.
   // Never a substitute for that gate: a client flag is a convenience, not a rule.
   biometricReleaseRequired?: boolean;
+  // Athletes only. The minor's counterpart: no biometric consent on file, and the athlete cannot
+  // give it -- their guardian can, from the guardian dashboard (recordBiometricReleaseAsGuardian).
+  // Lets the workout screen say so before the tracker opens rather than after the capture gate
+  // has silently dropped the numbers. Convenience only; the gate is the rule.
+  biometricReleaseAwaitingGuardian?: boolean;
   /** True until the athlete has personally acknowledged the assumption-of-risk release. A
    * guardian having agreed for them does not clear it -- see hasAcknowledgedAssumptionOfRisk. */
   assumptionOfRiskRequired?: boolean;

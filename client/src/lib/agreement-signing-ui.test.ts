@@ -137,3 +137,46 @@ describe("the paper path survives", () => {
     expect(PAGE).not.toContain("Download agreement");
   });
 });
+
+describe("a staff coach reads the signed agreement and can do nothing to it", () => {
+  // The status for a non-primary coach carries the primary's agreement with `required: false`.
+  // The component has to render SOMETHING for that shape -- before this branch existed the
+  // `!status?.required` early return drew nothing, and an assistant coach had no way to see the
+  // organisation's agreement was signed -- and that something must not be a way to sign or
+  // upload, which the server refuses a staff coach on anyway.
+  const view = /function StaffAgreementView\(([\s\S]*?)\n}\n/.exec(COMPONENT);
+
+  it("has a read-only branch for the primary's agreement", () => {
+    expect(view, "StaffAgreementView not found").toBeTruthy();
+    expect(view![0]).toContain("Your organisation's Service Agreement");
+    expect(view![0]).toContain("Signed by {signature.signerName}");
+    expect(view![0]).toContain("primaryCoachName");
+    expect(view![0]).toContain("Download signed copy");
+    expect(view![0]).toContain("downloadSignedCopy");
+  });
+
+  it("offers a staff coach no way to sign or upload", () => {
+    const body = view![0];
+    expect(body).not.toContain("Sign agreement");
+    expect(body).not.toContain("Prefer to sign on paper?");
+    expect(body).not.toContain("/api/coach/institutional-agreement/sign");
+    expect(body).not.toContain("/api/coach/institutional-agreement/download");
+    expect(body).not.toContain("Checkbox");
+    expect(body).not.toContain("Input");
+  });
+
+  it("is reached before the required check, on the primary's onFile", () => {
+    const staffBranch = COMPONENT.indexOf("status && !status.required && status.onFile");
+    const requiredReturn = COMPONENT.indexOf("if (!status?.required) return null;");
+    expect(staffBranch).toBeGreaterThan(-1);
+    expect(staffBranch).toBeLessThan(requiredReturn);
+    expect(COMPONENT.slice(staffBranch, requiredReturn)).toContain("<StaffAgreementView");
+  });
+
+  it("is rendered by the documents page when the agreement is on file, not only when required", () => {
+    expect(PAGE).toContain("institutional?.onFile === true");
+    expect(PAGE).toContain("{showInstitutional && <InstitutionalAgreementSigning />}");
+    // The upload kind stays gated on `required`: only the primary who owes one may upload it.
+    expect(PAGE).toContain("{offerInstitutional && (");
+  });
+});

@@ -190,6 +190,14 @@ import {
   renderPassagesForPrompt,
 } from "./knowledge-retrieval";
 import { RESEARCH_CONSENT_TEXT, researchConsentDisclosesDeletionRetention } from "@shared/research-consent";
+import {
+  CONSENT_CATALOG,
+  GUARDIAN_GIVES_BIOMETRIC_CONSENT,
+  type ConsentSummaryRow,
+  type ConsentType,
+} from "@shared/consent-catalog";
+import { sendEmail } from "./email";
+import { buildDocumentsRequestEmail } from "./email-roster-documents";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
   MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
@@ -26733,13 +26741,27 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * THE GUARDIAN IS NOTIFIED TOO, and for a minor they are usually the only one who can act:
    * a 15-year-old cannot produce their own medical clearance or sign an emergency
    * authorization. Telling only the athlete would be a request sent to the wrong person.
+   *
+   * AND IT GOES BY EMAIL. The in-app notification is still written -- it is what the 24-hour
+   * floor reads (athletesChasedSince), and it is there when the person opens the app -- but a
+   * parent who is not in the app is exactly the person this request is for, so the same
+   * wording goes to their inbox. Who gets it follows getDocumentEmailRecipients. When the mail
+   * provider is not configured the notification is still written and the caller is told the
+   * request was in-app only, so the coach's toast says what actually left.
    */
   async requestDocuments(input: {
     coachId: number;
     athleteId: number;
     athleteName: string;
     missing: string[];
-  }): Promise<void> {
+    /** Absolute origin for the link in the email, e.g. https://app.example. */
+    origin: string;
+  }): Promise<{
+    delivery: "emailed" | "in_app_only";
+    /** Who the email went to, or why it did not. */
+    detail: "athlete" | "guardians" | "no_email" | "not_configured" | "send_failed";
+    emailsSent: number;
+  }> {
     const coach = await this.getUser(input.coachId);
     const from = coach?.name ? `${coach.name} ` : "";
     const list = input.missing.join(", ");
@@ -26750,13 +26772,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       `${from}needs these on file: ${list}. You can upload a photo or a PDF from your Documents page.`,
       "/documents",
     );
-    const guardians = await db
-      .select({ guardianId: guardianLinks.guardianId })
-      .from(guardianLinks)
-      .where(eq(guardianLinks.athleteId, input.athleteId));
+    const recipients = await this.getDocumentEmailRecipients([input.athleteId]);
+    const who = recipients.get(input.athleteId);
+    const guardians = who?.guardians ?? [];
     for (const g of guardians) {
       await this.createNotification(
-        g.guardianId,
+        g.id,
         "documents_requested",
         `Documents needed for ${input.athleteName}`,
         `${from}needs these on file for ${input.athleteName}: ${list}. You can upload a photo or a PDF from their Documents page.`,
@@ -26768,6 +26789,119 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         `/documents/${input.athleteId}`,
       );
     }
+
+    // The email. A minor with guardians -> the guardians, about the child; anyone else -> the
+    // athlete's own address.
+    const toGuardians = !!who && who.isMinor && guardians.some((g) => g.email);
+    const targets: { email: string; name: string; athleteName: string | null; link: string }[] =
+      toGuardians
+        ? guardians
+            .filter((g) => g.email)
+            .map((g) => ({
+              email: g.email!,
+              name: g.name,
+              athleteName: input.athleteName,
+              link: `${input.origin}/documents/${input.athleteId}`,
+            }))
+        : who?.athleteEmail
+          ? [
+              {
+                email: who.athleteEmail,
+                name: who.athleteName,
+                athleteName: null,
+                link: `${input.origin}/documents`,
+              },
+            ]
+          : [];
+    if (targets.length === 0) return { delivery: "in_app_only", detail: "no_email", emailsSent: 0 };
+
+    let emailsSent = 0;
+    let lastError: string | undefined;
+    for (const t of targets) {
+      const result = await sendEmail({
+        to: t.email,
+        subject: t.athleteName ? `Documents needed for ${t.athleteName}` : "Documents needed",
+        html: buildDocumentsRequestEmail({
+          recipientName: t.name,
+          athleteName: t.athleteName,
+          coachName: coach?.name ?? null,
+          missing: input.missing,
+          link: t.link,
+        }),
+      });
+      if (result.sent) emailsSent += 1;
+      else lastError = result.error;
+    }
+    if (emailsSent === 0) {
+      return {
+        delivery: "in_app_only",
+        detail: lastError === "not_configured" ? "not_configured" : "send_failed",
+        emailsSent: 0,
+      };
+    }
+    return { delivery: "emailed", detail: toGuardians ? "guardians" : "athlete", emailsSent };
+  },
+
+  /** WHO GETS AN EMAIL ABOUT AN ATHLETE'S PAPERWORK.
+   *
+   * An adult athlete gets their own. A minor's linked guardians get it about the child, because
+   * a 15-year-old cannot produce their own medical clearance and a legal document about a minor
+   * is for the adult responsible for them. A minor with no guardian linked falls back to their
+   * own address -- the alternative is nobody hearing at all -- and the caller is told which
+   * happened. An unknown date of birth is a minor, the same rule getResearchDataConsent applies:
+   * when nobody can say whether an adult is reading, assume one is not.
+   *
+   * One query for the whole list, because the roster send and the chase list both call this
+   * for every athlete at once.
+   */
+  async getDocumentEmailRecipients(athleteIds: number[]): Promise<
+    Map<
+      number,
+      {
+        athleteName: string;
+        athleteEmail: string | null;
+        isMinor: boolean;
+        guardians: { id: number; name: string; email: string | null }[];
+      }
+    >
+  > {
+    const out = new Map<
+      number,
+      {
+        athleteName: string;
+        athleteEmail: string | null;
+        isMinor: boolean;
+        guardians: { id: number; name: string; email: string | null }[];
+      }
+    >();
+    if (athleteIds.length === 0) return out;
+    const athletes = await db
+      .select({ id: users.id, name: users.name, email: users.email, dateOfBirth: users.dateOfBirth })
+      .from(users)
+      .where(inArray(users.id, athleteIds));
+    for (const a of athletes) {
+      out.set(a.id, {
+        athleteName: a.name,
+        athleteEmail: a.email || null,
+        isMinor: a.dateOfBirth ? derivePrivacyTier(a.dateOfBirth) !== "tier3_adult_18plus" : true,
+        guardians: [],
+      });
+    }
+    const guardian = alias(users, "doc_recipient_guardian");
+    const links = await db
+      .select({
+        athleteId: guardianLinks.athleteId,
+        id: guardian.id,
+        name: guardian.name,
+        email: guardian.email,
+      })
+      .from(guardianLinks)
+      .innerJoin(guardian, eq(guardian.id, guardianLinks.guardianId))
+      .where(inArray(guardianLinks.athleteId, athleteIds));
+    for (const l of links) {
+      out.get(l.athleteId)?.guardians.push({ id: l.id, name: l.name, email: l.email || null });
+    }
+    return out;
   },
 
   async externalWaiverSummary(athleteId: number) {
@@ -27151,7 +27285,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     // A minor cannot give this for themselves; their guardian gives it at claim time. Checked
     // here and not only at the route, for the same reason every other consent check is.
     if (!athlete.dateOfBirth || derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus") {
-      return { ok: false, error: "A parent or guardian gives this consent for an athlete under 18." };
+      return { ok: false, error: GUARDIAN_GIVES_BIOMETRIC_CONSENT };
     }
     const release = await this.getLegalDocument("biometric_waiver");
     await this.logConsentRecord({
@@ -27163,6 +27297,106 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     });
     await db.update(users).set({ trackingOptOut: false }).where(eq(users.id, athleteId));
     return { ok: true };
+  },
+
+  /** WHERE THE VIDEO AND BIOMETRIC CONSENT STANDS FOR ONE ATHLETE.
+   *
+   * The latest biometric_waiver row, read the way hasBiometricConsent reads it (a WITHDRAWN row
+   * is a no), plus the one thing that function does not ask: whether the text that was agreed to
+   * is still the live document. Same rule as the Terms (getTermsAcceptanceStatus): a text
+   * comparison, never a version flag, so any edit to the reviewed document re-asks. Staleness
+   * does NOT close the capture gate -- a consent given under older wording is still a consent
+   * until it is withdrawn -- it is what tells the guardian dashboard and "What you've agreed to"
+   * to ask again, and both read it from here so they cannot disagree.
+   *
+   * `guardianDecides` is the Terms rule verbatim: an unknown date of birth is treated as a minor,
+   * because when nobody can say an adult is answering the answer has to come from one. */
+  async getBiometricConsentStatus(athleteId: number): Promise<{
+    given: boolean;
+    givenAt: string | null;
+    /** Somebody other than the athlete wrote the latest row -- the guardian, for a minor. */
+    givenByGuardian: boolean;
+    /** Given, and under text that no longer matches the live document. */
+    stale: boolean;
+    withdrawnAt: string | null;
+    guardianDecides: boolean;
+    /** Hash of the live text, so a card can say which version it is offering. */
+    liveVersion: string | null;
+  }> {
+    const [athlete, live, latest] = await Promise.all([
+      this.getUser(athleteId),
+      this.getLegalDocument("biometric_waiver"),
+      db.query.consentRecords.findFirst({
+        where: and(
+          eq(consentRecords.userId, athleteId),
+          eq(consentRecords.consentType, "biometric_waiver"),
+        ),
+        orderBy: [desc(consentRecords.createdAt), desc(consentRecords.id)],
+      }),
+    ]);
+    const withdrawn = latest != null && latest.documentText.startsWith("WITHDRAWN ");
+    const given = latest != null && !withdrawn;
+    return {
+      given,
+      givenAt: given ? latest!.createdAt.toISOString() : null,
+      givenByGuardian: given && latest!.givenByUserId != null && latest!.givenByUserId !== athleteId,
+      stale: given && live?.content != null && latest!.documentText !== live.content,
+      withdrawnAt: withdrawn ? latest!.createdAt.toISOString() : null,
+      guardianDecides:
+        athlete?.role === "athlete" &&
+        (athlete.dateOfBirth ? derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus" : true),
+      liveVersion: live?.content
+        ? createHash("sha256").update(live.content).digest("hex").slice(0, 12)
+        : null,
+    };
+  },
+
+  /** A GUARDIAN GIVING THE VIDEO AND BIOMETRIC CONSENT FOR A LINKED MINOR, AFTER THE CLAIM.
+   *
+   * logGuardianConsents writes this row at claim time and nothing else ever did, so a minor whose
+   * claim predates the consent, whose guardian declined then, or whose consent text has changed
+   * since, had a capture gate nobody could open. This is the same record, written the same way
+   * (recordBiometricRelease for an adult, logGuardianConsents for a claim): the live document's
+   * exact text, attributed to the guardian through givenByUserId, so withdrawGuardianConsent finds
+   * it and quotes it back like every other consent that guardian gave.
+   *
+   * Deliberately does NOT touch trackingOptOut. For an adult that flag is how "has not agreed" is
+   * expressed, so recordBiometricRelease clears it; for a minor it is the guardian's own prospective
+   * control (the tracking-opt-out route), and consenting to be filmed is not the same act as
+   * turning the camera on. An unlinked athlete reads as not found, the same 404 every guardian
+   * route gives for somebody else's child. An adult is refused: they give it themselves. */
+  async recordBiometricReleaseAsGuardian(input: {
+    guardianId: number;
+    athleteId: number;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<
+    | { ok: true; givenAt: string }
+    | { ok: false; code: "not_found" | "adult" | "no_document"; error: string }
+  > {
+    const athlete = await this.getAthleteForGuardianScoped(input.guardianId, input.athleteId);
+    if (!athlete) return { ok: false, code: "not_found", error: "No athlete linked to this account." };
+    if (athlete.dateOfBirth && derivePrivacyTier(athlete.dateOfBirth) === "tier3_adult_18plus") {
+      return {
+        ok: false,
+        code: "adult",
+        error: `${athlete.name} is an adult and gives this consent for themselves.`,
+      };
+    }
+    const release = await this.getLegalDocument("biometric_waiver");
+    if (!release?.content) {
+      // A consent record pointing at nothing is what the old draft produced. Refuse instead.
+      return { ok: false, code: "no_document", error: "That document isn't available right now." };
+    }
+    const record = await this.logConsentRecord({
+      userId: athlete.id,
+      consentType: "biometric_waiver",
+      documentText: release.content,
+      givenByUserId: input.guardianId,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    });
+    return { ok: true, givenAt: record.createdAt.toISOString() };
   },
 
   async withdrawGuardianConsent(input: {
@@ -27455,11 +27689,35 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
      * file" -- computed here rather than re-derived on the client, for the same reason every
      * other two-branch rule in this app is asked of the server once. */
     canSignInApp: boolean;
+    /** For a staff coach: the primary coach whose agreement this is, named so the read-only card
+     * can say whose signature it is showing. Null for the primary themselves and for a staff whose
+     * primary has nothing on file. */
+    primaryCoachName: string | null;
   }> {
     const coach = await this.getUser(coachId);
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const isPrimary = coachIds[0] === coachId;
-    if (!isPrimary || !coach?.billingTier) {
+    if (!isPrimary) {
+      // A STAFF COACH READS THE PRIMARY'S AGREEMENT. It is the staff's own contract -- the signed
+      // PDF route already serves it to anyone on the staff -- and until this the status said
+      // `required: false` and nothing else, so the documents page drew nothing and an assistant
+      // coach had no way to see that the organisation's agreement was signed, by whom, or when.
+      // `required` stays false and `canSignInApp` stays false: signing and uploading are the
+      // primary's acts (the sign route refuses on `required`; the waiver-kind-by-audience rule
+      // keeps the upload kind off a staff coach's list).
+      const primary = await this.getInstitutionalAgreementStatus(coachIds[0]);
+      const primaryCoach = primary.onFile ? await this.getUser(coachIds[0]) : null;
+      return {
+        required: false,
+        onFile: primary.onFile,
+        signedAt: primary.signedAt,
+        reviewPending: false,
+        signature: primary.signature,
+        canSignInApp: false,
+        primaryCoachName: primaryCoach?.name ?? null,
+      };
+    }
+    if (!coach?.billingTier) {
       return {
         required: false,
         onFile: false,
@@ -27467,6 +27725,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         reviewPending: false,
         signature: null,
         canSignInApp: false,
+        primaryCoachName: null,
       };
     }
     const rows = await db
@@ -27489,6 +27748,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           }
         : null,
       canSignInApp: !accepted,
+      primaryCoachName: null,
       // Uploaded but not yet reviewed. Worth saying out loud rather than showing the same "not on
       // file" banner as somebody who has sent nothing -- one of them has already done their part.
       reviewPending: !accepted && rows.some((r) => r.reviewStatus === "pending_review"),
@@ -27572,6 +27832,106 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * retired, never removed (see createExternalWaiver). */
   async deleteExternalWaiverRow(waiverId: number): Promise<void> {
     await db.delete(externalWaivers).where(eq(externalWaivers.id, waiverId));
+  },
+
+  /** WHAT THIS PERSON HAS AGREED TO, one row per consent type, read off consent_records.
+   *
+   * Every acceptance in Forge already writes a consent record with the text snapshotted, and until
+   * this nothing read them back for the person they are about: the only readers were an admin's
+   * compliance view and a couple of yes/no checks. This is the account holder's own copy of the
+   * ledger -- and the guardian's and the coach's view of an athlete's, through the same function,
+   * because three readers of one ledger must not disagree about what is on it.
+   *
+   * THE LATEST ROW PER TYPE DECIDES. The table is append-only and a withdrawal is a later row whose
+   * text begins WITHDRAWN (see withdrawGuardianConsent, setResearchDataConsent), so the newest row
+   * says whether the consent stands. An older grant under a withdrawal is history, not a consent.
+   *
+   * STALE IS COMPUTED THE WAY THE GATES ALREADY COMPUTE IT, not from the record: the terms by
+   * getTermsAcceptanceStatus (users.agreedToTermsText against the live clickwrap), research by
+   * getResearchDataConsent (does the signed text carry the current deletion-retention section),
+   * the biometric consent by getBiometricConsentStatus (the snapshotted text against the live
+   * document, which is what the guardian dashboard's card asks again on). Two definitions of
+   * "needs answering again" would eventually show a person a green row while the gate holds them
+   * at a dialog. Everything else is never stale: no other document re-asks.
+   *
+   * GIVEN BY IS A ROLE WORD, NEVER A NAME. The athlete sees "you", "your guardian" or "your coach";
+   * the coach variant leaves it out. A guardian's name on an athlete's own screen is their own
+   * guardian, which is fine, but a coach's name on a relayed COPPA row or an admin's on a
+   * corrected one is another user's identity on a page that does not need it.
+   */
+  async listConsentsForUser(
+    userId: number,
+    opts: { includeGivenBy: boolean },
+  ): Promise<ConsentSummaryRow[]> {
+    const rows = await db
+      .select({
+        consentType: consentRecords.consentType,
+        documentText: consentRecords.documentText,
+        documentVersion: consentRecords.documentVersion,
+        givenByUserId: consentRecords.givenByUserId,
+        createdAt: consentRecords.createdAt,
+      })
+      .from(consentRecords)
+      .where(eq(consentRecords.userId, userId))
+      .orderBy(desc(consentRecords.createdAt), desc(consentRecords.id));
+    if (rows.length === 0) return [];
+
+    const latest = new Map<ConsentType, (typeof rows)[number]>();
+    for (const row of rows) {
+      if (!latest.has(row.consentType)) latest.set(row.consentType, row);
+    }
+
+    const [terms, research, biometric] = await Promise.all([
+      latest.has("terms_of_service") ? this.getTermsAcceptanceStatus(userId) : null,
+      latest.has("research_data_use") ? this.getResearchDataConsent(userId) : null,
+      // Same rule as the guardian dashboard's card, from the same function, so a parent is never
+      // shown a green row here while the card asks them to accept again.
+      latest.has("biometric_waiver") ? this.getBiometricConsentStatus(userId) : null,
+    ]);
+
+    // Resolved once for every giver on the list; the role is all that leaves here.
+    const giverIds = [...new Set([...latest.values()].map((r) => r.givenByUserId).filter((id): id is number => id != null && id !== userId))];
+    const giverRoles = new Map<number, string>();
+    if (opts.includeGivenBy && giverIds.length > 0) {
+      const givers = await db
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(inArray(users.id, giverIds));
+      for (const g of givers) giverRoles.set(g.id, g.role);
+    }
+    const givenByWord = (giverId: number | null): ConsentSummaryRow["givenBy"] => {
+      if (giverId == null || giverId === userId) return "you";
+      const role = giverRoles.get(giverId);
+      if (role === "guardian") return "your guardian";
+      if (role === "coach") return "your coach";
+      return "Forge";
+    };
+
+    return [...latest.entries()].map(([type, row]) => {
+      const entry = CONSENT_CATALOG[type];
+      const withdrawn = row.documentText.startsWith("WITHDRAWN");
+      const stale =
+        !withdrawn &&
+        (type === "terms_of_service"
+          ? terms?.needsAcceptance === true
+          : type === "research_data_use"
+            ? research?.staleTerms === true
+            : type === "biometric_waiver"
+              ? biometric?.stale === true
+              : false);
+      const out: ConsentSummaryRow = {
+        type,
+        label: entry.label,
+        page: entry.page,
+        pdfUrl: entry.pdfType ? `/api/legal-documents/${entry.pdfType}.pdf` : null,
+        state: withdrawn ? "withdrawn" : "agreed",
+        createdAt: row.createdAt.toISOString(),
+        documentVersion: row.documentVersion,
+        stale,
+      };
+      if (opts.includeGivenBy) out.givenBy = givenByWord(row.givenByUserId);
+      return out;
+    });
   },
 
   async logConsentRecord(input: {

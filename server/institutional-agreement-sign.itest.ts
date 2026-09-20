@@ -196,4 +196,52 @@ describe("signing the Institutional Service Agreement in the app", () => {
     const signed = await staffClient.post("/api/coach/institutional-agreement/sign", GOOD);
     expect(signed.status).toBe(403);
   });
+
+  it("shows a staff coach the primary's signature, read-only", async () => {
+    const primary = await orgCoach("Dana Primary");
+    const staff = await makeLoginableUser({ role: "coach", name: "Assistant" });
+    await db.insert(coachStaff).values({ primaryCoachId: primary.id, staffCoachId: staff.id });
+    const staffClient = await loginAs(server.baseUrl, staff);
+
+    // Nothing signed yet: the staff status is empty, so the page draws nothing for them.
+    const before = await staffClient.get("/api/coach/institutional-agreement");
+    expect(before.status).toBe(200);
+    expect(before.body).toMatchObject({
+      required: false,
+      onFile: false,
+      signature: null,
+      canSignInApp: false,
+      primaryCoachName: null,
+    });
+
+    const primaryClient = await loginAs(server.baseUrl, primary);
+    expect((await primaryClient.post("/api/coach/institutional-agreement/sign", GOOD)).status).toBe(
+      201,
+    );
+
+    // Signed: the staff status carries the primary's agreement and names the primary, and still
+    // offers no way to sign it.
+    const after = await staffClient.get("/api/coach/institutional-agreement");
+    expect(after.body).toMatchObject({
+      required: false,
+      onFile: true,
+      canSignInApp: false,
+      reviewPending: false,
+      primaryCoachName: "Dana Primary",
+    });
+    expect(after.body.signature).toMatchObject({
+      signerName: "Dana Whitfield",
+      signerTitle: "Athletic Director",
+      institutionName: "Ironwood Ridge High School",
+    });
+    expect(new Date(after.body.signedAt).getTime()).toBeGreaterThan(0);
+    expect((await staffClient.post("/api/coach/institutional-agreement/sign", GOOD)).status).toBe(403);
+    expect(
+      (await staffClient.post("/api/coach/institutional-agreement/download", GOOD)).status,
+    ).toBe(403);
+    // The primary's own status is untouched by the staff read.
+    const own = await storage.getInstitutionalAgreementStatus(primary.id);
+    expect(own.required).toBe(true);
+    expect(own.primaryCoachName).toBeNull();
+  });
 });

@@ -112,6 +112,7 @@ import type { MovementProfile, ExercisePageTheme } from "@shared/schema";
 import { parseProgression, parsePrescribedWeight, convertWeight } from "@/lib/progression";
 import { PlateCalculatorDialog } from "@/components/plate-calculator-dialog";
 import { BiometricReleaseDialog } from "@/components/biometric-release-dialog";
+import { GUARDIAN_GIVES_BIOMETRIC_CONSENT } from "@shared/consent-catalog";
 import { logDebug } from "@/lib/debug-console";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { useCameraAccess } from "@/hooks/use-camera-access";
@@ -2794,6 +2795,13 @@ function ExerciseLogContent({
   const startTracking = (setNumber: number) => {
     if (user?.biometricReleaseRequired) {
       setReleaseAskedForSet(setNumber);
+      return;
+    }
+    // A minor with nothing on file cannot answer for themselves. Say who can and where, in the
+    // same words the server refuses them with, instead of filming a set whose numbers the gate
+    // then drops on the floor.
+    if (user?.biometricReleaseAwaitingGuardian) {
+      toast.info(GUARDIAN_GIVES_BIOMETRIC_CONSENT, { duration: 8000 });
       return;
     }
     setTrackingSet(setNumber);

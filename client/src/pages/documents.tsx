@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ReadFailed } from "@/components/read-failed";
 import { externalLinkClick } from "@/lib/open-external";
-import { Check, X, Minus, Clock, Upload, FileWarning } from "lucide-react";
+import { Check, X, Minus, Clock, Upload, FileWarning, ExternalLink, FileDown } from "lucide-react";
+import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import {
   type InstitutionalAgreementStatus,
 } from "@/components/institutional-agreement-signing";
 import { cn } from "@/lib/utils";
+import type { ConsentSummaryRow } from "@shared/consent-catalog";
 import {
   DOCUMENT_LABEL,
   REQUIRED_DOCUMENTS,
@@ -173,6 +175,10 @@ export default function DocumentsPage() {
     enabled: user?.role === "coach" && !forSomeoneElse,
   });
   const offerInstitutional = institutional?.required === true;
+  // A staff coach is never OFFERED the agreement (no upload kind, no form) but is SHOWN the
+  // organisation's signed one: the status carries the primary's record for them, and the
+  // component renders its read-only branch.
+  const showInstitutional = offerInstitutional || institutional?.onFile === true;
 
   const key = [`/api/waivers/${targetId ?? 0}`];
   // isError matters: without it a failed read renders every checklist row as "missing", which
@@ -227,6 +233,16 @@ export default function DocumentsPage() {
   ).length;
 
   const who = data?.athleteName ?? "this athlete";
+
+  const consentsUrl = !targetId
+    ? null
+    : !forSomeoneElse
+      ? "/api/account/consents"
+      : user?.role === "coach"
+        ? `/api/coach/roster/${targetId}/consents`
+        : user?.role === "guardian" || user?.hasGuardianLinks
+          ? `/api/guardian/athletes/${targetId}/consents`
+          : null;
 
   return (
     <AppShell title={forSomeoneElse ? "Athlete documents" : "Documents"}>
@@ -318,12 +334,17 @@ export default function DocumentsPage() {
             </p>
           ))}
 
+        {/* Which consents route answers depends on who is asking about whom; the rows are the same
+            shape from all three (see storage.listConsentsForUser), and an admin looking at somebody
+            else's page gets no card at all -- there is no admin route on purpose. */}
+        {consentsUrl && <AgreedToCard url={consentsUrl} forSomeoneElse={forSomeoneElse} who={who} />}
+
         {institutionalFailed && (
           // A failed read here silently hides the Service Agreement panel from the one coach who
           // needs it, so say so instead of showing nothing.
           <ReadFailed what="your Service Agreement status" onRetry={() => void refetchInstitutional()} />
         )}
-        {offerInstitutional && <InstitutionalAgreementSigning />}
+        {showInstitutional && <InstitutionalAgreementSigning />}
 
         <Card ref={uploadRef}>
           <CardHeader>
@@ -451,5 +472,116 @@ export default function DocumentsPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+/** WHAT YOU'VE AGREED TO.
+ *
+ * The checklist above is paperwork signed elsewhere and uploaded. This is the other half: the
+ * agreements accepted IN Forge -- the Terms at signup, the biometric consent at the camera, the
+ * research consent, a guardian's acceptances for a child -- each of which wrote a consent record
+ * that nothing ever showed back to the person it is about. Every row links to the live document
+ * and, where one exists, its PDF, so "what did I agree to" has an answer that is not "ask an
+ * admin".
+ *
+ * A stale row is one accepted under text that has since changed; the app is already asking
+ * again (the terms gate, the research re-consent) and this only says so. A withdrawn row is
+ * kept and labelled: a ledger that only shows the yeses cannot answer "when did I take it back".
+ */
+function AgreedToCard({
+  url,
+  forSomeoneElse,
+  who,
+}: {
+  url: string;
+  forSomeoneElse: boolean;
+  who: string;
+}) {
+  const { data, isLoading, isError, refetch } = useQuery<ConsentSummaryRow[]>({
+    queryKey: [url],
+  });
+  const rows = (data ?? []).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">
+          {forSomeoneElse ? `What ${who} has agreed to` : "What you've agreed to"}
+        </CardTitle>
+        <CardDescription>
+          The agreements accepted inside Forge, and the version that was accepted. Each one links
+          to the current text{forSomeoneElse ? "" : ", so you can reread what you said yes to"}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : isError ? (
+          <ReadFailed
+            what={forSomeoneElse ? "their agreements" : "your agreements"}
+            onRetry={() => void refetch()}
+          />
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {rows.map((row) => (
+              <li
+                key={row.type}
+                className={cn(
+                  "flex items-start justify-between gap-3 rounded-md border px-3 py-2.5",
+                  row.state === "withdrawn"
+                    ? "border-border opacity-70"
+                    : row.stale
+                      ? "border-amber-500/40"
+                      : "border-success/30",
+                )}
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{row.label}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {row.state === "withdrawn" ? "Withdrawn " : "Accepted "}
+                    {new Date(row.createdAt).toLocaleDateString()}
+                    {row.givenBy ? ` by ${row.givenBy}` : ""} · version {row.documentVersion}
+                  </span>
+                  <span className="mt-1 flex flex-wrap gap-3 text-xs">
+                    {row.page && (
+                      <Link href={row.page} className="inline-flex items-center gap-1 font-semibold text-primary hover:underline">
+                        <ExternalLink className="h-3 w-3" /> Read
+                      </Link>
+                    )}
+                    {row.pdfUrl && (
+                      <a
+                        href={resolveApiUrl(row.pdfUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={externalLinkClick(resolveApiUrl(row.pdfUrl))}
+                        className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                      >
+                        <FileDown className="h-3 w-3" /> PDF
+                      </a>
+                    )}
+                  </span>
+                </span>
+                <span className="shrink-0 pt-0.5">
+                  {row.state === "withdrawn" ? (
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                      <Minus className="h-4 w-4" /> Withdrawn
+                    </span>
+                  ) : row.stale ? (
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
+                      <FileWarning className="h-4 w-4" /> Needs re-accepting
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-success">
+                      <Check className="h-4 w-4" /> Current
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
