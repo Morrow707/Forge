@@ -311,9 +311,10 @@ describe("queueLog gives up replays before it gives up days", () => {
     expect(days).toContain("2026-09-13");
     expect(days).toContain("2026-09-14");
     for (const p of queued) {
-      // dropHeavyFields nulls the field rather than deleting the key -- the frames are what
-      // cost the space, and a null preserves the shape the server already accepts.
-      expect(p.payload.entries[0].sets[0].skeletonFrames).toBeNull();
+      // dropHeavyFields OMITS the field rather than writing null. Under the capture-column
+      // contract an absent key means "no claim, keep what the server has" and an explicit null
+      // means "clear it" -- so a trimmed replay must never look like a request to wipe the frames.
+      expect("skeletonFrames" in p.payload.entries[0].sets[0]).toBe(false);
       // The numbers the athlete typed are untouched. That is the whole trade.
       expect(p.payload.entries[0].sets[0].reps).toBe(5);
     }

@@ -72,6 +72,11 @@ import {
   clearPendingLog,
 } from "@/lib/offline-queue";
 import { dropHeavyFields } from "@/lib/log-payload-trim";
+
+/** Fired by the day's reattach listener once a queued clip has landed on its set, so the
+ * exercise card that owns the form-check mutations can run the check it never got to run. */
+const FORM_CHECK_AFTER_REATTACH_EVENT = "forge:form-check-after-reattach";
+type FormCheckAfterReattachDetail = { itemKey: string; setNumber: number; videoUrl: string };
 import {
   ArrowLeft,
   CheckCircle2,
@@ -1216,10 +1221,8 @@ export function WorkoutPage({
   // unit only touches that card's own item state (autosaved like any other
   // edit), never the athlete's account-level default.
   function setItemWeightUnit(key: string, weightUnit: WeightUnit) {
-    let nextItems: ItemState[] = [];
-    setItems((prev) => {
-      nextItems = prev.map((it) => (it.key === key ? { ...it, weightUnit } : it));
-      return nextItems;
+    const nextItems = commitItems((prev) => {
+      return prev.map((it) => (it.key === key ? { ...it, weightUnit } : it));
     });
     scheduleAutosave(nextItems);
   }
@@ -1541,6 +1544,46 @@ export function WorkoutPage({
     itemsRef.current = items;
   }, [items]);
 
+  // EVERY EDIT GOES THROUGH HERE, AND THE NEXT STATE IS COMPUTED NOW, NOT INSIDE THE UPDATER.
+  //
+  // The five edit paths used to do `let next = []; setItems(prev => { next = ...; return next });
+  // autosave(next)`. That only works when React runs the updater synchronously, which it does
+  // ONLY if the component has no update already pending. The moment after a capture dialog
+  // closes it always has one -- the dialog's own state flips, setExpandedKey, the toast -- so
+  // the updater was deferred to the next render and `next` was still [] when autosaveNow ran.
+  // buildLogPayload then sent entries: [] with a CURRENT baseRevision, the stale guard passed,
+  // and submitWorkoutLog's delete-and-reinsert wiped every entry of the day. From the athlete's
+  // side: film a set, and the whole workout is gone. Computing from itemsRef.current here is
+  // what makes the snapshot the autosave sends the state the athlete actually has, and keeping
+  // the ref current inside the same call is what lets two edits in one tick compose instead of
+  // the second overwriting the first.
+  function commitItems(compute: (prev: ItemState[]) => ItemState[]): ItemState[] {
+    const next = compute(itemsRef.current);
+    itemsRef.current = next;
+    setItems(next);
+    return next;
+  }
+
+  // A SAVE BUILT BEFORE HYDRATION SAYS "THIS DAY HAS NO EXERCISES", AND THE SERVER BELIEVES IT.
+  //
+  // submitWorkoutLog is a delete-and-reinsert of every entry on the day (see its own comment):
+  // whatever `entries` the payload carries becomes the whole log. `items` starts [] and is only
+  // filled by the hydrate effect above, which never runs when the day read FAILS -- the screen
+  // then renders <ReadFailed>, correctly, but the teardown handlers below still fired, built a
+  // payload from that empty state and either beaconed it (visibilitychange/pagehide) or wrote it
+  // to the offline queue (unmount) with no baseRevision to be refused on -- an absent
+  // baseRevision is "no claim about what was there", so the stale guard passes and the day's
+  // entire logged workout is deleted. Backgrounding the app or navigating away from a workout
+  // that failed to load was enough. Nothing about it is visible until the athlete reopens the
+  // day and finds it empty.
+  //
+  // The guard is hydration, not `items.length`: a genuinely empty day is indistinguishable from
+  // an unloaded one by length alone, and there is nothing to save in either case.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    hydratedRef.current = hydrated;
+  }, [hydrated]);
+
   // Fires a haptic exactly once per set the moment it newly qualifies as a
   // PR, rather than on every render isPR happens to be true (which would
   // just replay the buzz continuously while the crown icon stays visible).
@@ -1659,6 +1702,13 @@ export function WorkoutPage({
     silent: boolean;
     omitPersistedCapture?: boolean;
   }) {
+    // Belt to commitItems' braces. A hydrated day has one item per exercise, so a snapshot with
+    // none while the page holds some is never a real edit; sending it deletes the day. Refuse and
+    // say so on the debug console, which is the only instrument on a phone.
+    if (hydratedRef.current && args.itemsSnapshot.length === 0 && itemsRef.current.length > 0) {
+      logDebug("SAVE", "refused: empty snapshot after hydration would delete the day");
+      return;
+    }
     queueRawSave({
       payload: buildLogPayload(args.itemsSnapshot, args.completed, args.omitPersistedCapture),
       silent: args.silent,
@@ -1748,6 +1798,8 @@ export function WorkoutPage({
   // reads itemsRef.current for the freshest snapshot at the moment it fires.
   useEffect(() => {
     function flush() {
+      // Never save a day this screen never loaded -- see hydratedRef.
+      if (!hydratedRef.current) return;
       const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
       const body = JSON.stringify(payload);
       if (typeof navigator.sendBeacon === "function") {
@@ -1798,6 +1850,9 @@ export function WorkoutPage({
       // reason, not just a closed tab. Redundant if the last save already
       // synced -- queueLog just gets replayed against an already-saved
       // state -- but never redundant with data loss.
+      // Same guard as flush() above, for the same reason: an unmount from a failed read would
+      // otherwise queue an empty day and delete the athlete's workout on the next flush.
+      if (!hydratedRef.current) return;
       const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
       const rejectedStatus = lastPermanentRejectionRef.current;
       if (rejectedStatus == null) {
@@ -1819,10 +1874,8 @@ export function WorkoutPage({
 
   function updateItem(key: string, patch: Partial<ItemState>) {
     // Same "keep the updater pure" reasoning as updateSet below.
-    let nextItems: ItemState[] = [];
-    setItems((prev) => {
-      nextItems = prev.map((it) => (it.key === key ? { ...it, ...patch } : it));
-      return nextItems;
+    const nextItems = commitItems((prev) => {
+      return prev.map((it) => (it.key === key ? { ...it, ...patch } : it));
     });
     scheduleAutosave(nextItems);
   }
@@ -1848,8 +1901,7 @@ export function WorkoutPage({
     // acted on only after setItems returns.
     let restOnComplete: number | null = null;
     let becameComplete = false;
-    let nextItems: ItemState[] = [];
-    setItems((prev) => {
+    const nextItems = commitItems((prev) => {
       restOnComplete = null;
       becameComplete = false;
       const next = prev.map((it) => {
@@ -1868,7 +1920,6 @@ export function WorkoutPage({
           }),
         };
       });
-      nextItems = next;
       return next;
     });
     if (restOnComplete !== null) restTimerRef.current?.autoStart(restOnComplete);
@@ -1898,11 +1949,21 @@ export function WorkoutPage({
       const match = itemsRef.current.find(
         (it) => it.kind === "exercise" && it.refId === detail.programExerciseId,
       );
-      if (match)
+      if (match) {
         updateSet(match.key, detail.setNumber, {
           formCheckVideoUrl: detail.videoUrl,
           removeFormCheckVideo: false,
         });
+        // The form check (AI write-up or the coach's copy) only ever fired from the capture
+        // handler, which had no url for a queued clip -- cellular, or a server hiccup -- so a
+        // set filmed off Wi-Fi got its video later and its diagnosis never. The mutations live
+        // in the exercise card, so hand it the url the same way this handler was handed it.
+        window.dispatchEvent(
+          new CustomEvent<FormCheckAfterReattachDetail>(FORM_CHECK_AFTER_REATTACH_EVENT, {
+            detail: { itemKey: match.key, setNumber: detail.setNumber, videoUrl: detail.videoUrl },
+          }),
+        );
+      }
     }
     window.addEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
     return () => window.removeEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
@@ -1911,8 +1972,7 @@ export function WorkoutPage({
 
   function addSet(key: string) {
     // Same "keep the updater pure" reasoning as updateSet above.
-    let nextItems: ItemState[] = [];
-    setItems((prev) => {
+    const nextItems = commitItems((prev) => {
       const next = prev.map((it) => {
         if (it.key !== key) return it;
         const nextNumber = it.sets.length > 0 ? it.sets[it.sets.length - 1].setNumber + 1 : 1;
@@ -1977,19 +2037,16 @@ export function WorkoutPage({
           ],
         };
       });
-      nextItems = next;
       return next;
     });
     scheduleAutosave(nextItems);
   }
 
   function removeSet(key: string) {
-    let nextItems: ItemState[] = [];
-    setItems((prev) => {
-      nextItems = prev.map((it) =>
+    const nextItems = commitItems((prev) => {
+      return prev.map((it) =>
         it.key === key && it.sets.length > 1 ? { ...it, sets: it.sets.slice(0, -1) } : it,
       );
-      return nextItems;
     });
     scheduleAutosave(nextItems);
   }
@@ -2940,6 +2997,20 @@ function ExerciseLogContent({
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not get AI feedback on that video"),
   });
+
+  // A queued clip's form check, run when the clip finally reattaches. Same branch the capture
+  // handlers take, one event later. Above every early return so the hook count is stable.
+  useEffect(() => {
+    function onReattached(e: Event) {
+      const d = (e as CustomEvent<FormCheckAfterReattachDetail>).detail;
+      if (d.itemKey !== item.key) return;
+      if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: d.setNumber, videoUrl: d.videoUrl });
+      else postFormVideoMutation.mutate({ setNumber: d.setNumber, videoUrl: d.videoUrl });
+    }
+    window.addEventListener(FORM_CHECK_AFTER_REATTACH_EVENT, onReattached);
+    return () => window.removeEventListener(FORM_CHECK_AFTER_REATTACH_EVENT, onReattached);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.key, videoCheckMode]);
 
   // At most one "best" and one "worst" per exercise/day -- re-flagging a
   // different set clears the old holder of that flag rather than allowing

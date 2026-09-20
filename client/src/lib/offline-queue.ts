@@ -1,4 +1,5 @@
 import { isPermanentUploadRejection } from "@/lib/upload-rejection";
+import { logDebug } from "@/lib/debug-console";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 // Pure, and kept that way so it can be unit-tested with no DOM -- see its own comment.
@@ -332,6 +333,12 @@ export async function flushPendingLogs() {
 async function runFlush() {
   const pending = readQueue();
   if (pending.length === 0) return;
+  // WHETHER A QUEUED DAY EVER LEFT THE PHONE IS THE SECOND QUESTION, AND THERE WAS NO WAY TO ASK
+  // IT EITHER. workout.tsx logs SAVE for the live POST (ok / FAILED / classified / queued), so
+  // the console could show a set being QUEUED and then nothing at all -- a queue that never
+  // flushed and a flush the server refused looked identical from the phone. These four lines
+  // close that gap; they are the other half of the same instrument, same tag on purpose.
+  logDebug("SAVE", `flush: ${pending.length} queued day(s)`);
   let syncedAny = false;
   for (const entry of pending) {
     // Queued by a different account on this device -- leave it alone. It is
@@ -343,6 +350,7 @@ async function runFlush() {
     if (claimedDayKeys.has(entry.dayKey)) continue;
     try {
       await apiRequest("POST", entry.url, entry.payload);
+      logDebug("SAVE", `flush ok (${entry.dayKey})`);
       writeQueue(readQueue().filter((p) => p.id !== entry.id));
       clearDayFailure(entry.dayKey);
       syncedAny = true;
@@ -360,6 +368,10 @@ async function runFlush() {
       const status = err instanceof ApiError ? err.status : null;
       const code = err instanceof ApiError ? err.code : undefined;
       const permanentlyRejected = isPermanentUploadRejection(status, code);
+      logDebug(
+        "SAVE",
+        `flush ${permanentlyRejected ? "DROPPED" : "retry"} (${entry.dayKey}): ${status ?? "no response"}`,
+      );
       if (permanentlyRejected) {
         writeQueue(readQueue().filter((p) => p.id !== entry.id));
         clearDayFailure(entry.dayKey);

@@ -384,6 +384,18 @@ export class ImplementTracker {
   private dropLock(): void {
     this.lockPixelX = null;
     this.lockPixelY = null;
+    // The world pair goes with the pixel pair, always -- see the field declarations above, which
+    // say exactly that and were not being honoured here. Leaving lockWorldX/Y set after a drop
+    // left the ONE path that reads them without first consulting lockPixelX (the stationary-bar
+    // hold below, guarded on `this.lockWorldX != null`) still reporting the position that had
+    // just been thrown away. rejectLock() exists specifically so the caller can say "that
+    // position is implausible, stop dead-reckoning from it", and a bar that then sat still --
+    // lockout, the pause at the bottom of a bench, the frame after any reacquisition failure --
+    // got it handed straight back. It arrived at confidence 0 (lockStreak was reset), so the
+    // fusion weighted it to nothing and no metric moved, but setImplementDetected() read it as a
+    // live detection and nothing else in the pipeline was entitled to assume that zero.
+    this.lockWorldX = null;
+    this.lockWorldY = null;
     this.lockStreak = 0;
     this.lastColor = null;
     this.driftRatioHistory = [];

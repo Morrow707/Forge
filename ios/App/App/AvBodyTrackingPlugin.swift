@@ -2341,7 +2341,7 @@ private final class AvAnalysisProgress {
 // It lives in both places because it has to run in two: the rule must be TESTED, and there is no
 // Swift test target in this repo, but it must also ACT in real time mid-clip, and correcting a
 // take after the fact is not correcting it. Same arrangement implement-tracking.ts already has
-// with AvImplementTracker's constants. shared/tracker-arbiter-parity.test.ts reads this file and
+// with AvImplementTracker's constants. shared/tracker-arbiter.test.ts reads this file and
 // fails if the constants drift apart, so the duplication is enforced rather than trusted.
 private enum AvTrackerArbiter {
     // Keep in sync with MAX_LOCK_DISTANCE_IN_YARDSTICKS in shared/tracker-arbiter.ts.
@@ -3090,6 +3090,12 @@ private final class AvCoreMlImplementDetector {
                         // against them would read the correction itself as an implausible jump
                         // and immediately throw the good lock away.
                         seedTracking(on: fresh.box)
+                        // This frame DID report a lock, so it counts as one held. It was being
+                        // left out: the only increment sat on the fall-through path below, which
+                        // this early return skips, so every successful re-classification frame
+                        // went missing from the "held X/Y frames" line on the tracking report and
+                        // a lock that in fact held all take read as holding ~97% of it.
+                        telemetry.framesLockHeld += 1
                         return (fresh.box, fresh.confidence)
                     }
                 }

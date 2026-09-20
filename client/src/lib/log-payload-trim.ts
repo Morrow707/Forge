@@ -47,7 +47,11 @@ export function dropHeavyFields(payload: unknown): unknown | null {
         const trimmed = { ...(set as Record<string, unknown>) };
         for (const field of HEAVY_SET_FIELDS) {
           if (trimmed[field] != null) {
-            trimmed[field] = null;
+            // DELETE, never null. submitWorkoutLog carries an OMITTED capture column forward
+            // from what it already holds and treats an explicit null as "clear it" -- so the
+            // 413 rescue was re-queuing a payload that erased the very skeleton and bar-path
+            // data the server had accepted moments earlier (camera audit, 2026-09-20).
+            delete trimmed[field];
             dropped = true;
           }
         }
