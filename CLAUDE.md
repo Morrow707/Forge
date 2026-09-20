@@ -242,7 +242,25 @@ Two things worth saying out loud when someone tests this:
 - **SEO is data-driven from `shared/public-routes.ts`**: sitemap, prerender, per-page head,
   robots and JSON-LD all read it. Unknown paths get 404 with a noindex app shell. No ratings,
   social profiles or accuracy claims in structured data; `shared/seo-head.test.ts` scans.
-  Open: the App Store id for the smart app banner, and whether to SSR the six marketing pages.
+  Open: whether to SSR the six marketing pages.
+
+**Three things parked by Scott, 2026-09-20 ("flag those 3 needs, we can do those later"):**
+1. **Smart App Banner** on the website needs the App Store id. One line in
+   `client/index.html`: `<meta name="apple-itunes-app" content="app-id=XXXXXXXXX">`. Nobody
+   has the id in the repo; Scott supplies it.
+2. **FAQ on /for-high-schools with FAQPage JSON-LD.** Highest search payoff of the SEO
+   proposals. Questions come from facts in this file (FERPA does not apply; a minor's account is
+   inert until a guardian claims it; where data lives; the four validated movements and the
+   caveat; $4 an athlete in bands, not charging in beta; more than one coach per team; what
+   deletion keeps). Scott reads the draft before it ships; `shared/structured-data.ts` has the
+   place to emit the schema once the visible FAQ exists.
+3. **Barlow Condensed is named in `client/src/index.css` and never loaded**, so every heading
+   renders in the system font. If the brand wants it: self-host two woff2 files, `@font-face`
+   with `font-display: swap`, one `preload` in `index.html`. Not a bug, a decision.
+
+**Video review work is planned in `docs/video-review-plan.md`** (2026-09-20). Read it before
+touching `video-analysis-dialog.tsx`, `video-annotation-dialog.tsx`, `set-video-review.tsx` or
+anything under a `video-review` name; it has the phase order and the checklist.
 
 ## Documents: what every role can see, sign, download and send
 
