@@ -7,11 +7,11 @@ consent still counts for what it said, including the deletion-retention disclosu
 which the gate recognises under either heading. Kept as the record of the engineering
 facts behind each claim.
 
-**One word checked and flagged to Scott:** section 6 of the reviewed text says the retained
-record includes an "age bracket". The research store keeps the athlete's age as a whole
-number of years, not a bracket; extracts only ever show it inside a group. Either the word
-becomes "age" or the store starts keeping a band -- a one-line decision, open as of
-2026-09-19.
+**One word, closed 2026-09-20:** section 6 of the reviewed text said the retained record
+includes an "age bracket". The research store keeps the athlete's age as a whole number of
+years, not a bracket; extracts only ever show it inside a group. Scott put it to counsel,
+who approved changing the word to "age". Version 2026-09-20 carries that one change and
+re-asks everyone who consented under 2026-09-19.
 
 Before review this was the one live consent document no lawyer had read. It is short (356 words) and written for a sixteen-year-old and their
 parent. Rocket Lawyer has no template for it. The text below is asserted against the

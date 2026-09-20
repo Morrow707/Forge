@@ -18,7 +18,12 @@
  * The last one is the only place the product does something a person would
  * not guess, so leaving it out would make the whole document dishonest.
  */
-export const RESEARCH_CONSENT_VERSION = "2026-09-19";
+/** 2026-09-20: one word. Section 6 said "age bracket"; the research store keeps age in
+ * whole years, and an extract only ever shows it inside a group. Counsel, asked by Scott
+ * the same day, approved "age". Everyone who consented under the 2026-09-19 text is asked
+ * again (the text differs, so staleTerms is true), and their earlier yes still counts for
+ * what it said, including the deletion-retention disclosure under the same heading. */
+export const RESEARCH_CONSENT_VERSION = "2026-09-20";
 
 /** The heading of the section that discloses retention after deletion in the
  * CURRENT text. Used to recognise the disclosure inside a STORED consent
@@ -90,7 +95,7 @@ The data provided to researchers is designed so that it cannot be traced back to
 The Subject (or the Subject's parent/legal guardian) may revoke this authorization at any time by updating their preferences within the application settings. Upon withdrawal, the Subject's data shall be immediately removed from the designated research database and excluded from any future extracts. The Subject acknowledges that Forge cannot recall or retroactively modify statistical reports or datasets that were already compiled and delivered to researchers prior to the date of withdrawal.
 
 6. RETENTION AND ACCOUNT DELETION
-In the event the Subject deletes their Forge account, all personally identifiable information, video files, and account access shall be permanently removed in accordance with the Forge Privacy Policy. However, the de-identified, aggregated numeric data (including age bracket, sport, position, and performance metrics) authorized under this document shall be retained for ongoing longitudinal research, as it contains no identifying linkages to the Subject.
+In the event the Subject deletes their Forge account, all personally identifiable information, video files, and account access shall be permanently removed in accordance with the Forge Privacy Policy. However, the de-identified, aggregated numeric data (including age, sport, position, and performance metrics) authorized under this document shall be retained for ongoing longitudinal research, as it contains no identifying linkages to the Subject.
 - Opt-Out Procedure: If the Subject requires the permanent deletion of their de-identified numeric metrics from the research database, the Subject must expressly withdraw this authorization (as described in Section 5) prior to initiating the account deletion process.
 
 7. MINOR SUBJECTS
