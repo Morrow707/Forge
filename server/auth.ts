@@ -104,7 +104,18 @@ class ThrottledPgStore extends PgStore {
 
   get(sid: string, cb: (err: any, session?: session.SessionData | null) => void) {
     super.get(sid, (err: any, sess: session.SessionData | null | undefined) => {
-      if (!err && sess) this.remember(sid, expiryOf(sess));
+      // The stored JSON's cookie.expires is only rewritten by a full set(); touch() moves the
+      // `expire` COLUMN and leaves the JSON alone. So after the first throttled window the
+      // JSON is always older than what was really persisted, and re-remembering it here
+      // made every later touch() look like a big move -- one UPDATE per request, forever,
+      // for every session more than five minutes past its last full write (found 2026-09-20
+      // by counting statements per request). Only adopt the stored value when we know
+      // nothing newer.
+      if (!err && sess) {
+        const stored = expiryOf(sess);
+        const known = this.persistedExpiry.get(sid);
+        if (stored !== null && (known === undefined || stored > known)) this.remember(sid, stored);
+      }
       cb(err, sess);
     });
   }

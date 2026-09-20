@@ -26,11 +26,7 @@ import { withLoadTimeout } from "@/lib/lazy-load-recovery";
 import LandingPage from "@/pages/landing";
 import LoginPage from "@/pages/login";
 import AdminLoginPage from "@/pages/admin-login";
-import SignupPage from "@/pages/signup";
-import PricingPage from "@/pages/pricing";
-import ClaimPage from "@/pages/claim";
 import PublicTeamPage from "@/pages/public-team";
-import GuardianClaimPage from "@/pages/guardian-claim";
 import GuardianPendingPage from "@/pages/guardian-pending";
 import DateOfBirthRequiredPage from "@/pages/date-of-birth-required";
 import ForgotPasswordPage from "@/pages/forgot-password";
@@ -49,6 +45,19 @@ import {
 } from "@/pages/legal-document";
 import DeleteAccountPage from "@/pages/delete-account";
 import NotFound from "@/pages/not-found";
+// The signup, claim and pricing pages are one click past the front door rather than on it: a
+// visitor lands on / or /login, and only some of them go on to one of these. Together they were
+// 60 kB of the entry chunk (the sport picker's Select, the checkbox, the plan bands), paid by
+// every launch of the native app -- which starts on /login and has no signup at all on the
+// path a returning athlete takes. They are lazy, and prefetched while the browser is idle on
+// the two pages that link to them (see PrefetchLikelyNextPages), so the click still lands
+// without a spinner on the web.
+const signupLoader = () => import("@/pages/signup");
+const pricingLoader = () => import("@/pages/pricing");
+const SignupPage = lazy(withLoadTimeout(signupLoader));
+const PricingPage = lazy(withLoadTimeout(pricingLoader));
+const ClaimPage = lazy(withLoadTimeout(() => import("@/pages/claim")));
+const GuardianClaimPage = lazy(withLoadTimeout(() => import("@/pages/guardian-claim")));
 const ForHighSchoolsPage = lazy(withLoadTimeout(() => import("@/pages/for-high-schools")));
 const ForAthletesPage = lazy(withLoadTimeout(() => import("@/pages/for-athletes")));
 const CameraValidationPage = lazy(withLoadTimeout(() => import("@/pages/camera-validation")));
@@ -303,6 +312,28 @@ function RouteMeta() {
   return null;
 }
 
+/** Warms the chunks for the pages a visitor on / or /login is most likely to open next, once
+ * the browser is idle -- so making them lazy costs the web visitor nothing on the click, and
+ * costs the native app (which prefetches nothing it does not link to) nothing at boot. */
+function PrefetchLikelyNextPages() {
+  const [location] = useLocation();
+  useEffect(() => {
+    if (location !== "/" && location !== "/login") return;
+    const native = Capacitor.isNativePlatform();
+    const run = () => {
+      void signupLoader().catch(() => {});
+      if (!native) void pricingLoader().catch(() => {});
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(run, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(run, 2000);
+    return () => clearTimeout(id);
+  }, [location]);
+  return null;
+}
+
 function Router() {
   const [location] = useLocation();
 
@@ -340,6 +371,7 @@ function Router() {
       {/* OUTSIDE the location-keyed wrapper below, so it is not torn down and remounted on every
           navigation -- it reads the location itself and rewrites the head in place. */}
       <RouteMeta />
+      <PrefetchLikelyNextPages />
       {/* Keyed on location so React remounts this wrapper -- not the routes
           inside it -- on every navigation, replaying the fade/slide-in each
           time. motion-safe: (rather than a plain class) makes the animation

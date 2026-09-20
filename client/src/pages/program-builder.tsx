@@ -74,7 +74,7 @@ import {
   PERIODIZATION_PHASES,
   PERIODIZATION_PHASE_LABEL,
   type PeriodizationPhase,
-} from "@shared/schema";
+} from "@shared/schema-constants";
 import { WEEKDAY_OPTIONS } from "@/lib/weekdays";
 import { todayIso } from "@/lib/local-date";
 import { ReadFailed } from "@/components/read-failed";

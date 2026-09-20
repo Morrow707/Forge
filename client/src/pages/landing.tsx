@@ -36,7 +36,21 @@ import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
 /** A screenshot dressed up as a little browser window -- same treatment on
  * every feature screenshot so the marketing page reads as one coherent
  * product tour instead of loose, differently-cropped images. */
-function BrowserFrame({ src, alt, className }: { src: string; alt: string; className?: string }) {
+function BrowserFrame({
+  src,
+  alt,
+  className,
+  eager = false,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  /** The hero only. It is the largest thing on the first screen, so it is the LCP element, and
+   * a lazy-loaded LCP image is the worst of both: the browser waits for layout to decide it is
+   * in view before it even starts the fetch. The route's `preload` in shared/public-routes.ts
+   * starts that fetch from the head; this stops the <img> from throwing the head start away. */
+  eager?: boolean;
+}) {
   return (
     <div
       className={
@@ -57,11 +71,18 @@ function BrowserFrame({ src, alt, className }: { src: string; alt: string; class
           scripts/optimize-marketing-images.mjs) and cut that by about 60%. The PNG stays as the
           <source> fallback and as the file a designer edits.
 
-          loading/decoding are set for the same reason: these sit below the fold on every page
-          that uses them, so blocking first paint on them is pure cost. */}
+          loading/decoding are set for the same reason: all but the hero sit below the fold, so
+          blocking first paint on them is pure cost. */}
       <picture>
         <source srcSet={src.replace(/\.png$/, ".webp")} type="image/webp" />
-        <img src={src} alt={alt} className="block w-full" loading="lazy" decoding="async" />
+        <img
+          src={src}
+          alt={alt}
+          className="block w-full"
+          loading={eager ? "eager" : "lazy"}
+          fetchPriority={eager ? "high" : undefined}
+          decoding="async"
+        />
       </picture>
     </div>
   );
@@ -253,7 +274,7 @@ export default function LandingPage() {
         </div>
 
         <div className="relative mx-auto mt-16 max-w-5xl">
-          <BrowserFrame src="/marketing/shot-dashboard.png" alt="Forge coach dashboard" />
+          <BrowserFrame src="/marketing/shot-dashboard.png" alt="Forge coach dashboard" eager />
         </div>
       </section>
 

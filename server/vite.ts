@@ -5,6 +5,7 @@ import { createServer as createViteServer, createLogger } from "vite";
 import type { Server } from "http";
 import viteConfig from "../vite.config";
 import { PUBLIC_STATIC_OPTIONS, servePrerendered, spaFallback, staticLimiter } from "./public-static";
+import { cacheControlForStaticPath, REVALIDATE_CACHE_CONTROL } from "./static-cache-policy";
 
 const viteLogger = createLogger();
 
@@ -62,6 +63,13 @@ export async function setupVite(app: Express, server: Server) {
   });
 }
 
+function setStaticCacheHeaders(res: express.Response, filePath: string) {
+  // express.static hands over the resolved file path; the policy is by URL prefix, and the
+  // two agree because dist/public is served at the root with no mount path.
+  const relative = path.relative(path.resolve(import.meta.dirname, "public"), filePath);
+  res.setHeader("Cache-Control", cacheControlForStaticPath("/" + relative.split(path.sep).join("/")));
+}
+
 export function serveStatic(app: Express) {
   const distPath = path.resolve(import.meta.dirname, "public");
 
@@ -72,13 +80,27 @@ export function serveStatic(app: Express) {
   }
 
   app.use(staticLimiter);
+  app.use(revalidateDocuments());
   // A public route's prerendered head, at its clean URL, BEFORE express.static can see a
   // directory of the same name and answer with a redirect or fall through to the root page.
   // See server/public-static.ts for the two ways that went wrong.
   app.use(servePrerendered(distPath));
-  app.use(express.static(distPath, PUBLIC_STATIC_OPTIONS));
+  app.use(express.static(distPath, { ...PUBLIC_STATIC_OPTIONS, setHeaders: setStaticCacheHeaders }));
   // A missing build asset is a 404, not the app's HTML -- see spaFallback in
   // server/public-static.ts for why, and for the mount-path bug that had it silently
   // answering every missing chunk with a 200 for as long as it existed.
   app.use("*", spaFallback(distPath));
+}
+
+// The prerendered pages and the SPA shell go out through res.sendFile in public-static.ts,
+// which sets no Cache-Control at all; without one a browser is free to heuristically cache
+// the document, which is the one file that must always be revalidated after a deploy.
+// Stated once here rather than in that file, so this module owns every static header.
+export function revalidateDocuments(): express.RequestHandler {
+  return (req, res, next) => {
+    if ((req.method === "GET" || req.method === "HEAD") && !/\.[a-zA-Z0-9]+$/.test(req.path)) {
+      res.setHeader("Cache-Control", REVALIDATE_CACHE_CONTROL);
+    }
+    next();
+  };
 }

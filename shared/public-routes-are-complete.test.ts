@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PUBLIC_ROUTES, NOINDEX_PREFIXES, isIndexable } from "./public-routes";
+import { PUBLIC_ROUTES, NOINDEX_PREFIXES, isIndexable, isKnownAppPath } from "./public-routes";
 
 // A PUBLIC PAGE NOBODY CLASSIFIED IS A PAGE GOOGLE DECIDES ABOUT ON ITS OWN.
 //
@@ -42,7 +42,12 @@ function routerPaths(): { path: string; protected: boolean }[] {
   // /documents -- which is gated by AuthedRoute (signed in, any role) -- as an unclassified
   // public page. A gate this test does not recognise reads as no gate at all, which is the
   // direction that matters: it would have had somebody add a signed-in page to the sitemap.
-  for (const m of APP.matchAll(/<Route\s+path="([^"]+)"([^>]*)(\/?)>/g)) {
+  // The attribute capture must NOT be able to eat the closing slash. Written as `([^>]*)(\/?)>`
+  // it did: the greedy class took the "/" and selfClosing was always empty, so every route was
+  // classified by the 300-character look-ahead instead -- and a public route that happened to
+  // sit just above a gated one (/research-consent, above /dev/av-preview-test) read as gated and
+  // was missing from the sitemap with this test green.
+  for (const m of APP.matchAll(/<Route\s+path="([^"]+)"((?:[^>\/]|\/(?!>))*)(\/?)>/g)) {
     const [, path, attrs, selfClosing] = m;
     if (selfClosing === "/") {
       found.push({ path, protected: false });
@@ -113,6 +118,32 @@ describe("every route a logged-out visitor can reach is classified", () => {
     expect(isIndexable("/login")).toBe(false);
     // Closed beta: a signup page in search results invites traffic the product cannot serve.
     expect(isIndexable("/signup")).toBe(false);
+  });
+
+  it("classifies both kinds of route, so a scan that matched nothing would be noticed", () => {
+    // The regex bug above would have passed a "finds the router" count; this pins the split.
+    const publicPaths = paths.filter((p) => !p.protected).map((p) => p.path);
+    expect(publicPaths).toContain("/research-consent");
+    expect(publicPaths).toContain("/pricing");
+    expect(publicPaths).not.toContain("/coach");
+    expect(publicPaths).not.toContain("/documents");
+  });
+
+  it("lets the server tell every router path from a typo, so the 404 status cannot hit a real page", () => {
+    // spaFallback answers 404 for anything isKnownAppPath rejects. A route the router serves
+    // that this rejects is a real page delivered with a not-found status, which Google drops.
+    for (const p of paths) {
+      // A parameterised PUBLIC route is known through its concrete entries (/movements/back-squat),
+      // and an unknown slug there really is a not-found page, so a 404 for it is right. Elsewhere
+      // any value stands in for the parameter.
+      const concrete =
+        PUBLIC_ROUTES.find((r) => patternMatches(p.path, r.path))?.path ?? p.path.replace(/:[^/]+/g, "x");
+      expect(isKnownAppPath(concrete), `${p.path} would be served with a 404`).toBe(true);
+    }
+    expect(isKnownAppPath("/movements/not-a-movement")).toBe(false);
+    expect(isKnownAppPath("/pricng")).toBe(false);
+    expect(isKnownAppPath("/movement/back-squat")).toBe(false);
+    expect(isKnownAppPath("/pricing/")).toBe(true);
   });
 
   it("keeps the pages that are the point of having a site IN the index", () => {

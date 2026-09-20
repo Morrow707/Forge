@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { Sparkles, Apple, Target } from "lucide-react";
 import { FoodLogPanel } from "@/components/food-log-panel";
 import { NutritionTrendPanel } from "@/components/nutrition-trend-panel";
-import { NUTRITION_GOALS, NUTRITION_GOAL_LABEL, type NutritionGoal } from "@shared/schema";
+import { NUTRITION_GOALS, NUTRITION_GOAL_LABEL, type NutritionGoal } from "@shared/schema-constants";
 import { todayIso } from "@/lib/local-date";
 
 type NutritionGoalState = { nutritionGoal: NutritionGoal | null; nutritionGoalNote: string | null };

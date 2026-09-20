@@ -56,24 +56,32 @@ import {
 import { cn } from "@/lib/utils";
 import { ForgeMark } from "@/components/forge-mark";
 import { AthleteAvatar } from "@/components/athlete-avatar";
-import { EditMyProfileDialog } from "@/components/edit-my-profile-dialog";
-import { DeleteAccountDialog } from "@/components/delete-account-dialog";
-import { GuardianAccessDialog } from "@/components/guardian-access-dialog";
-import { ReportProblemDialog } from "@/components/report-problem-dialog";
-import { MfaSettingsDialog } from "@/components/mfa-settings-dialog";
-import { ActiveSessionsDialog } from "@/components/active-sessions-dialog";
-import { ChangePasswordDialog } from "@/components/change-password-dialog";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { DateOfBirthBanner } from "@/components/date-of-birth-banner";
 import { InstitutionalAgreementBanner } from "@/components/institutional-agreement-banner";
 import { NotificationBell } from "@/components/notification-bell";
-import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
-import { CoachingStaffDialog } from "@/components/coaching-staff-dialog";
-import { TeamBrandingDialog } from "@/components/team-branding-dialog";
-import { ExercisePageThemeDialog } from "@/components/exercise-page-theme-dialog";
-import { NavCustomizeDialog } from "@/components/nav-customize-dialog";
-import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { NonIosTrackingNotice } from "@/components/non-ios-tracking-warning";
+import { lazyDialog } from "@/components/lazy-dialog";
+// THE SETTINGS DIALOGS LOAD WHEN THEY ARE OPENED, NOT WITH THE SHELL.
+//
+// Thirteen dialogs -- account settings, team branding, the MFA enrolment with its QR-code
+// library, the coaching-staff editor -- were static imports here, so every signed-in page
+// carried ~130 kB of them from the first paint, and most sessions open none. Each is fetched
+// the first time it opens and stays mounted from then on, which is the same lifecycle the static
+// import had once open. See lazyDialog for the contract.
+const EditMyProfileDialog = lazyDialog(() => import("@/components/edit-my-profile-dialog").then((m) => ({ default: m.EditMyProfileDialog })));
+const DeleteAccountDialog = lazyDialog(() => import("@/components/delete-account-dialog").then((m) => ({ default: m.DeleteAccountDialog })));
+const GuardianAccessDialog = lazyDialog(() => import("@/components/guardian-access-dialog").then((m) => ({ default: m.GuardianAccessDialog })));
+const ReportProblemDialog = lazyDialog(() => import("@/components/report-problem-dialog").then((m) => ({ default: m.ReportProblemDialog })));
+const MfaSettingsDialog = lazyDialog(() => import("@/components/mfa-settings-dialog").then((m) => ({ default: m.MfaSettingsDialog })));
+const ActiveSessionsDialog = lazyDialog(() => import("@/components/active-sessions-dialog").then((m) => ({ default: m.ActiveSessionsDialog })));
+const ChangePasswordDialog = lazyDialog(() => import("@/components/change-password-dialog").then((m) => ({ default: m.ChangePasswordDialog })));
+const NotificationSettingsDialog = lazyDialog(() => import("@/components/notification-settings-dialog").then((m) => ({ default: m.NotificationSettingsDialog })));
+const CoachingStaffDialog = lazyDialog(() => import("@/components/coaching-staff-dialog").then((m) => ({ default: m.CoachingStaffDialog })));
+const TeamBrandingDialog = lazyDialog(() => import("@/components/team-branding-dialog").then((m) => ({ default: m.TeamBrandingDialog })));
+const ExercisePageThemeDialog = lazyDialog(() => import("@/components/exercise-page-theme-dialog").then((m) => ({ default: m.ExercisePageThemeDialog })));
+const NavCustomizeDialog = lazyDialog(() => import("@/components/nav-customize-dialog").then((m) => ({ default: m.NavCustomizeDialog })));
+const AccountSettingsDialog = lazyDialog(() => import("@/components/account-settings-dialog").then((m) => ({ default: m.AccountSettingsDialog })));
 import { CameraAccuracyNotice } from "@/components/camera-accuracy-notice";
 import { PoweredByFooter } from "@/components/powered-by-footer";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";

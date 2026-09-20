@@ -23,23 +23,36 @@ import { ExerciseVideoThumb } from "@/components/exercise-video";
 import { RestTimerControl, type RestTimerHandle } from "@/components/rest-timer";
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
-import { BarTrackerDialog } from "@/components/bar-tracker-dialog";
-import { AvJumpTrackerDialog } from "@/components/av-jump-tracker-dialog";
-import { AvBarTrackerDialog } from "@/components/av-bar-tracker-dialog";
-import { AvSwingTrackerDialog, type AvSwingSetMetrics } from "@/components/av-swing-tracker-dialog";
-import { SwingTrackerDialog } from "@/components/swing-tracker-dialog";
-import {
-  AvMedballTrackerDialog,
-  type MedballSetMetrics,
-  type MedballRepBreakdownEntry,
-} from "@/components/av-medball-tracker-dialog";
-import { AvKbSwingTrackerDialog } from "@/components/av-kb-swing-tracker-dialog";
-import { KbSwingTrackerDialog } from "@/components/kb-swing-tracker-dialog";
+import type { AvSwingSetMetrics } from "@/components/av-swing-tracker-dialog";
+import type { MedballSetMetrics, MedballRepBreakdownEntry } from "@/components/av-medball-tracker-dialog";
 import type { KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
-import { AvHorizontalLoadTrackerDialog, type HorizontalLoadSetMetrics } from "@/components/av-horizontal-load-tracker-dialog";
-import { HorizontalLoadTrackerDialog } from "@/components/horizontal-load-tracker-dialog";
-import { MedballTrackerDialog } from "@/components/medball-tracker-dialog";
+import type { HorizontalLoadSetMetrics } from "@/components/av-horizontal-load-tracker-dialog";
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
+import { lazyDialog, preloadWhenIdle } from "@/components/lazy-dialog";
+// THE CAMERA PIPELINE LOADS WHEN THE CAMERA OPENS, NOT WHEN THE PAGE DOES.
+//
+// Eleven tracker dialogs, and behind them MediaPipe's loader, onnxruntime-web and every
+// *-tracking.ts module, were static imports here -- 250 kB of JavaScript on the page every
+// athlete opens to log a set, most of whom never press record on it. Each is now fetched the
+// first time it is opened (see lazyDialog: mounted from then on, exactly as before), and the set
+// for this platform is prefetched in the background once camera access is confirmed, so the
+// first tap does not wait on a download. Types are still imported statically; they cost nothing.
+const BarTrackerDialog = lazyDialog(() => import("@/components/bar-tracker-dialog").then((m) => ({ default: m.BarTrackerDialog })));
+const AvJumpTrackerDialog = lazyDialog(() => import("@/components/av-jump-tracker-dialog").then((m) => ({ default: m.AvJumpTrackerDialog })));
+const AvBarTrackerDialog = lazyDialog(() => import("@/components/av-bar-tracker-dialog").then((m) => ({ default: m.AvBarTrackerDialog })));
+const AvSwingTrackerDialog = lazyDialog(() => import("@/components/av-swing-tracker-dialog").then((m) => ({ default: m.AvSwingTrackerDialog })));
+const SwingTrackerDialog = lazyDialog(() => import("@/components/swing-tracker-dialog").then((m) => ({ default: m.SwingTrackerDialog })));
+const AvMedballTrackerDialog = lazyDialog(() => import("@/components/av-medball-tracker-dialog").then((m) => ({ default: m.AvMedballTrackerDialog })));
+const AvKbSwingTrackerDialog = lazyDialog(() => import("@/components/av-kb-swing-tracker-dialog").then((m) => ({ default: m.AvKbSwingTrackerDialog })));
+const KbSwingTrackerDialog = lazyDialog(() => import("@/components/kb-swing-tracker-dialog").then((m) => ({ default: m.KbSwingTrackerDialog })));
+const AvHorizontalLoadTrackerDialog = lazyDialog(() => import("@/components/av-horizontal-load-tracker-dialog").then((m) => ({ default: m.AvHorizontalLoadTrackerDialog })));
+const HorizontalLoadTrackerDialog = lazyDialog(() => import("@/components/horizontal-load-tracker-dialog").then((m) => ({ default: m.HorizontalLoadTrackerDialog })));
+const MedballTrackerDialog = lazyDialog(() => import("@/components/medball-tracker-dialog").then((m) => ({ default: m.MedballTrackerDialog })));
+/** The dialogs this platform can actually open, for the idle prefetch below. */
+const TRACKER_DIALOGS_FOR_THIS_PLATFORM = () =>
+  isAvPreviewPlatform()
+    ? [AvBarTrackerDialog, AvJumpTrackerDialog, AvSwingTrackerDialog, AvMedballTrackerDialog, AvKbSwingTrackerDialog, AvHorizontalLoadTrackerDialog]
+    : [BarTrackerDialog, SwingTrackerDialog, MedballTrackerDialog, KbSwingTrackerDialog, HorizontalLoadTrackerDialog];
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
 import { extractVideoFrames } from "@/lib/video-frames";
@@ -2847,6 +2860,12 @@ function ExerciseLogContent({
   // its absence at a coach who can. Neither is worth the frame it saves.
   const cameraAccess = useCameraAccess();
   const cameraAllowed = cameraAccess?.allowed === true;
+  // Prefetch the camera pipeline once it is known this athlete may use it -- in the background,
+  // after the page has painted, so the first tap on Record does not wait on a download.
+  useEffect(() => {
+    if (!cameraAllowed || user?.trackingOptOut) return;
+    return preloadWhenIdle(TRACKER_DIALOGS_FOR_THIS_PLATFORM());
+  }, [cameraAllowed, user?.trackingOptOut]);
 
   const movementTypeForTracking =
     item.trackingLevel === "bar_path" || item.trackingLevel === "full"

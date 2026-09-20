@@ -364,6 +364,8 @@ import {
 } from "./auth-utils";
 import { generateTotpSecret, verifyTotpCode, generateBackupCodes, consumeBackupCode } from "./mfa";
 import { formatDeviceLabel, type SessionKind } from "./session-tracking";
+import { requestMemo } from "./request-cache";
+import { SET_BLOB_COLUMNS_EXCLUDED } from "./set-blob-columns";
 import {
   addDays,
   subDays,
@@ -3389,8 +3391,13 @@ function summariseWaivers(
 
 export const storage = {
   // ---------- Users ----------
+  // Memoised for the life of one request (server/request-cache.ts): the auth layer loads this
+  // row to sign the request in, and the guardian gate, the entitlement helpers and most routes
+  // then load it again. Each caller gets its own shallow copy, so one of them adjusting a field
+  // on the object it was handed cannot reach the others.
   async getUser(id: number) {
-    return db.query.users.findFirst({ where: eq(users.id, id) });
+    const row = await requestMemo(`user:${id}`, () => db.query.users.findFirst({ where: eq(users.id, id) }));
+    return row ? { ...row } : row;
   },
 
   async getUserByEmail(email: string) {
@@ -3866,7 +3873,7 @@ export const storage = {
     skillSessions: (typeof archivedSkillSessions.$inferInsert)[];
     healthFlags: (typeof archivedHealthFlags.$inferInsert)[];
   } | null> {
-    const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
+    const athlete = await this.getUser(athleteId);
     if (!athlete || athlete.role !== "athlete") return null;
     if (athlete.trackingOptOut) return null;
 
@@ -5108,15 +5115,27 @@ export const storage = {
   // resolves this internally, so joining or leaving a staff changes
   // visibility everywhere at once without any call site needing to know
   // staffing exists.
+  //
+  // Memoised per request (server/request-cache.ts), and it needs to be: a coach's entitlement
+  // route resolved the staff ten times in one request through helpers that each asked again.
+  // The one row that says whether a coach is on someone's staff, read once per request: the
+  // three resolvers below all start from it and, before this, each ran the same SELECT.
+  staffLinkFor(coachId: number) {
+    return requestMemo(`staffLink:${coachId}`, () =>
+      db.query.coachStaff.findFirst({ where: eq(coachStaff.staffCoachId, coachId) }),
+    );
+  },
+
   async getEffectiveCoachIds(coachId: number): Promise<number[]> {
-    const asStaff = await db.query.coachStaff.findFirst({
-      where: eq(coachStaff.staffCoachId, coachId),
+    const ids = await requestMemo(`effectiveCoachIds:${coachId}`, async () => {
+      const asStaff = await this.staffLinkFor(coachId);
+      const primaryId = asStaff?.primaryCoachId ?? coachId;
+      const staffRows = await db.query.coachStaff.findMany({
+        where: eq(coachStaff.primaryCoachId, primaryId),
+      });
+      return Array.from(new Set([primaryId, ...staffRows.map((r) => r.staffCoachId)]));
     });
-    const primaryId = asStaff?.primaryCoachId ?? coachId;
-    const staffRows = await db.query.coachStaff.findMany({
-      where: eq(coachStaff.primaryCoachId, primaryId),
-    });
-    return Array.from(new Set([primaryId, ...staffRows.map((r) => r.staffCoachId)]));
+    return [...ids];
   },
 
   // Per-team coach assignment -- see teamCoaches in shared/schema.ts for
@@ -5130,20 +5149,23 @@ export const storage = {
   // they own outright (teams.coachId), so nobody is locked out of a team
   // they created.
   async getCoachTeamScope(coachId: number): Promise<number[] | null> {
-    const asStaff = await db.query.coachStaff.findFirst({
-      where: eq(coachStaff.staffCoachId, coachId),
+    // Per-request memo, same reason as getEffectiveCoachIds: the roster list and every
+    // per-athlete coach route resolve this beside the staff, and several do so more than once.
+    const scope = await requestMemo(`coachTeamScope:${coachId}`, async (): Promise<number[] | null> => {
+      const asStaff = await this.staffLinkFor(coachId);
+      if (!asStaff) return null; // primary coach (or a solo coach)
+      const assigned = await db
+        .select({ teamId: teamCoaches.teamId })
+        .from(teamCoaches)
+        .where(eq(teamCoaches.coachId, coachId));
+      if (assigned.length === 0) return null;
+      const owned = await db
+        .select({ id: teams.id })
+        .from(teams)
+        .where(eq(teams.coachId, coachId));
+      return Array.from(new Set([...assigned.map((a) => a.teamId), ...owned.map((t) => t.id)]));
     });
-    if (!asStaff) return null; // primary coach (or a solo coach)
-    const assigned = await db
-      .select({ teamId: teamCoaches.teamId })
-      .from(teamCoaches)
-      .where(eq(teamCoaches.coachId, coachId));
-    if (assigned.length === 0) return null;
-    const owned = await db
-      .select({ id: teams.id })
-      .from(teams)
-      .where(eq(teams.coachId, coachId));
-    return Array.from(new Set([...assigned.map((a) => a.teamId), ...owned.map((t) => t.id)]));
+    return scope === null ? null : [...scope];
   },
 
   // The team ids one coach is explicitly assigned to (no owned-team union,
@@ -5229,9 +5251,7 @@ export const storage = {
   // so both read and write always go through the primary account's row
   // regardless of which staff member is asking.
   async getPrimaryCoachId(coachId: number): Promise<number> {
-    const asStaff = await db.query.coachStaff.findFirst({
-      where: eq(coachStaff.staffCoachId, coachId),
-    });
+    const asStaff = await this.staffLinkFor(coachId);
     return asStaff?.primaryCoachId ?? coachId;
   },
 
@@ -5243,7 +5263,7 @@ export const storage = {
 
   async getCoachFeatures(coachId: number): Promise<Record<CoachFeature, boolean>> {
     const primaryId = await this.getPrimaryCoachId(coachId);
-    const coach = await db.query.users.findFirst({ where: eq(users.id, primaryId) });
+    const coach = await this.getUser(primaryId);
     return resolveCoachFeatures(coach?.enabledFeatures);
   },
 
@@ -5252,7 +5272,7 @@ export const storage = {
     values: Partial<Record<CoachFeature, boolean>>,
   ): Promise<Record<CoachFeature, boolean>> {
     const primaryId = await this.getPrimaryCoachId(coachId);
-    const coach = await db.query.users.findFirst({ where: eq(users.id, primaryId) });
+    const coach = await this.getUser(primaryId);
     const merged = { ...(coach?.enabledFeatures ?? {}), ...values };
     await db.update(users).set({ enabledFeatures: merged }).where(eq(users.id, primaryId));
     return resolveCoachFeatures(merged);
@@ -7533,7 +7553,7 @@ export const storage = {
     }
     const athlete =
       rows.some((g) => g.type === "testing") &&
-      (await db.query.users.findFirst({ where: eq(users.id, athleteId) }));
+      (await this.getUser(athleteId));
 
     return Promise.all(
       rows.map(async (g) => {
@@ -7755,6 +7775,37 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     return db.query.wellnessCheckins.findFirst({
       where: and(eq(wellnessCheckins.athleteId, athleteId), eq(wellnessCheckins.date, date)),
     });
+  },
+
+  // Each athlete's newest `limit` check-ins' pain maps, keyed by athlete, in one statement.
+  // A window function does the per-athlete LIMIT that a plain query cannot express.
+  async getRecentPainMapsForAthletes(
+    athleteIds: number[],
+    limit: number,
+  ): Promise<Map<number, (string[] | null)[]>> {
+    const out = new Map<number, (string[] | null)[]>();
+    if (athleteIds.length === 0) return out;
+    const ranked = db
+      .select({
+        athleteId: wellnessCheckins.athleteId,
+        bodyPainMap: wellnessCheckins.bodyPainMap,
+        rank: sql<number>`row_number() over (partition by ${wellnessCheckins.athleteId} order by ${wellnessCheckins.date} desc)`.as(
+          "rank",
+        ),
+      })
+      .from(wellnessCheckins)
+      .where(inArray(wellnessCheckins.athleteId, athleteIds))
+      .as("ranked");
+    const rows = await db
+      .select({ athleteId: ranked.athleteId, bodyPainMap: ranked.bodyPainMap })
+      .from(ranked)
+      .where(lte(ranked.rank, limit));
+    for (const row of rows) {
+      const list = out.get(row.athleteId);
+      if (list) list.push(row.bodyPainMap ?? null);
+      else out.set(row.athleteId, [row.bodyPainMap ?? null]);
+    }
+    return out;
   },
 
   async getWellnessHistoryForAthlete(athleteId: number, limit = 14) {
@@ -9981,7 +10032,7 @@ Hard rules, no exceptions:
       .insert(teamPosts)
       .values({ coachId, authorId, body, isAnnouncement })
       .returning();
-    const author = await db.query.users.findFirst({ where: eq(users.id, authorId) });
+    const author = await this.getUser(authorId);
     return {
       id: row.id,
       body: row.body,
@@ -9997,7 +10048,7 @@ Hard rules, no exceptions:
   // there's at least one post, not retroactively for old history.
   async getTeamBoardHasUnread(userId: number, coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
-    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    const user = await this.getUser(userId);
     const latest = await db.query.teamPosts.findFirst({
       where: inArray(teamPosts.coachId, coachIds),
       orderBy: desc(teamPosts.createdAt),
@@ -10249,7 +10300,7 @@ Hard rules, no exceptions:
   // coaching knowledge, not calibrated against any real athlete's data.
 
   async getSkillFaultThresholdsForCoach(coachId: number) {
-    const coach = await db.query.users.findFirst({ where: eq(users.id, coachId) });
+    const coach = await this.getUser(coachId);
     const overrides = coach?.skillFaultThresholds ?? null;
     return {
       effective: resolveSkillFaultThresholds(overrides),
@@ -10277,7 +10328,7 @@ Hard rules, no exceptions:
       where: and(eq(skillAssignments.id, skillAssignmentId), eq(skillAssignments.athleteId, athleteId)),
     });
     if (!assignment) return null;
-    const coach = await db.query.users.findFirst({ where: eq(users.id, assignment.coachId) });
+    const coach = await this.getUser(assignment.coachId);
     return resolveSkillFaultThresholds(coach?.skillFaultThresholds ?? null);
   },
 
@@ -18056,11 +18107,21 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       for (const row of rows) dobById.set(row.id, row.dateOfBirth ?? null);
     }
 
+    // The last fourteen check-ins of every roster athlete in one query, rather than one
+    // query per athlete: this backs the roster page, and a school's roster is the one list in
+    // the app that runs to hundreds. Same rows getWellnessHistoryForAthlete(id, 14) returned
+    // per athlete (newest fourteen by date), only the pain map is read off them.
+    // `server/roster-pain-escalations-query-count.itest.ts` holds the query count flat as the
+    // roster grows.
+    const painMapsByAthlete = await this.getRecentPainMapsForAthletes(
+      (roster as { id: number }[]).map((a) => a.id),
+      14,
+    ).catch(() => new Map<number, (string[] | null)[]>());
+
     for (const athlete of roster as { id: number; name: string }[]) {
-      const history = await this.getWellnessHistoryForAthlete(athlete.id, 14).catch(() => []);
       const counts = new Map<string, number>();
-      for (const checkin of history as { bodyPainMap?: string[] | null }[]) {
-        for (const part of checkin.bodyPainMap ?? []) {
+      for (const bodyPainMap of painMapsByAthlete.get(athlete.id) ?? []) {
+        for (const part of bodyPainMap ?? []) {
           counts.set(part, (counts.get(part) ?? 0) + 1);
         }
       }
@@ -18568,7 +18629,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         date: input.date || null,
       })
       .returning();
-    const author = await db.query.users.findFirst({ where: eq(users.id, authorId) });
+    const author = await this.getUser(authorId);
     return {
       id: row.id,
       body: row.body,
@@ -18814,7 +18875,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
   },
 
   async updateCoachLogo(primaryCoachId: number, logoUrl: string | null) {
-    const existing = await db.query.users.findFirst({ where: eq(users.id, primaryCoachId) });
+    const existing = await this.getUser(primaryCoachId);
     if (existing?.brandLogoUrl && existing.brandLogoUrl !== logoUrl) {
       await deleteUploadedFile(existing.brandLogoUrl);
     }
@@ -19604,7 +19665,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       with: {
         entries: {
           with: {
-            sets: { orderBy: asc(workoutSetEntries.setNumber) },
+            sets: { orderBy: asc(workoutSetEntries.setNumber), columns: SET_BLOB_COLUMNS_EXCLUDED },
             programExercise: true,
             corrective: true,
           },
@@ -19919,7 +19980,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         date: input.date || null,
       })
       .returning();
-    const author = await db.query.users.findFirst({ where: eq(users.id, authorId) });
+    const author = await this.getUser(authorId);
     return {
       id: row.id,
       body: row.body,
@@ -20424,7 +20485,7 @@ ${catalog}`;
         if (s.formCheckVideoUrl) s.formCheckVideoUrl = await this.assertUploadedFileOwnedBy(s.formCheckVideoUrl, athleteId);
       }
     }
-    const athlete = await db.query.users.findFirst({ where: eq(users.id, athleteId) });
+    const athlete = await this.getUser(athleteId);
     // Fallback only -- each entry can carry its own weightUnit (see
     // logEntryInputSchema's comment: a superset can legitimately pair a
     // lbs lift with a kg lift), so this account-level default is what an
@@ -20636,23 +20697,46 @@ ${catalog}`;
       // enforcement once per distinct exercise after every insert is in.
       const touchedExerciseIds = new Set<number>();
 
+      // The referents of every entry, looked up once per table before the loop rather than
+      // once per entry inside it -- a day with ten exercises was up to thirty statements here,
+      // all inside the save transaction. The per-entry resolution below is unchanged.
+      const programExerciseIds = [...new Set(input.entries.flatMap((e) => (e.programExerciseId != null ? [e.programExerciseId] : [])))];
+      const correctiveIds = [...new Set(input.entries.flatMap((e) => (e.correctiveId != null ? [e.correctiveId] : [])))];
+      const snapshotExerciseIds = [...new Set(input.entries.flatMap((e) => (e.exerciseId != null ? [e.exerciseId] : [])))];
+      const programExerciseById = new Map(
+        (programExerciseIds.length
+          ? await tx
+              .select({ id: programExercises.id, exerciseId: programExercises.exerciseId })
+              .from(programExercises)
+              .where(inArray(programExercises.id, programExerciseIds))
+          : []
+        ).map((r) => [r.id, r]),
+      );
+      const correctiveById = new Map(
+        (correctiveIds.length
+          ? await tx
+              .select({ id: assignmentCorrectives.id, exerciseId: assignmentCorrectives.exerciseId })
+              .from(assignmentCorrectives)
+              .where(inArray(assignmentCorrectives.id, correctiveIds))
+          : []
+        ).map((r) => [r.id, r]),
+      );
+      const existingExerciseIds = new Set(
+        (snapshotExerciseIds.length
+          ? await tx.select({ id: exercises.id }).from(exercises).where(inArray(exercises.id, snapshotExerciseIds))
+          : []
+        ).map((r) => r.id),
+      );
+
       for (const entry of input.entries) {
         // Resolved once here, up front, and stored directly on the entry --
         // see workoutLogEntries.exerciseId's own schema comment for why this
         // can't just be re-derived later via programExerciseId's live join.
         const resolvedExerciseId =
           entry.programExerciseId != null
-            ? (
-                await tx.query.programExercises.findFirst({
-                  where: eq(programExercises.id, entry.programExerciseId),
-                })
-              )?.exerciseId
+            ? programExerciseById.get(entry.programExerciseId)?.exerciseId
             : entry.correctiveId != null
-              ? (
-                  await tx.query.assignmentCorrectives.findFirst({
-                    where: eq(assignmentCorrectives.id, entry.correctiveId),
-                  })
-                )?.exerciseId
+              ? correctiveById.get(entry.correctiveId)?.exerciseId
               : undefined;
 
         // The client's own answer to "which exercise was on screen", consulted ONLY when the
@@ -20661,12 +20745,8 @@ ${catalog}`;
         // unchecked one would put a dead reference into the column every historical read --
         // PR detection, the tracking report -- resolves identity through.
         const fallbackExerciseId =
-          resolvedExerciseId == null && entry.exerciseId != null
-            ? (
-                await tx.query.exercises.findFirst({
-                  where: eq(exercises.id, entry.exerciseId),
-                })
-              )?.id
+          resolvedExerciseId == null && entry.exerciseId != null && existingExerciseIds.has(entry.exerciseId)
+            ? entry.exerciseId
             : undefined;
 
         // A SLOT THE COACH DELETED WHILE THE ATHLETE WAS TRAINING MUST NOT COST THEM THE SESSION.
@@ -21219,9 +21299,7 @@ ${catalog}`;
     assignmentId: number,
     entries: SubmitWorkoutLogInput["entries"],
   ) {
-    const assignment = await db.query.assignments.findFirst({
-      where: eq(assignments.id, assignmentId),
-    });
+    const assignment = await this.getAssignmentById(assignmentId);
     // Self-assigned (Free Agent / admin training themselves) has no coach to
     // tell -- coachId === athleteId is how that's represented elsewhere
     // (see getWorkoutDayDetail's isSelfAssigned).
@@ -21299,9 +21377,7 @@ ${catalog}`;
     assignmentId: number,
     entries: SubmitWorkoutLogInput["entries"],
   ) {
-    const assignment = await db.query.assignments.findFirst({
-      where: eq(assignments.id, assignmentId),
-    });
+    const assignment = await this.getAssignmentById(assignmentId);
     // Self-assigned (Free Agent / admin training themselves) has no coach to
     // tell -- same gate evaluateLegDriveAsymmetryFlags uses.
     if (!assignment || assignment.coachId === assignment.athleteId) return null;
@@ -22193,11 +22269,19 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       }))
       .sort((a, b) => a.exerciseName.localeCompare(b.exerciseName));
 
-    const completedLogs = await db.query.workoutLogs.findMany({
-      where: and(eq(workoutLogs.athleteId, athleteId), eq(workoutLogs.completed, true)),
-    });
+    // One row per day trained rather than every completed log row with every column: the
+    // three numbers below are counts, and this is the athlete's dashboard, loaded on every
+    // visit for as long as they keep training.
+    const completedByDate = await db
+      .select({ date: workoutLogs.date, count: sql<number>`count(*)::int` })
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.athleteId, athleteId), eq(workoutLogs.completed, true)))
+      .groupBy(workoutLogs.date);
+    const totalWorkoutsCompleted = completedByDate.reduce((sum, r) => sum + r.count, 0);
     const monthPrefix = new Date().toISOString().slice(0, 7);
-    const workoutsThisMonth = completedLogs.filter((l) => l.date.startsWith(monthPrefix)).length;
+    const workoutsThisMonth = completedByDate
+      .filter((r) => r.date.startsWith(monthPrefix))
+      .reduce((sum, r) => sum + r.count, 0);
 
     // Real daily completion counts for the dashboard's Day Streak / Workouts
     // This Month sparklines -- bucketed from the completedLogs rows already
@@ -22206,14 +22290,11 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const last7Dates = Array.from({ length: 7 }, (_, i) =>
       formatISO(subDays(new Date(), 6 - i), { representation: "date" }),
     );
-    const completedCountByDate = new Map<string, number>();
-    for (const log of completedLogs) {
-      completedCountByDate.set(log.date, (completedCountByDate.get(log.date) ?? 0) + 1);
-    }
+    const completedCountByDate = new Map(completedByDate.map((r) => [r.date, r.count]));
     const last7DaysCompleted = last7Dates.map((d) => completedCountByDate.get(d) ?? 0);
 
     return {
-      totalWorkoutsCompleted: completedLogs.length,
+      totalWorkoutsCompleted,
       workoutsThisMonth,
       recentPRs,
       currentLifts,
@@ -22290,7 +22371,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       with: {
         entries: {
           with: {
-            sets: { orderBy: asc(workoutSetEntries.setNumber) },
+            sets: { orderBy: asc(workoutSetEntries.setNumber), columns: SET_BLOB_COLUMNS_EXCLUDED },
             exercise: true,
             programExercise: { with: { exercise: true } },
             corrective: { with: { exercise: true } },
@@ -23062,7 +23143,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         day: true,
         entries: {
           with: {
-            sets: true,
+            sets: { columns: SET_BLOB_COLUMNS_EXCLUDED },
             exercise: true,
             programExercise: { with: { exercise: true } },
             corrective: { with: { exercise: true } },
@@ -23113,7 +23194,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   async getDailyLoadSeriesForAthlete(athleteId: number, sinceDate: string): Promise<DailyLoad[]> {
     const logs = await db.query.workoutLogs.findMany({
       where: and(eq(workoutLogs.athleteId, athleteId), gte(workoutLogs.date, sinceDate)),
-      with: { entries: { with: { sets: true } } },
+      with: { entries: { with: { sets: { columns: SET_BLOB_COLUMNS_EXCLUDED } } } },
     });
 
     const loadByDate = new Map<string, number>();
@@ -23177,7 +23258,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .slice(0, 10);
     const logs = await db.query.workoutLogs.findMany({
       where: and(inArray(workoutLogs.assignmentId, assignmentIds), gte(workoutLogs.date, sinceDate)),
-      with: { entries: { with: { sets: true } } },
+      with: { entries: { with: { sets: { columns: SET_BLOB_COLUMNS_EXCLUDED } } } },
     });
 
     const byDate = new Map<string, { volume: number; numericReps: number; sets: number }>();
@@ -23263,7 +23344,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       with: {
         entries: {
           with: {
-            sets: true,
+            sets: { columns: SET_BLOB_COLUMNS_EXCLUDED },
             exercise: true,
             programExercise: { with: { exercise: true } },
             corrective: { with: { exercise: true } },
@@ -23474,10 +23555,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // second call on the same day a no-op conflict rather than a duplicate
   // alert, so a coach gets pinged once per athlete per day their ratio is
   // in the red zone, not once per set.
+  // Memoised per request: the three post-save evaluators a log submit runs each read the
+  // assignment again, after the transaction, when nothing can have changed it.
+  getAssignmentById(assignmentId: number) {
+    return requestMemo(`assignment:${assignmentId}`, () =>
+      db.query.assignments.findFirst({ where: eq(assignments.id, assignmentId) }),
+    );
+  },
+
   async evaluateAcwrRiskFlag(assignmentId: number, athleteId: number) {
-    const assignment = await db.query.assignments.findFirst({
-      where: eq(assignments.id, assignmentId),
-    });
+    const assignment = await this.getAssignmentById(assignmentId);
     if (!assignment || assignment.coachId === assignment.athleteId) return null;
 
     // The athlete's own day, matching getAcwrHistoryForAthlete and

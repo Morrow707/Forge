@@ -3,6 +3,7 @@ import path from "node:path";
 import type { RequestHandler } from "express";
 import rateLimit from "express-rate-limit";
 import type { ServeStaticOptions } from "serve-static";
+import { isKnownAppPath } from "../shared/public-routes";
 
 /** How the built client is served, and how the prerenderer has to name its files to match.
  *
@@ -51,6 +52,11 @@ export const PUBLIC_STATIC_OPTIONS: ServeStaticOptions = {
   redirect: false,
 };
 
+/** The app shell -- the template with a noindex -- written by scripts/prerender.ts beside the
+ * prerendered pages. index.html is the HOME page once prerendering has run, with the home page's
+ * canonical and structured data on it, which is the wrong thing to hand out for /coach. */
+export const APP_SHELL_FILE = "app-shell.html";
+
 /** Where the prerendered HTML for a public route lives, relative to the dist root. */
 export function prerenderedFileFor(routePath: string): string {
   if (routePath === "/") return "index.html";
@@ -80,9 +86,10 @@ export function servePrerendered(distPath: string): RequestHandler {
   };
 }
 
-/** The SPA catch-all: a client route gets index.html, a missing ASSET gets a real 404.
+/** The SPA catch-all: a client route gets the app shell, a missing ASSET gets a real 404, and a
+ * path the client has no page for gets the shell WITH a 404 status.
  *
- * WHY THE 404 MATTERS. Everything unmatched used to fall through to index.html, including a
+ * WHY THE ASSET 404 MATTERS. Everything unmatched used to fall through to index.html, including a
  * request for a hashed chunk that no longer exists -- which is exactly what a browser does for
  * the minutes after a deploy, with a tab still open on the previous build. Handing back
  * index.html with a 200 and text/html means dynamic import() gets a document where a module
@@ -91,20 +98,39 @@ export function servePrerendered(distPath: string): RequestHandler {
  * for: main.tsx's vite:preloadError listener and lazy-load-recovery.ts turn a failed chunk fetch
  * into one reload onto the current build. A 200 never reaches either of them.
  *
- * THE BUG THAT MADE IT A NO-OP. The check was written against `req.path`, and this handler is
- * mounted with `app.use("*", ...)`. Under a mounted handler Express strips the matched prefix, so
- * `req.path` is always "/" here and the extension test never matched: /missing.js came back as
+ * WHY THE PAGE 404 MATTERS. /pricng, /movement/back-squat, a link somebody mistyped on a forum:
+ * the client renders its not-found page, but the server said 200, so to a crawler that is a page
+ * and it gets indexed as one -- a soft 404, and Search Console fills up with them. The server
+ * cannot run the router, so it asks isKnownAppPath, which is the route list plus the prefixes
+ * the signed-in app lives under; shared/public-routes-are-complete.test.ts keeps that in step
+ * with the router. The BODY is still the shell, so the person sees the same not-found page and
+ * the client can still recover a deep link it knows better than this list does. Only the status
+ * changes.
+ *
+ * THE BUG THAT MADE THE ASSET CHECK A NO-OP. It was written against `req.path`, and this handler
+ * is mounted with `app.use("*", ...)`. Under a mounted handler Express strips the matched prefix,
+ * so `req.path` is always "/" here and the extension test never matched: /missing.js came back as
  * the app's HTML with a 200 for as long as the check existed. `req.originalUrl` is the request as
  * sent, which is the thing to test. The test beside this file requests a missing .js and
  * asserts the 404, so the check cannot go quiet again.
  */
 export function spaFallback(distPath: string): RequestHandler {
+  const shell = path.resolve(distPath, APP_SHELL_FILE);
   const index = path.resolve(distPath, "index.html");
+  // A dist built before the shell existed still serves: the home page's HTML, as before.
+  const body = fs.existsSync(shell) ? shell : index;
   return (req, res) => {
     const requested = req.originalUrl.split("?")[0];
     if (/\.[a-zA-Z0-9]+$/.test(requested)) {
       return res.status(404).type("text/plain").send("Not found");
     }
-    res.sendFile(index);
+    let decoded = requested;
+    try {
+      decoded = decodeURIComponent(requested);
+    } catch {
+      /* leave it; an undecodable path is not a known one either */
+    }
+    if (!isKnownAppPath(decoded)) res.status(404);
+    res.sendFile(body);
   };
 }

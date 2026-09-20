@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, ChevronDown, X } from "lucide-react";
 import { format, addDays, parseISO } from "date-fns";
 import { todayIso } from "@/lib/local-date";
-import { FOOD_LOG_MEALS, FOOD_LOG_MEAL_LABEL, type FoodLogMeal } from "@shared/schema";
+import { FOOD_LOG_MEALS, FOOD_LOG_MEAL_LABEL, type FoodLogMeal } from "@shared/schema-constants";
 import { NutrientRings } from "@/components/nutrient-rings";
 import { ReadFailed } from "@/components/read-failed";
 
