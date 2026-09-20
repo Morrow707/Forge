@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
+import { useFirstRunDialogSlot } from "@/hooks/use-first-run-dialogs";
 
 const SEEN_KEY = "forge:non-ios-accuracy-notice-seen";
 
@@ -24,10 +25,16 @@ export function NonIosTrackingNotice() {
     return window.localStorage.getItem(SEEN_KEY) !== "1";
   });
 
+  // Second in the first-run queue, behind the terms gate and ahead of the accuracy notice.
+  // Whether it is due is still decided entirely above; this only decides whose turn it is.
+  const isMyTurn = useFirstRunDialogSlot("non-ios-tracking", open);
+
   function dismiss() {
     window.localStorage.setItem(SEEN_KEY, "1");
     setOpen(false);
   }
+
+  if (!isMyTurn) return null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && dismiss()}>

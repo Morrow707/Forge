@@ -332,6 +332,32 @@ honest; selling it silently is not.
   live and the tier going back on sale needs nothing doing there. If it is ever withdrawn again,
   that step comes back with it.
 
+## Add-ons: the purchase path exists, and beta means free
+
+Added 2026-09-19. Scott: "we are still in beta, build the framework, but keep it free for now."
+Two entitlements had no purchase path at all: the three sport-coach add-ons (golf_swing, hitting,
+pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan" nothing sold.
+
+- **One resolver each, asked by both sides.** `sportCoachAccessFor` and `coachesCornerAccessFor`
+  in `server/routes.ts`; `GET /api/athlete/entitlements` and `GET /api/coach/entitlements` are
+  how the UI asks. The client never re-derives it (the old page read raw ownership and missed
+  the trial and enforcement-off cases).
+- **Beta, an active trial, or enforcement off = all add-ons unlocked**, the same short-circuit
+  `getEntitlements` already applies. `addOns` answers "may I open it"; `ownedAddOns` answers
+  "did I pay for it". They differ for every account today.
+- **Checkout is wired and dormant.** `POST /api/billing/checkout/free-agent-add-on` and
+  `/coach-add-on` take `{ addOnId }` from the shared lists (never hand-typed), sit behind
+  `chargingClosed()` like every other checkout, and the webhook kinds `free_agent_add_on` /
+  `coach_add_on` append ownership with de-dupe. Apple: `appleProductIdForFreeAgentAddOn`, and
+  `applyAppleIapVerification` recognises add-on products (without that an iOS purchase would
+  verify as "unrecognized product": money taken, nothing granted). Add-on products must NOT go
+  in the tier subscription group at App Store Connect: add-ons combine, tiers are exclusive.
+- **Placeholder prices**: Coaches Corner $19.99/mo, sport coaches $7.99/mo each, in the shared
+  constants. Scott sets the real numbers before BILLING_LIVE. Four Stripe Prices and three
+  App Store products are the launch-day work; `missingPriceEnvVars()` names the env vars.
+- **The locked state for a non-comped account says "not available yet"**, never "free in beta":
+  that branch is reached only by an account that is not comped.
+
 ## Skills are part of the camera tier
 
 Added 2026-09-19. Scott: "The 4.99 and 9.99 should not have access to the skills and skills

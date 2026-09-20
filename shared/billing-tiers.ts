@@ -41,7 +41,19 @@ export const ORG_BASE_CENTS = 0;
 export const ORG_PER_ATHLETE_CENTS = 400; // $4.00/athlete, flat, every band, no discount
 
 export type BillingTierId = string;
-export type AddOnId = "custom_colors" | "team_identity" | "workflow" | "full_bundle" | "personal_page";
+export type AddOnId =
+  | "custom_colors"
+  | "team_identity"
+  | "workflow"
+  | "full_bundle"
+  | "personal_page"
+  // The one add-on on this list that is not personalization: coach education.
+  // It sits here rather than in a list of its own because users.billingAddOns
+  // is the column that records what a coach account has bought, and a second
+  // parallel column for one product is a second place for ownership to be
+  // missed. See COACHES_CORNER_MONTHLY_PRICE_CENTS below for the price and
+  // COACH_PURCHASABLE_ADD_ON_ORDER for the ones checkout will actually sell.
+  | "coaches_corner";
 
 export interface BillingTierDef {
   id: BillingTierId;
@@ -156,6 +168,15 @@ export interface AddOnDef {
 // above 30 athletes already includes full personalization via
 // includesFullPersonalization, so there's nothing for them to buy here (see
 // getEntitlements in server/billing.ts).
+/** Coaches Corner's monthly price, as a standalone coach add-on.
+ *
+ * PLACEHOLDER. $19.99 is the number this product has carried since it was first
+ * priced, and nobody has been charged it -- billing is closed (BILLING_LIVE is
+ * off) and every checkout refuses. Scott sets the real number before billing
+ * opens; until then this is what every surface quotes, derived from here rather
+ * than typed anywhere. */
+export const COACHES_CORNER_MONTHLY_PRICE_CENTS = 1999;
+
 export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
   custom_colors: {
     id: "custom_colors",
@@ -190,6 +211,16 @@ export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
   // is entirely paid, nothing free, for any tier that hasn't bought it or
   // doesn't include full personalization. See shared/schema.ts's
   // users.exercisePageTheme for exactly what it drives.
+  // Coach education, not personalization -- see AddOnId's comment. Priced as a
+  // standalone add-on deliberately: a coach who wants the Corner should not have
+  // to move plans for it, and the org model has no plan tiers to hang it off.
+  coaches_corner: {
+    id: "coaches_corner",
+    label: "Coaches Corner",
+    monthlyPriceCents: COACHES_CORNER_MONTHLY_PRICE_CENTS,
+    description:
+      "Admin-authored coach education: program-design theory, Olympic lift progressions, youth development, arm care, season planning. Free for rosters of 100+.",
+  },
   personal_page: {
     id: "personal_page",
     label: "Personal Page",
@@ -204,7 +235,16 @@ export const BILLING_ADD_ON_ORDER: AddOnId[] = [
   "workflow",
   "personal_page",
   "full_bundle",
+  "coaches_corner",
 ];
+
+/** The coach add-ons a coach can BUY for themselves, as opposed to ones an admin
+ * assigns. Separate from BILLING_ADD_ON_ORDER for the same reason
+ * FREE_AGENT_TIER_ORDER is separate from ALL_FREE_AGENT_TIER_IDS: one list is what
+ * is on sale, the other is what an account can be recorded as owning. The
+ * personalization add-ons above have no self-serve checkout -- they are still
+ * granted from the admin billing panel -- so they are deliberately not here. */
+export const COACH_PURCHASABLE_ADD_ON_ORDER: AddOnId[] = ["coaches_corner"];
 
 export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -225,7 +265,7 @@ export function formatCents(cents: number): string {
 // plan above has no tiers to hang it off in the first place -- the model is
 // a flat base fee plus a flat per-athlete rate, with bands that are a
 // presentation of that formula, not products with different feature sets.
-export const COACHES_CORNER_MONTHLY_PRICE_CENTS = 1999;
+// (The constant itself is declared above BILLING_ADD_ONS, which reads it.)
 
 // Rosters at or above this size get the Corner at no charge. At the flat
 // per-athlete rate above, a 100-athlete org is already paying

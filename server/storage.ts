@@ -262,7 +262,24 @@ import type {
   ExternalWaiver,
   InstitutionalAgreementSignature,
 } from "@shared/schema";
-import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
+import {
+  FREE_AGENT_TIERS,
+  FREE_AGENT_ADD_ON_ORDER,
+  appleProductIdForFreeAgentAddOn,
+  type FreeAgentAddOnId,
+} from "@shared/free-agent-tiers";
+
+/** StoreKit product id -> sport-coach add-on, derived rather than typed out, for
+ * the same reason PRODUCT_ID_TO_TIER in server/apple-iap.ts is.
+ *
+ * An add-on is NOT a subscription tier and must not resolve through
+ * tierForAppleProductId: buying the Golf Swing coach does not move an athlete onto
+ * a tier, it appends to what they own. Without this branch an add-on purchase
+ * verified as "Unrecognized product" -- Apple would have taken the money and the
+ * athlete would have been granted nothing. */
+const APPLE_PRODUCT_ID_TO_ADD_ON: Record<string, FreeAgentAddOnId> = Object.fromEntries(
+  FREE_AGENT_ADD_ON_ORDER.map((addOn) => [appleProductIdForFreeAgentAddOn(addOn), addOn]),
+);
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { CAMERA_DERIVED_SET_COLUMNS } from "@shared/schema";
 import { classAiDraftSchema } from "@shared/schema";
@@ -3643,13 +3660,17 @@ export const storage = {
     return row ?? null;
   },
 
-  /** The three columns a Free Agent entitlement decision reads: the SKU they
-   * bought, the beta flag, and any active trial. A narrow select rather than the
-   * whole user row, since this is consulted on every AI-gated route. */
+  /** The columns a Free Agent entitlement decision reads: the SKU they bought, the
+   * add-ons they own on top of it, the beta flag, and any active trial. A narrow
+   * select rather than the whole user row, since this is consulted on every
+   * AI-gated route. freeAgentAddOns joined the select when the sport coaches
+   * started resolving through getFreeAgentEntitlements rather than being read
+   * straight off the user row by each caller. */
   async getFreeAgentBillingAccount(athleteId: number) {
     const [row] = await db
       .select({
         freeAgentTier: users.freeAgentTier,
+        freeAgentAddOns: users.freeAgentAddOns,
         isBetaAccount: users.isBetaAccount,
         trialExpiresAt: users.trialExpiresAt,
       })
@@ -4711,6 +4732,19 @@ export const storage = {
     userId: number,
     verified: VerifiedAppleTransaction,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
+    // An add-on first, because it is a different KIND of purchase: it appends to
+    // users.freeAgentAddOns and leaves the subscription row's tier alone.
+    const addOnId = APPLE_PRODUCT_ID_TO_ADD_ON[verified.productId];
+    if (addOnId) {
+      await this.addFreeAgentAddOn(userId, addOnId);
+      await this.logBillingEvent(userId, "apple_iap.verified", {
+        originalTransactionId: verified.originalTransactionId,
+        productId: verified.productId,
+        freeAgentAddOn: addOnId,
+        environment: verified.environment,
+      });
+      return { ok: true };
+    }
     const freeAgentTier = tierForAppleProductId(verified.productId);
     if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
     const updated = await this.updateSubscriptionByUserId(userId, {
@@ -4891,6 +4925,41 @@ export const storage = {
    * isBetaAccount is deliberately NOT touched. It defaults true and is the one deliberate,
    * per-account admin switch that makes billingTier actually restrict anybody (see its comment
    * in shared/schema.ts); a payment is not an instruction to start enforcing. */
+  /** Adds one sport-coach add-on to an athlete's ownership, leaving the rest alone.
+   *
+   * APPEND, NOT SET, and read-modify-write rather than a JSON array append in SQL:
+   * users.freeAgentAddOns is a json column, not a Postgres array, so there is no
+   * array_append for it. The Set is what makes a redelivered webhook idempotent --
+   * buying the same add-on twice can only ever produce one entry. */
+  async addFreeAgentAddOn(athleteId: number, addOnId: string) {
+    const current = await this.getUser(athleteId);
+    if (!current) return null;
+    const owned = new Set(current.freeAgentAddOns ?? []);
+    owned.add(addOnId);
+    const [row] = await db
+      .update(users)
+      .set({ freeAgentAddOns: [...owned] })
+      .where(eq(users.id, athleteId))
+      .returning({ id: users.id, freeAgentAddOns: users.freeAgentAddOns });
+    return row ?? null;
+  },
+
+  /** The coach-side twin of addFreeAgentAddOn, over users.billingAddOns -- which
+   * is where Coaches Corner ownership is recorded (see AddOnId in
+   * shared/billing-tiers.ts on why it shares the column rather than getting one). */
+  async addCoachBillingAddOn(userId: number, addOnId: string) {
+    const current = await this.getUser(userId);
+    if (!current) return null;
+    const owned = new Set(current.billingAddOns ?? []);
+    owned.add(addOnId);
+    const [row] = await db
+      .update(users)
+      .set({ billingAddOns: [...owned] })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, billingAddOns: users.billingAddOns });
+    return row ?? null;
+  },
+
   async applyCoachSubscriptionBand(userId: number, bandId: string, bandAthleteCap: number) {
     const current = await this.getUser(userId);
     if (!current) return null;

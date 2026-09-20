@@ -1,9 +1,13 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { apiRequest } from "@/lib/queryClient";
 import {
+  FREE_AGENT_ADD_ONS,
+  FREE_AGENT_ADD_ON_ORDER,
   FREE_AGENT_TIER_ORDER,
   FREE_AGENT_TIERS,
+  appleProductIdForFreeAgentAddOn,
   appleProductIdForFreeAgentTier,
+  type FreeAgentAddOnId,
   type FreeAgentTierId,
 } from "@shared/free-agent-tiers";
 
@@ -74,6 +78,34 @@ export async function fetchFreeAgentTierProducts(): Promise<FreeAgentTierProduct
   });
 }
 
+export type FreeAgentAddOnProduct = {
+  addOn: FreeAgentAddOnId;
+  label: string;
+  description: string;
+  /** StoreKit's own localized price, or null until App Store Connect has a
+   * matching priced Product for this add-on's id -- which is every add-on today
+   * (see appleProductIdForFreeAgentAddOn: none of the three has been created
+   * yet). A card with no price never offers a purchase button. */
+  displayPrice: string | null;
+};
+
+/** The three sport-coach add-ons, joined with StoreKit's live prices, exactly as
+ * fetchFreeAgentTierProducts does for the tiers -- one getProducts() call covers
+ * both, since StoreKit returns every configured Product for the app. */
+export async function fetchFreeAgentAddOnProducts(): Promise<FreeAgentAddOnProduct[]> {
+  const { products } = await AppleIap.getProducts();
+  const byId = new Map(products.map((p) => [p.id, p]));
+  return FREE_AGENT_ADD_ON_ORDER.map((addOn) => {
+    const def = FREE_AGENT_ADD_ONS[addOn];
+    return {
+      addOn,
+      label: def.label,
+      description: def.description,
+      displayPrice: byId.get(appleProductIdForFreeAgentAddOn(addOn))?.displayPrice ?? null,
+    };
+  });
+}
+
 // Shared by every path that ends up with a real signed transaction
 // (an explicit purchase, a restore, or the background transactionUpdated
 // listener below) -- verifies it server-side, and only tells StoreKit the
@@ -100,6 +132,25 @@ export class ApplePurchasePendingError extends Error {}
 export async function purchaseFreeAgentTier(tier: FreeAgentTierId): Promise<void> {
   try {
     const transaction = await AppleIap.purchase({ productId: appleProductIdForFreeAgentTier(tier) });
+    await verifyAndFinish(transaction);
+  } catch (err: any) {
+    if (err?.message === "cancelled") throw new ApplePurchaseCancelledError();
+    if (err?.message === "pending") throw new ApplePurchasePendingError();
+    throw err;
+  }
+}
+
+/** Buys one sport-coach add-on through StoreKit, with the same verify-then-finish
+ * contract as purchaseFreeAgentTier -- and the same two typed rejections, so a
+ * caller can tell a plain cancel from an Ask-to-Buy hold.
+ *
+ * No Swift change was needed for this: AppleIapPlugin.purchase takes a productId,
+ * and an add-on Product is a productId. What is missing is at Apple's end, not in
+ * the app -- the three Products do not exist in App Store Connect yet, so
+ * getProducts returns no price for them and the UI never offers the button. */
+export async function purchaseFreeAgentAddOn(addOn: FreeAgentAddOnId): Promise<void> {
+  try {
+    const transaction = await AppleIap.purchase({ productId: appleProductIdForFreeAgentAddOn(addOn) });
     await verifyAndFinish(transaction);
   } catch (err: any) {
     if (err?.message === "cancelled") throw new ApplePurchaseCancelledError();

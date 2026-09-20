@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { missingPriceEnvVars, freeAgentPriceEnvVar, freeAgentPriceId } from "./stripe-prices";
-import { FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
+import { FREE_AGENT_ADD_ON_ORDER, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
 import { ORG_BASE_CENTS } from "@shared/billing-tiers";
 
 const routes = readFileSync(join(__dirname, "routes.ts"), "utf8");
@@ -24,12 +24,29 @@ describe("Stripe price configuration", () => {
     // account fee -- which is ORG_BASE_CENTS, now 0: checkout looked configured and
     // charged nothing while /coach/billing quoted the band.
     expect(missing).toContain("STRIPE_PRICE_COACH_PER_ATHLETE");
-    expect(missing.length).toBe(FREE_AGENT_TIER_ORDER.length + 1);
+    // The sport-coach add-ons and Coaches Corner each need their own Price too --
+    // they have checkout routes now, so "configured" has to mean configured for
+    // them as well or the readiness check goes quiet while a purchase would fail.
+    for (const addOn of FREE_AGENT_ADD_ON_ORDER) {
+      expect(missing).toContain(`STRIPE_PRICE_FREE_AGENT_ADDON_${addOn.toUpperCase()}`);
+    }
+    expect(missing).toContain("STRIPE_PRICE_COACH_ADDON_COACHES_CORNER");
+    expect(missing.length).toBe(FREE_AGENT_TIER_ORDER.length + FREE_AGENT_ADD_ON_ORDER.length + 2);
   });
 
-  it("does not require an account-fee price while the fee is zero", () => {
+  /** Every Price a checkout route needs, so a test about one of them does not have
+   * to restate the rest. */
+  function setEveryPrice() {
     for (const tier of FREE_AGENT_TIER_ORDER) process.env[freeAgentPriceEnvVar(tier)] = `price_${tier}`;
+    for (const addOn of FREE_AGENT_ADD_ON_ORDER) {
+      process.env[`STRIPE_PRICE_FREE_AGENT_ADDON_${addOn.toUpperCase()}`] = `price_${addOn}`;
+    }
+    process.env.STRIPE_PRICE_COACH_ADDON_COACHES_CORNER = "price_coaches_corner";
     process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "price_per_athlete";
+  }
+
+  it("does not require an account-fee price while the fee is zero", () => {
+    setEveryPrice();
     delete process.env.STRIPE_PRICE_COACH_BASE;
     // ORG_BASE_CENTS is 0, so there is nothing to charge and nothing to create.
     expect(ORG_BASE_CENTS).toBe(0);
@@ -37,14 +54,13 @@ describe("Stripe price configuration", () => {
   });
 
   it("goes quiet once every price is set", () => {
-    for (const tier of FREE_AGENT_TIER_ORDER) process.env[freeAgentPriceEnvVar(tier)] = `price_${tier}`;
-    process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "price_per_athlete";
+    setEveryPrice();
     expect(missingPriceEnvVars()).toEqual([]);
     expect(freeAgentPriceId("ai_coach")).toBe("price_ai_coach");
   });
 
   it("treats a blank env var as unset rather than as a price id", () => {
-    for (const tier of FREE_AGENT_TIER_ORDER) process.env[freeAgentPriceEnvVar(tier)] = `price_${tier}`;
+    setEveryPrice();
     process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "   ";
     expect(missingPriceEnvVars()).toContain("STRIPE_PRICE_COACH_PER_ATHLETE");
   });

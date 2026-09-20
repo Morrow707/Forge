@@ -1,16 +1,27 @@
 import Stripe from "stripe";
 import { storage } from "./storage";
-import { coachBasePriceId, coachPerAthletePriceId, freeAgentPriceId } from "./stripe-prices";
 import {
+  coachAddOnPriceId,
+  coachBasePriceId,
+  coachPerAthletePriceId,
+  freeAgentAddOnPriceId,
+  freeAgentPriceId,
+} from "./stripe-prices";
+import {
+  BILLING_ADD_ONS,
   BILLING_TIERS,
+  COACH_PURCHASABLE_ADD_ON_ORDER,
   ORG_BASE_CENTS,
   bandForAthleteCount,
   type AddOnId,
   type BillingTierId,
 } from "@shared/billing-tiers";
 import {
+  FREE_AGENT_ADD_ONS,
+  FREE_AGENT_ADD_ON_ORDER,
   FREE_AGENT_TIERS,
   entitlementsForFreeAgentTier,
+  type FreeAgentAddOnId,
   type FreeAgentTierId,
 } from "@shared/free-agent-tiers";
 import { entitlementTierForFreeAgentTier } from "./apple-iap";
@@ -43,6 +54,21 @@ export interface Entitlements {
   /** Gates users.exercisePageTheme (see shared/schema.ts) -- distinct from
    * hasCustomColors, which only governs the org-wide header/nav re-skin. */
   hasPersonalPage: boolean;
+  /** Coaches Corner, the coach-education bundle.
+   *
+   * IT BELONGS HERE RATHER THAN IN routes.ts's own reading of the subscription
+   * tier, and that is the fix. hasCoachesCornerAccess used to consult
+   * subscriptions.tier === "pro" under BILLING_LIVE and a hardcoded email
+   * allowlist otherwise, so it never once asked isBetaAccount -- which meant a
+   * beta coach, the only kind of coach that exists today, was locked out of a
+   * product nothing could sell them. Every other entitlement on this object gets
+   * the beta/trial/enforcement-off short-circuit below for exactly that reason,
+   * and this one had been written outside it.
+   *
+   * The roster comp (COACHES_CORNER_FREE_AT_ATHLETE_COUNT) stays in routes.ts:
+   * it needs a roster count, which is a database read this pure function does
+   * not do. It is checked alongside this, never instead of it. */
+  hasCoachesCorner: boolean;
 }
 
 const UNLIMITED_ENTITLEMENTS: Entitlements = {
@@ -52,6 +78,7 @@ const UNLIMITED_ENTITLEMENTS: Entitlements = {
   hasWorkflowCustomization: true,
   hasMultiTeam: true,
   hasPersonalPage: true,
+  hasCoachesCorner: true,
 };
 
 export interface BillingAccount {
@@ -88,6 +115,11 @@ export function getEntitlements(account: BillingAccount): Entitlements {
       Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("workflow"),
     hasMultiTeam: Boolean(tier?.includesMultiTeam),
     hasPersonalPage: Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("personal_page"),
+    // Deliberately NOT part of full_bundle and not included in any band: the
+    // Corner is coach education sold on its own, and full_bundle is the
+    // personalization three at a discount. A band's own comp for a big roster is
+    // applied in routes.ts, which is the layer that can count a roster.
+    hasCoachesCorner: addOns.has("coaches_corner"),
   };
 }
 
@@ -101,20 +133,44 @@ export function getEntitlements(account: BillingAccount): Entitlements {
 export interface FreeAgentEntitlements {
   hasAiChat: boolean;
   hasVideoFormCheck: boolean;
+  hasSkills: boolean;
+  /** One entry per sport-specialist add-on, always all of them, never only the
+   * owned ones. A map with a key missing is a map a caller can read `undefined`
+   * from and treat as false by accident; every gate in this app is required to
+   * see an explicit true. */
+  addOns: Record<FreeAgentAddOnId, boolean>;
 }
+
+function addOnMap(owned: Iterable<string> | null | undefined): Record<FreeAgentAddOnId, boolean> {
+  const set = new Set(owned ?? []);
+  return Object.fromEntries(
+    FREE_AGENT_ADD_ON_ORDER.map((id) => [id, set.has(id)]),
+  ) as Record<FreeAgentAddOnId, boolean>;
+}
+
+const ALL_ADD_ONS: Record<FreeAgentAddOnId, boolean> = addOnMap(FREE_AGENT_ADD_ON_ORDER);
+const NO_ADD_ONS: Record<FreeAgentAddOnId, boolean> = addOnMap([]);
 
 const UNLIMITED_FREE_AGENT_ENTITLEMENTS: FreeAgentEntitlements = {
   hasAiChat: true,
   hasVideoFormCheck: true,
+  hasSkills: true,
+  addOns: ALL_ADD_ONS,
 };
 
 const NONE_FREE_AGENT_ENTITLEMENTS: FreeAgentEntitlements = {
   hasAiChat: false,
   hasVideoFormCheck: false,
+  hasSkills: false,
+  addOns: NO_ADD_ONS,
 };
 
 export interface FreeAgentBillingAccount {
   freeAgentTier: string | null;
+  /** The sport-coach add-ons this account actually owns (users.freeAgentAddOns).
+   * Optional so an existing caller that only needed the tier flags keeps
+   * compiling -- a missing value resolves to owning none, never to owning all. */
+  freeAgentAddOns?: string[] | null;
   isBetaAccount: boolean;
   trialExpiresAt: Date | null;
 }
@@ -128,7 +184,13 @@ export function getFreeAgentEntitlements(account: FreeAgentBillingAccount): Free
     return UNLIMITED_FREE_AGENT_ENTITLEMENTS;
   }
 
-  return entitlementsForFreeAgentTier(account.freeAgentTier);
+  return {
+    ...entitlementsForFreeAgentTier(account.freeAgentTier),
+    // Ownership, not the tier: the three sport coaches are bought one at a time
+    // on top of whatever tier an athlete is on, which is why they live in their
+    // own column rather than as flags on a SKU.
+    addOns: addOnMap(account.freeAgentAddOns),
+  };
 }
 
 // ---------- Form-check video retention ----------
@@ -294,6 +356,90 @@ export async function createFreeAgentTierCheckout(
     line_items: [{ price: priceId, quantity: 1 }],
     metadata: { kind: "free_agent_tier", userId: String(userId), tier },
     subscription_data: { metadata: { kind: "free_agent_tier", userId: String(userId), tier } },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+  if (!session.url) return { error: "Stripe didn't return a checkout URL." };
+  return { url: session.url };
+}
+
+/** One sport-specialist coach add-on (Golf Swing / Hitting / Pitching), bought on
+ * the web.
+ *
+ * Deliberately the same shape as createFreeAgentTierCheckout above, including the
+ * chargingClosed() call first: while Forge is in beta this refuses exactly like
+ * every other checkout, so the whole path can be built, typed and tested without
+ * a single card being charged.
+ *
+ * An add-on is NOT a tier and does not replace one -- an athlete can own any
+ * combination of the three on top of whatever tier they are on, which is why the
+ * webhook appends to users.freeAgentAddOns rather than writing a column.
+ *
+ * The iOS app must not link here, same as the tier checkout: Apple requires an
+ * in-app digital purchase to go through StoreKit, and requireWebCheckout on the
+ * route refuses a request from the native app. */
+export async function createFreeAgentAddOnCheckout(
+  userId: number,
+  userEmail: string,
+  addOn: FreeAgentAddOnId,
+  successUrl: string,
+  cancelUrl: string,
+): Promise<CheckoutResult> {
+  const closed = chargingClosed();
+  if (closed) return closed;
+  const stripe = getStripeClient();
+  if (!stripe) return { error: "Billing isn't configured yet." };
+  const priceId = freeAgentAddOnPriceId(addOn);
+  if (!priceId) {
+    return { error: `No Stripe price configured for the ${FREE_AGENT_ADD_ONS[addOn].label} add-on yet.` };
+  }
+  const metadata = { kind: "free_agent_add_on", userId: String(userId), addOnId: addOn };
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    ...(await baseSessionParams(userId, userEmail)),
+    line_items: [{ price: priceId, quantity: 1 }],
+    metadata,
+    subscription_data: { metadata },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+  if (!session.url) return { error: "Stripe didn't return a checkout URL." };
+  return { url: session.url };
+}
+
+/** A coach add-on bought by the coach themselves -- Coaches Corner today.
+ *
+ * Refuses anything not on COACH_PURCHASABLE_ADD_ON_ORDER rather than anything not
+ * in BILLING_ADD_ONS: the personalization add-ons are real, assignable, priced
+ * ids that simply have no self-serve checkout, so "is this an add-on" and "may
+ * this be bought here" are two questions and only the second one belongs in a
+ * checkout. Same distinction FREE_AGENT_TIER_ORDER draws against
+ * ALL_FREE_AGENT_TIER_IDS. */
+export async function createCoachAddOnCheckout(
+  userId: number,
+  userEmail: string,
+  addOn: AddOnId,
+  successUrl: string,
+  cancelUrl: string,
+): Promise<CheckoutResult> {
+  const closed = chargingClosed();
+  if (closed) return closed;
+  if (!COACH_PURCHASABLE_ADD_ON_ORDER.includes(addOn)) {
+    return { error: `The ${BILLING_ADD_ONS[addOn]?.label ?? addOn} add-on isn't sold here.` };
+  }
+  const stripe = getStripeClient();
+  if (!stripe) return { error: "Billing isn't configured yet." };
+  const priceId = coachAddOnPriceId(addOn);
+  if (!priceId) {
+    return { error: `No Stripe price configured for the ${BILLING_ADD_ONS[addOn].label} add-on yet.` };
+  }
+  const metadata = { kind: "coach_add_on", userId: String(userId), addOnId: addOn };
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    ...(await baseSessionParams(userId, userEmail)),
+    line_items: [{ price: priceId, quantity: 1 }],
+    metadata,
+    subscription_data: { metadata },
     success_url: successUrl,
     cancel_url: cancelUrl,
   });
@@ -566,6 +712,36 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         );
         // Same reasoning as the subscription branch below. A one-off lesson purchase is still a
         // card transaction, and this branch returns before reaching that call.
+        await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
+        break;
+      }
+
+      // AN ADD-ON IS APPENDED, NEVER WRITTEN OVER. Both branches below buy one
+      // thing on top of whatever the account already owns -- a second sport coach
+      // does not replace the first, and Coaches Corner does not replace a
+      // personalization add-on somebody assigned. The storage helpers do the
+      // append (and de-duplicate), so a redelivered event that slips past the
+      // wasStripeEventProcessed check cannot double an entry either.
+      //
+      // The id is validated against the shared list, not trusted: metadata is a
+      // string that came back from an external system, and an unrecognised id
+      // written onto the account is an entitlement nothing can resolve.
+      if (kind === "free_agent_add_on") {
+        const addOnId = session.metadata?.addOnId;
+        if (!addOnId || !FREE_AGENT_ADD_ON_ORDER.includes(addOnId as FreeAgentAddOnId)) break;
+        await storage.addFreeAgentAddOn(userId, addOnId as FreeAgentAddOnId);
+        if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
+        await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind, addOnId }, event.id);
+        await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
+        break;
+      }
+
+      if (kind === "coach_add_on") {
+        const addOnId = session.metadata?.addOnId;
+        if (!addOnId || !COACH_PURCHASABLE_ADD_ON_ORDER.includes(addOnId as AddOnId)) break;
+        await storage.addCoachBillingAddOn(userId, addOnId as AddOnId);
+        if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
+        await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind, addOnId }, event.id);
         await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
         break;
       }

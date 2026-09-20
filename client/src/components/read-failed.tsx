@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { RATE_LIMITED_MESSAGE, isRateLimited } from "@/lib/rate-limit-message";
 
 /** "We couldn't load this" — said out loud, instead of rendering as "there is nothing here".
  *
@@ -16,21 +17,31 @@ import { Button } from "@/components/ui/button";
  * So: one component, said the same way everywhere, with the sentence that actually matters --
  * that this is not the same as nothing being there -- and a retry, because the alternative is
  * asking somebody to reload an app to find out whether a record exists.
+ *
+ * `error` is OPTIONAL and additive: pass the query's error and a 429 from the rate limiter says
+ * so instead of implying a connection fault, which is the one failure here where "try again" is
+ * actively the wrong instruction. Every existing call site that passes nothing reads exactly as
+ * it did before.
  */
 export function ReadFailed({
   what,
   onRetry,
   className,
+  error,
 }: {
   /** What failed to load, as a noun phrase: "this athlete's injury history". */
   what: string;
   onRetry: () => void;
   className?: string;
+  /** The read's error, when the caller has it. Only a 429 changes what is said. */
+  error?: unknown;
 }) {
   return (
     <div className={className ?? "flex flex-col items-center gap-2 py-6 text-center"}>
       <p className="text-sm text-muted-foreground">
-        We couldn't load {what}. That isn't the same as there being none.
+        {isRateLimited(error)
+          ? RATE_LIMITED_MESSAGE
+          : `We couldn't load ${what}. That isn't the same as there being none.`}
       </p>
       <Button type="button" variant="outline" size="sm" onClick={onRetry}>
         Try again

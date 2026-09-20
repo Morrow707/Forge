@@ -299,6 +299,24 @@ export function AppShell({
   const [activeSessionsOpen, setActiveSessionsOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [moreNavOpen, setMoreNavOpen] = useState(false);
+  // Close either header menu on a click outside it. Both are plain divs rather than a
+  // popover primitive, so this is the whole of their dismiss behaviour.
+  const moreNavRef = useRef<HTMLDivElement | null>(null);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!moreNavOpen && !accountMenuOpen) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (moreNavOpen && moreNavRef.current && !moreNavRef.current.contains(t)) setMoreNavOpen(false);
+      if (accountMenuOpen && accountMenuRef.current && !accountMenuRef.current.contains(t)) setAccountMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
+  }, [moreNavOpen, accountMenuOpen]);
 
   // Resolved server-side: a coach's own team settings, or their athlete's
   // coach's -- see getEffectiveBrandingForUser in storage.ts. Drives the
@@ -597,12 +615,13 @@ export function AppShell({
                 Deliberately outside the scrollable <nav> above so it's
                 always reachable regardless of window width, same reasoning
                 as the account menu sitting out here. */}
+            {/* Click to open, click anywhere else to close. It used to ALSO open on hover and
+                close on leave while the button toggled the same state, so a click always closed
+                what the hover had just opened -- and on a touch screen, where the synthesised
+                mouseenter fires with the tap, the menu could never open at all (runtime audit
+                2026-09-19). One input drives the state now; same for the account menu below. */}
             {overflowNav.length > 0 && (
-              <div
-                className="relative hidden md:block"
-                onMouseEnter={() => setMoreNavOpen(true)}
-                onMouseLeave={() => setMoreNavOpen(false)}
-              >
+              <div ref={moreNavRef} className="relative hidden md:block">
                 <button
                   type="button"
                   onClick={() => setMoreNavOpen((v) => !v)}
@@ -687,11 +706,7 @@ export function AppShell({
                 the nav tabs for width; the notifications bell deliberately
                 stays outside this menu; see NotificationBell below,
                 unmoved. */}
-            <div
-              className="relative hidden md:block"
-              onMouseEnter={() => setAccountMenuOpen(true)}
-              onMouseLeave={() => setAccountMenuOpen(false)}
-            >
+            <div ref={accountMenuRef} className="relative hidden md:block">
               <button
                 type="button"
                 onClick={() => setAccountMenuOpen((v) => !v)}
