@@ -1,6 +1,9 @@
+import { AsyncResource } from "node:async_hooks";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
+import type { Logger } from "drizzle-orm/logger";
 import * as schema from "@shared/schema";
+import { invalidateRequestMemo, statementMayWrite } from "./request-cache";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -51,4 +54,52 @@ export const pool = new Pool({
 pool.on("error", (err) => {
   console.error("Unexpected error on idle Postgres client:", err);
 });
-export const db = drizzle(pool, { schema });
+
+// Every statement that leaves this process passes one of two doors: pool.query (the session
+// store, raw SQL, and drizzle outside a transaction) or a checked-out client inside a drizzle
+// transaction (which drizzle's logger still sees). Both doors do the same two things:
+//
+// 1. Tell the per-request memo (server/request-cache.ts) when a write happens, so a row it
+//    is holding is re-read afterwards rather than served stale.
+// 2. Report the statement to any observer registered with onDbQuery -- how a test counts the
+//    queries a route issues without a database extension.
+//
+// pool.query additionally re-binds a callback-style call to the CALLER's async context. pg
+// fires the callback from the socket's own context, which predates every request, and that is
+// where AsyncLocalStorage would otherwise lose the request scope -- the session store is
+// callback-style and everything after it runs inside that callback.
+type QueryObserver = (sqlText: string) => void;
+const observers = new Set<QueryObserver>();
+export function onDbQuery(observer: QueryObserver): () => void {
+  observers.add(observer);
+  return () => observers.delete(observer);
+}
+function noteStatement(sqlText: string) {
+  if (statementMayWrite(sqlText)) invalidateRequestMemo();
+  for (const observer of observers) observer(sqlText);
+}
+
+const originalQuery = pool.query.bind(pool) as (...args: unknown[]) => unknown;
+(pool as { query: unknown }).query = function query(...args: unknown[]) {
+  const first = args[0];
+  if (typeof first === "string") {
+    noteStatement(first);
+  } else {
+    // A query-config object is how drizzle calls this door, and drizzle's logger has already
+    // reported that statement to the observers; only the (idempotent) memo clear repeats.
+    const text = (first as { text?: string } | undefined)?.text ?? "";
+    if (statementMayWrite(text)) invalidateRequestMemo();
+  }
+  const last = args[args.length - 1];
+  if (typeof last === "function") args[args.length - 1] = AsyncResource.bind(last as (...a: unknown[]) => void);
+  return originalQuery(...args);
+};
+
+const memoInvalidationLogger: Logger = {
+  logQuery(query: string) {
+    // Statements that go through pool.query are reported there too; the memo clear is
+    // idempotent and observers are told to expect it (see onDbQuery's test).
+    noteStatement(query);
+  },
+};
+export const db = drizzle(pool, { schema, logger: memoInvalidationLogger });

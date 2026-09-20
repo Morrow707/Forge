@@ -4,6 +4,7 @@ import express from "express";
 import cors from "cors";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
+import { requestMemoScope } from "../request-cache";
 import { registerRoutes } from "../routes";
 import { verifyRequestOrigin } from "../csrf-protection";
 import { NATIVE_APP_ORIGINS } from "../native-app-origins";
@@ -45,6 +46,9 @@ export async function startTestServer(): Promise<TestServer> {
   app.use(verifyRequestOrigin(NATIVE_APP_ORIGINS));
   app.use(express.json({ limit: "25mb" }));
   app.use(express.urlencoded({ extended: false }));
+  // What server/index.ts mounts before the session middleware, so a route under test issues
+  // the same statements it does in production -- see server/request-cache.ts.
+  app.use(requestMemoScope);
 
   const server: Server = await registerRoutes(app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

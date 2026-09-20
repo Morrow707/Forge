@@ -1060,6 +1060,7 @@ CREATE INDEX IF NOT EXISTS "assignment_correctives_assignment_day_idx" ON "assig
 CREATE INDEX IF NOT EXISTS "workout_logs_athlete_date_idx" ON "workout_logs" ("athlete_id", "date");
 CREATE INDEX IF NOT EXISTS "workout_comments_assignment_day_idx" ON "workout_comments" ("assignment_id", "program_day_id");
 CREATE INDEX IF NOT EXISTS "notifications_user_read_idx" ON "notifications" ("user_id", "read");
+CREATE INDEX IF NOT EXISTS "notifications_user_created_idx" ON "notifications" ("user_id", "created_at");
 CREATE INDEX IF NOT EXISTS "push_subscriptions_user_idx" ON "push_subscriptions" ("user_id");
 
 CREATE TABLE IF NOT EXISTS "readiness_briefings" (

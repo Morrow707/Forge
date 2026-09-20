@@ -19,7 +19,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <!-- THE FALLBACK HEAD, not the per-page one.
          usePageMeta (src/lib/page-meta.ts) rewrites all of this per route, and
-         scripts/prerender.mjs bakes the result into a static file per public route so a crawler
+         scripts/prerender.ts (via shared/prerender-head.ts) bakes the result into a static file per public route,
+         appends that route's JSON-LD, and writes app-shell.html -- the same head plus noindex -- for
+         every path that is not a public page, so a crawler
          that does not run JavaScript still gets the right title and share card. What is here is
          what a route without its own metadata gets, and what a scraper sees for a path the
          prerenderer does not cover.
@@ -40,10 +42,18 @@
     <meta property="og:description" content="Coaching software for strength and conditioning: build exercise libraries, program training blocks, and keep a whole roster's calendar in one place." />
     <meta property="og:url" content="https://forgeperformancesystems.com/" />
     <meta property="og:image" content="https://forgeperformancesystems.com/marketing/shot-dashboard.png" />
+    <!-- PNG, not the webp sibling the page itself loads: the scrapers that draw share cards do
+         not decode webp. Width and height let the card render before the image is fetched;
+         the prerenderer reads the real dimensions from the file. -->
+    <meta property="og:image:width" content="3200" />
+    <meta property="og:image:height" content="1080" />
+    <meta property="og:image:alt" content="Forge coach dashboard" />
+    <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Forge Performance Systems — Coach. Program. Perform." />
     <meta name="twitter:description" content="Coaching software for strength and conditioning: build exercise libraries, program training blocks, and keep a whole roster's calendar in one place." />
     <meta name="twitter:image" content="https://forgeperformancesystems.com/marketing/shot-dashboard.png" />
+    <meta name="twitter:image:alt" content="Forge coach dashboard" />
 
     <meta name="theme-color" content="#F65B23" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />

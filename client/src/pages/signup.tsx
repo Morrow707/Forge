@@ -1,4 +1,4 @@
-import { MAX_EXPECTED_ATHLETES } from "@shared/schema";
+import { MAX_EXPECTED_ATHLETES } from "@shared/schema-constants";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";

@@ -29,7 +29,7 @@ import {
   FOOD_LOG_MEAL_LABEL,
   suggestedMealForHour,
   type FoodLogMeal,
-} from "@shared/schema";
+} from "@shared/schema-constants";
 import { toast } from "sonner";
 import {
   Camera,

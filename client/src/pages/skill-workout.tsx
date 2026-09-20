@@ -36,11 +36,14 @@ import {
   Video,
   Sparkles,
 } from "lucide-react";
-import { SprintTrackerDialog } from "@/components/sprint-tracker-dialog";
-import { AvSprintTrackerDialog } from "@/components/av-sprint-tracker-dialog";
-import { AvMechanicsTrackerDialog } from "@/components/av-mechanics-tracker-dialog";
 import { mechanicsModeFor, mechanicsActionLabelFor } from "@shared/skill-camera-profile";
-import { MechanicsTrackerDialog } from "@/components/mechanics-tracker-dialog";
+import { lazyDialog } from "@/components/lazy-dialog";
+// Same treatment as workout.tsx's tracker dialogs: the camera pipeline is fetched the first time
+// a drill is opened for capture, not when the page loads. See lazyDialog.
+const SprintTrackerDialog = lazyDialog(() => import("@/components/sprint-tracker-dialog").then((m) => ({ default: m.SprintTrackerDialog })));
+const AvSprintTrackerDialog = lazyDialog(() => import("@/components/av-sprint-tracker-dialog").then((m) => ({ default: m.AvSprintTrackerDialog })));
+const AvMechanicsTrackerDialog = lazyDialog(() => import("@/components/av-mechanics-tracker-dialog").then((m) => ({ default: m.AvMechanicsTrackerDialog })));
+const MechanicsTrackerDialog = lazyDialog(() => import("@/components/mechanics-tracker-dialog").then((m) => ({ default: m.MechanicsTrackerDialog })));
 import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";

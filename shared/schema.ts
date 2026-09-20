@@ -2745,6 +2745,9 @@ export const notifications = pgTable(
     // count/mark-read queries (userId + read=false) -- polled every 60s for
     // every logged-in coach and athlete.
     userReadIdx: index("notifications_user_read_idx").on(table.userId, table.read),
+    // The bell lists a user's newest thirty, ordered by created_at; (user_id, read) answers
+    // the unread count but leaves that list to sort every notification the user has ever had.
+    userCreatedIdx: index("notifications_user_created_idx").on(table.userId, table.createdAt),
   }),
 );
 

@@ -26,7 +26,10 @@ import {
   Play,
   Pause,
 } from "lucide-react";
-import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
+import { lazyDialog } from "@/components/lazy-dialog";
+// The analysis dialog carries MediaPipe's loader and the whole pose-tracking module (~165 kB);
+// it is fetched the first time a clip is analysed, not with the page. See lazyDialog.
+const VideoAnalysisDialog = lazyDialog(() => import("@/components/video-analysis-dialog").then((m) => ({ default: m.VideoAnalysisDialog })));
 import type { PoseFrame } from "@/lib/pose-tracking";
 
 export type FlaggedSetVideo = {

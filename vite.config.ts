@@ -2,10 +2,28 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
+import { visualizer } from "rollup-plugin-visualizer";
 
 export default defineConfig({
   plugins: [
     react(),
+    // `VITE_BUNDLE_STATS=/some/dir npm run build` writes a treemap of what is inside each chunk
+    // (dist sizes are visible in the build log; what is IN the 600kB entry is not). Off by default:
+    // the report is for a person looking at the bundle, not a build artifact.
+    ...(process.env.VITE_BUNDLE_STATS
+      ? [
+          visualizer({
+            filename: path.join(process.env.VITE_BUNDLE_STATS, "bundle-stats.html"),
+            template: "treemap",
+            gzipSize: true,
+          }),
+          visualizer({
+            filename: path.join(process.env.VITE_BUNDLE_STATS, "bundle-stats.json"),
+            template: "raw-data",
+            gzipSize: true,
+          }),
+        ]
+      : []),
     VitePWA({
       // Switched from the default generateSW strategy to injectManifest so
       // the service worker can also handle Web Push (`push` /
@@ -83,12 +101,24 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
     sourcemap: true,
+    // What the bundle is compiled FOR. Vite's default ("modules") targets Safari 14 / Chrome 87
+    // and adds transforms for anything newer. Nothing this app runs on is that old: the native
+    // shell's deployment target is iOS 15 (ios/App/App.xcodeproj -> IPHONEOS_DEPLOYMENT_TARGET),
+    // whose WKWebView is Safari 15, and the web build is used from current browsers. Saying so
+    // lets esbuild leave native syntax alone instead of rewriting it into something longer.
+    target: ["es2020", "safari15", "chrome100", "firefox100", "edge100"],
     // vendor-charts (recharts) is inherently large but lazy -- only fetched
     // by the handful of pages that render a chart, never on initial load --
     // so the default 500kB warning for it is no longer a signal of anything.
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
+        // NOT experimentalMinChunkSize. It was tried (10 kB) to fold the ~120 sub-2 kB icon
+        // chunks that lazy dialogs leave behind into their importers, and it did -- and it also
+        // folded a chart-drawing module into a chunk the coach dashboard imports statically, so
+        // the dashboard started downloading recharts (410 kB) on every visit. Rollup's merge
+        // only promises not to add imports to a chunk's *direct* importers, and the dashboard
+        // was two hops away. Sixty tiny requests are cheaper than that; leave it off.
         // Without this, Rollup names a shared vendor chunk after whichever
         // of its importers it picks arbitrarily -- recharts (only used by
         // a few history/analytics dialogs) was showing up as a 360kB chunk
@@ -127,6 +157,29 @@ export default defineConfig({
           // cacheable chunk across deploys, rather than being named after whichever importer
           // Rollup happened to pick (it was once named after a 28-line metrics helper).
           if (id.includes("node_modules/recharts")) return "vendor-charts";
+          // THE SCHEMA IS NOT A CLIENT MODULE, AND THIS IS WHAT KEEPS IT OFF THE FIRST PAINT.
+          //
+          // shared/schema.ts is 7,000 lines of Drizzle tables and zod insert schemas, and it
+          // drags zod, drizzle-orm and drizzle-zod in with it: ~510 kB of JavaScript. One
+          // literal imported from it by the signup form put all of that in the entry chunk --
+          // three-fifths of what the login page downloaded. The client modules that still need
+          // it (the nutrition panels' meal enums, the program builder's phases) now read
+          // shared/schema-constants.ts instead, and whatever still imports the schema itself
+          // gets it from this one lazy chunk. It is named so the first-paint test
+          // (client/src/lib/bundle-budget.test.ts) can assert it is never preloaded -- a new
+          // eager import of the schema fails the build rather than quietly costing 136 kB.
+          if (
+            id.endsWith("/shared/schema.ts") ||
+            id.includes("node_modules/drizzle-orm/") ||
+            id.includes("node_modules/drizzle-zod/")
+          ) {
+            return "vendor-schema";
+          }
+          // zod on its own, NOT inside vendor-schema: two small shared modules (roster-groups,
+          // the institutional agreement) validate with zod and are imported by pages that never
+          // touch the schema. Folding zod into the schema chunk would make the roster page
+          // download 7,000 lines of table definitions to parse a group name.
+          if (id.includes("node_modules/zod/")) return "vendor-zod";
           if (id.includes("node_modules/date-fns")) return "vendor-date";
         },
       },

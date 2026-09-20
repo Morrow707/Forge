@@ -5,8 +5,10 @@ import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { CalendarEntry } from "@/components/calendar-view";
-import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
-import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
+import { lazyDialog } from "@/components/lazy-dialog";
+// Opened from a calendar cell, not on load -- fetched the first time either is. See lazyDialog.
+const CoachDayEditDialog = lazyDialog(() => import("@/components/coach-day-edit-dialog").then((m) => ({ default: m.CoachDayEditDialog })));
+const SkillDayViewDialog = lazyDialog(() => import("@/components/skill-day-view-dialog").then((m) => ({ default: m.SkillDayViewDialog })));
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { WeeklyDigestCard } from "@/components/weekly-digest-card";
 import { TeamPrWallCard } from "@/components/team-pr-wall-card";

@@ -3,7 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiRequest, ApiError, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { VideoAnnotationDialog } from "@/components/video-annotation-dialog";
-import { VideoAnalysisDialog } from "@/components/video-analysis-dialog";
+import { lazyDialog } from "@/components/lazy-dialog";
+// The analysis dialog carries MediaPipe's loader and the whole pose-tracking module (~165 kB);
+// it is fetched the first time a clip is analysed, not with the page. See lazyDialog.
+const VideoAnalysisDialog = lazyDialog(() => import("@/components/video-analysis-dialog").then((m) => ({ default: m.VideoAnalysisDialog })));
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Pencil, Wand2 } from "lucide-react";

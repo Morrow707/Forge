@@ -98,6 +98,7 @@ import { signMediaUrlsDeep } from "./media-url-signing";
 import { verifyRequestOrigin } from "./csrf-protection";
 import { NATIVE_APP_ORIGINS } from "./native-app-origins";
 import { pool } from "./db";
+import { requestMemoScope } from "./request-cache";
 import { redactForLog } from "./log-redaction";
 import { recordSystemFailure } from "./system-events";
 
@@ -286,6 +287,11 @@ app.post(
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: false }));
 
+// One memo per API request for the rows every layer re-reads (the signed-in user, a coach's
+// staff). Mounted before the session middleware so the scope is open when passport loads the
+// user -- see server/request-cache.ts for why it survives that callback and what clears it.
+app.use(requestMemoScope);
+
 app.use((req, res, next) => {
   const start = Date.now();
   const reqPath = req.path;
@@ -452,6 +458,14 @@ app.get("/healthz", async (_req, res) => {
   }
 
   const port = parseInt(process.env.PORT || "5000", 10);
+  // Render's proxy holds keep-alive connections to this process open for longer than Node's
+  // five-second default. When Node closes an idle socket first, the proxy can already have a
+  // request in flight on it, and that request fails with a 502 nobody can reproduce. The
+  // timeout only has to outlast the proxy's own idle limit (60s on every load balancer that
+  // documents one); headersTimeout has to be the larger of the two or Node logs a warning
+  // and ignores it.
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
     // Says where uploads are actually going, every boot, and shouts if that is a path the

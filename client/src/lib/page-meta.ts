@@ -17,8 +17,8 @@ import { useEffect } from "react";
  * title, no image, no idea what was sent. That is the distribution path that actually exists
  * today, and it was the one with no metadata at all.
  *
- * ON PRERENDERING. scripts/prerender.mjs runs the real app for each public route and writes the
- * resulting head into a static HTML file, so a crawler that does not execute JavaScript still
+ * ON PRERENDERING. scripts/prerender.ts bakes each public route's head (shared/prerender-head.ts) into a
+ * static HTML file, so a crawler that does not execute JavaScript still
  * sees these tags. That is why this module writes plain DOM meta tags rather than keeping the
  * values in React state: the prerenderer reads the document, not the component tree.
  */
@@ -51,9 +51,10 @@ export type PageMeta = {
 };
 
 export function fullTitle(title: string): string {
-  // The landing page passes the site name itself; everything else gets it appended, so the brand
-  // term appears in every tab and every search result without being doubled on the home page.
-  return title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
+  // The landing page's title already carries the site name (with what Forge IS after it, since
+  // the brand alone tells a search result nothing); everything else gets it appended, so the
+  // brand term appears in every tab and every search result without being doubled on the home page.
+  return title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
 }
 
 function setTag(selector: string, attr: "name" | "property", key: string, content: string) {
