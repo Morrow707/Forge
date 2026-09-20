@@ -2679,6 +2679,13 @@ export const videoReviews = pgTable(
     overlaySettings: json("overlay_settings"),
     /** Set when the coach shares it; until then the athlete cannot see it at all. */
     sharedWithAthleteAt: timestamp("shared_with_athlete_at"),
+    /** The voice-over, when the coach recorded one. Stored under STORAGE_PATH/reviews/ in
+     * whatever MediaRecorder produced -- iOS gives audio/mp4, the web gives audio/webm, and
+     * <audio> plays each natively on the platform that made it. */
+    voiceOverUrl: text("voice_over_url"),
+    /** Where the video was when recording started. A coach who scrubs to the third rep and then
+     * talks is narrating from there, and the clock model needs that offset. */
+    voiceOverStartAt: real("voice_over_start_at"),
     /** Set when the retention sweep takes the clip out from under it. The notes survive. */
     purgedAt: timestamp("purged_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

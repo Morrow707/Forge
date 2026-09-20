@@ -21235,6 +21235,27 @@ ${catalog}`;
     });
   },
 
+  /** Attaches a recorded voice-over. Returns the OLD url so the caller can delete that file --
+   * a re-record replaces the audio, and leaving the previous take on disk is a leak that grows
+   * every time a coach is unhappy with their first attempt. */
+  async setVideoReviewVoiceOver(
+    coachId: number,
+    reviewId: number,
+    voiceOverUrl: string,
+    startAt: number,
+  ): Promise<{ previousUrl: string | null } | null> {
+    const [existing] = await db
+      .select({ id: videoReviews.id, voiceOverUrl: videoReviews.voiceOverUrl })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.coachId, coachId)));
+    if (!existing) return null;
+    await db
+      .update(videoReviews)
+      .set({ voiceOverUrl, voiceOverStartAt: startAt, updatedAt: new Date() })
+      .where(eq(videoReviews.id, reviewId));
+    return { previousUrl: existing.voiceOverUrl };
+  },
+
   async listVideoReviewsForAthlete(athleteId: number) {
     return db
       .select()

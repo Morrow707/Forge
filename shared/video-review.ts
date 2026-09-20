@@ -182,3 +182,103 @@ export function reviewDuration(events: ReviewEvent[]): number {
   }
   return end;
 }
+
+// ---------------------------------------------------------------------------
+// Voice-over: the clock model (Phase 3 of docs/video-review-plan.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * WHEN THERE IS A VOICE-OVER, THE AUDIO IS THE MASTER CLOCK.
+ *
+ * That inversion is the whole of Phase 3. Without narration the review timeline IS the left
+ * clip's time and a scrub moves the video directly. With narration the coach's voice is the
+ * thing that must not stutter -- an audio track that jumps is unlistenable, where a video that
+ * lags by a frame is not noticed -- so the audio plays straight through and everything else is
+ * derived from where it has got to.
+ *
+ * The derivation is not the identity, and that is the part worth being careful about: while
+ * recording, the coach changes the playback SPEED. Ten seconds of narration over a clip playing
+ * at 0.25x has advanced the video two and a half seconds, not ten. So video time is the integral
+ * of the speed events over the audio timeline, and a review that ignored speed would drift
+ * further out of sync the longer the coach talked -- worst exactly where they slowed down to
+ * point something out, which is the moment they most wanted synchronised.
+ */
+
+/** The left clip's time at `audioT` seconds into the narration.
+ *
+ * `startAt` is where the video was when recording began -- a coach who scrubs to the third rep
+ * and then starts talking is narrating from there, not from zero.
+ */
+export function videoTimeForAudioTime(
+  events: ReviewEvent[],
+  audioT: number,
+  startAt = 0,
+): number {
+  let video = startAt;
+  let rate = 1;
+  let last = 0;
+
+  for (const e of events) {
+    if (e.t > audioT) break;
+    // Advance at the rate in force since the previous event.
+    video += (e.t - last) * rate;
+    last = e.t;
+    if (e.payload.kind === "speed") {
+      rate = e.payload.rate;
+    } else if (e.payload.kind === "scrub") {
+      // A scrub during recording moves the video without consuming audio time: the coach
+      // jumped, and from here the clip runs on from the new position.
+      video = e.payload.to;
+    }
+  }
+  return video + (audioT - last) * rate;
+}
+
+/** The right clip's time for a left clip time, through the saved sync marks.
+ *
+ * Identical to the live compare tool's linkedTime and deliberately restated here rather than
+ * imported from client code: shared/ cannot depend on client/, and a review's playback has to
+ * agree with the tool that produced it to the frame. */
+export function rightTimeForLeftTime(leftT: number, syncL: number, syncR: number): number {
+  return leftT - syncL + syncR;
+}
+
+/** Where the audio should be to put the LEFT clip at `videoT` -- the inverse, for scrubbing the
+ * review timeline while narration exists.
+ *
+ * Returns null when the video time is never reached (the coach scrubbed past it and never came
+ * back), so the caller can refuse the seek rather than guess at an audio position. A silent
+ * clamp to the end is the wrong answer: it plays the wrong part of the narration over the frame
+ * the reader asked for.
+ */
+export function audioTimeForVideoTime(
+  events: ReviewEvent[],
+  videoT: number,
+  startAt = 0,
+  audioDuration = Infinity,
+): number | null {
+  let video = startAt;
+  let rate = 1;
+  let last = 0;
+
+  const reachedIn = (fromVideo: number, toVideo: number, atRate: number, fromAudio: number) => {
+    if (atRate <= 0) return null;
+    const between = (videoT - fromVideo) / atRate;
+    if (between < 0) return null;
+    const audioAt = fromAudio + between;
+    return toVideo >= videoT && audioAt >= fromAudio ? audioAt : null;
+  };
+
+  for (const e of events) {
+    const segmentEnd = video + (e.t - last) * rate;
+    const hit = reachedIn(video, segmentEnd, rate, last);
+    if (hit != null) return hit;
+    video = segmentEnd;
+    last = e.t;
+    if (e.payload.kind === "speed") rate = e.payload.rate;
+    else if (e.payload.kind === "scrub") video = e.payload.to;
+  }
+
+  const finalEnd = video + (audioDuration - last) * rate;
+  return reachedIn(video, finalEnd, rate, last);
+}

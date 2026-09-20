@@ -46,6 +46,7 @@ import {
   statUploadedFile,
   UPLOADS_ROOT,
   inspectUploadsStorage,
+  deleteUploadedFile,
 } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
@@ -317,6 +318,50 @@ const KNOWLEDGE_SOURCES_DIR = path.join(UPLOADS_ROOT, "knowledge-sources");
 
 const SKILL_VIDEOS_DIR = path.join(UPLOADS_ROOT, "skill-videos");
 fs.mkdirSync(SKILL_VIDEOS_DIR, { recursive: true });
+
+// Voice-over audio for a saved review. Its own directory for the same "never share a bucket"
+// isolation every other upload path here follows -- and because the retention rules differ: a
+// review's audio lives and dies with the review, not with the athlete's clip cap.
+//
+// Whatever MediaRecorder produced is stored as-is. iOS yields audio/mp4 and the web yields
+// audio/webm off the same code, and transcoding to a single format would mean a server-side
+// encode for no benefit: <audio> plays both natively on the platform that produced them.
+const REVIEW_AUDIO_DIR = path.join(UPLOADS_ROOT, "reviews");
+fs.mkdirSync(REVIEW_AUDIO_DIR, { recursive: true });
+
+const REVIEW_AUDIO_EXTENSIONS: Record<string, string> = {
+  "audio/mp4": ".m4a",
+  "audio/mpeg": ".mp3",
+  "audio/aac": ".aac",
+  "audio/webm": ".webm",
+  "audio/ogg": ".ogg",
+};
+
+function reviewAudioExtension(mimetype: string): string | null {
+  // MediaRecorder reports "audio/webm;codecs=opus" -- the codec parameter is part of the header
+  // and not part of the type, and matching on the whole string rejects every real recording.
+  const base = mimetype.split(";")[0]!.trim().toLowerCase();
+  return REVIEW_AUDIO_EXTENSIONS[base] ?? null;
+}
+
+const uploadReviewAudio = multer({
+  storage: multer.diskStorage({
+    destination: REVIEW_AUDIO_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${reviewAudioExtension(file.mimetype) ?? ""}`);
+    },
+  }),
+  // A voice-over is a coach talking over one lift. Generous enough for several minutes of
+  // speech and far below the video cap, because audio at this length is small and a limit that
+  // is never reached is not a limit.
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!reviewAudioExtension(file.mimetype)) {
+      return cb(new Error("Unsupported audio format"));
+    }
+    cb(null, true);
+  },
+});
 
 // Which gated /uploads directories the record-access audit log's streaming
 // hook (below, near the /uploads mount) treats as "an athlete's video" --
@@ -4774,6 +4819,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!events) return res.status(404).json({ message: "Review not found" });
     res.json(events);
   });
+
+  // The voice-over. Owner-only, and the previous take is deleted rather than orphaned: a coach
+  // unhappy with their first attempt re-records, and every discarded take would otherwise sit
+  // on the persistent disk forever.
+  app.post(
+    "/api/coach/video-reviews/:id/audio",
+    requireRole("coach"),
+    uploadReviewAudio.single("audio"),
+    async (req, res) => {
+      const user = currentUser(req);
+      if (!req.file) return res.status(400).json({ message: "No audio uploaded" });
+      const url = `/uploads/reviews/${req.file.filename}`;
+      const startAt = Number(req.body?.startAt ?? 0);
+      const result = await storage.setVideoReviewVoiceOver(
+        user.id,
+        Number(req.params.id),
+        url,
+        Number.isFinite(startAt) ? startAt : 0,
+      );
+      if (!result) {
+        // Not this coach's review. The file has already been written, so it is removed rather
+        // than left as an unreferenced blob somebody uploaded against somebody else's id.
+        await deleteUploadedFile(url).catch(() => {});
+        return res.status(404).json({ message: "Review not found" });
+      }
+      if (result.previousUrl && result.previousUrl !== url) {
+        await deleteUploadedFile(result.previousUrl).catch(() => {});
+      }
+      res.status(201).json({ voiceOverUrl: url });
+    },
+  );
 
   app.get("/api/athlete/video-reviews", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);

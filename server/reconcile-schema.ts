@@ -3378,6 +3378,11 @@ CREATE TABLE IF NOT EXISTS "video_review_events" (
 CREATE INDEX IF NOT EXISTS "video_review_events_review_time_idx"
   ON "video_review_events" ("review_id", "t");
 
+-- 2026-09-20: voice-over on a review (Phase 3). Audio lives under STORAGE_PATH/reviews/ and
+-- dies with the review rather than with the athlete's clip cap.
+ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_url" text;
+ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_start_at" real;
+
 -- A review is shared by posting it as a comment reply, which is where the coach's drawn
 -- annotation already lands. SET NULL rather than CASCADE: deleting a review should not delete
 -- the conversation that referenced it.

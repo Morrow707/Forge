@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { resetDatabase, db } from "./test-support/fixtures";
 import { guardianLinks, videoReviews } from "@shared/schema";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { UPLOADS_ROOT } from "./uploaded-files";
 import {
   startTestServer,
   makeLoginableUser,
@@ -203,6 +206,55 @@ describe("saved video reviews", () => {
       events: [{ t: 1, side: "left", payload: { kind: "hologram", spin: 4 } }],
     });
     expect(res.status).toBe(400);
+  });
+
+  it("takes a voice-over, owner-only, and deletes the take it replaces", async () => {
+    // A re-record replaces the audio. The previous take must not survive on the persistent disk
+    // -- a coach unhappy with their first attempt is the normal case, not the rare one.
+    const client = actors.coach;
+    const review = await createReview(client, ids.athleteId);
+
+    const form = new FormData();
+    form.append("audio", new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }), "take.webm");
+    form.append("startAt", "12.5");
+    const first = await fetch(`${server.baseUrl}/api/coach/video-reviews/${review.id}/audio`, {
+      method: "POST",
+      headers: { cookie: client.cookieHeader(), "x-forge-device-id": client.deviceId },
+      body: form,
+    });
+    expect(first.status).toBe(201);
+    const { voiceOverUrl } = (await first.json()) as { voiceOverUrl: string };
+    expect(voiceOverUrl).toMatch(/^\/uploads\/reviews\//);
+
+    const onDisk = join(UPLOADS_ROOT, voiceOverUrl.replace("/uploads/", ""));
+    expect(existsSync(onDisk)).toBe(true);
+
+    // Re-record.
+    const form2 = new FormData();
+    form2.append("audio", new Blob([new Uint8Array([4, 5, 6])], { type: "audio/webm" }), "take2.webm");
+    form2.append("startAt", "0");
+    const second = await fetch(`${server.baseUrl}/api/coach/video-reviews/${review.id}/audio`, {
+      method: "POST",
+      headers: { cookie: client.cookieHeader(), "x-forge-device-id": client.deviceId },
+      body: form2,
+    });
+    expect(second.status).toBe(201);
+    expect(existsSync(onDisk), "the replaced take is still on disk").toBe(false);
+  });
+
+  it("refuses a voice-over on somebody else's review", async () => {
+    const review = await createReview(actors.coach, ids.athleteId);
+    const form = new FormData();
+    form.append("audio", new Blob([new Uint8Array([1])], { type: "audio/webm" }), "x.webm");
+    const res = await fetch(`${server.baseUrl}/api/coach/video-reviews/${review.id}/audio`, {
+      method: "POST",
+      headers: {
+        cookie: actors.otherCoach.cookieHeader(),
+        "x-forge-device-id": actors.otherCoach.deviceId,
+      },
+      body: form,
+    });
+    expect(res.status).toBe(404);
   });
 
   it("refuses an unauthenticated caller", async () => {
