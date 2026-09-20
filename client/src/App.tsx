@@ -481,6 +481,15 @@ function Router() {
         <Route path="/athlete/video-bank">
           <ProtectedRoute role="athlete" component={AthleteVideoBank} />
         </Route>
+        {/* A coach or admin filming their own training queues clips through the same
+            store, so they need the same page to link an orphaned one. The page asks
+            /api/athlete/unattached-videos, which scopes by the caller's own id. */}
+        <Route path="/coach/video-bank">
+          <ProtectedRoute role="coach" component={AthleteVideoBank} />
+        </Route>
+        <Route path="/admin/video-bank">
+          <ProtectedRoute role="admin" component={AthleteVideoBank} />
+        </Route>
         <Route path="/athlete/nutrition">
           <ProtectedRoute role="athlete" component={AthleteNutrition} />
         </Route>

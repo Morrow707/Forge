@@ -34,6 +34,34 @@ describe("self-training video uploads are not athlete-only", () => {
     });
   }
 
+  // The upload was opened to coaches on the first pass and the REATTACH was not, so a coach's
+  // queued clip uploaded fine and then 403'd on the link, landing in an unattached list with
+  // no coach page to reach it from. Same rule, same three roles, on every route the video
+  // bank and the offline flush call.
+  for (const path of [
+    "/api/athlete/log/attach-video",
+    "/api/athlete/unattached-videos",
+    "/api/athlete/unattached-videos/:id/candidate-sets",
+    "/api/athlete/unattached-videos/:id/attach",
+    "/api/athlete/unattached-videos/:id/dismiss",
+  ]) {
+    it(`accepts coach and admin on ${path}`, () => {
+      expect(registration(path)).toContain('requireRole(["athlete", "coach", "admin"])');
+    });
+  }
+
+  it("gives coach and admin a video bank page to link their own clips from", () => {
+    const app = readFileSync("client/src/App.tsx", "utf8");
+    for (const [path, role] of [["/coach/video-bank", "coach"], ["/admin/video-bank", "admin"]]) {
+      const at = app.indexOf(`<Route path="${path}">`);
+      expect(at, `no route for ${path}`).toBeGreaterThan(-1);
+      expect(app.slice(at, at + 200)).toContain(`role="${role}" component={AthleteVideoBank}`);
+    }
+    const shell = readFileSync("client/src/components/app-shell.tsx", "utf8");
+    expect(shell).toContain('href: "/coach/video-bank"');
+    expect(shell).toContain('href: "/admin/video-bank"');
+  });
+
   it("exempts coach and admin from the Free Agent video paywall", () => {
     // The rule asks athleteHasCoach and then checks a Free Agent entitlement; for a coach both
     // answers are "no", which would be a 402 for someone who is not a Free Agent at all.
