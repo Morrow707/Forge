@@ -107,9 +107,22 @@ New page-level component `client/src/components/video-compare.tsx` (replaces the
   timeline), kind: `stroke | arrow | line | circle | text | angle | ruler | pause | scrub |
   speed | flag`, payload json, side: `left | right | both`). Reconcile with idempotent
   `CREATE TABLE IF NOT EXISTS`, proved with `db:reconcile`.
-- **Tools** added to the drawing toolbox: arrow, straight line, circle, text label, plus the
-  existing freehand and angle. Each is an event at the current time; a drawing persists until
-  the next `scrub`/`pause` boundary unless pinned ("keep on screen for N s").
+- **Tools** added to the drawing toolbox (Scott, 2026-09-20: "I like your tool additions, add
+  those to the plan"), each an event at the current time; a drawing persists until the next
+  `scrub`/`pause` boundary unless pinned ("keep on screen for N s"):
+  1. **Arrow** and **straight line** (direction of force; the bar path wanted versus got).
+  2. **Circle** and **box** ("look here" without a scrawl).
+  3. **Text label** at a timestamp; with voice-over it is the caption.
+  4. **Vertical and horizontal guide lines** that SNAP TO A JOINT so they follow the skeleton
+     frame to frame: a plumb line from the bar, a floor line, a hip-height line. The one
+     lifters reach for most.
+  5. **Bar path trace** drawn as an overlay from the iOS capture's tracked path, not only the
+     deviation number. Data Forge already has; carries the camera caveat.
+  6. **Tracked angle over time**: pick a joint angle and it stays on screen through playback,
+     updating each frame, with a small graph. Today an angle is one frozen reading. Caveat
+     attached.
+  Plus the existing freehand and angle. Zoom/pan, trim marks, mirror and an optional grid are
+  Phase 4.
 - **Routes**: `POST/GET/PATCH /api/coach/video-reviews`, `GET /api/athlete/video-reviews`
   (only those `sharedWithAthleteAt`), guardian variant for a minor. A review is shared by
   posting it as a comment reply (extend `workoutComments` with `videoReviewId`, alongside the
@@ -145,8 +158,9 @@ New page-level component `client/src/components/video-compare.tsx` (replaces the
   form-video) or "save as reference" from a roster clip (coach only, and it copies the file so
   the athlete's retention purge does not break the reference; the copy is the coach's).
   Visible to the coach and their staff.
-- **Polish**: pinch-zoom and pan on either side; mirror; speed 0.1x; keyboard on web
-  (space, arrows, [ ] for sync marks); gesture on phone (tap to pause, swipe to step).
+- **Polish**: pinch-zoom and pan on either side; mirror; an optional grid; trim marks (play
+  only the rep that matters, no re-encode); speed 0.1x; keyboard on web (space, arrows, [ ]
+  for sync marks); gesture on phone (tap to pause, swipe to step).
 - **Auto-sync suggestion**: when both clips have `repBreakdown` or a bar-path trace, propose
   the sync at the first rep's lowest point (`video-sync.ts`), and say it is a suggestion.
 
@@ -161,6 +175,27 @@ New page-level component `client/src/components/video-compare.tsx` (replaces the
   names the guardian consent that covers it.
 - Long clips: cap export length and warn; the render runs in real time, so a 60 s review takes
   60 s.
+
+## Phase 5b (native): analyse while recording
+
+Scott, 2026-09-20: "Is there a way for the video to process in the background as it's being
+recorded?" Today the plugin records to disk natively, then RE-READS the finished file and runs
+the body tracker per frame after stop (`analyzeRecording`, `AVAssetReader`), which is the wait
+the athlete feels; upload already overlaps it and is queued in the background.
+
+- Run `VNDetectHumanBodyPoseRequest` (and the object detector + overwatch) on the live sample
+  buffers during recording, `AVCaptureVideoDataOutput` alongside `AVCaptureMovieFileOutput`,
+  emitting the same `poseFrame` events the post-capture path emits today so the JS side is
+  unchanged. Keep the post-capture path as the fallback for a clip that arrives without live
+  frames (a device that fell behind, an imported video).
+- Drop to every second frame when the analysis queue backs up (the existing
+  `sampleEveryNthFrame` knob), never drop recording frames: the movie writer is separate
+  hardware and must not be gated on analysis.
+- Measure on a real phone: heat, battery, and analysis lag at 60 fps on the oldest supported
+  device. This is why it sits after the compare tool: it needs `verify_build` and a phone,
+  not a sandbox.
+- Streaming the UPLOAD while recording (fragmented MP4 + a chunked upload route) is the
+  smaller win; decide after measuring the live-analysis change.
 
 ## Phase 6 (optional, last): AI assist
 
@@ -194,4 +229,5 @@ New page-level component `client/src/components/video-compare.tsx` (replaces the
 - [ ] Phase 3: voice-over
 - [ ] Phase 4: reference library, zoom/pan, auto-sync, trim
 - [ ] Phase 5: export and share
+- [ ] Phase 5b: analyse while recording (native, needs a phone)
 - [ ] Phase 6: AI draft notes (only if asked)
