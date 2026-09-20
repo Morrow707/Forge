@@ -164,6 +164,41 @@ New page-level component `client/src/components/video-compare.tsx` (replaces the
 - **Auto-sync suggestion**: when both clips have `repBreakdown` or a bar-path trace, propose
   the sync at the first rep's lowest point (`video-sync.ts`), and say it is a suggestion.
 
+## Phase 4b: the Forge-specific additions (Scott, 2026-09-20: "add everything into the master plan")
+
+Each of these uses something Forge already has and OnForm does not. Build after Phase 4, in
+this order, one PR each.
+
+1. **"You versus you."** When the coach or athlete opens Compare on a clip, the picker's first
+   suggestion is the SAME athlete's most recent earlier clip of the SAME exercise (by
+   `exerciseId`, falling back to name), at least 14 days older, preferring one with
+   `repBreakdown` so auto-sync works. Route: `GET /api/athlete/clips/prior?exerciseId=&before=`
+   and the coach variant. UI: a "Compare to N weeks ago" button beside the clip. No reference
+   library needed for this case.
+2. **Review queue.** Athlete taps "Ask my coach to check this" on a set with a clip; writes a
+   `video_review_requests` row (athleteId, setId, requestedAt, resolvedAt, reviewId). Coach
+   sees a queue (count badge in the nav, list sorted oldest first, age in days) and opening a
+   request opens the review editor on that clip; saving and sharing the review resolves the
+   request. Notification to the athlete on resolve; the in-app bell, and email through the
+   same sendEmail path the documents chase uses.
+3. **Cue library.** `coach_cues` (coachId, kind: `text | audio`, text, audioUrl, label). In
+   the review editor a "Cues" drawer lists them; dropping one onto the timeline adds a `text`
+   event or an `audio` event (a short audio clip played at that time during playback, mixed
+   with or instead of the voice-over). Cues are the coach's and visible to their staff.
+4. **Review-to-program loop.** From a saved review, "Add a corrective" opens the existing
+   exercise picker and appends the chosen exercise to the athlete's next scheduled day (or a
+   named day) with a note that links back to the review. Uses the existing program-edit
+   routes; the only new column is `programExercises.sourceReviewId` nullable, so the athlete's
+   day shows "from your review on <date>".
+5. **Athlete self-review.** Same editor for an athlete on their own clips; "Send to coach"
+   shares it the way the coach's share works, in the other direction. The camera gate
+   (`cameraAccessFor`) does not apply to REVIEWING an existing clip, only to recording (see
+   CLAUDE.md "Watching a clip you already recorded is never gated").
+6. **120 fps capture** (native, with Phase 5b): once analysis runs live and subsamples, the
+   recorder can ask for 120 fps on devices that offer it at 1080p without the binned-readout
+   formats the plugin comment warns about. Frame stepping and bar tracking both improve.
+   Measure file size; keep 60 as the default until measured.
+
 ## Phase 5: export and share
 
 - **Burn-in export**: render the review (both videos, overlay, drawings, angles, and audio)
@@ -223,6 +258,30 @@ the athlete feels; upload already overlaps it and is queued in the background.
 10. Two-athlete leaderboard-style comparisons are NOT recommended: a comparison is a claim
     about people and the camera numbers are uncalibrated (CLAUDE.md).
 
+## Handoff state, 2026-09-20 evening
+
+Scott moved to another model at 93% usage while Phase 0 and Phase 1 were being built by two
+helpers in the previous session. Their in-progress, UNVERIFIED work was snapshotted to branch
+`claude/video-review-wip-2026-09-20` (pushed) so it is not lost; nothing from it is on `main`.
+Whoever continues: check that branch first. If it typechecks and its tests pass, finish it on
+`claude/modest-babbage-y53kyw` and PR to `main`; if it is half-built, treat it as reference and
+rebuild the phase from the plan. What each helper was told to produce:
+
+- **Phase 0 helper** (files: `video-analysis-dialog.tsx`, `video-annotation-dialog.tsx`,
+  `workout-comment-thread.tsx`, `lib/video-pose-analysis.ts`, the annotations route): runtime
+  click-through of every existing tool as coach and athlete on a seeded DB with uploaded test
+  clips, a tool × role table, small fixes with a test each, and the name of the skeleton-draw
+  function the compare tool should reuse.
+- **Phase 1 helper** (files: NEW `video-compare.tsx`, NEW `clip-picker.tsx`, NEW
+  `lib/video-sync.ts` + test, `set-video-review.tsx` minus its analysis-dialog call,
+  `storage.ts`, `schema.ts`, `routes.ts` minus the annotations route): the compare tool exactly
+  as Phase 1 specifies, clip list routes `GET /api/coach/roster/:athleteId/clips` and
+  `GET /api/athlete/clips` (no skeletonFrames in list payloads), itest for scoping, transport
+  scan test, lazy-loaded so the bundle budget test stays green.
+
+Everything else in this file is unstarted. Build 488 is on TestFlight; #154 (SEO + perf) is on
+`main` and waiting on the next upload.
+
 ## Checklist (tick as each lands: PR number, commit)
 
 - [ ] Phase 0: existing tools verified, fixes merged
@@ -230,6 +289,7 @@ the athlete feels; upload already overlaps it and is queued in the background.
 - [ ] Phase 2: saved reviews with timed drawings, shared as a comment
 - [ ] Phase 3: voice-over
 - [ ] Phase 4: reference library, zoom/pan, auto-sync, trim
+- [ ] Phase 4b: you-versus-you, review queue, cue library, review-to-program, self-review, 120 fps
 - [ ] Phase 5: export and share
 - [ ] Phase 5b: analyse while recording (native, needs a phone)
 - [ ] Phase 6: AI draft notes (only if asked)
