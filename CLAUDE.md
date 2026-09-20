@@ -197,7 +197,9 @@ can install. Delete entries as a `beta` ships them.
   their form check, trimmed replays no longer clear frames) and the six
   approved camera items (#149: overwatch on the web path, the Swift overwatch
   gaps, honest camera alignment, frozen-frame dedup, reattach by row id with
-  the unattached-clips card). Nothing on `main` is waiting on an upload.
+  the unattached-clips card).
+- Waiting on an upload since 483: #150 (a coach's own queued clip can be linked from
+  /coach/video-bank and /admin/video-bank; the reattach routes accept all three roles).
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
