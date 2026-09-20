@@ -56,6 +56,29 @@ describe("the admin Legal & Compliance page", () => {
     // lives in docs/legal-open-questions.md, where a reviewer reads it.
     expect(adminPage).not.toMatch(/not (yet )?reviewed by counsel/i);
     expect(adminPage).not.toMatch(/awaiting counsel/i);
+    // The research card's own phrasings, from when it was a review packet: "neither has been
+    // read by a lawyer", "both are drafts below", a DRAFT badge, and a warning not to send.
+    expect(adminPage).not.toMatch(/read by a lawyer/i);
+    expect(adminPage).not.toMatch(/are drafts/i);
+    expect(adminPage).not.toMatch(/no extract should be sent/i);
+    expect(adminPage).not.toMatch(/questions for counsel/i);
+    expect(adminPage).not.toContain("<DraftBadge");
+  });
+
+  it("cites the export cell floor from the server rather than retyping it", () => {
+    // RESEARCH_EXPORT_MIN_CELL lives in server/research-export.ts, which the client cannot
+    // import. The public research_consent route reports it as exportMinCell; the card reads that.
+    const card = adminPage.slice(
+      adminPage.indexOf("function ResearchDataReviewCard"),
+      adminPage.indexOf("export default function AdminDocuments"),
+    );
+    expect(card).toContain("exportMinCell");
+    expect(card).not.toMatch(/\b10 athletes\b/);
+    expect(card).not.toMatch(/floor of 10\b/);
+    expect(routes).toMatch(/exportMinCell:\s*RESEARCH_EXPORT_MIN_CELL/);
+    // And links to the page and the PDF it is describing.
+    expect(card).toContain('href="/research-consent"');
+    expect(card).toContain("/api/legal-documents/research_consent.pdf");
   });
 });
 
@@ -72,6 +95,37 @@ describe("the public legal pages", () => {
     expect(pdf).toBeGreaterThanOrEqual(0);
     expect(text).toBeGreaterThanOrEqual(0);
     expect(pdf).toBeLessThan(text);
+  });
+
+  it("include the research consent, which is a constant and not a row", () => {
+    // The one accepted text with no public page until 2026-09-20. It is served by an explicit
+    // branch on both public routes and stays OUT of the enums, so it can never reach the admin
+    // editor or the seed as a row somebody retypes.
+    expect(publicPage).toContain('docType="research_consent"');
+    expect(publicPage).toContain("export function ResearchConsentPage");
+    expect(read("client/src/App.tsx")).toContain('path="/research-consent"');
+    expect(read("client/src/pages/legal.tsx")).toContain('href: "/research-consent"');
+    expect(stringArray(routes, "LEGAL_DOC_TYPES")).not.toContain("research_consent");
+    expect(stringArray(routes, "PUBLIC_LEGAL_DOC_TYPES")).not.toContain("research_consent");
+    const pdfRoute = routes.indexOf('app.get("/api/legal-documents/:type.pdf"');
+    const branch = routes.indexOf("type === RESEARCH_CONSENT_DOC_TYPE", pdfRoute);
+    const lookup = routes.indexOf("if (!isPublicLegalDocType(type))", pdfRoute);
+    expect(branch).toBeGreaterThan(pdfRoute);
+    expect(branch).toBeLessThan(lookup);
+  });
+
+  it("each have a page in App.tsx that renders through the one component with the download", () => {
+    // Every exported page in legal-document.tsx is routed, and every one renders
+    // LegalDocumentPage, which is where the DownloadButton lives -- so a new public page cannot
+    // ship without a download.
+    const app = read("client/src/App.tsx");
+    const pages = Array.from(publicPage.matchAll(/export function (\w+Page)\(/g), (m) => m[1]);
+    expect(pages.length).toBeGreaterThanOrEqual(7);
+    for (const page of pages) {
+      expect(app, page).toContain(`component={${page}}`);
+      const body = publicPage.slice(publicPage.indexOf(`export function ${page}(`));
+      expect(body.slice(0, body.indexOf("}\n")), page).toContain("<LegalDocumentPage");
+    }
   });
 
   it("serve every public type from the same set the page can request", () => {

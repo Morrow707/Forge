@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DownloadButton } from "@/components/download-button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HeartPulse, HeartCrack, Gauge, Activity, ShieldAlert, VideoOff, Video } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/queryClient";
@@ -397,6 +398,17 @@ export function ResearchConsentControl({ athleteId }: { athleteId: number }) {
           <pre className="whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed">
             {consentText?.text ?? "Loading…"}
           </pre>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              Keep a copy: <a href="/research-consent" className="underline">read it as a page</a>
+            </span>
+            <DownloadButton
+              url="/api/legal-documents/research_consent.pdf"
+              filename="forge-research-consent.pdf"
+              shareTitle="Forge Research Consent"
+              label="Download PDF"
+            />
+          </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="relayed-from">Who gave this answer</Label>

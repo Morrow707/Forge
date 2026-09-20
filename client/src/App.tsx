@@ -45,6 +45,7 @@ import {
   BiometricReleasePage,
   AssumptionOfRiskPage,
   AiTermsOfUsePage,
+  ResearchConsentPage,
 } from "@/pages/legal-document";
 import DeleteAccountPage from "@/pages/delete-account";
 import NotFound from "@/pages/not-found";
@@ -384,6 +385,9 @@ function Router() {
             there is a session to authenticate. */}
         <Route path="/biometric-release" component={BiometricReleasePage} />
         <Route path="/assumption-of-risk" component={AssumptionOfRiskPage} />
+        {/* The research consent text (shared/research-consent.ts), readable without a session
+            so a guardian deciding for a minor, or anyone who already said yes, can reread it. */}
+        <Route path="/research-consent" component={ResearchConsentPage} />
         <Route path="/delete-account" component={DeleteAccountPage} />
         <Route path="/dev/av-preview-test">
           <ProtectedRoute role="admin" component={AvPreviewTestPage} />

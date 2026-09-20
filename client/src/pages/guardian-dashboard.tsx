@@ -1,6 +1,8 @@
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
+import type { ConsentSummaryRow } from "@shared/consent-catalog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { getJson, apiRequest, ApiError } from "@/lib/queryClient";
@@ -23,6 +25,7 @@ import {
   MonitorSmartphone,
   Trash2,
   Flag,
+  FileCheck2,
 } from "lucide-react";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
@@ -402,6 +405,8 @@ export default function GuardianDashboardPage() {
                       </dl>
                   </CardContent>
                 </Card>
+
+                <GuardianAgreementsCard athleteId={athlete.id} athleteName={athlete.name} />
 
                 <Card>
                   <CardHeader>
@@ -1081,5 +1086,59 @@ function NutritionStat({
         {target != null ? ` / ${Math.round(target)}` : ""}
       </span>
     </div>
+  );
+}
+
+/** THE CHILD'S PAPERWORK, FROM THE PARENT'S SIDE.
+ *
+ * A guardian accepts things for their athlete -- the terms, the biometric consent, research --
+ * and until this nothing on their dashboard showed what they had accepted or whether it was
+ * still current. The count is a summary; the link opens /documents/:athleteId, the same page
+ * a coach files on, where every row is listed with the text behind it. That link is also the
+ * only way a guardian reached the child's documents page at all: the request-documents
+ * notification pointed at it, and the dashboard did not.
+ */
+function GuardianAgreementsCard({ athleteId, athleteName }: { athleteId: number; athleteName: string }) {
+  const { data, isLoading, isError, refetch } = useQuery<ConsentSummaryRow[]>({
+    queryKey: ["/api/guardian/athletes", athleteId, "consents"],
+    queryFn: () => getJson(`/api/guardian/athletes/${athleteId}/consents`),
+  });
+  const rows = data ?? [];
+  const agreed = rows.filter((r) => r.state === "agreed" && !r.stale);
+  const stale = rows.filter((r) => r.state === "agreed" && r.stale);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FileCheck2 className="h-4 w-4 text-primary" />
+          Agreements and documents
+        </CardTitle>
+        <CardDescription>
+          What has been accepted for {athleteName} in Forge, and the forms on file.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isError ? (
+          <ReadFailed what="their agreements" onRetry={() => void refetch()} />
+        ) : isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : (
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Badge variant="secondary">
+              {agreed.length} current
+            </Badge>
+            {stale.length > 0 && (
+              <Badge variant="destructive">
+                {stale.length} {stale.length === 1 ? "needs" : "need"} re-accepting
+              </Badge>
+            )}
+            {rows.length === 0 && <span className="text-muted-foreground">Nothing recorded yet.</span>}
+          </div>
+        )}
+        <Button asChild size="sm" variant="outline">
+          <Link href={`/documents/${athleteId}`}>Open {athleteName}'s documents</Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

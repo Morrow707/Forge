@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { needsCoppaAttestation } from "@shared/coach-attestation";
@@ -31,6 +31,7 @@ import { registerNumericParamGuards } from "./numeric-route-params";
 import { apnsEnabled } from "./apns";
 import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail, emailEnabled } from "./email";
+import { buildRosterDocumentEmail } from "./email-roster-documents";
 import { aiEnabled } from "./ai";
 import { usdaFoodLookupEnabled } from "./food-lookup";
 import { buildProgressReportEmail } from "./progress-report";
@@ -1197,6 +1198,11 @@ function toMetricSummary(r: any): ResearchMetricSummary {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  /** Absolute origin for links that leave the app in an email. RENDER_EXTERNAL_URL first, for
+   * the same host-header-poisoning reason auth.ts gives on its own copy of this line. */
+  const publicOrigin = (req: Request): string =>
+    process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+
   // One guard for every id-shaped route param, before anything else is
   // registered -- see server/numeric-route-params.ts for why it lives in one
   // place rather than at ~250 call sites, and why it answers 404.
@@ -4133,8 +4139,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // perfectly good :type to the route below. Same public set, same resolver, same builder the
   // admin route uses -- the only thing that was admin-only about downloading a public document
   // was the route, so an athlete or a coach reading /privacy had no way to keep a copy.
+  //
+  // The research consent is served from BOTH public routes by an explicit branch ahead of the
+  // enum lookup, and is deliberately NOT in LEGAL_DOC_TYPES or PUBLIC_LEGAL_DOC_TYPES. It is a
+  // code constant (shared/research-consent.ts), attorney-reviewed, hashed into every consent
+  // record; putting it in the enum would hand it to the admin editor and the seed as a row
+  // somebody can retype. It was the only accepted text with no public page and no PDF.
+  const RESEARCH_CONSENT_DOC_TYPE = "research_consent";
+  const RESEARCH_CONSENT_TITLE = "Forge -- Research Consent and Data Use Authorization";
   app.get("/api/legal-documents/:type.pdf", async (req, res) => {
     const type = String(req.params.type).replace(/\.pdf$/, "");
+    if (type === RESEARCH_CONSENT_DOC_TYPE) {
+      // The version goes in the footer so a printed copy says which text it is: a change to
+      // the text changes the hash on every later signature, and the version is how a person
+      // holding a PDF matches it to the record.
+      const pdf = await buildLegalDocumentPdf(
+        RESEARCH_CONSENT_TITLE,
+        `${RESEARCH_CONSENT_TEXT}\n\n--\nVersion ${RESEARCH_CONSENT_VERSION}`,
+      );
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="forge-research-consent.pdf"`);
+      return res.send(pdf);
+    }
     if (!isPublicLegalDocType(type)) return res.status(404).json({ message: "Unknown document type" });
     const doc = await resolveLegalDocument(type);
     if (!doc) return res.status(404).json({ message: "Not found" });
@@ -4146,6 +4172,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/legal-documents/:type", async (req, res) => {
     const type = String(req.params.type);
+    if (type === RESEARCH_CONSENT_DOC_TYPE) {
+      // Same shape as every other public document so /research-consent renders through the
+      // same page, plus the two facts the admin status card cites: the version, and the
+      // export cell floor read from the constant that enforces it rather than retyped.
+      return res.json({
+        content: RESEARCH_CONSENT_TEXT,
+        updatedAt: null,
+        version: RESEARCH_CONSENT_VERSION,
+        exportMinCell: RESEARCH_EXPORT_MIN_CELL,
+      });
+    }
     if (!isPublicLegalDocType(type)) return res.status(404).json({ message: "Unknown document type" });
     const doc = await resolveLegalDocument(type);
     res.json({ content: doc?.content ?? "", updatedAt: doc?.updatedAt ?? null });
@@ -7206,20 +7243,207 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dayAgo,
       );
 
-      let sent = 0;
+      // Per target, what actually left: an email to the athlete or their guardians, or the
+      // in-app notice alone and why. The coach's toast reads these, because "asked 3 athletes"
+      // when the mail provider is down and nobody opens the app is a request nobody received.
+      const results: {
+        athleteId: number;
+        athleteName: string;
+        delivery: "emailed" | "in_app_only";
+        detail: "athlete" | "guardians" | "no_email" | "not_configured" | "send_failed";
+      }[] = [];
       for (const target of targets) {
         if (alreadyChased.has(target.athleteId)) continue;
-        await storage.requestDocuments({
+        const outcome = await storage.requestDocuments({
           coachId: user.id,
           athleteId: target.athleteId,
           athleteName: target.athleteName,
           missing: target.documents
             .filter((d) => d.required && d.status !== "accepted" && d.status !== "pending_review")
             .map((d) => d.label),
+          origin: publicOrigin(req),
         });
-        sent += 1;
+        results.push({
+          athleteId: target.athleteId,
+          athleteName: target.athleteName,
+          delivery: outcome.delivery,
+          detail: outcome.detail,
+        });
       }
-      res.json({ sent, skipped: targets.length - sent, outstanding: targets.length });
+      const sent = results.length;
+      res.json({
+        sent,
+        skipped: targets.length - sent,
+        outstanding: targets.length,
+        emailed: results.filter((r) => r.delivery === "emailed").length,
+        inAppOnly: results.filter((r) => r.delivery === "in_app_only").length,
+        results,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** SEND A DOCUMENT TO YOUR ROSTER.
+   *
+   * A coach can put Forge's own paperwork in front of the families on their roster -- the
+   * Privacy Policy before a season, the biometric consent when the camera comes out -- without
+   * asking an admin to email each address. PUBLIC types only (PUBLIC_LEGAL_DOC_TYPES, the same
+   * set /api/legal-documents/:type.pdf serves): a document a stranger can read on /privacy is
+   * one a coach may forward; anything not public is not the coach's to distribute.
+   *
+   * ROSTER-SCOPED through getRosterForCoach, so per-team narrowing applies: a staff coach
+   * assigned to JV emails JV. Who receives which follows getDocumentEmailRecipients -- adults
+   * their own, minors' guardians about the child -- and addresses are de-duplicated, so a parent
+   * with two athletes on the team gets one email. The document travels as a link to the live
+   * page plus its PDF, never as an attachment (sendEmail has none) and never as pasted text (a
+   * copy in an inbox is the one nobody can correct).
+   *
+   * Nothing is recorded against anybody. This is a copy for their records, not an acceptance.
+   */
+  // Keyed by the public set, so a type added there without a page is a type error here rather
+  // than an email whose button lands on a 404.
+  const CONSENT_PAGE_FOR_LEGAL_TYPE: Record<(typeof PUBLIC_LEGAL_DOC_TYPES)[number], string> = {
+    terms_of_service: "/terms",
+    privacy_policy: "/privacy",
+    eula: "/eula",
+    biometric_waiver: "/biometric-release",
+    assumption_of_risk: "/assumption-of-risk",
+    ai_terms_of_use: "/ai-terms",
+  };
+
+  const rosterDocumentRecipients = async (roster: { id: number }[]) => {
+    const recipients = await storage.getDocumentEmailRecipients(roster.map((a) => a.id));
+    const byEmail = new Map<string, { name: string; athleteName: string | null }>();
+    let athletesWithoutAddress = 0;
+    for (const athlete of roster) {
+      const who = recipients.get(athlete.id);
+      if (!who) continue;
+      const guardiansWithEmail = who.guardians.filter((g) => g.email);
+      const toGuardians = who.isMinor && guardiansWithEmail.length > 0;
+      const targets = toGuardians
+        ? guardiansWithEmail.map((g) => ({ email: g.email!, name: g.name, athleteName: who.athleteName }))
+        : who.athleteEmail
+          ? [{ email: who.athleteEmail, name: who.athleteName, athleteName: null }]
+          : [];
+      if (targets.length === 0) athletesWithoutAddress += 1;
+      for (const t of targets) {
+        const key = t.email.trim().toLowerCase();
+        if (!byEmail.has(key)) byEmail.set(key, { name: t.name, athleteName: t.athleteName });
+      }
+    }
+    return { athletes: roster.length, byEmail, athletesWithoutAddress };
+  };
+
+  /** Which documents a coach may send, derived from the public set rather than typed into the
+   * client. Titles come from the same table the PDF and the public page use. */
+  app.get("/api/coach/legal-documents/sendable", requireRole("coach"), async (_req, res, next) => {
+    try {
+      res.json(PUBLIC_LEGAL_DOC_TYPES.map((type) => ({ type, title: LEGAL_DOC_TITLES[type] })));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** The count the confirm step shows, computed the same way the send will. */
+  app.get(
+    "/api/coach/legal-documents/email-roster/recipients",
+    requireRole("coach"),
+    async (req, res, next) => {
+      try {
+        const { athletes, byEmail, athletesWithoutAddress } = await rosterDocumentRecipients(
+          await storage.getRosterForCoach(currentUser(req).id),
+        );
+        res.json({ athletes, recipients: byEmail.size, athletesWithoutAddress });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  app.post(
+    "/api/coach/legal-documents/:type/email-roster",
+    requireRole("coach"),
+    async (req, res, next) => {
+      try {
+        const user = currentUser(req);
+        const type = String(req.params.type);
+        if (!isPublicLegalDocType(type)) {
+          return res.status(404).json({ message: "Unknown document type" });
+        }
+        const doc = await resolveLegalDocument(type);
+        if (!doc) return res.status(404).json({ message: "Not found" });
+        const title = LEGAL_DOC_TITLES[type];
+        const origin = publicOrigin(req);
+        const page = CONSENT_PAGE_FOR_LEGAL_TYPE[type];
+        const pageLink = `${origin}${page}`;
+        const pdfLink = `${origin}/api/legal-documents/${type}.pdf`;
+        // The roster is the scope: getRosterForCoach applies per-team narrowing, so a staff
+        // coach assigned to one team sends to that team.
+        const roster = await storage.getRosterForCoach(user.id);
+        const { athletes, byEmail, athletesWithoutAddress } = await rosterDocumentRecipients(roster);
+
+        let emailed = 0;
+        let failed = 0;
+        let notConfigured = false;
+        for (const [email, who] of byEmail) {
+          const result = await sendEmail({
+            to: email,
+            subject: `Forge ${title}${who.athleteName ? ` for ${who.athleteName}` : ""}`,
+            html: buildRosterDocumentEmail({
+              recipientName: who.name,
+              athleteName: who.athleteName,
+              coachName: user.name ?? null,
+              documentTitle: title,
+              pageLink,
+              pdfLink,
+            }),
+          });
+          if (result.sent) emailed += 1;
+          else {
+            failed += 1;
+            if (result.error === "not_configured") notConfigured = true;
+          }
+        }
+        res.json({
+          type,
+          title,
+          athletes,
+          recipients: byEmail.size,
+          emailed,
+          failed,
+          athletesWithoutAddress,
+          notConfigured,
+        });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  /** WHAT YOU'VE AGREED TO -- the account holder's own copy of their consent ledger. See
+   * storage.listConsentsForUser for the rules (latest row per type, withdrawn, stale, role words
+   * for who answered). Three readers, one function: */
+  app.get("/api/account/consents", requireAuth, async (req, res, next) => {
+    try {
+      res.json(await storage.listConsentsForUser(currentUser(req).id, { includeGivenBy: true }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** The coach's view of a rostered athlete's paperwork: type, date, current or stale. No
+   * givenBy -- whether it was the parent or the child who ticked the box is the family's
+   * business; "is it current" is the coach's. Scoped through getRosterAthleteForCoach like every
+   * other per-athlete coach route, so per-team narrowing applies. */
+  app.get("/api/coach/roster/:athleteId/consents", requireRole("coach"), async (req, res, next) => {
+    try {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      if (!Number.isInteger(athleteId)) return res.status(400).json({ message: "Bad athlete id" });
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      res.json(await storage.listConsentsForUser(athleteId, { includeGivenBy: false }));
     } catch (err) {
       next(err);
     }
@@ -11887,6 +12111,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await handler(athlete.id, req, res);
     });
   }
+
+  /** The child's "What you've agreed to", with givenBy so a parent can see which rows they
+   * answered themselves and which the athlete did. The words are role words -- "your guardian"
+   * here means the guardian reading it, or a co-guardian. */
+  guardianRead("/consents", async (athleteId, _req, res) => {
+    res.json(await storage.listConsentsForUser(athleteId, { includeGivenBy: true }));
+  });
 
   guardianRead("/progress", async (athleteId, _req, res) => {
     const summary = await storage.getAthleteProgressSummary(athleteId);

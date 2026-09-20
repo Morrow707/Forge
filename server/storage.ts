@@ -190,6 +190,9 @@ import {
   renderPassagesForPrompt,
 } from "./knowledge-retrieval";
 import { RESEARCH_CONSENT_TEXT, researchConsentDisclosesDeletionRetention } from "@shared/research-consent";
+import { CONSENT_CATALOG, type ConsentSummaryRow, type ConsentType } from "@shared/consent-catalog";
+import { sendEmail } from "./email";
+import { buildDocumentsRequestEmail } from "./email-roster-documents";
 import { classifyGoniometerReading, GONIOMETER_JOINTS } from "@shared/goniometer";
 import {
   MOVEMENT_SCREEN_LOW_GRADE_THRESHOLD,
@@ -26733,13 +26736,27 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * THE GUARDIAN IS NOTIFIED TOO, and for a minor they are usually the only one who can act:
    * a 15-year-old cannot produce their own medical clearance or sign an emergency
    * authorization. Telling only the athlete would be a request sent to the wrong person.
+   *
+   * AND IT GOES BY EMAIL. The in-app notification is still written -- it is what the 24-hour
+   * floor reads (athletesChasedSince), and it is there when the person opens the app -- but a
+   * parent who is not in the app is exactly the person this request is for, so the same
+   * wording goes to their inbox. Who gets it follows getDocumentEmailRecipients. When the mail
+   * provider is not configured the notification is still written and the caller is told the
+   * request was in-app only, so the coach's toast says what actually left.
    */
   async requestDocuments(input: {
     coachId: number;
     athleteId: number;
     athleteName: string;
     missing: string[];
-  }): Promise<void> {
+    /** Absolute origin for the link in the email, e.g. https://app.example. */
+    origin: string;
+  }): Promise<{
+    delivery: "emailed" | "in_app_only";
+    /** Who the email went to, or why it did not. */
+    detail: "athlete" | "guardians" | "no_email" | "not_configured" | "send_failed";
+    emailsSent: number;
+  }> {
     const coach = await this.getUser(input.coachId);
     const from = coach?.name ? `${coach.name} ` : "";
     const list = input.missing.join(", ");
@@ -26750,13 +26767,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       `${from}needs these on file: ${list}. You can upload a photo or a PDF from your Documents page.`,
       "/documents",
     );
-    const guardians = await db
-      .select({ guardianId: guardianLinks.guardianId })
-      .from(guardianLinks)
-      .where(eq(guardianLinks.athleteId, input.athleteId));
+    const recipients = await this.getDocumentEmailRecipients([input.athleteId]);
+    const who = recipients.get(input.athleteId);
+    const guardians = who?.guardians ?? [];
     for (const g of guardians) {
       await this.createNotification(
-        g.guardianId,
+        g.id,
         "documents_requested",
         `Documents needed for ${input.athleteName}`,
         `${from}needs these on file for ${input.athleteName}: ${list}. You can upload a photo or a PDF from their Documents page.`,
@@ -26768,6 +26784,119 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         `/documents/${input.athleteId}`,
       );
     }
+
+    // The email. A minor with guardians -> the guardians, about the child; anyone else -> the
+    // athlete's own address.
+    const toGuardians = !!who && who.isMinor && guardians.some((g) => g.email);
+    const targets: { email: string; name: string; athleteName: string | null; link: string }[] =
+      toGuardians
+        ? guardians
+            .filter((g) => g.email)
+            .map((g) => ({
+              email: g.email!,
+              name: g.name,
+              athleteName: input.athleteName,
+              link: `${input.origin}/documents/${input.athleteId}`,
+            }))
+        : who?.athleteEmail
+          ? [
+              {
+                email: who.athleteEmail,
+                name: who.athleteName,
+                athleteName: null,
+                link: `${input.origin}/documents`,
+              },
+            ]
+          : [];
+    if (targets.length === 0) return { delivery: "in_app_only", detail: "no_email", emailsSent: 0 };
+
+    let emailsSent = 0;
+    let lastError: string | undefined;
+    for (const t of targets) {
+      const result = await sendEmail({
+        to: t.email,
+        subject: t.athleteName ? `Documents needed for ${t.athleteName}` : "Documents needed",
+        html: buildDocumentsRequestEmail({
+          recipientName: t.name,
+          athleteName: t.athleteName,
+          coachName: coach?.name ?? null,
+          missing: input.missing,
+          link: t.link,
+        }),
+      });
+      if (result.sent) emailsSent += 1;
+      else lastError = result.error;
+    }
+    if (emailsSent === 0) {
+      return {
+        delivery: "in_app_only",
+        detail: lastError === "not_configured" ? "not_configured" : "send_failed",
+        emailsSent: 0,
+      };
+    }
+    return { delivery: "emailed", detail: toGuardians ? "guardians" : "athlete", emailsSent };
+  },
+
+  /** WHO GETS AN EMAIL ABOUT AN ATHLETE'S PAPERWORK.
+   *
+   * An adult athlete gets their own. A minor's linked guardians get it about the child, because
+   * a 15-year-old cannot produce their own medical clearance and a legal document about a minor
+   * is for the adult responsible for them. A minor with no guardian linked falls back to their
+   * own address -- the alternative is nobody hearing at all -- and the caller is told which
+   * happened. An unknown date of birth is a minor, the same rule getResearchDataConsent applies:
+   * when nobody can say whether an adult is reading, assume one is not.
+   *
+   * One query for the whole list, because the roster send and the chase list both call this
+   * for every athlete at once.
+   */
+  async getDocumentEmailRecipients(athleteIds: number[]): Promise<
+    Map<
+      number,
+      {
+        athleteName: string;
+        athleteEmail: string | null;
+        isMinor: boolean;
+        guardians: { id: number; name: string; email: string | null }[];
+      }
+    >
+  > {
+    const out = new Map<
+      number,
+      {
+        athleteName: string;
+        athleteEmail: string | null;
+        isMinor: boolean;
+        guardians: { id: number; name: string; email: string | null }[];
+      }
+    >();
+    if (athleteIds.length === 0) return out;
+    const athletes = await db
+      .select({ id: users.id, name: users.name, email: users.email, dateOfBirth: users.dateOfBirth })
+      .from(users)
+      .where(inArray(users.id, athleteIds));
+    for (const a of athletes) {
+      out.set(a.id, {
+        athleteName: a.name,
+        athleteEmail: a.email || null,
+        isMinor: a.dateOfBirth ? derivePrivacyTier(a.dateOfBirth) !== "tier3_adult_18plus" : true,
+        guardians: [],
+      });
+    }
+    const guardian = alias(users, "doc_recipient_guardian");
+    const links = await db
+      .select({
+        athleteId: guardianLinks.athleteId,
+        id: guardian.id,
+        name: guardian.name,
+        email: guardian.email,
+      })
+      .from(guardianLinks)
+      .innerJoin(guardian, eq(guardian.id, guardianLinks.guardianId))
+      .where(inArray(guardianLinks.athleteId, athleteIds));
+    for (const l of links) {
+      out.get(l.athleteId)?.guardians.push({ id: l.id, name: l.name, email: l.email || null });
+    }
+    return out;
   },
 
   async externalWaiverSummary(athleteId: number) {
@@ -27572,6 +27701,99 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * retired, never removed (see createExternalWaiver). */
   async deleteExternalWaiverRow(waiverId: number): Promise<void> {
     await db.delete(externalWaivers).where(eq(externalWaivers.id, waiverId));
+  },
+
+  /** WHAT THIS PERSON HAS AGREED TO, one row per consent type, read off consent_records.
+   *
+   * Every acceptance in Forge already writes a consent record with the text snapshotted, and until
+   * this nothing read them back for the person they are about: the only readers were an admin's
+   * compliance view and a couple of yes/no checks. This is the account holder's own copy of the
+   * ledger -- and the guardian's and the coach's view of an athlete's, through the same function,
+   * because three readers of one ledger must not disagree about what is on it.
+   *
+   * THE LATEST ROW PER TYPE DECIDES. The table is append-only and a withdrawal is a later row whose
+   * text begins WITHDRAWN (see withdrawGuardianConsent, setResearchDataConsent), so the newest row
+   * says whether the consent stands. An older grant under a withdrawal is history, not a consent.
+   *
+   * STALE IS COMPUTED THE WAY THE GATES ALREADY COMPUTE IT, not from the record: the terms by
+   * getTermsAcceptanceStatus (users.agreedToTermsText against the live clickwrap), research by
+   * getResearchDataConsent (does the signed text carry the current deletion-retention section).
+   * Two definitions of "needs answering again" would eventually show a person a green row while
+   * the gate holds them at a dialog. Everything else is never stale: no other document re-asks.
+   *
+   * GIVEN BY IS A ROLE WORD, NEVER A NAME. The athlete sees "you", "your guardian" or "your coach";
+   * the coach variant leaves it out. A guardian's name on an athlete's own screen is their own
+   * guardian, which is fine, but a coach's name on a relayed COPPA row or an admin's on a
+   * corrected one is another user's identity on a page that does not need it.
+   */
+  async listConsentsForUser(
+    userId: number,
+    opts: { includeGivenBy: boolean },
+  ): Promise<ConsentSummaryRow[]> {
+    const rows = await db
+      .select({
+        consentType: consentRecords.consentType,
+        documentText: consentRecords.documentText,
+        documentVersion: consentRecords.documentVersion,
+        givenByUserId: consentRecords.givenByUserId,
+        createdAt: consentRecords.createdAt,
+      })
+      .from(consentRecords)
+      .where(eq(consentRecords.userId, userId))
+      .orderBy(desc(consentRecords.createdAt), desc(consentRecords.id));
+    if (rows.length === 0) return [];
+
+    const latest = new Map<ConsentType, (typeof rows)[number]>();
+    for (const row of rows) {
+      if (!latest.has(row.consentType)) latest.set(row.consentType, row);
+    }
+
+    const [terms, research] = await Promise.all([
+      latest.has("terms_of_service") ? this.getTermsAcceptanceStatus(userId) : null,
+      latest.has("research_data_use") ? this.getResearchDataConsent(userId) : null,
+    ]);
+
+    // Resolved once for every giver on the list; the role is all that leaves here.
+    const giverIds = [...new Set([...latest.values()].map((r) => r.givenByUserId).filter((id): id is number => id != null && id !== userId))];
+    const giverRoles = new Map<number, string>();
+    if (opts.includeGivenBy && giverIds.length > 0) {
+      const givers = await db
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(inArray(users.id, giverIds));
+      for (const g of givers) giverRoles.set(g.id, g.role);
+    }
+    const givenByWord = (giverId: number | null): ConsentSummaryRow["givenBy"] => {
+      if (giverId == null || giverId === userId) return "you";
+      const role = giverRoles.get(giverId);
+      if (role === "guardian") return "your guardian";
+      if (role === "coach") return "your coach";
+      return "Forge";
+    };
+
+    return [...latest.entries()].map(([type, row]) => {
+      const entry = CONSENT_CATALOG[type];
+      const withdrawn = row.documentText.startsWith("WITHDRAWN");
+      const stale =
+        !withdrawn &&
+        (type === "terms_of_service"
+          ? terms?.needsAcceptance === true
+          : type === "research_data_use"
+            ? research?.staleTerms === true
+            : false);
+      const out: ConsentSummaryRow = {
+        type,
+        label: entry.label,
+        page: entry.page,
+        pdfUrl: entry.pdfType ? `/api/legal-documents/${entry.pdfType}.pdf` : null,
+        state: withdrawn ? "withdrawn" : "agreed",
+        createdAt: row.createdAt.toISOString(),
+        documentVersion: row.documentVersion,
+        stale,
+      };
+      if (opts.includeGivenBy) out.givenBy = givenByWord(row.givenByUserId);
+      return out;
+    });
   },
 
   async logConsentRecord(input: {

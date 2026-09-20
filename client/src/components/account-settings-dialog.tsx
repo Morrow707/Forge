@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DownloadButton } from "@/components/download-button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -763,9 +764,22 @@ function MyResearchConsentSection() {
       )}
 
       {showText && consentText && (
-        <p className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-3 text-xs text-muted-foreground">
-          {consentText.text}
-        </p>
+        <div>
+          <p className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-3 text-xs text-muted-foreground">
+            {consentText.text}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              Keep a copy: <a href="/research-consent" className="underline">read it as a page</a>
+            </span>
+            <DownloadButton
+              url="/api/legal-documents/research_consent.pdf"
+              filename="forge-research-consent.pdf"
+              shareTitle="Forge Research Consent"
+              label="Download PDF"
+            />
+          </div>
+        </div>
       )}
     </div>
   );

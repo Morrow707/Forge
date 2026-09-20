@@ -41,12 +41,20 @@ function LegalDocumentPage({
     | "eula"
     | "biometric_waiver"
     | "assumption_of_risk"
-    | "ai_terms_of_use";
+    | "ai_terms_of_use"
+    // Not a legalDocuments row: served from shared/research-consent.ts by an explicit branch
+    // on both public routes, so it reaches this page through the same two URLs as the rest.
+    | "research_consent";
   title: string;
   otherHref: string;
   otherLabel: string;
 }) {
-  const { data, isLoading, isError, refetch } = useQuery<{ content: string; updatedAt: string | null }>({
+  const { data, isLoading, isError, refetch } = useQuery<{
+    content: string;
+    updatedAt: string | null;
+    /** Only the research consent carries one; the others report updatedAt. */
+    version?: string;
+  }>({
     queryKey: [`/api/legal-documents/${docType}`],
   });
 
@@ -66,6 +74,9 @@ function LegalDocumentPage({
           <p className="mb-6 text-xs text-muted-foreground">
             Last updated {new Date(data.updatedAt).toLocaleDateString()}
           </p>
+        )}
+        {data?.version && (
+          <p className="mb-6 text-xs text-muted-foreground">Version {data.version}</p>
         )}
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
@@ -160,6 +171,20 @@ export function AiTermsOfUsePage() {
       title="Artificial Intelligence Terms of Use"
       otherHref="/legal"
       otherLabel="Signup Agreement \u2192"
+    />
+  );
+}
+
+/** The research consent: a code constant, not a legalDocuments row, and until 2026-09-20 the
+ * only accepted text with no public page and no PDF. An athlete or guardian who said yes in
+ * account settings could reread it only from inside that dialog. */
+export function ResearchConsentPage() {
+  return (
+    <LegalDocumentPage
+      docType="research_consent"
+      title="Research Consent and Data Use Authorization"
+      otherHref="/privacy"
+      otherLabel="Privacy Policy \u2192"
     />
   );
 }

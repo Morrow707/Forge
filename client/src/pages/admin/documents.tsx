@@ -66,13 +66,6 @@ function LiveBadge() {
     </Badge>
   );
 }
-function DraftBadge() {
-  return (
-    <Badge variant="secondary" className="text-[10px]">
-      DRAFT -- not enforced
-    </Badge>
-  );
-}
 /** Published for anyone to read, but not itself the thing anybody accepts.
  *
  * The third state, and the one these badges were missing. A document served at a public URL is
@@ -89,48 +82,46 @@ function PublishedBadge({ at }: { at: string }) {
 }
 
 
-/** The research-sharing review packet.
+/** Research data sharing: where it stands.
  *
- * The data-collection audit changed what the platform says it does with
- * athlete data: extracts can now leave the organisation as a PDF. Two of the
- * documents below were rewritten to describe that accurately, and neither has
- * been read by a lawyer. This card exists so that fact is on the same page as
- * the documents themselves rather than living only in a commit message --
- * whoever sends these to counsel needs the list of what changed and the
- * questions the build could not answer for itself.
+ * This was a "review packet" with a DRAFT badge and a warning against sending any extract,
+ * written when the Privacy Policy s7 and the biometric consent had been rewritten to describe
+ * research sharing and nobody with a law degree had read either. Every document is
+ * attorney-reviewed as of 2026-09-20 (CLAUDE.md, "Every legal document ALREADY EXISTS") and
+ * Scott has approved sending extracts, so the card is now a status card: which documents
+ * govern an extract, that they are reviewed, and the rules an extract is built under.
  *
- * The consent counts are here for the same reason: "how many athletes have
- * actually opted in" is the first thing a reviewer asks, and it is a number,
- * not a document. */
+ * The rules are cited, not restated. The cell floor is read from the same public route that
+ * serves the consent text, which reads RESEARCH_EXPORT_MIN_CELL -- the constant that actually
+ * suppresses a cell -- so this card cannot say "10" after the floor has moved. The consent
+ * counts stay because "how many athletes have actually opted in" is the first thing anybody
+ * asks, and it is a number, not a document. */
 function ResearchDataReviewCard() {
   // Renders `?? "--"` below rather than `?? 0`, which is already the honest answer
   // for a failed read, so this one needs no isError branch.
   const { data } = useQuery<{ totalAthletes: number; consentedAthletes: number }>({
     queryKey: ["/api/admin/research-consent"],
   });
+  const { data: consentDoc } = useQuery<{ version: string; exportMinCell: number }>({
+    queryKey: ["/api/legal-documents/research_consent"],
+  });
+  const floor = consentDoc?.exportMinCell ?? "--";
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          Research Data Sharing -- Review Packet
-          <DraftBadge />
+          Research Data Sharing
+          <Badge variant="outline" className="text-[10px]">
+            REVIEWED
+          </Badge>
         </CardTitle>
         <CardDescription>
-          What the platform now does with athlete data when an extract leaves the organisation,
-          the documents that describe it, and the questions counsel has to answer before an
-          extract is actually sent to anyone.
+          What leaves the organisation when a research extract is sent, the documents that
+          describe it, and the rules every extract is built under.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
-          <ShieldAlert className="h-4 w-4 shrink-0" />
-          No extract should be sent outside the organisation until a lawyer has read the two
-          rewritten documents below. The technical controls are built and tested; whether they
-          are sufficient for the jurisdictions Forge operates in is not a question the code can
-          answer.
-        </p>
-
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-md border p-3">
             <p className="text-xs text-muted-foreground">Athletes on the platform</p>
@@ -147,51 +138,60 @@ function ResearchDataReviewCard() {
 
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            What changed
+            Documents
           </p>
           <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
             <li>
-              <span className="text-foreground">Privacy Policy S7</span> and the{" "}
-              <span className="text-foreground">{BIOMETRIC_DOCUMENT_NAME}</span> were rewritten to
-              describe research sharing as it actually works. Both are drafts below.
+              <a href="/research-consent" className="font-semibold text-primary hover:underline">
+                Research Consent and Data Use Authorization
+              </a>
+              {" "}(version {consentDoc?.version ?? "--"}), the opt-in text an athlete or guardian
+              accepts. It is a code constant, not an editable document: the text is hashed into
+              every consent record, so a change is a new version that re-asks everyone.
+              <div className="mt-2">
+                <DownloadButton
+                  url="/api/legal-documents/research_consent.pdf"
+                  filename="forge-research-consent.pdf"
+                  shareTitle="Forge Research Consent"
+                  label="Download PDF"
+                />
+              </div>
             </li>
             <li>
-              A separate, opt-in <span className="text-foreground">research consent</span> was
-              added, distinct from tracking opt-out. A minor's answer comes from a guardian and
-              the record names who relayed it. Withdrawal writes its own dated record.
-            </li>
-            <li>
-              Extracts are group numbers only. No name, email, date of birth or user id leaves
-              the platform; rows carry a per-query pseudonym that maps nowhere.
-            </li>
-            <li>
-              Cells below <span className="text-foreground">10 athletes</span> are suppressed in
-              anything that leaves; the in-app floor stays at 5. Admin cohort queries are capped
-              at 50 per day so a group cannot be narrowed to one person by subtraction.
+              <span className="text-foreground">Privacy Policy s7</span> and the{" "}
+              <span className="text-foreground">{BIOMETRIC_DOCUMENT_NAME}</span> describe research
+              sharing as it works. All three are attorney-reviewed; what is still open with
+              counsel is in docs/legal-open-questions.md.
             </li>
           </ul>
         </div>
 
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Questions for counsel
+            Rules every extract is built under
           </p>
           <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
             <li>
-              Is guardian consent relayed through a coach sufficient, or does the guardian have
-              to sign it themselves?
+              Built from the research mirror, never from live athlete rows. The identifying
+              columns are absent from the mirror rather than stripped on the way out.
             </li>
             <li>
-              Is a suppression floor of 10 defensible for a document leaving the organisation,
-              given a recipient may hold outside knowledge that narrows a group further?
+              Group numbers only. No name, email, date of birth or user id leaves the platform;
+              rows carry a per-query pseudonym that maps nowhere.
             </li>
             <li>
-              Does a withdrawal have to reach extracts already sent, and if so, what does the
-              recipient agreement have to say?
+              Any cell describing fewer than{" "}
+              <span className="text-foreground">{floor} athletes</span> is suppressed in anything
+              that leaves. The in-app floor is lower on purpose; the two are different questions.
             </li>
             <li>
-              Do biometric-data statutes treat velocity, bar path and skeleton keypoints as
-              biometric identifiers, and does that change once they are de-identified?
+              Denominators report former athletes separately, so a retained-after-deletion
+              subject never makes a cohort read larger than the live roster.
+            </li>
+            <li>
+              A minor's consent comes from a guardian; a coach relaying it names who they are
+              relaying from. Withdrawal writes its own dated record and cannot reach an extract
+              already sent -- the consent text says so.
             </li>
           </ul>
         </div>
@@ -208,12 +208,11 @@ function ResearchDataReviewCard() {
  * review, in one place -- previously split across two confusingly similar
  * pages ("Legal Agreement" and "Documents") that both turned out to just be
  * "a page where an admin edits legal document text," which made it unclear
- * which document was which. Only the Signup Agreement is actually live
- * (shown and required at signup, frozen per-user at acceptance time via
- * agreedToTermsText -- see legal-agreement's own comment, folded in below);
- * the other five are drafts with no live enforcement path yet. Every
- * document card is labeled LIVE or DRAFT so that distinction is never
- * ambiguous again. The compliance snapshot below isn't a document at all --
+ * which document was which. The Signup Agreement is the one accepted at
+ * signup (frozen per-user at acceptance time via agreedToTermsText -- see
+ * legal-agreement's own comment, folded in below); the rest are published
+ * at public URLs. Every document card is labeled LIVE or PUBLISHED so that
+ * distinction is never ambiguous again. The compliance snapshot below isn't a document at all --
  * it's system data for the same "review before relying on it" purpose,
  * kept on this page rather than given their own nav slot. */
 export default function AdminDocuments() {
@@ -233,9 +232,9 @@ export default function AdminDocuments() {
           <CardHeader>
             <CardTitle>Legal & Compliance</CardTitle>
             <CardDescription>
-              Every legal document on the platform (labeled LIVE or DRAFT below), plus the
-              privacy/compliance data snapshot -- built for review before any of it is relied on,
-              not finished legal or security documents yet.
+              Every legal document on the platform (labeled LIVE or PUBLISHED below), plus the
+              privacy/compliance data snapshot. Every document is attorney-reviewed; the snapshot
+              is system data, not a legal opinion.
             </CardDescription>
           </CardHeader>
           <CardContent>
