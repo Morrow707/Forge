@@ -61,6 +61,7 @@ import {
 import { missingPriceEnvVars } from "./stripe-prices";
 import { getHealthSnapshot } from "./health-probes";
 import { RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION } from "@shared/research-consent";
+import { documentAudienceFor, uploadableKindsFor } from "@shared/required-documents";
 import { requireGuardianAccess } from "./auth";
 import { transcribeScannedPdf } from "./pdf-vision";
 import { tagPassages } from "./passage-tagging";
@@ -4092,7 +4093,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!isLegalDocType(type)) return res.status(400).json({ message: "Invalid document type" });
     const doc = await resolveLegalDocument(type);
     if (!doc) return res.status(404).json({ message: "Not found" });
-    const title = `Forge -- ${LEGAL_DOC_TITLES[type]} (Draft)`;
+    // No "(Draft)" in the title any more. The documents are reviewed (see CLAUDE.md, "Every legal
+    // document ALREADY EXISTS") and documents-are-not-drafts.test.ts forbids the word inside every
+    // text -- but the PDF and the email were still wrapping each one in it, so a downloaded copy
+    // of the counsel-built biometric consent opened with "(Draft)" over it.
+    const title = `Forge -- ${LEGAL_DOC_TITLES[type]}`;
     const pdf = await buildLegalDocumentPdf(title, doc.content);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="forge-${type}.pdf"`);
@@ -4106,7 +4111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const doc = await resolveLegalDocument(type);
     if (!doc) return res.status(404).json({ message: "Not found" });
-    const title = `Forge ${LEGAL_DOC_TITLES[type]} (Draft)`;
+    const title = `Forge ${LEGAL_DOC_TITLES[type]}`;
     const html = `<h2>${title}</h2><p style="white-space:pre-wrap;font-family:sans-serif;">${doc.content
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")}</p>`;
@@ -4123,6 +4128,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // returning empty so a typo'd URL doesn't quietly render a blank page.
   // Scoped to PUBLIC_LEGAL_DOC_TYPES, not every isLegalDocType -- see that
   // set's own comment for why the biometric waiver isn't in it.
+  //
+  // The PDF first, because Express matches in registration order and "privacy_policy.pdf" is a
+  // perfectly good :type to the route below. Same public set, same resolver, same builder the
+  // admin route uses -- the only thing that was admin-only about downloading a public document
+  // was the route, so an athlete or a coach reading /privacy had no way to keep a copy.
+  app.get("/api/legal-documents/:type.pdf", async (req, res) => {
+    const type = String(req.params.type).replace(/\.pdf$/, "");
+    if (!isPublicLegalDocType(type)) return res.status(404).json({ message: "Unknown document type" });
+    const doc = await resolveLegalDocument(type);
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    const pdf = await buildLegalDocumentPdf(`Forge -- ${LEGAL_DOC_TITLES[type]}`, doc.content);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="forge-${type.replace(/_/g, "-")}.pdf"`);
+    res.send(pdf);
+  });
+
   app.get("/api/legal-documents/:type", async (req, res) => {
     const type = String(req.params.type);
     if (!isPublicLegalDocType(type)) return res.status(404).json({ message: "Unknown document type" });
@@ -7065,6 +7086,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!req.file) return res.status(400).json({ message: "No file received." });
         const parsed = waiverKindSchema.safeParse(req.body?.kind);
         if (!parsed.success) return res.status(400).json({ message: "Pick what kind of form this is." });
+        // THE KIND HAS TO BELONG ON THIS PROFILE. The enum is every kind the table can hold;
+        // the checklist is what this person is asked for, and the two were never compared here,
+        // so an athlete could file an "Institutional Service Agreement (signed)" against
+        // themselves and put a row in the admin queue that read as a school's signature. The
+        // institutional agreement is the one kind on no checklist: it is allowed only for the
+        // coach the server says owes one, filing it on their own record.
+        const target = await storage.getUser(athleteId);
+        if (!target) return res.status(404).json({ message: "Athlete not found." });
+        const audience = documentAudienceFor({
+          role: target.role,
+          hasCoach: target.role === "athlete" ? await athleteHasCoach(athleteId) : false,
+        });
+        // "other" is the escape hatch for a form no list anticipated, on every profile.
+        const allowedKinds: string[] = [...uploadableKindsFor(audience), "other"];
+        if (
+          parsed.data === "institutional_agreement" &&
+          user.id === athleteId &&
+          target.role === "coach" &&
+          (await storage.getInstitutionalAgreementStatus(athleteId)).required
+        ) {
+          allowedKinds.push("institutional_agreement");
+        }
+        if (!allowedKinds.includes(parsed.data)) {
+          return res.status(400).json({ message: "That kind of document does not belong on this profile." });
+        }
         const waiver = await storage.createExternalWaiver({
           athleteId,
           uploadedByUserId: user.id,
@@ -7082,9 +7128,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // READ IT NOW, DECIDE NOW. No queue.
         //
         // The model is asked three visual questions -- right kind, signed, legible -- and if all
-        // three land confidently the document is accepted in this request and the file is
-        // destroyed before the response is written. The parent sees a green check, and no member
-        // of staff has opened their child's medical form. Anything the model cannot clear goes
+        // three land confidently the document is accepted in this request. The parent sees a
+        // green check, and no member of staff has opened their child's medical form. The file is
+        // KEPT either way (see externalWaivers' schema comment: a release only covers anyone if
+        // it can be produced). Anything the model cannot clear goes
         // to a person WITH the file still on disk, which is the only case where one exists.
         //
         // Awaited rather than backgrounded: the whole point is that the answer is in the reply.

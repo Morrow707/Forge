@@ -115,6 +115,17 @@ export const REQUIRED_DOCUMENTS: Record<DocumentAudience, RequiredDocument[]> = 
   ],
 };
 
+/** The kinds a profile of this audience may have FILED against it. The checklist is what the
+ * page shows; this is what the upload route accepts, and it is the same list on purpose: a kind
+ * nobody is asked for is a kind nobody should be able to file. Found at runtime 2026-09-20 when
+ * an athlete uploaded a signed "Institutional Service Agreement" against themselves and it landed
+ * in the admin queue as if a school had signed. The institutional agreement is the one kind
+ * outside every checklist, and the route allows it only for the primary coach the server says
+ * owes one; "other" is allowed everywhere as the escape hatch for a form nobody categorised. */
+export function uploadableKindsFor(audience: DocumentAudience): DocumentKind[] {
+  return REQUIRED_DOCUMENTS[audience].map((d) => d.kind);
+}
+
 /** Which checklist applies. A coach is a coach; an athlete splits on whether anybody actually
  * coaches them, because that is what decides whether an institution exists to have issued
  * anything. */

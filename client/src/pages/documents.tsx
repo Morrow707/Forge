@@ -29,7 +29,9 @@ import {
   DOCUMENT_LABEL,
   REQUIRED_DOCUMENTS,
   documentAudienceFor,
+  documentNeedsAction,
   type DocumentKind,
+  type DocumentStatus,
 } from "@shared/required-documents";
 
 /** ONE PAGE, THREE CHECKLISTS.
@@ -47,7 +49,11 @@ import {
  */
 type Summary = {
   kind: DocumentKind;
-  status: "accepted" | "pending_review" | "rejected" | "expired" | "missing";
+  // The server's DocumentStatus, every value of it. This used to be a hand-written union that
+  // left out "expiring_soon", so an accepted clearance inside its 30-day warning window fell
+  // through StatusMark to "Not uploaded" here while the coach's roster view said "Expires
+  // soon" for the same row. shared/document-status.test.ts scans this file for every value.
+  status: DocumentStatus;
   issuingOrganization: string | null;
   expiresOn: string | null;
   waiverId: number | null;
@@ -78,6 +84,13 @@ function StatusMark({ status, required }: { status: Summary["status"]; required:
     return (
       <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
         <Clock className="h-4 w-4" /> In review
+      </span>
+    );
+  }
+  if (status === "expiring_soon") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
+        <FileWarning className="h-4 w-4" /> Expires soon
       </span>
     );
   }
@@ -205,8 +218,12 @@ export default function DocumentsPage() {
     uploadRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
+  // The same rule the coach's roster view counts by (documentStatusForRoster), so the number an
+  // athlete sees here is the number their coach sees for them. Counting "anything but accepted"
+  // told an athlete who had already uploaded and was waiting on review that they still had one
+  // to upload.
   const outstanding = checklist.filter(
-    (d) => d.required && (byKind.get(d.kind)?.status ?? "missing") !== "accepted",
+    (d) => d.required && documentNeedsAction(byKind.get(d.kind)?.status ?? "missing"),
   ).length;
 
   const who = data?.athleteName ?? "this athlete";
@@ -383,10 +400,11 @@ export default function DocumentsPage() {
             {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               PDF, or a photo of the signed page. It's read automatically as soon as you upload
-              it -- we check it's the document you picked and that it's actually signed, then the
-              file is deleted. Nobody at Forge keeps a copy or reads it unless the check can't
-              clear it. We can't confirm a form signed with someone else covers Forge, so the
-              agreements you accepted here still apply.
+              it -- we check it's the document you picked and that it's actually signed. Nobody at
+              Forge reads it unless that check can't clear it. The file is kept on your record so it
+              can be produced later, and you can open it below.{" "}
+              We can't confirm a form signed with someone else covers Forge, so the agreements you
+              accepted here still apply.
             </p>
           </CardContent>
         </Card>

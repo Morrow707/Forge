@@ -73,11 +73,13 @@ export default function AdminWaiversPage() {
             <CardTitle className="text-base">Documents from schools, clubs and clinics</CardTitle>
             <CardDescription>
               Only the ones the automatic read could not clear reach this queue -- a document it
-              accepted was never seen by anybody here, and its file was destroyed on the spot.
-              Confirm each one below arrived, is legible, and is what it says it is. That is the
-              whole claim: accepting a form signed with a school does not make it cover Forge,
-              which takes the institution signing our own agreement.
-              {" "}Deciding either way deletes the file, so this is the only time it can be opened.
+              accepted was never seen by anybody here. Confirm each one below arrived, is legible,
+              and is what it says it is. That is the whole claim: accepting a form signed with a
+              school does not make it cover Forge, which takes the institution signing our own
+              agreement.
+              {" "}The file is kept after either decision (accepted, it is the proof the document
+              exists; rejected, it is what an appeal argues over). Opening it again later goes
+              through the athlete lookup below, with a reason, and is logged.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
