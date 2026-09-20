@@ -182,14 +182,30 @@ export function listUnattachedUploads(): UnattachedUpload[] {
   }
 }
 
+// Both writes are guarded, for a reason that is not tidiness: this runs inside
+// uploadPendingEntry, AFTER the upload landed and AFTER clearPersistedVideo has already taken
+// the clip off disk and out of the manifest. A throw here (localStorage full -- which is the
+// realistic case, since the log queue shares this store) escaped into runVideoFlush's catch,
+// where it looks like a failed upload and is "left queued" -- except there is no queue entry
+// left to leave. The clip was uploaded, unlinked from every set, recorded nowhere, and the
+// athlete was told nothing. A lost bookkeeping row costs one Video Bank listing; a throw here
+// costs the whole clip.
 function recordUnattachedUpload(entry: UnattachedUpload) {
   const next = [entry, ...listUnattachedUploads()].slice(0, MAX_UNATTACHED);
-  localStorage.setItem(UNATTACHED_KEY, JSON.stringify(next));
+  try {
+    localStorage.setItem(UNATTACHED_KEY, JSON.stringify(next));
+  } catch {
+    // Nothing to do -- see above. The upload itself already succeeded.
+  }
 }
 
 export function dismissUnattachedUpload(url: string) {
   const next = listUnattachedUploads().filter((u) => u.url !== url);
-  localStorage.setItem(UNATTACHED_KEY, JSON.stringify(next));
+  try {
+    localStorage.setItem(UNATTACHED_KEY, JSON.stringify(next));
+  } catch {
+    // The entry stays listed; the athlete can dismiss it again later.
+  }
 }
 
 /** Writes the blob to disk and records it in the pending-upload manifest

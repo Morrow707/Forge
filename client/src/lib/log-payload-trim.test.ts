@@ -35,9 +35,10 @@ describe("dropHeavyFields", () => {
     const out = dropHeavyFields(realPayload()) as ReturnType<typeof realPayload> | null;
     expect(out).not.toBeNull();
     const set = out!.entries[0].sets[0];
-    expect(set.skeletonFrames).toBeNull();
-    expect(set.barPathTrace).toBeNull();
-    expect(set.armPathTrace).toBeNull();
+    // Absent, not null: an explicit null would clear the stored column on the server.
+    expect(set).not.toHaveProperty("skeletonFrames");
+    expect(set).not.toHaveProperty("barPathTrace");
+    expect(set).not.toHaveProperty("armPathTrace");
   });
 
   it("keeps every number the athlete actually logged", () => {

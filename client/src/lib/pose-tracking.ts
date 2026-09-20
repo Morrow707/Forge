@@ -1612,8 +1612,11 @@ export const MIN_CALIBRATION_SAMPLES = 5;
 // tracked frame's raw (pixel-space) worldLandmarks, tracks vertical sign per-frame the same
 // way live ARKit tracking does (worldVerticalSign can return null on a single noisy frame;
 // falls back to the last known-good sign rather than defaulting to a guess), and returns the
-// median of every valid computePixelToMeterScale sample. Consolidated here so a fix to this
-// logic (or the sample-count bar) lands in one place, not three separately-drifting copies.
+// TENTH PERCENTILE of every valid computePixelToMeterScale sample. (This said "median" long
+// after the estimator stopped being one -- see the block comment on the return statement itself
+// for why a median is the wrong estimator for a one-sided error, and do not restore it.)
+// Consolidated here so a fix to this logic (or the sample-count bar) lands in one place, not
+// three separately-drifting copies.
 // Movements performed lying down, matched by NAME rather than inferred from the landmarks.
 //
 // That choice is the whole point. Two attempts to infer "is this athlete lying down" from the

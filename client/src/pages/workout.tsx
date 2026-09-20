@@ -72,6 +72,11 @@ import {
   clearPendingLog,
 } from "@/lib/offline-queue";
 import { dropHeavyFields } from "@/lib/log-payload-trim";
+
+/** Fired by the day's reattach listener once a queued clip has landed on its set, so the
+ * exercise card that owns the form-check mutations can run the check it never got to run. */
+const FORM_CHECK_AFTER_REATTACH_EVENT = "forge:form-check-after-reattach";
+type FormCheckAfterReattachDetail = { itemKey: string; setNumber: number; videoUrl: string };
 import {
   ArrowLeft,
   CheckCircle2,
@@ -1944,11 +1949,21 @@ export function WorkoutPage({
       const match = itemsRef.current.find(
         (it) => it.kind === "exercise" && it.refId === detail.programExerciseId,
       );
-      if (match)
+      if (match) {
         updateSet(match.key, detail.setNumber, {
           formCheckVideoUrl: detail.videoUrl,
           removeFormCheckVideo: false,
         });
+        // The form check (AI write-up or the coach's copy) only ever fired from the capture
+        // handler, which had no url for a queued clip -- cellular, or a server hiccup -- so a
+        // set filmed off Wi-Fi got its video later and its diagnosis never. The mutations live
+        // in the exercise card, so hand it the url the same way this handler was handed it.
+        window.dispatchEvent(
+          new CustomEvent<FormCheckAfterReattachDetail>(FORM_CHECK_AFTER_REATTACH_EVENT, {
+            detail: { itemKey: match.key, setNumber: detail.setNumber, videoUrl: detail.videoUrl },
+          }),
+        );
+      }
     }
     window.addEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
     return () => window.removeEventListener(VIDEO_REATTACHED_EVENT, handleReattached);
@@ -2982,6 +2997,20 @@ function ExerciseLogContent({
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not get AI feedback on that video"),
   });
+
+  // A queued clip's form check, run when the clip finally reattaches. Same branch the capture
+  // handlers take, one event later. Above every early return so the hook count is stable.
+  useEffect(() => {
+    function onReattached(e: Event) {
+      const d = (e as CustomEvent<FormCheckAfterReattachDetail>).detail;
+      if (d.itemKey !== item.key) return;
+      if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: d.setNumber, videoUrl: d.videoUrl });
+      else postFormVideoMutation.mutate({ setNumber: d.setNumber, videoUrl: d.videoUrl });
+    }
+    window.addEventListener(FORM_CHECK_AFTER_REATTACH_EVENT, onReattached);
+    return () => window.removeEventListener(FORM_CHECK_AFTER_REATTACH_EVENT, onReattached);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.key, videoCheckMode]);
 
   // At most one "best" and one "worst" per exercise/day -- re-flagging a
   // different set clears the old holder of that flag rather than allowing

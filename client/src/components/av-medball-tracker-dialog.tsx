@@ -19,7 +19,11 @@ import {
   visionRefineGripSeed,
   type ImplementPoint,
 } from "@/lib/vision-body-landmarks";
-import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
+import type {
+  PoseFrame as NativePoseFrame,
+  CaptureDeviceInfo,
+  AvObjectLockTelemetry,
+} from "@/lib/native-av-preview";
 import {
   calibrateFromFrames,
   calibrationMethodBreakdown,
@@ -327,7 +331,20 @@ export function AvMedballTrackerDialog({
     rawFrames: NativePoseFrame[],
     skeletonFrames: PoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
-    recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+    // THIS DIALOG RUNS THE IMPLEMENT DETECTOR (trackingMode "med_ball"), SO IT HAS LOCK
+    // TELEMETRY TO REPORT -- and this parameter used to narrow it away. The caller passes the
+    // whole AvAnalysisResult; typing it as three counters meant every med-ball take's
+    // objectLock/objectLockSecondary was dropped between the bridge and the insert, silently,
+    // because the schema fields are optional. A guard that cannot be shown to have fired is a
+    // guard nobody can tune -- and a ball is exactly the class where a re-classify correction
+    // mid-clip is likeliest. Same forwarding as av-bar-tracker-dialog.tsx.
+    recordingStats: {
+      frameCount: number;
+      trackedFrameCount: number;
+      elapsedSeconds: number;
+      objectLock?: AvObjectLockTelemetry;
+      objectLockSecondary?: AvObjectLockTelemetry;
+    },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
@@ -346,6 +363,8 @@ export function AvMedballTrackerDialog({
           rawFrames,
           trackingMode: "med_ball",
           recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor: null, ...calibrationFrames },
         }),
         uploadPromise,
@@ -480,6 +499,8 @@ export function AvMedballTrackerDialog({
           rawFrames,
           trackingMode: "med_ball",
           recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor, ...calibrationFrames },
         }),
         uploadPromise,
@@ -498,6 +519,8 @@ export function AvMedballTrackerDialog({
         rawFrames,
         trackingMode: "med_ball",
         recording: recordingStats,
+        objectLock: recordingStats.objectLock ?? null,
+        objectLockSecondary: recordingStats.objectLockSecondary ?? null,
         calibration: { scaleFactor, ...calibrationFrames },
       }),
     };
