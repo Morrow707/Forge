@@ -4701,6 +4701,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(await storage.listUnattachedVideoUploads(athleteId));
   });
 
+  // ---------- Clip lists for the compare tool (see shared/video-clips.ts) ----------
+  //
+  // A coach picks any roster athlete's clip for either side of a comparison. Scoped through
+  // getRosterAthleteForCoach like every other per-athlete coach route, which is also what makes
+  // it per-team narrowed. An admin has no route here at all: an admin never gets a clip URL
+  // for somebody else's athlete, and the only clips an admin can list are their own
+  // (/api/athlete/clips below, which scopes by the caller's id).
+  app.get("/api/coach/roster/:athleteId/clips", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    const movement = typeof req.query.movement === "string" ? req.query.movement : null;
+    res.json(await storage.getClipsForAthlete(athleteId, movement));
+  });
+
+  // The saved skeleton for one chosen set clip. Fetched per clip, never with the list.
+  app.get("/api/coach/roster/:athleteId/clips/:setId/frames", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    const frames = await storage.getSetClipFramesForAthlete(athleteId, Number(req.params.setId));
+    if (!frames) return res.status(404).json({ message: "Clip not found" });
+    res.json(frames);
+  });
+
   app.patch("/api/coach/roster/:athleteId/profile", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const athleteId = Number(req.params.athleteId);
@@ -10399,6 +10426,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ attached: true, via: result.via });
   });
 
+  // ---------- The caller's own clips, for the compare tool ----------
+  // Same three roles as /api/athlete/unattached-videos below, for the same reason: a coach or
+  // admin filming their own training compares their own sets. Always the caller's own id --
+  // somebody else's clips are the coach roster route above or the guardian route, each with its
+  // own scope check. Watching a clip already recorded is never behind the camera entitlement
+  // (CLAUDE.md, "Who may use the camera").
+  app.get("/api/athlete/clips", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const movement = typeof req.query.movement === "string" ? req.query.movement : null;
+    res.json(await storage.getClipsForAthlete(user.id, movement));
+  });
+
+  app.get("/api/athlete/clips/:setId/frames", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const frames = await storage.getSetClipFramesForAthlete(user.id, Number(req.params.setId));
+    if (!frames) return res.status(404).json({ message: "Clip not found" });
+    res.json(frames);
+  });
+
   // ---------- Unattached video uploads (see unattachedVideoUploads' schema comment) ----------
 
   app.get("/api/athlete/unattached-videos", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
@@ -12188,6 +12234,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // video rather than describing one.
   guardianRead("/videos", async (athleteId, _req, res) => {
     res.json(await storage.getVideosForAthlete(athleteId));
+  });
+
+  // The compare tool's clip list for a parent looking at their child's clips, and the frames
+  // for one of them. Read-only like everything else in guardianRead.
+  guardianRead("/clips", async (athleteId, req, res) => {
+    const movement = typeof req.query.movement === "string" ? req.query.movement : null;
+    res.json(await storage.getClipsForAthlete(athleteId, movement));
+  });
+
+  guardianRead("/clips/:setId/frames", async (athleteId, req, res) => {
+    const frames = await storage.getSetClipFramesForAthlete(athleteId, Number(req.params.setId));
+    if (!frames) return res.status(404).json({ message: "Clip not found" });
+    res.json(frames);
   });
 
   // ---------------- Guardian: asking for a video to come down ----------------

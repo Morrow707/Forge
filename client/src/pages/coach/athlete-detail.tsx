@@ -574,7 +574,16 @@ export default function AthleteDetailPage() {
 
               <TabsContent value="skills">
                 <Card>
-                  <CardContent className="p-5">
+                  <CardContent className="space-y-4 p-5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        Put any two of {athlete.name}'s clips side by side, or against a teammate's.
+                      </p>
+                      <Button size="sm" variant="secondary" onClick={() => setComparing(true)}>
+                        <GitCompare className="h-3.5 w-3.5" />
+                        Compare clips
+                      </Button>
+                    </div>
                     <SkillSessionsPanel athleteName={athlete.name} athleteId={athlete.id} />
                   </CardContent>
                 </Card>
