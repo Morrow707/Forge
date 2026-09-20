@@ -70,3 +70,16 @@ export type ConsentSummaryRow = {
   /** A role word, never a name -- see listConsentsForUser. */
   givenBy?: "you" | "your guardian" | "your coach" | "Forge";
 };
+
+/** WHAT A MINOR IS TOLD AT THE CAMERA WHEN NO VIDEO AND BIOMETRIC CONSENT IS ON FILE.
+ *
+ * One string, read by the server (recordBiometricRelease's refusal of a minor) and by the client
+ * (the athlete's own workout screen before the tracker opens), so both say the same thing and both
+ * name the one place the consent can actually be given. A guardian gives it at claim time; when
+ * that did not happen -- a claim that predates the consent, a guardian who declined, a withdrawal
+ * -- the guardian dashboard is where it is given afterwards, and a refusal that does not say so is
+ * a dead end for the person reading it.
+ */
+export const GUARDIAN_GIVES_BIOMETRIC_CONSENT =
+  "A parent or guardian gives the video and biometric consent for an athlete under 18. " +
+  "They can give it for you from their Forge guardian dashboard, under your name.";

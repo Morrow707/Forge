@@ -175,6 +175,10 @@ export default function DocumentsPage() {
     enabled: user?.role === "coach" && !forSomeoneElse,
   });
   const offerInstitutional = institutional?.required === true;
+  // A staff coach is never OFFERED the agreement (no upload kind, no form) but is SHOWN the
+  // organisation's signed one: the status carries the primary's record for them, and the
+  // component renders its read-only branch.
+  const showInstitutional = offerInstitutional || institutional?.onFile === true;
 
   const key = [`/api/waivers/${targetId ?? 0}`];
   // isError matters: without it a failed read renders every checklist row as "missing", which
@@ -340,7 +344,7 @@ export default function DocumentsPage() {
           // needs it, so say so instead of showing nothing.
           <ReadFailed what="your Service Agreement status" onRetry={() => void refetchInstitutional()} />
         )}
-        {offerInstitutional && <InstitutionalAgreementSigning />}
+        {showInstitutional && <InstitutionalAgreementSigning />}
 
         <Card ref={uploadRef}>
           <CardHeader>

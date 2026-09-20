@@ -286,10 +286,14 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
     // change anything: an adult (a minor's comes from their guardian) who has not agreed. The
     // capture gate in submitWorkoutLog is the enforcement; this is what lets the client ask
     // rather than silently dropping what they film.
-    publicUser.biometricReleaseRequired =
-      user.dateOfBirth != null &&
-      derivePrivacyTier(user.dateOfBirth) === "tier3_adult_18plus" &&
-      !(await storage.hasBiometricConsent(user.id));
+    const hasBiometricConsent = await storage.hasBiometricConsent(user.id);
+    const isAdult =
+      user.dateOfBirth != null && derivePrivacyTier(user.dateOfBirth) === "tier3_adult_18plus";
+    publicUser.biometricReleaseRequired = isAdult && !hasBiometricConsent;
+    // The other half of the same question, for a minor: nothing on file and nothing THEY can do
+    // about it. The workout screen tells them who can (their guardian, from the guardian
+    // dashboard) instead of opening a tracker whose numbers the capture gate will then drop.
+    publicUser.biometricReleaseAwaitingGuardian = !isAdult && !hasBiometricConsent;
     // Whether to show this athlete the risk terms themselves. EVERY athlete, not only adults --
     // that is the whole point. For a minor the guardian's agreement is the legal instrument and
     // this changes nothing about it; what it changes is that the person actually lifting has

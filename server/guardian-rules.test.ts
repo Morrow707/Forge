@@ -135,7 +135,7 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     expect(section).not.toContain("updateProfileSchema");
   });
 
-  it("leaves exactly five guardian writes, all deliberate", () => {
+  it("leaves exactly seven guardian writes, all deliberate", () => {
     // Camera tracking off, which is prospective and is the parental control the feature exists
     // for; asking for a removal, which somebody else answers; and signing off a research-consent
     // change the ATHLETE asked for.
@@ -184,10 +184,20 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     // Accepting when nothing is stale is a no-op re-affirmation rather than a change, so unlike
     // the research route there is nothing here a guardian could originate.
     //
+    // The seventh is giving the VIDEO AND BIOMETRIC CONSENT for the minor after the claim. It is
+    // the consent logGuardianConsents already writes when the guardian claims the link, given
+    // again for the cases the claim cannot cover: a claim that predates the consent, a guardian
+    // who declined then, a text that changed since. Same reasoning as the withdraw-consent route
+    // in reverse -- it is the permission the camera stands on, which was the guardian's to give
+    // at the claim and is therefore theirs to give afterwards. It is not the athlete's to
+    // originate (recordBiometricRelease refuses a minor) and the server refuses an adult, so the
+    // only thing this route can record is the one consent only a guardian can give.
+    //
     // Anything else appearing here is a regression.
     const guardianWrites = [...routes.matchAll(/app\.(post|patch|put|delete)\(\s*\n?\s*"\/api\/guardian\/[^"]*"/g)];
     const paths = guardianWrites.map((m) => m[0].split('"')[1]);
     expect(paths.sort()).toEqual([
+      "/api/guardian/athletes/:athleteId/biometric-consent",
       "/api/guardian/athletes/:athleteId/removal-requests",
       "/api/guardian/athletes/:athleteId/tracking-opt-out",
       "/api/guardian/athletes/:athleteId/withdraw-consent",

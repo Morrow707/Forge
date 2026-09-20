@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ForgeMark } from "@/components/forge-mark";
 import {
@@ -26,6 +27,7 @@ import {
   Trash2,
   Flag,
   FileCheck2,
+  ScanLine,
 } from "lucide-react";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
@@ -407,6 +409,7 @@ export default function GuardianDashboardPage() {
                 </Card>
 
                 <GuardianAgreementsCard athleteId={athlete.id} athleteName={athlete.name} />
+                <GuardianBiometricConsentCard athleteId={athlete.id} athleteName={athlete.name} />
 
                 <Card>
                   <CardHeader>
@@ -1138,6 +1141,174 @@ function GuardianAgreementsCard({ athleteId, athleteName }: { athleteId: number;
         <Button asChild size="sm" variant="outline">
           <Link href={`/documents/${athleteId}`}>Open {athleteName}'s documents</Link>
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+type BiometricConsentStatus = {
+  given: boolean;
+  givenAt: string | null;
+  givenByGuardian: boolean;
+  stale: boolean;
+  withdrawnAt: string | null;
+  guardianDecides: boolean;
+  liveVersion: string | null;
+};
+
+/** THE GUARDIAN GIVES THE VIDEO AND BIOMETRIC CONSENT, AFTER THE CLAIM.
+ *
+ * Claiming the link is where a parent gives this consent, and until this card it was the only
+ * place: a claim that predates the consent, a guardian who declined at the time, or a change to
+ * the consent text all left the child at the camera with a refusal that named the guardian and a
+ * guardian with nowhere to answer it. The card shows where the consent stands, the whole document
+ * (the same live text the athlete's own dialog reads), a checkbox and one button. It is the same
+ * record logGuardianConsents writes at the claim, attributed to the guardian who pressed it.
+ *
+ * Three states, and the third is the one that had no surface: current (nothing to do), given
+ * under text that has since changed (ask again, and say why), and not given (ask). An adult child
+ * is the athlete's own question and the card says so rather than offering a button the server
+ * will refuse. The document is fetched only when the card is about to ask for it.
+ */
+function GuardianBiometricConsentCard({
+  athleteId,
+  athleteName,
+}: {
+  athleteId: number;
+  athleteName: string;
+}) {
+  const qc = useQueryClient();
+  const [agreed, setAgreed] = useState(false);
+  const statusKey = ["/api/guardian/athletes", athleteId, "biometric-consent"];
+  const {
+    data: status,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<BiometricConsentStatus>({
+    queryKey: statusKey,
+    queryFn: () => getJson(`/api/guardian/athletes/${athleteId}/biometric-consent`),
+  });
+
+  const asking = status != null && status.guardianDecides && (!status.given || status.stale);
+  const {
+    data: document,
+    isError: documentFailed,
+    refetch: refetchDocument,
+  } = useQuery<{ content: string }>({
+    queryKey: ["/api/legal-documents/biometric_waiver"],
+    queryFn: () => getJson("/api/legal-documents/biometric_waiver"),
+    enabled: asking,
+  });
+
+  const give = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/guardian/athletes/${athleteId}/biometric-consent`, {
+        agreed: true,
+      });
+    },
+    onSuccess: () => {
+      setAgreed(false);
+      qc.invalidateQueries({ queryKey: statusKey });
+      qc.invalidateQueries({ queryKey: ["/api/guardian/athletes", athleteId, "consents"] });
+      toast.success(`Recorded. ${athleteName} can use the camera now.`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+  });
+
+  return (
+    <Card className={asking ? "border-amber-500/50" : undefined}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ScanLine className="h-4 w-4 text-primary" />
+          Video and Biometric Consent
+        </CardTitle>
+        <CardDescription>
+          Whether {athleteName} may film a set and have their movement measured from the video.
+          Without it their sets still log; the camera measurements are not stored.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isError ? (
+          <ReadFailed what="the consent status" onRetry={() => void refetch()} />
+        ) : isLoading || !status ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : !status.guardianDecides ? (
+          <p className="text-sm text-muted-foreground">
+            {athleteName} is an adult and gives this consent for themselves, from their own
+            workout screen.
+          </p>
+        ) : (
+          <>
+            {status.given && !status.stale && (
+              <p className="flex items-start gap-2 text-sm">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                <span>
+                  Given {status.givenByGuardian ? "by a guardian " : ""}on{" "}
+                  {status.givenAt ? new Date(status.givenAt).toLocaleDateString() : "record"}, under
+                  the current text. Nothing to do.
+                </span>
+              </p>
+            )}
+            {status.given && status.stale && (
+              <p className="text-sm">
+                <span className="font-semibold">The consent text has changed</span> since it was
+                given on {status.givenAt ? new Date(status.givenAt).toLocaleDateString() : "record"}.
+                The earlier consent still stands; read the current version and accept it again so
+                the record matches what {athleteName} is actually consented to.
+              </p>
+            )}
+            {!status.given && (
+              <p className="text-sm">
+                <span className="font-semibold">Not on file.</span>{" "}
+                {status.withdrawnAt
+                  ? `Withdrawn on ${new Date(status.withdrawnAt).toLocaleDateString()}. `
+                  : ""}
+                {athleteName} cannot give this themselves. Read it and, if you agree, accept it
+                for them here.
+              </p>
+            )}
+            {asking && (
+              <>
+                {documentFailed ? (
+                  <ReadFailed
+                    what="the Video and Biometric Consent"
+                    onRetry={() => void refetchDocument()}
+                    className="py-4"
+                  />
+                ) : !document ? (
+                  <p className="text-sm text-muted-foreground">Loading the document…</p>
+                ) : (
+                  <div
+                    className="max-h-[60vh] overflow-y-auto rounded-md border border-border bg-background/40 p-3 text-xs leading-relaxed whitespace-pre-wrap"
+                    data-testid="biometric-consent-text"
+                  >
+                    {document.content}
+                  </div>
+                )}
+                <label className="flex items-start gap-2 text-xs">
+                  <Checkbox
+                    className="mt-0.5"
+                    checked={agreed}
+                    onCheckedChange={(v) => setAgreed(v === true)}
+                    disabled={!document}
+                  />
+                  <span>
+                    I am {athleteName}'s parent or legal guardian, I have read this consent and I
+                    agree to it on their behalf
+                  </span>
+                </label>
+                <Button
+                  size="sm"
+                  disabled={!agreed || !document || give.isPending}
+                  onClick={() => give.mutate()}
+                >
+                  {give.isPending ? "Recording…" : `Accept for ${athleteName}`}
+                </Button>
+              </>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
   );

@@ -12119,6 +12119,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(await storage.listConsentsForUser(athleteId, { includeGivenBy: true }));
   });
 
+  /** Where the child's Video and Biometric Consent stands: given or not, by whom, on what date,
+   * and whether the text has changed since. The dashboard card asks this before it offers the
+   * accept button, and "What you've agreed to" reads staleness from the same function. */
+  guardianRead("/biometric-consent", async (athleteId, _req, res) => {
+    res.json(await storage.getBiometricConsentStatus(athleteId));
+  });
+
+  // THE GUARDIAN GIVES THE VIDEO AND BIOMETRIC CONSENT AFTER THE CLAIM. The seventh guardian
+  // write (see guardian-rules.test.ts). It is the consent logGuardianConsents writes at claim
+  // time, given again -- for a claim that predates it, a guardian who declined then, or a text
+  // that has changed since -- and it is the guardian's to give exactly as the withdraw-consent
+  // route above is theirs to take back. Not information about the child (rule 3): the permission
+  // the camera stands on. An `agreed` literal, so a request that says nothing records nothing.
+  app.post(
+    "/api/guardian/athletes/:athleteId/biometric-consent",
+    requireGuardianAccess,
+    async (req, res) => {
+      const user = currentUser(req);
+      // Scoped here like every other per-athlete guardian route, and again inside the storage
+      // method, for the same reason every other consent check is done in both places.
+      const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
+      if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+      const parsed = z.object({ agreed: z.literal(true) }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "agreed is required" });
+      const result = await storage.recordBiometricReleaseAsGuardian({
+        guardianId: user.id,
+        athleteId: athlete.id,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") ?? undefined,
+      });
+      if (!result.ok) {
+        const status = result.code === "not_found" ? 404 : result.code === "no_document" ? 503 : 400;
+        return res.status(status).json({ message: result.error });
+      }
+      res.json({ givenAt: result.givenAt });
+    },
+  );
+
   guardianRead("/progress", async (athleteId, _req, res) => {
     const summary = await storage.getAthleteProgressSummary(athleteId);
     const streak = await storage.getStreakForAthlete(athleteId);
