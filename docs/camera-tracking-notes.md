@@ -131,6 +131,19 @@ the object tracker asks about the object tracker, and a lock that has slid onto
 a plate on the rack behind the lifter answers every one of them correctly about
 the wrong object. It jumps nowhere, flies nowhere, and it *is* a plate.
 
+**2026-09-20: the referee now runs on BOTH paths.** Until today `arbitrate()` had
+no TypeScript caller -- overwatch lived only in the Swift port, and the web/MediaPipe
+path judged its lock with a frame fraction. `client/src/lib/overwatch-tracking.ts`
+(`WebOverwatch`) is the web caller, wired into `bar-tracker-dialog.tsx` with the same
+order (body first, then the object, then any fresh detection) and the same asymmetry;
+`overwatch-tracking.test.ts` scans the dialog for that order. The same day the Swift
+side gained per-source yardstick history, a motion-correlation check (the lock has to
+move with the hands), a size/edge filter on candidates before the pick, frozen-frame
+detection, and a `held` flag on dead-reckoned positions; the three new counters
+(`breaksMotionDisagreement`, `candidatesRejectedBySize`, `framesFrozen`) reach the
+admin report. `implement-tracker-swift-parity.test.ts` now polices the seven
+implement-tracker constants the same way the arbiter's five are policed.
+
 `shared/tracker-arbiter.ts` is the rule that was missing, and it is deliberately
 one rule applied in three places rather than three fixes:
 

@@ -67,13 +67,15 @@
  * The continuous gate has to run natively, in real time, mid-clip -- correcting a take after the
  * fact is not correcting it. So `AvCoreMlImplementDetector` in AvBodyTrackingPlugin.swift carries
  * a port of `lockDistanceVerdict` and of the constants below, with a comment naming this file.
- * Same arrangement implement-tracking.ts already has with AvImplementTracker's constants, and for
- * the same reason: the rule gets stated once, tested once, here, where there is a test runner.
- * If you change a number here, change it there. `shared/tracker-arbiter.test.ts` reads the
- * Swift source and fails if the two drift apart, so this is enforced rather than hoped for.
- * (It named `tracker-arbiter-parity.test.ts`, which has never existed -- a pointer to a file
- * nobody can open reads as "the parity check was dropped", which is the one conclusion that
- * would license changing a number in one place.)
+ * Same arrangement implement-tracking.ts has with AvImplementTracker's constants -- though that
+ * one went unpoliced until 2026-09-20, when client/src/lib/implement-tracker-swift-parity.test.ts
+ * was added; an earlier version of this comment claimed it was already covered, which is how a
+ * duplicated number gets changed in one place. The rule gets stated once, tested once, here,
+ * where there is a test runner. If you change a number here, change it there.
+ * `shared/tracker-arbiter.test.ts` reads the Swift source and fails if the two drift apart, so
+ * this is enforced rather than hoped for. (It named `tracker-arbiter-parity.test.ts`, which has
+ * never existed -- a pointer to a file nobody can open reads as "the parity check was dropped",
+ * which is the one conclusion that would license changing a number in one place.)
  *
  * EVERY THRESHOLD BELOW IS A REASONED STARTING VALUE, NOT A MEASURED ONE -- the same caveat
  * every other constant in this pipeline carries. The difference is that this is the first

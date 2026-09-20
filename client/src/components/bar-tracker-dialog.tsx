@@ -36,6 +36,8 @@ import {
 } from "@/lib/implement-appearance-memory";
 import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
 import { ImplementTracker, shoulderPixelsPerMeter } from "@/lib/implement-tracking";
+import { WebOverwatch, type BodyJudgement } from "@/lib/overwatch-tracking";
+import { buildTrackingDiagnostics } from "@/lib/tracking-diagnostics";
 import { WebImplementDetector } from "@/lib/implement-detection";
 import { getHandLandmarker, refineGripPoint } from "@/lib/hand-tracking";
 import { PoseSmoother } from "@/lib/one-euro-filter";
@@ -64,6 +66,8 @@ import {
   computeHeightScaleCorrection,
   scaleWorldLandmarks,
   assessCameraAlignment,
+  subjectFacingFromFrames,
+  trustAlignmentReason,
   usesSharedBarEquipment,
   chainConsistencyPenalty,
   LOWER_BODY_MOVEMENT_TYPES,
@@ -94,7 +98,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
-import { firstMoveForExercise } from "@/lib/exercise-camera-profile";
+import { firstMoveForExercise, expectedCameraView } from "@/lib/exercise-camera-profile";
 import { playSuccessChime } from "@/lib/audio-cues";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from "recharts";
 import {
@@ -277,9 +281,9 @@ function isJumpMetrics(r: RepMetrics | JumpSetMetrics): r is JumpSetMetrics {
 // m/s. A frame-to-frame jump implying more than this is never the implement
 // actually moving that fast; it's the pose model (or an implement tracker)
 // briefly latching onto the wrong point for one frame -- often right as a
-// wrist reappears from an occlusion. MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M and
-// MAX_PLAUSIBLE_GRIP_OFFSET_M below already catch a disagreement WITHIN one
-// frame (tracker vs. wrist); neither catches a frame that's internally
+// wrist reappears from an occlusion. Overwatch's grip-width gate (see
+// overwatchRef) and MAX_PLAUSIBLE_GRIP_OFFSET_M below already catch a
+// disagreement WITHIN one frame (tracker vs. body); neither catches a frame that's internally
 // consistent but wildly far from the PREVIOUS frame, which is exactly what
 // inflates peak velocity, fabricates phantom reps (a single bad frame reads
 // as a whole extra zigzag to segmentPhases), and swings the live tilt/grip
@@ -530,6 +534,10 @@ export function BarTrackerDialog({
   // implement-tracking.ts's own comment for why this replaces the old
   // wide-grip-only static edge detector.
   const implementTrackerRef = useRef(new ImplementTracker());
+  // OVERWATCH -- the third camera part on this path (see overwatch-tracking.ts). Holds the body
+  // tracker (MediaPipe) and the object tracker (implementTrackerRef) against each other every
+  // frame, and carries the lock telemetry that reaches the admin tracking report at Stop.
+  const overwatchRef = useRef(new WebOverwatch());
   // Two more instances, one per grip point, entirely separate from the
   // combined one above -- bar tilt needs two independently-tracked points
   // to compare (there's no such thing as "the tilt" of one point), and
@@ -726,6 +734,7 @@ export function BarTrackerDialog({
     worldSmootherRef.current.reset();
     subjectGateRef.current.reset();
     implementTrackerRef.current.reset();
+    overwatchRef.current.reset();
     leftImplementTrackerRef.current.reset();
     rightImplementTrackerRef.current.reset();
     webImplementDetectorRef.current.reset();
@@ -1177,6 +1186,7 @@ export function BarTrackerDialog({
     rememberedAppearanceRef.current = getRememberedAppearance(exerciseName);
     setImplementDetected(false);
     implementTrackerRef.current.reset();
+    overwatchRef.current.reset();
     leftImplementTrackerRef.current.reset();
     rightImplementTrackerRef.current.reset();
     webImplementDetectorRef.current.reset();
@@ -1348,39 +1358,58 @@ export function BarTrackerDialog({
             gripConfirmed = true;
           }
         }
+        // OVERWATCH, STEP 1: THE BODY IS JUDGED BEFORE THE OBJECT TRACKER RUNS.
+        //
+        // Every statement overwatch can make about the object below is measured with the
+        // body's ruler (the athlete's grip width, in this frame's pixels), so a ruler that just
+        // changed length cannot convict anybody. And the object tracker's search is seeded on
+        // the wrist, so a wrist landmark that jumped would seed the search in the wrong part of
+        // the image -- which is why a suspect body skips the tracker entirely rather than
+        // running it and ignoring the answer. The lock is left exactly as it was; the frame
+        // simply reports no implement, the same as an occluded one. See
+        // shared/tracker-arbiter.ts for the rule and overwatch-tracking.ts for the state.
+        const bodyJudgement: BodyJudgement | null =
+          normalizedWrist && mode !== "jump"
+            ? overwatchRef.current.judgeBody(landmarks, video.videoWidth, video.videoHeight)
+            : null;
+        const bodySuspectThisFrame = bodyJudgement?.suspect === true;
         let barTrack =
-          normalizedWrist &&
-          implementTrackerRef.current.track(
-            video,
-            normalizedWrist.x,
-            normalizedWrist.y,
-            landmarks,
-            worldLandmarks,
-            worldPoint.x,
-            worldPoint.y,
+          normalizedWrist && !bodySuspectThisFrame
+            ? implementTrackerRef.current.track(
+                video,
+                normalizedWrist.x,
+                normalizedWrist.y,
+                landmarks,
+                worldLandmarks,
+                worldPoint.x,
+                worldPoint.y,
+              )
+            : null;
+        // OVERWATCH, STEP 2: THE OBJECT IS JUDGED AGAINST THE BODY.
+        //
+        // Two independent measurements agreeing is reassuring; two disagreeing is INFORMATION,
+        // not something to average away. This used to be a fixed 0.5 metre offset -- metres
+        // that came from the very body read being checked, and a number that meant something
+        // different at every framing. It is now the shared arbiter's rule: distance from the
+        // hands in multiples of the athlete's own grip width, which needs no calibration and
+        // scales with the camera exactly as the scene does. `object_suspect` (a steady body,
+        // and the object nowhere near it) drops the lock and forces a fresh acquisition next
+        // frame rather than dead-reckoning on from a position just judged implausible;
+        // `cannot_judge` (no athlete to measure from) passes, because absence of a body reading
+        // is not evidence the object is wrong. A `body_suspect` verdict cannot reach here: that
+        // frame skipped the tracker above.
+        if (barTrack && bodyJudgement) {
+          const call = overwatchRef.current.judgeObject(
+            { x: barTrack.normX, y: barTrack.normY },
+            bodyJudgement,
           );
-        // Two independent measurements agreeing is reassuring; two
-        // independent measurements disagreeing is INFORMATION, not
-        // something to average away. No real implement sits this far from
-        // the hand holding it -- if the tracker's own reported position
-        // is further than that from the wrist, it's latched onto the
-        // wrong thing (a rack post, another lifter, a shadow), and a
-        // confidence-weighted blend between "right" and "wildly wrong"
-        // isn't a meaningfully better answer than either extreme. Reject
-        // it outright: force the tracker to reacquire fresh next frame
-        // (rather than keep dead-reckoning forward from a position that's
-        // just been judged implausible) and fall back to the wrist alone
-        // for this one frame, the same as if no implement had been found
-        // at all.
-        const MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M = 0.5;
-        if (
-          barTrack &&
-          Math.hypot(barTrack.worldX - worldPoint.x, barTrack.worldY - worldPoint.y) >
-            MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M
-        ) {
-          implementTrackerRef.current.rejectLock();
-          rejectionEventsRef.current.push(t);
-          barTrack = null;
+          if (call.breakLock) {
+            implementTrackerRef.current.rejectLock();
+            rejectionEventsRef.current.push(t);
+            barTrack = null;
+          }
+        } else {
+          overwatchRef.current.noteNoLock();
         }
         setImplementDetected(!!barTrack);
         // Third, additive implement signal (see webImplementDetectorRef's
@@ -1394,7 +1423,9 @@ export function BarTrackerDialog({
         // with the exact same "offset from the wrist, scaled by shoulder
         // width" math ImplementTracker's own fresh-acquisition path uses,
         // without duplicating that scale-lookup logic here.
-        if (webDetectorTargetLabel && normalizedWrist) {
+        // No fresh detection on a frame whose body read is suspect -- the seed wrist is the
+        // thing under suspicion, so a detection anchored on it searches the wrong place.
+        if (webDetectorTargetLabel && normalizedWrist && !bodySuspectThisFrame) {
           // Real frame dimensions, not 1x1.
           //
           // Passing 1,1 asked for "normalized units per metre", and the comment above argued the
@@ -1614,12 +1645,16 @@ export function BarTrackerDialog({
         // scale VelocitySample promises everywhere else.
         let leftConfidence = 0;
         let rightConfidence = 0;
-        if (mode !== "jump" && usesSharedBar) {
+        // Also skipped on a frame overwatch marked body-suspect (see bodySuspectThisFrame
+        // above): each side's tracker seeds on its own wrist, and a jumped wrist is exactly
+        // what that flag means.
+        if (mode !== "jump" && usesSharedBar && !bodySuspectThisFrame) {
           const normalizedWrists = deriveNormalizedWristPoints(landmarks);
-          // Same plausibility reasoning as MAX_PLAUSIBLE_IMPLEMENT_OFFSET_M
-          // above, just tighter -- a single grip point has to sit right at
-          // the hand holding it, not somewhere across a whole bar's width
-          // the way the combined center can legitimately be.
+          // A per-side plausibility check in metres, kept alongside overwatch's grip-width rule
+          // on the combined lock above: a single grip point has to sit right at the hand
+          // holding it, not somewhere across a whole bar's width the way the combined centre
+          // legitimately can, and the arbiter's anchor is the wrist MIDPOINT, which is the
+          // wrong reference for one hand.
           const MAX_PLAUSIBLE_GRIP_OFFSET_M = 0.35;
 
           if (normalizedWrists.left) {
@@ -2024,15 +2059,34 @@ export function BarTrackerDialog({
       // now the trace's own smoothing (summarizeTrackedSet's ySmoothed)
       // already used, just filtered here to the reps that need it. An
       // interpolated occlusion-gap filler point (see interpolateOcclusionGap)
-      // has no confidence of its own, so it reads as neutral rather than
-      // untrustworthy, same fallback movingAverage/computeRepTrustScores use
-      // elsewhere.
+      // carries its neighbours' confidence discounted by
+      // OCCLUSION_CONFIDENCE_DISCOUNT, so it already counts as less trusted
+      // than a real read; the 0.6 fallback is only for a point with no
+      // confidence at all, which reads as neutral rather than untrustworthy,
+      // same fallback movingAverage/computeRepTrustScores use elsewhere.
       traceRef.current.map((p) => ({ t: p.t, confidence: p.confidence ?? 0.6 })),
       rejectionEventsRef.current,
       guessMismatch,
-      lastAlignmentReasonRef.current,
+      // A correct side view is not a framing fault -- see trustAlignmentReason. On this path z
+      // is real, so a side-on athlete read "angled" and was docked 15 points for filming the
+      // lift exactly as the guidance asks. Same exemption as the AV twin, from the same helper.
+      trustAlignmentReason(
+        lastAlignmentReasonRef.current,
+        subjectFacingFromFrames(framesRef.current),
+        expectedCameraView(exerciseName),
+      ),
       chainPenalties,
     );
+    // What overwatch did over the take, so the web path reaches the admin tracking report the
+    // same way the native one does. rawFrames is empty because this path has no NativePoseFrame
+    // to summarise -- the bodyPose/objectDetection counts read zero here and the objectLock
+    // block is what this call exists to carry. A guard that cannot be shown to have fired is a
+    // guard nobody can tune.
+    metrics.trackingDiagnostics = buildTrackingDiagnostics({
+      outcome: "tracked",
+      rawFrames: [],
+      objectLock: overwatchRef.current.telemetry,
+    });
 
     if (voiceEnabledRef.current) {
       const count = metrics.formFaults.length;

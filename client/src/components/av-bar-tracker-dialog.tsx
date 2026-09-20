@@ -36,7 +36,8 @@ import {
   impliedBodyLengthUnits,
   tiltDegreesFromPoints,
   usesSharedBarEquipment,
-  assessCameraAlignment,
+  alignmentReasonWithoutDepth,
+  trustAlignmentReason,
   assessSubjectFacing,
   cameraViewMismatch,
   type SubjectFacing,
@@ -52,7 +53,6 @@ import {
   CALIBRATION_REFERENCES,
   MIN_CALIBRATION_SAMPLES,
   type PoseFrame,
-  type CameraAlignment,
   type FormFaultThresholds,
 } from "@/lib/pose-tracking";
 import {
@@ -911,8 +911,8 @@ export function AvBarTrackerDialog({
     //
     // The size ratio above is a real cross-check and it catches the gross case -- the 497px read
     // that took a whole bench set's numbers with it. What it cannot catch is the common one. Its
-    // window spans 0.25 to 2.5, a factor of ten, because a plate genuinely can appear at very
-    // different sizes; a plate on the rack at twice the athlete's distance reads at about half
+    // window spans 0.45 to 2.0 (PLATE_TO_GRIP_RATIO_LOW/HIGH), more than a factor of four,
+    // because a plate genuinely can appear at very different sizes; a plate on the rack at twice the athlete's distance reads at about half
     // the pixels and sails straight through.
     //
     // Shape and position are what separate those two, and both were ALREADY BEING MEASURED. The
@@ -1139,7 +1139,10 @@ export function AvBarTrackerDialog({
     // available, the closest available proxy to "framing right when the set
     // started."
     const gripPairs: { left: { x: number; y: number }; right: { x: number; y: number } }[] = [];
-    let alignmentReason: CameraAlignment["reason"] | null = null;
+    // Kept asking until a frame answers -- see subjectFacing's own loop below. Frame 0 of a
+    // replay is usually untracked, and the alignment verdict used to be pinned on it: "unknown"
+    // set for good on the first frame, and every rep docked 10 trust points for framing that
+    // could not be confirmed on a frame with nobody in it.
     let subjectFacing: SubjectFacing | null = null;
 
     // Weighted fusion of each side's implement reading against that side's
@@ -1220,7 +1223,10 @@ export function AvBarTrackerDialog({
 
       const sign = worldVerticalSign(worldLm);
       if (sign != null) verticalSign = sign;
-      if (alignmentReason == null) alignmentReason = assessCameraAlignment(worldLm).reason;
+      // No assessCameraAlignment on this path: worldLm has z pinned to 0 (see
+      // visionJointsToWorldLandmarks), so that reader could only ever answer "ok" or
+      // "unknown", and it answered "unknown" for every correct side view. The alignment
+      // reason is derived from the x/y facing read at Stop -- see alignmentReasonWithoutDepth.
       if (subjectFacing == null || subjectFacing === "unknown") {
         subjectFacing = assessSubjectFacing(worldLm);
       }
@@ -1714,15 +1720,14 @@ export function AvBarTrackerDialog({
       trace.map((p) => ({ t: p.t, confidence: p.confidence ?? 0.6 })),
       rejectionEvents,
       patternMismatch,
-      // A correct side view used to arrive here as "unknown" and cost the take 10 trust points
-      // with the note "Camera framing couldn't be confirmed". assessCameraAlignment asks whether
-      // the athlete is squared up to the lens, which is false by definition when they are side-on
-      // -- so the one camera position nearly every barbell lift requires scored worse than a
-      // front view that cannot see bar drift at all. When the lift wants a side view and the
-      // footage shows a side view, that is confirmed framing, not unconfirmed.
-      expectedCameraView(exerciseName) === "side" && subjectFacing === "side_on"
-        ? "ok"
-        : alignmentReason,
+      // A correct side view is not a framing fault -- see trustAlignmentReason, shared with the
+      // web twin. The reason itself comes from the depthless reader (alignmentReasonWithoutDepth)
+      // because this path has no z to give assessCameraAlignment.
+      trustAlignmentReason(
+        alignmentReasonWithoutDepth(subjectFacing ?? "unknown", expectedCameraView(exerciseName)),
+        subjectFacing ?? "unknown",
+        expectedCameraView(exerciseName),
+      ),
       chainPenalties,
     );
     metrics.captureDeviceInfo = captureDeviceInfo;

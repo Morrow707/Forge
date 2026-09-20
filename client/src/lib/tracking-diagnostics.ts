@@ -78,6 +78,12 @@ export type ObjectLockDiagnostics = {
   reclassifyCorrections: number;
   candidatesRejectedByWristGate: number;
   framesBodySuspect: number;
+  // Added 2026-09-20 with the overwatch fixes: a lock that stopped moving while the hands moved
+  // (or vice versa), candidates thrown out for being too small or clipped by the frame edge, and
+  // frames the camera repeated verbatim. Required so zero and "never reported" stay different.
+  breaksMotionDisagreement: number;
+  candidatesRejectedBySize: number;
+  framesFrozen: number;
   maxAcceptedDistanceInYardsticks?: number;
   yardstickSource?: string;
 };

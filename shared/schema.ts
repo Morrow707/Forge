@@ -2360,6 +2360,13 @@ export const workoutSetEntries = pgTable(
   // deletion signal.
   formCheckVideoUrl: text("form_check_video_url"),
   formCheckFlag: formCheckFlagEnum("form_check_flag"),
+  // HOW the video above reached this row when it did not arrive with the set itself. Null for
+  // a clip the client sent inline on the workout-log save (the ordinary Wi-Fi path). One of
+  // VIDEO_ATTACH_REASONS when attachVideoToLoggedSet wrote it later: the clip was queued for
+  // lack of Wi-Fi ("offline_flush"), retried after a 5xx ("server_error_retry"), or linked by
+  // hand from the Video Bank ("manual"). Carried forward on a resave with the url (see
+  // priorVideoByKey in submitWorkoutLog); a different url clears it.
+  videoAttachReason: text("video_attach_reason"),
   // Auto-computed at save time (submitWorkoutLog), never client-set: true
   // when this set's weight beat every prior set's weight for the exact
   // same (exercise, weight unit, rep count) combination as of the date it
@@ -6007,6 +6014,50 @@ export const uploadedFiles = pgTable(
   }),
 );
 
+// A form-check clip that uploaded fine but could not be linked to the set it was filmed for
+// (see attachVideoToLoggedSet, and UNATTACHED_VIDEO_CAUSES for the ways that happens). Until
+// 2026-09-20 the only record of such a clip was a twenty-entry localStorage list on the device
+// that filmed it, which no screen surfaced, and which the coach could never see. This row is
+// written by the attach route the moment an attach fails, so the athlete's Video Bank can offer
+// to link the clip by hand and the coach's athlete page can say a clip is waiting.
+//
+// A row is RESOLVED, never deleted: resolvedHow says whether the athlete linked it or dismissed
+// it, and the file itself is untouched either way -- dismissing a clip keeps the upload, it
+// only stops asking about it. The intended target (assignment/day/date/exercise/set) is kept
+// so the manual picker can start on the right day.
+export const unattachedVideoUploads = pgTable(
+  "unattached_video_uploads",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    videoUrl: text("video_url").notNull(),
+    label: text("label"),
+    assignmentId: integer("assignment_id"),
+    programDayId: integer("program_day_id"),
+    date: text("date"),
+    programExerciseId: integer("program_exercise_id"),
+    setNumber: integer("set_number"),
+    // Which of UNATTACHED_VIDEO_CAUSES declined it, and which of VIDEO_ATTACH_REASONS the
+    // client gave for the attempt. Both text rather than enums so a new value is a code
+    // change, not a migration.
+    cause: text("cause").notNull(),
+    attachReason: text("attach_reason"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+    resolvedHow: text("resolved_how"),
+  },
+  (table) => ({
+    athleteOpenIdx: index("unattached_video_uploads_athlete_open_idx")
+      .on(table.athleteId)
+      .where(sql`${table.resolvedAt} is null`),
+    // One open row per clip: a flush that fails twice on the same url must not list it twice.
+    videoUrlIdx: uniqueIndex("unattached_video_uploads_video_url_idx").on(table.videoUrl),
+  }),
+);
+export type UnattachedVideoUpload = typeof unattachedVideoUploads.$inferSelect;
+
 // ---------- Problem reports ----------
 // A coach/athlete tapping "Report a problem" from the account menu -- free
 // text plus an optional screenshot, reviewed by an admin. Deliberately
@@ -8267,6 +8318,7 @@ export const NON_CAMERA_SET_COLUMNS = [
   "boxHeightUnit",
   "formCheckVideoUrl",
   "formCheckFlag",
+  "videoAttachReason",
   "isPr",
   "videoFavorited",
   "videoUploadedAt",
@@ -8295,6 +8347,12 @@ const objectLockDiagnosticsSchema = z.object({
   // one. Required like the rest: zero means "the body was steady all take", absent would mean
   // nothing at all, and the report says different things about those.
   framesBodySuspect: z.number(),
+  // Overwatch's three newer counters (2026-09-20), required like the rest: zero means "never
+  // fired", absent would mean nothing at all. Motion correlation between hands and lock, size
+  // and bounds rejections before the most-confident pick, and frozen (repeated) frames.
+  breaksMotionDisagreement: z.number(),
+  candidatesRejectedBySize: z.number(),
+  framesFrozen: z.number(),
   maxAcceptedDistanceInYardsticks: z.number().optional(),
   yardstickSource: z.string().optional(),
 });
@@ -8764,6 +8822,15 @@ export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
 // a full delete-and-reinsert of that day's set rows (see
 // storage.submitWorkoutLog), so no set ever has a stable database id to
 // capture at record time; this tuple is the actual stable address instead.
+//
+// Since 2026-09-20 the address is two-tier. A set row DOES have an id between saves, and the
+// day's save response now hands those ids back (submitWorkoutLog's savedSetRowIds), so a
+// queued clip carries `workoutSetEntryId` when it has one. The server tries that row FIRST
+// and falls back to the tuple when the id no longer exists (the day was resaved -- ids are
+// never reused, so a stale id can only miss, never land on the wrong set). The tuple stays
+// required because it is the only address a clip filmed before its first save can have.
+export const VIDEO_ATTACH_REASONS = ["offline_flush", "server_error_retry", "manual"] as const;
+export type VideoAttachReason = (typeof VIDEO_ATTACH_REASONS)[number];
 export const attachVideoToSetSchema = z.object({
   assignmentId: z.number(),
   programDayId: z.number(),
@@ -8771,8 +8838,33 @@ export const attachVideoToSetSchema = z.object({
   programExerciseId: z.number(),
   setNumber: z.number(),
   videoUrl: z.string(),
+  workoutSetEntryId: z.number().int().positive().optional(),
+  // Why this clip is arriving out of band -- stored on the set row as videoAttachReason and,
+  // when the attach fails, on the unattached_video_uploads row. Optional only so a client from
+  // before this field existed still attaches; it is recorded as null then.
+  reason: z.enum(VIDEO_ATTACH_REASONS).optional(),
+  // Shown in the Video Bank when the attach fails ("Bench Press · Set 3"); the server has no
+  // other way to name a clip whose target set it could not find.
+  label: z.string().trim().max(200).optional(),
 });
 export type AttachVideoToSetInput = z.infer<typeof attachVideoToSetSchema>;
+
+/** Every way attachVideoToLoggedSet can decline. Each is a different fix for the athlete, so
+ * the unattached row records which one it was rather than a bare false. */
+export const UNATTACHED_VIDEO_CAUSES = [
+  "not_your_upload",
+  "assignment_not_yours",
+  "no_log_for_date",
+  "exercise_not_logged",
+  "set_not_logged",
+  "set_already_has_video",
+] as const;
+export type UnattachedVideoCause = (typeof UNATTACHED_VIDEO_CAUSES)[number];
+
+export const attachUnattachedVideoSchema = z.object({
+  workoutSetEntryId: z.number().int().positive(),
+});
+export type AttachUnattachedVideoInput = z.infer<typeof attachUnattachedVideoSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;

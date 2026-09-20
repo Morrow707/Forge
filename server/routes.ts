@@ -116,6 +116,7 @@ import {
   updateAssignmentSchema,
   submitWorkoutLogSchema,
   attachVideoToSetSchema,
+  attachUnattachedVideoSchema,
   updateProgramDaySchema,
   updateCorrectivesSchema,
   applyCorrectivesToDaysSchema,
@@ -4628,6 +4629,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
     if (!athlete) return res.status(404).json({ message: "Athlete not found" });
     res.json(athlete);
+  });
+
+  // Clips this athlete uploaded that never reached a set (see unattachedVideoUploads). The
+  // coach cannot link them -- only the athlete knows which set a clip was -- but a coach who
+  // sees "3 sets, no video" on a day the athlete says they filmed needs to know the footage
+  // exists. Scoped through getRosterAthleteForCoach like every other per-athlete coach route.
+  app.get("/api/coach/roster/:athleteId/unattached-videos", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    res.json(await storage.listUnattachedVideoUploads(athleteId));
   });
 
   app.patch("/api/coach/roster/:athleteId/profile", requireRole("coach"), async (req, res) => {
@@ -10090,8 +10103,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .status(403)
         .json({ message: "Camera-tracking collection is turned off for this athlete at a parent/guardian's request." });
     }
-    const attached = await storage.attachVideoToLoggedSet(user.id, parsed.data);
-    res.json({ attached });
+    const result = await storage.attachVideoToLoggedSet(user.id, parsed.data);
+    if (!result.attached) {
+      // The clip is on disk and in uploaded_files; the only thing that failed is the link. The
+      // row is what lets the Video Bank offer to link it by hand and the coach's page say a
+      // clip is waiting -- before it, a failed attach was a localStorage entry on one phone.
+      const { assignmentId, programDayId, date, programExerciseId, setNumber } = parsed.data;
+      await storage.recordUnattachedVideoUpload({
+        athleteId: user.id,
+        videoUrl: parsed.data.videoUrl.split("?")[0],
+        label: parsed.data.label ?? null,
+        cause: result.cause,
+        attachReason: parsed.data.reason ?? null,
+        target: { assignmentId, programDayId, date, programExerciseId, setNumber },
+      });
+      return res.json({ attached: false, cause: result.cause });
+    }
+    res.json({ attached: true, via: result.via });
+  });
+
+  // ---------- Unattached video uploads (see unattachedVideoUploads' schema comment) ----------
+
+  app.get("/api/athlete/unattached-videos", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listUnattachedVideoUploads(user.id));
+  });
+
+  // The sets an orphaned clip could be linked to: that clip's own day when the target date is
+  // known, otherwise the last 30 days. Only sets with no video yet -- attaching never replaces.
+  app.get("/api/athlete/unattached-videos/:id/candidate-sets", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const orphan = await storage.getUnattachedVideoUpload(user.id, Number(req.params.id));
+    if (!orphan) return res.status(404).json({ message: "Clip not found" });
+    res.json(await storage.listSetsAvailableForVideo(user.id, orphan.date));
+  });
+
+  app.post("/api/athlete/unattached-videos/:id/attach", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = attachUnattachedVideoSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    if (await isTrackingOptedOut(user.id)) {
+      return res
+        .status(403)
+        .json({ message: "Camera-tracking collection is turned off for this athlete at a parent/guardian's request." });
+    }
+    const result = await storage.attachUnattachedVideoUpload(user.id, Number(req.params.id), parsed.data.workoutSetEntryId);
+    if (!result) return res.status(404).json({ message: "Clip not found" });
+    if (!result.attached) {
+      return res.status(409).json({
+        message:
+          result.cause === "set_already_has_video"
+            ? "That set already has a video. Pick a set without one."
+            : "That set could not be found any more.",
+        cause: result.cause,
+      });
+    }
+    res.json(result);
+  });
+
+  app.post("/api/athlete/unattached-videos/:id/dismiss", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const ok = await storage.dismissUnattachedVideoUpload(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Clip not found" });
+    res.json({ ok: true });
   });
 
   // ---------- CARA (countable athletically-related activity) tracking ----------

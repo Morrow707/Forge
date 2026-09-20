@@ -109,6 +109,44 @@ function AthleteTrophiesTab({ fetchUrl }: { fetchUrl: string }) {
  * in the app. Every tab renders its content directly on the page (not in a
  * popup) -- there's plenty of room, and switching tabs is one click instead
  * of open-dialog-then-close-dialog. */
+/** "This athlete has filmed sets that never reached a set." Read from the server's
+ * unattached_video_uploads list (the per-device localStorage list is not visible here, and
+ * cannot be). The coach cannot link a clip -- only the athlete knows which set it was -- so
+ * this is a note, not an action: it stops a day that reads "3 sets, no video" from being taken
+ * as "did not film". Renders nothing when there is nothing to say, including on a read failure,
+ * which is the right answer for an informational aside rather than a spinner or an error box. */
+function UnattachedClipsNote({ athleteId }: { athleteId: number }) {
+  const route = `/api/coach/roster/${athleteId}/unattached-videos`;
+  const { data } = useQuery<{ id: number; label: string | null; date: string | null; createdAt: string }[]>({
+    queryKey: [route],
+    queryFn: () => getJson(route),
+  });
+  if (!data || data.length === 0) return null;
+  return (
+    <Card className="border-amber-500/40" data-testid="coach-unattached-clips">
+      <CardContent className="space-y-1.5 p-4">
+        <p className="text-sm font-medium">
+          {data.length === 1 ? "1 clip uploaded but not linked to a set" : `${data.length} clips uploaded but not linked to a set`}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          The athlete filmed these, the upload landed, and the set had changed by the time it did. They
+          can link each one from their Video Bank; until then a day with no video may still have been
+          filmed.
+        </p>
+        <ul className="space-y-0.5 text-xs text-muted-foreground">
+          {data.slice(0, 5).map((c) => (
+            <li key={c.id} className="truncate">
+              {c.label ?? "Form check clip"}
+              {c.date ? ` · filmed ${c.date}` : ""}
+            </li>
+          ))}
+          {data.length > 5 && <li>…and {data.length - 5} more</li>}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AthleteDetailPage() {
   const { athleteId } = useParams<{ athleteId: string }>();
   const id = Number(athleteId);
@@ -341,6 +379,8 @@ export default function AthleteDetailPage() {
                 </Button>
               </CardContent>
             </Card>
+
+            <UnattachedClipsNote athleteId={athlete.id} />
 
             <ExerciseRegressionsCard athleteId={athlete.id} />
 

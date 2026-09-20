@@ -60,7 +60,15 @@ export type VideoReattachTarget = {
   date: string;
   programExerciseId: number;
   setNumber: number;
+  // The set's row id, when the day had been saved by the time the clip was filmed. The server
+  // tries it first and falls back to the tuple when a resave has replaced the row -- see
+  // attachVideoToSetSchema. Kept current by refreshQueuedVideoRowIds on every save.
+  workoutSetEntryId?: number;
 };
+
+/** Why a clip is being attached out of band -- recorded on the set row so a coach or an
+ * audit can tell a Wi-Fi-queued clip from one that met a 5xx from one linked by hand. */
+export type VideoAttachReason = "offline_flush" | "server_error_retry" | "manual";
 
 // What a recording dialog needs to pass in -- everything queuing/upload
 // needs beyond the blob itself.
@@ -81,6 +89,10 @@ type PendingVideoUpload = {
   queuedAt: string;
   label: string;
   reattach?: VideoReattachTarget;
+  // What put the clip in the queue: no Wi-Fi, or a live upload the server refused with
+  // something retryable. Becomes the attach reason when the flush finally lands it. Absent
+  // on entries queued before this existed, which attach with no reason recorded.
+  queuedBecause?: "offline" | "server_error";
   // Which account recorded this. See queue-owner.ts. Without it, a clip
   // queued by one athlete uploaded under the next athlete's session on a
   // shared device: the upload succeeded, the file was recorded as theirs,
@@ -218,6 +230,7 @@ export async function persistVideoForUpload(
   fieldName: string,
   filename: string,
   context: VideoRecordContext,
+  queuedBecause: "offline" | "server_error" = "offline",
 ): Promise<string | null> {
   if (!isVideoOfflinePersistenceSupported()) return null;
   const id = crypto.randomUUID();
@@ -238,6 +251,7 @@ export async function persistVideoForUpload(
     queuedAt: new Date().toISOString(),
     label: context.label,
     reattach: context.reattach,
+    queuedBecause,
     ownerId: getQueueOwner(),
   };
   if (!writeManifest([...readManifest(), entry])) {
@@ -291,18 +305,47 @@ function announceReattached(target: VideoReattachTarget, videoUrl: string) {
   );
 }
 
-/** POSTs the reattach tuple + the just-uploaded URL to the server; returns
- * whether it actually landed on a set. False is an expected, non-error
- * outcome (the day/exercise/set changed underneath it), not a failure --
- * see the route's own comment in routes.ts. */
-async function attachVideoToSet(target: VideoReattachTarget, videoUrl: string): Promise<boolean> {
+/** POSTs the reattach address (row id when known, tuple always) + the just-uploaded URL to
+ * the server. "declined" is an expected, non-error outcome (the day/exercise/set changed
+ * underneath it) and the SERVER has recorded the clip as unattached; "unreached" means the
+ * request itself never got an answer, so nothing server-side knows the link failed and the
+ * local list below is the only record. */
+async function attachVideoToSet(
+  target: VideoReattachTarget,
+  videoUrl: string,
+  reason: VideoAttachReason | undefined,
+  label: string,
+): Promise<"attached" | "declined" | "unreached"> {
   try {
-    const res = await apiRequest("POST", "/api/athlete/log/attach-video", { ...target, videoUrl });
+    const res = await apiRequest("POST", "/api/athlete/log/attach-video", { ...target, videoUrl, reason, label });
     const { attached } = await res.json();
-    return !!attached;
+    return attached ? "attached" : "declined";
   } catch {
-    return false;
+    return "unreached";
   }
+}
+
+/** Called by the workout page after every synced save with the row ids the server just
+ * produced, so a clip still waiting in the queue names the CURRENT row of its set rather than
+ * one a resave has since replaced. Keyed by the tuple the clip already carries. Best-effort:
+ * a manifest that cannot be written keeps its old ids, and the tuple fallback still lands it. */
+export function refreshQueuedVideoRowIds(
+  day: { assignmentId: number; programDayId: number; date: string },
+  rows: { programExerciseId: number | null; setNumber: number; id: number }[],
+): void {
+  if (!isVideoOfflinePersistenceSupported()) return;
+  const byKey = new Map<string, number>();
+  for (const r of rows) if (r.programExerciseId != null) byKey.set(`${r.programExerciseId}:${r.setNumber}`, r.id);
+  let changed = false;
+  const next = readManifest().map((e) => {
+    const t = e.reattach;
+    if (!t || t.assignmentId !== day.assignmentId || t.programDayId !== day.programDayId || t.date !== day.date) return e;
+    const id = byKey.get(`${t.programExerciseId}:${t.setNumber}`);
+    if (id == null || id === t.workoutSetEntryId) return e;
+    changed = true;
+    return { ...e, reattach: { ...t, workoutSetEntryId: id } };
+  });
+  if (changed) writeManifest(next);
 }
 
 /** Uploads immediately on Wi-Fi (or web); on a native device with no
@@ -338,7 +381,14 @@ export async function uploadOrQueueVideo(
     const status = err instanceof ApiError ? err.status : null;
     const code = err instanceof ApiError ? err.code : undefined;
     if (err instanceof ApiError && isPermanentUploadRejection(status, code)) throw err;
-    await persistVideoForUpload(blob, "/api/athlete/form-video", "video", filename, context);
+    await persistVideoForUpload(
+      blob,
+      "/api/athlete/form-video",
+      "video",
+      filename,
+      context,
+      err instanceof ApiError ? "server_error" : "offline",
+    );
     return { status: "queued" };
   }
 }
@@ -351,12 +401,20 @@ async function uploadPendingEntry(entry: PendingVideoUpload): Promise<void> {
   const { url } = await uploadWithProgress(entry.url, formData);
   await clearPersistedVideo(entry.id);
 
-  let attached = false;
-  if (entry.reattach) {
-    attached = await attachVideoToSet(entry.reattach, url);
-    if (attached) announceReattached(entry.reattach, url);
+  if (!entry.reattach) {
+    // Nothing to attach to (a corrective, or a caller with no set): the clip is a standalone
+    // Video Bank entry, and the local list is how it is shown.
+    recordUnattachedUpload({ url, label: entry.label, uploadedAt: new Date().toISOString() });
+    return;
   }
-  if (!attached) {
+  const reason: VideoAttachReason | undefined =
+    entry.queuedBecause === "server_error" ? "server_error_retry" : entry.queuedBecause === "offline" ? "offline_flush" : undefined;
+  const outcome = await attachVideoToSet(entry.reattach, url, reason, entry.label);
+  if (outcome === "attached") {
+    announceReattached(entry.reattach, url);
+  } else if (outcome === "unreached") {
+    // Declined attaches are recorded server-side (the athlete's Video Bank and the coach's page
+    // both read that list); only an attach the server never answered needs the local record.
     recordUnattachedUpload({ url, label: entry.label, uploadedAt: new Date().toISOString() });
   }
 }

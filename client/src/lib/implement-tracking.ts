@@ -261,6 +261,13 @@ export type BarTrackResult = {
   // to already be directly comparable/addable, not a delta.
   worldX: number;
   worldY: number;
+  // Where the lock sits in normalized [0,1] image space -- the same convention as every
+  // landmark -- so overwatch (overwatch-tracking.ts) can measure it against the body in the
+  // frame's own pixels. Reported, never read back by this class: the arbiter's rule is
+  // expressed in the athlete's grip widths, which this tracker has no way to measure, and
+  // that independence is what makes the check a referee rather than a second opinion.
+  normX: number;
+  normY: number;
   // 0-1, ramping up over LOCK_RAMP_FRAMES of continuous, unbroken lock on
   // what this tracker believes is the same object -- the caller's cue for
   // how much weight to give worldX/Y against the wrist's own reading, not
@@ -492,10 +499,12 @@ export class ImplementTracker {
       // nothing) drops it. A lock that was never established yet has
       // nothing to hold, so this still reports null before the first real
       // acquisition of the set.
-      if (this.lockWorldX != null && this.lockWorldY != null) {
+      if (this.lockWorldX != null && this.lockWorldY != null && this.lockPixelX != null && this.lockPixelY != null) {
         return {
           worldX: this.lockWorldX,
           worldY: this.lockWorldY,
+          normX: this.lockPixelX / w,
+          normY: this.lockPixelY / h,
           confidence: this.confidence(),
           color: this.lastColor,
         };
@@ -573,6 +582,8 @@ export class ImplementTracker {
     return {
       worldX: this.lockWorldX,
       worldY: this.lockWorldY,
+      normX: centroid.x / w,
+      normY: centroid.y / h,
       confidence: rawConfidence,
       color: this.lastColor,
     };

@@ -40,6 +40,11 @@ type ObjectLockLine = {
   reclassifyCorrections: number;
   candidatesRejectedByWristGate: number;
   framesBodySuspect: number;
+  // Added 2026-09-20 with the overwatch fixes. Optional here because takes recorded on an
+  // earlier build never wrote them; the schema requires them on every new insert.
+  breaksMotionDisagreement?: number;
+  candidatesRejectedBySize?: number;
+  framesFrozen?: number;
   maxAcceptedDistanceInYardsticks?: number;
   yardstickSource?: string;
 };
@@ -534,6 +539,18 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
         // and the arbiter correctly declined to let that break a good lock.
         (lock.framesBodySuspect > 0
           ? `. ${lock.framesBodySuspect} frame${lock.framesBodySuspect === 1 ? "" : "s"} skipped because the BODY read jumped -- that is a body-tracking problem, not an object one`
+          : "") +
+        // The three checks added 2026-09-20. A lock that sat still while the hands moved (or the
+        // reverse) was never caught before; a tiny or edge-clipped box used to be allowed to win
+        // the most-confident pick; a frozen frame used to advance the lock streak.
+        ((lock.breaksMotionDisagreement ?? 0) > 0
+          ? `. ${lock.breaksMotionDisagreement} unlock${lock.breaksMotionDisagreement === 1 ? "" : "s"} because the lock and the hands stopped moving together`
+          : "") +
+        ((lock.candidatesRejectedBySize ?? 0) > 0
+          ? `. ${lock.candidatesRejectedBySize} candidate${lock.candidatesRejectedBySize === 1 ? "" : "s"} refused for being too small or clipped by the frame edge`
+          : "") +
+        ((lock.framesFrozen ?? 0) > 0
+          ? `. ${lock.framesFrozen} frozen frame${lock.framesFrozen === 1 ? "" : "s"} (camera repeated the image) held without advancing the lock`
           : ""),
     });
   }
