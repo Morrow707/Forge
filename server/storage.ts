@@ -50,6 +50,8 @@ import {
   workoutLogEntries,
   workoutSetEntries,
   workoutComments,
+  videoReviews,
+  videoReviewEvents,
   exerciseSubmissions,
   exerciseReports,
   apnsDeviceTokens,
@@ -21080,6 +21082,199 @@ ${catalog}`;
    * address a clip has before its set was ever saved, and what it falls back to after the day
    * moved on. Both go through the same ownership check: the row must hang off a log that is
    * this athlete's. */
+  // ---------- Saved video reviews (Phase 2 of docs/video-review-plan.md) ----------
+  //
+  // Every read below resolves the caller against the review rather than trusting an id from the
+  // wire, and the three readers are deliberately three functions rather than one with a role
+  // flag: a coach sees their own drafts, an athlete sees only what was SHARED with them, and a
+  // guardian sees only what was shared with the child they are linked to. Collapsing those into
+  // one query with a branch is how a draft leaks to the person it is about before the coach has
+  // finished writing it.
+
+  async createVideoReview(
+    coachId: number,
+    input: {
+      athleteId?: number | null;
+      title: string;
+      leftClip: unknown;
+      rightClip?: unknown | null;
+      syncL?: number;
+      syncR?: number;
+      mode?: string;
+      overlaySettings?: unknown | null;
+    },
+  ) {
+    // An athlete named on a review has to be one this coach may actually see. Checked here and
+    // not only at the route, because this is the function every future caller will reach for.
+    if (input.athleteId != null) {
+      const athlete = await this.getRosterAthleteForCoach(coachId, input.athleteId);
+      if (!athlete) return null;
+    }
+    const [row] = await db
+      .insert(videoReviews)
+      .values({
+        coachId,
+        athleteId: input.athleteId ?? null,
+        title: input.title,
+        leftClip: input.leftClip,
+        rightClip: input.rightClip ?? null,
+        syncL: input.syncL ?? 0,
+        syncR: input.syncR ?? 0,
+        mode: input.mode ?? "split",
+        overlaySettings: input.overlaySettings ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  async getVideoReviewForCoach(coachId: number, reviewId: number) {
+    const [row] = await db
+      .select()
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.coachId, coachId)));
+    if (!row) return null;
+    return { ...row, events: await this.listVideoReviewEvents(reviewId) };
+  },
+
+  async listVideoReviewsForCoach(coachId: number, athleteId?: number | null) {
+    return db
+      .select()
+      .from(videoReviews)
+      .where(
+        athleteId == null
+          ? eq(videoReviews.coachId, coachId)
+          : and(eq(videoReviews.coachId, coachId), eq(videoReviews.athleteId, athleteId)),
+      )
+      .orderBy(desc(videoReviews.updatedAt));
+  },
+
+  async listVideoReviewEvents(reviewId: number) {
+    // In time order, which is what visibleAt in shared/video-review.ts requires of its input --
+    // it scans forward for the next boundary and would find the wrong one out of order.
+    return db
+      .select()
+      .from(videoReviewEvents)
+      .where(eq(videoReviewEvents.reviewId, reviewId))
+      .orderBy(asc(videoReviewEvents.t), asc(videoReviewEvents.id));
+  },
+
+  async updateVideoReview(
+    coachId: number,
+    reviewId: number,
+    patch: {
+      title?: string;
+      syncL?: number;
+      syncR?: number;
+      mode?: string;
+      overlaySettings?: unknown | null;
+      /** true shares, false un-shares. Omitted leaves it alone. */
+      shared?: boolean;
+    },
+  ) {
+    const [existing] = await db
+      .select({ id: videoReviews.id })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.coachId, coachId)));
+    if (!existing) return null;
+    const [row] = await db
+      .update(videoReviews)
+      .set({
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.syncL !== undefined ? { syncL: patch.syncL } : {}),
+        ...(patch.syncR !== undefined ? { syncR: patch.syncR } : {}),
+        ...(patch.mode !== undefined ? { mode: patch.mode } : {}),
+        ...(patch.overlaySettings !== undefined ? { overlaySettings: patch.overlaySettings } : {}),
+        // Un-sharing sets it back to null, so "has this ever been shared" and "is it shared now"
+        // are the same question. A coach who shares early and thinks better of it gets it back.
+        ...(patch.shared !== undefined
+          ? { sharedWithAthleteAt: patch.shared ? new Date() : null }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(videoReviews.id, reviewId))
+      .returning();
+    return row;
+  },
+
+  /** Replaces the whole event log. A review is edited by rewriting its timeline, not by
+   * patching individual marks -- the editor holds the log in memory and saves it whole, which
+   * is also what makes undo free on the client. */
+  async replaceVideoReviewEvents(
+    coachId: number,
+    reviewId: number,
+    events: { t: number; kind: string; payload: unknown; side?: string; holdSeconds?: number | null }[],
+  ) {
+    const [existing] = await db
+      .select({ id: videoReviews.id })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.coachId, coachId)));
+    if (!existing) return null;
+    return db.transaction(async (tx) => {
+      await tx.delete(videoReviewEvents).where(eq(videoReviewEvents.reviewId, reviewId));
+      if (events.length > 0) {
+        await tx.insert(videoReviewEvents).values(
+          events.map((e) => ({
+            reviewId,
+            t: e.t,
+            kind: e.kind,
+            payload: e.payload,
+            side: e.side ?? "left",
+            holdSeconds: e.holdSeconds ?? null,
+          })),
+        );
+      }
+      await tx
+        .update(videoReviews)
+        .set({ updatedAt: new Date() })
+        .where(eq(videoReviews.id, reviewId));
+      return tx
+        .select()
+        .from(videoReviewEvents)
+        .where(eq(videoReviewEvents.reviewId, reviewId))
+        .orderBy(asc(videoReviewEvents.t), asc(videoReviewEvents.id));
+    });
+  },
+
+  async listVideoReviewsForAthlete(athleteId: number) {
+    return db
+      .select()
+      .from(videoReviews)
+      .where(
+        and(eq(videoReviews.athleteId, athleteId), isNotNull(videoReviews.sharedWithAthleteAt)),
+      )
+      .orderBy(desc(videoReviews.sharedWithAthleteAt));
+  },
+
+  async getVideoReviewForAthlete(athleteId: number, reviewId: number) {
+    const [row] = await db
+      .select()
+      .from(videoReviews)
+      .where(
+        and(
+          eq(videoReviews.id, reviewId),
+          eq(videoReviews.athleteId, athleteId),
+          isNotNull(videoReviews.sharedWithAthleteAt),
+        ),
+      );
+    if (!row) return null;
+    return { ...row, events: await this.listVideoReviewEvents(reviewId) };
+  },
+
+  /** The guardian's read is the athlete's read, gated on the link. A review is coaching content
+   * about a child, so the person responsible for that child sees exactly what the child sees --
+   * no more (never the coach's unshared drafts) and no less. */
+  async listVideoReviewsForGuardian(guardianId: number, athleteId: number) {
+    const athlete = await this.getAthleteForGuardianScoped(guardianId, athleteId);
+    if (!athlete) return null;
+    return this.listVideoReviewsForAthlete(athleteId);
+  },
+
+  async getVideoReviewForGuardian(guardianId: number, athleteId: number, reviewId: number) {
+    const athlete = await this.getAthleteForGuardianScoped(guardianId, athleteId);
+    if (!athlete) return null;
+    return this.getVideoReviewForAthlete(athleteId, reviewId);
+  },
+
   async attachVideoToLoggedSet(
     athleteId: number,
     input: AttachVideoToSetInput,

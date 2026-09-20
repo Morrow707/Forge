@@ -3336,6 +3336,54 @@ CREATE INDEX IF NOT EXISTS "unattached_video_uploads_athlete_open_idx"
 CREATE UNIQUE INDEX IF NOT EXISTS "unattached_video_uploads_video_url_idx"
   ON "unattached_video_uploads" ("video_url");
 
+-- 2026-09-20: saved video reviews (Phase 2 of docs/video-review-plan.md).
+--
+-- A review is the clip reference(s) plus a timed event log; playback re-renders it. That is why
+-- there is no video column here and no transcode step anywhere: the whole review is kilobytes.
+--
+-- purged_at rather than a delete: when the retention cap takes the clip, the coach's notes are
+-- still a record of what they said about the lift, and coaching outlives the footage.
+CREATE TABLE IF NOT EXISTS "video_reviews" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer REFERENCES "users"("id") ON DELETE CASCADE,
+  "title" text NOT NULL,
+  "left_clip" json NOT NULL,
+  "right_clip" json,
+  "sync_l" real NOT NULL DEFAULT 0,
+  "sync_r" real NOT NULL DEFAULT 0,
+  "mode" text NOT NULL DEFAULT 'split',
+  "overlay_settings" json,
+  "shared_with_athlete_at" timestamp,
+  "purged_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "video_reviews_coach_idx" ON "video_reviews" ("coach_id");
+CREATE INDEX IF NOT EXISTS "video_reviews_athlete_shared_idx"
+  ON "video_reviews" ("athlete_id", "shared_with_athlete_at");
+
+-- t is real, not integer: frame-step lands on 1/30ths of a second, and rounding a drawing to
+-- the nearest second puts it over the wrong frame of a lift that lasts two.
+CREATE TABLE IF NOT EXISTS "video_review_events" (
+  "id" serial PRIMARY KEY,
+  "review_id" integer NOT NULL REFERENCES "video_reviews"("id") ON DELETE CASCADE,
+  "t" real NOT NULL,
+  "kind" text NOT NULL,
+  "payload" json NOT NULL,
+  "side" text NOT NULL DEFAULT 'left',
+  "hold_seconds" real,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "video_review_events_review_time_idx"
+  ON "video_review_events" ("review_id", "t");
+
+-- A review is shared by posting it as a comment reply, which is where the coach's drawn
+-- annotation already lands. SET NULL rather than CASCADE: deleting a review should not delete
+-- the conversation that referenced it.
+ALTER TABLE "workout_comments" ADD COLUMN IF NOT EXISTS "video_review_id" integer
+  REFERENCES "video_reviews"("id") ON DELETE SET NULL;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN

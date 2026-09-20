@@ -19,6 +19,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { reviewEventPayloadSchema } from "./video-review";
 import { BODY_PAIN_PARTS } from "./wellness";
 import type { WidgetLayoutEntry } from "./dashboard-widgets";
 import type { RosterGroup } from "./roster-groups";
@@ -2606,6 +2607,14 @@ export const workoutComments = pgTable(
     // circling a knee valgus moment -- saved as a PNG and attached the same
     // way a video link is, just a different media type on the same comment.
     imageUrl: text("image_url"),
+    // A saved video review, shared as a reply. Lands in the same place the coach's drawn
+    // annotation already does (imageUrl above), because that is where the athlete is already
+    // looking -- a review that arrives somewhere new is a review nobody opens. The row here
+    // carries only the reference; the review itself is scoped by its own sharedWithAthleteAt,
+    // so a comment pointing at an unshared review still shows the athlete nothing.
+    videoReviewId: integer("video_review_id").references(() => videoReviews.id, {
+      onDelete: "set null",
+    }),
     // The workout day this comment/video is actually FOR (the athlete's
     // calendar date, e.g. logging a session for last Friday two days late)
     // -- deliberately separate from createdAt below, which is just when the
@@ -2627,6 +2636,98 @@ export const workoutComments = pgTable(
     videoIdx: index("workout_comments_video_idx")
       .on(table.videoUrl)
       .where(sql`${table.videoUrl} is not null`),
+  }),
+);
+
+/** A SAVED REVIEW IS DATA, NOT A RENDERED VIDEO.
+ *
+ * The clip reference(s) plus a timed event log; playback re-renders it. That is the whole
+ * design decision behind this table and the one below, and it is what keeps a review at
+ * kilobytes, editable after the fact, and free of a transcode step. Burning a review to a real
+ * video file is Phase 5 of docs/video-review-plan.md and exists only for sharing outside the
+ * app -- nothing inside Forge ever needs it.
+ *
+ * RETENTION REACHES REVIEWS, and the two halves are deliberately separated. When the retention
+ * cap purges a clip, the review that referenced it loses the footage -- but the row stays,
+ * `purgedAt` is stamped, and the coach's notes and drawings survive as a record of what they
+ * said. A review is coaching, and coaching outlives the video it was about. (Purging still
+ * never touches a set's metrics; that is a separate CLAUDE.md invariant.)
+ *
+ * `athleteId` is nullable because a coach may compare two reference lifts that belong to
+ * nobody on their roster. When it IS set, it is what scopes the athlete's and guardian's read.
+ */
+export const videoReviews = pgTable(
+  "video_reviews",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The athlete this review is ABOUT. Null for a review of two reference clips. */
+    athleteId: integer("athlete_id").references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** {videoUrl, source, label} -- see shared/video-review.ts's ReviewClip. */
+    leftClip: json("left_clip").notNull(),
+    /** Null for a single-clip review: every tool works on one clip too. */
+    rightClip: json("right_clip"),
+    /** The sync marks from the compare tool, in seconds on each clip's own timeline. */
+    syncL: real("sync_l").notNull().default(0),
+    syncR: real("sync_r").notNull().default(0),
+    /** "split" | "overlay" -- see shared/video-review.ts. */
+    mode: text("mode").notNull().default("split"),
+    /** Opacity, mirror, scale and nudge for overlay mode. */
+    overlaySettings: json("overlay_settings"),
+    /** Set when the coach shares it; until then the athlete cannot see it at all. */
+    sharedWithAthleteAt: timestamp("shared_with_athlete_at"),
+    /** Set when the retention sweep takes the clip out from under it. The notes survive. */
+    purgedAt: timestamp("purged_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachIdx: index("video_reviews_coach_idx").on(table.coachId),
+    // Backs the athlete's and guardian's list, which reads only shared rows.
+    athleteSharedIdx: index("video_reviews_athlete_shared_idx").on(
+      table.athleteId,
+      table.sharedWithAthleteAt,
+    ),
+  }),
+);
+
+/** One thing the coach did, at one moment on the review's timeline.
+ *
+ * Insert-mostly and read in bulk: a review's playback loads every event once and renders from
+ * memory, so there is no per-event read path to optimise for.
+ *
+ * `t` is seconds on the REVIEW's timeline, which is the left clip's timeline -- the right side
+ * is derived through syncL/syncR exactly as the live compare tool derives it. Storing one
+ * timeline rather than two is what makes a review re-syncable after the fact: change the marks
+ * and every event still lands where the coach put it relative to the lift.
+ */
+export const videoReviewEvents = pgTable(
+  "video_review_events",
+  {
+    id: serial("id").primaryKey(),
+    reviewId: integer("review_id")
+      .notNull()
+      .references(() => videoReviews.id, { onDelete: "cascade" }),
+    /** Seconds on the review timeline. real, not integer: frame-step lands on 1/30ths. */
+    t: real("t").notNull(),
+    /** See REVIEW_EVENT_KINDS in shared/video-review.ts. Text rather than an enum so a new
+     * drawing tool is a client change plus a zod value, not a migration on a live table. */
+    kind: text("kind").notNull(),
+    /** Shape-specific: points for a stroke, from/to for an arrow, the text for a label. */
+    payload: json("payload").notNull(),
+    /** "left" | "right" | "both" -- which video the drawing belongs over. */
+    side: text("side").notNull().default("left"),
+    /** How long it stays on screen past `t`, in seconds. Null = until the next scrub or pause
+     * boundary, which is the default a coach expects when drawing while talking. */
+    holdSeconds: real("hold_seconds"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    // Every read is "this review's events, in time order".
+    reviewTimeIdx: index("video_review_events_review_time_idx").on(table.reviewId, table.t),
   }),
 );
 
@@ -8772,6 +8873,69 @@ export const submitWorkoutLogSchema = z.object({
   // no log yet) still works; when it is present and does not match, the save is
   // refused rather than allowed to overwrite newer data.
   baseRevision: z.number().int().nonnegative().optional(),
+});
+
+/** What a coach may send when creating or editing a review.
+ *
+ * The clip references are validated as shapes rather than trusted: leftClip is what playback
+ * loads, and a malformed one is a review that opens to a black rectangle with no way to tell
+ * whether the clip was purged or the row was always wrong. */
+export const reviewClipSchema = z.object({
+  videoUrl: z.string().min(1),
+  source: z.enum(["set", "skill", "reference"]),
+  label: z.string().max(200),
+  /** The set this clip came from, when it has one -- what the bar-path overlay tool reads. */
+  setId: z.number().int().positive().optional().nullable(),
+  repBreakdown: z
+    .array(z.object({ repNumber: z.number(), startT: z.number(), endT: z.number() }))
+    .max(200)
+    .optional()
+    .nullable(),
+});
+
+export const createVideoReviewSchema = z.object({
+  athleteId: z.number().int().positive().optional().nullable(),
+  title: z.string().min(1).max(200),
+  leftClip: reviewClipSchema,
+  rightClip: reviewClipSchema.optional().nullable(),
+  syncL: z.number().optional(),
+  syncR: z.number().optional(),
+  mode: z.enum(["split", "overlay"]).optional(),
+  overlaySettings: z
+    .object({
+      opacity: z.number().min(0).max(1),
+      mirror: z.boolean(),
+      scale: z.number().positive(),
+      dx: z.number(),
+      dy: z.number(),
+    })
+    .optional()
+    .nullable(),
+});
+
+export const updateVideoReviewSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  syncL: z.number().optional(),
+  syncR: z.number().optional(),
+  mode: z.enum(["split", "overlay"]).optional(),
+  overlaySettings: createVideoReviewSchema.shape.overlaySettings,
+  /** true shares with the athlete, false takes it back. */
+  shared: z.boolean().optional(),
+});
+
+/** The whole timeline. Capped because a review is a few hundred marks at most -- a payload of
+ * fifty thousand is a bug or an attack, and either way it should not reach the insert. */
+export const replaceVideoReviewEventsSchema = z.object({
+  events: z
+    .array(
+      z.object({
+        t: z.number().min(0),
+        side: z.enum(["left", "right", "both"]).default("left"),
+        holdSeconds: z.number().positive().optional().nullable(),
+        payload: reviewEventPayloadSchema,
+      }),
+    )
+    .max(2000),
 });
 
 // ---------- Types ----------

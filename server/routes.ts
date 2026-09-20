@@ -117,6 +117,9 @@ import {
   updateSkillFaultThresholdsSchema,
   updateAssignmentSchema,
   submitWorkoutLogSchema,
+  createVideoReviewSchema,
+  updateVideoReviewSchema,
+  replaceVideoReviewEventsSchema,
   attachVideoToSetSchema,
   attachUnattachedVideoSchema,
   updateProgramDaySchema,
@@ -4700,6 +4703,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!athlete) return res.status(404).json({ message: "Athlete not found" });
     res.json(await storage.listUnattachedVideoUploads(athleteId));
   });
+
+  // ---------- Saved video reviews (Phase 2 of docs/video-review-plan.md) ----------
+  //
+  // A review is the clip reference(s) plus a timed event log; playback re-renders it. Nothing
+  // here uploads or transcodes anything, which is why a review costs kilobytes.
+  //
+  // THREE READERS, THREE ROUTES, on purpose. The coach sees their own work including unshared
+  // drafts; the athlete sees only what was shared with them; the guardian sees exactly what
+  // their athlete sees. One route with a role branch is how a half-written review reaches the
+  // person it is about.
+
+  app.post("/api/coach/video-reviews", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createVideoReviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const review = await storage.createVideoReview(user.id, parsed.data);
+    // Null means the named athlete is not one this coach may see -- 404 rather than 403, same
+    // as every other per-athlete coach route, because confirming the id exists is a disclosure.
+    if (!review) return res.status(404).json({ message: "Athlete not found" });
+    res.status(201).json(review);
+  });
+
+  app.get("/api/coach/video-reviews", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = req.query.athleteId ? Number(req.query.athleteId) : null;
+    res.json(await storage.listVideoReviewsForCoach(user.id, athleteId));
+  });
+
+  app.get("/api/coach/video-reviews/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const review = await storage.getVideoReviewForCoach(user.id, Number(req.params.id));
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(review);
+  });
+
+  app.patch("/api/coach/video-reviews/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateVideoReviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const review = await storage.updateVideoReview(user.id, Number(req.params.id), parsed.data);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(review);
+  });
+
+  // The whole timeline, rewritten. The editor holds the log in memory and saves it whole, which
+  // is what makes undo free on the client and keeps the server from having to reason about
+  // event ordering at all.
+  app.put("/api/coach/video-reviews/:id/events", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = replaceVideoReviewEventsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const events = await storage.replaceVideoReviewEvents(
+      user.id,
+      Number(req.params.id),
+      parsed.data.events.map((e) => ({
+        t: e.t,
+        kind: e.payload.kind,
+        payload: e.payload,
+        side: e.side,
+        holdSeconds: e.holdSeconds ?? null,
+      })),
+    );
+    if (!events) return res.status(404).json({ message: "Review not found" });
+    res.json(events);
+  });
+
+  app.get("/api/athlete/video-reviews", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listVideoReviewsForAthlete(user.id));
+  });
+
+  app.get("/api/athlete/video-reviews/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const review = await storage.getVideoReviewForAthlete(user.id, Number(req.params.id));
+    // An unshared review is not "forbidden", it does not exist as far as the athlete is
+    // concerned -- a 403 would tell them their coach is drafting something about them.
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(review);
+  });
+
+  // getAthleteForGuardianScoped is called HERE rather than only inside the storage function,
+  // even though the storage function checks it too. cross-tenant-scoping.test.ts reads this file
+  // and requires the link check to be visible in the route -- which is right: a reader auditing
+  // the guardian surface should see the scope without tracing into a 27,000-line module, and a
+  // future refactor that swaps the storage call must not be able to drop the check silently.
+  app.get(
+    "/api/guardian/athletes/:athleteId/video-reviews",
+    requireRole("guardian"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const athlete = await storage.getAthleteForGuardianScoped(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+      res.json(await storage.listVideoReviewsForAthlete(athleteId));
+    },
+  );
+
+  app.get(
+    "/api/guardian/athletes/:athleteId/video-reviews/:id",
+    requireRole("guardian"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const athlete = await storage.getAthleteForGuardianScoped(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+      // The athlete's own read, reused whole: a guardian sees exactly what their athlete sees,
+      // which means the sharedWithAthleteAt gate applies to them identically.
+      const review = await storage.getVideoReviewForAthlete(athleteId, Number(req.params.id));
+      if (!review) return res.status(404).json({ message: "Review not found" });
+      res.json(review);
+    },
+  );
 
   // ---------- Clip lists for the compare tool (see shared/video-clips.ts) ----------
   //
