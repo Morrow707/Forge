@@ -10092,7 +10092,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // (edited, deleted, or already carrying a different video) -- the client
   // falls back to keeping the clip as a standalone entry in the Video Bank
   // rather than treating that as an error.
-  app.post("/api/athlete/log/attach-video", requireRole("athlete"), async (req, res) => {
+  //
+  // Open to coach and admin for the same reason /api/athlete/form-video is: a coach
+  // filming their own training uploads through the same queue, and until 2026-09-20 the
+  // upload succeeded and the reattach 403'd, so the clip landed in the unattached list
+  // with no page a coach could reach to link it. Every storage call below scopes by the
+  // caller's own id, so a coach can only ever touch their own logs and their own clips.
+  app.post("/api/athlete/log/attach-video", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
     const user = currentUser(req);
     const parsed = attachVideoToSetSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -10124,21 +10130,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ---------- Unattached video uploads (see unattachedVideoUploads' schema comment) ----------
 
-  app.get("/api/athlete/unattached-videos", requireRole("athlete"), async (req, res) => {
+  app.get("/api/athlete/unattached-videos", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
     const user = currentUser(req);
     res.json(await storage.listUnattachedVideoUploads(user.id));
   });
 
   // The sets an orphaned clip could be linked to: that clip's own day when the target date is
   // known, otherwise the last 30 days. Only sets with no video yet -- attaching never replaces.
-  app.get("/api/athlete/unattached-videos/:id/candidate-sets", requireRole("athlete"), async (req, res) => {
+  app.get("/api/athlete/unattached-videos/:id/candidate-sets", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
     const user = currentUser(req);
     const orphan = await storage.getUnattachedVideoUpload(user.id, Number(req.params.id));
     if (!orphan) return res.status(404).json({ message: "Clip not found" });
     res.json(await storage.listSetsAvailableForVideo(user.id, orphan.date));
   });
 
-  app.post("/api/athlete/unattached-videos/:id/attach", requireRole("athlete"), async (req, res) => {
+  app.post("/api/athlete/unattached-videos/:id/attach", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
     const user = currentUser(req);
     const parsed = attachUnattachedVideoSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -10161,7 +10167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(result);
   });
 
-  app.post("/api/athlete/unattached-videos/:id/dismiss", requireRole("athlete"), async (req, res) => {
+  app.post("/api/athlete/unattached-videos/:id/dismiss", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
     const user = currentUser(req);
     const ok = await storage.dismissUnattachedVideoUpload(user.id, Number(req.params.id));
     if (!ok) return res.status(404).json({ message: "Clip not found" });

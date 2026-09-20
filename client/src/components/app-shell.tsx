@@ -120,6 +120,7 @@ const coachNav: NavItem[] = [
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare, overflow: true },
   { href: "/coach/my", label: "My Training", icon: UserCircle, overflow: true },
+  { href: "/coach/video-bank", label: "My Video Bank", icon: Video, overflow: true },
   { href: "/coach/billing", label: "Billing", icon: CreditCard, overflow: true },
   // Same page for every role, different checklist -- see shared/required-documents.ts. A coach
   // is asked for credentials (background check, certification, CPR), not for a waiver.
@@ -188,6 +189,7 @@ const athleteNav: NavItem[] = [
 const adminNav: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: Flame, exact: true },
   { href: "/admin/my", label: "My Calendar", icon: CalendarDays },
+  { href: "/admin/video-bank", label: "My Video Bank", icon: Video, overflow: true },
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/skills", label: "Forge Skill Bank", icon: Target, overflow: true },
   { href: "/admin/skill-programs", label: "Forge Skill Programs", icon: Target, overflow: true },
