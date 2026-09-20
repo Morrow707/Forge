@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { lazyDialog } from "@/components/lazy-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { AthleteSwitcher } from "@/components/athlete-switcher";
@@ -39,6 +40,7 @@ import { toast } from "sonner";
 import { ReadFailed } from "@/components/read-failed";
 import {
   ArrowLeft,
+  GitCompare,
   Pencil,
   Mail,
   Share2,
@@ -147,6 +149,10 @@ function UnattachedClipsNote({ athleteId }: { athleteId: number }) {
   );
 }
 
+const VideoCompareDialog = lazyDialog(() =>
+  import("@/components/video-compare").then((m) => ({ default: m.VideoCompareDialog })),
+);
+
 export default function AthleteDetailPage() {
   const { athleteId } = useParams<{ athleteId: string }>();
   const id = Number(athleteId);
@@ -186,6 +192,10 @@ export default function AthleteDetailPage() {
   const [acwrOpen, setAcwrOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
+  // Lazily fetched the first time a coach compares, not with this page -- the compare tool
+  // pulls in the skeleton renderer and the clip picker, and most visits to an athlete never
+  // open it. Same lazyDialog treatment as the analysis dialog (see set-video-review.tsx).
+  const [comparing, setComparing] = useState(false);
   const [sharingProfile, setSharingProfile] = useState(false);
 
   const sendReportMutation = useMutation({
@@ -648,6 +658,17 @@ export default function AthleteDetailPage() {
         onOpenChange={setAcwrOpen}
         athleteName={athlete.name}
         fetchUrl={`/api/coach/roster/${athlete.id}/acwr-history`}
+      />
+
+      {/* Subject is the ROSTER athlete, not the coach: the picker's "this athlete" source has to
+          be the person whose page this is, and its second source is the rest of the coach's
+          roster. Per-team narrowing and the minors rules are enforced server-side by the clip
+          list route, never by what the picker chooses to show. */}
+      <VideoCompareDialog
+        open={comparing}
+        onOpenChange={setComparing}
+        subject={{ kind: "roster", athleteId: athlete.id, athleteName: athlete.name }}
+        title={`Compare ${athlete.name}'s clips`}
       />
 
       <TrainingHistoryExportDialog
