@@ -191,9 +191,11 @@ the athlete feels; upload already overlaps it and is queued in the background.
 - Drop to every second frame when the analysis queue backs up (the existing
   `sampleEveryNthFrame` knob), never drop recording frames: the movie writer is separate
   hardware and must not be gated on analysis.
-- Measure on a real phone: heat, battery, and analysis lag at 60 fps on the oldest supported
-  device. This is why it sits after the compare tool: it needs `verify_build` and a phone,
-  not a sandbox.
+- This ADDS no work: the same per-frame tracking runs today, after the set instead of during
+  it, and a set is twenty to forty seconds followed by a rest (Scott, 2026-09-20). The one
+  thing to measure on a real phone is whether the oldest supported device keeps up at 60 fps or
+  needs every second frame. It sits after the compare tool only because it needs
+  `verify_build` and a phone, not a sandbox.
 - Streaming the UPLOAD while recording (fragmented MP4 + a chunked upload route) is the
   smaller win; decide after measuring the live-analysis change.
 
