@@ -313,7 +313,15 @@ export async function uploadOrQueueVideo(
     const { url } = await uploadWithProgress("/api/athlete/form-video", formData, onProgress);
     return { status: "uploaded", url };
   } catch (err) {
-    if (err instanceof ApiError) throw err;
+    // Same classification runVideoFlush uses below, for the same reason: an ApiError is not
+    // a permanent rejection. This used to rethrow EVERY ApiError -- 500, 502, 503, 429 and
+    // 401 included -- so a server cold start or a deploy in the seconds after a set was
+    // filmed threw the clip away at the dialog instead of queueing it, while the very same
+    // error forty lines down was (correctly) left on disk for the next flush. Only a 4xx the
+    // server will keep rejecting is worth throwing; everything else is queued.
+    const status = err instanceof ApiError ? err.status : null;
+    const code = err instanceof ApiError ? err.code : undefined;
+    if (err instanceof ApiError && isPermanentUploadRejection(status, code)) throw err;
     await persistVideoForUpload(blob, "/api/athlete/form-video", "video", filename, context);
     return { status: "queued" };
   }
