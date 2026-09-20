@@ -189,16 +189,13 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **485** is the newest TestFlight build, cut from `c3b874e` on
-  2026-09-20 (Scott: "upload to apple"). `verify_build` run 484 passed
-  `altool --validate-app` on the same code. On top of 483 it adds #150: a
-  coach or admin filming their own training can link a stranded clip from
-  /coach/video-bank or /admin/video-bank.
-- Waiting on an upload since 485: #152 (documents audit: public PDF download button on every
-  legal page, honest statuses on /documents, admin AI Terms card, kind-belongs-on-profile
-  upload rule) and #153 (the six document items: coach email-to-roster, "What you've agreed
-  to", /research-consent page and PDF, guardian biometric consent after claim, staff view of
-  the signed Service Agreement, admin research card).
+- Build **488** is the newest TestFlight build, cut from `8ccddec` on
+  2026-09-20 (Scott: "upload to apple"). `verify_build` run 487 passed
+  `altool --validate-app` on the same code. On top of 485 it adds #152 (the
+  documents audit fixes) and #153 (the six document items: coach
+  email-to-roster, "What you've agreed to", /research-consent page and PDF,
+  guardian biometric consent after claim, staff view of the signed Service
+  Agreement, admin research card). Nothing on `main` is waiting on an upload.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
