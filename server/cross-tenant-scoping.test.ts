@@ -85,6 +85,8 @@ const OWNERSHIP_CHECKS = [
 const GLOBAL_BY_DESIGN = new Set([
   // Terms and privacy policy, and only the types on a public allowlist.
   "/api/legal-documents/:type",
+  // The same public document as a PDF, from the same public set; nothing about it is per-user.
+  "/api/legal-documents/:type.pdf",
   // A coach or team invite code resolving to that program's public page -- no
   // account, by design, since the audience is a parent or a recruit who does not have
   // one. There is no caller to scope against. What it returns is bounded instead: the

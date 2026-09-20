@@ -6,6 +6,7 @@ import {
   addDays,
   documentNeedsAction,
   documentStatus,
+  type DocumentStatus,
 } from "./required-documents";
 
 const TODAY = "2026-09-17";
@@ -94,6 +95,58 @@ describe("chasing an athlete for what is outstanding", () => {
     expect(fn).toContain("createNotification");
   });
 
+  it("sends the guardian to the CHILD's documents page, not their own", () => {
+    // Bare "/documents" is the viewer's own checklist. A guardian has no forms of their own, so
+    // that link landed a parent on an empty page with nothing pointing at the athlete the
+    // request was about. /documents/:athleteId is the same page filing for somebody else.
+    const fn = storage.slice(
+      storage.indexOf("async requestDocuments"),
+      storage.indexOf("async externalWaiverSummary"),
+    );
+    const guardianLoop = fn.slice(fn.indexOf("for (const g of guardians)"));
+    expect(guardianLoop).toContain("`/documents/${input.athleteId}`");
+    expect(guardianLoop).not.toMatch(/"\/documents",/);
+  });
+});
+
+const athletePage = fs.readFileSync(
+  path.join(process.cwd(), "client/src/pages/documents.tsx"),
+  "utf8",
+);
+
+describe("the athlete's own checklist agrees with the coach's roster view", () => {
+  it("renders every status the shared rule can produce", () => {
+    // StatusMark used to branch on a hand-written union that left out "expiring_soon", so an
+    // accepted clearance inside its warning window fell through to "Not uploaded" on the
+    // athlete's page while the coach's page said "Expires soon" for the same row. Derived from
+    // the type rather than restated: a status added to DocumentStatus without a branch here fails.
+    const statuses: DocumentStatus[] = [
+      "missing",
+      "pending_review",
+      "accepted",
+      "rejected",
+      "expiring_soon",
+      "expired",
+    ];
+    const statusMark = athletePage.slice(
+      athletePage.indexOf("function StatusMark"),
+      athletePage.indexOf("export default function DocumentsPage"),
+    );
+    for (const status of statuses) {
+      if (status === "missing") continue; // the fall-through branch, by design
+      expect(statusMark, status).toContain(`status === "${status}"`);
+    }
+    expect(athletePage).toMatch(/status: DocumentStatus;/);
+  });
+
+  it("counts what is outstanding by the same rule the coach's page does", () => {
+    // "Anything but accepted" counted a document already uploaded and waiting on review as one
+    // the athlete still had to upload; the coach's page (documentStatusForRoster) never did.
+    expect(athletePage).toMatch(/d\.required && documentNeedsAction\(/);
+  });
+});
+
+describe("the roster document query", () => {
   it("reads the roster's documents in one query, not one per athlete", () => {
     const fn = storage.slice(
       storage.indexOf("async documentStatusForRoster"),

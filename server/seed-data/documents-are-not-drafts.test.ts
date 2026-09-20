@@ -52,6 +52,25 @@ describe("a document Forge shows somebody", () => {
   });
 });
 
+describe("the copies that leave the app", () => {
+  it("the PDF and the email do not wrap a reviewed document in \"(Draft)\"", () => {
+    // Every text above is clean, and the download and email routes were still titling each one
+    // "Forge -- <name> (Draft)" -- so the counsel-built biometric consent opened with the word
+    // over it whenever anybody downloaded or emailed it. Comments are allowed to say the word;
+    // a template literal that becomes a title is not.
+    const routes = fs.readFileSync(path.join(process.cwd(), "server/routes.ts"), "utf8");
+    const legal = routes.slice(
+      routes.indexOf("const LEGAL_DOC_TYPES = ["),
+      routes.indexOf('app.get("/api/admin/nutrition-knowledge"'),
+    );
+    expect(legal.length).toBeGreaterThan(0);
+    for (const line of legal.split("\n")) {
+      if (line.trim().startsWith("//")) continue;
+      expect(line).not.toMatch(/`[^`]*\(Draft\)/);
+    }
+  });
+});
+
 describe("the two that keep their warning, on purpose", () => {
   it("the institutional agreement outline is gone entirely", () => {
     // It used to keep a warning saying it was never drafted by a lawyer and must not be sent to

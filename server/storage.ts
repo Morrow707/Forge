@@ -26760,7 +26760,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         "documents_requested",
         `Documents needed for ${input.athleteName}`,
         `${from}needs these on file for ${input.athleteName}: ${list}. You can upload a photo or a PDF from their Documents page.`,
-        "/documents",
+        // THE CHILD'S page, not the guardian's own. Bare "/documents" opens the viewer's own
+        // checklist, and a guardian has no forms of their own -- so the link the parent was
+        // told to follow landed on an empty list with no way to reach the athlete it was about.
+        // /documents/:athleteId is the same page filing for somebody else; the server checks the
+        // guardian link on both the read and the upload.
+        `/documents/${input.athleteId}`,
       );
     }
   },

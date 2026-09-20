@@ -3,6 +3,7 @@ import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { Link } from "wouter";
 import { ForgeMark } from "@/components/forge-mark";
 import { ReadFailed } from "@/components/read-failed";
+import { DownloadButton } from "@/components/download-button";
 
 /**
  * Public, unauthenticated pages for Forge's legal documents (shared/schema.ts
@@ -74,6 +75,20 @@ function LegalDocumentPage({
           <p className="mb-8 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
             {data?.content}
           </p>
+        )}
+        {/* The same PDF an admin could already download, from the public route. Anybody who
+            accepted one of these should be able to keep a copy, and until now only an admin
+            could. DownloadButton goes through the share sheet on iOS, where <a download> is
+            ignored. */}
+        {!isLoading && !isError && (
+          <div className="mb-6">
+            <DownloadButton
+              url={`/api/legal-documents/${docType}.pdf`}
+              filename={`forge-${docType.replace(/_/g, "-")}.pdf`}
+              shareTitle={`Forge ${title}`}
+              label="Download PDF"
+            />
+          </div>
         )}
         <Link href={otherHref} className="text-sm font-semibold text-primary hover:underline">
           {otherLabel}

@@ -83,7 +83,7 @@ function DraftBadge() {
 function PublishedBadge({ at }: { at: string }) {
   return (
     <Badge variant="outline" className="text-[10px]">
-      PUBLISHED at {at} -- awaiting counsel
+      PUBLISHED at {at}
     </Badge>
   );
 }
@@ -241,10 +241,11 @@ export default function AdminDocuments() {
           <CardContent>
             <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
               <ShieldAlert className="h-4 w-4 shrink-0" />
-              Apart from the Video and Biometric Consent, which was built with a lawyer, nothing
-              on this page has been reviewed by counsel. Tier thresholds and retention windows are
-              real, current system behavior -- not a claim that the underlying approach is legally
-              sound.
+              Every document here is live: an edit changes what the next person reads or agrees
+              to, and an edit to the Terms re-asks every account to accept them. Treat a change as
+              a change to a contract. Tier thresholds and retention windows are real, current
+              system behavior -- not a claim that the underlying approach is legally sound. What is
+              still open with counsel is in docs/legal-open-questions.md.
             </p>
           </CardContent>
         </Card>
@@ -362,6 +363,12 @@ export default function AdminDocuments() {
               agreement and the open questions are in docs/legal-open-questions.md.
             </CardDescription>
           </CardHeader>
+          <CardContent>
+            {/* The server has resolved terms_of_service to the signup agreement for the PDF and
+                the email since the merge; this card just had no buttons, so the one document
+                everybody accepts was the one an admin could not send. */}
+            <LegalDocSendRow docType="terms_of_service" />
+          </CardContent>
         </Card>
 
         <Card>
@@ -417,8 +424,7 @@ export default function AdminDocuments() {
               users.requiresGuardianNotice and GUARDIAN_NOTICE_LIVE in shared/privacy-tiers.ts);
               its content is embedded and delivered today in the guardian-invite email sent at
               signup (see issueGuardianInviteIfNeeded in server/auth.ts) -- every minor's parent
-              gets this text, so editing it changes what the next one reads. Not reviewed by
-              counsel.
+              gets this text, so editing it changes what the next one reads.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -450,11 +456,29 @@ export default function AdminDocuments() {
               It carries the clauses Apple requires of an app that replaces the standard licence
               with its own -- Apple as a third-party beneficiary, and Apple disclaiming
               maintenance and warranty -- and App Store Connect's licence URL points at this page.
-              Not yet reviewed by counsel.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <LegalDocEditor docType="eula" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              AI Terms of Use
+              <PublishedBadge at="/ai-terms" />
+            </CardTitle>
+            <CardDescription>
+              The AI features specifically -- program generation, form-check feedback, the coaching
+              assistant. A supplement to the Terms of Use, not a rival: its own "Service" is the AI
+              features and it points platform use back at the Terms. It was seeded, routed and
+              served at /ai-terms with no card here, so it was the one document an admin could
+              neither download nor email.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LegalDocEditor docType="ai_terms_of_use" />
           </CardContent>
         </Card>
 
@@ -469,9 +493,8 @@ export default function AdminDocuments() {
               describes data handling, or takes a consent, and this one asks somebody to give up a
               right. Section 8 says plainly what a guardian can and cannot waive on a child's
               behalf, which is the part most templates get wrong by omission. Editing it changes
-              what the next person agrees to. Not yet reviewed by counsel -- and of everything on
-              this page that caveat weighs most here, because an unenforceable release is not a
-              weak release, it is no release.
+              what the next person agrees to, and of everything on this page an edit weighs most
+              here, because an unenforceable release is not a weak release, it is no release.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -573,7 +596,6 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
   const doc = docs?.find((d) => d.docType === docType);
   const [content, setContent] = useState("");
   const [hydrated, setHydrated] = useState(false);
-  const [emailTo, setEmailTo] = useState("");
 
   useEffect(() => {
     if (doc && !hydrated) {
@@ -591,17 +613,6 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
       toast.success("Saved");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save"),
-  });
-
-  const emailMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", `/api/admin/legal-documents/${docType}/email`, { to: emailTo });
-    },
-    onSuccess: () => {
-      toast.success(`Sent to ${emailTo}`);
-      setEmailTo("");
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Could not send"),
   });
 
   // Same as SignupAgreementEditor above, and this one had no loading guard at all: an
@@ -637,32 +648,55 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
           <Save className="h-4 w-4" />
           {saveMutation.isPending ? "Saving…" : "Save"}
         </Button>
-        <DownloadButton
-          url={`/api/admin/legal-documents/${docType}.pdf`}
-          filename={`forge-${docType.replace(/_/g, "-")}.pdf`}
-          shareTitle={DOC_LABEL[docType]}
-          label="Print / Download PDF"
-        />
-        <div className="flex items-center gap-1.5">
-          <Input
-            type="email"
-            value={emailTo}
-            onChange={(e) => setEmailTo(e.target.value)}
-            placeholder="Email to…"
-            className="h-8 w-48"
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => emailMutation.mutate()}
-            disabled={emailMutation.isPending || !emailTo.trim()}
-          >
-            <Mail className="h-4 w-4" />
-            Send
-          </Button>
-        </div>
+        <LegalDocSendRow docType={docType} />
       </div>
     </div>
+  );
+}
+
+/** Download as PDF, or email to one address -- for any document the server can resolve to text,
+ * which includes the Terms (resolved to the signup agreement) that have no editor on this page.
+ * The email route answers 502 with its own sentence when no provider is configured, and that
+ * sentence is what the toast shows. */
+function LegalDocSendRow({ docType }: { docType: LegalDocType }) {
+  const [emailTo, setEmailTo] = useState("");
+  const emailMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/admin/legal-documents/${docType}/email`, { to: emailTo });
+    },
+    onSuccess: () => {
+      toast.success(`Sent to ${emailTo}`);
+      setEmailTo("");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not send"),
+  });
+  return (
+    <>
+      <DownloadButton
+        url={`/api/admin/legal-documents/${docType}.pdf`}
+        filename={`forge-${docType.replace(/_/g, "-")}.pdf`}
+        shareTitle={DOC_LABEL[docType]}
+        label="Print / Download PDF"
+      />
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="email"
+          value={emailTo}
+          onChange={(e) => setEmailTo(e.target.value)}
+          placeholder="Email to…"
+          className="h-8 w-48"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => emailMutation.mutate()}
+          disabled={emailMutation.isPending || !emailTo.trim()}
+        >
+          <Mail className="h-4 w-4" />
+          Send
+        </Button>
+      </div>
+    </>
   );
 }
 

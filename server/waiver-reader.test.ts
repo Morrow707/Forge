@@ -102,7 +102,8 @@ describe("what happens to the file", () => {
 describe("the upload route", () => {
   it("reads and decides inside the request rather than queueing", () => {
     const fn = routes.slice(routes.indexOf('app.post(\n    "/api/waivers/:athleteId"'));
-    const body = fn.slice(0, 4000);
+    // Wide enough to reach past the kind-belongs-on-this-profile check added 2026-09-20.
+    const body = fn.slice(0, 6000);
     expect(body).toContain("await readUploadedWaiver");
     expect(body).toContain("acceptExternalWaiverFromAi");
   });
