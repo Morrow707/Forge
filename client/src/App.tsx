@@ -11,6 +11,8 @@ import { queryClient, persistOptions } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { BiometricLockGate } from "@/components/biometric-lock-gate";
 import { TermsReacceptanceGate } from "@/components/terms-reacceptance-gate";
+import { FirstRunDialogProvider } from "@/hooks/use-first-run-dialogs";
+import { RATE_LIMITED_MESSAGE, isRateLimited } from "@/lib/rate-limit-message";
 import { watchAppleIapTransactionUpdates } from "@/lib/apple-iap";
 import { DebugConsole } from "@/components/debug-console";
 import { withLoadTimeout } from "@/lib/lazy-load-recovery";
@@ -165,11 +167,18 @@ function homeFor(role: "coach" | "athlete" | "admin" | "guardian") {
 // lets them retry instead.
 function ConnectionProblem() {
   const qc = useQueryClient();
+  const { error } = useAuth();
+  // A 429 is the server answering, not a connection failing, and "check your connection" sends
+  // somebody to a fix that cannot work -- worse, it invites the hammering that made it fire.
+  // Only a real HTTP response reaches this branch: a transport failure is a NetworkError, which
+  // is deliberately not an ApiError (see CLAUDE.md), so it still gets the sentence above.
+  const rateLimited = isRateLimited(error);
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-background px-6 text-center">
       <p className="text-sm text-muted-foreground">
-        Having trouble reaching Forge. Your session is still fine -- check your connection and
-        try again.
+        {rateLimited
+          ? RATE_LIMITED_MESSAGE
+          : "Having trouble reaching Forge. Your session is still fine -- check your connection and try again."}
       </p>
       <button
         type="button"
@@ -657,6 +666,13 @@ export default function App() {
   return (
     <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
       <AuthProvider>
+        {/* THE FIRST-RUN QUEUE. Three modals are due at once on a first sign-in -- this gate and
+            the two camera notices in AppShell -- and all three used to open together, each with
+            its own blocking layer, so nothing underneath was tappable. This hands the screen to
+            one at a time (terms, then the 2D-device notice, then the accuracy notice). It wraps
+            both the router and the gate because the two notices are mounted down inside AppShell
+            and this one is not. Nothing about what any of them says, or when it is due, changes. */}
+        <FirstRunDialogProvider>
         <BiometricLockGate>
           <Router />
           {/* Beside the router, not inside a screen: a change to the signup Terms of Use has to
@@ -704,6 +720,7 @@ export default function App() {
               diagnosed -- this is a tool, not a feature. */}
           {(Capacitor.isNativePlatform() || import.meta.env.DEV) && <DebugConsole />}
         </BiometricLockGate>
+        </FirstRunDialogProvider>
       </AuthProvider>
     </PersistQueryClientProvider>
   );

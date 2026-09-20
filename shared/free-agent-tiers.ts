@@ -245,6 +245,22 @@ export const BUILT_FREE_AGENT_ADD_ONS: Set<FreeAgentAddOnId> = new Set([
 
 export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching"];
 
+/** The App Store Connect Product id for a sport-coach add-on.
+ *
+ * Auto-renewable subscriptions like the tier products, but these must NOT go in
+ * the tier subscription group: a Free Agent can own any combination of the three
+ * alongside whatever tier they are on, and membership of one StoreKit subscription
+ * group is exactly the mutual exclusivity the tiers need and these must not have.
+ * Three Products in their own group (or three groups of one), created before
+ * APPLE_IAP_LIVE can cover them.
+ *
+ * The "_v1" suffix has no history behind it, unlike the tiers' "_v2" -- none of
+ * these ids has ever been created in App Store Connect. It is there so the first
+ * mistake with one costs a suffix bump rather than a dead id. */
+export function appleProductIdForFreeAgentAddOn(addOn: FreeAgentAddOnId): string {
+  return `${APPLE_BUNDLE_ID}.addon.${addOn}_v1`;
+}
+
 // Skill Bank sport-unlock pricing -- a separate dimension from the add-ons
 // above (those are 3 specific unbuilt AI specialties; this is "any of the
 // SPORTS taxonomy's sports"). A Free Agent's Skill Bank is free for their

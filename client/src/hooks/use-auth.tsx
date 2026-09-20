@@ -45,6 +45,9 @@ type AuthContextValue = {
   // distinct from user === null, which means the server actively said "no
   // one is logged in." See AuthProvider's own comment on the query above.
   isError: boolean;
+  /** The error that failed check produced, so a caller can tell a rate limit (ApiError 429)
+   * apart from an unreachable server. Undefined whenever isError is false. */
+  error: unknown;
   loginMutation: ReturnType<typeof useLoginMutation>;
   mfaVerifyMutation: ReturnType<typeof useMfaVerifyMutation>;
   deviceApprovalCompleteMutation: ReturnType<typeof useDeviceApprovalCompleteMutation>;
@@ -196,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: user,
     isLoading: isFetching,
     isError,
+    error,
   } = useQuery<PublicUser | null>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }),
@@ -300,6 +304,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         isError,
+        error,
         loginMutation,
         mfaVerifyMutation,
         deviceApprovalCompleteMutation,

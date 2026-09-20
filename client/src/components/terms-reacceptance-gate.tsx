@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ReadFailed } from "@/components/read-failed";
 import { ScrollText } from "lucide-react";
+import { useFirstRunDialogSlot } from "@/hooks/use-first-run-dialogs";
 
 export type TermsStatus = {
   needsAcceptance: boolean;
@@ -43,6 +44,7 @@ export function TermsReacceptanceGate() {
   const {
     data: status,
     isError,
+    error,
     refetch,
   } = useQuery<TermsStatus>({
     queryKey: ["/api/auth/terms-status"],
@@ -63,12 +65,21 @@ export function TermsReacceptanceGate() {
     onError: (err: ApiError) => toast.error(err.message || "Couldn't record that right now"),
   });
 
+  // FIRST in the first-run queue, ahead of both camera notices: this one is a contract and is
+  // deliberately non-dismissable, so an acknowledgment drawn over it would be a click-through
+  // in front of something that cannot be clicked through. Same conditions as before -- the
+  // guardianDecides null and the not-yet-known null are what decide whether it is due at all,
+  // and they are computed here so this component asks for the slot only when it really wants it.
+  const wants = needs && status?.guardianDecides !== true && (isError || status != null);
+  const isMyTurn = useFirstRunDialogSlot("terms-reacceptance", wants);
+
   if (!needs) return null;
   // The minor keeps using the app while their guardian is asked.
   if (status?.guardianDecides) return null;
   // Nothing to show until we know which of the two this is -- drawing the blocking dialog first
   // and hiding it a moment later would flash a locked screen at a minor who is not being asked.
   if (!isError && !status) return null;
+  if (!isMyTurn) return null;
 
   return (
     <Dialog
@@ -89,7 +100,7 @@ export function TermsReacceptanceGate() {
           <DialogTitle>Forge's Terms of Use have changed</DialogTitle>
         </DialogHeader>
         {isError || !status ? (
-          <ReadFailed what="the updated Terms of Use" onRetry={() => void refetch()} />
+          <ReadFailed what="the updated Terms of Use" error={error} onRetry={() => void refetch()} />
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">

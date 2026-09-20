@@ -18,7 +18,8 @@ import {
   ApplePurchasePendingError,
   type FreeAgentTierProduct,
 } from "@/lib/apple-iap";
-import type { FreeAgentTierId } from "@shared/free-agent-tiers";
+import type { FreeAgentTierId, FreeAgentAddOnId } from "@shared/free-agent-tiers";
+import { FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
 import { Sparkles, Video, RotateCcw, CreditCard } from "lucide-react";
 import {
   FREE_AGENT_TIERS,
@@ -28,6 +29,93 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { formatCents } from "@shared/billing-tiers";
+
+/** The add-on half of GET /api/athlete/entitlements -- see sport-coaches.tsx for
+ * why `addOns` (may I open it) and `ownedAddOns` (did I pay for it) are two
+ * different questions. */
+type AddOnEntitlements = {
+  addOns: Record<FreeAgentAddOnId, boolean>;
+  ownedAddOns: Record<FreeAgentAddOnId, boolean>;
+  billingOpen: boolean;
+};
+
+/** The sport-coach add-ons, with price and status, on the one page an athlete
+ * goes to in order to buy something.
+ *
+ * Status comes from the server, never from a tier table here: an add-on is a
+ * separate purchase from a tier and the beta/trial short-circuit that turns it on
+ * lives in getFreeAgentEntitlements. The price is the shared constant on the web;
+ * on iOS the Sport Coaches page carries the StoreKit price, because only StoreKit
+ * can state an Apple price and only it can take the purchase. */
+function SportCoachAddOns({ webCheckout }: { webCheckout: boolean }) {
+  const { data } = useQuery<AddOnEntitlements>({
+    queryKey: ["/api/athlete/entitlements"],
+    queryFn: () => getJson("/api/athlete/entitlements"),
+  });
+  return (
+    <div className="mt-10">
+      <p className="label-xs mb-1">Sport coaches</p>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Bought one at a time, on top of whatever plan you are on.
+      </p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {FREE_AGENT_ADD_ON_ORDER.map((id) => {
+          const addOn = FREE_AGENT_ADD_ONS[id];
+          // Explicit true throughout -- undefined means "not answered yet".
+          const unlocked = data?.addOns[id] === true;
+          const owned = data?.ownedAddOns[id] === true;
+          const status = owned
+            ? "Owned"
+            : unlocked
+              ? "Included in beta"
+              : data?.billingOpen === true
+                ? "Available"
+                : "Not available yet";
+          return (
+            <Card key={id} className="flex flex-col">
+              <CardContent className="flex flex-1 flex-col gap-2 p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-display text-base font-bold uppercase tracking-wide">
+                    {addOn.label}
+                  </p>
+                  <Badge variant={unlocked ? "success" : "secondary"} className="shrink-0 text-[10px]">
+                    {status.toUpperCase()}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{addOn.description}</p>
+                <p className="mt-auto font-display text-xl font-bold">
+                  {formatCents(addOn.monthlyPriceCents)}
+                  <span className="text-sm font-normal text-muted-foreground">/mo</span>
+                </p>
+                {/* Stripe on the web only. On iOS an add-on is a StoreKit purchase
+                    made from the Sport Coaches page, and the server refuses a web
+                    checkout carrying the native platform header anyway -- a button
+                    here would be a guaranteed error toast. */}
+                {!unlocked && data?.billingOpen === true && webCheckout && (
+                  <Button size="sm" variant="outline" onClick={() => void startAddOnCheckout(id)}>
+                    Get
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Web checkout for one add-on. Hands off to Stripe's hosted page, same as the
+ * tier checkout above it -- no card detail touches this app. */
+async function startAddOnCheckout(addOnId: FreeAgentAddOnId) {
+  try {
+    const res = await apiRequest("POST", "/api/billing/checkout/free-agent-add-on", { addOnId });
+    const { url } = await res.json();
+    window.location.href = url;
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "Couldn't start checkout -- try again");
+  }
+}
 
 /** The purchase surface, which is two surfaces by necessity.
  *
@@ -196,6 +284,7 @@ export default function AthleteUpgrade() {
             })}
           </div>
         )}
+        <SportCoachAddOns webCheckout={!supported} />
         {supported && !live && (
           <Card className="mt-6">
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">

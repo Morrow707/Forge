@@ -51,10 +51,47 @@ describe("flipping enforcement on restricts nobody who is still a beta account",
 
   it("leaves the free agent AI coach unlimited", async () => {
     const { getFreeAgentEntitlements } = await billingWithEnforcement(true);
+    // Every flag AND every sport-coach add-on. The add-ons joined this object so
+    // one function answers "what may this account do" for all of it -- the Sport
+    // Coaches page used to answer the add-on half for itself off isBetaAccount
+    // alone, which ignored a live trial and the enforcement flag entirely.
     expect(getFreeAgentEntitlements({ ...beta, freeAgentTier: null } as any)).toEqual({
       hasAiChat: true,
       hasVideoFormCheck: true,
+      hasSkills: true,
+      addOns: { golf_swing: true, hitting: true, pitching: true },
     });
+  });
+
+  it("leaves the Coaches Corner unlocked for a beta coach", async () => {
+    // The bug this replaces: hasCoachesCornerAccess never asked isBetaAccount at
+    // all, so every coach on Forge -- all of them beta -- was locked out of a
+    // product that also had no checkout.
+    const { getEntitlements } = await billingWithEnforcement(true);
+    expect(
+      getEntitlements({ ...beta, billingTier: null, billingAddOns: [] } as any).hasCoachesCorner,
+    ).toBe(true);
+  });
+
+  it("gives a non-beta account with no add-ons nothing, on either side", async () => {
+    const { getEntitlements, getFreeAgentEntitlements } = await billingWithEnforcement(true);
+    expect(
+      getEntitlements({ ...paying, billingTier: null, billingAddOns: [] } as any).hasCoachesCorner,
+    ).toBe(false);
+    expect(
+      getFreeAgentEntitlements({ ...paying, freeAgentTier: null, freeAgentAddOns: [] } as any).addOns,
+    ).toEqual({ golf_swing: false, hitting: false, pitching: false });
+  });
+
+  it("gives a non-beta account exactly the add-ons it bought", async () => {
+    const { getFreeAgentEntitlements } = await billingWithEnforcement(true);
+    expect(
+      getFreeAgentEntitlements({
+        ...paying,
+        freeAgentTier: "basic",
+        freeAgentAddOns: ["hitting"],
+      } as any).addOns,
+    ).toEqual({ golf_swing: false, hitting: true, pitching: false });
   });
 
   it("leaves video retention unlimited, so nothing starts being trimmed", async () => {

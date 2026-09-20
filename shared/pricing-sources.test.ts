@@ -105,15 +105,24 @@ describe("Coaches Corner comp threshold", () => {
     expect(coachesCornerCompedForRoster(1)).toBe(false);
   });
 
-  it("checks the comp before the billing branch, not inside it", () => {
-    // The comp decides access for the largest customers. If it only ran
-    // under BILLING_LIVE it would never have executed once before the day
-    // it starts deciding revenue, so the ordering is the point of the test.
+  it("checks the comp before anything that can be bought or switched off", () => {
+    // The comp decides access for the largest customers, and it is true whether or
+    // not billing and enforcement are switched on. If it ran second it would never
+    // have executed once before the day it starts deciding revenue, so the
+    // ordering is the point of the test.
+    //
+    // What follows it used to be a BILLING_LIVE branch reading subscriptions.tier.
+    // It is now getEntitlementsForCoach, which is where the beta flag, a live trial
+    // and BILLING_ENFORCEMENT_ENABLED are applied -- the switches whose absence had
+    // every beta coach locked out. The assertion follows the rename rather than
+    // pinning a flag that moved.
     const routes = readFileSync(join(__dirname, "..", "server", "routes.ts"), "utf8");
     const fn = routes.slice(routes.indexOf("async function hasCoachesCornerAccess"));
     const body = fn.slice(0, fn.indexOf("\n}\n"));
     expect(body.indexOf("coachesCornerCompedForRoster")).toBeGreaterThan(-1);
-    expect(body.indexOf("coachesCornerCompedForRoster")).toBeLessThan(body.indexOf("BILLING_LIVE"));
+    expect(body.indexOf("coachesCornerCompedForRoster")).toBeLessThan(
+      body.indexOf("getEntitlementsForCoach"),
+    );
   });
 
   it("no longer leaves large orgs depending on the hardcoded comp list", () => {

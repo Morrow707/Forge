@@ -2,7 +2,15 @@ import express, { type Express } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { needsCoppaAttestation } from "@shared/coach-attestation";
-import { coachesCornerCompedForRoster, BILLING_TIERS, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
+import {
+  coachesCornerCompedForRoster,
+  COACHES_CORNER_MONTHLY_PRICE_CENTS,
+  BILLING_ADD_ONS,
+  BILLING_TIERS,
+  COACH_PURCHASABLE_ADD_ON_ORDER,
+  ORG_PER_ATHLETE_CENTS,
+  type AddOnId,
+} from "@shared/billing-tiers";
 import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
@@ -44,7 +52,9 @@ import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
 import { BILLING_LIVE } from "./billing";
 import {
   createBillingPortalSession,
+  createCoachAddOnCheckout,
   createCoachSubscriptionCheckout,
+  createFreeAgentAddOnCheckout,
   createFreeAgentTierCheckout,
   createLessonCheckout,
 } from "./billing";
@@ -921,18 +931,53 @@ async function requireVideoTrackingAccess(req: any, res: any, next: any) {
 // share one route shape -- validates it against FREE_AGENT_ADD_ON_ORDER
 // first so an unknown id 404s instead of silently falling through the
 // ownership check as "not owned."
+/**
+ * WHICH SPORT COACHES MAY THIS ATHLETE OPEN -- the one place the question is answered, for the
+ * route gate below AND for the UI, which asks it over HTTP rather than working it out again.
+ *
+ * It used to be answered twice and differently. This gate read isBetaAccount off the user row;
+ * the Sport Coaches page read `user.isBetaAccount ? all : user.freeAgentAddOns` out of the
+ * /api/auth/me payload. Both spellings of "beta" agreed, which is what hid the rest of the
+ * disagreement: an active redeemed trial and BILLING_ENFORCEMENT_ENABLED being off BOTH unlock
+ * everything server-side (see getFreeAgentEntitlements) and neither had any effect on the page.
+ * A trialing athlete saw three "Not in your plan" cards for three coaches the server would have
+ * let them chat to. Same rule CLAUDE.md states for the camera: the client never re-derives it.
+ *
+ * Resolution goes through getFreeAgentEntitlements so the beta flag, the trial and the
+ * enforcement switch are applied in exactly one place, by the same short-circuit every other
+ * Free Agent entitlement gets.
+ */
+export type SportCoachAccess = {
+  /** Every add-on, always -- an absent key reads as undefined, and every gate here requires an
+   * explicit true. */
+  addOns: Record<FreeAgentAddOnId, boolean>;
+  /** Why they are all on, when they are, so a surface can say "free while Forge is in beta"
+   * instead of implying a purchase that never happened. */
+  reason: "comped" | "entitlements";
+};
+
+async function sportCoachAccessFor(user: { id: number; email: string }): Promise<SportCoachAccess> {
+  const allOn = Object.fromEntries(FREE_AGENT_ADD_ON_ORDER.map((id) => [id, true])) as Record<
+    FreeAgentAddOnId,
+    boolean
+  >;
+  if (testingUnlockAllPaywalls) return { addOns: allOn, reason: "comped" };
+  if (COMPED_FREE_AGENT_ENTITLEMENTS[user.email]) return { addOns: allOn, reason: "comped" };
+  const account = await storage.getFreeAgentBillingAccount(user.id);
+  const entitlements = getFreeAgentEntitlements(
+    account ?? { freeAgentTier: null, freeAgentAddOns: null, isBetaAccount: false, trialExpiresAt: null },
+  );
+  return { addOns: entitlements.addOns, reason: "entitlements" };
+}
+
 async function requireFreeAgentAddOn(req: any, res: any, next: any) {
   const addOnId = req.params.addOnId as string;
   if (!FREE_AGENT_ADD_ON_ORDER.includes(addOnId as FreeAgentAddOnId)) {
     return res.status(404).json({ message: "No such sport coach" });
   }
   const sessionUser = currentUser(req);
-  if (testingUnlockAllPaywalls) return next();
-  if (COMPED_FREE_AGENT_ENTITLEMENTS[sessionUser.email]) return next();
-  const user = await storage.getUser(sessionUser.id);
-  if (user?.isBetaAccount) return next();
-  const owned = (user?.freeAgentAddOns ?? []).includes(addOnId);
-  if (!owned) {
+  const access = await sportCoachAccessFor(sessionUser);
+  if (access.addOns[addOnId as FreeAgentAddOnId] !== true) {
     return res.status(402).json({
       message: `${FREE_AGENT_ADD_ONS[addOnId as FreeAgentAddOnId].label} is a paid upgrade for Free Agents.`,
       freeAgentPaywall: true,
@@ -970,35 +1015,55 @@ const COMPED_COACHES_CORNER_COACHES = new Set(["coach@forge.app"]);
 // org that size is already paying around $360/mo, so another $19.99 is
 // noise on their invoice and friction on the sale.
 //
-// Otherwise, once BILLING_LIVE, a paid subscription. The Corner is priced
-// as a standalone add-on (COACHES_CORNER_MONTHLY_PRICE_CENTS) rather than
-// a plan perk, but there is nowhere yet to record that someone bought it --
-// users.billingAddOns only accepts the org personalization add-on ids, and
-// widening it is a schema change, not a paywall change. So this still reads
-// the subscription tier, which is a stand-in for the add-on and is marked
-// as one here so nobody reads it as the intended end state.
+// Otherwise, the ENTITLEMENT -- getEntitlementsForCoach, which is where the
+// beta flag, an active trial and BILLING_ENFORCEMENT_ENABLED are applied, and
+// which resolves "coaches_corner" off the primary coach's users.billingAddOns.
 //
-// Otherwise the small-account testing comp above.
+// THIS IS THE FIX FOR A BETA COACH BEING LOCKED OUT. Until now this function
+// read subscriptions.tier === "pro" under BILLING_LIVE and a two-email hardcoded
+// allowlist otherwise, and asked isBetaAccount nowhere at all -- so every coach
+// on Forge today (all of them beta) was locked out of a product that also had no
+// checkout, with the copy pointing at a "Pro coaching plan" that does not exist
+// in a pricing model made of roster bands. Routing it through the entitlements
+// object means it gets the same "beta means unlocked" short-circuit as every
+// other entitlement, and the same add-on lookup once enforcement is on.
+//
+// The roster comp is still checked FIRST and deliberately outside all of it: the
+// comp says this org never pays for the Corner, which is true whether or not
+// billing or enforcement is switched on.
+//
+// The small-account testing comp stays as the last word, for a coach account too
+// small to be comped on an installation where enforcement has been turned on.
 async function hasCoachesCornerAccess(user: { id: number; role: string; email: string }): Promise<boolean> {
   if (testingUnlockAllPaywalls) return true;
   if (user.role === "admin") return true;
   if (user.role === "coach") {
     const rosterSize = await storage.getRosterSeatCountForCoach(user.id);
     if (coachesCornerCompedForRoster(rosterSize)) return true;
-  }
-  if (BILLING_LIVE) {
-    const sub = await storage.getSubscriptionForUser(user.id);
-    if (!sub || sub.accountType !== "coach") return false;
-    if (!["trialing", "active", "past_due"].includes(sub.status)) return false;
-    // Same trial-tier trap as hasAthletePaidForAiAccess above: a trial is
-    // written as tier "base", so gating on tier alone locks a trialing
-    // coach out of the one thing a trial exists to show them.
-    if (sub.status === "trialing") return true;
-    // Stand-in for "has bought the Coaches Corner add-on" -- see this
-    // function's comment. Replace with the add-on check, not another tier.
-    return sub.tier === "pro";
+    if ((await getEntitlementsForCoach(user.id)).hasCoachesCorner) return true;
   }
   return COMPED_COACHES_CORNER_COACHES.has(user.email);
+}
+
+/** The same answer the catalog routes use, plus WHY -- so the page can tell "you
+ * own this", "it is free while Forge is in beta" and "this is buyable" apart
+ * instead of rendering one locked state for all three. A convenience for the
+ * interface; the routes keep their own gate. */
+async function coachesCornerAccessFor(user: { id: number; role: string; email: string }) {
+  const unlocked = await hasCoachesCornerAccess(user);
+  const rosterSize = user.role === "coach" ? await storage.getRosterSeatCountForCoach(user.id) : 0;
+  const owned =
+    user.role === "coach"
+      ? ((await storage.getUser((await storage.getEffectiveCoachIds(user.id))[0]))?.billingAddOns ?? [])
+          .includes("coaches_corner")
+      : false;
+  return {
+    unlocked,
+    owned,
+    compedForRoster: user.role === "coach" && coachesCornerCompedForRoster(rosterSize),
+    monthlyPriceCents: COACHES_CORNER_MONTHLY_PRICE_CENTS,
+    billingOpen: BILLING_LIVE,
+  };
 }
 
 function todayIso() {
@@ -2118,14 +2183,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // stub every other paywall stub uses, post-billing it points the coach at
   // the real fix instead of a message claiming this can never be purchased
   // even once it actually can.
-  app.post("/api/coach/academy/unlock", requireRole("coach"), async (_req, res) => {
+  app.post("/api/coach/academy/unlock", requireRole("coach"), async (req, res) => {
     if (testingUnlockAllPaywalls) return res.status(204).end();
-    if (BILLING_LIVE) {
-      return res
-        .status(402)
-        .json({ message: "Coaches Corner is included with a Pro coaching plan -- upgrade to unlock it." });
-    }
-    res.status(402).json({ message: "Coaches Corner isn't open for purchase yet." });
+    const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/coach/coaches-corner");
+    const user = currentUser(req);
+    const result = await createCoachAddOnCheckout(
+      user.id,
+      user.email,
+      "coaches_corner",
+      successUrl,
+      cancelUrl,
+    );
+    // While billing is closed this is chargingClosed()'s own sentence, which is
+    // the same answer /api/billing/checkout/coach-add-on gives -- one message for
+    // "nothing is for sale yet", not a second one invented here.
+    if ("error" in result) return res.status(402).json({ message: result.error });
+    res.json(result);
+  });
+
+  // WHAT THIS COACH MAY DO, resolved server-side. Same standing as
+  // /api/athlete/camera-access: a convenience for the interface, never the
+  // enforcement -- every academy route keeps its own gate.
+  app.get("/api/coach/entitlements", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const entitlements = await getEntitlementsForCoach(user.id);
+    res.json({
+      ...entitlements,
+      coachesCorner: await coachesCornerAccessFor(user),
+      purchasableAddOns: COACH_PURCHASABLE_ADD_ON_ORDER.map((id) => ({
+        id,
+        label: BILLING_ADD_ONS[id].label,
+        description: BILLING_ADD_ONS[id].description,
+        monthlyPriceCents: BILLING_ADD_ONS[id].monthlyPriceCents,
+      })),
+      billingOpen: BILLING_LIVE,
+    });
   });
 
   // ---------------- Admin: Forge Exercise Library ----------------
@@ -8730,6 +8822,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // WHAT THIS ATHLETE MAY DO, resolved server-side -- including which sport-coach
+  // add-ons they may open. The Sport Coaches page reads this instead of deciding
+  // from the /api/auth/me payload: see sportCoachAccessFor on what the second copy
+  // of the rule got wrong. Same standing as camera-access above -- a convenience
+  // for the interface, and the routes behind it keep their own gates.
+  app.get("/api/athlete/entitlements", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const access = await sportCoachAccessFor(user);
+    const account = await storage.getFreeAgentBillingAccount(user.id);
+    const bought = new Set(account?.freeAgentAddOns ?? []);
+    res.json({
+      addOns: access.addOns,
+      // WHICH OF THOSE WERE PAID FOR. Beta, a live trial and enforcement being off
+      // all turn an add-on on without anybody having bought it, and a surface that
+      // cannot tell the two apart either implies a purchase that never happened or
+      // offers to sell something already owned.
+      ownedAddOns: Object.fromEntries(
+        FREE_AGENT_ADD_ON_ORDER.map((id) => [id, bought.has(id)]),
+      ) as Record<FreeAgentAddOnId, boolean>,
+      addOnCatalog: FREE_AGENT_ADD_ON_ORDER.map((id) => ({
+        id,
+        label: FREE_AGENT_ADD_ONS[id].label,
+        description: FREE_AGENT_ADD_ONS[id].description,
+        monthlyPriceCents: FREE_AGENT_ADD_ONS[id].monthlyPriceCents,
+      })),
+      billingOpen: BILLING_LIVE,
+    });
+  });
+
   app.get("/api/athlete/coaches", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const coaches = await storage.getCoachesForAthlete(user.id);
@@ -11284,6 +11405,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.id,
         user.email,
         parsed.data.tier as FreeAgentTierId,
+        successUrl,
+        cancelUrl,
+      );
+      if ("error" in result) return res.status(503).json({ message: result.error });
+      res.json(result);
+    },
+  );
+
+  app.post(
+    "/api/billing/checkout/free-agent-add-on",
+    requireRole("athlete"),
+    requireWebCheckout,
+    async (req, res) => {
+      const user = currentUser(req);
+      // DERIVED FROM THE SHARED LIST, never typed out -- same reason the tier
+      // route's enum is. A hand-typed copy of a list is a copy that stops
+      // agreeing with the list, and this one would go on selling an add-on
+      // after it was pulled everywhere else.
+      const schema = z.object({
+        addOnId: z.enum(FREE_AGENT_ADD_ON_ORDER as [FreeAgentAddOnId, ...FreeAgentAddOnId[]]),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Pick a sport coach first." });
+      }
+      const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/athlete/sport-coaches");
+      const result = await createFreeAgentAddOnCheckout(
+        user.id,
+        user.email,
+        parsed.data.addOnId,
+        successUrl,
+        cancelUrl,
+      );
+      if ("error" in result) return res.status(503).json({ message: result.error });
+      res.json(result);
+    },
+  );
+
+  app.post(
+    "/api/billing/checkout/coach-add-on",
+    requireRole("coach"),
+    requireWebCheckout,
+    async (req, res) => {
+      const user = currentUser(req);
+      const schema = z.object({
+        addOnId: z.enum(COACH_PURCHASABLE_ADD_ON_ORDER as [AddOnId, ...AddOnId[]]),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Pick an add-on first." });
+      }
+      const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/coach/billing");
+      const result = await createCoachAddOnCheckout(
+        user.id,
+        user.email,
+        parsed.data.addOnId,
         successUrl,
         cancelUrl,
       );

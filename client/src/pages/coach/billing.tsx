@@ -12,6 +12,15 @@ import { toast } from "sonner";
 import { CreditCard, Users, AlertTriangle } from "lucide-react";
 import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 
+/** GET /api/coach/entitlements, the add-on half. purchasableAddOns is derived
+ * server-side from COACH_PURCHASABLE_ADD_ON_ORDER, so this page never holds its
+ * own list of what is for sale or what it costs. */
+type CoachEntitlements = {
+  coachesCorner: { unlocked: boolean; owned: boolean; compedForRoster: boolean };
+  purchasableAddOns: { id: string; label: string; description: string; monthlyPriceCents: number }[];
+  billingOpen: boolean;
+};
+
 type RosterAthlete = { id: number };
 
 /** What GET/PUT /api/coach/plan answer with. `band` is null only when no
@@ -89,6 +98,27 @@ export default function CoachBilling() {
     queryFn: () => getJson("/api/billing/status"),
   });
   const billingOpen = !!billingStatus?.open;
+
+  // What this org has on top of the plan, resolved by the server. The beta flag,
+  // an active trial and BILLING_ENFORCEMENT_ENABLED all decide it and none of them
+  // is visible from here, so this page asks rather than works it out.
+  const { data: entitlements } = useQuery<CoachEntitlements>({
+    queryKey: ["/api/coach/entitlements"],
+    queryFn: () => getJson("/api/coach/entitlements"),
+  });
+  const [buyingAddOn, setBuyingAddOn] = useState<string | null>(null);
+
+  async function buyAddOn(addOnId: string) {
+    setBuyingAddOn(addOnId);
+    try {
+      const res = await apiRequest("POST", "/api/billing/checkout/coach-add-on", { addOnId });
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't start checkout -- try again");
+      setBuyingAddOn(null);
+    }
+  }
   // The roster band, not a flat fee. This read ORG_BASE_CENTS, which was the
   // whole bill back when there was a flat account fee; there isn't one now,
   // so that same read would have quoted every coach $0.00 a month.
@@ -231,6 +261,57 @@ export default function CoachBilling() {
               )}
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6 max-w-xl">
+        <CardContent className="flex flex-col gap-4 p-6">
+          <p className="label-xs">Add-ons</p>
+          {entitlements?.purchasableAddOns.map((addOn) => {
+            // Coaches Corner is the only one today. Status is three-valued on
+            // purpose -- owned, comped (beta, a trial, or a roster of 100+), and
+            // for sale -- because one "locked" state for all three either offers
+            // to sell something already owned or implies a purchase that never
+            // happened.
+            const unlocked =
+              addOn.id === "coaches_corner" ? entitlements.coachesCorner.unlocked : false;
+            const owned = addOn.id === "coaches_corner" ? entitlements.coachesCorner.owned : false;
+            const status = owned
+              ? "Owned"
+              : unlocked
+                ? entitlements.coachesCorner.compedForRoster
+                  ? "Included with your roster size"
+                  : "Included in beta"
+                : entitlements.billingOpen
+                  ? "Available"
+                  : "Not available yet";
+            return (
+              <div key={addOn.id} className="flex flex-col gap-1 border-t border-border pt-4 first:border-0 first:pt-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">{addOn.label}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {formatCents(addOn.monthlyPriceCents)}/mo
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">{addOn.description}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {status}
+                </p>
+                {!unlocked && entitlements.billingOpen && !isNative && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-fit"
+                    disabled={buyingAddOn !== null}
+                    onClick={() => void buyAddOn(addOn.id)}
+                  >
+                    {buyingAddOn === addOn.id ? "Opening checkout..." : `Get ${addOn.label}`}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+          {!entitlements && <p className="text-sm text-muted-foreground">Loading…</p>}
         </CardContent>
       </Card>
 

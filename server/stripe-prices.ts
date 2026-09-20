@@ -12,8 +12,17 @@
 // purchase is built inline with price_data from the lesson's own priceCents
 // (see createLessonCheckoutSession), so adding a priced lesson never means
 // creating a Stripe Price to match it -- one less place for the two to drift.
-import { FREE_AGENT_TIER_ORDER, type FreeAgentTierId } from "@shared/free-agent-tiers";
-import { ORG_BASE_CENTS } from "@shared/billing-tiers";
+import {
+  FREE_AGENT_TIER_ORDER,
+  FREE_AGENT_ADD_ON_ORDER,
+  type FreeAgentTierId,
+  type FreeAgentAddOnId,
+} from "@shared/free-agent-tiers";
+import {
+  ORG_BASE_CENTS,
+  COACH_PURCHASABLE_ADD_ON_ORDER,
+  type AddOnId,
+} from "@shared/billing-tiers";
 
 /** Env var name for a Free Agent tier's monthly Price. */
 export function freeAgentPriceEnvVar(tier: FreeAgentTierId): string {
@@ -22,6 +31,30 @@ export function freeAgentPriceEnvVar(tier: FreeAgentTierId): string {
 
 export function freeAgentPriceId(tier: FreeAgentTierId): string | null {
   return process.env[freeAgentPriceEnvVar(tier)]?.trim() || null;
+}
+
+/** Env var name for a Free Agent sport-coach add-on's monthly Price.
+ *
+ * A separate Price per add-on, unlike the coach band's one Price with a quantity:
+ * these are three different products at (today) the same price, not three
+ * quantities of one. */
+export function freeAgentAddOnPriceEnvVar(addOn: FreeAgentAddOnId): string {
+  return `STRIPE_PRICE_FREE_AGENT_ADDON_${addOn.toUpperCase()}`;
+}
+
+export function freeAgentAddOnPriceId(addOn: FreeAgentAddOnId): string | null {
+  return process.env[freeAgentAddOnPriceEnvVar(addOn)]?.trim() || null;
+}
+
+/** Env var name for a purchasable COACH add-on's monthly Price -- Coaches Corner
+ * today (see COACH_PURCHASABLE_ADD_ON_ORDER). The personalization add-ons are
+ * admin-assigned and have no checkout, so they have no Price to configure. */
+export function coachAddOnPriceEnvVar(addOn: AddOnId): string {
+  return `STRIPE_PRICE_COACH_ADDON_${addOn.toUpperCase()}`;
+}
+
+export function coachAddOnPriceId(addOn: AddOnId): string | null {
+  return process.env[coachAddOnPriceEnvVar(addOn)]?.trim() || null;
 }
 
 /** The coach organisation's per-athlete monthly rate (ORG_PER_ATHLETE_CENTS).
@@ -59,6 +92,15 @@ export function missingPriceEnvVars(): string[] {
   const missing: string[] = [];
   for (const tier of FREE_AGENT_TIER_ORDER) {
     if (!freeAgentPriceId(tier)) missing.push(freeAgentPriceEnvVar(tier));
+  }
+  // Every add-on that has a checkout route needs a Price the same way a tier does
+  // -- derived from the on-sale lists, never restated, so adding an add-on cannot
+  // leave this readiness check quietly saying "configured".
+  for (const addOn of FREE_AGENT_ADD_ON_ORDER) {
+    if (!freeAgentAddOnPriceId(addOn)) missing.push(freeAgentAddOnPriceEnvVar(addOn));
+  }
+  for (const addOn of COACH_PURCHASABLE_ADD_ON_ORDER) {
+    if (!coachAddOnPriceId(addOn)) missing.push(coachAddOnPriceEnvVar(addOn));
   }
   if (!coachPerAthletePriceId()) missing.push(COACH_PER_ATHLETE_PRICE_ENV);
   // Only a real requirement while there is a flat fee to charge.

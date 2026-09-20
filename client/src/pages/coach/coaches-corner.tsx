@@ -11,6 +11,21 @@ import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle, Unlock } from "lu
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
 import { AcademyQuiz } from "@/components/academy-quiz";
+import { formatCents } from "@shared/billing-tiers";
+
+/** The Coaches Corner half of GET /api/coach/entitlements. `unlocked` is the same
+ * answer the catalog routes gate on; the rest is only there so this page can tell
+ * "you bought it", "it is free while Forge is in beta" and "this is for sale"
+ * apart instead of drawing one locked state for all three. */
+type CoachEntitlements = {
+  coachesCorner: {
+    unlocked: boolean;
+    owned: boolean;
+    compedForRoster: boolean;
+    monthlyPriceCents: number;
+    billingOpen: boolean;
+  };
+};
 
 type TrackSummary = {
   id: number;
@@ -67,6 +82,33 @@ export default function CoachesCorner() {
     queryFn: () => getJson(`/api/coach/academy/tracks/${selectedTrackId}`),
     enabled: selectedTrackId != null,
   });
+
+  const [buying, setBuying] = useState(false);
+
+  // WHY it is locked, from the server. The page never works this out for itself:
+  // the roster comp, the beta flag, an active trial and BILLING_ENFORCEMENT_ENABLED
+  // all decide it, and a second copy of that rule here would disagree with the
+  // routes silently. `unlocked` on each track is still what gates the content --
+  // this only decides what the upsell card says.
+  const { data: entitlements } = useQuery<CoachEntitlements>({
+    queryKey: ["/api/coach/entitlements"],
+    queryFn: () => getJson("/api/coach/entitlements"),
+  });
+  const corner = entitlements?.coachesCorner;
+
+  async function buyCoachesCorner() {
+    setBuying(true);
+    try {
+      const res = await apiRequest("POST", "/api/billing/checkout/coach-add-on", {
+        addOnId: "coaches_corner",
+      });
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't start checkout -- try again");
+      setBuying(false);
+    }
+  }
 
   const completeMutation = useMutation({
     mutationFn: async ({ lessonId, completed }: { lessonId: number; completed: boolean }) => {
@@ -226,13 +268,29 @@ export default function CoachesCorner() {
               sport-specific arm care, reading Forge's own analytics, season planning, and team
               culture -- a real coach-education curriculum, for coaches who want to go deeper.
             </p>
-            {/* Not a button. /api/coach/academy/unlock answers 402 in every branch it
-                has -- there is no checkout for Coaches Corner anywhere -- so the only
-                thing the button could do was fail with a toast. Say what it actually
-                costs and how it is obtained instead. */}
-            <p className="text-sm font-semibold text-amber-500">
-              Included with a Pro coaching plan. Not open for separate purchase yet.
-            </p>
+            {/* THE OLD COPY NAMED A PLAN THAT DOES NOT EXIST. "Included with a Pro
+                coaching plan" described a tier the org pricing model has no room for
+                -- it is roster bands at a flat per-athlete rate, with no plan tiers
+                to include anything in -- and nothing sold it either way. Coaches
+                Corner is a standalone add-on, so the card says that, and once
+                billing opens it says it with a button that actually buys it. */}
+            {corner?.billingOpen ? (
+              <div className="flex flex-col items-start gap-2">
+                <p className="text-sm font-semibold">
+                  {formatCents(corner.monthlyPriceCents)}/month, on top of your plan. Free for
+                  rosters of 100+ athletes.
+                </p>
+                <Button onClick={buyCoachesCorner} disabled={buying}>
+                  {buying ? "Opening checkout..." : "Get Coaches Corner"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm font-semibold text-amber-500">
+                A paid add-on{corner ? ` (${formatCents(corner.monthlyPriceCents)}/month)` : ""},
+                purchasable once billing opens. Free for rosters of 100+ athletes. Nothing is
+                charged while Forge is in beta.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

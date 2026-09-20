@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
+import { useFirstRunDialogSlot } from "@/hooks/use-first-run-dialogs";
 
 const SEEN_KEY = "forge:camera-accuracy-notice-seen";
 
@@ -28,10 +29,16 @@ export function CameraAccuracyNotice() {
     return window.localStorage.getItem(SEEN_KEY) !== "1";
   });
 
+  // Last in the first-run queue: shown once the terms gate and the 2D-device notice are done
+  // with the screen. Nothing about WHEN this is due changes -- only that it waits its turn.
+  const isMyTurn = useFirstRunDialogSlot("camera-accuracy", open);
+
   function dismiss() {
     window.localStorage.setItem(SEEN_KEY, "1");
     setOpen(false);
   }
+
+  if (!isMyTurn) return null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && dismiss()}>
