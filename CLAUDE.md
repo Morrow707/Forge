@@ -196,7 +196,9 @@ can install. Delete entries as a `beta` ships them.
   /coach/video-bank or /admin/video-bank.
 - Waiting on an upload since 485: #152 (documents audit: public PDF download button on every
   legal page, honest statuses on /documents, admin AI Terms card, kind-belongs-on-profile
-  upload rule).
+  upload rule) and #153 (the six document items: coach email-to-roster, "What you've agreed
+  to", /research-consent page and PDF, guardian biometric consent after claim, staff view of
+  the signed Service Agreement, admin research card).
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
@@ -216,6 +218,39 @@ Two things worth saying out loud when someone tests this:
   copy never writes a record -- only signing or uploading does. The agreement text is still
   under attorney review; a change to it changes the hash on every later signature, which is
   the point of storing it.
+
+## Documents: what every role can see, sign, download and send
+
+Added 2026-09-20 after a runtime + code audit of every document surface (Scott: "every one can
+be downloaded, reuploaded, everyone can sign them, the appropriate documents get to the
+appropriate profiles, coaches can email them straight to their lists, the athletes/coaches can
+see whats live on their profiles and whats missing"). State of the code:
+
+- **Every public legal document has a page and a PDF**: `GET /api/legal-documents/:type.pdf`
+  for the public set, plus `research_consent.pdf` served from the reviewed constant (an explicit
+  branch BEFORE the enum lookup; it must never become an admin-editable row). Nothing leaving
+  the app is titled "(Draft)".
+- **A waiver kind has to belong on the profile it is filed against.** The upload route accepts
+  the target's checklist kinds (`uploadableKindsFor`) plus "other"; the institutional agreement
+  only from the primary coach the server says owes one. Before this an athlete could file a
+  signed Service Agreement against themselves and it read as a school's signature.
+- **"What you've agreed to"** (`GET /api/account/consents`, guardian and coach variants) is the
+  only listing of consent_records for a person. `shared/consent-catalog.ts` maps each consent
+  type to its page and PDF, keyed by the enum so a new type is a type error until named.
+  `givenBy` is a role word, never a name. Stale is a TEXT comparison for terms and the biometric
+  consent, `staleTerms` for research, false otherwise.
+- **Coach email-to-roster**: "Ask" emails adults directly and minors' guardians (link to the
+  child's page), keeps the 24h floor, and reports `emailed | in_app_only` per target so the
+  toast says what actually left. `POST /api/coach/legal-documents/:type/email-roster` sends a
+  public document as page + PDF links, roster-scoped and per-team narrowed, one email per
+  address. `sendEmail` has no attachments, so links, not files.
+- **A guardian gives the biometric consent after the claim** from the dashboard card; a minor's
+  camera button says so instead of dropping the numbers. Withdrawal stays the existing
+  withdraw-consent, because that is the software the reviewed text describes.
+- **Staff coaches see the primary's signed Service Agreement read-only**; sign, upload and the
+  blank download stay primary-only (`required` still gates them).
+- **The admin research card cites the export cell floor from the server** (`exportMinCell`),
+  never a hand-typed 10.
 
 ## A school picks its plan at signup by typing a number
 
