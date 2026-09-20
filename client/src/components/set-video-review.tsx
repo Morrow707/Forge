@@ -1,14 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogClose, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useEffect, useMemo, useState } from "react";
+import { Dialog, DialogContent, DialogClose, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { resolveApiUrl } from "@/lib/queryClient";
 import {
@@ -21,16 +13,13 @@ import {
   Heart,
   Trophy,
   VideoOff,
-  Layers,
-  Columns2,
-  Play,
-  Pause,
 } from "lucide-react";
 import { lazyDialog } from "@/components/lazy-dialog";
 // The analysis dialog carries MediaPipe's loader and the whole pose-tracking module (~165 kB);
 // it is fetched the first time a clip is analysed, not with the page. See lazyDialog.
 const VideoAnalysisDialog = lazyDialog(() => import("@/components/video-analysis-dialog").then((m) => ({ default: m.VideoAnalysisDialog })));
 import type { PoseFrame } from "@/lib/pose-tracking";
+import type { CompareClip } from "@/components/clip-picker";
 
 export type FlaggedSetVideo = {
   setNumber: number;
@@ -238,10 +227,32 @@ function pickDefault(sets: FlaggedSetVideo[], want: "best" | "worst", fallbackIn
   return sets.find((s) => s.flag === want)?.setNumber ?? sets[fallbackIndex]?.setNumber;
 }
 
-// Side-by-side (stacked on mobile) comparison of any two recorded set
-// videos for one exercise -- defaults to the flagged Worst on top and Best
-// on bottom when both exist, since that's the comparison the athlete set
-// the flags up for, but either side can be repointed at any recorded set.
+// The compare tool proper -- two clips from anywhere, sync marks, a transport that links or
+// unlinks, overlay with mirror/scale/nudge (see video-compare.tsx and docs/video-review-plan.md,
+// Phase 1). Lazy for the same reason the analysis dialog is: it is opened from a workout page
+// that most sessions never compare anything on.
+const VideoCompareDialog = lazyDialog(() =>
+  import("@/components/video-compare").then((m) => ({ default: m.VideoCompareDialog })),
+);
+
+function toCompareClip(s: FlaggedSetVideo): CompareClip {
+  return {
+    key: `set-today:${s.setNumber}`,
+    videoUrl: s.videoUrl,
+    label: `Set ${s.setNumber}`,
+    sublabel: "today",
+    repBreakdown: s.repBreakdown ?? null,
+    // Frames are already in hand on this page (the set was just captured), so no fetch.
+    framesUrl: null,
+    skeletonFrames: s.skeletonFrames ?? null,
+  };
+}
+
+// Comparison of this exercise's recorded sets -- defaults to the flagged Worst on the left and
+// Best on the right when both exist, since that's the comparison the athlete set the flags up
+// for. Either side can be repointed at any clip the picker offers: another set today, another
+// day, or (for a coach) another athlete. The flags stay here, under each side, because they are
+// what this page is for; the pairing itself is the compare tool's.
 export function SetVideoCompareDialog({
   open,
   onOpenChange,
@@ -253,333 +264,46 @@ export function SetVideoCompareDialog({
   sets: FlaggedSetVideo[];
   onFlag: (setNumber: number, flag: "best" | "worst" | null) => void;
 }) {
-  const [leftNumber, setLeftNumber] = useState<number | undefined>(undefined);
-  const [rightNumber, setRightNumber] = useState<number | undefined>(undefined);
-  // Which side (if either) has its analysis tools open -- a comparison is
-  // exactly when a coach most wants to overlay a skeleton or measure an
-  // angle (this rep vs. that one), but until now the tools only existed on
-  // the single-video preview, not here. One shared dialog instance driven
-  // by this rather than one per side, since only one can ever be open at a
-  // time anyway.
-  const [analyzing, setAnalyzing] = useState<{ url: string; title: string; skeletonFrames: PoseFrame[] | null } | null>(
-    null,
-  );
-  // Which set numbers' videos failed to load, keyed by setNumber -- same
-  // reasoning as SetVideoPreviewDialog's own loadError above: without this,
-  // a failed load (expired/malformed signed URL, genuinely missing file)
-  // just silently renders the browser's bare "no source" icon here too.
-  const [loadErrors, setLoadErrors] = useState<Record<number, boolean>>({});
-  // Side-by-side (independent controls, default) vs. ghost-overlay (one
-  // video semi-transparent on top of the other, synced playback) --
-  // side-by-side stays the default since it's what this dialog has always
-  // done and needs no tracked data; overlay is the OnForm-style addition.
-  const [mode, setMode] = useState<"split" | "overlay">("split");
-  const [opacity, setOpacity] = useState(50);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [scrubT, setScrubT] = useState(0);
-  const baseVideoRef = useRef<HTMLVideoElement>(null);
-  const ghostVideoRef = useRef<HTMLVideoElement>(null);
+  const leftSet = sets.find((s) => s.setNumber === pickDefault(sets, "worst", 0));
+  const rightSet = sets.find((s) => s.setNumber === pickDefault(sets, "best", sets.length - 1));
+  const initialLeft = useMemo(() => (leftSet ? toCompareClip(leftSet) : null), [leftSet?.setNumber, leftSet?.videoUrl]);
+  const initialRight = useMemo(() => (rightSet ? toCompareClip(rightSet) : null), [rightSet?.setNumber, rightSet?.videoUrl]);
 
-  const left = sets.find((s) => s.setNumber === (leftNumber ?? pickDefault(sets, "worst", 0)));
-  const right = sets.find(
-    (s) => s.setNumber === (rightNumber ?? pickDefault(sets, "best", sets.length - 1)),
-  );
-
-  // Aligns the two clips by their first tracked rep's inflection point
-  // (turnaround/start of the concentric phase) rather than raw video start
-  // -- two athletes rarely start their setup at exactly the same point in
-  // the clip, but the bar/body actually beginning to move is a real,
-  // comparable reference. Falls back to 0 (no alignment, just both videos
-  // from their own t=0) whenever either side has no tracked rep data.
-  const ghostOffsetSeconds =
-    (right?.repBreakdown?.[0]?.startT ?? 0) - (left?.repBreakdown?.[0]?.startT ?? 0);
-
-  // Reset overlay playback state whenever either side changes so an old
-  // scrub position from a previous pairing doesn't carry over.
-  useEffect(() => {
-    setIsPlaying(false);
-    setScrubT(0);
-    if (baseVideoRef.current) baseVideoRef.current.currentTime = 0;
-    if (ghostVideoRef.current) ghostVideoRef.current.currentTime = Math.max(0, ghostOffsetSeconds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [left?.setNumber, right?.setNumber, mode]);
-
-  function seekOverlayTo(t: number) {
-    setScrubT(t);
-    if (baseVideoRef.current) baseVideoRef.current.currentTime = t;
-    if (ghostVideoRef.current) ghostVideoRef.current.currentTime = Math.max(0, t + ghostOffsetSeconds);
-  }
-
-  function toggleOverlayPlayback() {
-    const base = baseVideoRef.current;
-    const ghost = ghostVideoRef.current;
-    if (!base || !ghost) return;
-    if (isPlaying) {
-      base.pause();
-      ghost.pause();
-      setIsPlaying(false);
-    } else {
-      base.play();
-      ghost.play();
-      setIsPlaying(true);
-    }
-  }
-
-  // Drift correction -- two independently-playing <video> elements creep
-  // apart by tens of milliseconds per second even when started together, and
-  // that's plenty to make an overlay comparison look wrong within a few
-  // seconds. Piggybacking on the base video's native timeupdate (fires ~4x/
-  // sec) is cheap and frequent enough to keep the ghost within a couple
-  // frames without a dedicated animation-frame loop.
-  function handleBaseTimeUpdate() {
-    const base = baseVideoRef.current;
-    const ghost = ghostVideoRef.current;
-    if (!base || !ghost) return;
-    setScrubT(base.currentTime);
-    const targetGhostT = Math.max(0, base.currentTime + ghostOffsetSeconds);
-    if (Math.abs(ghost.currentTime - targetGhostT) > 0.15) {
-      ghost.currentTime = targetGhostT;
-    }
-  }
-
-  function Slot({
-    video,
-    onPick,
-    onAnalyze,
-  }: {
-    video: FlaggedSetVideo | undefined;
-    onPick: (n: number) => void;
-    onAnalyze: () => void;
-  }) {
-    if (!video) return null;
-    return (
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <Select value={String(video.setNumber)} onValueChange={(v) => onPick(Number(v))}>
-            <SelectTrigger className="h-8 w-32 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sets.map((s) => (
-                <SelectItem key={s.setNumber} value={String(s.setNumber)}>
-                  Set {s.setNumber}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {video.flag && (
-            <Badge
-              className={cn(
-                "gap-1 text-[10px]",
-                video.flag === "best"
-                  ? "bg-success/15 text-success hover:bg-success/15"
-                  : "bg-destructive/15 text-destructive hover:bg-destructive/15",
-              )}
-            >
-              {video.flag === "best" ? <ThumbsUp className="h-3 w-3" /> : <ThumbsDown className="h-3 w-3" />}
-              {video.flag === "best" ? "Best" : "Worst"}
-            </Badge>
-          )}
-        </div>
-        {loadErrors[video.setNumber] ? (
-          <div className="flex h-40 flex-col items-center justify-center gap-1.5 rounded-md border border-border bg-black text-center text-xs text-white/70">
-            <VideoOff className="h-5 w-5" />
-            Couldn't load this video
-          </div>
-        ) : (
-          <video
-            crossOrigin="anonymous"
-            src={resolveApiUrl(video.videoUrl)}
-            controls
-            playsInline
-            className="w-full rounded-md bg-black"
-            onError={() => setLoadErrors((prev) => ({ ...prev, [video.setNumber]: true }))}
-          />
-        )}
-        <Button size="sm" variant="outline" className="w-full" onClick={onAnalyze}>
-          <Wand2 className="h-3.5 w-3.5" />
-          Analysis Tools
-        </Button>
-        <div className="flex items-center justify-center gap-2">
-          <FlagButton
-            active={video.flag === "best"}
-            onClick={() => onFlag(video.setNumber, video.flag === "best" ? null : "best")}
-            icon={ThumbsUp}
-            label="Best"
-            activeClass="border-success bg-success/15 text-success"
-          />
-          <FlagButton
-            active={video.flag === "worst"}
-            onClick={() => onFlag(video.setNumber, video.flag === "worst" ? null : "worst")}
-            icon={ThumbsDown}
-            label="Worst"
-            activeClass="border-destructive bg-destructive/15 text-destructive"
-          />
-        </div>
-      </div>
-    );
+  function setFor(clip: CompareClip): FlaggedSetVideo | undefined {
+    if (!clip.key.startsWith("set-today:")) return undefined;
+    return sets.find((s) => s.setNumber === Number(clip.key.slice("set-today:".length)));
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Compare Sets</DialogTitle>
-        </DialogHeader>
-        <div className="flex overflow-hidden rounded-md border border-border text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setMode("split")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 px-3 py-1.5 transition-colors",
-              mode === "split"
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Columns2 className="h-3.5 w-3.5" />
-            Side by Side
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("overlay")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 px-3 py-1.5 transition-colors",
-              mode === "overlay"
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Layers className="h-3.5 w-3.5" />
-            Ghost Overlay
-          </button>
-        </div>
-        {mode === "split" ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Slot
-              video={left}
-              onPick={setLeftNumber}
-              onAnalyze={() =>
-                left && setAnalyzing({ url: left.videoUrl, title: `Set ${left.setNumber}`, skeletonFrames: left.skeletonFrames ?? null })
-              }
+    <VideoCompareDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      subject={{ kind: "self" }}
+      title="Compare Sets"
+      initialLeft={initialLeft}
+      initialRight={initialRight}
+      sideFooter={(clip) => {
+        const s = setFor(clip);
+        if (!s) return null;
+        return (
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <FlagButton
+              active={s.flag === "best"}
+              onClick={() => onFlag(s.setNumber, s.flag === "best" ? null : "best")}
+              icon={ThumbsUp}
+              label="Best"
+              activeClass="border-success bg-success/15 text-success"
             />
-            <Slot
-              video={right}
-              onPick={setRightNumber}
-              onAnalyze={() =>
-                right && setAnalyzing({ url: right.videoUrl, title: `Set ${right.setNumber}`, skeletonFrames: right.skeletonFrames ?? null })
-              }
+            <FlagButton
+              active={s.flag === "worst"}
+              onClick={() => onFlag(s.setNumber, s.flag === "worst" ? null : "worst")}
+              icon={ThumbsDown}
+              label="Worst"
+              activeClass="border-destructive bg-destructive/15 text-destructive"
             />
           </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <Select value={left ? String(left.setNumber) : undefined} onValueChange={(v) => setLeftNumber(Number(v))}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Base set" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sets.map((s) => (
-                    <SelectItem key={s.setNumber} value={String(s.setNumber)}>
-                      Base: Set {s.setNumber}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={right ? String(right.setNumber) : undefined}
-                onValueChange={(v) => setRightNumber(Number(v))}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Ghost set" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sets.map((s) => (
-                    <SelectItem key={s.setNumber} value={String(s.setNumber)}>
-                      Ghost: Set {s.setNumber}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {!left?.repBreakdown?.length || !right?.repBreakdown?.length ? (
-              <p className="text-[10px] text-muted-foreground">
-                No tracked rep data on one or both sets -- overlay still works, just not aligned to a rep's
-                start.
-              </p>
-            ) : null}
-            {left && right ? (
-              <>
-                <div className="relative w-full overflow-hidden rounded-md bg-black">
-                  <video
-                    ref={baseVideoRef}
-                    crossOrigin="anonymous"
-                    src={resolveApiUrl(left.videoUrl)}
-                    playsInline
-                    muted
-                    className="block w-full"
-                    onTimeUpdate={handleBaseTimeUpdate}
-                    onError={() => setLoadErrors((prev) => ({ ...prev, [left.setNumber]: true }))}
-                  />
-                  <video
-                    ref={ghostVideoRef}
-                    crossOrigin="anonymous"
-                    src={resolveApiUrl(right.videoUrl)}
-                    playsInline
-                    muted
-                    style={{ opacity: opacity / 100 }}
-                    className="absolute inset-0 block h-full w-full object-cover"
-                    onError={() => setLoadErrors((prev) => ({ ...prev, [right.setNumber]: true }))}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="h-8 w-8 shrink-0"
-                    aria-label={isPlaying ? "Pause" : "Play"}
-                    onClick={toggleOverlayPlayback}
-                  >
-                    {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                  </Button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={baseVideoRef.current?.duration || 100}
-                    step={0.03}
-                    value={scrubT}
-                    onChange={(e) => seekOverlayTo(Number(e.target.value))}
-                    className="h-1.5 flex-1 accent-primary"
-                    aria-label="Scrub position"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-14 shrink-0 text-[10px] font-semibold uppercase text-muted-foreground">
-                    Ghost {opacity}%
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={opacity}
-                    onChange={(e) => setOpacity(Number(e.target.value))}
-                    className="h-1.5 flex-1 accent-primary"
-                    aria-label="Ghost opacity"
-                  />
-                </div>
-              </>
-            ) : null}
-          </div>
-        )}
-      </DialogContent>
-      <VideoAnalysisDialog
-        open={!!analyzing}
-        onOpenChange={(o) => !o && setAnalyzing(null)}
-        videoUrl={analyzing?.url ?? ""}
-        title={analyzing?.title}
-        skeletonFrames={analyzing?.skeletonFrames ?? null}
-      />
-    </Dialog>
+        );
+      }}
+    />
   );
 }

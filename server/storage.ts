@@ -293,6 +293,7 @@ const APPLE_PRODUCT_ID_TO_ADD_ON: Record<string, FreeAgentAddOnId> = Object.from
 );
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { CAMERA_DERIVED_SET_COLUMNS } from "@shared/schema";
+import type { ClipSource, ClipSummary } from "@shared/video-clips";
 import { classAiDraftSchema } from "@shared/schema";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
 import type { VideoRetentionLimits } from "@shared/video-retention";
@@ -26266,6 +26267,99 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       oldestPresentAt,
       newestMissingAt: missingFiles[0]?.uploadedAt ?? null,
     };
+  },
+
+  /**
+   * Every clip the compare tool may offer for one athlete: form-check clips on logged sets and
+   * skill-session clips, newest first. See shared/video-clips.ts for the shape and for why
+   * skeleton_frames is NOT selected here -- only whether it exists. The URL is a gated /uploads
+   * path that the response middleware signs, exactly as getVideosForAthlete's are.
+   *
+   * `movement`, when given, narrows to exercises whose name contains it (case-insensitive) --
+   * the clip picker's "same movement as the clip on the other side" filter.
+   *
+   * Coach-comment videos and annotation images are deliberately absent: a comparison is of the
+   * athlete moving, and those are the coach's replies.
+   */
+  async getClipsForAthlete(athleteId: number, movement?: string | null): Promise<ClipSummary[]> {
+    const needle = movement?.trim() ? `%${movement.trim()}%` : null;
+    const result = await db.execute<{
+      source: ClipSource;
+      id: number;
+      video_url: string;
+      date: string;
+      exercise_name: string;
+      set_number: number | null;
+      has_skeleton_frames: boolean;
+      rep_breakdown: ClipSummary["repBreakdown"];
+    }>(sql`
+      SELECT v.source, v.id, v.video_url, v.reference_time::date::text AS date, v.exercise_name,
+        v.set_number, v.has_skeleton_frames, v.rep_breakdown
+      FROM (
+        SELECT 'set' AS source, wse.id AS id, wl.athlete_id AS athlete_id,
+          wse.form_check_video_url AS video_url,
+          coalesce(e.name, 'Exercise') AS exercise_name,
+          wse.set_number AS set_number,
+          (wse.skeleton_frames IS NOT NULL) AS has_skeleton_frames,
+          wse.rep_breakdown AS rep_breakdown,
+          coalesce(wl.completed_at, wl.date::timestamp) AS reference_time
+        FROM workout_set_entries wse
+        JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+        JOIN workout_logs wl ON wl.id = wle.workout_log_id
+        LEFT JOIN exercises e ON e.id = wle.exercise_id
+        WHERE wse.form_check_video_url IS NOT NULL
+
+        UNION ALL
+
+        SELECT 'skill', ssl.id, ssl.athlete_id, ssl.video_url,
+          coalesce(sx.name, 'Skill drill'), ssl.set_number, false, NULL::json, ssl.created_at
+        FROM skill_session_logs ssl
+        LEFT JOIN skill_program_exercises spe ON spe.id = ssl.skill_program_exercise_id
+        LEFT JOIN skill_exercises sx ON sx.id = coalesce(ssl.skill_exercise_id, spe.skill_exercise_id)
+        WHERE ssl.video_url IS NOT NULL
+      ) v
+      WHERE v.athlete_id = ${athleteId}
+        ${needle ? sql`AND v.exercise_name ILIKE ${needle}` : sql``}
+      ORDER BY v.reference_time DESC, v.set_number ASC NULLS LAST
+    `);
+    return result.rows.map((r) => ({
+      source: r.source,
+      id: Number(r.id),
+      videoUrl: r.video_url,
+      date: r.date,
+      exerciseName: r.exercise_name,
+      setNumber: r.set_number == null ? null : Number(r.set_number),
+      hasSkeletonFrames: !!r.has_skeleton_frames,
+      repBreakdown: Array.isArray(r.rep_breakdown) ? r.rep_breakdown : null,
+    }));
+  },
+
+  /**
+   * The saved skeleton for ONE set clip, fetched when that clip is chosen. Scoped by the athlete
+   * the caller has already been authorised for: a set id that belongs to somebody else reads as
+   * "no such clip", never as their frames. Null frames (a web/Android capture, a plain form
+   * check) come back as an empty array so the caller can tell "none" from "not found".
+   */
+  async getSetClipFramesForAthlete(
+    athleteId: number,
+    setId: number,
+  ): Promise<{ skeletonFrames: unknown[] } | null> {
+    const rows = await db
+      .select({ skeletonFrames: workoutSetEntries.skeletonFrames })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutLogEntries.id, workoutSetEntries.logEntryId))
+      .innerJoin(workoutLogs, eq(workoutLogs.id, workoutLogEntries.workoutLogId))
+      .where(
+        and(
+          eq(workoutSetEntries.id, setId),
+          eq(workoutLogs.athleteId, athleteId),
+          isNotNull(workoutSetEntries.formCheckVideoUrl),
+        ),
+      )
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return { skeletonFrames: Array.isArray(row.skeletonFrames) ? row.skeletonFrames : [] };
   },
 
   async getVideosForAthlete(athleteId: number): Promise<
