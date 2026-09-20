@@ -2,6 +2,11 @@ import { z } from "zod";
 
 /** THE INSTITUTIONAL SERVICE AGREEMENT, AS A SCHOOL RECEIVES IT.
  *
+ * REVIEWED BY COUNSEL. Drafted through Rocket Lawyer with the attorney, and confirmed
+ * reviewed as it stands by Scott on 2026-09-20 ("yes the others are attorney reviewed").
+ * Changing a word here is changing a reviewed contract, and it changes the text hash on
+ * every signature made from then on; copies already signed stand as signed.
+ *
  * NAME REFERENCE UPDATED 2026-09-19: s1.2's list of User Documents said "the Terms of Service",
  * a document retired that day when the two Terms were merged. It now says "the Terms of Use",
  * which is what every person under the Institution's program actually accepts. Nothing else in

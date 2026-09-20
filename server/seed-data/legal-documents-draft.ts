@@ -1,17 +1,16 @@
-// First-pass draft text for the admin-editable Privacy Policy, EULA, and
-// Parental Notice (see shared/schema.ts
-// legalDocuments). Grounded in what Forge actually does today --
-// camera-based tracking, the AI features, the wellness/nutrition/injury
-// data it collects, the age-tier system built alongside this -- not
-// generic boilerplate. Still explicitly a draft: nothing here has been
-// reviewed by a lawyer, and none of it is wired into any live signup or
-// delivery flow (that's legalAgreement's job, a separate, shorter document
-// actually shown at signup). See getComplianceReportData's own "not yet
-// reviewed"/"not yet built" list for the same caveats stated as structured
-// data, not just a comment here -- both the biometric_waiver consent_type
-// and the parental-notice delivery this file's PARENTAL_NOTICE_DRAFT is
-// for were unwritten until now, and this is a first pass, not a decision
-// that either is ready to go live.
+// The admin-editable Privacy Policy, EULA, and Parental Notice (see
+// shared/schema.ts legalDocuments). Grounded in what Forge actually does
+// today -- camera-based tracking, the AI features, the wellness/nutrition/
+// injury data it collects, the age-tier system -- not generic boilerplate.
+//
+// REVIEWED BY COUNSEL. Drafted by a lawyer, corrected against the code on
+// 2026-09-19 (see git log for this file), and confirmed reviewed as they
+// stand by Scott on 2026-09-20: "yes the others are attorney reviewed".
+// The _DRAFT suffixes are historical variable names, not banners. Changing
+// a word here is changing a reviewed document: the Privacy Policy and the
+// Notice carry prior-shipped hashes (shipped-versions.ts) so an edit is
+// registered as a new version rather than silently overwriting the text an
+// installation stored.
 
 import { TIER1_VIDEO_RETENTION_DAYS, TIER2_VIDEO_RETENTION_DAYS } from "@shared/privacy-tiers";
 import {

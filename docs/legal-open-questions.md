@@ -131,9 +131,9 @@ packet (`docs/research-consent-for-counsel.md`) went out, and it went live verba
 version 2026-09-19. Its wording answers the packet's questions in the text itself: "designed
 so that it cannot be traced back" (question 1), retention after deletion kept with the
 withdraw-first procedure (question 3), no researcher named (question 5). Everyone who
-consented under the 2026-09-17 wording is asked again. One word open: section 6 says "age
-bracket"; the store keeps age in whole years. Scott to choose "age" in the text or a band in
-the store.
+consented under the 2026-09-17 wording is asked again. The one open word (section 6 said "age
+bracket"; the store keeps age in whole years) was put to counsel by Scott on 2026-09-20 and
+changed to "age" with their approval. Version 2026-09-20 re-asks everyone.
 
 The AI Terms of Use is REVIEWED: Scott, 2026-09-19, "we used the AI terms of use as a
 draft, a lawyer modified that". Its file header says so.
@@ -162,12 +162,16 @@ because there is nothing left to take precedence over, /terms now serves this do
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
 biometric consent plus the engineering facts behind each of its claims.
 
-**Four documents still under review** (the Assumption of Risk, the AI Terms of Use, the research consent and the signup Terms of Use were reviewed 2026-09-19, questions 8 to 10) (factual corrections from the 2026-09-19 pass already
-applied; see `git log -- server/seed-data/legal-documents-draft.ts`): the Privacy Policy,
-the EULA, the Notice to Parent or Guardian, and the Institutional Service Agreement. The
-Terms of Service is no longer on this list because it no longer exists -- it was merged into
-the (reviewed) Terms of Use on 2026-09-19. The Notice is also the parental consent document, so question 5 should
-be put to whoever reads it, at the same time. The Service Agreement's text lives in
+**Every document is now attorney-reviewed.** The Assumption of Risk, the AI Terms of Use,
+the research consent and the signup Terms of Use were reviewed 2026-09-19 (questions 8 to
+10). The Privacy Policy, the EULA, the Notice to Parent or Guardian and the Institutional
+Service Agreement were confirmed reviewed by Scott on 2026-09-20 ("yes the others are
+attorney reviewed"), as the text stood that day including the factual corrections from the
+2026-09-19 pass (see `git log -- server/seed-data/legal-documents-draft.ts`). The Terms of
+Service is not on any list because it no longer exists -- it was merged into the Terms of
+Use on 2026-09-19. The open questions above (1 to 6) are still questions about wording or
+enforceability; they do not make a document unreviewed. Question 5 travels with the Notice,
+which is also the parental consent document. The Service Agreement's text lives in
 `shared/institutional-service-agreement.ts` (mirrored in
 `docs/institutional-service-agreement.md`) and since 2026-09-19 is signed in the app, with
 a hash of the signed text kept on every signature -- questions 2 and 3 travel with it. An

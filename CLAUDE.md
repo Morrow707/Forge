@@ -768,15 +768,18 @@ document that gets in the way"): `TERMS_OF_SERVICE_DRAFT` is retired, six of its
 carried into `SIGNUP_AGREEMENT` in its own words, and /terms now serves the document people
 actually accept. Do not add a public Terms of Service back.
 
-**The only legal work left is REVIEW**: the remaining public documents, the Institutional
-Service Agreement (`docs/institutional-service-agreement.md`), the signup Terms of Use,
-and the questions in `docs/legal-open-questions.md`. Nothing needs
-writing. Five documents ARE reviewed: the Video and Biometric Consent (built with counsel,
+**Every document is attorney-reviewed as of 2026-09-20.** Nothing needs writing and
+nothing is waiting on a lawyer. The Video and Biometric Consent (built with counsel,
 2026-09-17), the Assumption of Risk (counsel's opinion 2026-09-19, question 8), the AI
 Terms of Use (lawyer-modified from the Rocket Lawyer draft), the research consent
-(counsel's rewrite, live verbatim 2026-09-19, question 9; `shared/research-consent.ts`)
-and the signup Terms of Use (counsel's rewrite with their five answers folded in, live
-2026-09-19, question 10; `server/seed-data/signup-agreement.ts`).
+(counsel's rewrite, live verbatim 2026-09-19, question 9; one word changed to "age" with
+counsel's approval 2026-09-20, version 2026-09-20) and the signup Terms of Use (counsel's
+rewrite with their five answers folded in, live 2026-09-19, question 10) were reviewed
+2026-09-19; the Privacy Policy, the EULA, the Notice to Parent or Guardian and the
+Institutional Service Agreement were confirmed reviewed by Scott on 2026-09-20 ("yes the
+others are attorney reviewed"). What remains in `docs/legal-open-questions.md` (1 to 6)
+are wording and enforceability questions, not unreviewed text. Changing any of these is
+changing a reviewed document: register a version, never edit in place.
 A change to the research consent text re-asks everyone; the deletion-retention gate
 recognises the disclosure under the current heading and every prior one
 (`PRIOR_DELETION_RETENTION_HEADINGS`), so an earlier yes keeps counting for what it said.
