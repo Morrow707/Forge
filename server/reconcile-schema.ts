@@ -3312,6 +3312,29 @@ CREATE TABLE IF NOT EXISTS "institutional_agreement_signatures" (
 CREATE INDEX IF NOT EXISTS "institutional_agreement_signatures_coach_idx"
   ON "institutional_agreement_signatures" ("coach_user_id", "signed_at");
 
+-- 2026-09-20: how a deferred clip reached its set, and the clips that never did.
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "video_attach_reason" text;
+CREATE TABLE IF NOT EXISTS "unattached_video_uploads" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "video_url" text NOT NULL,
+  "label" text,
+  "assignment_id" integer,
+  "program_day_id" integer,
+  "date" text,
+  "program_exercise_id" integer,
+  "set_number" integer,
+  "cause" text NOT NULL,
+  "attach_reason" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "resolved_at" timestamp,
+  "resolved_how" text
+);
+CREATE INDEX IF NOT EXISTS "unattached_video_uploads_athlete_open_idx"
+  ON "unattached_video_uploads" ("athlete_id") WHERE "resolved_at" IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS "unattached_video_uploads_video_url_idx"
+  ON "unattached_video_uploads" ("video_url");
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN

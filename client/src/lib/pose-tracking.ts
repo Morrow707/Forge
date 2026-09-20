@@ -1644,6 +1644,41 @@ export function isKnownSupineMovement(exerciseName: string | null | undefined): 
   return SUPINE_MOVEMENT_PATTERNS.some((re) => re.test(exerciseName));
 }
 
+// A DUPLICATE FRAME IS ONE SAMPLE, NOT TWO.
+//
+// The tenth-percentile estimator below assumes each sample is one look at the athlete. A
+// stalled camera -- a phone that dropped frames and repeated the last one, a paused replay, an
+// encoder that duplicated a frame -- hands calibrateFromFrames the same landmark set again and
+// again, and every copy counts. Stall at the bottom of a squat and the compressed span is
+// repeated enough times to drag the tenth percentile down into the very error the percentile
+// was chosen to sit clear of. This is a dedup, not a new threshold: the estimator and the
+// sample floor are untouched, and only a frame that is a COPY of the one before it is dropped.
+//
+// The epsilon is a millionth of a unit (metres on MediaPipe, scaled pixels on the Vision
+// path). Two consecutive live reads of a real athlete never agree on every one of 33 joints to
+// that precision -- sensor noise alone moves a landmark by orders of magnitude more -- so the
+// only thing this can match is the same detection served twice. It is not zero because a
+// world-landmark array can pass through scaleWorldLandmarks on the way here, and a float
+// multiply should not be what decides whether two identical frames look identical.
+export const DUPLICATE_FRAME_EPSILON = 1e-6;
+
+export function isDuplicateLandmarkFrame(a: Landmark[], b: Landmark[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const p = a[i];
+    const q = b[i];
+    if (
+      Math.abs(p.x - q.x) > DUPLICATE_FRAME_EPSILON ||
+      Math.abs(p.y - q.y) > DUPLICATE_FRAME_EPSILON ||
+      Math.abs(p.z - q.z) > DUPLICATE_FRAME_EPSILON ||
+      Math.abs(p.visibility - q.visibility) > DUPLICATE_FRAME_EPSILON
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function calibrateFromFrames(
   frames: { worldLandmarks: Landmark[] }[],
   heightIn: number | null | undefined,
@@ -1651,7 +1686,13 @@ export function calibrateFromFrames(
   if (!heightIn || heightIn <= 0) return null;
   let lastSign: 1 | -1 = 1;
   const samples: number[] = [];
+  let previous: Landmark[] | null = null;
   for (const f of frames) {
+    // See isDuplicateLandmarkFrame: a repeated frame is the same look at the athlete and gets
+    // one sample. Checked BEFORE the percentile, on the raw landmark set, never on the
+    // computed scale -- two different poses can legitimately produce the same scale.
+    if (previous && isDuplicateLandmarkFrame(f.worldLandmarks, previous)) continue;
+    previous = f.worldLandmarks;
     const sign: 1 | -1 = worldVerticalSign(f.worldLandmarks) ?? lastSign;
     lastSign = sign;
     const candidate = computePixelToMeterScale(f.worldLandmarks, sign, heightIn);
@@ -1956,6 +1997,74 @@ export function assessCameraAlignment(worldLandmarks: Landmark[]): CameraAlignme
   }
 
   return { aligned: true, reason: "ok" };
+}
+
+/** The first frame of a take with a readable facing, or "unknown" when no frame had one.
+ *
+ * Frame 0 of a clip is usually untracked -- the athlete is walking in, the model has not
+ * settled -- so pinning any per-take verdict on it answers "unknown" for good. Keep asking
+ * until a frame answers. The FIRST answer is used rather than the most common one because the
+ * camera does not move mid-set and the athlete's facing at the start of the set is the framing
+ * the set was filmed in; a pivot at the end (racking the bar) should not re-classify it. */
+export function subjectFacingFromFrames(frames: { worldLandmarks: Landmark[] }[]): SubjectFacing {
+  for (const f of frames) {
+    const facing = assessSubjectFacing(f.worldLandmarks);
+    if (facing !== "unknown") return facing;
+  }
+  return "unknown";
+}
+
+/** The alignment reason for a path that has NO DEPTH -- the native 2D Vision path, where
+ * visionJointsToWorldLandmarks fills z with 0.
+ *
+ * assessCameraAlignment reads z for both of its faults, so with z pinned to zero it can only
+ * ever answer "ok" or "unknown", and it answers "unknown" precisely when the shoulders have
+ * collapsed onto each other in x -- which is what a correct side view looks like. That is not
+ * a real answer; it is the depth check reporting the absence of depth. This helper answers
+ * the same question from what the 2D path CAN measure, the x/y-only facing read
+ * (assessSubjectFacing), held against what the lift wants:
+ *
+ *   - the facing the lift wants                  -> "ok"
+ *   - head-on for a side-view lift               -> "axial" (a legitimate angle that costs one
+ *                                                  axis, exactly what "axial" already means to
+ *                                                  computeRepTrustScores, which does not dock it)
+ *   - oblique, or side-on for a front-view lift  -> "angled" (parallax, the fault "angled" names)
+ *   - no readable shoulders and hips             -> "unknown"
+ *
+ * Chosen over making assessCameraAlignment return "unknown" whenever z is absent, because that
+ * would be honest and useless: every native take would lose 10 trust points for "framing
+ * couldn't be confirmed" when the framing could be confirmed from x and y alone. */
+export function alignmentReasonWithoutDepth(
+  facing: SubjectFacing,
+  expected: "side" | "front" | "either" | null,
+): CameraAlignment["reason"] {
+  if (facing === "unknown") return "unknown";
+  if (!expected || expected === "either") return "ok";
+  if (expected === "side") {
+    if (facing === "side_on") return "ok";
+    if (facing === "facing_camera") return "axial";
+    return "angled";
+  }
+  return facing === "facing_camera" ? "ok" : "angled";
+}
+
+/** THE CORRECT CAMERA ANGLE MUST NOT SCORE WORSE THAN THE WRONG ONE.
+ *
+ * assessCameraAlignment asks whether the athlete is squared up to the lens, which is false by
+ * definition when they are side-on -- so the one camera position nearly every barbell lift
+ * requires scored worse than a front view that cannot see bar drift at all. On the native path
+ * that read "unknown" and cost 10 trust points; on the web path, where z is real, it read
+ * "angled" and cost 15. When the lift wants a side view and the footage IS a side view (by the
+ * separate x/y facing reader, never by the reader that produced the fault), that is confirmed
+ * framing, not unconfirmed. Both tracker dialogs pass their alignment reason through here;
+ * side-view-is-not-a-framing-fault.test.ts scans both for the call. */
+export function trustAlignmentReason(
+  alignmentReason: CameraAlignment["reason"] | null,
+  facing: SubjectFacing,
+  expected: "side" | "front" | "either" | null,
+): CameraAlignment["reason"] | null {
+  if (expected === "side" && facing === "side_on") return "ok";
+  return alignmentReason;
 }
 
 // The tracked point for "jump" mode -- the ankle midpoint rather than the

@@ -139,6 +139,7 @@ import {
   legalDocuments,
   problemReports,
   uploadedFiles,
+  unattachedVideoUploads,
   type ProblemReport,
   userSessions,
   type UserSession,
@@ -203,6 +204,8 @@ import type {
   UpsertSkillSetEntryInput,
   SubmitWorkoutLogInput,
   AttachVideoToSetInput,
+  UnattachedVideoCause,
+  VideoAttachReason,
   UpdateProgramDayInput,
   UpdateCorrectivesInput,
   UpdateAssignmentInput,
@@ -20461,6 +20464,16 @@ ${catalog}`;
     // attach to the response after" shape as newlyUnlockedTrophies at this
     // function's own call site in routes.ts.
     const newPRs: { exerciseName: string; weight: string; unit: "lbs" | "kg"; reps: string }[] = [];
+    // The row ids this save produced, handed back to the client so a clip queued for later
+    // upload can name its set by id (see attachVideoToSetSchema). Every save reinserts the
+    // day, so these are only good until the next save -- which is why the tuple stays the
+    // fallback and the client refreshes its queue from each response.
+    const savedSetRowIds: {
+      programExerciseId: number | null;
+      correctiveId: number | null;
+      setNumber: number;
+      id: number;
+    }[] = [];
 
     const log = await db.transaction(async (tx) => {
       let log = await tx.query.workoutLogs.findFirst({
@@ -20478,7 +20491,10 @@ ${catalog}`;
       // bottom of this function every single time the athlete saves.
       // Keyed by (exercise, set number) since row ids don't survive a
       // resubmission but that pair does.
-      const priorVideoByKey = new Map<string, { url: string; uploadedAt: Date | null }>();
+      const priorVideoByKey = new Map<
+        string,
+        { url: string; uploadedAt: Date | null; attachReason: string | null }
+      >();
       // Resolved once for the whole save rather than per set -- see captureField below for what it
       // gates and why it carries prior values forward instead of clearing them. A minor's consent
       // comes from their guardian at claim time and is recorded against the athlete, so this one
@@ -20512,6 +20528,7 @@ ${catalog}`;
               priorVideoByKey.set(`${exerciseKey}:${s.setNumber}`, {
                 url: s.formCheckVideoUrl,
                 uploadedAt: s.videoUploadedAt ?? null,
+                attachReason: s.videoAttachReason ?? null,
               });
             }
             // Same snapshot, same key, for the frame-by-frame capture columns -- see
@@ -20808,7 +20825,7 @@ ${catalog}`;
             }
           }
 
-          await tx.insert(workoutSetEntries).values(
+          const insertedSets = await tx.insert(workoutSetEntries).values(
             entry.sets.map((s) => {
               const prior = priorVideoByKey.get(`${exerciseKey}:${s.setNumber}`);
               // AN OMITTED VIDEO URL MEANS "UNCHANGED", NOT "DELETE IT".
@@ -20891,6 +20908,9 @@ ${catalog}`;
                 velocityLossPercent: s.velocityLossPercent ?? null,
                 formCheckVideoUrl: effectiveVideoUrl,
                 formCheckFlag: s.formCheckFlag ?? null,
+                // Travels with the url: the same clip keeps the record of how it arrived, a
+                // different one (sent inline by the client) arrived the ordinary way.
+                videoAttachReason: isSameVideo ? prior!.attachReason : null,
                 videoFavorited: s.formCheckVideoUrl ? (s.videoFavorited ?? false) : false,
                 videoUploadedAt: effectiveVideoUrl ? (isSameVideo ? prior!.uploadedAt : new Date()) : null,
                 jumpHeightCm: s.jumpHeightCm ?? null,
@@ -20930,7 +20950,15 @@ ${catalog}`;
                 skeletonFrames: captureField(s as Record<string, unknown>, s.setNumber, "skeletonFrames"),
               };
             }),
-          );
+          ).returning({ id: workoutSetEntries.id, setNumber: workoutSetEntries.setNumber });
+          for (const row of insertedSets) {
+            savedSetRowIds.push({
+              programExerciseId: entryRow.programExerciseId,
+              correctiveId: entryRow.correctiveId,
+              setNumber: row.setNumber,
+              id: row.id,
+            });
+          }
         }
       }
 
@@ -20950,24 +20978,64 @@ ${catalog}`;
       if (!retainedVideoUrls.has(url)) await deleteUploadedFile(url);
     }
 
-    return { ...log, newPRs };
+    return { ...log, newPRs, savedSetRowIds };
   },
 
-  async attachVideoToLoggedSet(athleteId: number, input: AttachVideoToSetInput): Promise<boolean> {
+  /** Links a deferred clip to the set it was filmed for. Never throws; the result says which
+   * address landed it or which of UNATTACHED_VIDEO_CAUSES declined it, and the route records
+   * the latter on unattached_video_uploads so the clip stays findable.
+   *
+   * PRECEDENCE: the set row id first, then the tuple. The id is exact when it still exists --
+   * a resave of the day reinserts every set and serial ids are never reused, so a stale id can
+   * only miss (and fall through to the tuple), never land on a different set. The tuple is the
+   * address a clip has before its set was ever saved, and what it falls back to after the day
+   * moved on. Both go through the same ownership check: the row must hang off a log that is
+   * this athlete's. */
+  async attachVideoToLoggedSet(
+    athleteId: number,
+    input: AttachVideoToSetInput,
+  ): Promise<{ attached: true; via: "row_id" | "tuple" } | { attached: false; cause: UnattachedVideoCause }> {
     // assertUploadedFileOwnedBy throws (see uploadedFiles' own schema
     // comment) -- caught here rather than left to propagate, matching this
-    // function's own "never throws, false is the whole failure signal"
-    // contract described above.
+    // function's own "never throws" contract.
     let videoUrl: string;
     try {
       videoUrl = await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId);
     } catch {
-      return false;
+      return { attached: false, cause: "not_your_upload" };
     }
+    const reason = input.reason ?? null;
+
+    if (input.workoutSetEntryId != null) {
+      const [byId] = await db
+        .select({
+          id: workoutSetEntries.id,
+          formCheckVideoUrl: workoutSetEntries.formCheckVideoUrl,
+          logAthleteId: workoutLogs.athleteId,
+        })
+        .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+        .where(eq(workoutSetEntries.id, input.workoutSetEntryId));
+      // A row that exists and is this athlete's is the answer, one way or the other: if it
+      // already carries a clip, the tuple would resolve to the very same row, so there is no
+      // point asking it. A row that is gone or someone else's is treated as absent.
+      if (byId && byId.logAthleteId === athleteId) {
+        if (byId.formCheckVideoUrl) return { attached: false, cause: "set_already_has_video" };
+        const [updated] = await db
+          .update(workoutSetEntries)
+          .set({ formCheckVideoUrl: videoUrl, videoAttachReason: reason, videoUploadedAt: new Date() })
+          .where(and(eq(workoutSetEntries.id, byId.id), isNull(workoutSetEntries.formCheckVideoUrl)))
+          .returning({ id: workoutSetEntries.id });
+        if (updated) return { attached: true, via: "row_id" };
+        return { attached: false, cause: "set_already_has_video" };
+      }
+    }
+
     const assignment = await db.query.assignments.findFirst({
       where: and(eq(assignments.id, input.assignmentId), eq(assignments.athleteId, athleteId)),
     });
-    if (!assignment) return false;
+    if (!assignment) return { attached: false, cause: "assignment_not_yours" };
 
     const log = await db.query.workoutLogs.findFirst({
       where: and(
@@ -20976,7 +21044,7 @@ ${catalog}`;
         eq(workoutLogs.date, input.date),
       ),
     });
-    if (!log) return false;
+    if (!log) return { attached: false, cause: "no_log_for_date" };
 
     const entry = await db.query.workoutLogEntries.findFirst({
       where: and(
@@ -20984,11 +21052,11 @@ ${catalog}`;
         eq(workoutLogEntries.programExerciseId, input.programExerciseId),
       ),
     });
-    if (!entry) return false;
+    if (!entry) return { attached: false, cause: "exercise_not_logged" };
 
     const [updated] = await db
       .update(workoutSetEntries)
-      .set({ formCheckVideoUrl: videoUrl })
+      .set({ formCheckVideoUrl: videoUrl, videoAttachReason: reason, videoUploadedAt: new Date() })
       .where(
         and(
           eq(workoutSetEntries.logEntryId, entry.id),
@@ -20997,8 +21065,141 @@ ${catalog}`;
         ),
       )
       .returning({ id: workoutSetEntries.id });
+    if (updated) return { attached: true, via: "tuple" };
 
-    return !!updated;
+    const setExists = await db.query.workoutSetEntries.findFirst({
+      where: and(eq(workoutSetEntries.logEntryId, entry.id), eq(workoutSetEntries.setNumber, input.setNumber)),
+    });
+    return { attached: false, cause: setExists ? "set_already_has_video" : "set_not_logged" };
+  },
+
+  // ---------- Unattached video uploads ----------
+  // See unattachedVideoUploads' schema comment. One open row per clip url; a second failed
+  // attach of the same clip updates the cause rather than listing it twice.
+
+  async recordUnattachedVideoUpload(input: {
+    athleteId: number;
+    videoUrl: string;
+    label: string | null;
+    cause: UnattachedVideoCause;
+    attachReason: VideoAttachReason | null;
+    target: { assignmentId: number; programDayId: number; date: string; programExerciseId: number; setNumber: number } | null;
+  }) {
+    const [row] = await db
+      .insert(unattachedVideoUploads)
+      .values({
+        athleteId: input.athleteId,
+        videoUrl: input.videoUrl,
+        label: input.label,
+        cause: input.cause,
+        attachReason: input.attachReason,
+        assignmentId: input.target?.assignmentId ?? null,
+        programDayId: input.target?.programDayId ?? null,
+        date: input.target?.date ?? null,
+        programExerciseId: input.target?.programExerciseId ?? null,
+        setNumber: input.target?.setNumber ?? null,
+      })
+      .onConflictDoUpdate({
+        target: unattachedVideoUploads.videoUrl,
+        set: { cause: input.cause, attachReason: input.attachReason },
+      })
+      .returning();
+    return row;
+  },
+
+  async listUnattachedVideoUploads(athleteId: number) {
+    return db
+      .select()
+      .from(unattachedVideoUploads)
+      .where(and(eq(unattachedVideoUploads.athleteId, athleteId), isNull(unattachedVideoUploads.resolvedAt)))
+      .orderBy(desc(unattachedVideoUploads.createdAt));
+  },
+
+  async getUnattachedVideoUpload(athleteId: number, id: number) {
+    const row = await db.query.unattachedVideoUploads.findFirst({
+      where: and(
+        eq(unattachedVideoUploads.id, id),
+        eq(unattachedVideoUploads.athleteId, athleteId),
+        isNull(unattachedVideoUploads.resolvedAt),
+      ),
+    });
+    return row ?? null;
+  },
+
+  /** The sets the athlete could link an orphaned clip to: every set logged on the clip's
+   * date (or, with no date on record, every set of the last 30 days) that does not already
+   * carry a video, named well enough to pick from a list. */
+  async listSetsAvailableForVideo(athleteId: number, date: string | null) {
+    const rows = await db
+      .select({
+        workoutSetEntryId: workoutSetEntries.id,
+        setNumber: workoutSetEntries.setNumber,
+        reps: workoutSetEntries.reps,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        date: workoutLogs.date,
+        exerciseName: exercises.name,
+        programExerciseId: workoutLogEntries.programExerciseId,
+        correctiveId: workoutLogEntries.correctiveId,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .leftJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      .where(
+        and(
+          eq(workoutLogs.athleteId, athleteId),
+          isNull(workoutSetEntries.formCheckVideoUrl),
+          date
+            ? eq(workoutLogs.date, date)
+            : gte(workoutLogs.date, formatISO(subDays(new Date(), 30), { representation: "date" })),
+        ),
+      )
+      .orderBy(desc(workoutLogs.date), workoutLogEntries.id, workoutSetEntries.setNumber);
+    return rows.map((r) => ({ ...r, exerciseName: r.exerciseName ?? "(exercise no longer resolves)" }));
+  },
+
+  /** The Video Bank's "attach to this set" action. Goes through attachVideoToLoggedSet's row-id
+   * path with reason "manual" so the same ownership and already-has-video rules apply, then
+   * resolves the orphan row. Returns null when the orphan is not this athlete's or is already
+   * resolved. */
+  async attachUnattachedVideoUpload(athleteId: number, id: number, workoutSetEntryId: number) {
+    const orphan = await this.getUnattachedVideoUpload(athleteId, id);
+    if (!orphan) return null;
+    const result = await this.attachVideoToLoggedSet(athleteId, {
+      workoutSetEntryId,
+      reason: "manual",
+      videoUrl: orphan.videoUrl,
+      // The tuple is required by the schema but must not be consulted here: the athlete picked
+      // a row, and a miss on it is an answer, not a cue to guess. Impossible ids guarantee it.
+      assignmentId: -1,
+      programDayId: -1,
+      date: "",
+      programExerciseId: -1,
+      setNumber: -1,
+    });
+    if (result.attached) {
+      await db
+        .update(unattachedVideoUploads)
+        .set({ resolvedAt: new Date(), resolvedHow: "attached" })
+        .where(eq(unattachedVideoUploads.id, orphan.id));
+    }
+    return result;
+  },
+
+  async dismissUnattachedVideoUpload(athleteId: number, id: number) {
+    const [row] = await db
+      .update(unattachedVideoUploads)
+      .set({ resolvedAt: new Date(), resolvedHow: "dismissed" })
+      .where(
+        and(
+          eq(unattachedVideoUploads.id, id),
+          eq(unattachedVideoUploads.athleteId, athleteId),
+          isNull(unattachedVideoUploads.resolvedAt),
+        ),
+      )
+      .returning({ id: unattachedVideoUploads.id });
+    return !!row;
   },
 
   // Scans a just-submitted log's sets for a genuine (not single-rep-noise)

@@ -164,6 +164,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // on the object it found, and two labels sharing one lock would fight over it every frame.
     private var coreMlSecondaryDetector = AvCoreMlImplementDetector()
     private var cameraStabilizer = AvCameraStabilizer()
+    // OVERWATCH (part 3 of the camera architecture), at frame level. One verdict per frame about
+    // whether the body read can be trusted and whether the frame is new at all, handed to BOTH
+    // object trackers below (the CoreML detector and the motion-diff implement trackers) so the
+    // motion-diff tracker is no longer the one tracker running outside arbitration. See
+    // AvOverwatch's own header comment.
+    private var overwatch = AvOverwatch()
 
     // The public, documented Vision joint names this plugin reports -- unlike ARKit's own
     // joint-name strings (which needed on-device discovery to nail down, per
@@ -1156,6 +1162,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         coreMlImplementDetector.reset()
         coreMlSecondaryDetector.reset()
         cameraStabilizer.reset()
+        overwatch.reset()
 
         // Confirmed against a real field report: AVAssetReader/Vision setup can hang
         // indefinitely before runPoseAnalysis's read loop even starts (stuck at "0 frames
@@ -1513,6 +1520,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             let frameHeight = swapDimensions ? rawWidth : rawHeight
 
             var joints: [[String: Any]] = []
+            // Every body landmark this frame, flattened, for AvOverwatch's frozen-frame check --
+            // a pose that is bit-for-bit identical to the last frame's is a pose request
+            // returning cached results, not an athlete who did not move.
+            var landmarkSignature: [Double] = []
             var tracked = false
             var leftWristJoint: (x: Double, y: Double)?
             var rightWristJoint: (x: Double, y: Double)?
@@ -1555,6 +1566,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                             "y": Double(point.location.y),
                             "confidence": Double(point.confidence),
                         ])
+                        landmarkSignature.append(Double(point.location.x))
+                        landmarkSignature.append(Double(point.location.y))
                         if label == "leftWrist" {
                             leftWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
                         } else if label == "rightWrist" {
@@ -1688,6 +1701,27 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 boxTopCandidates.append(candidate)
             }
 
+            // OVERWATCH SPEAKS FIRST, BEFORE EITHER OBJECT TRACKER RUNS.
+            //
+            // What the BODY tracker knows, plus overwatch's verdict on whether it can be believed
+            // this frame and whether this frame is new at all, handed to BOTH object trackers so
+            // they are checked against the same referee. The motion-diff implement trackers
+            // below used to run outside arbitration entirely -- a jumped wrist that the CoreML
+            // detector correctly abstained on still re-seeded the motion-diff lock on the wrong
+            // part of the image. See AvOverwatch, AvTrackerArbiter and shared/tracker-arbiter.ts.
+            let overwatchFrame = overwatch.judge(
+                pixelBuffer: pixelBuffer,
+                landmarkSignature: landmarkSignature,
+                anchor: AvTrackerArbiter.handAnchor(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
+                yardstick: AvTrackerArbiter.bodyYardstick(
+                    leftWrist: leftWristJoint, rightWrist: rightWristJoint,
+                    leftShoulder: leftShoulderJoint, rightShoulder: rightShoulderJoint,
+                    frameWidth: Double(frameWidth), frameHeight: Double(frameHeight)
+                ),
+                frameWidth: Double(frameWidth), frameHeight: Double(frameHeight)
+            )
+            let bodyContext = overwatchFrame.body
+
             // Phase 5: object/implement tracking -- only worth the extra downscale+render
             // work on a frame that actually has a wrist to anchor the search on, same
             // "skip when there's nothing to track from" precedent bar-tracker-dialog.tsx
@@ -1703,7 +1737,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     let wristWorkingY = (1.0 - wrist.y) * Double(working.height)
                     if let result = leftImplementTracker.track(
                         rgba: working.rgba, luma: working.luma, width: working.width, height: working.height,
-                        wristX: wristWorkingX, wristY: wristWorkingY
+                        wristX: wristWorkingX, wristY: wristWorkingY,
+                        overwatch: overwatchFrame
                     ) {
                         leftImplement = implementResultDict(result)
                     }
@@ -1713,7 +1748,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     let wristWorkingY = (1.0 - wrist.y) * Double(working.height)
                     if let result = rightImplementTracker.track(
                         rgba: working.rgba, luma: working.luma, width: working.width, height: working.height,
-                        wristX: wristWorkingX, wristY: wristWorkingY
+                        wristX: wristWorkingX, wristY: wristWorkingY,
+                        overwatch: overwatchFrame
                     ) {
                         rightImplement = implementResultDict(result)
                     }
@@ -1734,22 +1770,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // (already tried, made things worse -- see extractWorkingFrame's own comment above)
             // or running detection concurrently with capture (already tried, caused real
             // on-device thermal throttling -- see this file's header comment).
-            // What the BODY tracker knows, handed to the object tracker so it can be checked
-            // against it. This is the whole unification in one variable: the two systems ran
-            // side by side for a year and never once compared notes, and every drifted lock that
-            // cost a take was a lock nobody asked the obvious question about. See
-            // AvTrackerArbiter and shared/tracker-arbiter.ts.
-            let bodyContext = AvCoreMlImplementDetector.BodyContext(
-                anchor: AvTrackerArbiter.handAnchor(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
-                yardstick: AvTrackerArbiter.bodyYardstick(
-                    leftWrist: leftWristJoint, rightWrist: rightWristJoint,
-                    leftShoulder: leftShoulderJoint, rightShoulder: rightShoulderJoint,
-                    frameWidth: Double(frameWidth), frameHeight: Double(frameHeight)
-                ),
-                frameWidth: Double(frameWidth),
-                frameHeight: Double(frameHeight)
-            )
-
+            // bodyContext (built by overwatch above, before the motion-diff trackers ran) is what
+            // the BODY tracker knows, handed to the object tracker so it can be checked against
+            // it. This is the whole unification in one variable: the two systems ran side by
+            // side for a year and never once compared notes, and every drifted lock that cost a
+            // take was a lock nobody asked the obvious question about. See AvTrackerArbiter and
+            // shared/tracker-arbiter.ts.
             var coreMlImplement: [String: Any]?
             if coreMlDetectionEnabled, let targetLabel = coreMlTargetLabel,
                let result = coreMlImplementDetector.track(
@@ -1757,7 +1783,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                    regionOfInterest: AvCoreMlImplementDetector.regionOfInterest(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
                    body: bodyContext
                ) {
-                coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence)
+                coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence, held: result.held)
             }
 
             // The second class, sampled rather than tracked every frame.
@@ -1787,7 +1813,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                    // scale, which makes it the one whose mistakes are most expensive.
                    body: bodyContext
                ) {
-                var dict = coreMlResultDict(secondary.box, confidence: secondary.confidence)
+                var dict = coreMlResultDict(secondary.box, confidence: secondary.confidence, held: secondary.held)
                 dict["label"] = secondaryLabel
                 coreMlSecondary = dict
             }
@@ -1922,6 +1948,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         if let objectLockTelemetry {
             logDiag("object lock: \(objectLockTelemetry.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
         }
+        // The motion-diff trackers' own abstentions and unlocks, and overwatch's frame-level
+        // counts. Diagnostic log only for now: the objectLock telemetry shape on the report is the
+        // CoreML detector's, and widening it to a second sensor is a schema conversation.
+        logDiag(
+            "implement lock (motion-diff): left=\(leftImplementTracker.telemetry.summary) "
+                + "right=\(rightImplementTracker.telemetry.summary) overwatch=\(overwatch.summary)"
+        )
         logDiag(
             "analyzeRecording finished: \(processedCount) frames processed, "
                 + "\(trackedCount) tracked, \(String(format: "%.2f", elapsed))s elapsed"
@@ -2245,6 +2278,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         if let color = result.color {
             dict["color"] = ["r": color.r, "g": color.g, "b": color.b]
         }
+        // Only ever present as true: a held (dead-reckoned) position is repeated from the last
+        // real lock while the implement is stationary or the frame is frozen, and the JS side
+        // must be able to discount it rather than count it as a fresh detection. Omitted on a
+        // real detection so every existing consumer sees exactly the shape it always did.
+        if result.held { dict["held"] = true }
         return dict
     }
 
@@ -2252,19 +2290,22 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // second, which is far more than a median over a set needs and a quarter of the cost.
     private static let coreMlSecondaryEveryNthFrame = 4
 
-    private func coreMlResultDict(_ boundingBox: CGRect, confidence: Float) -> [String: Any] {
+    private func coreMlResultDict(_ boundingBox: CGRect, confidence: Float, held: Bool) -> [String: Any] {
         // Vision's box is (x, y, width, height) with the same normalized,
         // bottom-left-origin convention as every joint this file already
         // hands back -- reporting the box's center point keeps the shape
         // consistent with implementResultDict's x/y (a point, not a rect)
         // for whatever future JS-side code starts consuming this.
-        return [
+        var dict: [String: Any] = [
             "x": Double(boundingBox.midX),
             "y": Double(boundingBox.midY),
             "width": Double(boundingBox.width),
             "height": Double(boundingBox.height),
             "confidence": Double(confidence),
         ]
+        // Same convention as implementResultDict: present only when true.
+        if held { dict["held"] = true }
+        return dict
     }
 }
 
@@ -2354,6 +2395,26 @@ private enum AvTrackerArbiter {
     static let maxYardstickDeviationRatio = 2.0
     // Keep in sync with MIN_YARDSTICK_SAMPLES_FOR_STABILITY in shared/tracker-arbiter.ts.
     static let minYardstickSamplesForStability = 5
+
+    // MOTION CORRELATION (overwatch). Over a short window of tracked frames, the hands and the
+    // locked region have to move together: an implement in the athlete's hands cannot travel a
+    // grip width while the hands stay put, and the hands cannot travel a grip width while the
+    // thing they are holding stays put. Either is a lock on something that is not in the hands
+    // -- a rack plate, a wall clock -- that the distance gate lets through because it happens to
+    // sit near the athlete. Thresholds in grip widths, never pixels or frame fractions, for the
+    // same reason as maxLockDistanceInYardsticks: one number that is correct at every framing.
+    // Untuned starting values; every threshold here is an admitted guess until real footage.
+    static let motionWindowFrames = 6
+    static let motionMovedInYardsticks = 1.0
+    static let motionStillInYardsticks = 0.25
+
+    // CANDIDATE SIZE (overwatch, applied before the most-confident pick). A detection smaller
+    // than this fraction of the grip width is not an implement the athlete could be holding --
+    // a plate is about a grip wide, a med ball half of one, a kettlebell a third -- it is a
+    // speck the model labelled. A box that runs off the frame edge has a wrong size, which for
+    // the class that sets real-world scale is a wrong number in every metric downstream.
+    static let minCandidateSizeInYardsticks = 0.15
+    static let candidateEdgeTolerance = 0.005
 
     struct Yardstick {
         var px: Double
@@ -2463,6 +2524,41 @@ private enum AvTrackerArbiter {
         )
     }
 
+    /// Do the hands and the lock agree about whether anything moved over the window? Returns
+    /// agree on anything it cannot measure. `handMoved`/`lockMoved` are in yardsticks.
+    static func motionAgreement(
+        handFrom: (x: Double, y: Double), handTo: (x: Double, y: Double),
+        lockFrom: (x: Double, y: Double), lockTo: (x: Double, y: Double),
+        yardstickPx: Double, frameWidth: Double, frameHeight: Double
+    ) -> (agree: Bool, handMoved: Double, lockMoved: Double) {
+        guard yardstickPx > 0, frameWidth > 0, frameHeight > 0 else { return (true, 0, 0) }
+        let hand = distancePx(handFrom, handTo, frameWidth: frameWidth, frameHeight: frameHeight) / yardstickPx
+        let lock = distancePx(lockFrom, lockTo, frameWidth: frameWidth, frameHeight: frameHeight) / yardstickPx
+        let handsMovedLockStill = hand > motionMovedInYardsticks && lock < motionStillInYardsticks
+        let lockMovedHandsStill = lock > motionMovedInYardsticks && hand < motionStillInYardsticks
+        return (!(handsMovedLockStill || lockMovedHandsStill), hand, lock)
+    }
+
+    /// Is this candidate box big enough to be an implement, and wholly inside the frame?
+    ///
+    /// The size half passes when there is no yardstick: with nothing to measure against there is
+    /// no honest number to refuse on, and a frame fraction would be the per-setup tuning every
+    /// earlier attempt needed and never got. The edge half is skipped for "barbell": a bar is
+    /// longer than most framings are wide and legitimately runs off both sides, whereas a plate,
+    /// ball, kettlebell or dumbbell that touches the edge has been cut and its size is wrong.
+    static func candidateBoxIsUsable(
+        _ box: CGRect, label: String, yardstick: Yardstick?, frameWidth: Double, frameHeight: Double
+    ) -> Bool {
+        guard box.width > 0, box.height > 0 else { return false }
+        if label != "barbell" {
+            let t = CGFloat(candidateEdgeTolerance)
+            if box.minX <= t || box.minY <= t || box.maxX >= 1 - t || box.maxY >= 1 - t { return false }
+        }
+        guard let yardstick, yardstick.px > 0, frameWidth > 0, frameHeight > 0 else { return true }
+        let largestSidePx = max(Double(box.width) * frameWidth, Double(box.height) * frameHeight)
+        return largestSidePx >= yardstick.px * minCandidateSizeInYardsticks
+    }
+
     /// Distance between two normalized Vision points, in this frame's own pixels.
     ///
     /// Pixels, not normalized units, for the reason the TS file spells out: normalized space is
@@ -2535,6 +2631,165 @@ private enum AvTrackerArbiter {
     }
 }
 
+// THE RULER'S HISTORY IS KEPT PER RULER (overwatch).
+//
+// The body yardstick comes from the grip when both wrists are seen and from the shoulders when
+// one drops out. Those are two different lengths -- a wide bench grip is well over a shoulder
+// span, a close one well under -- so one flat history mixing the two read every source switch
+// as the span "changing length faster than an athlete can rotate", and a take whose wrist
+// flickered in and out could freeze on body-suspect for good. Each source keeps its own window,
+// and switching source switches which window is read: a grip reading is only ever judged against
+// grip readings. Switching BACK resumes the old window rather than starting from nothing, so a
+// three-frame dropout does not disarm the guard for the next five.
+private struct AvYardstickHistory {
+    static let window = 8
+    private var bySource: [String: [Double]] = [:]
+    private(set) var source: String?
+
+    /// Select which ruler this frame's reading belongs to. Re-baselines the READ, not the data.
+    mutating func select(_ newSource: String) { source = newSource }
+
+    /// The window for the selected source; empty when no source has been selected.
+    var recent: [Double] {
+        get { source.flatMap { bySource[$0] } ?? [] }
+        set {
+            guard let s = source else { return }
+            bySource[s] = Array(newValue.suffix(Self.window))
+        }
+    }
+
+    mutating func reset() {
+        bySource = [:]
+        source = nil
+    }
+}
+
+// OVERWATCH AT FRAME LEVEL (part 3 of the camera architecture).
+//
+// AvTrackerArbiter is the rule; this is the thing that applies it once per frame, before either
+// object tracker runs, and hands both of them the same verdict. It owns no sensor: everything
+// it says comes from holding the body against itself (is the ruler steady) and the frame against
+// the last one (is there anything new here at all). Two questions, both answered before any
+// object work, because every statement about the object is measured with the body's ruler and
+// a frame that is not new cannot be evidence of anything.
+//
+// The frozen check is the newer of the two. A decoder that repeats a frame, or a pose request
+// that returns cached landmarks, produces a frame identical to the last one. Nothing in either
+// tracker could tell: the lock "held" (of course it did, nothing moved), the streak advanced,
+// and a calibration median gained a duplicate sample. Identical bytes are no new evidence, so a
+// frozen frame is reported as HELD and advances nothing.
+private final class AvOverwatch {
+    /// Consecutive frames with bit-identical body landmarks before the pose is called frozen.
+    /// Two in a row happens on a real still athlete about never (sensor noise moves a landmark
+    /// by a fraction of a pixel every frame); three is a request returning the same answer.
+    static let frozenLandmarkFrames = 3
+
+    private var yardstickHistory = AvYardstickHistory()
+    private var lastFrameSignature: UInt64?
+    private var lastLandmarkSignature: [Double]?
+    private var identicalLandmarkRun = 0
+    private(set) var framesFrozen = 0
+    private(set) var framesBodySuspect = 0
+
+    /// One frame's verdict, shared by every object tracker that runs on it.
+    struct FrameVerdict {
+        var body: AvCoreMlImplementDetector.BodyContext
+        /// The selected ruler's history, for a tracker that wants to run the full arbitrate().
+        var recentYardstickPx: [Double]
+    }
+
+    var summary: String {
+        "framesFrozen=\(framesFrozen) framesBodySuspect=\(framesBodySuspect)"
+    }
+
+    func reset() {
+        yardstickHistory.reset()
+        lastFrameSignature = nil
+        lastLandmarkSignature = nil
+        identicalLandmarkRun = 0
+        framesFrozen = 0
+        framesBodySuspect = 0
+    }
+
+    func judge(
+        pixelBuffer: CVPixelBuffer,
+        landmarkSignature: [Double],
+        anchor: (x: Double, y: Double)?,
+        yardstick: AvTrackerArbiter.Yardstick?,
+        frameWidth: Double, frameHeight: Double
+    ) -> FrameVerdict {
+        // THE BODY FIRST, as everywhere else in this pipeline.
+        var bodySuspect = false
+        if let yardstick {
+            yardstickHistory.select(yardstick.source)
+            let stability = AvTrackerArbiter.bodyReadIsStable(
+                currentPx: yardstick.px, recentPx: yardstickHistory.recent
+            )
+            if stability.stable {
+                // Only a stable span joins the history it will be judged against -- same rule
+                // as the detector's own copy, for the same reason.
+                var recent = yardstickHistory.recent
+                recent.append(yardstick.px)
+                yardstickHistory.recent = recent
+            } else {
+                bodySuspect = true
+                framesBodySuspect += 1
+            }
+        }
+
+        // THEN THE FRAME: is there anything new here?
+        var frozen = false
+        if let signature = AvOverwatch.frameSignature(pixelBuffer) {
+            if let last = lastFrameSignature, last == signature { frozen = true }
+            lastFrameSignature = signature
+        }
+        if !landmarkSignature.isEmpty, let last = lastLandmarkSignature, last == landmarkSignature {
+            identicalLandmarkRun += 1
+            if identicalLandmarkRun + 1 >= AvOverwatch.frozenLandmarkFrames { frozen = true }
+        } else {
+            identicalLandmarkRun = 0
+        }
+        lastLandmarkSignature = landmarkSignature.isEmpty ? nil : landmarkSignature
+        if frozen { framesFrozen += 1 }
+
+        return FrameVerdict(
+            body: AvCoreMlImplementDetector.BodyContext(
+                anchor: anchor, yardstick: yardstick,
+                frameWidth: frameWidth, frameHeight: frameHeight,
+                overwatchBodySuspect: bodySuspect, frozen: frozen
+            ),
+            recentYardstickPx: yardstickHistory.recent
+        )
+    }
+
+    /// A cheap fingerprint of the frame's first plane: FNV-1a over ~4k evenly strided bytes.
+    /// Byte-identical frames always match. Two frames that differ only between the sampled
+    /// bytes would match too, but a decoded video frame that changed in fewer than one byte in
+    /// every few hundred is a frame that carries no new evidence either, which is the question.
+    static func frameSignature(_ pixelBuffer: CVPixelBuffer) -> UInt64? {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+        let planar = CVPixelBufferIsPlanar(pixelBuffer)
+        let base = planar
+            ? CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0)
+            : CVPixelBufferGetBaseAddress(pixelBuffer)
+        guard let base else { return nil }
+        let height = planar ? CVPixelBufferGetHeightOfPlane(pixelBuffer, 0) : CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = planar ? CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0) : CVPixelBufferGetBytesPerRow(pixelBuffer)
+        let total = height * bytesPerRow
+        guard total > 0 else { return nil }
+        let bytes = base.assumingMemoryBound(to: UInt8.self)
+        let stride = max(1, total / 4096)
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        var i = 0
+        while i < total {
+            hash = (hash ^ UInt64(bytes[i])) &* 0x0000_0100_0000_01b3
+            i += stride
+        }
+        return hash
+    }
+}
+
 // WHAT THE LOCK ACTUALLY DID, FOR A TAKE THAT CAN BE ARGUED WITH.
 //
 // Every unlock path in this detector used to be silent. A take where the lock broke forty times
@@ -2560,6 +2815,18 @@ private struct AvObjectLockTelemetry {
     /// the lock alone. A take with many of them is a body-tracking problem being correctly
     /// refused permission to masquerade as an object-tracking one.
     var framesBodySuspect = 0
+    /// Overwatch's motion-correlation check: the hands moved a grip width and the lock did not,
+    /// or the other way round. A lock the distance gate let through because it sat near the
+    /// athlete, on something the athlete was not holding.
+    var breaksMotionDisagreement = 0
+    /// Candidate detections refused for being smaller than a fraction of the grip width or cut
+    /// off by the frame edge, BEFORE the most-confident pick. Separate from the wrist gate's
+    /// count because they say different things about the room.
+    var candidatesRejectedBySize = 0
+    /// Frames identical to the one before them -- a repeated decoder frame or a pose request
+    /// returning cached landmarks. Reported as held, advanced nothing. Many of these on one take
+    /// is a capture problem, not a tracking one, and it has to be visible as that.
+    var framesFrozen = 0
     /// A re-classification that found the object where the tracker already thought it was.
     var reclassifyConfirmations = 0
     /// A re-classification that MOVED the lock. The interesting number: a take with several of
@@ -2597,6 +2864,9 @@ private struct AvObjectLockTelemetry {
             "reclassifyCorrections": reclassifyCorrections,
             "candidatesRejectedByWristGate": candidatesRejectedByWristGate,
             "framesBodySuspect": framesBodySuspect,
+            "breaksMotionDisagreement": breaksMotionDisagreement,
+            "candidatesRejectedBySize": candidatesRejectedBySize,
+            "framesFrozen": framesFrozen,
         ]
         if let d = maxAcceptedDistanceInYardsticks {
             out["maxAcceptedDistanceInYardsticks"] = (d * 100).rounded() / 100
@@ -2674,8 +2944,23 @@ private final class AvCoreMlImplementDetector {
     /// Only STABLE spans are recorded. A rejected reading must never join the history it was
     /// rejected against, or a run of bad landmark frames teaches the check to accept them and
     /// the guard quietly dissolves exactly when it is needed most.
-    private var recentYardstickPx: [Double] = []
-    private let yardstickHistoryWindow = 8
+    ///
+    /// Kept PER SOURCE (grip vs shoulders) -- see AvYardstickHistory. `recentYardstickPx` reads
+    /// and writes the window of whichever source track() selected for this frame.
+    private var yardstickHistory = AvYardstickHistory()
+    private var recentYardstickPx: [Double] {
+        get { yardstickHistory.recent }
+        set { yardstickHistory.recent = newValue }
+    }
+    private let yardstickHistoryWindow = AvYardstickHistory.window
+
+    /// Overwatch's motion-correlation window (hand anchor and lock centre, in normalized Vision
+    /// coordinates, plus the yardstick that frame). Grip-sourced frames only, so a wrist dropout
+    /// moving the anchor to one hand cannot read as the hands moving. Cleared on every re-seed.
+    private var motionWindow: [(hand: (x: Double, y: Double), lock: (x: Double, y: Double), yardstickPx: Double)] = []
+
+    /// The confidence last reported alongside a lock, so a frozen frame can repeat it as HELD.
+    private var lastReportedConfidence: Float = 0
 
     /// Everything the BODY tracker knows that this detector needs in order to be checked against
     /// it. Passed in per frame rather than stored, because it is genuinely per frame: a wrist
@@ -2686,6 +2971,12 @@ private final class AvCoreMlImplementDetector {
         var yardstick: AvTrackerArbiter.Yardstick?
         var frameWidth: Double
         var frameHeight: Double
+        /// Frame-level overwatch already found the body read unstable this frame (its own
+        /// per-source history). The detector's own check is still run when this is false.
+        var overwatchBodySuspect: Bool = false
+        /// This frame is byte-identical to the last, or the landmarks have not changed for
+        /// AvOverwatch.frozenLandmarkFrames frames. Nothing may advance on it.
+        var frozen: Bool = false
     }
 
     /// The arbiter's rule, applied to a box this detector is considering or already holding.
@@ -2804,7 +3095,9 @@ private final class AvCoreMlImplementDetector {
         trajectoryRequest = makeTrajectoryRequest()
         latestTrajectoryObservations = []
         telemetry = AvObjectLockTelemetry()
-        recentYardstickPx = []
+        yardstickHistory.reset()
+        motionWindow = []
+        lastReportedConfidence = 0
     }
 
     // Center-to-center normalized distance and area ratio between two boxes -- both in Vision's
@@ -2907,7 +3200,10 @@ private final class AvCoreMlImplementDetector {
     // frame) skips a fresh detection outright rather than falling back to a full-frame scan --
     // same "only worth it when there's a wrist to anchor on" precedent
     // extractWorkingFrame's own caller already established for the motion-diff tracker.
-    func track(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation, targetLabel: String, regionOfInterest: CGRect?, body: BodyContext) -> (box: CGRect, confidence: Float)? {
+    //
+    /// `held` is true only on a frozen frame, where the last box is repeated without any tracking
+    /// having run -- the JS side discounts a held reading rather than treating it as a fresh one.
+    func track(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation, targetLabel: String, regionOfInterest: CGRect?, body: BodyContext) -> (box: CGRect, confidence: Float, held: Bool)? {
         guard visionModel != nil else { return nil }
 
         telemetry.framesTracked += 1
@@ -2926,7 +3222,16 @@ private final class AvCoreMlImplementDetector {
         // has jumped also drags regionOfInterest with it, so a detection seeded on this frame
         // would search the wrong part of the image and lock onto whatever happens to be there.
         var bodySuspectThisFrame = false
-        if let yardstick = body.yardstick {
+        if body.overwatchBodySuspect {
+            // Frame-level overwatch already ruled on this frame's body read. One verdict, both
+            // trackers -- the motion-diff tracker abstained on the same word.
+            bodySuspectThisFrame = true
+            telemetry.framesBodySuspect += 1
+        } else if let yardstick = body.yardstick {
+            // Per-source history: a grip reading is judged against grip readings only. Selecting
+            // the source first is what stops a wrist dropout (grip -> shoulders -> grip) reading
+            // as the span changing length. See AvYardstickHistory.
+            yardstickHistory.select(yardstick.source)
             let stability = AvTrackerArbiter.bodyReadIsStable(
                 currentPx: yardstick.px, recentPx: recentYardstickPx
             )
@@ -2941,6 +3246,18 @@ private final class AvCoreMlImplementDetector {
             }
         }
         if bodySuspectThisFrame { return nil }
+
+        // A FROZEN FRAME ADVANCES NOTHING (overwatch). Identical bytes are no new evidence: the
+        // lock is neither confirmed nor broken, the held-frame count and the re-classify clock
+        // stay where they were, and no detection is attempted. A held lock is repeated, flagged
+        // HELD so the JS side can discount it from any median it feeds.
+        if body.frozen {
+            telemetry.framesFrozen += 1
+            if trackingRequest != nil, trackingLabel == targetLabel, let last = recentBoxes.last {
+                return (last, lastReportedConfidence, true)
+            }
+            return nil
+        }
 
         if trackingLabel != targetLabel {
             trackingRequest = nil
@@ -3022,6 +3339,43 @@ private final class AvCoreMlImplementDetector {
                         return nil
                     }
                 }
+                // OVERWATCH: DOES THE LOCK MOVE WITH THE ATHLETE?
+                //
+                // The distance gate above asks where the lock IS. This asks where it WENT. A
+                // plate on the rack a grip width behind the lifter passes the distance gate on
+                // every frame, and then sits perfectly still while the hands travel a full rep.
+                // Over motionWindowFrames tracked frames the hands and the lock must agree about
+                // whether anything moved; grip-sourced frames only, so a single wrist dropping
+                // out (which moves the anchor to the other hand) cannot count as motion.
+                //
+                // Not for the med ball: it leaves the hands on purpose, and after release the
+                // hands and the ball are SUPPOSED to disagree. The trajectory check above is the
+                // med ball's motion referee.
+                if trackingLabel != "med_ball", let yardstick = body.yardstick, yardstick.source == "grip",
+                   let anchor = body.anchor {
+                    motionWindow.append((
+                        hand: anchor,
+                        lock: (x: Double(newBox.midX), y: Double(newBox.midY)),
+                        yardstickPx: yardstick.px
+                    ))
+                    if motionWindow.count > AvTrackerArbiter.motionWindowFrames { motionWindow.removeFirst() }
+                    if motionWindow.count == AvTrackerArbiter.motionWindowFrames,
+                       let first = motionWindow.first, let last = motionWindow.last {
+                        let motion = AvTrackerArbiter.motionAgreement(
+                            handFrom: first.hand, handTo: last.hand,
+                            lockFrom: first.lock, lockTo: last.lock,
+                            yardstickPx: last.yardstickPx,
+                            frameWidth: body.frameWidth, frameHeight: body.frameHeight
+                        )
+                        if !motion.agree {
+                            trackingRequest = nil
+                            recentBoxes = []
+                            motionWindow = []
+                            telemetry.breaksMotionDisagreement += 1
+                            return nil
+                        }
+                    }
+                }
                 // Camera overlord: RE-ASK THE MODEL, PERIODICALLY, WHETHER THIS IS STILL THE THING.
                 //
                 // The two checks above break a lock that jumps or contradicts a trajectory. Both
@@ -3096,13 +3450,15 @@ private final class AvCoreMlImplementDetector {
                         // went missing from the "held X/Y frames" line on the tracking report and
                         // a lock that in fact held all take read as holding ~97% of it.
                         telemetry.framesLockHeld += 1
-                        return (fresh.box, fresh.confidence)
+                        lastReportedConfidence = fresh.confidence
+                        return (fresh.box, fresh.confidence, false)
                     }
                 }
                 recordBox(newBox)
                 request.inputObservation = observation
                 telemetry.framesLockHeld += 1
-                return (newBox, observation.confidence)
+                lastReportedConfidence = observation.confidence
+                return (newBox, observation.confidence, false)
             } catch {
                 trackingRequest = nil
                 recentBoxes = []
@@ -3120,7 +3476,8 @@ private final class AvCoreMlImplementDetector {
 
         telemetry.freshDetections += 1
         seedTracking(on: best.box)
-        return (best.box, best.confidence)
+        lastReportedConfidence = best.confidence
+        return (best.box, best.confidence, false)
     }
 
     /// A classification from scratch: what the model says is in the frame RIGHT NOW, ignoring
@@ -3153,9 +3510,20 @@ private final class AvCoreMlImplementDetector {
         guard (try? handler.perform([detectRequest])) != nil,
             let results = detectRequest.results as? [VNRecognizedObjectObservation]
         else { return nil }
-        let ofThisClass = results
+        let allOfThisClass = results
             .filter { $0.labels.first?.identifier == targetLabel }
             .filter { $0.confidence >= minDetectionConfidence }
+        // OVERWATCH: SIZE AND BOUNDS, ALSO BEFORE THE PICK. A speck the model labelled, or a box
+        // the frame edge has cut, is not a candidate -- and if it were allowed to be the most
+        // confident one it would win over the real implement. Threshold in grip widths; with no
+        // yardstick only the edge rule applies. See AvTrackerArbiter.candidateBoxIsUsable.
+        let ofThisClass = allOfThisClass.filter {
+            AvTrackerArbiter.candidateBoxIsUsable(
+                $0.boundingBox, label: targetLabel, yardstick: body.yardstick,
+                frameWidth: body.frameWidth, frameHeight: body.frameHeight
+            )
+        }
+        telemetry.candidatesRejectedBySize += allOfThisClass.count - ofThisClass.count
         // THE FILTER GOES BEFORE THE MAX, AND THE ORDER IS THE ENTIRE POINT.
         //
         // Taking the most confident detection and THEN asking whether it is plausible would
@@ -3178,6 +3546,9 @@ private final class AvCoreMlImplementDetector {
         // whatever a previous, unrelated lock last reported.
         recentBoxes = [box]
         framesSinceReclassify = 0
+        // A fresh acquisition is a new object as far as overwatch's motion window is concerned;
+        // comparing its first steps against the old lock's would read the re-seed as a jump.
+        motionWindow = []
     }
 }
 
@@ -3298,7 +3669,24 @@ private final class AvImplementTracker {
         // meaning as both ports this is descended from.
         var confidence: Double
         var color: ColorSignature?
+        // True when this position was NOT found this frame but repeated from the last lock --
+        // the implement was stationary, or the frame was frozen. The JS side discounts a held
+        // reading rather than counting it as a fresh detection.
+        var held: Bool = false
     }
+
+    /// This tracker's own overwatch record: abstentions and unlocks the referee ordered. Read at
+    /// the end of analysis into the diagnostic log (the report's objectLock shape belongs to the
+    /// CoreML detector; widening it to a second sensor is a schema conversation, not a commit).
+    struct Telemetry {
+        var framesBodySuspect = 0
+        var breaksWristGate = 0
+        var framesFrozen = 0
+        var summary: String {
+            "framesBodySuspect=\(framesBodySuspect) breaksWristGate=\(breaksWristGate) framesFrozen=\(framesFrozen)"
+        }
+    }
+    private(set) var telemetry = Telemetry()
 
     private var prevLuma: [UInt8]?
     private var prevWidth = 0
@@ -3331,6 +3719,7 @@ private final class AvImplementTracker {
         prevLuma = nil
         prevWidth = 0
         prevHeight = 0
+        telemetry = Telemetry()
         dropLock()
     }
 
@@ -3421,14 +3810,42 @@ private final class AvImplementTracker {
     // the wrist joint was itself confidently detected, matching bar-tracker-dialog.tsx
     // and ar-bar-tracker-dialog.tsx's own existing precedent of never calling track()
     // on a frame with no wrist reading.
+    //
+    // `overwatch` is the frame-level referee's verdict (see AvOverwatch): this tracker used to run
+    // outside arbitration entirely, and now answers to it exactly as the CoreML detector does --
+    // same asymmetry, a suspect BODY is an abstention and a suspect OBJECT drops the lock.
     func track(
         rgba: [UInt8],
         luma: [UInt8],
         width: Int,
         height: Int,
         wristX: Double,
-        wristY: Double
+        wristY: Double,
+        overwatch: AvOverwatch.FrameVerdict
     ) -> TrackResult? {
+        // THE BODY IS CHECKED FIRST, before any state moves. A jumped wrist is exactly what this
+        // tracker's search window is centred on, so a frame seeded on it would lock onto whatever
+        // happens to be where the wrist is not. Frame skipped, lock left alone, nothing reported.
+        if overwatch.body.overwatchBodySuspect {
+            telemetry.framesBodySuspect += 1
+            return nil
+        }
+        // A FROZEN FRAME advances nothing (overwatch): no streak, no new motion, no re-seed. A
+        // held lock is repeated, flagged HELD.
+        if overwatch.body.frozen {
+            telemetry.framesFrozen += 1
+            if let lx = lockPixelX, let ly = lockPixelY {
+                return TrackResult(
+                    x: lx / Double(width),
+                    y: 1.0 - (ly / Double(height)),
+                    confidence: confidence(),
+                    color: lastColor,
+                    held: true
+                )
+            }
+            return nil
+        }
+
         let previousWristX = prevWristX
         let previousWristY = prevWristY
         prevWristX = wristX
@@ -3452,11 +3869,13 @@ private final class AvImplementTracker {
             // already-held lock is suddenly wrong. Same "hold, don't drop" reasoning
             // as both ports this descends from.
             if let lx = lockPixelX, let ly = lockPixelY {
+                // Dead-reckoned from the last lock, not found this frame: reported HELD.
                 return TrackResult(
                     x: lx / Double(width),
                     y: 1.0 - (ly / Double(height)),
                     confidence: confidence(),
-                    color: lastColor
+                    color: lastColor,
+                    held: true
                 )
             }
             return nil
@@ -3483,6 +3902,25 @@ private final class AvImplementTracker {
             motionDiffThreshold: motionDiffThreshold,
             minHotPixels: minHotPixels
         ) else {
+            dropLock()
+            return nil
+        }
+
+        // OVERWATCH: the same arbitration the CoreML detector runs on its lock, on this frame's
+        // centroid, in the same grip-width units. The body half was ruled on above and cannot
+        // reach breakLock here; an OBJECT fault (a centroid nowhere near the hands, measured in
+        // the athlete's own grip widths rather than maxLockDriftFraction's working-frame
+        // fraction) drops the lock so the next frame reacquires instead of dead-reckoning on.
+        let call = AvTrackerArbiter.arbitrate(
+            objectCenter: (x: centroid.x / Double(width), y: 1.0 - (centroid.y / Double(height))),
+            anchor: overwatch.body.anchor,
+            yardstick: overwatch.body.yardstick,
+            recentYardstickPx: overwatch.recentYardstickPx,
+            frameWidth: overwatch.body.frameWidth,
+            frameHeight: overwatch.body.frameHeight
+        )
+        if call.breakLock {
+            telemetry.breaksWristGate += 1
             dropLock()
             return nil
         }

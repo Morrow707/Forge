@@ -21,7 +21,12 @@ import {
  *
  * These tests pin each condition so a future change to the matching rule has to state which of
  * them it is changing. They deliberately do NOT assert the rule is correct -- condition 3 (the
- * date) is a live design question. */
+ * date) is a live design question.
+ *
+ * Since 2026-09-20 the function answers with WHICH condition declined it (see
+ * UNATTACHED_VIDEO_CAUSES) and the route records that on unattached_video_uploads. The row-id
+ * path that runs before the tuple is covered in video-reattach-by-row-id.itest.ts; every case
+ * here sends no row id, so it exercises the tuple exactly as before. */
 
 async function registerUpload(url: string, uploadedBy: number) {
   await db.insert(uploadedFiles).values({ path: url, uploadedBy });
@@ -87,7 +92,7 @@ describe("reattaching a deferred clip", () => {
     const clip = await makeUploadedFile(`bench-${Date.now()}.mp4`);
     await registerUpload(clip, athlete.id);
     await logDay(athlete.id, program, DAY);
-    expect(await attach(athlete.id, program, clip)).toBe(true);
+    expect(await attach(athlete.id, program, clip)).toEqual({ attached: true, via: "tuple" });
   });
 
   // HYPOTHESIS 29, THE MIDNIGHT CASE. The clip names the day it was filmed under; the log row
@@ -99,9 +104,9 @@ describe("reattaching a deferred clip", () => {
     const clip = await makeUploadedFile(`bench-${Date.now()}.mp4`);
     await registerUpload(clip, athlete.id);
     await logDay(athlete.id, program, "2026-09-19"); // saved under the NEXT day
-    expect(await attach(athlete.id, program, clip, { date: DAY })).toBe(false);
+    expect(await attach(athlete.id, program, clip, { date: DAY })).toEqual({ attached: false, cause: "no_log_for_date" });
     // And it is not merely unattached to THAT set -- the clip reaches no set at all.
-    expect(await attach(athlete.id, program, clip, { date: "2026-09-17" })).toBe(false);
+    expect(await attach(athlete.id, program, clip, { date: "2026-09-17" })).toEqual({ attached: false, cause: "no_log_for_date" });
   });
 
   it("returns false when the file is not this athlete's upload", async () => {
@@ -110,7 +115,7 @@ describe("reattaching a deferred clip", () => {
     const clip = await makeUploadedFile(`bench-${Date.now()}.mp4`);
     await registerUpload(clip, stranger.id);
     await logDay(athlete.id, program, DAY);
-    expect(await attach(athlete.id, program, clip)).toBe(false);
+    expect(await attach(athlete.id, program, clip)).toEqual({ attached: false, cause: "not_your_upload" });
   });
 
   it("returns false when the assignment is not this athlete's", async () => {
@@ -118,7 +123,10 @@ describe("reattaching a deferred clip", () => {
     const clip = await makeUploadedFile(`bench-${Date.now()}.mp4`);
     await registerUpload(clip, athlete.id);
     await logDay(athlete.id, program, DAY);
-    expect(await attach(athlete.id, program, clip, { assignmentId: program.assignment.id + 9999 })).toBe(false);
+    expect(await attach(athlete.id, program, clip, { assignmentId: program.assignment.id + 9999 })).toEqual({
+      attached: false,
+      cause: "assignment_not_yours",
+    });
   });
 
   it("returns false when the day's log holds no entry for that exercise", async () => {
@@ -128,7 +136,7 @@ describe("reattaching a deferred clip", () => {
     await logDay(athlete.id, program, DAY);
     expect(
       await attach(athlete.id, program, clip, { programExerciseId: program.programExercises[0].id + 9999 }),
-    ).toBe(false);
+    ).toEqual({ attached: false, cause: "exercise_not_logged" });
   });
 
   it("returns false when that set already carries a video", async () => {
@@ -138,8 +146,8 @@ describe("reattaching a deferred clip", () => {
     await registerUpload(first, athlete.id);
     await registerUpload(second, athlete.id);
     await logDay(athlete.id, program, DAY);
-    expect(await attach(athlete.id, program, first)).toBe(true);
-    expect(await attach(athlete.id, program, second)).toBe(false);
+    expect((await attach(athlete.id, program, first)).attached).toBe(true);
+    expect(await attach(athlete.id, program, second)).toEqual({ attached: false, cause: "set_already_has_video" });
   });
 
   it("returns false when the set number was never logged", async () => {
@@ -147,6 +155,6 @@ describe("reattaching a deferred clip", () => {
     const clip = await makeUploadedFile(`bench-${Date.now()}.mp4`);
     await registerUpload(clip, athlete.id);
     await logDay(athlete.id, program, DAY);
-    expect(await attach(athlete.id, program, clip, { setNumber: 4 })).toBe(false);
+    expect(await attach(athlete.id, program, clip, { setNumber: 4 })).toEqual({ attached: false, cause: "set_not_logged" });
   });
 });

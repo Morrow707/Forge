@@ -55,6 +55,7 @@ import { hapticLight, hapticSuccess } from "@/lib/haptics";
 import { playSuccessChime, playStreakMilestoneChime } from "@/lib/audio-cues";
 import {
   VIDEO_REATTACHED_EVENT,
+  refreshQueuedVideoRowIds,
   type VideoReattachedDetail,
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
@@ -562,6 +563,9 @@ type LogEntry = {
   rpe: number | null;
   notes: string | null;
   sets: ({
+    // The row id as of this read. Valid until the next save reinserts the day; see
+    // setRowIdsRef for how it is kept current and what it is for.
+    id?: number;
     setNumber: number;
     reps: string | null;
     weight: string | null;
@@ -1122,6 +1126,15 @@ export function WorkoutPage({
   // log exists (nothing to conflict with) and re-read from the server's answer on
   // every successful save, since each save advances it.
   const baseRevisionRef = useRef<number | null>(null);
+  // The server row id of every saved set on this day, keyed `${programExerciseId}:${setNumber}`.
+  // Seeded from the day read and replaced from every synced save (a save reinserts the day, so
+  // every id changes). A clip queued for later upload carries the id current at record time so
+  // the attach can name its row exactly; the tuple stays in the address as the fallback for
+  // when a later save has replaced that row. See attachVideoToSetSchema in shared/schema.ts.
+  const setRowIdsRef = useRef<Map<string, number>>(new Map());
+  function setRowIdFor(programExerciseId: number, setNumber: number): number | undefined {
+    return setRowIdsRef.current.get(`${programExerciseId}:${setNumber}`);
+  }
   // Peek + Rail accordion: at most one exercise expanded at a time (its own
   // ItemState.key), the whole workout always visible/scrollable above and
   // below it -- replaces the old separate "overview list" vs. "full-screen
@@ -1211,6 +1224,12 @@ export function WorkoutPage({
       );
       setItems([...correctiveItems, ...exerciseItems]);
       baseRevisionRef.current = data.log?.revision ?? null;
+      const seeded = new Map<string, number>();
+      for (const e of data.log?.entries ?? []) {
+        if (e.programExerciseId == null) continue;
+        for (const st of e.sets) if (st.id != null) seeded.set(`${e.programExerciseId}:${st.setNumber}`, st.id);
+      }
+      setRowIdsRef.current = seeded;
       setHydrated(true);
       setExpandedKey(null);
     }
@@ -1430,6 +1449,25 @@ export function WorkoutPage({
       // Each save advances the stored revision, so the next payload has to claim the
       // new one or it would look stale to the server and be refused.
       if (synced && typeof data?.revision === "number") baseRevisionRef.current = data.revision;
+      // Every synced save replaces every set row, so the ids a queued clip carries are stale
+      // from this moment. Take the new ones and push them into the queue before the next flush
+      // can run with the old ones; the tuple fallback would still land it, but the row id is
+      // the exact answer and this is the only moment it is known.
+      if (synced && Array.isArray(data?.savedSetRowIds)) {
+        const rows = data.savedSetRowIds as {
+          programExerciseId: number | null;
+          setNumber: number;
+          id: number;
+        }[];
+        const next = new Map<string, number>();
+        for (const r of rows) if (r.programExerciseId != null) next.set(`${r.programExerciseId}:${r.setNumber}`, r.id);
+        setRowIdsRef.current = next;
+        refreshQueuedVideoRowIds(
+          { assignmentId: Number(assignmentId), programDayId: Number(programDayId), date },
+          rows,
+        );
+        logDebug("SAVE", `set row ids refreshed (${rows.length} sets)`);
+      }
       // Anything still queued for this day is now behind what the server holds, so it is not
       // a rescue any more -- replaying it would just be refused as stale. Drop it.
       if (synced) clearPendingLog(dayKey);
@@ -2638,6 +2676,7 @@ export function WorkoutPage({
                                     }
                                     onAddSet={() => addSet(item.key)}
                                     onRemoveSet={() => removeSet(item.key)}
+                                    setRowIdFor={setRowIdFor}
                                   />
                                 </div>
                               )}
@@ -2712,6 +2751,7 @@ function ExerciseLogContent({
   onUpdateSet,
   onAddSet,
   onRemoveSet,
+  setRowIdFor,
 }: {
   item: ItemState;
   linked: boolean;
@@ -2735,6 +2775,8 @@ function ExerciseLogContent({
   onUpdateSet: (setNumber: number, patch: Partial<SetRow>, options?: { immediate?: boolean }) => void;
   onAddSet: () => void;
   onRemoveSet: () => void;
+  // The saved row id of one of this exercise's sets, or undefined before its first save.
+  setRowIdFor: (programExerciseId: number, setNumber: number) => number | undefined;
 }) {
   const { user } = useAuth();
   const isCorrective = item.kind === "corrective";
@@ -2826,7 +2868,14 @@ function ExerciseLogContent({
       label: `${item.exerciseName} · Set ${setNumber}`,
       reattach:
         item.kind === "exercise"
-          ? { assignmentId, programDayId, date, programExerciseId: item.refId, setNumber }
+          ? {
+              assignmentId,
+              programDayId,
+              date,
+              programExerciseId: item.refId,
+              setNumber,
+              workoutSetEntryId: setRowIdFor(item.refId, setNumber),
+            }
           : undefined,
     };
   }

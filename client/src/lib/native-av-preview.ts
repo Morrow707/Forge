@@ -30,6 +30,12 @@ export type PoseImplement = {
   // same as ArImplementTracker's own color field (computed and emitted despite
   // ar-bar-tracker-dialog.tsx not calling into that feature either).
   color?: { r: number; g: number; b: number };
+  // Present (and true) only when this position was NOT found this frame but repeated from the
+  // last lock -- the implement was stationary, or overwatch judged the frame frozen (identical
+  // to the one before it). A held reading is a dead-reckoned guess, not a detection: discount it
+  // rather than let it advance a streak or add a duplicate sample to a median. Omitted on a real
+  // detection so every existing consumer sees exactly the shape it always did.
+  held?: true;
 };
 // frameWidth/frameHeight are the UPRIGHT (already orientation-corrected) pixel dimensions
 // Vision measured joints against -- see AvBodyTrackingPlugin.swift's own comment on why this
@@ -51,7 +57,16 @@ export type PoseImplement = {
 // signal wins when both this and the motion-diff implement trackers
 // report a position is deliberately left for a follow-up pass, once
 // there's real on-device data to validate the choice against.
-export type PoseCoreMlImplement = { x: number; y: number; width: number; height: number; confidence: number };
+export type PoseCoreMlImplement = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence: number;
+  // Same meaning as PoseImplement.held: the last box repeated on a frozen frame with no tracking
+  // run, never a fresh detection. Omitted otherwise.
+  held?: true;
+};
 
 // The second class detected on the same clip, carrying which class it is -- see
 // AvCoreMlImplementDetector.secondaryLabel. A loaded barbell is both a bar and a pair of plates,
@@ -207,6 +222,16 @@ export type AvObjectLockTelemetry = {
    * alone. Many of these is a body-tracking problem being refused permission to masquerade as an
    * object-tracking one. */
   framesBodySuspect: number;
+  /** Overwatch's motion-correlation break: over a short window the hands moved a grip width and
+   * the lock did not, or the reverse. A lock the distance gate let through because it sat near
+   * the athlete, on something the athlete was not holding. Threshold in grip widths. */
+  breaksMotionDisagreement: number;
+  /** Candidate detections refused BEFORE the most-confident pick for being smaller than a
+   * fraction of the grip width or cut off by the frame edge. */
+  candidatesRejectedBySize: number;
+  /** Frames byte-identical to the one before, or whose landmarks had not changed for several
+   * frames. Reported as held, advanced nothing. Many on one take is a capture problem. */
+  framesFrozen: number;
   /** The largest distance-from-hands, in body yardsticks, that was ACCEPTED -- how close this
    * take ran to MAX_LOCK_DISTANCE_IN_YARDSTICKS. Absent when no frame had a yardstick. */
   maxAcceptedDistanceInYardsticks?: number;

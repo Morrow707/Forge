@@ -11,7 +11,17 @@ import type { Landmark } from "@mediapipe/tasks-vision";
 // visionJointsToWorldLandmarks fills z with 0 (Vision's 2D body-pose request has no depth),
 // and calibration runs on those landmarks. Anything that has to survive a real camera angle
 // has to survive with no depth information at all.
+//
+// Every frame built here carries a distinct sub-millimetre jitter, because a live camera never
+// serves the same detection twice and calibrateFromFrames now drops a frame that is a byte-for-
+// byte copy of the one before it (a stalled camera is one sample, not thirty -- see
+// pose-calibration-dedup.test.ts). Without this, `take()` below would be thirty copies of one
+// still and count once. The jitter is far above DUPLICATE_FRAME_EPSILON and far below anything
+// a fixture's geometry cares about.
+let frameSerial = 0;
 function frameFrom(points: Record<number, [number, number]>): { worldLandmarks: Landmark[] } {
+  frameSerial += 1;
+  const jitter = frameSerial * 1e-5;
   const worldLandmarks: Landmark[] = Array.from({ length: 33 }, () => ({
     x: 0,
     y: 0,
@@ -19,7 +29,7 @@ function frameFrom(points: Record<number, [number, number]>): { worldLandmarks: 
     visibility: 0,
   })) as Landmark[];
   for (const [index, [x, y]] of Object.entries(points)) {
-    worldLandmarks[Number(index)] = { x, y, z: 0, visibility: 0.99 } as Landmark;
+    worldLandmarks[Number(index)] = { x: x + jitter, y, z: 0, visibility: 0.99 } as Landmark;
   }
   return { worldLandmarks };
 }
