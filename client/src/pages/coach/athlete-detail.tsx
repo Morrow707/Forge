@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { lazyDialog } from "@/components/lazy-dialog";
+import { VideoReviewList } from "@/components/video-review-list";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { AthleteSwitcher } from "@/components/athlete-switcher";
@@ -595,6 +596,18 @@ export default function AthleteDetailPage() {
                       </Button>
                     </div>
                     <SkillSessionsPanel athleteName={athlete.name} athleteId={athlete.id} />
+
+                    {/* Saved reviews for this athlete. Lives beside the clips they were made
+                        from, which is where a coach goes looking for them. */}
+                    <div className="space-y-2 border-t border-border pt-4">
+                      <p className="text-sm font-semibold">Saved reviews</p>
+                      <VideoReviewList
+                        mode="coach"
+                        fetchUrl={`/api/coach/video-reviews?athleteId=${athlete.id}`}
+                        reviewUrl={(id) => `/api/coach/video-reviews/${id}`}
+                        emptyHint="No saved reviews for this athlete yet. Compare two clips, then save what you drew."
+                      />
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>

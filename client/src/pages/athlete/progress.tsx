@@ -44,6 +44,7 @@ import {
 import { average } from "@/lib/wellness-metrics";
 import { Link } from "wouter";
 import { GoalsPanel } from "@/components/goals-panel";
+import { VideoReviewList } from "@/components/video-review-list";
 import { ReadFailed } from "@/components/read-failed";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { StreakBadges } from "@/components/streak-badge";
@@ -251,6 +252,20 @@ export default function AthleteProgress() {
               </CardContent>
             </Card>
           )}
+
+          {/* Reviews the coach has SHARED. The route returns only those, so nothing here has to
+              filter -- and nothing here can accidentally stop filtering. */}
+          <Card className="mb-6">
+            <CardContent className="space-y-3 p-5">
+              <p className="font-semibold">Coach reviews</p>
+              <VideoReviewList
+                mode="read-only"
+                fetchUrl="/api/athlete/video-reviews"
+                reviewUrl={(id) => `/api/athlete/video-reviews/${id}`}
+                emptyHint="When your coach breaks down one of your lifts, it shows up here."
+              />
+            </CardContent>
+          </Card>
 
           <div className="mb-6 grid gap-4 sm:grid-cols-3">
             <Card>
