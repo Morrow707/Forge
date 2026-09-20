@@ -195,7 +195,10 @@ can install. Delete entries as a `beta` ships them.
   documents audit fixes) and #153 (the six document items: coach
   email-to-roster, "What you've agreed to", /research-consent page and PDF,
   guardian biometric consent after claim, staff view of the signed Service
-  Agreement, admin research card). Nothing on `main` is waiting on an upload.
+  Agreement, admin research card).
+- Waiting on an upload since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
+  tracker dialogs and vision runtimes, server request memo and cache headers). The bundle
+  changes reach the native binary; the SEO and server changes ship on the Render deploy.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
@@ -215,6 +218,31 @@ Two things worth saying out loud when someone tests this:
   copy never writes a record -- only signing or uploading does. The agreement text is still
   under attorney review; a change to it changes the hash on every later signature, which is
   the point of storing it.
+
+## Speed and findability, 2026-09-20
+
+- **The schema never enters the client bundle.** `shared/schema-constants.ts` carries the
+  handful of constants the client reads; `shared/schema-constants.test.ts` pins each to the
+  schema's value. One literal import of `shared/schema.ts` from a page used to drag 291 kB of
+  schema plus zod and drizzle into the eager entry. `client/src/lib/bundle-budget.test.ts`
+  holds the eager budget and `camera-pipeline-is-lazy.test.ts` refuses a static import of any
+  tracker dialog, MediaPipe, onnxruntime or pose-tracking from a page.
+- **Dialogs mount on first open** through `lazyDialog` and stay mounted after close, because
+  tracker dialogs finish their save path after `onOpenChange(false)`. Do not swap it for a
+  plain lazy that unmounts on close.
+- **Per-request memo** (`server/request-cache.ts`, AsyncLocalStorage) caches getUser, staff
+  links, team scope and assignment reads within one request and is cleared on any write
+  statement. The HTTP test harness mounts the same scope so itests issue production's
+  statements. Jobs and the seed run outside a request and see no memo.
+- **Static cache policy** lives in `server/static-cache-policy.ts`: hashed assets immutable,
+  model/wasm files a day with ETag, HTML always revalidated.
+- **The session store** only adopts the stored JSON expiry when nothing newer is known;
+  touch() moves the column, not the JSON, and re-learning the JSON caused one UPDATE per
+  request after five minutes. `server/session-touch-throttle.test.ts` pins it.
+- **SEO is data-driven from `shared/public-routes.ts`**: sitemap, prerender, per-page head,
+  robots and JSON-LD all read it. Unknown paths get 404 with a noindex app shell. No ratings,
+  social profiles or accuracy claims in structured data; `shared/seo-head.test.ts` scans.
+  Open: the App Store id for the smart app banner, and whether to SSR the six marketing pages.
 
 ## Documents: what every role can see, sign, download and send
 
