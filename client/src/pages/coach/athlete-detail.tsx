@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { lazyDialog } from "@/components/lazy-dialog";
 import { VideoReviewList } from "@/components/video-review-list";
+import { StrengthProfileCard } from "@/components/strength-profile-card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { AthleteSwitcher } from "@/components/athlete-switcher";
@@ -596,6 +597,14 @@ export default function AthleteDetailPage() {
                       </Button>
                     </div>
                     <SkillSessionsPanel athleteName={athlete.name} athleteId={athlete.id} />
+
+                    {/* The same profile the athlete sees, so a coach and their athlete are
+                        reading one number rather than two that can disagree. */}
+                    <div className="space-y-2 border-t border-border pt-4">
+                      <StrengthProfileCard
+                        fetchUrl={`/api/coach/roster/${athlete.id}/strength-profile`}
+                      />
+                    </div>
 
                     {/* Saved reviews for this athlete. Lives beside the clips they were made
                         from, which is where a coach goes looking for them. */}

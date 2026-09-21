@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ageBandFor,
+  ageBandBounds,
   cohortLabel,
   percentileBand,
   renderNormsForPrompt,
@@ -115,5 +116,26 @@ describe("cohort norms", () => {
       "16-17 male Football LB",
     );
     expect(cohortLabel({ sport: null, position: null, ageBand: null, gender: null })).toBe("all athletes");
+  });
+});
+
+describe("age band bounds", () => {
+  it("round-trips every age through both directions", () => {
+    // The bounds exist so a SQL query can select a cohort without re-writing the boundaries at
+    // the call site. If the two ever disagree, a percentile silently compares an athlete
+    // against the wrong age group -- which looks like a plausible number, not like a bug.
+    for (let age = 8; age <= 60; age++) {
+      const band = ageBandFor(age);
+      expect(band, `no band for age ${age}`).not.toBeNull();
+      const bounds = ageBandBounds(band)!;
+      expect(bounds, `no bounds for band ${band}`).toBeTruthy();
+      expect(age, `age ${age} outside its own band ${band}`).toBeGreaterThanOrEqual(bounds.min);
+      expect(age, `age ${age} outside its own band ${band}`).toBeLessThanOrEqual(bounds.max);
+    }
+  });
+
+  it("has no bounds for a band that is not a band", () => {
+    expect(ageBandBounds(null)).toBeNull();
+    expect(ageBandBounds("30-40")).toBeNull();
   });
 });

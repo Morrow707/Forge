@@ -3490,6 +3490,28 @@ ALTER TABLE "workout_comments" ADD COLUMN IF NOT EXISTS "video_review_id" intege
 ALTER TABLE "assignment_correctives" ADD COLUMN IF NOT EXISTS "source_review_id" integer
   REFERENCES "video_reviews"("id") ON DELETE SET NULL;
 
+-- 2026-09-21: Forge-official exercises, and the strength score that rides on them.
+--
+-- An EXPLICIT flag, not "owned by an admin". Every exercise row has a coachId, admins
+-- included, so inferring it would silently enrol an admin's own personal exercise into the
+-- standards every athlete on the platform is measured against, with nothing to say so. Same
+-- reasoning classes.is_forge_official already follows.
+--
+-- Backfilled from admin ownership once, because that IS what the library means by Forge
+-- content today; after this they can diverge deliberately. Marked so a redeploy does not
+-- re-flag an exercise an admin has since turned off.
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "is_forge_official" boolean NOT NULL DEFAULT false;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'forge_official_exercises_2026_09_21') THEN
+    UPDATE "exercises" SET "is_forge_official" = true
+    WHERE "coach_id" IN (SELECT "id" FROM "users" WHERE "role" = 'admin');
+    INSERT INTO "applied_backfills" ("key") VALUES ('forge_official_exercises_2026_09_21');
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS "exercises_forge_official_idx"
+  ON "exercises" ("is_forge_official") WHERE "is_forge_official";
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN

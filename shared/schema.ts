@@ -1334,6 +1334,19 @@ export const exercises = pgTable("exercises", {
   // exclusive (a dumbbell box step-up needs both usesWeight and usesBox).
   usesWeight: boolean("uses_weight").notNull().default(true),
   usesBodyweight: boolean("uses_bodyweight").notNull().default(false),
+  /**
+   * PLATFORM CONTENT, and the gate on strength scoring (Scott, 2026-09-21: "we will only
+   * allow tracking for Forge created exercises, keeps the percentiles more accurate").
+   *
+   * An explicit flag rather than "owned by an admin", for the same reason classes.isForgeOfficial
+   * is one: ownership cannot be inferred. Every exercise row has a coachId, admins included, so
+   * inferring it would silently enrol an admin's own personal exercise into the standards every
+   * athlete on the platform is measured against -- and nothing would say it had happened.
+   *
+   * Backfilled true for admin-owned rows, which is exactly what the library means by Forge
+   * content today; after that the two can diverge on purpose.
+   */
+  isForgeOfficial: boolean("is_forge_official").notNull().default(false),
   usesBand: boolean("uses_band").notNull().default(false),
   usesBox: boolean("uses_box").notNull().default(false),
   isCorrective: boolean("is_corrective").notNull().default(false),

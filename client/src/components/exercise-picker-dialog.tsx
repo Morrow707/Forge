@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { MuscleFilterMap } from "@/components/muscle-filter-map";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Search, Dumbbell, Stethoscope, Sparkles, ChevronDown, Star, Clock } from "lucide-react";
@@ -281,6 +282,25 @@ export function ExercisePickerDialog({
           <DialogHeader>
             <DialogTitle>{title ?? (correctivesOnly ? "Add Corrective" : "Add Exercise")}</DialogTitle>
           </DialogHeader>
+          {/* THE BODY MAP SITS BESIDE SEARCH, NEVER IN PLACE OF IT. It is here for the athlete
+              who does not yet know what a lat is; anyone who does will type "hamstring" and
+              expect that to work, and making the picture the only way in would slow down every
+              coach to help a beginner. It drives the muscleGroupFilter the chips already use,
+              so there is one filtering path rather than two that can disagree. */}
+          <MuscleFilterMap
+            selected={muscleGroupFilter}
+            onToggle={(group) =>
+              setMuscleGroupFilter((prev) => {
+                const next = new Set(prev);
+                // Tapping the selected region clears it -- the same toggle-to-reset the family
+                // accordion already follows, so the figure behaves like the rest of the sheet.
+                if (next.has(group)) next.delete(group);
+                else next.add(group);
+                return next;
+              })
+            }
+            onClear={() => setMuscleGroupFilter(new Set())}
+          />
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

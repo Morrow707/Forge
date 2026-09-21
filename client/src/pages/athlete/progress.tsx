@@ -46,6 +46,7 @@ import { Link } from "wouter";
 import { GoalsPanel } from "@/components/goals-panel";
 import { VideoReviewList } from "@/components/video-review-list";
 import { AskCoachForReview } from "@/components/ask-coach-for-review";
+import { StrengthProfileCard } from "@/components/strength-profile-card";
 import { ReadFailed } from "@/components/read-failed";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { StreakBadges } from "@/components/streak-badge";
@@ -267,6 +268,10 @@ export default function AthleteProgress() {
               />
             </CardContent>
           </Card>
+
+          {/* Where each movement sits against athletes the same age. Percentile only, never a
+              rank, and never a name -- see getStrengthPercentilesForAthlete. */}
+          <StrengthProfileCard fetchUrl="/api/athlete/strength-profile" />
 
           {/* The athlete's OWN breakdowns of their own lifts, which they can send to their
               coach. Kept apart from "Coach reviews" above on purpose: one list mixing the two
