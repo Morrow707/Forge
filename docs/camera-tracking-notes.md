@@ -881,3 +881,49 @@ attributable rather than blended anonymously into everything else. The plate cla
 data is eleven instances from three photos and the training script rebuilds from scratch each
 time, so this needs measuring through the replay harness before a plate-derived scale is treated
 as settled. It is a candidate for real bench numbers, not a promise of them.
+
+## The squat's agreement with a bar sensor was two errors cancelling (2026-09-21)
+
+Twenty captures exported from the admin report, eight of them back squats at 135 lb x 5,
+filmed alongside an OVR bar sensor reading **75.7 cm ROM**. Set-level ROM averaged 75.4 cm.
+That looks like a calibrated tracker. It is not, and the way it is wrong matters more than
+the number.
+
+**A terminal phantom rep -- the re-rack -- is being counted, and it is large.**
+
+Six of the eight sets counted 6 or 7 reps on a set of 5. In every case the extra rep is the
+LAST one, and it is the bar going back into the hooks:
+
+| set | last rep ROM | last rep concentric | the set's real reps |
+|---|---|---|---|
+| seq10 | 122.6 cm | 7.23 s | ~1.3 s |
+| seq11 | 134.2 cm | 2.50 s | ~1.2 s |
+| seq15 | 141.2 cm | 6.30 s | ~1.0 s |
+| seq12 | 77.8 cm | 5.00 s | ~1.1 s |
+| seq16 | 56.8 cm | 3.93 s | ~1.0 s |
+| seq4 | 87.3 cm | 1.90 s | ~0.8 s |
+
+**The discriminator is concentric DURATION, not velocity.** An earlier attempt at this gate
+used mean-velocity ratios and was reverted, correctly -- instrumented against the miscounting
+sets, the edge phases came back at 0.99, 2.02, 1.21, 0.74 with no usable separation. Duration
+separates cleanly: every artifact is 2.4x to 6.3x the set's median, and every real rep sits
+within +-30% of it. A rule of "the last rep, when its concentric is >=2.5x the median of the
+preceding reps OR its ROM is >=1.5x that median" fires on all six artifacts, on no real rep,
+and lands five of the six sets on exactly the logged five.
+
+**Then the ROM story inverts.** Drop the phantom and the remaining reps average **69.2 cm,
+which is 8.6% UNDER the sensor** (sd 5.3, so the spread is real but not wild). The phantom's
+enormous excursion had been dragging the set average UP onto the sensor's number. The tracker
+under-reads real ROM by roughly 9% and the miscount was hiding it. Anyone comparing set
+averages to a sensor and stopping there will conclude the squat is calibrated; it is the
+per-rep numbers that show it is not.
+
+Two sets in the same export are a different failure and should not be pooled with these:
+- **seq5** reads 35-41 cm on every rep, about half of everything else -- a scale failure, the
+  same class as the bench-press weakness above, not a segmentation one.
+- **seq4** (the newest) counts 7, with a LEADING artifact too: rep 1 at 32.3 cm against a
+  54 cm median. One instance is not a pattern, and no rule should be written from it yet.
+
+**Bench is worse and has had no attention.** The same export has bench sets of 10 reps
+segmenting to 1, 2, 2 and 4. The squat's +1 is a rounding error next to that.
+
