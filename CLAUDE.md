@@ -189,10 +189,12 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **491** is the newest TestFlight build, cut from `1d5ecc8` on 2026-09-21
-  (Scott: "build all upload to apple"). It carries #156: the strength profile --
-  the shared body map, the tap-a-muscle exercise filter, and the age-band
-  percentile.
+- Build **492** is the newest TestFlight build, cut from `4f245a8` on 2026-09-21.
+  It carries #157: the athlete's own cohort filter (gender and sport, on top of
+  the age band).
+- Build **491** shipped from `1d5ecc8` the same day with #156: the strength
+  profile -- the shared body map, the tap-a-muscle exercise filter, and the
+  age-band percentile.
 - Build **490** shipped from `d924540` the same day and cleared the queue that had
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
