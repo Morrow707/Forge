@@ -158,9 +158,12 @@ New page-level component `client/src/components/video-compare.tsx` (replaces the
   form-video) or "save as reference" from a roster clip (coach only, and it copies the file so
   the athlete's retention purge does not break the reference; the copy is the coach's).
   Visible to the coach and their staff.
-- **Polish**: pinch-zoom and pan on either side; mirror; an optional grid; trim marks (play
-  only the rep that matters, no re-encode); speed 0.1x; keyboard on web (space, arrows, [ ]
-  for sync marks); gesture on phone (tap to pause, swipe to step).
+- **Polish**: mirror (overlay mode), speed 0.1x, an optional thirds grid, trim marks (play
+  only the rep that matters, no re-encode -- two numbers and a loop), and the web keyboard
+  (space plays both, arrows step a frame, `[` and `]` set the sync marks). DONE 2026-09-21.
+  Still open: pinch-zoom and pan on either side, and the phone gestures (tap to pause, swipe
+  to step) -- both need a real touch device to get right, and a gesture tuned in a sandbox is
+  a gesture that fights the person using it.
 - **Auto-sync suggestion**: when both clips have `repBreakdown` or a bar-path trace, propose
   the sync at the first rep's lowest point (`video-sync.ts`), and say it is a suggestion.
 
@@ -289,7 +292,13 @@ Everything else in this file is unstarted. Build 488 is on TestFlight; #154 (SEO
 - [ ] Phase 2: saved reviews with timed drawings, shared as a comment
 - [ ] Phase 3: voice-over
 - [ ] Phase 4: reference library, zoom/pan, auto-sync, trim
-- [ ] Phase 4b: you-versus-you, review queue, cue library, review-to-program, self-review, 120 fps
-- [ ] Phase 5: export and share
+- [x] Phase 4b.1: you versus you (prior-clip routes, the picker's first suggestion)
+- [x] Phase 4b.2: review queue (athlete asks, coach queue oldest-first, resolve on share)
+- [x] Phase 4b.3: cue library (coach_cues, the drawer, a `cue` event carrying a copy of the text)
+- [x] Phase 4b.4: review to program (a per-athlete corrective on their next unlogged day)
+- [x] Phase 4b.5: athlete self-review (authorId vs coachId, send-to-coach, the same editor)
+- [ ] Phase 4 polish: pinch-zoom/pan and phone gestures (need a touch device)
+- [ ] Phase 4b.6: 120 fps capture (native, with Phase 5b -- needs a phone)
+- [x] Phase 5: export and share (burn-in render, expiring share link, audit trail, minor gate)
 - [ ] Phase 5b: analyse while recording (native, needs a phone)
 - [ ] Phase 6: AI draft notes (only if asked)

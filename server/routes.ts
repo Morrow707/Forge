@@ -46,10 +46,13 @@ import {
   statUploadedFile,
   UPLOADS_ROOT,
   inspectUploadsStorage,
+  deleteUploadedFile,
+  uploadedFileDiskPath,
+  copyUploadedFile,
 } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
-import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
+import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier, ageFromDateOfBirth } from "@shared/privacy-tiers";
 import { BILLING_LIVE } from "./billing";
 import {
   createBillingPortalSession,
@@ -117,6 +120,14 @@ import {
   updateSkillFaultThresholdsSchema,
   updateAssignmentSchema,
   submitWorkoutLogSchema,
+  createReferenceClipSchema,
+  saveClipAsReferenceSchema,
+  createVideoReviewSchema,
+  createVideoReviewRequestSchema,
+  createCoachCueSchema,
+  updateCoachCueSchema,
+  updateVideoReviewSchema,
+  replaceVideoReviewEventsSchema,
   attachVideoToSetSchema,
   attachUnattachedVideoSchema,
   updateProgramDaySchema,
@@ -314,6 +325,102 @@ const KNOWLEDGE_SOURCES_DIR = path.join(UPLOADS_ROOT, "knowledge-sources");
 
 const SKILL_VIDEOS_DIR = path.join(UPLOADS_ROOT, "skill-videos");
 fs.mkdirSync(SKILL_VIDEOS_DIR, { recursive: true });
+
+// Voice-over audio for a saved review. Its own directory for the same "never share a bucket"
+// isolation every other upload path here follows -- and because the retention rules differ: a
+// review's audio lives and dies with the review, not with the athlete's clip cap.
+//
+// Whatever MediaRecorder produced is stored as-is. iOS yields audio/mp4 and the web yields
+// audio/webm off the same code, and transcoding to a single format would mean a server-side
+// encode for no benefit: <audio> plays both natively on the platform that produced them.
+const REFERENCE_CLIPS_DIR = path.join(UPLOADS_ROOT, "reference-clips");
+fs.mkdirSync(REFERENCE_CLIPS_DIR, { recursive: true });
+
+// The coach's own library. Its own directory because its retention is the COACH's, not any
+// athlete's -- see shared/schema.ts's referenceClips on why a reference is always a copy.
+const uploadReferenceClip = multer({
+  storage: multer.diskStorage({
+    destination: REFERENCE_CLIPS_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${videoExtensionForMimetype(file.mimetype) ?? ""}`);
+    },
+  }),
+  limits: { fileSize: MAX_TRACKED_VIDEO_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (!videoExtensionForMimetype(file.mimetype)) return cb(new Error("Unsupported video format"));
+    cb(null, true);
+  },
+});
+
+const REVIEW_AUDIO_DIR = path.join(UPLOADS_ROOT, "reviews");
+fs.mkdirSync(REVIEW_AUDIO_DIR, { recursive: true });
+
+const REVIEW_AUDIO_EXTENSIONS: Record<string, string> = {
+  "audio/mp4": ".m4a",
+  "audio/mpeg": ".mp3",
+  "audio/aac": ".aac",
+  "audio/webm": ".webm",
+  "audio/ogg": ".ogg",
+};
+
+function reviewAudioExtension(mimetype: string): string | null {
+  // MediaRecorder reports "audio/webm;codecs=opus" -- the codec parameter is part of the header
+  // and not part of the type, and matching on the whole string rejects every real recording.
+  const base = mimetype.split(";")[0]!.trim().toLowerCase();
+  return REVIEW_AUDIO_EXTENSIONS[base] ?? null;
+}
+
+/** A burned-in export lands beside the voice-overs; it is part of the review, not the
+ * athlete's own footage, and it dies with the review rather than with their retention cap. */
+const REVIEW_EXPORT_EXTENSIONS: Record<string, string> = {
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+  "video/quicktime": ".mov",
+};
+
+function reviewExportExtension(mimetype: string): string | null {
+  // Same codec-parameter problem as the audio above: MediaRecorder reports
+  // "video/webm;codecs=vp9,opus".
+  const base = mimetype.split(";")[0]!.trim().toLowerCase();
+  return REVIEW_EXPORT_EXTENSIONS[base] ?? null;
+}
+
+const uploadReviewExport = multer({
+  storage: multer.diskStorage({
+    destination: REVIEW_AUDIO_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${reviewExportExtension(file.mimetype) ?? ""}`);
+    },
+  }),
+  // The render runs in real time and the plan caps review length, so this is a couple of
+  // minutes of burned-in video at phone resolution. Same order as a form-check clip.
+  limits: { fileSize: 200 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!reviewExportExtension(file.mimetype)) {
+      return cb(new Error("Unsupported video format"));
+    }
+    cb(null, true);
+  },
+});
+
+const uploadReviewAudio = multer({
+  storage: multer.diskStorage({
+    destination: REVIEW_AUDIO_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${reviewAudioExtension(file.mimetype) ?? ""}`);
+    },
+  }),
+  // A voice-over is a coach talking over one lift. Generous enough for several minutes of
+  // speech and far below the video cap, because audio at this length is small and a limit that
+  // is never reached is not a limit.
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!reviewAudioExtension(file.mimetype)) {
+      return cb(new Error("Unsupported audio format"));
+    }
+    cb(null, true);
+  },
+});
 
 // Which gated /uploads directories the record-access audit log's streaming
 // hook (below, near the /uploads mount) treats as "an athlete's video" --
@@ -588,6 +695,24 @@ const pushTestLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many test notifications. Try again in a little while." },
+});
+
+// The review-export share link (Phase 5 of docs/video-review-plan.md). The ONLY
+// unauthenticated route in the app that touches the filesystem, and the only one where a
+// wrong guess is cheap to make and a right one hands over footage of a person -- so it is the
+// one place where "the token is unguessable" is not the whole answer. 32 random bytes are not
+// brute-forceable, but an unbounded endpoint that does file work per request is a DoS surface
+// whether or not the guesses ever land, and the limit costs nothing to a parent opening a link
+// their coach sent them.
+//
+// Generous on purpose: a <video> element range-requests the same URL several times while
+// scrubbing, and a limit tight enough to feel like security would break ordinary playback.
+const exportShareLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please try again in a few minutes." },
 });
 
 function currentUser(req: any) {
@@ -4699,6 +4824,583 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
     if (!athlete) return res.status(404).json({ message: "Athlete not found" });
     res.json(await storage.listUnattachedVideoUploads(athleteId));
+  });
+
+  // ---------- The coach's reference library (Phase 4) ----------
+
+  app.get("/api/coach/reference-clips", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listReferenceClips(user.id));
+  });
+
+  app.post(
+    "/api/coach/reference-clips",
+    requireRole("coach"),
+    uploadReferenceClip.single("video"),
+    async (req, res) => {
+      const user = currentUser(req);
+      if (!req.file) return res.status(400).json({ message: "No video uploaded" });
+      const url = `/uploads/reference-clips/${req.file.filename}`;
+      const parsed = createReferenceClipSchema.safeParse(req.body);
+      if (!parsed.success) {
+        await deleteUploadedFile(url).catch(() => {});
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const row = await storage.createReferenceClip({
+        coachId: user.id,
+        ...parsed.data,
+        videoUrl: url,
+        source: "uploaded",
+      });
+      res.status(201).json(row);
+    },
+  );
+
+  // "Save as reference" from a roster athlete's clip. THE FILE IS COPIED, and that is the whole
+  // point of the route: a library entry pointing at the athlete's file would break when their
+  // retention cap purged it, or would keep their footage alive after they asked for it to go.
+  app.post("/api/coach/reference-clips/from-athlete", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = saveClipAsReferenceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    // The athlete has to be one this coach may actually see -- the same resolver the clip list
+    // uses, so per-team narrowing applies here too.
+    const athlete = await storage.getRosterAthleteForCoach(user.id, parsed.data.athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+
+    const copied = await copyUploadedFile(parsed.data.videoUrl, "reference-clips");
+    if (!copied) return res.status(404).json({ message: "Clip not found" });
+
+    const row = await storage.createReferenceClip({
+      coachId: user.id,
+      title: parsed.data.title,
+      movement: parsed.data.movement,
+      notes: parsed.data.notes,
+      videoUrl: copied,
+      source: "from_athlete",
+      sourceAthleteId: parsed.data.athleteId,
+    });
+    res.status(201).json(row);
+  });
+
+  app.delete("/api/coach/reference-clips/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const url = await storage.deleteReferenceClip(user.id, Number(req.params.id));
+    if (!url) return res.status(404).json({ message: "Reference not found" });
+    // Safe to delete outright: the copy is the coach's and nothing else points at it.
+    await deleteUploadedFile(url).catch(() => {});
+    res.json({ ok: true });
+  });
+
+  // ---------- Saved video reviews (Phase 2 of docs/video-review-plan.md) ----------
+  //
+  // A review is the clip reference(s) plus a timed event log; playback re-renders it. Nothing
+  // here uploads or transcodes anything, which is why a review costs kilobytes.
+  //
+  // THREE READERS, THREE ROUTES, on purpose. The coach sees their own work including unshared
+  // drafts; the athlete sees only what was shared with them; the guardian sees exactly what
+  // their athlete sees. One route with a role branch is how a half-written review reaches the
+  // person it is about.
+
+  app.post("/api/coach/video-reviews", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createVideoReviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const review = await storage.createVideoReview(user.id, parsed.data);
+    // Null means the named athlete is not one this coach may see -- 404 rather than 403, same
+    // as every other per-athlete coach route, because confirming the id exists is a disclosure.
+    if (!review) return res.status(404).json({ message: "Athlete not found" });
+    res.status(201).json(review);
+  });
+
+  app.get("/api/coach/video-reviews", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = req.query.athleteId ? Number(req.query.athleteId) : null;
+    res.json(await storage.listVideoReviewsForCoach(user.id, athleteId));
+  });
+
+  app.get("/api/coach/video-reviews/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const review = await storage.getVideoReviewForCoach(user.id, Number(req.params.id));
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(review);
+  });
+
+  app.patch("/api/coach/video-reviews/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateVideoReviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const review = await storage.updateVideoReview(user.id, Number(req.params.id), parsed.data);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(review);
+  });
+
+  // The whole timeline, rewritten. The editor holds the log in memory and saves it whole, which
+  // is what makes undo free on the client and keeps the server from having to reason about
+  // event ordering at all.
+  app.put("/api/coach/video-reviews/:id/events", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = replaceVideoReviewEventsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const events = await storage.replaceVideoReviewEvents(
+      user.id,
+      Number(req.params.id),
+      parsed.data.events.map((e) => ({
+        t: e.t,
+        kind: e.payload.kind,
+        payload: e.payload,
+        side: e.side,
+        holdSeconds: e.holdSeconds ?? null,
+      })),
+    );
+    if (!events) return res.status(404).json({ message: "Review not found" });
+    res.json(events);
+  });
+
+  // The voice-over. Owner-only, and the previous take is deleted rather than orphaned: a coach
+  // unhappy with their first attempt re-records, and every discarded take would otherwise sit
+  // on the persistent disk forever.
+  app.post(
+    "/api/coach/video-reviews/:id/audio",
+    requireRole("coach"),
+    uploadReviewAudio.single("audio"),
+    async (req, res) => {
+      const user = currentUser(req);
+      if (!req.file) return res.status(400).json({ message: "No audio uploaded" });
+      const url = `/uploads/reviews/${req.file.filename}`;
+      const startAt = Number(req.body?.startAt ?? 0);
+      const result = await storage.setVideoReviewVoiceOver(
+        user.id,
+        Number(req.params.id),
+        url,
+        Number.isFinite(startAt) ? startAt : 0,
+      );
+      if (!result) {
+        // Not this coach's review. The file has already been written, so it is removed rather
+        // than left as an unreferenced blob somebody uploaded against somebody else's id.
+        await deleteUploadedFile(url).catch(() => {});
+        return res.status(404).json({ message: "Review not found" });
+      }
+      if (result.previousUrl && result.previousUrl !== url) {
+        await deleteUploadedFile(result.previousUrl).catch(() => {});
+      }
+      res.status(201).json({ voiceOverUrl: url });
+    },
+  );
+
+  // From a saved review straight to the athlete's next session (Phase 4b). The drill is a
+  // per-athlete corrective, never an edit to the shared program day -- see
+  // addCorrectiveFromReview for why the plan's programExercises route would have prescribed one
+  // athlete's drill to the whole squad.
+  app.post("/api/coach/video-reviews/:id/corrective", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      exerciseId: z.number().int().positive(),
+      sets: z.number().int().min(1).max(20).optional(),
+      reps: z.string().trim().min(1).max(40).optional(),
+      notes: z.string().trim().max(500).optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.addCorrectiveFromReview(user.id, Number(req.params.id), parsed.data);
+    if (!result.ok) {
+      if (result.reason === "no_upcoming_day") {
+        return res
+          .status(409)
+          .json({ message: "This athlete has no upcoming training day to add it to." });
+      }
+      if (result.reason === "no_athlete") {
+        return res.status(409).json({ message: "This review is not about an athlete." });
+      }
+      return res.status(404).json({ message: "Review not found" });
+    }
+    res.status(201).json(result);
+  });
+
+  // ---------- Burned-in export (Phase 5 of docs/video-review-plan.md) ----------
+  //
+  // The rest of a review is data on purpose. This is the exception, for the one thing data
+  // cannot do: leave the platform. A file somebody can send to a parent, a recruiter or a
+  // physio has to carry its own drawings -- and a copy of a named person's footage outlives
+  // every permission Forge enforces, which is why the link expires, the row is an audit
+  // record, and a minor's export needs the coach to confirm what covers it.
+
+  app.post(
+    "/api/coach/video-reviews/:id/export",
+    requireRole("coach"),
+    uploadReviewExport.single("video"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const url = req.file ? `/uploads/reviews/${req.file.filename}` : null;
+      const cleanUp = async () => {
+        if (url) await deleteUploadedFile(url).catch(() => {});
+      };
+      if (!url) return res.status(400).json({ message: "No video uploaded" });
+
+      const review = await storage.getVideoReviewForCoach(user.id, Number(req.params.id));
+      if (!review || review.authorId !== user.id) {
+        // The file is already on disk, so it goes rather than sitting there as an
+        // unreferenced blob uploaded against somebody else's id. Author-only: exporting is
+        // publishing, and publishing somebody else's work is not a coach's to do.
+        await cleanUp();
+        return res.status(404).json({ message: "Review not found" });
+      }
+
+      // A MINOR'S EXPORT needs the coach to say, in this request, that guardian consent covers
+      // it. Not a checkbox the client can forget: the server refuses without it, because the
+      // confirmation is the record.
+      let minorAtExport = false;
+      if (review.athleteId != null) {
+        const athlete = await storage.getUser(review.athleteId);
+        const dob = athlete?.dateOfBirth ?? null;
+        // Unknown date of birth is treated as a minor, the same way the rest of the guardian
+        // gate does: the fail-open version of this question is the one that goes wrong.
+        minorAtExport = dob ? ageFromDateOfBirth(dob) < 18 : true;
+        if (minorAtExport && req.body?.guardianConsentConfirmed !== "true") {
+          await cleanUp();
+          return res.status(409).json({
+            message:
+              "This athlete is a minor. Confirm that the guardian consent on file covers " +
+              "sharing this video before exporting.",
+          });
+        }
+      }
+
+      const { row, token } = await storage.recordVideoReviewExport({
+        reviewId: review.id,
+        exportedBy: user.id,
+        athleteId: review.athleteId,
+        videoUrl: url,
+        minorAtExport,
+      });
+      res.status(201).json({
+        id: row.id,
+        expiresAt: row.expiresAt,
+        minorAtExport,
+        // Returned ONCE. Only the hash is stored, so this is the only moment the link exists.
+        shareUrl: `/api/review-exports/${token}`,
+      });
+    },
+  );
+
+  app.get("/api/coach/video-reviews/:id/exports", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const review = await storage.getVideoReviewForCoach(user.id, Number(req.params.id));
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(await storage.listVideoReviewExports(review.id));
+  });
+
+  app.post("/api/coach/review-exports/:id/revoke", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const ok = await storage.revokeVideoReviewExport(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Export not found" });
+    res.json({ ok: true });
+  });
+
+  // THE SHARE LINK. Deliberately unauthenticated -- the token is the credential, which is the
+  // whole point of a link somebody can send to a parent who has no Forge account. It streams
+  // the file rather than redirecting to the stored path, so the underlying file stays behind
+  // the signed-URL gate and cannot be fetched directly once this token expires or is revoked.
+  app.get("/api/review-exports/:token", exportShareLimiter, async (req, res) => {
+    const row = await storage.resolveVideoReviewExport(String(req.params.token));
+    // Wrong, expired and revoked all answer the same way. "This link has expired" tells a
+    // stranger the review exists, which is the thing the expiry was protecting.
+    if (!row) return res.status(404).json({ message: "This link is no longer available." });
+    // The path is derived through uploadedFileDiskPath, which applies the same containment
+    // check every other file helper does -- the url is ours (multer wrote the name) but the
+    // guard is what makes that true rather than assumed.
+    const filePath = uploadedFileDiskPath(row.videoUrl);
+    if (!filePath) return res.status(404).json({ message: "This link is no longer available." });
+    // sendFile's own callback rather than an existsSync first: the sync stat blocks the event
+    // loop on every request, and it is a race anyway -- the retention sweep can take the file
+    // between the check and the send.
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ message: "This link is no longer available." });
+      }
+    });
+  });
+
+  // ---------- Athlete self-review (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // The same editor, the other direction. Not gated by cameraAccessFor: that gate is about
+  // RECORDING, and thinking about footage somebody already has is not something to withhold
+  // (CLAUDE.md, "Watching a clip you already recorded is never gated").
+
+  app.post("/api/athlete/self-reviews", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    // athleteId is not read from the body at all: a self-review is about its author, and a
+    // field that could name somebody else is one a client could set.
+    const parsed = createVideoReviewSchema.omit({ athleteId: true }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    res.status(201).json(await storage.createSelfReview(user.id, parsed.data));
+  });
+
+  app.get("/api/athlete/self-reviews", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listSelfReviewsForAthlete(user.id));
+  });
+
+  app.get("/api/athlete/self-reviews/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const review = await storage.getSelfReviewForAthlete(user.id, Number(req.params.id));
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(review);
+  });
+
+  app.patch("/api/athlete/self-reviews/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      title: z.string().min(1).max(200).optional(),
+      syncL: z.number().optional(),
+      syncR: z.number().optional(),
+      mode: z.enum(["split", "overlay"]).optional(),
+      /** true sends it to their coach, false takes it back. */
+      sentToCoach: z.boolean().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const row = await storage.updateSelfReview(user.id, Number(req.params.id), parsed.data);
+    if (!row) return res.status(404).json({ message: "Review not found" });
+    res.json(row);
+  });
+
+  app.put("/api/athlete/self-reviews/:id/events", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = replaceVideoReviewEventsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const events = await storage.replaceSelfReviewEvents(
+      user.id,
+      Number(req.params.id),
+      parsed.data.events.map((e) => ({
+        t: e.t,
+        kind: e.payload.kind,
+        payload: e.payload,
+        side: e.side,
+        holdSeconds: e.holdSeconds ?? null,
+      })),
+    );
+    if (!events) return res.status(404).json({ message: "Review not found" });
+    res.json(events);
+  });
+
+  // ---------- The cue library (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // A cue dropped onto a timeline becomes an ordinary `cue` event carrying a COPY of its text.
+  // Nothing here rewrites an existing review, on purpose: the library is a source of new
+  // events, never the storage for old ones.
+
+  app.get("/api/coach/cues", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listCoachCues(user.id));
+  });
+
+  app.post("/api/coach/cues", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createCoachCueSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    res.status(201).json(await storage.createCoachCue({ coachId: user.id, ...parsed.data }));
+  });
+
+  app.patch("/api/coach/cues/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateCoachCueSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const row = await storage.updateCoachCue(user.id, Number(req.params.id), parsed.data);
+    if (!row) return res.status(404).json({ message: "Cue not found" });
+    res.json(row);
+  });
+
+  app.delete("/api/coach/cues/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.deleteCoachCue(user.id, Number(req.params.id));
+    if (!result) return res.status(404).json({ message: "Cue not found" });
+    if (result.audioUrl) await deleteUploadedFile(result.audioUrl).catch(() => {});
+    res.json({ ok: true });
+  });
+
+  // A short recorded cue. Same storage and the same re-record cleanup as a review's voice-over.
+  app.post(
+    "/api/coach/cues/:id/audio",
+    requireRole("coach"),
+    uploadReviewAudio.single("audio"),
+    async (req, res) => {
+      const user = currentUser(req);
+      if (!req.file) return res.status(400).json({ message: "No audio uploaded" });
+      const url = `/uploads/reviews/${req.file.filename}`;
+      const result = await storage.setCoachCueAudio(user.id, Number(req.params.id), url);
+      if (!result) {
+        // Written before the owner check could run, so it is removed rather than left as an
+        // unreferenced blob uploaded against somebody else's id.
+        await deleteUploadedFile(url).catch(() => {});
+        return res.status(404).json({ message: "Cue not found" });
+      }
+      if (result.previousUrl && result.previousUrl !== url) {
+        await deleteUploadedFile(result.previousUrl).catch(() => {});
+      }
+      res.status(201).json({ audioUrl: url });
+    },
+  );
+
+  // ---------- The review queue (Phase 4b of docs/video-review-plan.md) ----------
+
+  // Open asks, oldest first, and a count for the nav badge. Both scope through the roster, so
+  // the badge can never count something the coach cannot open.
+  app.get("/api/coach/video-review-requests", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listVideoReviewRequestsForCoach(user.id));
+  });
+
+  app.get("/api/coach/video-review-requests/count", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    res.json({ open: await storage.countOpenVideoReviewRequestsForCoach(user.id) });
+  });
+
+  // "Ask my coach to check this." The set has to be the caller's own and has to have a clip;
+  // both refusals read the same, because a distinct answer for "not yours" would tell an
+  // athlete whether a set id belongs to somebody else.
+  app.post("/api/athlete/video-review-requests", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createVideoReviewRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.requestVideoReview(user.id, parsed.data.setId, parsed.data.note);
+    if (!result.ok) {
+      if (result.reason === "no_coach") {
+        return res.status(409).json({ message: "You do not have a coach to ask." });
+      }
+      return res.status(404).json({ message: "Clip not found" });
+    }
+    // 200 rather than 201 for a repeat ask: tapping again means "yes, please", and the athlete
+    // should see the ask they already have rather than an error about having made it.
+    res.status(result.alreadyOpen ? 200 : 201).json(result.request);
+  });
+
+  app.get("/api/athlete/video-review-requests", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listVideoReviewRequestsForAthlete(user.id));
+  });
+
+  // Withdrawing an ask resolves it rather than deleting it: the coach may already have started
+  // on it, and a row that vanishes from under them is confusing in a way a closed one is not.
+  app.delete("/api/athlete/video-review-requests/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const ok = await storage.cancelVideoReviewRequest(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Request not found" });
+    res.json({ ok: true });
+  });
+
+  app.get("/api/athlete/video-reviews", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listVideoReviewsForAthlete(user.id));
+  });
+
+  app.get("/api/athlete/video-reviews/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const review = await storage.getVideoReviewForAthlete(user.id, Number(req.params.id));
+    // An unshared review is not "forbidden", it does not exist as far as the athlete is
+    // concerned -- a 403 would tell them their coach is drafting something about them.
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(review);
+  });
+
+  // getAthleteForGuardianScoped is called HERE rather than only inside the storage function,
+  // even though the storage function checks it too. cross-tenant-scoping.test.ts reads this file
+  // and requires the link check to be visible in the route -- which is right: a reader auditing
+  // the guardian surface should see the scope without tracing into a 27,000-line module, and a
+  // future refactor that swaps the storage call must not be able to drop the check silently.
+  app.get(
+    "/api/guardian/athletes/:athleteId/video-reviews",
+    requireRole("guardian"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const athlete = await storage.getAthleteForGuardianScoped(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+      res.json(await storage.listVideoReviewsForAthlete(athleteId));
+    },
+  );
+
+  app.get(
+    "/api/guardian/athletes/:athleteId/video-reviews/:id",
+    requireRole("guardian"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const athlete = await storage.getAthleteForGuardianScoped(user.id, athleteId);
+      if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+      // The athlete's own read, reused whole: a guardian sees exactly what their athlete sees,
+      // which means the sharedWithAthleteAt gate applies to them identically.
+      const review = await storage.getVideoReviewForAthlete(athleteId, Number(req.params.id));
+      if (!review) return res.status(404).json({ message: "Review not found" });
+      res.json(review);
+    },
+  );
+
+  // ---------- Clip lists for the compare tool (see shared/video-clips.ts) ----------
+  //
+  // A coach picks any roster athlete's clip for either side of a comparison. Scoped through
+  // getRosterAthleteForCoach like every other per-athlete coach route, which is also what makes
+  // it per-team narrowed. An admin has no route here at all: an admin never gets a clip URL
+  // for somebody else's athlete, and the only clips an admin can list are their own
+  // (/api/athlete/clips below, which scopes by the caller's id).
+  app.get("/api/coach/roster/:athleteId/clips", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    const movement = typeof req.query.movement === "string" ? req.query.movement : null;
+    res.json(await storage.getClipsForAthlete(athleteId, movement));
+  });
+
+  // "Compare to N weeks ago" -- the same athlete's last clip of the same movement.
+  app.get("/api/coach/roster/:athleteId/clips/prior", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    const exercise = String(req.query.exercise ?? "").trim();
+    const before = String(req.query.before ?? "").trim();
+    if (!exercise || !before) {
+      return res.status(400).json({ message: "exercise and before are required" });
+    }
+    const days = req.query.minDays ? Number(req.query.minDays) : undefined;
+    const clip = await storage.getPriorClipForAthlete(athleteId, exercise, before, days);
+    // 200 with null, not 404: "this athlete has no earlier clip of this lift" is an ordinary
+    // answer the UI renders as a hidden button, not an error worth a retry.
+    res.json(clip);
+  });
+
+  // The saved skeleton for one chosen set clip. Fetched per clip, never with the list.
+  app.get("/api/coach/roster/:athleteId/clips/:setId/frames", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    const frames = await storage.getSetClipFramesForAthlete(athleteId, Number(req.params.setId));
+    if (!frames) return res.status(404).json({ message: "Clip not found" });
+    res.json(frames);
   });
 
   app.patch("/api/coach/roster/:athleteId/profile", requireRole("coach"), async (req, res) => {
@@ -10399,6 +11101,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ attached: true, via: result.via });
   });
 
+  // ---------- The caller's own clips, for the compare tool ----------
+  // Same three roles as /api/athlete/unattached-videos below, for the same reason: a coach or
+  // admin filming their own training compares their own sets. Always the caller's own id --
+  // somebody else's clips are the coach roster route above or the guardian route, each with its
+  // own scope check. Watching a clip already recorded is never behind the camera entitlement
+  // (CLAUDE.md, "Who may use the camera").
+  app.get("/api/athlete/clips", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const movement = typeof req.query.movement === "string" ? req.query.movement : null;
+    res.json(await storage.getClipsForAthlete(user.id, movement));
+  });
+
+  app.get("/api/athlete/clips/prior", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const exercise = String(req.query.exercise ?? "").trim();
+    const before = String(req.query.before ?? "").trim();
+    if (!exercise || !before) {
+      return res.status(400).json({ message: "exercise and before are required" });
+    }
+    const days = req.query.minDays ? Number(req.query.minDays) : undefined;
+    res.json(await storage.getPriorClipForAthlete(user.id, exercise, before, days));
+  });
+
+  app.get("/api/athlete/clips/:setId/frames", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const frames = await storage.getSetClipFramesForAthlete(user.id, Number(req.params.setId));
+    if (!frames) return res.status(404).json({ message: "Clip not found" });
+    res.json(frames);
+  });
+
   // ---------- Unattached video uploads (see unattachedVideoUploads' schema comment) ----------
 
   app.get("/api/athlete/unattached-videos", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
@@ -12188,6 +12920,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // video rather than describing one.
   guardianRead("/videos", async (athleteId, _req, res) => {
     res.json(await storage.getVideosForAthlete(athleteId));
+  });
+
+  // The compare tool's clip list for a parent looking at their child's clips, and the frames
+  // for one of them. Read-only like everything else in guardianRead.
+  guardianRead("/clips", async (athleteId, req, res) => {
+    const movement = typeof req.query.movement === "string" ? req.query.movement : null;
+    res.json(await storage.getClipsForAthlete(athleteId, movement));
+  });
+
+  guardianRead("/clips/:setId/frames", async (athleteId, req, res) => {
+    const frames = await storage.getSetClipFramesForAthlete(athleteId, Number(req.params.setId));
+    if (!frames) return res.status(404).json({ message: "Clip not found" });
+    res.json(frames);
   });
 
   // ---------------- Guardian: asking for a video to come down ----------------

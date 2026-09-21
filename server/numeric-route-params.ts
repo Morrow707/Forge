@@ -47,6 +47,10 @@ export const NUMERIC_ROUTE_PARAMS = [
   "goalId",
   "gameDayId",
   "setNumber",
+  // The clip-frames route's id (GET .../clips/:setId/frames). A workoutSetEntries.id, read
+  // through Number() like every other id here -- added with Phase 1 of the video review plan,
+  // and caught by numeric-route-params.test.ts rather than remembered.
+  "setId",
   "pageNumber",
 ] as const;
 

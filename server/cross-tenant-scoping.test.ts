@@ -96,6 +96,14 @@ const GLOBAL_BY_DESIGN = new Set([
   "/api/public/team/:code",
   // Forge-authored movement profiles, identical for every account.
   "/api/movement-profiles/active/:movementType",
+  // A review export's share link (Phase 5 of docs/video-review-plan.md). THE TOKEN IS THE
+  // CREDENTIAL -- 32 random bytes, stored only as a hash, expiring, revocable -- and there is
+  // deliberately no caller to scope against: the audience is a parent, a recruiter or a physio
+  // with no Forge account, which is the entire reason the export exists. What bounds it is the
+  // token itself rather than a session, so the safety lives in resolveVideoReviewExport (wrong,
+  // expired and revoked all answer 404 alike) and in the fact that the underlying file stays
+  // behind the signed-URL gate, so the link stops working when the row says it should.
+  "/api/review-exports/:token",
 ]);
 
 const routes = parseRoutes(routesSrc);

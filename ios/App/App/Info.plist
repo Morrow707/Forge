@@ -86,6 +86,13 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Forge uses your camera for live rep/sprint/mechanics tracking, form-check video recording, and food/barcode scanning.</string>
+	<!-- Voice-over on a video review (Phase 3 of docs/video-review-plan.md): a coach talks over
+	     a lift while scrubbing and drawing, and the audio is saved alongside the timed event log.
+	     Required BEFORE any getUserMedia({audio}) call ships: a missing purpose string is an
+	     upload rejection (error 90683), which is the class verify_build was added to catch after
+	     a Health string removal archived cleanly and bounced at upload. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Forge uses your microphone when you record a voice-over on a video review, so your athlete hears your coaching alongside the footage. Nothing is recorded unless you start a voice-over.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Forge lets you attach photos from your library for food logging and lesson content uploads.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

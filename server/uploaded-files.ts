@@ -9,6 +9,7 @@
 // into the route-registration file.
 import fs from "fs/promises";
 import path from "path";
+import crypto from "crypto";
 import { recordSystemFailure } from "./system-events";
 
 // STORAGE_PATH (render.yaml) points this at the persistent disk's mount point
@@ -229,6 +230,22 @@ export function warnIfUploadsAreEphemeral(): void {
 // purge of a minor's footage is supposed to guarantee. A missing file
 // still counts as gone (true): there is nothing left to delete, so
 // clearing the reference is correct.
+/**
+ * The on-disk path for an /uploads URL, or null when it is not one or escapes the root.
+ *
+ * Same containment check every other function here makes, exported because a route that
+ * STREAMS a file (the review-export share link) needs the path rather than the bytes -- reading
+ * a whole video into a Buffer to answer one request is not the same shape as readUploadedFile's
+ * callers. The traversal guard is the point of sharing it: a path built ad hoc at a call site
+ * is one nobody re-checks.
+ */
+export function uploadedFileDiskPath(url: string | null | undefined): string | null {
+  if (!url || !url.startsWith("/uploads/")) return null;
+  const resolved = path.join(UPLOADS_ROOT, url.slice("/uploads/".length));
+  if (!resolved.startsWith(UPLOADS_ROOT + path.sep)) return null;
+  return resolved;
+}
+
 export async function deleteUploadedFile(url: string | null | undefined): Promise<boolean> {
   if (!url || !url.startsWith("/uploads/")) return true;
   const resolved = path.join(UPLOADS_ROOT, url.slice("/uploads/".length));
@@ -238,7 +255,10 @@ export async function deleteUploadedFile(url: string | null | undefined): Promis
     return true;
   } catch (err: any) {
     if (err?.code === "ENOENT") return true;
-    console.error(`Failed to delete uploaded file at ${url}:`, err);
+    // The url is an ARGUMENT, never part of the format string. console.error treats its
+    // first argument as a printf format, so a url carrying "%s" would swallow `err` and the
+    // reason the delete failed would vanish out of the log -- from a path a caller supplies.
+    console.error("Failed to delete uploaded file at", url, err);
     return false;
   }
 }
@@ -312,6 +332,45 @@ export async function readUploadedFile(url: string | null | undefined): Promise<
   try {
     return await fs.readFile(resolved);
   } catch {
+    return null;
+  }
+}
+
+/**
+ * Copies an uploaded file into a new directory and returns the new /uploads path.
+ *
+ * WHY A COPY AND NOT A REFERENCE. The coach's reference library (Phase 4 of
+ * docs/video-review-plan.md) can be built from a roster athlete's clip, and that clip is
+ * governed by the athlete's retention cap and their deletion rights. A library entry that
+ * pointed at their file would either break when the cap purged it, or -- much worse -- keep an
+ * athlete's footage alive after they asked for it to be gone. The copy belongs to the coach.
+ *
+ * Returns null rather than throwing on a missing source, matching deleteUploadedFile's
+ * non-throwing contract: the caller decides whether a missing clip is an error.
+ */
+export async function copyUploadedFile(
+  sourceUrl: string,
+  destinationDir: string,
+): Promise<string | null> {
+  if (!sourceUrl.startsWith("/uploads/")) return null;
+  const source = path.join(UPLOADS_ROOT, sourceUrl.slice("/uploads/".length));
+  // The same traversal guard deleteUploadedFile uses -- a url is client-supplied and
+  // "/uploads/../../etc/passwd" must not resolve outside the root.
+  if (!source.startsWith(UPLOADS_ROOT + path.sep)) return null;
+
+  const dir = path.join(UPLOADS_ROOT, destinationDir);
+  if (!dir.startsWith(UPLOADS_ROOT + path.sep)) return null;
+
+  try {
+    await fs.mkdir(dir, { recursive: true });
+    const extension = path.extname(source);
+    const filename = `${crypto.randomUUID()}${extension}`;
+    await fs.copyFile(source, path.join(dir, filename));
+    return `/uploads/${destinationDir}/${filename}`;
+  } catch (err: any) {
+    if (err?.code === "ENOENT") return null;
+    // Argument, not format string -- same reason as deleteUploadedFile above.
+    console.error("Failed to copy uploaded file", sourceUrl, err);
     return null;
   }
 }

@@ -3336,6 +3336,160 @@ CREATE INDEX IF NOT EXISTS "unattached_video_uploads_athlete_open_idx"
 CREATE UNIQUE INDEX IF NOT EXISTS "unattached_video_uploads_video_url_idx"
   ON "unattached_video_uploads" ("video_url");
 
+-- 2026-09-20: saved video reviews (Phase 2 of docs/video-review-plan.md).
+--
+-- A review is the clip reference(s) plus a timed event log; playback re-renders it. That is why
+-- there is no video column here and no transcode step anywhere: the whole review is kilobytes.
+--
+-- purged_at rather than a delete: when the retention cap takes the clip, the coach's notes are
+-- still a record of what they said about the lift, and coaching outlives the footage.
+CREATE TABLE IF NOT EXISTS "video_reviews" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer REFERENCES "users"("id") ON DELETE CASCADE,
+  "title" text NOT NULL,
+  "left_clip" json NOT NULL,
+  "right_clip" json,
+  "sync_l" real NOT NULL DEFAULT 0,
+  "sync_r" real NOT NULL DEFAULT 0,
+  "mode" text NOT NULL DEFAULT 'split',
+  "overlay_settings" json,
+  "shared_with_athlete_at" timestamp,
+  "purged_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "video_reviews_coach_idx" ON "video_reviews" ("coach_id");
+CREATE INDEX IF NOT EXISTS "video_reviews_athlete_shared_idx"
+  ON "video_reviews" ("athlete_id", "shared_with_athlete_at");
+
+-- t is real, not integer: frame-step lands on 1/30ths of a second, and rounding a drawing to
+-- the nearest second puts it over the wrong frame of a lift that lasts two.
+CREATE TABLE IF NOT EXISTS "video_review_events" (
+  "id" serial PRIMARY KEY,
+  "review_id" integer NOT NULL REFERENCES "video_reviews"("id") ON DELETE CASCADE,
+  "t" real NOT NULL,
+  "kind" text NOT NULL,
+  "payload" json NOT NULL,
+  "side" text NOT NULL DEFAULT 'left',
+  "hold_seconds" real,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "video_review_events_review_time_idx"
+  ON "video_review_events" ("review_id", "t");
+
+-- 2026-09-21: an athlete asking their coach to look at one clip (Phase 4b).
+--
+-- The partial unique index is the rule, not a nicety: one OPEN request per set. Two taps on a
+-- slow connection are the same ask, and a queue showing the same clip three times is one a
+-- coach stops reading. Partial so a set can be asked about again after the first ask is
+-- answered, which is a genuinely new request.
+CREATE TABLE IF NOT EXISTS "video_review_requests" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "set_id" integer NOT NULL REFERENCES "workout_set_entries"("id") ON DELETE CASCADE,
+  "note" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "resolved_at" timestamp,
+  "review_id" integer REFERENCES "video_reviews"("id") ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS "video_review_requests_coach_open_idx"
+  ON "video_review_requests" ("coach_id", "created_at");
+CREATE INDEX IF NOT EXISTS "video_review_requests_athlete_idx"
+  ON "video_review_requests" ("athlete_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "video_review_requests_one_open_per_set_idx"
+  ON "video_review_requests" ("set_id") WHERE "resolved_at" IS NULL;
+
+-- 2026-09-21: the coach's reference library (Phase 4).
+--
+-- A reference taken from an athlete's clip COPIES the file. Pointing at theirs would either
+-- break when their retention cap purged it, or keep their footage alive after they asked for it
+-- to go. source_athlete_id is provenance, not a link.
+CREATE TABLE IF NOT EXISTS "reference_clips" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "title" text NOT NULL,
+  "movement" text,
+  "video_url" text NOT NULL,
+  "source" text NOT NULL DEFAULT 'uploaded',
+  "source_athlete_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "notes" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "reference_clips_coach_idx" ON "reference_clips" ("coach_id");
+
+-- 2026-09-21: the coach's cue library (Phase 4b).
+--
+-- A cue dropped on a timeline copies its text into the event. The library is a source of new
+-- events, never the storage for old ones -- editing a cue must not rewrite what a coach already
+-- said in a review somebody has watched.
+CREATE TABLE IF NOT EXISTS "coach_cues" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "kind" text NOT NULL DEFAULT 'text',
+  "label" text NOT NULL,
+  "body" text NOT NULL,
+  "audio_url" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "coach_cues_coach_idx" ON "coach_cues" ("coach_id");
+
+-- 2026-09-21: burned-in exports of a review (Phase 5).
+--
+-- The one place a review becomes a real video file, because a file is the only thing that can
+-- leave the platform -- and therefore the one place a copy outlives every permission Forge
+-- enforces. The link expires, only its hash is stored, and the row doubles as the audit record
+-- (who exported whose review, when). Revoking is a column rather than a delete: "this link was
+-- made and then withdrawn" is the fact somebody will need to establish later.
+CREATE TABLE IF NOT EXISTS "video_review_exports" (
+  "id" serial PRIMARY KEY,
+  "review_id" integer NOT NULL REFERENCES "video_reviews"("id") ON DELETE CASCADE,
+  "exported_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "video_url" text NOT NULL,
+  "token_hash" text NOT NULL UNIQUE,
+  "expires_at" timestamp NOT NULL,
+  "revoked_at" timestamp,
+  "minor_at_export" boolean NOT NULL DEFAULT false,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "video_review_exports_review_idx"
+  ON "video_review_exports" ("review_id");
+
+-- 2026-09-20: voice-over on a review (Phase 3). Audio lives under STORAGE_PATH/reviews/ and
+-- dies with the review rather than with the athlete's clip cap.
+ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_url" text;
+ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_start_at" real;
+
+-- 2026-09-21: athlete self-review (Phase 4b).
+--
+-- author_id is who MADE it; coach_id stays "which coach it is filed with". Two columns because
+-- those are the two questions the queries ask -- collapsing them makes a self-review either
+-- invisible to the coach it was sent to, or editable by them.
+--
+-- Backfilled to coach_id for every existing row, which is exactly true: everything written
+-- before this was a coach's own review.
+ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "author_id" integer
+  REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "sent_to_coach_at" timestamp;
+UPDATE "video_reviews" SET "author_id" = "coach_id" WHERE "author_id" IS NULL;
+
+-- A review is shared by posting it as a comment reply, which is where the coach's drawn
+-- annotation already lands. SET NULL rather than CASCADE: deleting a review should not delete
+-- the conversation that referenced it.
+ALTER TABLE "workout_comments" ADD COLUMN IF NOT EXISTS "video_review_id" integer
+  REFERENCES "video_reviews"("id") ON DELETE SET NULL;
+
+-- 2026-09-21: a corrective that came out of a review (Phase 4b).
+--
+-- On assignment_correctives, NOT on program_exercises as the plan said: a program day is shared
+-- by every athlete on that program, so appending there would give the whole squad a drill
+-- prescribed for one person. SET NULL so deleting a review never takes the athlete's prescribed
+-- work with it.
+ALTER TABLE "assignment_correctives" ADD COLUMN IF NOT EXISTS "source_review_id" integer
+  REFERENCES "video_reviews"("id") ON DELETE SET NULL;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'erase_unused_phone_numbers_2026_09_15') THEN

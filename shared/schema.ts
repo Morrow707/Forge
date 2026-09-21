@@ -19,6 +19,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { reviewEventPayloadSchema } from "./video-review";
 import { BODY_PAIN_PARTS } from "./wellness";
 import type { WidgetLayoutEntry } from "./dashboard-widgets";
 import type { RosterGroup } from "./roster-groups";
@@ -2070,6 +2071,17 @@ export const assignmentCorrectives = pgTable(
     weight: text("weight"),
     restSeconds: integer("rest_seconds"),
     notes: text("notes"),
+    /** The review this corrective came out of, when it came out of one (Phase 4b of
+     * docs/video-review-plan.md). ON DELETE SET NULL: a deleted review must not take the
+     * athlete's prescribed work with it -- the drill is still the right drill.
+     *
+     * It sits HERE and not on programExercises, which is what the plan said. A program day is
+     * shared by every athlete on that program, so appending to it would give the whole squad a
+     * corrective prescribed for one person's knee. assignment_correctives is the existing
+     * per-athlete vehicle for exactly this and already renders in the athlete's day. */
+    sourceReviewId: integer("source_review_id").references(() => videoReviews.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2606,6 +2618,14 @@ export const workoutComments = pgTable(
     // circling a knee valgus moment -- saved as a PNG and attached the same
     // way a video link is, just a different media type on the same comment.
     imageUrl: text("image_url"),
+    // A saved video review, shared as a reply. Lands in the same place the coach's drawn
+    // annotation already does (imageUrl above), because that is where the athlete is already
+    // looking -- a review that arrives somewhere new is a review nobody opens. The row here
+    // carries only the reference; the review itself is scoped by its own sharedWithAthleteAt,
+    // so a comment pointing at an unshared review still shows the athlete nothing.
+    videoReviewId: integer("video_review_id").references(() => videoReviews.id, {
+      onDelete: "set null",
+    }),
     // The workout day this comment/video is actually FOR (the athlete's
     // calendar date, e.g. logging a session for last Friday two days late)
     // -- deliberately separate from createdAt below, which is just when the
@@ -2629,6 +2649,305 @@ export const workoutComments = pgTable(
       .where(sql`${table.videoUrl} is not null`),
   }),
 );
+
+/** A coach's own library of model lifts to compare an athlete against.
+ *
+ * THE COPY IS THE POINT, and it is the one rule here that cannot be relaxed. A reference taken
+ * from a roster athlete's clip COPIES the file rather than pointing at it, because the athlete's
+ * clip is subject to their retention cap and their deletion rights: a reference that pointed at
+ * it would either break when the cap purged it, or -- far worse -- quietly keep an athlete's
+ * footage alive after they asked for it to go. The copy belongs to the coach and is governed by
+ * the coach's own retention, and `sourceAthleteId` records where it came from so the provenance
+ * is answerable later.
+ *
+ * Visible to the coach and their staff. Never to an athlete: a reference is teaching material a
+ * coach curated, and one athlete's lift becoming another athlete's "model" is a decision the
+ * coach makes explicitly, not a side effect of the library existing.
+ */
+export const referenceClips = pgTable(
+  "reference_clips",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** Free text rather than an exercise id: a reference is often a lift Forge's library does
+     * not carry (a competition clean from video, a drill the coach invented). */
+    movement: text("movement"),
+    videoUrl: text("video_url").notNull(),
+    /** "uploaded" or "from_athlete" -- which path produced this copy. */
+    source: text("source").notNull().default("uploaded"),
+    /** Present only for source = from_athlete. Provenance, never a live link to their clip. */
+    sourceAthleteId: integer("source_athlete_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachIdx: index("reference_clips_coach_idx").on(table.coachId),
+  }),
+);
+
+/**
+ * A BURNED-IN copy of a review, and the link somebody was given to it (Phase 5 of
+ * docs/video-review-plan.md).
+ *
+ * Everything else about a review is deliberately data rather than a rendered video -- that is
+ * what keeps it at kilobytes, editable, and free of a transcode step. This is the exception,
+ * and it exists for the one thing data cannot do: leave the platform. A file somebody can send
+ * to a parent, a recruiter or a physio has to carry its own drawings.
+ *
+ * Which is exactly why it is the most dangerous thing in the feature. A review is footage of a
+ * person, very often a minor, and an export is a copy of it that outlives every permission
+ * Forge enforces. So:
+ *  - the link EXPIRES, and only a hash of its token is stored, like every other token here;
+ *  - the row is the audit record -- who exported whose review and when -- and is insert-only;
+ *  - revoking is a column, not a delete, because "this link was made and then withdrawn" is
+ *    the fact somebody will need to establish later.
+ */
+/**
+ * How long a share link lives. Two weeks: long enough for a parent to get round to opening it
+ * or a recruiter to watch it twice, short enough that a link pasted into a group chat stops
+ * working well before the athlete has moved schools. A number somebody chose, not a derivation.
+ */
+export const VIDEO_EXPORT_EXPIRY_DAYS = 14;
+
+export const videoReviewExports = pgTable(
+  "video_review_exports",
+  {
+    id: serial("id").primaryKey(),
+    reviewId: integer("review_id")
+      .notNull()
+      .references(() => videoReviews.id, { onDelete: "cascade" }),
+    /** Who pressed export. Not derived from the review: a staff coach may export a head
+     * coach's review, and the audit question is who acted. */
+    exportedBy: integer("exported_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The athlete in the footage, copied rather than joined -- the audit record has to stay
+     * answerable after a review is deleted. */
+    athleteId: integer("athlete_id").references(() => users.id, { onDelete: "set null" }),
+    videoUrl: text("video_url").notNull(),
+    /** Only the hash, so a database leak alone does not hand out playable links. */
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    revokedAt: timestamp("revoked_at"),
+    /** True when the athlete was under 18 at export time, with the coach's confirmation that
+     * guardian consent covers it. Stored because the answer changes as the athlete ages and
+     * the record has to say what was true on the day. */
+    minorAtExport: boolean("minor_at_export").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    reviewIdx: index("video_review_exports_review_idx").on(table.reviewId),
+  }),
+);
+
+/**
+ * A coach's saved cues -- the things they say over and over (Phase 4b of
+ * docs/video-review-plan.md). Dropped onto a review's timeline, a cue becomes an ordinary
+ * `cue` event carrying a COPY of its text.
+ *
+ * That copy is the design decision. A cue the coach later edits or deletes must not change or
+ * blank what they already said in a review somebody has watched: the library is a source of
+ * new events, never the storage for old ones.
+ *
+ * Cues belong to the coach and are visible to their staff, the same way a shared roster is.
+ */
+export const coachCues = pgTable(
+  "coach_cues",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "text" | "audio". An audio cue carries text too, so it still reads on screen for an
+     * athlete watching with the sound off -- which on a phone, in a gym, is most of them. */
+    kind: text("kind").notNull().default("text"),
+    label: text("label").notNull(),
+    body: text("body").notNull(),
+    /** Under STORAGE_PATH/reviews/, same place a voice-over lives. Null for a text cue. */
+    audioUrl: text("audio_url"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachIdx: index("coach_cues_coach_idx").on(table.coachId),
+  }),
+);
+
+export const createCoachCueSchema = z.object({
+  label: z.string().trim().min(1).max(80),
+  body: z.string().trim().min(1).max(280),
+});
+export const updateCoachCueSchema = createCoachCueSchema.partial();
+export type CreateCoachCue = z.infer<typeof createCoachCueSchema>;
+
+/** A SAVED REVIEW IS DATA, NOT A RENDERED VIDEO.
+ *
+ * The clip reference(s) plus a timed event log; playback re-renders it. That is the whole
+ * design decision behind this table and the one below, and it is what keeps a review at
+ * kilobytes, editable after the fact, and free of a transcode step. Burning a review to a real
+ * video file is Phase 5 of docs/video-review-plan.md and exists only for sharing outside the
+ * app -- nothing inside Forge ever needs it.
+ *
+ * RETENTION REACHES REVIEWS, and the two halves are deliberately separated. When the retention
+ * cap purges a clip, the review that referenced it loses the footage -- but the row stays,
+ * `purgedAt` is stamped, and the coach's notes and drawings survive as a record of what they
+ * said. A review is coaching, and coaching outlives the video it was about. (Purging still
+ * never touches a set's metrics; that is a separate CLAUDE.md invariant.)
+ *
+ * `athleteId` is nullable because a coach may compare two reference lifts that belong to
+ * nobody on their roster. When it IS set, it is what scopes the athlete's and guardian's read.
+ */
+export const videoReviews = pgTable(
+  "video_reviews",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The athlete this review is ABOUT. Null for a review of two reference clips. */
+    athleteId: integer("athlete_id").references(() => users.id, { onDelete: "cascade" }),
+    /**
+     * WHO MADE IT. Equal to coachId for a coach's review; equal to athleteId for an athlete's
+     * self-review (Phase 4b).
+     *
+     * A separate column rather than a role flag, because the two questions a query actually
+     * asks are "whose work is this to edit" (authorId) and "which coach is it filed with"
+     * (coachId). Collapsing them means a self-review is either invisible to the coach it was
+     * sent to, or editable by them -- and both are wrong.
+     */
+    authorId: integer("author_id").references(() => users.id, { onDelete: "cascade" }),
+    /** Set when an athlete sends their own review to their coach. The mirror of
+     * sharedWithAthleteAt, and the only thing that puts a self-review on a coach's list. */
+    sentToCoachAt: timestamp("sent_to_coach_at"),
+    title: text("title").notNull(),
+    /** {videoUrl, source, label} -- see shared/video-review.ts's ReviewClip. */
+    leftClip: json("left_clip").notNull(),
+    /** Null for a single-clip review: every tool works on one clip too. */
+    rightClip: json("right_clip"),
+    /** The sync marks from the compare tool, in seconds on each clip's own timeline. */
+    syncL: real("sync_l").notNull().default(0),
+    syncR: real("sync_r").notNull().default(0),
+    /** "split" | "overlay" -- see shared/video-review.ts. */
+    mode: text("mode").notNull().default("split"),
+    /** Opacity, mirror, scale and nudge for overlay mode. */
+    overlaySettings: json("overlay_settings"),
+    /** Set when the coach shares it; until then the athlete cannot see it at all. */
+    sharedWithAthleteAt: timestamp("shared_with_athlete_at"),
+    /** The voice-over, when the coach recorded one. Stored under STORAGE_PATH/reviews/ in
+     * whatever MediaRecorder produced -- iOS gives audio/mp4, the web gives audio/webm, and
+     * <audio> plays each natively on the platform that made it. */
+    voiceOverUrl: text("voice_over_url"),
+    /** Where the video was when recording started. A coach who scrubs to the third rep and then
+     * talks is narrating from there, and the clock model needs that offset. */
+    voiceOverStartAt: real("voice_over_start_at"),
+    /** Set when the retention sweep takes the clip out from under it. The notes survive. */
+    purgedAt: timestamp("purged_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachIdx: index("video_reviews_coach_idx").on(table.coachId),
+    // Backs the athlete's and guardian's list, which reads only shared rows.
+    athleteSharedIdx: index("video_reviews_athlete_shared_idx").on(
+      table.athleteId,
+      table.sharedWithAthleteAt,
+    ),
+  }),
+);
+
+/** One thing the coach did, at one moment on the review's timeline.
+ *
+ * Insert-mostly and read in bulk: a review's playback loads every event once and renders from
+ * memory, so there is no per-event read path to optimise for.
+ *
+ * `t` is seconds on the REVIEW's timeline, which is the left clip's timeline -- the right side
+ * is derived through syncL/syncR exactly as the live compare tool derives it. Storing one
+ * timeline rather than two is what makes a review re-syncable after the fact: change the marks
+ * and every event still lands where the coach put it relative to the lift.
+ */
+export const videoReviewEvents = pgTable(
+  "video_review_events",
+  {
+    id: serial("id").primaryKey(),
+    reviewId: integer("review_id")
+      .notNull()
+      .references(() => videoReviews.id, { onDelete: "cascade" }),
+    /** Seconds on the review timeline. real, not integer: frame-step lands on 1/30ths. */
+    t: real("t").notNull(),
+    /** See REVIEW_EVENT_KINDS in shared/video-review.ts. Text rather than an enum so a new
+     * drawing tool is a client change plus a zod value, not a migration on a live table. */
+    kind: text("kind").notNull(),
+    /** Shape-specific: points for a stroke, from/to for an arrow, the text for a label. */
+    payload: json("payload").notNull(),
+    /** "left" | "right" | "both" -- which video the drawing belongs over. */
+    side: text("side").notNull().default("left"),
+    /** How long it stays on screen past `t`, in seconds. Null = until the next scrub or pause
+     * boundary, which is the default a coach expects when drawing while talking. */
+    holdSeconds: real("hold_seconds"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    // Every read is "this review's events, in time order".
+    reviewTimeIdx: index("video_review_events_review_time_idx").on(table.reviewId, table.t),
+  }),
+);
+
+/**
+ * An athlete asking their coach to look at one clip. Phase 4b of docs/video-review-plan.md.
+ *
+ * The row exists because "I filmed it and nobody watched it" is the failure this feature is
+ * for. A comment can be read and forgotten; a request has a resolvedAt, so a coach can be
+ * shown what is still owed and how long it has been waiting.
+ *
+ * Two rules the queries depend on:
+ *  - ONE OPEN REQUEST PER SET. Asking twice is the same ask, and a queue that shows the same
+ *    clip three times is one a coach learns to ignore. The partial unique index enforces it
+ *    rather than a read-then-insert, which two taps on a slow connection lose.
+ *  - The request points at the SET, not at a video url. A clip that is re-uploaded or purged
+ *    is still the same set, and the queue entry stays meaningful (or reads as purged) instead
+ *    of dangling.
+ *
+ * reviewId is the answer, filled when the coach shares a review made from this clip. It is
+ * nullable and ON DELETE SET NULL: a deleted review leaves the request resolved, because the
+ * coach did look -- unresolving it would put a stale ask back in front of them.
+ */
+export const videoReviewRequests = pgTable(
+  "video_review_requests",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The coach the ask is FOR, resolved at request time. An athlete whose coach changes
+     * keeps the ask with the coach they made it to, which is who owes them an answer. */
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    setId: integer("set_id")
+      .notNull()
+      .references(() => workoutSetEntries.id, { onDelete: "cascade" }),
+    /** What the athlete wants looked at. Optional: most asks are "is this right?". */
+    note: text("note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+    reviewId: integer("review_id").references(() => videoReviews.id, { onDelete: "set null" }),
+  },
+  (table) => ({
+    // The coach's queue: their open asks, oldest first.
+    coachOpenIdx: index("video_review_requests_coach_open_idx").on(table.coachId, table.createdAt),
+    athleteIdx: index("video_review_requests_athlete_idx").on(table.athleteId),
+  }),
+);
+
+export const createVideoReviewRequestSchema = z.object({
+  setId: z.number().int().positive(),
+  note: z.string().trim().max(500).optional(),
+});
+export type CreateVideoReviewRequest = z.infer<typeof createVideoReviewRequestSchema>;
 
 // In-app notification inbox. Deliberately narrow: only ever created for a
 // coach when an athlete comments or attaches a video, never for program
@@ -8772,6 +9091,85 @@ export const submitWorkoutLogSchema = z.object({
   // no log yet) still works; when it is present and does not match, the save is
   // refused rather than allowed to overwrite newer data.
   baseRevision: z.number().int().nonnegative().optional(),
+});
+
+/** What a coach may send when creating or editing a review.
+ *
+ * The clip references are validated as shapes rather than trusted: leftClip is what playback
+ * loads, and a malformed one is a review that opens to a black rectangle with no way to tell
+ * whether the clip was purged or the row was always wrong. */
+export const reviewClipSchema = z.object({
+  videoUrl: z.string().min(1),
+  source: z.enum(["set", "skill", "reference"]),
+  label: z.string().max(200),
+  /** The set this clip came from, when it has one -- what the bar-path overlay tool reads. */
+  setId: z.number().int().positive().optional().nullable(),
+  repBreakdown: z
+    .array(z.object({ repNumber: z.number(), startT: z.number(), endT: z.number() }))
+    .max(200)
+    .optional()
+    .nullable(),
+});
+
+export const createVideoReviewSchema = z.object({
+  athleteId: z.number().int().positive().optional().nullable(),
+  title: z.string().min(1).max(200),
+  leftClip: reviewClipSchema,
+  rightClip: reviewClipSchema.optional().nullable(),
+  syncL: z.number().optional(),
+  syncR: z.number().optional(),
+  mode: z.enum(["split", "overlay"]).optional(),
+  overlaySettings: z
+    .object({
+      opacity: z.number().min(0).max(1),
+      mirror: z.boolean(),
+      scale: z.number().positive(),
+      dx: z.number(),
+      dy: z.number(),
+    })
+    .optional()
+    .nullable(),
+});
+
+export const updateVideoReviewSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  syncL: z.number().optional(),
+  syncR: z.number().optional(),
+  mode: z.enum(["split", "overlay"]).optional(),
+  overlaySettings: createVideoReviewSchema.shape.overlaySettings,
+  /** true shares with the athlete, false takes it back. */
+  shared: z.boolean().optional(),
+});
+
+/** The whole timeline. Capped because a review is a few hundred marks at most -- a payload of
+ * fifty thousand is a bug or an attack, and either way it should not reach the insert. */
+export const replaceVideoReviewEventsSchema = z.object({
+  events: z
+    .array(
+      z.object({
+        t: z.number().min(0),
+        side: z.enum(["left", "right", "both"]).default("left"),
+        holdSeconds: z.number().positive().optional().nullable(),
+        payload: reviewEventPayloadSchema,
+      }),
+    )
+    .max(2000),
+});
+
+export const createReferenceClipSchema = z.object({
+  title: z.string().min(1).max(200),
+  movement: z.string().max(120).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+/** Saving a roster athlete's clip as a reference. The server copies the FILE; the client only
+ * names which clip and why. */
+export const saveClipAsReferenceSchema = z.object({
+  athleteId: z.number().int().positive(),
+  videoUrl: z.string().min(1),
+  title: z.string().min(1).max(200),
+  movement: z.string().max(120).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
 });
 
 // ---------- Types ----------

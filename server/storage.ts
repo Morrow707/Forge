@@ -50,6 +50,13 @@ import {
   workoutLogEntries,
   workoutSetEntries,
   workoutComments,
+  videoReviews,
+  coachCues,
+  videoReviewEvents,
+  videoReviewExports,
+  VIDEO_EXPORT_EXPIRY_DAYS,
+  videoReviewRequests,
+  referenceClips,
   exerciseSubmissions,
   exerciseReports,
   apnsDeviceTokens,
@@ -293,6 +300,7 @@ const APPLE_PRODUCT_ID_TO_ADD_ON: Record<string, FreeAgentAddOnId> = Object.from
 );
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { CAMERA_DERIVED_SET_COLUMNS } from "@shared/schema";
+import type { ClipSource, ClipSummary } from "@shared/video-clips";
 import { classAiDraftSchema } from "@shared/schema";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
 import type { VideoRetentionLimits } from "@shared/video-retention";
@@ -21079,6 +21087,893 @@ ${catalog}`;
    * address a clip has before its set was ever saved, and what it falls back to after the day
    * moved on. Both go through the same ownership check: the row must hang off a log that is
    * this athlete's. */
+  // ---------- The coach's reference library (Phase 4) ----------
+
+  async listReferenceClips(coachId: number) {
+    // The coach's own plus their staff's -- getEffectiveCoachIds is what makes a head coach and
+    // their assistants share a library rather than each building their own.
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db
+      .select()
+      .from(referenceClips)
+      .where(inArray(referenceClips.coachId, coachIds))
+      .orderBy(desc(referenceClips.createdAt));
+  },
+
+  async createReferenceClip(input: {
+    coachId: number;
+    title: string;
+    movement?: string | null;
+    videoUrl: string;
+    source: "uploaded" | "from_athlete";
+    sourceAthleteId?: number | null;
+    notes?: string | null;
+  }) {
+    const [row] = await db
+      .insert(referenceClips)
+      .values({
+        coachId: input.coachId,
+        title: input.title,
+        movement: input.movement ?? null,
+        videoUrl: input.videoUrl,
+        source: input.source,
+        sourceAthleteId: input.sourceAthleteId ?? null,
+        notes: input.notes ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  async deleteReferenceClip(coachId: number, id: number): Promise<string | null> {
+    // Only the coach who made it, not the whole staff: a shared library that anybody can delete
+    // from is one where a head coach's teaching material disappears without a trace.
+    const [row] = await db
+      .select({ id: referenceClips.id, videoUrl: referenceClips.videoUrl })
+      .from(referenceClips)
+      .where(and(eq(referenceClips.id, id), eq(referenceClips.coachId, coachId)));
+    if (!row) return null;
+    await db.delete(referenceClips).where(eq(referenceClips.id, id));
+    // The caller deletes the file: the copy is the coach's and nothing else points at it.
+    return row.videoUrl;
+  },
+
+  // ---------- Review to program (Phase 4b of docs/video-review-plan.md) ----------
+
+  /**
+   * "Add a corrective" from a saved review: the drill lands on the athlete's next training day.
+   *
+   * It is written to `assignment_correctives`, NOT to `program_exercises` as the plan said. A
+   * program day is shared by every athlete on that program, so appending there would give the
+   * whole squad a drill prescribed for one person's knee. The correctives table is the existing
+   * per-athlete vehicle for exactly this and already renders inside the athlete's day.
+   *
+   * "Next" is the earliest non-rest day of their newest assignment that has no workout log yet.
+   * That is what an athlete opens next, whatever the calendar says -- somebody a week behind
+   * should get the drill on the session they actually do, not on one that has already gone by.
+   */
+  async addCorrectiveFromReview(
+    coachId: number,
+    reviewId: number,
+    input: { exerciseId: number; sets?: number; reps?: string; notes?: string | null },
+  ): Promise<
+    | { ok: true; corrective: typeof assignmentCorrectives.$inferSelect; programDayId: number }
+    | { ok: false; reason: "no_review" | "no_athlete" | "no_upcoming_day" }
+  > {
+    const review = await this.getVideoReviewForCoach(coachId, reviewId);
+    if (!review) return { ok: false, reason: "no_review" };
+    if (review.athleteId == null) return { ok: false, reason: "no_athlete" };
+    await this.assertExerciseIdsVisibleTo(coachId, [input.exerciseId]);
+
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const [assignment] = await db
+      .select({ id: assignments.id, programId: assignments.programId })
+      .from(assignments)
+      .where(
+        and(eq(assignments.athleteId, review.athleteId), inArray(assignments.coachId, coachIds)),
+      )
+      .orderBy(desc(assignments.id))
+      .limit(1);
+    if (!assignment) return { ok: false, reason: "no_upcoming_day" };
+
+    const [day] = await db
+      .select({ id: programDays.id })
+      .from(programDays)
+      .innerJoin(programWeeks, eq(programWeeks.id, programDays.weekId))
+      .leftJoin(
+        workoutLogs,
+        and(
+          eq(workoutLogs.programDayId, programDays.id),
+          eq(workoutLogs.assignmentId, assignment.id),
+        ),
+      )
+      .where(
+        and(
+          eq(programWeeks.programId, assignment.programId),
+          eq(programDays.isRestDay, false),
+          isNull(workoutLogs.id),
+        ),
+      )
+      .orderBy(asc(programWeeks.weekNumber), asc(programDays.dayNumber))
+      .limit(1);
+    // Every day already logged: the program is finished, and there is nothing to append to.
+    // Said as its own answer rather than silently writing the drill onto a past session.
+    if (!day) return { ok: false, reason: "no_upcoming_day" };
+
+    const [maxOrder] = await db
+      .select({ n: sql<number>`coalesce(max(${assignmentCorrectives.orderIndex}), -1)` })
+      .from(assignmentCorrectives)
+      .where(
+        and(
+          eq(assignmentCorrectives.assignmentId, assignment.id),
+          eq(assignmentCorrectives.programDayId, day.id),
+        ),
+      );
+
+    const [row] = await db
+      .insert(assignmentCorrectives)
+      .values({
+        assignmentId: assignment.id,
+        programDayId: day.id,
+        exerciseId: input.exerciseId,
+        orderIndex: Number(maxOrder?.n ?? -1) + 1,
+        sets: input.sets ?? 3,
+        reps: input.reps ?? "10",
+        notes: input.notes ?? null,
+        sourceReviewId: reviewId,
+      })
+      .returning();
+    return { ok: true, corrective: row, programDayId: day.id };
+  },
+
+  // ---------- The cue library (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // The things a coach says over and over, ready to drop onto a timeline. Shared with their
+  // staff for the same reason the reference library is, and deletable only by whoever made it
+  // for the same reason: a shared library anybody can delete from is one where a head coach's
+  // teaching material disappears without a trace.
+
+  async listCoachCues(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db
+      .select()
+      .from(coachCues)
+      .where(inArray(coachCues.coachId, coachIds))
+      .orderBy(asc(coachCues.label));
+  },
+
+  async createCoachCue(input: {
+    coachId: number;
+    label: string;
+    body: string;
+    audioUrl?: string | null;
+  }) {
+    const [row] = await db
+      .insert(coachCues)
+      .values({
+        coachId: input.coachId,
+        label: input.label,
+        body: input.body,
+        // An audio cue still carries its text, so it reads on screen with the sound off --
+        // which on a phone, in a gym, is most of the time.
+        kind: input.audioUrl ? "audio" : "text",
+        audioUrl: input.audioUrl ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  async updateCoachCue(
+    coachId: number,
+    id: number,
+    patch: { label?: string; body?: string },
+  ) {
+    const [existing] = await db
+      .select({ id: coachCues.id })
+      .from(coachCues)
+      .where(and(eq(coachCues.id, id), eq(coachCues.coachId, coachId)));
+    if (!existing) return null;
+    const [row] = await db
+      .update(coachCues)
+      .set({
+        ...(patch.label !== undefined ? { label: patch.label } : {}),
+        ...(patch.body !== undefined ? { body: patch.body } : {}),
+      })
+      .where(eq(coachCues.id, id))
+      .returning();
+    // Editing a cue deliberately does NOT touch reviews that already used it: a `cue` event
+    // carries a copy of the text, so what a coach already said stays said.
+    return row;
+  },
+
+  /** Returns the audio url to clean up, or null when there is nothing to delete. */
+  async deleteCoachCue(coachId: number, id: number): Promise<{ audioUrl: string | null } | null> {
+    const [row] = await db
+      .select({ id: coachCues.id, audioUrl: coachCues.audioUrl })
+      .from(coachCues)
+      .where(and(eq(coachCues.id, id), eq(coachCues.coachId, coachId)));
+    if (!row) return null;
+    await db.delete(coachCues).where(eq(coachCues.id, id));
+    return { audioUrl: row.audioUrl };
+  },
+
+  /** Set or replace a cue's audio. The previous take is deleted rather than orphaned, the same
+   * way a re-recorded voice-over is. */
+  async setCoachCueAudio(
+    coachId: number,
+    id: number,
+    audioUrl: string,
+  ): Promise<{ previousUrl: string | null } | null> {
+    const [existing] = await db
+      .select({ id: coachCues.id, audioUrl: coachCues.audioUrl })
+      .from(coachCues)
+      .where(and(eq(coachCues.id, id), eq(coachCues.coachId, coachId)));
+    if (!existing) return null;
+    await db.update(coachCues).set({ audioUrl, kind: "audio" }).where(eq(coachCues.id, id));
+    return { previousUrl: existing.audioUrl };
+  },
+
+  // ---------- Saved video reviews (Phase 2 of docs/video-review-plan.md) ----------
+  //
+  // Every read below resolves the caller against the review rather than trusting an id from the
+  // wire, and the three readers are deliberately three functions rather than one with a role
+  // flag: a coach sees their own drafts, an athlete sees only what was SHARED with them, and a
+  // guardian sees only what was shared with the child they are linked to. Collapsing those into
+  // one query with a branch is how a draft leaks to the person it is about before the coach has
+  // finished writing it.
+
+  async createVideoReview(
+    coachId: number,
+    input: {
+      athleteId?: number | null;
+      title: string;
+      leftClip: unknown;
+      rightClip?: unknown | null;
+      syncL?: number;
+      syncR?: number;
+      mode?: string;
+      overlaySettings?: unknown | null;
+    },
+  ) {
+    // An athlete named on a review has to be one this coach may actually see. Checked here and
+    // not only at the route, because this is the function every future caller will reach for.
+    if (input.athleteId != null) {
+      const athlete = await this.getRosterAthleteForCoach(coachId, input.athleteId);
+      if (!athlete) return null;
+    }
+    const [row] = await db
+      .insert(videoReviews)
+      .values({
+        coachId,
+        authorId: coachId,
+        athleteId: input.athleteId ?? null,
+        title: input.title,
+        leftClip: input.leftClip,
+        rightClip: input.rightClip ?? null,
+        syncL: input.syncL ?? 0,
+        syncR: input.syncR ?? 0,
+        mode: input.mode ?? "split",
+        overlaySettings: input.overlaySettings ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  async getVideoReviewForCoach(coachId: number, reviewId: number) {
+    // Same rule as the list: their own, or a self-review that was sent to them.
+    const [row] = await db
+      .select()
+      .from(videoReviews)
+      .where(
+        and(
+          eq(videoReviews.id, reviewId),
+          eq(videoReviews.coachId, coachId),
+          or(eq(videoReviews.authorId, coachId), isNotNull(videoReviews.sentToCoachAt)),
+        ),
+      );
+    if (!row) return null;
+    return { ...row, events: await this.listVideoReviewEvents(reviewId) };
+  },
+
+  async listVideoReviewsForCoach(coachId: number, athleteId?: number | null) {
+    // Filed with this coach, and either their own work or a self-review an athlete actually
+    // SENT. An athlete's unsent draft is theirs -- a coach seeing one would be reading over
+    // their shoulder, and the whole point of a draft is that nobody has it yet.
+    const mine = and(
+      eq(videoReviews.coachId, coachId),
+      or(eq(videoReviews.authorId, coachId), isNotNull(videoReviews.sentToCoachAt)),
+    );
+    return db
+      .select()
+      .from(videoReviews)
+      .where(athleteId == null ? mine : and(mine, eq(videoReviews.athleteId, athleteId)))
+      .orderBy(desc(videoReviews.updatedAt));
+  },
+
+  async listVideoReviewEvents(reviewId: number) {
+    // In time order, which is what visibleAt in shared/video-review.ts requires of its input --
+    // it scans forward for the next boundary and would find the wrong one out of order.
+    return db
+      .select()
+      .from(videoReviewEvents)
+      .where(eq(videoReviewEvents.reviewId, reviewId))
+      .orderBy(asc(videoReviewEvents.t), asc(videoReviewEvents.id));
+  },
+
+  async updateVideoReview(
+    coachId: number,
+    reviewId: number,
+    patch: {
+      title?: string;
+      syncL?: number;
+      syncR?: number;
+      mode?: string;
+      overlaySettings?: unknown | null;
+      /** true shares, false un-shares. Omitted leaves it alone. */
+      shared?: boolean;
+    },
+  ) {
+    // AUTHOR, not merely the coach it is filed with. A coach can now receive an athlete's
+    // self-review; editing one would rewrite what that athlete said about their own lift.
+    const [existing] = await db
+      .select({ id: videoReviews.id })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, coachId)));
+    if (!existing) return null;
+    const [row] = await db
+      .update(videoReviews)
+      .set({
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.syncL !== undefined ? { syncL: patch.syncL } : {}),
+        ...(patch.syncR !== undefined ? { syncR: patch.syncR } : {}),
+        ...(patch.mode !== undefined ? { mode: patch.mode } : {}),
+        ...(patch.overlaySettings !== undefined ? { overlaySettings: patch.overlaySettings } : {}),
+        // Un-sharing sets it back to null, so "has this ever been shared" and "is it shared now"
+        // are the same question. A coach who shares early and thinks better of it gets it back.
+        ...(patch.shared !== undefined
+          ? { sharedWithAthleteAt: patch.shared ? new Date() : null }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(videoReviews.id, reviewId))
+      .returning();
+    // SHARING is what answers an ask, and it is hooked here rather than at the route so every
+    // future caller closes the queue entry too. Saving a draft deliberately does not: telling
+    // an athlete they have been answered by something they cannot see is worse than silence.
+    if (patch.shared === true) {
+      const resolved = await this.resolveVideoReviewRequestsForReview(reviewId);
+      if (resolved.length > 0 && row.athleteId != null) {
+        await this.createNotification(
+          row.athleteId,
+          "video_review",
+          "Your coach reviewed your clip",
+          row.title,
+          `/athlete/video-reviews/${reviewId}`,
+        );
+      }
+    }
+    return row;
+  },
+
+  /** Replaces the whole event log. A review is edited by rewriting its timeline, not by
+   * patching individual marks -- the editor holds the log in memory and saves it whole, which
+   * is also what makes undo free on the client. */
+  /** The whole timeline, rewritten -- by its AUTHOR. A coach holding an athlete's sent
+   * self-review must not be able to overwrite the marks that athlete made on their own lift. */
+  async replaceVideoReviewEvents(
+    coachId: number,
+    reviewId: number,
+    events: { t: number; kind: string; payload: unknown; side?: string; holdSeconds?: number | null }[],
+  ) {
+    const [existing] = await db
+      .select({ id: videoReviews.id })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, coachId)));
+    if (!existing) return null;
+    return db.transaction(async (tx) => {
+      await tx.delete(videoReviewEvents).where(eq(videoReviewEvents.reviewId, reviewId));
+      if (events.length > 0) {
+        await tx.insert(videoReviewEvents).values(
+          events.map((e) => ({
+            reviewId,
+            t: e.t,
+            kind: e.kind,
+            payload: e.payload,
+            side: e.side ?? "left",
+            holdSeconds: e.holdSeconds ?? null,
+          })),
+        );
+      }
+      await tx
+        .update(videoReviews)
+        .set({ updatedAt: new Date() })
+        .where(eq(videoReviews.id, reviewId));
+      return tx
+        .select()
+        .from(videoReviewEvents)
+        .where(eq(videoReviewEvents.reviewId, reviewId))
+        .orderBy(asc(videoReviewEvents.t), asc(videoReviewEvents.id));
+    });
+  },
+
+  /** Attaches a recorded voice-over. Returns the OLD url so the caller can delete that file --
+   * a re-record replaces the audio, and leaving the previous take on disk is a leak that grows
+   * every time a coach is unhappy with their first attempt. */
+  async setVideoReviewVoiceOver(
+    coachId: number,
+    reviewId: number,
+    voiceOverUrl: string,
+    startAt: number,
+  ): Promise<{ previousUrl: string | null } | null> {
+    const [existing] = await db
+      .select({ id: videoReviews.id, voiceOverUrl: videoReviews.voiceOverUrl })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, coachId)));
+    if (!existing) return null;
+    await db
+      .update(videoReviews)
+      .set({ voiceOverUrl, voiceOverStartAt: startAt, updatedAt: new Date() })
+      .where(eq(videoReviews.id, reviewId));
+    return { previousUrl: existing.voiceOverUrl };
+  },
+
+  async listVideoReviewsForAthlete(athleteId: number) {
+    return db
+      .select()
+      .from(videoReviews)
+      .where(
+        and(eq(videoReviews.athleteId, athleteId), isNotNull(videoReviews.sharedWithAthleteAt)),
+      )
+      .orderBy(desc(videoReviews.sharedWithAthleteAt));
+  },
+
+  async getVideoReviewForAthlete(athleteId: number, reviewId: number) {
+    const [row] = await db
+      .select()
+      .from(videoReviews)
+      .where(
+        and(
+          eq(videoReviews.id, reviewId),
+          eq(videoReviews.athleteId, athleteId),
+          isNotNull(videoReviews.sharedWithAthleteAt),
+        ),
+      );
+    if (!row) return null;
+    return { ...row, events: await this.listVideoReviewEvents(reviewId) };
+  },
+
+  /** The guardian's read is the athlete's read, gated on the link. A review is coaching content
+   * about a child, so the person responsible for that child sees exactly what the child sees --
+   * no more (never the coach's unshared drafts) and no less. */
+  async listVideoReviewsForGuardian(guardianId: number, athleteId: number) {
+    const athlete = await this.getAthleteForGuardianScoped(guardianId, athleteId);
+    if (!athlete) return null;
+    return this.listVideoReviewsForAthlete(athleteId);
+  },
+
+  async getVideoReviewForGuardian(guardianId: number, athleteId: number, reviewId: number) {
+    const athlete = await this.getAthleteForGuardianScoped(guardianId, athleteId);
+    if (!athlete) return null;
+    return this.getVideoReviewForAthlete(athleteId, reviewId);
+  },
+
+  // ---------- Burned-in export (Phase 5 of docs/video-review-plan.md) ----------
+  //
+  // The one place a review becomes a real video file, because a file is the only thing that can
+  // leave the platform -- and so the one place a copy outlives every permission Forge enforces.
+  // The row is both the link and the audit record.
+
+  /**
+   * Records an export and returns the one-time share token.
+   *
+   * The TOKEN IS RETURNED ONCE and never stored: only its hash goes in the row, the same way
+   * every other token in this schema is handled. A leak of the table alone therefore hands out
+   * no playable links.
+   */
+  async recordVideoReviewExport(input: {
+    reviewId: number;
+    exportedBy: number;
+    athleteId: number | null;
+    videoUrl: string;
+    minorAtExport: boolean;
+    expiresInDays?: number;
+  }): Promise<{ row: typeof videoReviewExports.$inferSelect; token: string }> {
+    const token = generateResetToken();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + (input.expiresInDays ?? VIDEO_EXPORT_EXPIRY_DAYS));
+    const [row] = await db
+      .insert(videoReviewExports)
+      .values({
+        reviewId: input.reviewId,
+        exportedBy: input.exportedBy,
+        athleteId: input.athleteId,
+        videoUrl: input.videoUrl,
+        tokenHash: hashResetToken(token),
+        expiresAt,
+        minorAtExport: input.minorAtExport,
+      })
+      .returning();
+    return { row, token };
+  },
+
+  /** The file behind a share link, or null for a token that is wrong, expired or revoked. All
+   * three answer the same way: a link that says "this expired" tells a stranger the review
+   * exists, which is the thing the expiry was protecting. */
+  async resolveVideoReviewExport(token: string) {
+    const [row] = await db
+      .select()
+      .from(videoReviewExports)
+      .where(eq(videoReviewExports.tokenHash, hashResetToken(token)));
+    if (!row) return null;
+    if (row.revokedAt) return null;
+    if (row.expiresAt.getTime() <= Date.now()) return null;
+    return row;
+  },
+
+  /** Every export of one review -- the audit trail a coach or an admin reads. Never the token. */
+  async listVideoReviewExports(reviewId: number) {
+    return db
+      .select({
+        id: videoReviewExports.id,
+        exportedBy: videoReviewExports.exportedBy,
+        exportedByName: users.name,
+        athleteId: videoReviewExports.athleteId,
+        expiresAt: videoReviewExports.expiresAt,
+        revokedAt: videoReviewExports.revokedAt,
+        minorAtExport: videoReviewExports.minorAtExport,
+        createdAt: videoReviewExports.createdAt,
+      })
+      .from(videoReviewExports)
+      .leftJoin(users, eq(users.id, videoReviewExports.exportedBy))
+      .where(eq(videoReviewExports.reviewId, reviewId))
+      .orderBy(desc(videoReviewExports.createdAt));
+  },
+
+  /** Withdraws a link. Marked, never deleted: "this link was made and then withdrawn" is the
+   * fact somebody will need to establish later, and a deleted row cannot say it. */
+  async revokeVideoReviewExport(coachId: number, exportId: number): Promise<boolean> {
+    const rows = await db
+      .update(videoReviewExports)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(videoReviewExports.id, exportId),
+          // Whoever made the link, or the coach the review is filed with -- a head coach must
+          // be able to pull a link an assistant created.
+          or(
+            eq(videoReviewExports.exportedBy, coachId),
+            inArray(
+              videoReviewExports.reviewId,
+              db
+                .select({ id: videoReviews.id })
+                .from(videoReviews)
+                .where(eq(videoReviews.coachId, coachId)),
+            ),
+          ),
+          isNull(videoReviewExports.revokedAt),
+        ),
+      )
+      .returning({ id: videoReviewExports.id });
+    return rows.length > 0;
+  },
+
+  // ---------- Athlete self-review (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // The same editor, the same tables, the other direction. An athlete breaks down their own
+  // lift and can SEND it to their coach; until they do, it is theirs alone.
+  //
+  // Reviewing an existing clip is never gated by cameraAccessFor -- that gate is about
+  // RECORDING (see CLAUDE.md, "Watching a clip you already recorded is never gated"). Taking
+  // away the ability to think about footage somebody already has is not withholding something
+  // unbought.
+
+  async createSelfReview(
+    athleteId: number,
+    input: {
+      title: string;
+      leftClip: unknown;
+      rightClip?: unknown | null;
+      syncL?: number;
+      syncR?: number;
+      mode?: string;
+      overlaySettings?: unknown | null;
+    },
+  ) {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    const [row] = await db
+      .insert(videoReviews)
+      .values({
+        // Filed with their coach so "send to coach" has a destination, but NOT visible to that
+        // coach until sentToCoachAt is set. A Free Agent has no coach and gets their own id
+        // here: the row still needs a non-null coachId, and pointing it at themselves is the
+        // only value that cannot show their review to somebody else.
+        coachId: coaches[0]?.id ?? athleteId,
+        authorId: athleteId,
+        athleteId,
+        title: input.title,
+        leftClip: input.leftClip,
+        rightClip: input.rightClip ?? null,
+        syncL: input.syncL ?? 0,
+        syncR: input.syncR ?? 0,
+        mode: input.mode ?? "split",
+        overlaySettings: input.overlaySettings ?? null,
+        // The author can always watch their own work; sharedWithAthleteAt is what the ATHLETE
+        // read is gated on, and for a self-review the athlete is the author.
+        sharedWithAthleteAt: new Date(),
+      })
+      .returning();
+    return row;
+  },
+
+  /** The athlete's own reviews: the ones they wrote. Distinct from listVideoReviewsForAthlete,
+   * which is what their COACH shared with them -- two different questions, and one list mixing
+   * them would leave an athlete unable to tell their own notes from their coach's. */
+  async listSelfReviewsForAthlete(athleteId: number) {
+    return db
+      .select()
+      .from(videoReviews)
+      .where(and(eq(videoReviews.authorId, athleteId), eq(videoReviews.athleteId, athleteId)))
+      .orderBy(desc(videoReviews.updatedAt));
+  },
+
+  async getSelfReviewForAthlete(athleteId: number, reviewId: number) {
+    const [row] = await db
+      .select()
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, athleteId)));
+    if (!row) return null;
+    return { ...row, events: await this.listVideoReviewEvents(reviewId) };
+  },
+
+  async updateSelfReview(
+    athleteId: number,
+    reviewId: number,
+    patch: { title?: string; syncL?: number; syncR?: number; mode?: string; sentToCoach?: boolean },
+  ) {
+    const [existing] = await db
+      .select({ id: videoReviews.id, coachId: videoReviews.coachId, title: videoReviews.title })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, athleteId)));
+    if (!existing) return null;
+    const [row] = await db
+      .update(videoReviews)
+      .set({
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.syncL !== undefined ? { syncL: patch.syncL } : {}),
+        ...(patch.syncR !== undefined ? { syncR: patch.syncR } : {}),
+        ...(patch.mode !== undefined ? { mode: patch.mode } : {}),
+        // Unsending sets it back to null, the mirror of a coach un-sharing: somebody who sent
+        // early and thought better of it gets it back.
+        ...(patch.sentToCoach !== undefined
+          ? { sentToCoachAt: patch.sentToCoach ? new Date() : null }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(videoReviews.id, reviewId))
+      .returning();
+    if (patch.sentToCoach === true && existing.coachId !== athleteId) {
+      await this.createNotification(
+        existing.coachId,
+        "video_review",
+        "An athlete sent you their own review",
+        row.title,
+        `/coach/roster/${athleteId}`,
+      );
+    }
+    return row;
+  },
+
+  /** The athlete's own timeline, rewritten. Author-scoped for the same reason the coach's is. */
+  async replaceSelfReviewEvents(
+    athleteId: number,
+    reviewId: number,
+    events: { t: number; kind: string; payload: unknown; side?: string; holdSeconds?: number | null }[],
+  ) {
+    const [existing] = await db
+      .select({ id: videoReviews.id })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, athleteId)));
+    if (!existing) return null;
+    return db.transaction(async (tx) => {
+      await tx.delete(videoReviewEvents).where(eq(videoReviewEvents.reviewId, reviewId));
+      if (events.length > 0) {
+        await tx.insert(videoReviewEvents).values(
+          events.map((e) => ({
+            reviewId,
+            t: e.t,
+            kind: e.kind,
+            payload: e.payload,
+            side: e.side ?? "left",
+            holdSeconds: e.holdSeconds ?? null,
+          })),
+        );
+      }
+      await tx.update(videoReviews).set({ updatedAt: new Date() }).where(eq(videoReviews.id, reviewId));
+      return this.listVideoReviewEvents(reviewId);
+    });
+  },
+
+  // ---------- The review queue (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // "I filmed it and nobody watched it" is the failure this exists for. A request is an ask
+  // with a resolvedAt on it, so a coach can be shown what is still owed and how long it has
+  // been waiting -- which a comment cannot do.
+
+  /**
+   * An athlete asks for one of their own sets to be looked at.
+   *
+   * The set must be theirs and must actually have a clip: a request for footage that does not
+   * exist opens a queue entry the coach cannot act on, and they have no way to tell that from
+   * a clip that failed to load.
+   *
+   * Asking twice is the same ask. The partial unique index is the rule; this returns the
+   * existing open request rather than erroring, because from the athlete's side tapping again
+   * means "yes, please" and not "something went wrong".
+   */
+  async requestVideoReview(
+    athleteId: number,
+    setId: number,
+    note?: string | null,
+  ): Promise<
+    | { ok: true; request: typeof videoReviewRequests.$inferSelect; alreadyOpen: boolean }
+    | { ok: false; reason: "no_such_clip" | "no_coach" }
+  > {
+    const [set] = await db
+      .select({ id: workoutSetEntries.id, videoUrl: workoutSetEntries.formCheckVideoUrl })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutLogEntries.id, workoutSetEntries.logEntryId))
+      .innerJoin(workoutLogs, eq(workoutLogs.id, workoutLogEntries.workoutLogId))
+      .where(and(eq(workoutSetEntries.id, setId), eq(workoutLogs.athleteId, athleteId)));
+    // One answer for "not yours" and "no clip on it": a distinct refusal for the first would
+    // tell an athlete whether a set id belongs to somebody else.
+    if (!set || !set.videoUrl) return { ok: false, reason: "no_such_clip" };
+
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    // A Free Agent has nobody to ask. Phase 4b item 5 gives them self-review instead.
+    if (coaches.length === 0) return { ok: false, reason: "no_coach" };
+
+    const [open] = await db
+      .select()
+      .from(videoReviewRequests)
+      .where(and(eq(videoReviewRequests.setId, setId), isNull(videoReviewRequests.resolvedAt)));
+    if (open) return { ok: true, request: open, alreadyOpen: true };
+
+    const [row] = await db
+      .insert(videoReviewRequests)
+      .values({
+        athleteId,
+        coachId: coaches[0].id,
+        setId,
+        note: note?.trim() ? note.trim() : null,
+      })
+      .returning();
+    return { ok: true, request: row, alreadyOpen: false };
+  },
+
+  /**
+   * The coach's queue: open asks, OLDEST FIRST.
+   *
+   * Oldest-first is the whole point of a queue rather than a feed. The thing that has been
+   * waiting eleven days is the one that has gone wrong, and a newest-first list buries it
+   * under this morning's.
+   *
+   * Scoped through getEffectiveCoachIds, so an assistant sees the staff's asks -- and then
+   * narrowed by the per-team scope, so an assigned coach sees only their own athletes'. The
+   * clip is joined LEFT: a purged or re-uploaded clip still leaves a real ask on the queue,
+   * and dropping the row would hide exactly the request that has been waiting longest.
+   */
+  async listVideoReviewRequestsForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    // Narrowed to the athletes this coach may actually open. getRosterForCoach is the one
+    // resolver that already applies both the staff union and the per-team assignment, so the
+    // queue cannot drift from the roster page -- and an athlete who has left the roster stops
+    // appearing here, which is the same answer every other coach surface gives.
+    const visible = new Set((await this.getRosterForCoach(coachId)).map((a) => a.id));
+    const rows = await db
+      .select({
+        id: videoReviewRequests.id,
+        athleteId: videoReviewRequests.athleteId,
+        athleteName: users.name,
+        setId: videoReviewRequests.setId,
+        note: videoReviewRequests.note,
+        createdAt: videoReviewRequests.createdAt,
+        videoUrl: workoutSetEntries.formCheckVideoUrl,
+        setNumber: workoutSetEntries.setNumber,
+        exerciseName: exercises.name,
+        date: workoutLogs.date,
+      })
+      .from(videoReviewRequests)
+      .innerJoin(users, eq(users.id, videoReviewRequests.athleteId))
+      .leftJoin(workoutSetEntries, eq(workoutSetEntries.id, videoReviewRequests.setId))
+      .leftJoin(workoutLogEntries, eq(workoutLogEntries.id, workoutSetEntries.logEntryId))
+      .leftJoin(workoutLogs, eq(workoutLogs.id, workoutLogEntries.workoutLogId))
+      .leftJoin(exercises, eq(exercises.id, workoutLogEntries.exerciseId))
+      .where(
+        and(
+          inArray(videoReviewRequests.coachId, coachIds),
+          isNull(videoReviewRequests.resolvedAt),
+          visible.size === 0
+            ? sql`false`
+            : inArray(videoReviewRequests.athleteId, [...visible]),
+        ),
+      )
+      .orderBy(asc(videoReviewRequests.createdAt));
+    return rows.map((r) => ({
+      ...r,
+      exerciseName: r.exerciseName ?? "(exercise no longer resolves)",
+      // The clip is gone (retention cap, or the set was cleared). The ask is still real and
+      // the coach should see it said so rather than see nothing.
+      clipAvailable: Boolean(r.videoUrl),
+    }));
+  },
+
+  /** Just the number, for the nav badge. Same scoping as the list -- a badge counting asks the
+   * coach cannot open is worse than no badge. */
+  async countOpenVideoReviewRequestsForCoach(coachId: number): Promise<number> {
+    const rows = await this.listVideoReviewRequestsForCoach(coachId);
+    return rows.length;
+  },
+
+  /**
+   * Marks every open ask about this review's clip answered, and points them at the review.
+   *
+   * Called when the coach SHARES a review, never when they save a draft: an unshared review is
+   * work in progress, and closing the ask on it tells the athlete they have been answered by
+   * something they cannot see.
+   */
+  async resolveVideoReviewRequestsForReview(reviewId: number): Promise<number[]> {
+    const [review] = await db.select().from(videoReviews).where(eq(videoReviews.id, reviewId));
+    if (!review || review.athleteId == null) return [];
+    const clip = review.leftClip as { setId?: number } | null;
+    const setId = typeof clip?.setId === "number" ? clip.setId : null;
+    if (setId == null) return [];
+    const resolved = await db
+      .update(videoReviewRequests)
+      .set({ resolvedAt: new Date(), reviewId })
+      .where(
+        and(
+          eq(videoReviewRequests.setId, setId),
+          eq(videoReviewRequests.athleteId, review.athleteId),
+          isNull(videoReviewRequests.resolvedAt),
+        ),
+      )
+      .returning({ id: videoReviewRequests.id });
+    return resolved.map((r) => r.id);
+  },
+
+  /** The athlete's own view of what they have asked for and what came back. */
+  async listVideoReviewRequestsForAthlete(athleteId: number) {
+    return db
+      .select({
+        id: videoReviewRequests.id,
+        setId: videoReviewRequests.setId,
+        note: videoReviewRequests.note,
+        createdAt: videoReviewRequests.createdAt,
+        resolvedAt: videoReviewRequests.resolvedAt,
+        reviewId: videoReviewRequests.reviewId,
+      })
+      .from(videoReviewRequests)
+      .where(eq(videoReviewRequests.athleteId, athleteId))
+      .orderBy(desc(videoReviewRequests.createdAt));
+  },
+
+  /** An athlete withdrawing their own ask. Resolves rather than deletes: the coach may already
+   * have started on it, and a row that vanishes from under them is confusing in a way a
+   * closed one is not. */
+  async cancelVideoReviewRequest(athleteId: number, requestId: number): Promise<boolean> {
+    const rows = await db
+      .update(videoReviewRequests)
+      .set({ resolvedAt: new Date() })
+      .where(
+        and(
+          eq(videoReviewRequests.id, requestId),
+          eq(videoReviewRequests.athleteId, athleteId),
+          isNull(videoReviewRequests.resolvedAt),
+        ),
+      )
+      .returning({ id: videoReviewRequests.id });
+    return rows.length > 0;
+  },
+
   async attachVideoToLoggedSet(
     athleteId: number,
     input: AttachVideoToSetInput,
@@ -26266,6 +27161,135 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       oldestPresentAt,
       newestMissingAt: missingFiles[0]?.uploadedAt ?? null,
     };
+  },
+
+  /**
+   * Every clip the compare tool may offer for one athlete: form-check clips on logged sets and
+   * skill-session clips, newest first. See shared/video-clips.ts for the shape and for why
+   * skeleton_frames is NOT selected here -- only whether it exists. The URL is a gated /uploads
+   * path that the response middleware signs, exactly as getVideosForAthlete's are.
+   *
+   * `movement`, when given, narrows to exercises whose name contains it (case-insensitive) --
+   * the clip picker's "same movement as the clip on the other side" filter.
+   *
+   * Coach-comment videos and annotation images are deliberately absent: a comparison is of the
+   * athlete moving, and those are the coach's replies.
+   */
+  async getClipsForAthlete(athleteId: number, movement?: string | null): Promise<ClipSummary[]> {
+    const needle = movement?.trim() ? `%${movement.trim()}%` : null;
+    const result = await db.execute<{
+      source: ClipSource;
+      id: number;
+      video_url: string;
+      date: string;
+      exercise_name: string;
+      set_number: number | null;
+      has_skeleton_frames: boolean;
+      rep_breakdown: ClipSummary["repBreakdown"];
+    }>(sql`
+      SELECT v.source, v.id, v.video_url, v.reference_time::date::text AS date, v.exercise_name,
+        v.set_number, v.has_skeleton_frames, v.rep_breakdown
+      FROM (
+        SELECT 'set' AS source, wse.id AS id, wl.athlete_id AS athlete_id,
+          wse.form_check_video_url AS video_url,
+          coalesce(e.name, 'Exercise') AS exercise_name,
+          wse.set_number AS set_number,
+          (wse.skeleton_frames IS NOT NULL) AS has_skeleton_frames,
+          wse.rep_breakdown AS rep_breakdown,
+          coalesce(wl.completed_at, wl.date::timestamp) AS reference_time
+        FROM workout_set_entries wse
+        JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+        JOIN workout_logs wl ON wl.id = wle.workout_log_id
+        LEFT JOIN exercises e ON e.id = wle.exercise_id
+        WHERE wse.form_check_video_url IS NOT NULL
+
+        UNION ALL
+
+        SELECT 'skill', ssl.id, ssl.athlete_id, ssl.video_url,
+          coalesce(sx.name, 'Skill drill'), ssl.set_number, false, NULL::json, ssl.created_at
+        FROM skill_session_logs ssl
+        LEFT JOIN skill_program_exercises spe ON spe.id = ssl.skill_program_exercise_id
+        LEFT JOIN skill_exercises sx ON sx.id = coalesce(ssl.skill_exercise_id, spe.skill_exercise_id)
+        WHERE ssl.video_url IS NOT NULL
+      ) v
+      WHERE v.athlete_id = ${athleteId}
+        ${needle ? sql`AND v.exercise_name ILIKE ${needle}` : sql``}
+      ORDER BY v.reference_time DESC, v.set_number ASC NULLS LAST
+    `);
+    return result.rows.map((r) => ({
+      source: r.source,
+      id: Number(r.id),
+      videoUrl: r.video_url,
+      date: r.date,
+      exerciseName: r.exercise_name,
+      setNumber: r.set_number == null ? null : Number(r.set_number),
+      hasSkeletonFrames: !!r.has_skeleton_frames,
+      repBreakdown: Array.isArray(r.rep_breakdown) ? r.rep_breakdown : null,
+    }));
+  },
+
+  /**
+   * The same athlete's last clip of the same movement, from far enough back to be worth
+   * comparing against. "You versus you" (Phase 4b of docs/video-review-plan.md).
+   *
+   * THE MINIMUM AGE IS THE WHOLE IDEA. Comparing a lift against one from the same session shows
+   * fatigue, which is a different question and usually a discouraging answer. Fourteen days is
+   * long enough for training to have changed something and short enough that the athlete
+   * remembers the session. It is a judgement call, not a derivation, and it is a parameter so a
+   * coach comparing a twelve-week block can widen it.
+   *
+   * Prefers a clip that carries repBreakdown, because that is what lets the sync suggestion
+   * work -- a comparison the tool can line up is worth more than one three days older that it
+   * cannot. Falls back to the most recent qualifying clip either way rather than returning
+   * nothing: "no rep data" is not "no clip".
+   */
+  async getPriorClipForAthlete(
+    athleteId: number,
+    exerciseName: string,
+    before: string,
+    minimumDaysApart = 14,
+  ): Promise<ClipSummary | null> {
+    const clips = await this.getClipsForAthlete(athleteId, exerciseName);
+    const cutoff = new Date(before);
+    if (Number.isNaN(cutoff.getTime())) return null;
+    cutoff.setDate(cutoff.getDate() - minimumDaysApart);
+
+    const eligible = clips.filter((c) => {
+      const d = new Date(c.date);
+      return !Number.isNaN(d.getTime()) && d <= cutoff;
+    });
+    if (eligible.length === 0) return null;
+    // getClipsForAthlete is already newest-first, so the first hit of each kind is the most
+    // recent one. Prefer alignable, fall back to merely eligible.
+    return eligible.find((c) => (c.repBreakdown?.length ?? 0) > 0) ?? eligible[0];
+  },
+
+  /**
+   * The saved skeleton for ONE set clip, fetched when that clip is chosen. Scoped by the athlete
+   * the caller has already been authorised for: a set id that belongs to somebody else reads as
+   * "no such clip", never as their frames. Null frames (a web/Android capture, a plain form
+   * check) come back as an empty array so the caller can tell "none" from "not found".
+   */
+  async getSetClipFramesForAthlete(
+    athleteId: number,
+    setId: number,
+  ): Promise<{ skeletonFrames: unknown[] } | null> {
+    const rows = await db
+      .select({ skeletonFrames: workoutSetEntries.skeletonFrames })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutLogEntries.id, workoutSetEntries.logEntryId))
+      .innerJoin(workoutLogs, eq(workoutLogs.id, workoutLogEntries.workoutLogId))
+      .where(
+        and(
+          eq(workoutSetEntries.id, setId),
+          eq(workoutLogs.athleteId, athleteId),
+          isNotNull(workoutSetEntries.formCheckVideoUrl),
+        ),
+      )
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return { skeletonFrames: Array.isArray(row.skeletonFrames) ? row.skeletonFrames : [] };
   },
 
   async getVideosForAthlete(athleteId: number): Promise<
