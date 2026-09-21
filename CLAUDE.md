@@ -189,9 +189,11 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **492** is the newest TestFlight build, cut from `4f245a8` on 2026-09-21.
-  It carries #157: the athlete's own cohort filter (gender and sport, on top of
-  the age band).
+- A `beta` was triggered on `main` at `8d1a4920` on 2026-09-21 for #158: the
+  tap-a-muscle history, the reader's-unit display, the date window, and
+  bodyweight-at-the-time scoring. Record the build number here when it lands.
+- Build **492** was cut from `4f245a8` on 2026-09-21. It carries #157: the
+  athlete's own cohort filter (gender and sport, on top of the age band).
 - Build **491** shipped from `1d5ecc8` the same day with #156: the strength
   profile -- the shared body map, the tap-a-muscle exercise filter, and the
   age-band percentile.
@@ -199,7 +201,7 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- **Nothing on `main` is waiting on an upload.**
+- **Nothing on `main` is waiting on an upload** beyond the #158 `beta` above, which is in flight.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
@@ -629,8 +631,19 @@ branch through the real login route and the real email.
   moves it forward -- the rule the session cookie already follows. Signing out forgets the device.
   Changing the password keeps the device in hand and forgets the rest; a reset forgets all.
   The account was created on its first trusted device, so signup never meets the email.
-- **The App Review demo accounts are exempt by email**, `DEVICE_VERIFICATION_EXEMPT_EMAILS` on
-  Render, because they sign in on Apple's devices and cannot open the inbox.
+- **The three seeded demo accounts are exempt IN CODE**, `DEMO_ACCOUNT_EMAILS` in
+  `server/device-trust-policy.ts` -- `coach@forge.app`, `athlete@forge.app`,
+  `freeagent@forge.app`. This used to read "exempt by email, `DEVICE_VERIFICATION_EXEMPT_EMAILS`
+  on Render", and that was both the wrong shape and, on 2026-09-21, simply not true: the
+  variable was never set, so Scott could not sign in to any of the three ("I can't login for the
+  demo accounts ... I obviously can't get to those emails as they don't exist"). An env var is
+  the right control for a decision an OPERATOR makes -- an email outage, one account -- but these
+  three are a fact about the software: the seed creates them and gives them addresses nothing
+  delivers to. Never move this back into the environment.
+  `DEVICE_VERIFICATION_EXEMPT_EMAILS` still works and ADDS to the list, for anything else.
+  Matching is exact and `server/trusted-devices.test.ts` pins the three against the addresses
+  `seed.ts` really creates, so a rename cannot leave a stale literal reading as covered.
+  `admin@forge.app` is deliberately NOT exempt -- the admin account is Scott's, on a real inbox.
   `DEVICE_VERIFICATION_DISABLED=true` is the kill switch for an email-provider outage. With no
   email provider configured at all (a dev box) the gate stands down and says so once.
 - **The test harness pre-trusts its client.** `loginAs` calls `trustClientDevice` first, so the
