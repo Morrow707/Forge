@@ -8,7 +8,12 @@ import { useQuery } from "@tanstack/react-query";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { drawEvents } from "@/lib/review-draw";
 import { drawSkeleton, nearestSkeletonFrame } from "@/lib/skeleton-draw";
-import { visibleAt, speedAt, type ReviewEvent } from "@shared/video-review";
+import {
+  visibleAt,
+  speedAt,
+  videoTimeForAudioTime,
+  type ReviewEvent,
+} from "@shared/video-review";
 import type { PoseFrame } from "@/lib/pose-tracking";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +48,8 @@ type SavedReview = {
   syncL: number;
   syncR: number;
   mode: "split" | "overlay";
+  voiceOverUrl: string | null;
+  voiceOverStartAt: number | null;
   purgedAt: string | null;
   events: { t: number; kind: string; payload: unknown; side: string; holdSeconds: number | null }[];
 };
@@ -85,6 +92,8 @@ export function VideoReviewPlayerDialog({
 
 function ReviewPlayback({ review }: { review: SavedReview }) {
   const leftRef = useRef<HTMLVideoElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hasVoiceOver = !!review.voiceOverUrl;
   const rightRef = useRef<HTMLVideoElement | null>(null);
   const leftCanvas = useRef<HTMLCanvasElement | null>(null);
   const rightCanvas = useRef<HTMLCanvasElement | null>(null);
@@ -138,6 +147,14 @@ function ReviewPlayback({ review }: { review: SavedReview }) {
     let raf = 0;
     const tick = () => {
       const l = leftRef.current;
+      // WITH NARRATION THE AUDIO IS THE MASTER. The video is driven to wherever the speech has
+      // reached, through the integral of the speed events -- not set equal to the audio time,
+      // which would drift apart as soon as the coach slowed the clip down to point at something.
+      const a = audioRef.current;
+      if (hasVoiceOver && a && l) {
+        const want = videoTimeForAudioTime(events, a.currentTime, review.voiceOverStartAt ?? 0);
+        if (Math.abs(l.currentTime - want) > 0.08) l.currentTime = want;
+      }
       if (l) {
         setT(l.currentTime);
         if (Number.isFinite(l.duration)) setDuration(l.duration);
@@ -185,6 +202,7 @@ function ReviewPlayback({ review }: { review: SavedReview }) {
     const l = leftRef.current;
     const r = rightRef.current;
     if (!l) return;
+    const a = audioRef.current;
     if (l.paused) {
       l.playbackRate = speedAt(events, l.currentTime);
       void l.play().catch(() => {});
@@ -192,10 +210,15 @@ function ReviewPlayback({ review }: { review: SavedReview }) {
         r.playbackRate = l.playbackRate;
         void r.play().catch(() => {});
       }
+      // Pausing the narration pauses everything, and starting it starts everything -- the coach
+      // talking is the thing being watched, and a video that ran on without it would be a
+      // different review.
+      if (a) void a.play().catch(() => {});
       setPlaying(true);
     } else {
       l.pause();
       r?.pause();
+      a?.pause();
       setPlaying(false);
     }
   }
@@ -206,6 +229,11 @@ function ReviewPlayback({ review }: { review: SavedReview }) {
     l.currentTime = to;
     const r = rightRef.current;
     if (r) r.currentTime = rightTimeFor(to);
+    // With narration, the scrub bar still moves the VIDEO -- which is what a reader means by
+    // dragging it -- and the rAF loop above will pull the video back to wherever the speech is
+    // on the next frame. Seeking the audio to match would need audioTimeForVideoTime and a null
+    // case for a frame the coach never narrated over; that is Phase 4's polish, and doing it
+    // half-way here would strand the reader mid-sentence.
   }
 
   return (
@@ -250,6 +278,15 @@ function ReviewPlayback({ review }: { review: SavedReview }) {
           </div>
         )}
       </div>
+
+      {hasVoiceOver && (
+        <audio
+          ref={audioRef}
+          src={resolveApiUrl(review.voiceOverUrl!)}
+          preload="metadata"
+          className="hidden"
+        />
+      )}
 
       <div className="flex items-center gap-3">
         <Button size="sm" variant="secondary" onClick={toggle} aria-label={playing ? "Pause" : "Play"}>

@@ -18,6 +18,8 @@ import {
   Trash2,
   Share2,
   Save,
+  Mic,
+  Square as StopIcon,
 } from "lucide-react";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { resolveApiUrl, apiRequest } from "@/lib/queryClient";
@@ -90,6 +92,17 @@ export function VideoReviewEditorDialog({
   const [saving, setSaving] = useState(false);
   const [shared, setShared] = useState(initialShared);
   const [dirty, setDirty] = useState(false);
+  // VOICE-OVER. While recording, the coach's actions are logged against the AUDIO clock rather
+  // than the video's -- see shared/video-review.ts's videoTimeForAudioTime for why the two are
+  // not the same thing once playback speed changes.
+  const [recording, setRecording] = useState(false);
+  const recorder = useRef<MediaRecorder | null>(null);
+  const chunks = useRef<Blob[]>([]);
+  const recStartedAtMs = useRef(0);
+  const recStartVideoT = useRef(0);
+
+  /** Seconds into the narration, right now. The clock every event uses while recording. */
+  const audioElapsed = () => (Date.now() - recStartedAtMs.current) / 1000;
 
   // Re-seed each time the dialog opens, for the same reason the compare tool does: a stale log
   // from a previous open would be somebody else's review. Props, not a query, so this is not the
@@ -183,7 +196,9 @@ export function VideoReviewEditorDialog({
   }
 
   function addEvent(payload: ReviewEventPayload) {
-    const now = videoRef.current?.currentTime ?? 0;
+    // While narrating, a mark belongs to the moment in the SPEECH it was made, because that is
+    // the clock playback will run on. Outside a recording it belongs to the video frame.
+    const now = recording ? audioElapsed() : (videoRef.current?.currentTime ?? 0);
     // Inserted in time order so the log stays sorted -- visibleAt scans forward for the next
     // boundary and would find the wrong one otherwise, and the server returns it sorted too.
     const mark: ReviewEvent = { t: now, side: "left", payload };
@@ -228,6 +243,61 @@ export function VideoReviewEditorDialog({
     if (tool === "stroke" && d.points.length < 2) return;
     const payload = previewPayload(d);
     if (payload) addEvent(payload);
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      chunks.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.current.push(e.data);
+      };
+      mr.onstop = () => {
+        // Every track stopped, or iOS leaves the microphone indicator on after the dialog
+        // closes and the coach reasonably concludes the app is still listening.
+        stream.getTracks().forEach((t2) => t2.stop());
+        void uploadTake(new Blob(chunks.current, { type: mr.mimeType || "audio/webm" }));
+      };
+      recStartedAtMs.current = Date.now();
+      recStartVideoT.current = videoRef.current?.currentTime ?? 0;
+      mr.start();
+      recorder.current = mr;
+      setRecording(true);
+      // The narration runs over the lift, so playback starts with it.
+      void videoRef.current?.play().catch(() => {});
+      setPlaying(true);
+    } catch {
+      // A refused permission is the common case, not an error worth a stack trace.
+      toast.error("Forge needs microphone access to record a voice-over.");
+    }
+  }
+
+  function stopRecording() {
+    recorder.current?.stop();
+    recorder.current = null;
+    setRecording(false);
+    videoRef.current?.pause();
+    setPlaying(false);
+  }
+
+  async function uploadTake(blob: Blob) {
+    try {
+      const form = new FormData();
+      // The extension is decided server-side from the mimetype; the name is only a label.
+      form.append("audio", blob, "voice-over");
+      form.append("startAt", String(recStartVideoT.current));
+      const res = await fetch(resolveApiUrl(`/api/coach/video-reviews/${reviewId}/audio`), {
+        method: "POST",
+        body: form,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      toast.success("Voice-over saved");
+      onSaved?.();
+    } catch {
+      toast.error("Couldn't save the voice-over. The drawings you made are still here.");
+    }
   }
 
   async function save() {
@@ -385,6 +455,14 @@ export function VideoReviewEditorDialog({
             {events.length} mark{events.length === 1 ? "" : "s"}
             {marksHere > 0 ? ` (${marksHere} on screen)` : ""}
           </span>
+          <Button
+            size="sm"
+            variant={recording ? "destructive" : "outline"}
+            onClick={() => (recording ? stopRecording() : void startRecording())}
+          >
+            {recording ? <StopIcon className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+            {recording ? "Stop" : "Voice-over"}
+          </Button>
           <span className="flex-1" />
           <Button size="sm" variant={shared ? "default" : "outline"} onClick={() => void toggleShare()}>
             <Share2 className="h-3.5 w-3.5" /> {shared ? "Shared" : "Share"}
