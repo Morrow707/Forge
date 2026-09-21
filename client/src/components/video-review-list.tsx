@@ -103,6 +103,14 @@ export function VideoReviewList({
                   <Lock className="h-3.5 w-3.5" /> Draft
                 </span>
               ))}
+            {/* Watch is where the export lives (Phase 5): burning a review requires playing
+                it through, and the player is the screen that already has both videos and the
+                voice-over loaded. A coach gets both buttons. */}
+            {mode === "coach" && (
+              <Button size="sm" variant="ghost" onClick={() => setOpenId(r.id)}>
+                Watch
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -119,6 +127,10 @@ export function VideoReviewList({
           open={openId != null}
           onOpenChange={(o) => !o && setOpenId(null)}
           fetchUrl={reviewUrl(openId)}
+          // Exporting is publishing, so it is offered only to a coach on their own reviews.
+          // The server refuses anybody else regardless; this is what stops a button being
+          // drawn that always fails.
+          canExport={mode === "coach"}
         />
       )}
       {editing && (

@@ -53,6 +53,8 @@ import {
   videoReviews,
   coachCues,
   videoReviewEvents,
+  videoReviewExports,
+  VIDEO_EXPORT_EXPIRY_DAYS,
   videoReviewRequests,
   referenceClips,
   exerciseSubmissions,
@@ -21552,6 +21554,106 @@ ${catalog}`;
     const athlete = await this.getAthleteForGuardianScoped(guardianId, athleteId);
     if (!athlete) return null;
     return this.getVideoReviewForAthlete(athleteId, reviewId);
+  },
+
+  // ---------- Burned-in export (Phase 5 of docs/video-review-plan.md) ----------
+  //
+  // The one place a review becomes a real video file, because a file is the only thing that can
+  // leave the platform -- and so the one place a copy outlives every permission Forge enforces.
+  // The row is both the link and the audit record.
+
+  /**
+   * Records an export and returns the one-time share token.
+   *
+   * The TOKEN IS RETURNED ONCE and never stored: only its hash goes in the row, the same way
+   * every other token in this schema is handled. A leak of the table alone therefore hands out
+   * no playable links.
+   */
+  async recordVideoReviewExport(input: {
+    reviewId: number;
+    exportedBy: number;
+    athleteId: number | null;
+    videoUrl: string;
+    minorAtExport: boolean;
+    expiresInDays?: number;
+  }): Promise<{ row: typeof videoReviewExports.$inferSelect; token: string }> {
+    const token = generateResetToken();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + (input.expiresInDays ?? VIDEO_EXPORT_EXPIRY_DAYS));
+    const [row] = await db
+      .insert(videoReviewExports)
+      .values({
+        reviewId: input.reviewId,
+        exportedBy: input.exportedBy,
+        athleteId: input.athleteId,
+        videoUrl: input.videoUrl,
+        tokenHash: hashResetToken(token),
+        expiresAt,
+        minorAtExport: input.minorAtExport,
+      })
+      .returning();
+    return { row, token };
+  },
+
+  /** The file behind a share link, or null for a token that is wrong, expired or revoked. All
+   * three answer the same way: a link that says "this expired" tells a stranger the review
+   * exists, which is the thing the expiry was protecting. */
+  async resolveVideoReviewExport(token: string) {
+    const [row] = await db
+      .select()
+      .from(videoReviewExports)
+      .where(eq(videoReviewExports.tokenHash, hashResetToken(token)));
+    if (!row) return null;
+    if (row.revokedAt) return null;
+    if (row.expiresAt.getTime() <= Date.now()) return null;
+    return row;
+  },
+
+  /** Every export of one review -- the audit trail a coach or an admin reads. Never the token. */
+  async listVideoReviewExports(reviewId: number) {
+    return db
+      .select({
+        id: videoReviewExports.id,
+        exportedBy: videoReviewExports.exportedBy,
+        exportedByName: users.name,
+        athleteId: videoReviewExports.athleteId,
+        expiresAt: videoReviewExports.expiresAt,
+        revokedAt: videoReviewExports.revokedAt,
+        minorAtExport: videoReviewExports.minorAtExport,
+        createdAt: videoReviewExports.createdAt,
+      })
+      .from(videoReviewExports)
+      .leftJoin(users, eq(users.id, videoReviewExports.exportedBy))
+      .where(eq(videoReviewExports.reviewId, reviewId))
+      .orderBy(desc(videoReviewExports.createdAt));
+  },
+
+  /** Withdraws a link. Marked, never deleted: "this link was made and then withdrawn" is the
+   * fact somebody will need to establish later, and a deleted row cannot say it. */
+  async revokeVideoReviewExport(coachId: number, exportId: number): Promise<boolean> {
+    const rows = await db
+      .update(videoReviewExports)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(videoReviewExports.id, exportId),
+          // Whoever made the link, or the coach the review is filed with -- a head coach must
+          // be able to pull a link an assistant created.
+          or(
+            eq(videoReviewExports.exportedBy, coachId),
+            inArray(
+              videoReviewExports.reviewId,
+              db
+                .select({ id: videoReviews.id })
+                .from(videoReviews)
+                .where(eq(videoReviews.coachId, coachId)),
+            ),
+          ),
+          isNull(videoReviewExports.revokedAt),
+        ),
+      )
+      .returning({ id: videoReviewExports.id });
+    return rows.length > 0;
   },
 
   // ---------- Athlete self-review (Phase 4b of docs/video-review-plan.md) ----------

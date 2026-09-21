@@ -2691,6 +2691,61 @@ export const referenceClips = pgTable(
 );
 
 /**
+ * A BURNED-IN copy of a review, and the link somebody was given to it (Phase 5 of
+ * docs/video-review-plan.md).
+ *
+ * Everything else about a review is deliberately data rather than a rendered video -- that is
+ * what keeps it at kilobytes, editable, and free of a transcode step. This is the exception,
+ * and it exists for the one thing data cannot do: leave the platform. A file somebody can send
+ * to a parent, a recruiter or a physio has to carry its own drawings.
+ *
+ * Which is exactly why it is the most dangerous thing in the feature. A review is footage of a
+ * person, very often a minor, and an export is a copy of it that outlives every permission
+ * Forge enforces. So:
+ *  - the link EXPIRES, and only a hash of its token is stored, like every other token here;
+ *  - the row is the audit record -- who exported whose review and when -- and is insert-only;
+ *  - revoking is a column, not a delete, because "this link was made and then withdrawn" is
+ *    the fact somebody will need to establish later.
+ */
+/**
+ * How long a share link lives. Two weeks: long enough for a parent to get round to opening it
+ * or a recruiter to watch it twice, short enough that a link pasted into a group chat stops
+ * working well before the athlete has moved schools. A number somebody chose, not a derivation.
+ */
+export const VIDEO_EXPORT_EXPIRY_DAYS = 14;
+
+export const videoReviewExports = pgTable(
+  "video_review_exports",
+  {
+    id: serial("id").primaryKey(),
+    reviewId: integer("review_id")
+      .notNull()
+      .references(() => videoReviews.id, { onDelete: "cascade" }),
+    /** Who pressed export. Not derived from the review: a staff coach may export a head
+     * coach's review, and the audit question is who acted. */
+    exportedBy: integer("exported_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The athlete in the footage, copied rather than joined -- the audit record has to stay
+     * answerable after a review is deleted. */
+    athleteId: integer("athlete_id").references(() => users.id, { onDelete: "set null" }),
+    videoUrl: text("video_url").notNull(),
+    /** Only the hash, so a database leak alone does not hand out playable links. */
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    revokedAt: timestamp("revoked_at"),
+    /** True when the athlete was under 18 at export time, with the coach's confirmation that
+     * guardian consent covers it. Stored because the answer changes as the athlete ages and
+     * the record has to say what was true on the day. */
+    minorAtExport: boolean("minor_at_export").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    reviewIdx: index("video_review_exports_review_idx").on(table.reviewId),
+  }),
+);
+
+/**
  * A coach's saved cues -- the things they say over and over (Phase 4b of
  * docs/video-review-plan.md). Dropped onto a review's timeline, a cue becomes an ordinary
  * `cue` event carrying a COPY of its text.

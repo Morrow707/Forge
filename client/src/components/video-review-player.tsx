@@ -7,6 +7,7 @@ import { ReadFailed } from "@/components/read-failed";
 import { useQuery } from "@tanstack/react-query";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { drawEvents } from "@/lib/review-draw";
+import { ExportReviewButton } from "@/components/export-review-button";
 import { drawSkeleton, nearestSkeletonFrame } from "@/lib/skeleton-draw";
 import {
   visibleAt,
@@ -52,6 +53,9 @@ type SavedReview = {
   voiceOverUrl: string | null;
   voiceOverStartAt: number | null;
   purgedAt: string | null;
+  /** Who the review is about; null for two reference clips. Read here only to tell the export
+   * confirmation whether it is somebody's footage. */
+  athleteId: number | null;
   events: { t: number; kind: string; payload: unknown; side: string; holdSeconds: number | null }[];
 };
 
@@ -60,10 +64,13 @@ export function VideoReviewPlayerDialog({
   onOpenChange,
   /** Where to fetch it from -- the athlete, guardian and coach routes all return the same shape. */
   fetchUrl,
+  canExport = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   fetchUrl: string;
+  /** Draw the burn-in export control (Phase 5). Coach-side, on their own reviews. */
+  canExport?: boolean;
 }) {
   const { data, isLoading, isError, refetch } = useQuery<SavedReview>({
     queryKey: [fetchUrl],
@@ -84,14 +91,22 @@ export function VideoReviewPlayerDialog({
         ) : isLoading || !data ? (
           <div className="h-64 w-full animate-pulse rounded-lg bg-surface" />
         ) : (
-          <ReviewPlayback review={data} />
+          <ReviewPlayback review={data} canExport={canExport} />
         )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function ReviewPlayback({ review }: { review: SavedReview }) {
+function ReviewPlayback({
+  review,
+  /** Only a coach reading their OWN review gets an export button. Exporting is publishing, and
+   * the server refuses anybody else -- this just stops drawing a button that always fails. */
+  canExport = false,
+}: {
+  review: SavedReview;
+  canExport?: boolean;
+}) {
   const leftRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   /** Where the cue clock was last frame. Seeded to the start, so a cue at t=0 fires when
@@ -213,6 +228,16 @@ function ReviewPlayback({ review }: { review: SavedReview }) {
     drawEvents(ctx, visibleAt(events, now, side), box, frame);
   }
 
+  /** What the exporter plays through its canvas: the elements already on screen, so nothing is
+   * re-decoded and the export cannot drift from what is being watched. */
+  const exportSources = () => ({
+    left: leftRef.current!,
+    right: rightRef.current,
+    audio: audioRef.current,
+    events,
+    rightTimeFor,
+  });
+
   function toggle() {
     const l = leftRef.current;
     const r = rightRef.current;
@@ -326,6 +351,13 @@ function ReviewPlayback({ review }: { review: SavedReview }) {
           {t.toFixed(2)}s
         </span>
       </div>
+
+      {canExport && (
+        <ExportReviewButton
+          review={{ id: review.id, title: review.title, athleteId: review.athleteId ?? null }}
+          sources={exportSources}
+        />
+      )}
 
       {/* Any angle or measurement in a review is a camera number and carries the caveat like
           every other surface. Never exempt this one: a drawn angle looks more authoritative

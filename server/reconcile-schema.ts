@@ -3435,6 +3435,28 @@ CREATE TABLE IF NOT EXISTS "coach_cues" (
 );
 CREATE INDEX IF NOT EXISTS "coach_cues_coach_idx" ON "coach_cues" ("coach_id");
 
+-- 2026-09-21: burned-in exports of a review (Phase 5).
+--
+-- The one place a review becomes a real video file, because a file is the only thing that can
+-- leave the platform -- and therefore the one place a copy outlives every permission Forge
+-- enforces. The link expires, only its hash is stored, and the row doubles as the audit record
+-- (who exported whose review, when). Revoking is a column rather than a delete: "this link was
+-- made and then withdrawn" is the fact somebody will need to establish later.
+CREATE TABLE IF NOT EXISTS "video_review_exports" (
+  "id" serial PRIMARY KEY,
+  "review_id" integer NOT NULL REFERENCES "video_reviews"("id") ON DELETE CASCADE,
+  "exported_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "video_url" text NOT NULL,
+  "token_hash" text NOT NULL UNIQUE,
+  "expires_at" timestamp NOT NULL,
+  "revoked_at" timestamp,
+  "minor_at_export" boolean NOT NULL DEFAULT false,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "video_review_exports_review_idx"
+  ON "video_review_exports" ("review_id");
+
 -- 2026-09-20: voice-over on a review (Phase 3). Audio lives under STORAGE_PATH/reviews/ and
 -- dies with the review rather than with the athlete's clip cap.
 ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_url" text;

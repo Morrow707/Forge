@@ -47,11 +47,12 @@ import {
   UPLOADS_ROOT,
   inspectUploadsStorage,
   deleteUploadedFile,
+  uploadedFileDiskPath,
   copyUploadedFile,
 } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
-import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier } from "@shared/privacy-tiers";
+import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier, ageFromDateOfBirth } from "@shared/privacy-tiers";
 import { BILLING_LIVE } from "./billing";
 import {
   createBillingPortalSession,
@@ -368,6 +369,39 @@ function reviewAudioExtension(mimetype: string): string | null {
   const base = mimetype.split(";")[0]!.trim().toLowerCase();
   return REVIEW_AUDIO_EXTENSIONS[base] ?? null;
 }
+
+/** A burned-in export lands beside the voice-overs; it is part of the review, not the
+ * athlete's own footage, and it dies with the review rather than with their retention cap. */
+const REVIEW_EXPORT_EXTENSIONS: Record<string, string> = {
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+  "video/quicktime": ".mov",
+};
+
+function reviewExportExtension(mimetype: string): string | null {
+  // Same codec-parameter problem as the audio above: MediaRecorder reports
+  // "video/webm;codecs=vp9,opus".
+  const base = mimetype.split(";")[0]!.trim().toLowerCase();
+  return REVIEW_EXPORT_EXTENSIONS[base] ?? null;
+}
+
+const uploadReviewExport = multer({
+  storage: multer.diskStorage({
+    destination: REVIEW_AUDIO_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${reviewExportExtension(file.mimetype) ?? ""}`);
+    },
+  }),
+  // The render runs in real time and the plan caps review length, so this is a couple of
+  // minutes of burned-in video at phone resolution. Same order as a form-check clip.
+  limits: { fileSize: 200 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!reviewExportExtension(file.mimetype)) {
+      return cb(new Error("Unsupported video format"));
+    }
+    cb(null, true);
+  },
+});
 
 const uploadReviewAudio = multer({
   storage: multer.diskStorage({
@@ -4973,6 +5007,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Review not found" });
     }
     res.status(201).json(result);
+  });
+
+  // ---------- Burned-in export (Phase 5 of docs/video-review-plan.md) ----------
+  //
+  // The rest of a review is data on purpose. This is the exception, for the one thing data
+  // cannot do: leave the platform. A file somebody can send to a parent, a recruiter or a
+  // physio has to carry its own drawings -- and a copy of a named person's footage outlives
+  // every permission Forge enforces, which is why the link expires, the row is an audit
+  // record, and a minor's export needs the coach to confirm what covers it.
+
+  app.post(
+    "/api/coach/video-reviews/:id/export",
+    requireRole("coach"),
+    uploadReviewExport.single("video"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const url = req.file ? `/uploads/reviews/${req.file.filename}` : null;
+      const cleanUp = async () => {
+        if (url) await deleteUploadedFile(url).catch(() => {});
+      };
+      if (!url) return res.status(400).json({ message: "No video uploaded" });
+
+      const review = await storage.getVideoReviewForCoach(user.id, Number(req.params.id));
+      if (!review || review.authorId !== user.id) {
+        // The file is already on disk, so it goes rather than sitting there as an
+        // unreferenced blob uploaded against somebody else's id. Author-only: exporting is
+        // publishing, and publishing somebody else's work is not a coach's to do.
+        await cleanUp();
+        return res.status(404).json({ message: "Review not found" });
+      }
+
+      // A MINOR'S EXPORT needs the coach to say, in this request, that guardian consent covers
+      // it. Not a checkbox the client can forget: the server refuses without it, because the
+      // confirmation is the record.
+      let minorAtExport = false;
+      if (review.athleteId != null) {
+        const athlete = await storage.getUser(review.athleteId);
+        const dob = athlete?.dateOfBirth ?? null;
+        // Unknown date of birth is treated as a minor, the same way the rest of the guardian
+        // gate does: the fail-open version of this question is the one that goes wrong.
+        minorAtExport = dob ? ageFromDateOfBirth(dob) < 18 : true;
+        if (minorAtExport && req.body?.guardianConsentConfirmed !== "true") {
+          await cleanUp();
+          return res.status(409).json({
+            message:
+              "This athlete is a minor. Confirm that the guardian consent on file covers " +
+              "sharing this video before exporting.",
+          });
+        }
+      }
+
+      const { row, token } = await storage.recordVideoReviewExport({
+        reviewId: review.id,
+        exportedBy: user.id,
+        athleteId: review.athleteId,
+        videoUrl: url,
+        minorAtExport,
+      });
+      res.status(201).json({
+        id: row.id,
+        expiresAt: row.expiresAt,
+        minorAtExport,
+        // Returned ONCE. Only the hash is stored, so this is the only moment the link exists.
+        shareUrl: `/api/review-exports/${token}`,
+      });
+    },
+  );
+
+  app.get("/api/coach/video-reviews/:id/exports", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const review = await storage.getVideoReviewForCoach(user.id, Number(req.params.id));
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(await storage.listVideoReviewExports(review.id));
+  });
+
+  app.post("/api/coach/review-exports/:id/revoke", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const ok = await storage.revokeVideoReviewExport(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Export not found" });
+    res.json({ ok: true });
+  });
+
+  // THE SHARE LINK. Deliberately unauthenticated -- the token is the credential, which is the
+  // whole point of a link somebody can send to a parent who has no Forge account. It streams
+  // the file rather than redirecting to the stored path, so the underlying file stays behind
+  // the signed-URL gate and cannot be fetched directly once this token expires or is revoked.
+  app.get("/api/review-exports/:token", async (req, res) => {
+    const row = await storage.resolveVideoReviewExport(String(req.params.token));
+    // Wrong, expired and revoked all answer the same way. "This link has expired" tells a
+    // stranger the review exists, which is the thing the expiry was protecting.
+    if (!row) return res.status(404).json({ message: "This link is no longer available." });
+    const filePath = uploadedFileDiskPath(row.videoUrl);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ message: "This link is no longer available." });
+    }
+    res.sendFile(filePath);
   });
 
   // ---------- Athlete self-review (Phase 4b of docs/video-review-plan.md) ----------

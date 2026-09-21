@@ -104,6 +104,15 @@ const GATED_UPLOAD_DIRS = new Set([
   "annotations",
   "problem-reports",
   "waivers",
+  // A review's voice-over, its cue audio and its burned-in export. All three are a coach
+  // talking about a named person's lift, and the export is footage of them -- exactly the
+  // material the rest of this list protects. It was public-by-URL until Phase 5.
+  //
+  // A SHARE LINK does not come through here: it carries its own token, is resolved by
+  // GET /api/review-exports/:token, and that route streams the file itself. Gating the raw
+  // path is what stops the link's underlying file being fetched directly after the token has
+  // expired or been revoked.
+  "reviews",
 ]);
 
 // Matches only a bare, freshly-stored path with no query string yet --
