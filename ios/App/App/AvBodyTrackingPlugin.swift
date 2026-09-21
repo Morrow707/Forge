@@ -100,6 +100,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var currentInput: AVCaptureDeviceInput?
     private var movieOutput: AVCaptureMovieFileOutput?
+    // What applyHighestFrameRate actually settled on. Read by analyzeRecording to pick a
+    // sampling stride, so raising the capture rate cannot silently double the analysis wait.
+    private var activeCaptureFrameRate: Double = 60
     private var recordingCall: CAPPluginCall?
     // Set when stop() tears the session down with a recording still finalizing. The delegate
     // below deletes the resulting file instead of leaving it on disk with nobody to claim it.
@@ -792,6 +795,28 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // 60fps is double the ~30fps hardware default, which is the motion-blur win that mattered,
     // and it halves the frame count analysis has to chew through compared to 120.
     private let targetFrameRate: Double = 60
+
+    // 120 IS PREFERRED; 240 IS REFUSED ON PURPOSE.
+    //
+    // Requested by Scott 2026-09-21 after an OVR bar sensor was filmed alongside a back squat.
+    // Against that reference, PEAK concentric velocity over-read by 18% while MEAN under-read by
+    // 40%. Peak is a short event -- roughly 50-100ms in a squat -- so at 60fps it rests on 3 to 6
+    // samples and one spiky frame wins it. Doubling the rate halves that quantisation and lets a
+    // spike be outvoted. It also makes frame stepping in the review tool worth using.
+    //
+    // 240 is NOT the next step up, and the reasoning is the same one the comment above already
+    // makes about locking to a format's top speed: the ranges that reach 240 on an iPhone are
+    // the slow-motion ones, with binned readout and an autofocus system that will not converge.
+    // That trades landmark PRECISION for temporal resolution, and precision is what the numbers
+    // above are short of -- a noisier, softer, badly-focused frame is a worse input to Vision no
+    // matter how many of them arrive. Sampling faster also cannot fix either error actually
+    // measured against the OVR: a scale that is wrong by a constant factor stays wrong at any
+    // rate, and a phantom sixth rep is a segmentation mistake, not a sampling one.
+    //
+    // So the rule is a specific rate, never "the fastest offered", and a format that reaches it
+    // by binning or by giving up autofocus is not eligible -- see preferredHighRateFormats.
+    private let preferredFrameRate: Double = 120
+    private let maxAcceptableFrameRate: Double = 120
     private let targetWidth: Int32 = 1920
     private let targetHeight: Int32 = 1080
 
@@ -818,10 +843,29 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         func dims(_ format: AVCaptureDevice.Format) -> CMVideoDimensions {
             CMVideoFormatDescriptionGetDimensions(format.formatDescription)
         }
-        func canRun60(_ format: AVCaptureDevice.Format) -> Bool {
+        func canRun(_ format: AVCaptureDevice.Format, at rate: Double) -> Bool {
             format.videoSupportedFrameRateRanges.contains {
-                $0.minFrameRate <= targetFrameRate && $0.maxFrameRate >= targetFrameRate
+                $0.minFrameRate <= rate && $0.maxFrameRate >= rate
             }
+        }
+        func canRun60(_ format: AVCaptureDevice.Format) -> Bool { canRun(format, at: targetFrameRate) }
+        // WHAT MAKES A HIGH-RATE FORMAT ACCEPTABLE, rather than merely fast.
+        //
+        // isVideoBinned is AVFoundation's own word for the readout that slow-motion formats use
+        // to reach their rate: neighbouring photosites are combined, so the frame is softer and
+        // noisier than its stated dimensions suggest. autoFocusSystem == .none is the other
+        // signature the plugin comment above warns about. Either one makes the frame a worse
+        // input to Vision than a clean 60, which is the whole reason 120 is being asked for.
+        //
+        // maxAcceptableFrameRate is a ceiling on the RANGE, not only on what we set: a format
+        // whose range tops out at 240 is a slow-motion format even when 120 sits inside it.
+        func isAcceptableHighRate(_ format: AVCaptureDevice.Format) -> Bool {
+            if format.isVideoBinned { return false }
+            if format.autoFocusSystem == .none { return false }
+            let topsOutAbove = format.videoSupportedFrameRateRanges.contains {
+                $0.maxFrameRate > maxAcceptableFrameRate
+            }
+            return !topsOutAbove && canRun(format, at: preferredFrameRate)
         }
         func aspect(_ format: AVCaptureDevice.Format) -> Double {
             let d = dims(format)
@@ -894,14 +938,30 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 return !a.isVideoHDRSupported && b.isVideoHDRSupported
             }
         }
-        guard let chosen = bestFormat(fourThree) ?? bestFormat(exact) ?? largest(underBudget) ?? largest(anySixty) else {
+        // 120 FIRST, AT THE SAME GEOMETRY, OR 60 UNCHANGED.
+        //
+        // Preferred, never required -- the same shape as the 4:3 preference above. Every filter
+        // that decides SHAPE (4:3, exactly 1080p) is reapplied here with the high-rate
+        // eligibility test on top, so asking for 120 can only ever pick between formats that
+        // were already acceptable. A device that publishes no clean 120 format falls straight
+        // through to the 60 selection below, byte for byte what every build before this did.
+        let fourThreeFast = fourThree.filter(isAcceptableHighRate)
+        let exactFast = exact.filter(isAcceptableHighRate)
+        let fastChoice = bestFormat(fourThreeFast) ?? bestFormat(exactFast)
+        guard let chosen = fastChoice ?? bestFormat(fourThree) ?? bestFormat(exact)
+            ?? largest(underBudget) ?? largest(anySixty)
+        else {
             logDiag("WARNING: no format supports \(Int(targetFrameRate))fps -- leaving device default")
             return
         }
+        // The rate we actually got, not the one we wanted -- every downstream number is sampled
+        // at this interval, and the diagnostics have to say which it was.
+        let chosenRate = fastChoice != nil ? preferredFrameRate : targetFrameRate
+        activeCaptureFrameRate = chosenRate
         // One exact duration for both min and max pins the rate rather than leaving the device
         // free to drop frames under load, which would put a variable, unrecorded sample interval
         // underneath every velocity number.
-        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(targetFrameRate))
+        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(chosenRate))
         do {
             try device.lockForConfiguration()
             device.activeFormat = chosen
@@ -925,7 +985,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // that knows them.
             let widestAnyRate = device.formats.map(\.videoFieldOfView).max() ?? chosen.videoFieldOfView
             logDiag(
-                "activeFormat set: \(d.width)x\(d.height) @ \(Int(targetFrameRate))fps (capped), "
+                "activeFormat set: \(d.width)x\(d.height) @ \(Int(chosenRate))fps"
+                    + "\(fastChoice != nil ? " (high-rate, unbinned, AF-capable)" : " (capped)"), "
                     + "aspect \(String(format: "%.2f", Double(d.width) / Double(max(d.height, 1))))"
                     + "\(isFourThree(chosen) ? " (4:3, matches Camera app)" : " (16:9 fallback)") "
                     + "fov \(String(format: "%.1f", chosen.videoFieldOfView))deg "
@@ -1136,7 +1197,21 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             call.reject("Missing path")
             return
         }
-        let sampleEveryNthFrame = max(1, call.getInt("sampleEveryNthFrame") ?? 1)
+        // A HIGHER CAPTURE RATE MUST NOT BECOME A LONGER WAIT.
+        //
+        // This pass re-reads the finished clip and runs Vision per frame; at 120fps that is
+        // twice the frames and roughly twice the ~19s an athlete already waits after a 20s set.
+        // The clip is still RECORDED at 120 -- frame stepping and the review tool get every
+        // frame, which is half of why the rate was raised -- but the offline analysis samples
+        // back down to the rate its timings were tuned against.
+        //
+        // This is explicitly the INTERIM arrangement. Analysing all 120 frames is what sharpens
+        // peak velocity (see preferredFrameRate), and the way to afford it is to analyse during
+        // recording rather than after it, which is its own piece of work. Until then, taking
+        // every second frame keeps the wait and the accuracy exactly where they are today
+        // rather than trading one for the other. An explicit caller value still wins.
+        let defaultStride = max(1, Int((activeCaptureFrameRate / 60.0).rounded()))
+        let sampleEveryNthFrame = max(1, call.getInt("sampleEveryNthFrame") ?? defaultStride)
         // Box jump only (see this file's own comment on detectBoxTop below) -- every other AV
         // dialog omits this and pays nothing extra per frame.
         let detectBox = call.getBool("detectBox") ?? false

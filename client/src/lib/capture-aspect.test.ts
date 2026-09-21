@@ -34,7 +34,46 @@ describe("the capture format", () => {
 
   it("still falls back to what every earlier build used", () => {
     // Aspect is a preference. A device that cannot hold 60fps at 4:3 keeps the 16:9 path.
-    expect(plugin).toMatch(/bestFormat\(exact\) \?\? largest\(underBudget\) \?\? largest\(anySixty\)/);
+    // Whitespace-tolerant: the chain is the invariant, not how it happens to wrap.
+    expect(plugin).toMatch(
+      /bestFormat\(exact\)\s*\?\?\s*largest\(underBudget\)\s*\?\?\s*largest\(anySixty\)/,
+    );
+  });
+
+  it("asks for 120fps in FRONT of that chain, never in place of it", () => {
+    // Same shape as the 4:3 preference: preferred, never required. A device with no clean
+    // high-rate format has to fall through to exactly the 60fps selection it used before.
+    expect(plugin).toMatch(/let fastChoice = bestFormat\(fourThreeFast\) \?\? bestFormat\(exactFast\)/);
+    expect(plugin).toMatch(/fastChoice \?\?\s*bestFormat\(fourThree\)/);
+    // The fast candidates are the SAME shape filters with eligibility on top, so asking for
+    // 120 can only pick between formats that were already acceptable.
+    expect(plugin).toContain("let fourThreeFast = fourThree.filter(isAcceptableHighRate)");
+    expect(plugin).toContain("let exactFast = exact.filter(isAcceptableHighRate)");
+  });
+
+  it("refuses the formats that reach a high rate by degrading the frame", () => {
+    // Binned readout and a non-converging autofocus are what the plugin comment has always
+    // warned about, and they cost landmark precision -- which is what the OVR comparison
+    // showed to be short, so buying rate with precision would be the wrong trade.
+    const fn = plugin.slice(plugin.indexOf("func isAcceptableHighRate"));
+    expect(fn.slice(0, 500)).toContain("format.isVideoBinned");
+    expect(fn.slice(0, 500)).toContain("format.autoFocusSystem == .none");
+    // A format whose range tops out above the ceiling is a slow-motion format even when the
+    // rate we want sits inside it.
+    expect(fn.slice(0, 500)).toContain("maxAcceptableFrameRate");
+    expect(plugin).toMatch(/maxAcceptableFrameRate: Double = 120/);
+  });
+
+  it("does not let a higher capture rate become a longer wait", () => {
+    // The offline pass samples back down to the rate its timings were tuned against; the clip
+    // is still recorded at full rate. An explicit caller value still wins.
+    expect(plugin).toContain("let defaultStride = max(1, Int((activeCaptureFrameRate / 60.0).rounded()))");
+    expect(plugin).toContain('call.getInt("sampleEveryNthFrame") ?? defaultStride');
+  });
+
+  it("reports the rate it actually got, not the one it wanted", () => {
+    expect(plugin).toContain("let chosenRate = fastChoice != nil ? preferredFrameRate : targetFrameRate");
+    expect(plugin).toContain("CMTimeScale(chosenRate)");
   });
 
   it("says which shape it ended up with", () => {
