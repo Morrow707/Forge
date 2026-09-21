@@ -21,7 +21,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { ClipPickerDialog, type CompareClip, type CompareSubject } from "@/components/clip-picker";
-import { getJson, resolveApiUrl } from "@/lib/queryClient";
+import { getJson, resolveApiUrl, apiRequest } from "@/lib/queryClient";
+import { toast } from "sonner";
+import { VideoReviewEditorDialog } from "@/components/video-review-editor";
 import { cn } from "@/lib/utils";
 import { drawSkeleton, nearestSkeletonFrame } from "@/lib/skeleton-draw";
 import type { PoseFrame } from "@/lib/pose-tracking";
@@ -164,6 +166,60 @@ export function VideoCompareDialog({
 
   // Which side is the ruler while linked: the side the last control was aimed at. The follower
   // is corrected towards it in the animation loop.
+  const [savingReview, setSavingReview] = useState(false);
+  const [editingReview, setEditingReview] = useState<
+    { id: number; title: string; clipUrl: string; clipLabel: string } | null
+  >(null);
+
+  /**
+   * Keep this pairing as a review, then open the editor on it.
+   *
+   * The clips and the SYNC MARKS go with it: lining two takes up is most of the work, and a
+   * review that lost them would make the coach do it again before they could draw anything.
+   * The route is chosen by who is looking -- a coach files it against the athlete, an athlete
+   * files it as their own (Phase 4b) -- and the server decides what either may do, not this.
+   */
+  async function saveAsReview() {
+    const left = clips.left;
+    if (!left) return;
+    const isSelf = subject.kind === "self";
+    setSavingReview(true);
+    try {
+      const body: Record<string, unknown> = {
+        title: clips.right ? `${left.label} vs ${clips.right.label}` : left.label,
+        leftClip: { videoUrl: left.videoUrl, source: "set", label: left.label, repBreakdown: left.repBreakdown ?? null },
+        rightClip: clips.right
+          ? {
+              videoUrl: clips.right.videoUrl,
+              source: "set",
+              label: clips.right.label,
+              repBreakdown: clips.right.repBreakdown ?? null,
+            }
+          : null,
+        syncL: marks.syncL,
+        syncR: marks.syncR,
+        mode,
+      };
+      if (subject.kind === "roster") body.athleteId = subject.athleteId;
+      const res = await apiRequest(
+        "POST",
+        isSelf ? "/api/athlete/self-reviews" : "/api/coach/video-reviews",
+        body,
+      );
+      const saved = (await res.json()) as { id: number; title: string };
+      setEditingReview({
+        id: saved.id,
+        title: saved.title,
+        clipUrl: left.videoUrl,
+        clipLabel: left.label,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save this as a review.");
+    } finally {
+      setSavingReview(false);
+    }
+  }
+
   const masterRef = useRef<Side>("left");
   const linkedRef = useRef(linked);
   linkedRef.current = linked;
@@ -707,6 +763,23 @@ export function VideoCompareDialog({
                 <ArrowLeftRight className="h-3.5 w-3.5" />
                 Swap
               </Button>
+              {/* SAVE WHAT YOU SET UP. The pairing and the sync marks are the expensive part of
+                  a review -- finding the two clips and lining them up -- and until this existed
+                  there was no way to keep them: the routes were there, nothing called them, and
+                  both saved-review lists promised something no button could produce.
+                  A guardian gets no button: they watch what was shared, they do not author. */}
+              {subject.kind !== "guardian" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  disabled={!clips.left || savingReview}
+                  onClick={() => void saveAsReview()}
+                >
+                  <Film className="h-3.5 w-3.5" />
+                  {savingReview ? "Saving..." : "Save as review"}
+                </Button>
+              )}
             </div>
             {reps.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
@@ -737,6 +810,18 @@ export function VideoCompareDialog({
         </div>
 
       </DialogContent>
+      {editingReview && (
+        <VideoReviewEditorDialog
+          open
+          onOpenChange={(o) => !o && setEditingReview(null)}
+          reviewId={editingReview.id}
+          title={editingReview.title}
+          clipUrl={editingReview.clipUrl}
+          clipLabel={editingReview.clipLabel}
+          variant={subject.kind === "self" ? "self" : "coach"}
+          initialShared={false}
+        />
+      )}
       {picking && (
         <ClipPickerDialog
           open

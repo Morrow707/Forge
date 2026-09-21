@@ -2755,6 +2755,19 @@ export const videoReviews = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     /** The athlete this review is ABOUT. Null for a review of two reference clips. */
     athleteId: integer("athlete_id").references(() => users.id, { onDelete: "cascade" }),
+    /**
+     * WHO MADE IT. Equal to coachId for a coach's review; equal to athleteId for an athlete's
+     * self-review (Phase 4b).
+     *
+     * A separate column rather than a role flag, because the two questions a query actually
+     * asks are "whose work is this to edit" (authorId) and "which coach is it filed with"
+     * (coachId). Collapsing them means a self-review is either invisible to the coach it was
+     * sent to, or editable by them -- and both are wrong.
+     */
+    authorId: integer("author_id").references(() => users.id, { onDelete: "cascade" }),
+    /** Set when an athlete sends their own review to their coach. The mirror of
+     * sharedWithAthleteAt, and the only thing that puts a self-review on a coach's list. */
+    sentToCoachAt: timestamp("sent_to_coach_at"),
     title: text("title").notNull(),
     /** {videoUrl, source, label} -- see shared/video-review.ts's ReviewClip. */
     leftClip: json("left_clip").notNull(),

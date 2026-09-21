@@ -21342,6 +21342,7 @@ ${catalog}`;
       .insert(videoReviews)
       .values({
         coachId,
+        authorId: coachId,
         athleteId: input.athleteId ?? null,
         title: input.title,
         leftClip: input.leftClip,
@@ -21356,23 +21357,33 @@ ${catalog}`;
   },
 
   async getVideoReviewForCoach(coachId: number, reviewId: number) {
+    // Same rule as the list: their own, or a self-review that was sent to them.
     const [row] = await db
       .select()
       .from(videoReviews)
-      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.coachId, coachId)));
+      .where(
+        and(
+          eq(videoReviews.id, reviewId),
+          eq(videoReviews.coachId, coachId),
+          or(eq(videoReviews.authorId, coachId), isNotNull(videoReviews.sentToCoachAt)),
+        ),
+      );
     if (!row) return null;
     return { ...row, events: await this.listVideoReviewEvents(reviewId) };
   },
 
   async listVideoReviewsForCoach(coachId: number, athleteId?: number | null) {
+    // Filed with this coach, and either their own work or a self-review an athlete actually
+    // SENT. An athlete's unsent draft is theirs -- a coach seeing one would be reading over
+    // their shoulder, and the whole point of a draft is that nobody has it yet.
+    const mine = and(
+      eq(videoReviews.coachId, coachId),
+      or(eq(videoReviews.authorId, coachId), isNotNull(videoReviews.sentToCoachAt)),
+    );
     return db
       .select()
       .from(videoReviews)
-      .where(
-        athleteId == null
-          ? eq(videoReviews.coachId, coachId)
-          : and(eq(videoReviews.coachId, coachId), eq(videoReviews.athleteId, athleteId)),
-      )
+      .where(athleteId == null ? mine : and(mine, eq(videoReviews.athleteId, athleteId)))
       .orderBy(desc(videoReviews.updatedAt));
   },
 
@@ -21399,10 +21410,12 @@ ${catalog}`;
       shared?: boolean;
     },
   ) {
+    // AUTHOR, not merely the coach it is filed with. A coach can now receive an athlete's
+    // self-review; editing one would rewrite what that athlete said about their own lift.
     const [existing] = await db
       .select({ id: videoReviews.id })
       .from(videoReviews)
-      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.coachId, coachId)));
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, coachId)));
     if (!existing) return null;
     const [row] = await db
       .update(videoReviews)
@@ -21442,6 +21455,8 @@ ${catalog}`;
   /** Replaces the whole event log. A review is edited by rewriting its timeline, not by
    * patching individual marks -- the editor holds the log in memory and saves it whole, which
    * is also what makes undo free on the client. */
+  /** The whole timeline, rewritten -- by its AUTHOR. A coach holding an athlete's sent
+   * self-review must not be able to overwrite the marks that athlete made on their own lift. */
   async replaceVideoReviewEvents(
     coachId: number,
     reviewId: number,
@@ -21450,7 +21465,7 @@ ${catalog}`;
     const [existing] = await db
       .select({ id: videoReviews.id })
       .from(videoReviews)
-      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.coachId, coachId)));
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, coachId)));
     if (!existing) return null;
     return db.transaction(async (tx) => {
       await tx.delete(videoReviewEvents).where(eq(videoReviewEvents.reviewId, reviewId));
@@ -21490,7 +21505,7 @@ ${catalog}`;
     const [existing] = await db
       .select({ id: videoReviews.id, voiceOverUrl: videoReviews.voiceOverUrl })
       .from(videoReviews)
-      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.coachId, coachId)));
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, coachId)));
     if (!existing) return null;
     await db
       .update(videoReviews)
@@ -21537,6 +21552,142 @@ ${catalog}`;
     const athlete = await this.getAthleteForGuardianScoped(guardianId, athleteId);
     if (!athlete) return null;
     return this.getVideoReviewForAthlete(athleteId, reviewId);
+  },
+
+  // ---------- Athlete self-review (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // The same editor, the same tables, the other direction. An athlete breaks down their own
+  // lift and can SEND it to their coach; until they do, it is theirs alone.
+  //
+  // Reviewing an existing clip is never gated by cameraAccessFor -- that gate is about
+  // RECORDING (see CLAUDE.md, "Watching a clip you already recorded is never gated"). Taking
+  // away the ability to think about footage somebody already has is not withholding something
+  // unbought.
+
+  async createSelfReview(
+    athleteId: number,
+    input: {
+      title: string;
+      leftClip: unknown;
+      rightClip?: unknown | null;
+      syncL?: number;
+      syncR?: number;
+      mode?: string;
+      overlaySettings?: unknown | null;
+    },
+  ) {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    const [row] = await db
+      .insert(videoReviews)
+      .values({
+        // Filed with their coach so "send to coach" has a destination, but NOT visible to that
+        // coach until sentToCoachAt is set. A Free Agent has no coach and gets their own id
+        // here: the row still needs a non-null coachId, and pointing it at themselves is the
+        // only value that cannot show their review to somebody else.
+        coachId: coaches[0]?.id ?? athleteId,
+        authorId: athleteId,
+        athleteId,
+        title: input.title,
+        leftClip: input.leftClip,
+        rightClip: input.rightClip ?? null,
+        syncL: input.syncL ?? 0,
+        syncR: input.syncR ?? 0,
+        mode: input.mode ?? "split",
+        overlaySettings: input.overlaySettings ?? null,
+        // The author can always watch their own work; sharedWithAthleteAt is what the ATHLETE
+        // read is gated on, and for a self-review the athlete is the author.
+        sharedWithAthleteAt: new Date(),
+      })
+      .returning();
+    return row;
+  },
+
+  /** The athlete's own reviews: the ones they wrote. Distinct from listVideoReviewsForAthlete,
+   * which is what their COACH shared with them -- two different questions, and one list mixing
+   * them would leave an athlete unable to tell their own notes from their coach's. */
+  async listSelfReviewsForAthlete(athleteId: number) {
+    return db
+      .select()
+      .from(videoReviews)
+      .where(and(eq(videoReviews.authorId, athleteId), eq(videoReviews.athleteId, athleteId)))
+      .orderBy(desc(videoReviews.updatedAt));
+  },
+
+  async getSelfReviewForAthlete(athleteId: number, reviewId: number) {
+    const [row] = await db
+      .select()
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, athleteId)));
+    if (!row) return null;
+    return { ...row, events: await this.listVideoReviewEvents(reviewId) };
+  },
+
+  async updateSelfReview(
+    athleteId: number,
+    reviewId: number,
+    patch: { title?: string; syncL?: number; syncR?: number; mode?: string; sentToCoach?: boolean },
+  ) {
+    const [existing] = await db
+      .select({ id: videoReviews.id, coachId: videoReviews.coachId, title: videoReviews.title })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, athleteId)));
+    if (!existing) return null;
+    const [row] = await db
+      .update(videoReviews)
+      .set({
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.syncL !== undefined ? { syncL: patch.syncL } : {}),
+        ...(patch.syncR !== undefined ? { syncR: patch.syncR } : {}),
+        ...(patch.mode !== undefined ? { mode: patch.mode } : {}),
+        // Unsending sets it back to null, the mirror of a coach un-sharing: somebody who sent
+        // early and thought better of it gets it back.
+        ...(patch.sentToCoach !== undefined
+          ? { sentToCoachAt: patch.sentToCoach ? new Date() : null }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(videoReviews.id, reviewId))
+      .returning();
+    if (patch.sentToCoach === true && existing.coachId !== athleteId) {
+      await this.createNotification(
+        existing.coachId,
+        "video_review",
+        "An athlete sent you their own review",
+        row.title,
+        `/coach/roster/${athleteId}`,
+      );
+    }
+    return row;
+  },
+
+  /** The athlete's own timeline, rewritten. Author-scoped for the same reason the coach's is. */
+  async replaceSelfReviewEvents(
+    athleteId: number,
+    reviewId: number,
+    events: { t: number; kind: string; payload: unknown; side?: string; holdSeconds?: number | null }[],
+  ) {
+    const [existing] = await db
+      .select({ id: videoReviews.id })
+      .from(videoReviews)
+      .where(and(eq(videoReviews.id, reviewId), eq(videoReviews.authorId, athleteId)));
+    if (!existing) return null;
+    return db.transaction(async (tx) => {
+      await tx.delete(videoReviewEvents).where(eq(videoReviewEvents.reviewId, reviewId));
+      if (events.length > 0) {
+        await tx.insert(videoReviewEvents).values(
+          events.map((e) => ({
+            reviewId,
+            t: e.t,
+            kind: e.kind,
+            payload: e.payload,
+            side: e.side ?? "left",
+            holdSeconds: e.holdSeconds ?? null,
+          })),
+        );
+      }
+      await tx.update(videoReviews).set({ updatedAt: new Date() }).where(eq(videoReviews.id, reviewId));
+      return this.listVideoReviewEvents(reviewId);
+    });
   },
 
   // ---------- The review queue (Phase 4b of docs/video-review-plan.md) ----------

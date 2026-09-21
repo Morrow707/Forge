@@ -4975,6 +4975,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
+  // ---------- Athlete self-review (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // The same editor, the other direction. Not gated by cameraAccessFor: that gate is about
+  // RECORDING, and thinking about footage somebody already has is not something to withhold
+  // (CLAUDE.md, "Watching a clip you already recorded is never gated").
+
+  app.post("/api/athlete/self-reviews", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    // athleteId is not read from the body at all: a self-review is about its author, and a
+    // field that could name somebody else is one a client could set.
+    const parsed = createVideoReviewSchema.omit({ athleteId: true }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    res.status(201).json(await storage.createSelfReview(user.id, parsed.data));
+  });
+
+  app.get("/api/athlete/self-reviews", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listSelfReviewsForAthlete(user.id));
+  });
+
+  app.get("/api/athlete/self-reviews/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const review = await storage.getSelfReviewForAthlete(user.id, Number(req.params.id));
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(review);
+  });
+
+  app.patch("/api/athlete/self-reviews/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      title: z.string().min(1).max(200).optional(),
+      syncL: z.number().optional(),
+      syncR: z.number().optional(),
+      mode: z.enum(["split", "overlay"]).optional(),
+      /** true sends it to their coach, false takes it back. */
+      sentToCoach: z.boolean().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const row = await storage.updateSelfReview(user.id, Number(req.params.id), parsed.data);
+    if (!row) return res.status(404).json({ message: "Review not found" });
+    res.json(row);
+  });
+
+  app.put("/api/athlete/self-reviews/:id/events", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = replaceVideoReviewEventsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const events = await storage.replaceSelfReviewEvents(
+      user.id,
+      Number(req.params.id),
+      parsed.data.events.map((e) => ({
+        t: e.t,
+        kind: e.payload.kind,
+        payload: e.payload,
+        side: e.side,
+        holdSeconds: e.holdSeconds ?? null,
+      })),
+    );
+    if (!events) return res.status(404).json({ message: "Review not found" });
+    res.json(events);
+  });
+
   // ---------- The cue library (Phase 4b of docs/video-review-plan.md) ----------
   //
   // A cue dropped onto a timeline becomes an ordinary `cue` event carrying a COPY of its text.

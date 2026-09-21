@@ -268,6 +268,21 @@ export default function AthleteProgress() {
             </CardContent>
           </Card>
 
+          {/* The athlete's OWN breakdowns of their own lifts, which they can send to their
+              coach. Kept apart from "Coach reviews" above on purpose: one list mixing the two
+              would leave an athlete unable to tell their own notes from their coach's. */}
+          <Card className="mb-6">
+            <CardContent className="space-y-3 p-5">
+              <p className="font-semibold">Your own reviews</p>
+              <VideoReviewList
+                mode="self"
+                fetchUrl="/api/athlete/self-reviews"
+                reviewUrl={(id) => `/api/athlete/self-reviews/${id}`}
+                emptyHint="Break down one of your own lifts from the compare tool, then send it to your coach."
+              />
+            </CardContent>
+          </Card>
+
           {/* The other direction: what the athlete has ASKED for, and whether it came back.
               A button that fires and forgets would leave them exactly where they started --
               which is the failure the queue exists for. */}

@@ -3440,6 +3440,19 @@ CREATE INDEX IF NOT EXISTS "coach_cues_coach_idx" ON "coach_cues" ("coach_id");
 ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_url" text;
 ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_start_at" real;
 
+-- 2026-09-21: athlete self-review (Phase 4b).
+--
+-- author_id is who MADE it; coach_id stays "which coach it is filed with". Two columns because
+-- those are the two questions the queries ask -- collapsing them makes a self-review either
+-- invisible to the coach it was sent to, or editable by them.
+--
+-- Backfilled to coach_id for every existing row, which is exactly true: everything written
+-- before this was a coach's own review.
+ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "author_id" integer
+  REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "sent_to_coach_at" timestamp;
+UPDATE "video_reviews" SET "author_id" = "coach_id" WHERE "author_id" IS NULL;
+
 -- A review is shared by posting it as a comment reply, which is where the coach's drawn
 -- annotation already lands. SET NULL rather than CASCADE: deleting a review should not delete
 -- the conversation that referenced it.

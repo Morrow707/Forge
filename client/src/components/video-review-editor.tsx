@@ -72,6 +72,7 @@ export function VideoReviewEditorDialog({
   clipLabel,
   initialEvents = [],
   initialShared = false,
+  variant = "coach",
   onSaved,
 }: {
   open: boolean;
@@ -82,8 +83,20 @@ export function VideoReviewEditorDialog({
   clipLabel: string;
   initialEvents?: ReviewEvent[];
   initialShared?: boolean;
+  /**
+   * WHOSE review this is. "coach" is the original editor; "self" is an athlete on their own
+   * lift (Phase 4b of docs/video-review-plan.md).
+   *
+   * One component rather than two, because the drawing surface, the timeline and the tools are
+   * the same thing -- and a copy would drift, which on this screen means one of the two
+   * silently losing a tool. What differs is the routes it writes to, the word on the share
+   * button, and the two coach-only affordances (voice-over, prescribing a corrective).
+   */
+  variant?: "coach" | "self";
   onSaved?: () => void;
 }) {
+  const base = variant === "coach" ? "/api/coach/video-reviews" : "/api/athlete/self-reviews";
+  const isCoach = variant === "coach";
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [events, setEvents] = useState<ReviewEvent[]>(initialEvents);
@@ -101,7 +114,7 @@ export function VideoReviewEditorDialog({
    * prescribing a drill, so this deliberately does not save them first. */
   async function addCorrective(exerciseId: number) {
     try {
-      await apiRequest("POST", `/api/coach/video-reviews/${reviewId}/corrective`, { exerciseId });
+      await apiRequest("POST", `${base}/${reviewId}/corrective`, { exerciseId });
       toast.success("Added to their next training day");
     } catch (err) {
       // The server says which of the real refusals this is ("no upcoming training day", "not
@@ -305,7 +318,7 @@ export function VideoReviewEditorDialog({
       // The extension is decided server-side from the mimetype; the name is only a label.
       form.append("audio", blob, "voice-over");
       form.append("startAt", String(recStartVideoT.current));
-      const res = await fetch(resolveApiUrl(`/api/coach/video-reviews/${reviewId}/audio`), {
+      const res = await fetch(resolveApiUrl(`${base}/${reviewId}/audio`), {
         method: "POST",
         body: form,
         credentials: "include",
@@ -321,7 +334,7 @@ export function VideoReviewEditorDialog({
   async function save() {
     setSaving(true);
     try {
-      await apiRequest("PUT", `/api/coach/video-reviews/${reviewId}/events`, {
+      await apiRequest("PUT", `${base}/${reviewId}/events`, {
         events: events.map((e) => ({
           t: e.t,
           side: e.side,
@@ -344,9 +357,21 @@ export function VideoReviewEditorDialog({
   async function toggleShare() {
     const next = !shared;
     try {
-      await apiRequest("PATCH", `/api/coach/video-reviews/${reviewId}`, { shared: next });
+      await apiRequest(
+        "PATCH",
+        `${base}/${reviewId}`,
+        isCoach ? { shared: next } : { sentToCoach: next },
+      );
       setShared(next);
-      toast.success(next ? "Shared with the athlete" : "No longer shared");
+      toast.success(
+        isCoach
+          ? next
+            ? "Shared with the athlete"
+            : "No longer shared"
+          : next
+            ? "Sent to your coach"
+            : "Taken back from your coach",
+      );
       onSaved?.();
     } catch {
       toast.error("Couldn't change who can see this review.");
@@ -391,17 +416,21 @@ export function VideoReviewEditorDialog({
         {/* A cue carries a COPY of its text into the event, never the cue's id: editing or
             deleting a cue later must not change what the coach already said in a review
             somebody has watched. cueId rides along only as provenance. */}
-        <CueDrawer
-          onDrop={(cue) =>
-            addEvent({
-              kind: "cue",
-              text: cue.body,
-              audioUrl: cue.audioUrl,
-              cueId: cue.id,
-              color,
-            })
-          }
-        />
+        {/* The cue library is a coach's, and there is no athlete equivalent -- a drawer that
+            always came back empty would be a promise the app does not keep. */}
+        {isCoach && (
+          <CueDrawer
+            onDrop={(cue) =>
+              addEvent({
+                kind: "cue",
+                text: cue.body,
+                audioUrl: cue.audioUrl,
+                cueId: cue.id,
+                color,
+              })
+            }
+          />
+        )}
 
         <div className="flex flex-wrap items-center gap-1.5">
           {TOOLS.map((tl) => (
@@ -488,23 +517,31 @@ export function VideoReviewEditorDialog({
             {events.length} mark{events.length === 1 ? "" : "s"}
             {marksHere > 0 ? ` (${marksHere} on screen)` : ""}
           </span>
-          <Button
-            size="sm"
-            variant={recording ? "destructive" : "outline"}
-            onClick={() => (recording ? stopRecording() : void startRecording())}
-          >
-            {recording ? <StopIcon className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-            {recording ? "Stop" : "Voice-over"}
-          </Button>
-          {/* From the review straight to the athlete's next session. It writes a per-athlete
+          {/* Coach-only for now: there is no self-review audio route, and drawing a button
+              that always fails is worse than not drawing one. */}
+          {isCoach && (
+            <Button
+              size="sm"
+              variant={recording ? "destructive" : "outline"}
+              onClick={() => (recording ? stopRecording() : void startRecording())}
+            >
+              {recording ? <StopIcon className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+              {recording ? "Stop" : "Voice-over"}
+            </Button>
+          )}
+          {/* Coach-only: prescribing work is the coach's job. From the review straight to the
+              athlete's next session. It writes a per-athlete
               corrective, never an edit to the shared program day -- see
               addCorrectiveFromReview in storage.ts. */}
-          <Button size="sm" variant="outline" onClick={() => setPickingCorrective(true)}>
-            <ClipboardPlus className="h-3.5 w-3.5" /> Add a corrective
-          </Button>
+          {isCoach && (
+            <Button size="sm" variant="outline" onClick={() => setPickingCorrective(true)}>
+              <ClipboardPlus className="h-3.5 w-3.5" /> Add a corrective
+            </Button>
+          )}
           <span className="flex-1" />
           <Button size="sm" variant={shared ? "default" : "outline"} onClick={() => void toggleShare()}>
-            <Share2 className="h-3.5 w-3.5" /> {shared ? "Shared" : "Share"}
+            <Share2 className="h-3.5 w-3.5" />{" "}
+            {isCoach ? (shared ? "Shared" : "Share") : shared ? "Sent" : "Send to coach"}
           </Button>
           <Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>
             <Save className="h-3.5 w-3.5" /> {saving ? "Saving..." : "Save"}

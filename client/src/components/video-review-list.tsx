@@ -22,6 +22,7 @@ type ReviewRow = {
   title: string;
   leftClip: { videoUrl: string; label: string };
   sharedWithAthleteAt: string | null;
+  sentToCoachAt?: string | null;
   purgedAt: string | null;
   updatedAt: string;
 };
@@ -43,7 +44,10 @@ export function VideoReviewList({
   emptyHint,
 }: {
   fetchUrl: string;
-  mode: "coach" | "read-only";
+  /** "coach" edits a coach's own review; "self" edits an athlete's own (Phase 4b); "read-only"
+   * watches somebody else's. The mode decides which editor routes are written to, and the
+   * route decides what may be read -- never this component. */
+  mode: "coach" | "self" | "read-only";
   reviewUrl: (id: number) => string;
   emptyHint: string;
 }) {
@@ -77,6 +81,16 @@ export function VideoReviewList({
                 {r.purgedAt ? " · clip expired, notes kept" : ""}
               </p>
             </div>
+            {mode === "self" &&
+              (r.sentToCoachAt ? (
+                <span className="flex items-center gap-1 text-xs text-emerald-500">
+                  <Share2 className="h-3.5 w-3.5" /> Sent
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Lock className="h-3.5 w-3.5" /> Only you
+                </span>
+              ))}
             {mode === "coach" &&
               (r.sharedWithAthleteAt ? (
                 <span className="flex items-center gap-1 text-xs text-emerald-500">
@@ -92,9 +106,9 @@ export function VideoReviewList({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => (mode === "coach" ? setEditing(r) : setOpenId(r.id))}
+              onClick={() => (mode === "read-only" ? setOpenId(r.id) : setEditing(r))}
             >
-              {mode === "coach" ? "Edit" : "Watch"}
+              {mode === "read-only" ? "Watch" : "Edit"}
             </Button>
           </CardContent>
         </Card>
@@ -115,7 +129,13 @@ export function VideoReviewList({
           title={editing.title}
           clipUrl={editing.leftClip.videoUrl}
           clipLabel={editing.leftClip.label}
-          initialShared={!!editing.sharedWithAthleteAt}
+          variant={mode === "self" ? "self" : "coach"}
+          // For a self-review the flag on the button is "sent to my coach", not "shared with
+          // the athlete" -- the athlete IS the subject, so the coach-facing flag would read as
+          // permanently on.
+          initialShared={
+            mode === "self" ? !!editing.sentToCoachAt : !!editing.sharedWithAthleteAt
+          }
           onSaved={() => void refetch()}
         />
       )}
