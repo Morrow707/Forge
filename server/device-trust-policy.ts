@@ -54,13 +54,37 @@ export const DEMO_ACCOUNT_EMAILS = [
   "freeagent@forge.app",
 ] as const;
 
+/**
+ * A TEMPORARY OPERATOR EXEMPTION, AND IT IS NOT THE SAME THING AS THE LIST ABOVE.
+ *
+ * The demo accounts are exempt because their addresses do not exist. THIS account's address is
+ * real and the email arrives fine -- what fails is the link in it, which landed on a 404 on
+ * 2026-09-21 and left the owner of the platform unable to sign in on a new device. Scott:
+ * "let's fix that, or just disable this feature for now for the scott.morrow admin I created."
+ *
+ * Kept separate so the distinction survives: this is a REAL account trading a real protection
+ * for access while a bug is outstanding, not a fact about the software. It should be deleted
+ * the moment the approval link is confirmed working, and the entry names that condition so
+ * nobody has to reconstruct it. Do not add anybody else here -- an account that needs a
+ * standing exemption belongs in DEVICE_VERIFICATION_EXEMPT_EMAILS on Render, where an operator
+ * can remove it without a deploy.
+ */
+export const TEMPORARY_ACCOUNT_EXEMPTIONS = [
+  // Remove once /device-approval is confirmed reachable from the emailed link.
+  "scott.morrow@live.com",
+] as const;
+
 export function isDeviceVerificationExempt(email: string): boolean {
   const fromEnv = (process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  const list = [...DEMO_ACCOUNT_EMAILS, ...fromEnv];
-  return list.includes(email.trim().toLowerCase() as (typeof DEMO_ACCOUNT_EMAILS)[number]);
+  const list: string[] = [
+    ...DEMO_ACCOUNT_EMAILS,
+    ...TEMPORARY_ACCOUNT_EXEMPTIONS,
+    ...fromEnv,
+  ];
+  return list.includes(email.trim().toLowerCase());
 }
 
 export type ApprovalState = "pending" | "approved" | "denied" | "expired";

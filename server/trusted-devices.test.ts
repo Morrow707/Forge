@@ -9,6 +9,7 @@ import {
   hashDeviceId,
   TRUSTED_DEVICE_TTL_MS,
   DEMO_ACCOUNT_EMAILS,
+  TEMPORARY_ACCOUNT_EXEMPTIONS,
 } from "./device-trust-policy";
 import { NOINDEX_PREFIXES } from "@shared/public-routes";
 
@@ -136,12 +137,36 @@ describe("the demo accounts never meet the new-device email", () => {
   it("is exact-match, so no real account falls into it", () => {
     expect(isDeviceVerificationExempt("coach@forge.app.attacker.test")).toBe(false);
     expect(isDeviceVerificationExempt("notcoach@forge.app")).toBe(false);
-    expect(isDeviceVerificationExempt("scott.morrow@live.com")).toBe(false);
+    expect(isDeviceVerificationExempt("someone.else@live.com")).toBe(false);
   });
 
   it("still adds whatever the environment variable lists", () => {
     process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS = "review@apple.test";
     expect(isDeviceVerificationExempt("review@apple.test")).toBe(true);
     expect(isDeviceVerificationExempt("coach@forge.app")).toBe(true);
+  });
+});
+
+/**
+ * A real account trading a real protection for access while the approval LINK is broken. Held
+ * apart from the demo list so the difference stays visible, and so deleting it is one line.
+ */
+describe("the temporary admin exemption", () => {
+  it("covers exactly one account, and says which", () => {
+    expect(TEMPORARY_ACCOUNT_EXEMPTIONS).toEqual(["scott.morrow@live.com"]);
+    expect(isDeviceVerificationExempt("scott.morrow@live.com")).toBe(true);
+  });
+
+  it("is not confused with the demo accounts", () => {
+    // Different reasons, different lifetimes: the demo addresses do not exist and never will,
+    // this one is waiting on a bug fix.
+    for (const e of TEMPORARY_ACCOUNT_EXEMPTIONS) {
+      expect(DEMO_ACCOUNT_EMAILS).not.toContain(e);
+    }
+  });
+
+  it("carries the condition for its own removal", () => {
+    const src = readFileSync(resolve(__dirname, "device-trust-policy.ts"), "utf-8");
+    expect(src).toMatch(/Remove once .*device-approval/i);
   });
 });
