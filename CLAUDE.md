@@ -189,16 +189,15 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **488** is the newest TestFlight build, cut from `8ccddec` on
-  2026-09-20 (Scott: "upload to apple"). `verify_build` run 487 passed
-  `altool --validate-app` on the same code. On top of 485 it adds #152 (the
-  documents audit fixes) and #153 (the six document items: coach
-  email-to-roster, "What you've agreed to", /research-consent page and PDF,
-  guardian biometric consent after claim, staff view of the signed Service
-  Agreement, admin research card).
-- Waiting on an upload since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
-  tracker dialogs and vision runtimes, server request memo and cache headers). The bundle
-  changes reach the native binary; the SEO and server changes ship on the Render deploy.
+- Build **491** is the newest TestFlight build, cut from `1d5ecc8` on 2026-09-21
+  (Scott: "build all upload to apple"). It carries #156: the strength profile --
+  the shared body map, the tap-a-muscle exercise filter, and the age-band
+  percentile.
+- Build **490** shipped from `d924540` the same day and cleared the queue that had
+  been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
+  tracker dialogs and vision runtimes, server request memo and cache headers) and
+  #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
+- **Nothing on `main` is waiting on an upload.**
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
@@ -218,6 +217,61 @@ Two things worth saying out loud when someone tests this:
   copy never writes a record -- only signing or uploading does. The agreement text is still
   under attorney review; a change to it changes the hash on every later signature, which is
   the point of storing it.
+
+## The strength profile: a percentile that names nobody
+
+Added 2026-09-21. Scott wanted three things -- a comparison against other athletes, a
+per-muscle map like the one in the screenshots he sent, and an interactive figure beginners
+can tap to filter exercises. All three shipped in #156. The decisions, because every one of
+them will read as an arbitrary constraint to somebody who wasn't here:
+
+- **A PERCENTILE, NEVER A RANK.** "#4 of 11 in 16-17" plus a coach who knows their roster is
+  a name, and `server/leaderboard-teammate-privacy.itest.ts` already records what a leaderboard
+  gave away once: a hundred children's names at a named club, each with age, height, body
+  weight, sport and position, readable by anyone who saw the coachCode on a flyer. A rank is
+  also volatile in a way a percentile is not -- one teammate PRs and you drop three places for
+  reasons that have nothing to do with you. Scott, 2026-09-21: "we don't track people by their
+  names, nor do I want them to be able to."
+- **Under `NORM_MIN_COHORT` (30) PER GROUP there is no number.** Not per cohort: thirty
+  athletes in an age band does not mean thirty of them have ever trained calves. A percentile
+  over the four who have is the thin claim the floor exists to refuse, and the existing cohort
+  norms already answer this way.
+- **Forge-official exercises only**, and `exercises.isForgeOfficial` is now an EXPLICIT flag.
+  It was inferred from "owned by an admin", and this feature makes that inference decide what
+  every athlete on the platform is measured against -- the day an admin logs a personal
+  exercise it would silently join the standards. `classes.isForgeOfficial` already made this
+  argument; exercises now follow it. Backfilled from admin ownership, which is what the library
+  means by Forge content today. Scott: "Coaches can't edit those exercises, only admins, so in
+  effect we created them."
+- **Hand-logged weight and reps only. NEVER a camera number.** Everything the camera produces
+  is uncalibrated and carries `CAMERA_ACCURACY_PURCHASE_WARNING`; a score built on it would
+  inherit that warning and the whole feature would ship with an asterisk. Hand-logged load is
+  the one measurement in this app that is simply true, and that is the entire reason this
+  feature can make a claim at all. Enforced in the SQL, not at a call site.
+- **Twelve reps or fewer.** Past that Epley extrapolates muscular endurance into a maximal
+  claim -- a set of thirty bodyweight squats is not a 3x bodyweight single, and without the cap
+  it scores as one.
+- **No bodyweight means no score.** A number computed against a guessed bodyweight looks
+  exactly like a real one. Known gap: `users.bodyWeightLbs` is a single current value, so a
+  lift from eight months ago is scored against today's weight. A weight history is its own
+  piece of work and was deliberately not smuggled into #156.
+- **The bands are relative to FORGE'S population, not world standards.** Forge has no validated
+  standards table and inventing one would repeat the uncalibrated-numbers problem the camera
+  work spent months on. The card says "ahead of 68% of athletes your age", which is a claim the
+  data supports. Swapping in published per-exercise standards later needs no UI change.
+- **Every coaching line names a MOVEMENT, never a body part.** Forge has thirteen-year-olds on
+  it: "bring up your abs" is a sentence about a child's body, "your trunk flexion is behind
+  your squatting" is a sentence about their training. `MOVEMENT_FOR_GROUP` in
+  `shared/strength-score.ts` is what makes that automatic, and the test asserts the body-part
+  words never reach the screen. Scott: "Love the minors and framing addition."
+- **The body map never replaces text search** (Scott, explicitly). It exists for the athlete
+  who does not know what a lat is; anyone who does will type "hamstring" and expect it to work.
+  It drives the SAME `muscleGroupFilter` the chips use, so there is one filtering path rather
+  than two that can disagree. Collapsed on a phone and open on a desktop, decided by CSS --
+  a viewport read in JavaScript is wrong on a tablet, wrong after a rotation, and wrong on
+  first paint.
+- **Sex is not in the cohort yet.** Age band only. Adding it narrows every cohort and fights
+  the 30 floor, so it is a volume decision rather than a code one.
 
 ## Speed and findability, 2026-09-20
 
