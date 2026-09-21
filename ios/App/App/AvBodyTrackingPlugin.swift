@@ -1885,7 +1885,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     result["freeDiskSpaceBytes"] = freeDiskSpaceBytes
                 }
                 if let maxInterFrameGapSeconds = state.maxInterFrameGapSeconds {
-                    result["maxInterFrameGapSeconds"] = state.maxInterFrameGapSeconds
+                    result["maxInterFrameGapSeconds"] = maxInterFrameGapSeconds
                 }
                 call.resolve(result)
             }
@@ -2085,8 +2085,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         if let body3DRequest = ctx.body3DRequest, thisFrameIndex % ctx.body3DDetectionStride == 0 {
             let body3DStart = Date()
             do {
-                try handler.perform([ctx.body3DRequest])
-                if #available(iOS 17.0, *), let observation = ctx.body3DRequest.results?.first as? VNHumanBodyPose3DObservation {
+                try handler.perform([body3DRequest])
+                if #available(iOS 17.0, *), let observation = body3DRequest.results?.first as? VNHumanBodyPose3DObservation {
                     for (jointName, label) in Self.body3DPoseJoints {
                         // Unlike the 2D VNRecognizedPoint this plugin's other requests use,
                         // VNHumanBodyRecognizedPoint3D has no confidence property at all (its
