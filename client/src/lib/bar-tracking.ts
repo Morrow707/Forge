@@ -241,6 +241,37 @@ const TRACE_MAX_POINTS = 1000;
 // changed. -- shared by the averaged bar-path
 // trace and the independent left/right arm-path traces so all three use the
 // same coordinate convention.
+/**
+ * WITHIN-SET FATIGUE, OR NOTHING -- never an impossible percentage.
+ *
+ * Loss is (first - last) / first, the VBT convention. Two things make that explode, and a real
+ * set on 2026-09-21 hit both: a back squat reported **-220% velocity loss** on the athlete's own
+ * screen, which reads as a broken app rather than as a number.
+ *
+ *  - The reference rep is not a rep. The first "rep" of a trace is often the un-rack or the
+ *    settle: a short, slow fragment whose mean velocity is a fraction of a real rep's. Divide by
+ *    that and any honest later rep looks like a hundreds-of-percent change. That set logged 5
+ *    reps and the trace found 6, so its first entry was exactly this.
+ *  - Velocity ROSE. On a warm-up weight an athlete speeds up through the set. That is a real
+ *    observation, and "negative fatigue" is not the way to say it.
+ *
+ * A drop cannot exceed 100% (that would be a dead stop), and a rise past 100% means the first
+ * rep was never a valid reference. Outside that band the honest answer is that this set has no
+ * fatigue signal to report -- null, the same withholding this file already applies to a ROM it
+ * cannot scale, rather than a figure whose only use is to be disbelieved.
+ */
+export const MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT = 100;
+
+export function velocityLossAcross(reps: { meanVelocityMps: number }[]): number | null {
+  if (reps.length <= 1) return null;
+  const first = reps[0].meanVelocityMps;
+  const last = reps[reps.length - 1].meanVelocityMps;
+  if (!(first > 0)) return null;
+  const pct = Math.round(((first - last) / first) * 1000) / 10;
+  if (!Number.isFinite(pct)) return null;
+  return Math.abs(pct) > MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT ? null : pct;
+}
+
 export function buildPathTrace(
   rawPoints: TrackedPoint[],
   origin: { x: number; y: number },
@@ -1589,15 +1620,7 @@ export function summarizeTrackedSet(
       if (measured.length === 0) return null;
       return Math.round((measured.reduce((a, v) => a + v, 0) / measured.length) * 100) / 100;
     })(),
-    velocityLossPercent:
-      repBreakdown.length > 1 && repBreakdown[0].meanVelocityMps > 0
-        ? Math.round(
-            ((repBreakdown[0].meanVelocityMps -
-              repBreakdown[repBreakdown.length - 1].meanVelocityMps) /
-              repBreakdown[0].meanVelocityMps) *
-              1000,
-          ) / 10
-        : null,
+    velocityLossPercent: velocityLossAcross(repBreakdown),
   };
 }
 
@@ -1741,15 +1764,7 @@ export function fuseSideVelocity(
     // PEAK, which is one noisy single-frame sample: a tracking spike on the
     // first or last rep moved the reported fatigue by tens of percent, and
     // the same set analysed through the two paths disagreed.
-    velocityLossPercent:
-      fusedRepBreakdown.length > 1 && fusedRepBreakdown[0].meanVelocityMps > 0
-        ? Math.round(
-            ((fusedRepBreakdown[0].meanVelocityMps -
-              fusedRepBreakdown[fusedRepBreakdown.length - 1].meanVelocityMps) /
-              fusedRepBreakdown[0].meanVelocityMps) *
-              1000,
-          ) / 10
-        : null,
+    velocityLossPercent: velocityLossAcross(fusedRepBreakdown),
   };
 }
 

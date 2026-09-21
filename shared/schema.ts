@@ -8639,6 +8639,31 @@ export const CAMERA_DERIVED_SET_COLUMNS = [
   "skeletonFrames",
 ] as const;
 
+/**
+ * WHAT PROVES A CAPTURE HAPPENED -- the membership test for the tracking report.
+ *
+ * Every column above is camera-derived, but they do not all mean the same thing.
+ * `captureDeviceInfo` describes the PHONE -- its model, the negotiated format, the lens. It is
+ * stamped when the camera is available, not when a take is produced, so a set nobody ever
+ * recorded can carry it while carrying nothing else. Membership on "any camera column" therefore
+ * put sets that were never performed onto the report, reading as "No data points recorded for
+ * this set" -- indistinguishable from a capture that ran and failed, which is the one thing this
+ * report exists to make distinguishable. Reported from a real session on 2026-09-21: three
+ * Medicine Ball sets and several others the athlete had not done yet.
+ *
+ * So the report asks for a column that only a capture can write. A capture that FAILED still
+ * qualifies, because a refused take writes `trackingDiagnostics` saying why (saveEmptyAndWarn in
+ * the tracker dialogs) -- that is the whole point of that blob, and it is what keeps this
+ * narrowing from repeating the three silent drops this query has already suffered. A set with
+ * device info and nothing else is not a failed capture; it is a set that was never filmed.
+ *
+ * `skeletonFrames` and `trustScores` stay IN: both are produced by an analysis run, not by the
+ * camera merely existing.
+ */
+export const CAMERA_CAPTURE_EVIDENCE_COLUMNS = CAMERA_DERIVED_SET_COLUMNS.filter(
+  (c) => c !== "captureDeviceInfo",
+);
+
 /** The rest of workoutSetEntries, listed for the same reason: so the classification test can
  * tell "considered and ruled out" apart from "nobody looked at it yet". */
 export const NON_CAMERA_SET_COLUMNS = [

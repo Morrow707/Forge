@@ -311,7 +311,7 @@ const APPLE_PRODUCT_ID_TO_ADD_ON: Record<string, FreeAgentAddOnId> = Object.from
   FREE_AGENT_ADD_ON_ORDER.map((addOn) => [appleProductIdForFreeAgentAddOn(addOn), addOn]),
 );
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
-import { CAMERA_DERIVED_SET_COLUMNS } from "@shared/schema";
+import { CAMERA_CAPTURE_EVIDENCE_COLUMNS } from "@shared/schema";
 import type { ClipSource, ClipSummary } from "@shared/video-clips";
 import { classAiDraftSchema } from "@shared/schema";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
@@ -23140,8 +23140,12 @@ ${catalog}`;
           // on this page at all -- and an absent row looks exactly like a mode nobody filmed, so
           // the gap could not be noticed from the page itself. A new mode picks this up for free
           // once its columns are classified, which a test makes mandatory.
+          // EVIDENCE OF A CAPTURE, NOT EVIDENCE OF A CAMERA. captureDeviceInfo is stamped for
+          // the phone rather than for a take, so including it put sets nobody had filmed onto
+          // this report -- see CAMERA_CAPTURE_EVIDENCE_COLUMNS for the whole argument and why
+          // a FAILED capture still qualifies.
           or(
-            ...CAMERA_DERIVED_SET_COLUMNS.map((c) =>
+            ...CAMERA_CAPTURE_EVIDENCE_COLUMNS.map((c) =>
               isNotNull(workoutSetEntries[c as keyof typeof workoutSetEntries] as never),
             ),
           ),
