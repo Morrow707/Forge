@@ -21671,18 +21671,26 @@ ${catalog}`;
    * Hand-logged weight and reps only, same as the score -- a camera number is uncalibrated and
    * has no business in a list somebody reads as a record of what they lifted.
    */
-  async getMuscleGroupHistoryForAthlete(athleteId: number, muscleGroup: string, limit = 50) {
+  async getMuscleGroupHistoryForAthlete(
+    athleteId: number,
+    muscleGroup: string,
+    opts: { sinceDate?: string; limit?: number } = {},
+  ) {
     if (!isScorableMuscleGroup(muscleGroup)) return [];
+    const limit = opts.limit ?? 200;
 
     const rows = await db.execute<{
       logged_on: string;
       exercise_name: string;
       weight_lbs: number;
+      logged_weight: string | null;
+      logged_unit: "lbs" | "kg" | null;
       reps_count: number;
       set_number: number;
     }>(sql`
       SELECT wl.date::text AS logged_on, e.name AS exercise_name,
-        wse.weight_lbs, wse.reps_count, wse.set_number
+        wse.weight_lbs, wse.weight AS logged_weight, wse.weight_unit_at_log AS logged_unit,
+        wse.reps_count, wse.set_number
       FROM workout_set_entries wse
       JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
       JOIN workout_logs wl ON wl.id = wle.workout_log_id
@@ -21694,6 +21702,7 @@ ${catalog}`;
         AND wse.reps_count IS NOT NULL
         AND wse.weight_lbs > 0
         AND wse.reps_count > 0
+        ${opts.sinceDate ? sql`AND wl.date >= ${opts.sinceDate}` : sql``}
       ORDER BY wl.date DESC, wse.set_number ASC
       LIMIT ${limit}
     `);
@@ -21713,10 +21722,16 @@ ${catalog}`;
         bestEst = est;
         bestIdx = i;
       }
+      // The AS-LOGGED number travels beside the normalised one, so a set logged in kilos and
+      // read back in kilos is the athlete's own figure rather than a round trip through
+      // pounds. Only a set being shown in a unit it was not logged in gets converted.
+      const loggedWeight = r.logged_weight != null ? parseFloat(r.logged_weight) : NaN;
       return {
         date: r.logged_on,
         exerciseName: r.exercise_name,
         weightLbs,
+        loggedWeight: Number.isFinite(loggedWeight) ? loggedWeight : weightLbs,
+        loggedUnit: (r.logged_unit ?? "lbs") as "lbs" | "kg",
         reps,
         setNumber: Number(r.set_number),
         countsTowardScore: scorable,

@@ -5243,7 +5243,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Tapping a muscle on the body map asks "what did I actually lift for this?". Same
   // Forge-official-only population as the score above it -- see
   // getMuscleGroupHistoryForAthlete for why the two cannot differ.
-  const muscleHistoryQuerySchema = z.object({ group: z.string().min(1) });
+  const muscleHistoryQuerySchema = z.object({
+    group: z.string().min(1),
+    // An inclusive floor, not a rolling window count: "since 1 Sep" survives a page reload and
+    // a timezone, where "last 90 days" quietly means something different tomorrow.
+    since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  });
 
   app.get("/api/athlete/muscle-history", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
     const user = currentUser(req);
@@ -5251,7 +5256,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: "group query param required" });
     }
-    res.json(await storage.getMuscleGroupHistoryForAthlete(user.id, parsed.data.group));
+    res.json(
+      await storage.getMuscleGroupHistoryForAthlete(user.id, parsed.data.group, {
+        sinceDate: parsed.data.since,
+      }),
+    );
   });
 
   app.get("/api/coach/roster/:athleteId/muscle-history", requireRole("coach"), async (req, res) => {
@@ -5263,7 +5272,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: "group query param required" });
     }
-    res.json(await storage.getMuscleGroupHistoryForAthlete(athleteId, parsed.data.group));
+    res.json(
+      await storage.getMuscleGroupHistoryForAthlete(athleteId, parsed.data.group, {
+        sinceDate: parsed.data.since,
+      }),
+    );
   });
 
   // ---------- The cue library (Phase 4b of docs/video-review-plan.md) ----------

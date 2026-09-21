@@ -315,6 +315,18 @@ them will read as an arbitrary constraint to somebody who wasn't here:
   (`strength-profile` -> `muscle-history`) so a caller cannot wire an athlete's own history behind
   a coach's roster-scoped profile by getting one prop right and the other wrong.
 
+- **A logged load is shown in the READER'S unit, and a set already in that unit is never
+  converted.** Scott, 2026-09-21: "if they want to see kg let them see kilos, even if the other
+  athletes put it in lbs the conversion is 2.2." `weight_lbs` is a normalised comparison column,
+  so display is a separate concern: the history carries the AS-LOGGED weight and unit beside it,
+  and a kg set read back in kg prints exactly what the athlete typed. `shared/weight-units.ts`
+  is the one conversion. The factor is 2.20462 rather than 2.2 for one visible reason -- a kg
+  lift is stored through 2.20462, so reading it back at 2.2 turns a 100 kg lift into 100.2 kg,
+  a number nobody lifted.
+- **The history's date window is a server-side inclusive floor** (`since=YYYY-MM-DD`), not a
+  client-side slice, and "All time" is always offered so a narrow window can never be mistaken
+  for an empty history. Same reasoning as the cohort chips.
+
 - **The cohort sentence comes from the SERVER** (`cohortLabel`). A client that assembled its
   own description could drift from the group the query actually used, and the drift would be
   invisible.
