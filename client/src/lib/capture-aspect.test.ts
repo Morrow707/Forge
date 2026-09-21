@@ -65,10 +65,16 @@ describe("the capture format", () => {
   });
 
   it("does not let a higher capture rate become a longer wait", () => {
-    // The offline pass samples back down to the rate its timings were tuned against; the clip
-    // is still recorded at full rate. An explicit caller value still wins.
-    expect(plugin).toContain("let defaultStride = max(1, Int((activeCaptureFrameRate / 60.0).rounded()))");
-    expect(plugin).toContain('call.getInt("sampleEveryNthFrame") ?? defaultStride');
+    // THE FIRST VERSION OF THIS GOT IT WRONG AND SHIPPED. It only supplied a DEFAULT stride,
+    // and the app passes an explicit one (ANALYSIS_SAMPLE_STRIDE = 2), so the default never
+    // fired: at 120fps that 2 became 60Hz, double the Vision work it had always done, and a
+    // 25.6s clip went from ~19s of analysis to 66s on a real phone.
+    //
+    // The caller's number means a RATE -- its own comment says "30fps-equivalent on a 60fps
+    // recording" -- so it is scaled against that baseline rather than used as a frame count.
+    expect(plugin).toContain("let baselineStride = max(1, call.getInt(\"sampleEveryNthFrame\") ?? 1)");
+    expect(plugin).toContain("let rateRatio = max(1.0, activeCaptureFrameRate / 60.0)");
+    expect(plugin).toContain("Double(baselineStride) * rateRatio");
   });
 
   it("reports the rate it actually got, not the one it wanted", () => {

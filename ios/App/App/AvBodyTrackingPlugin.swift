@@ -1197,21 +1197,24 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             call.reject("Missing path")
             return
         }
-        // A HIGHER CAPTURE RATE MUST NOT BECOME A LONGER WAIT.
+        // A STRIDE IS A TARGET RATE, NOT A FRAME COUNT.
         //
-        // This pass re-reads the finished clip and runs Vision per frame; at 120fps that is
-        // twice the frames and roughly twice the ~19s an athlete already waits after a 20s set.
-        // The clip is still RECORDED at 120 -- frame stepping and the review tool get every
-        // frame, which is half of why the rate was raised -- but the offline analysis samples
-        // back down to the rate its timings were tuned against.
+        // The caller asks for "every Nth frame" meaning a sampling RATE -- use-av-body-tracking's
+        // own constant says so out loud: "every 2nd frame still gives a 30fps-equivalent trace on
+        // a 60fps recording." That reasoning is relative to the capture rate and the number was
+        // absolute, so raising capture to 120 silently turned that same 2 into 60Hz: DOUBLE the
+        // Vision work it had always done. Measured on a real phone the same day 120fps shipped --
+        // a 25.6s clip went from roughly 19s of analysis to 66s. The athlete felt it immediately.
         //
-        // This is explicitly the INTERIM arrangement. Analysing all 120 frames is what sharpens
-        // peak velocity (see preferredFrameRate), and the way to afford it is to analyse during
-        // recording rather than after it, which is its own piece of work. Until then, taking
-        // every second frame keeps the wait and the accuracy exactly where they are today
-        // rather than trading one for the other. An explicit caller value still wins.
-        let defaultStride = max(1, Int((activeCaptureFrameRate / 60.0).rounded()))
-        let sampleEveryNthFrame = max(1, call.getInt("sampleEveryNthFrame") ?? defaultStride)
+        // So the caller's number is interpreted against the 60fps baseline it was written for and
+        // scaled to whatever the camera actually ran at. Stride 2 stays 30Hz at 60fps, and becomes
+        // 4 at 120fps -- the same trace, the same wait, from a better recording. A caller that
+        // wants every frame (1) still gets 60Hz at 120fps rather than 120, which is deliberate:
+        // nothing downstream asked for more, and the whole point of the ratio is that the cost
+        // tracks the intent rather than the hardware.
+        let baselineStride = max(1, call.getInt("sampleEveryNthFrame") ?? 1)
+        let rateRatio = max(1.0, activeCaptureFrameRate / 60.0)
+        let sampleEveryNthFrame = max(1, Int((Double(baselineStride) * rateRatio).rounded()))
         // Box jump only (see this file's own comment on detectBoxTop below) -- every other AV
         // dialog omits this and pays nothing extra per frame.
         let detectBox = call.getBool("detectBox") ?? false

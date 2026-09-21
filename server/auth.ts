@@ -1309,15 +1309,43 @@ export function setupAuth(app: Express) {
   }
 
   type DeviceGate =
-    | { kind: "trusted" }
+    | { kind: "trusted"; recognized: boolean }
     | { kind: "approval"; pollToken: string }
     | { kind: "unavailable" };
+
+  /**
+   * A TRUSTED DEVICE IS A SECOND FACTOR, SO THE AUTHENTICATOR CODE IS A THIRD.
+   *
+   * Scott, 2026-09-21: "if I've already gone through the two verifications and am on a trusted
+   * device that's overkill." He is right, and my earlier advice against this was wrong.
+   *
+   * A trusted device here is not a remembered browser. It is a device the account owner proved
+   * by opening their own inbox and approving it. So password + trusted device is already two
+   * genuine factors -- something known, something held. Demanding the authenticator code on
+   * top, on that same device, every time, is a THIRD factor, stricter than GitHub, Google or
+   * AWS, all of which let a verified device skip the code.
+   *
+   * The cost was not neutral. It pushed the account owner through finite backup codes, and
+   * exhausting those is itself a lockout with no self-service way back -- a security LOSS.
+   *
+   * RECOGNISED IS NOT THE SAME AS "the gate said trusted", and conflating them would be a real
+   * hole: deviceGate also answers "trusted" when it STANDS DOWN -- an exempt account, a kill
+   * switch, a box with no email provider. None of those saw a device at all, so none of them
+   * may skip the code. Only a device matched against a stored, unexpired, owner-approved row
+   * counts, which is what `recognized` means and why it is a separate field.
+   */
+  function mayShortCircuitMfa(gate: DeviceGate): boolean {
+    return gate.kind === "trusted" && gate.recognized === true;
+  }
 
   // Password was right. Is this a device we know? See trusted-devices.ts for
   // the rule; this is where it is applied, and it runs BEFORE the
   // authenticator step so a stolen password meets the inbox first.
   async function deviceGate(req: any, user: { id: number; email: string; name: string }): Promise<DeviceGate> {
-    if (isDeviceVerificationDisabled() || isDeviceVerificationExempt(user.email)) return { kind: "trusted" };
+    // Standing down, not recognising. recognized:false keeps the authenticator code in place.
+    if (isDeviceVerificationDisabled() || isDeviceVerificationExempt(user.email)) {
+      return { kind: "trusted", recognized: false };
+    }
     if (!isEmailConfigured()) {
       // A dev box with no Resend key. Locking every login here would help
       // nobody; say so once per process instead.
@@ -1325,14 +1353,15 @@ export function setupAuth(app: Express) {
         warnedNoEmailForDeviceGate = true;
         console.warn("New-device approval is standing down: no email provider is configured, so the approval email could not be sent.");
       }
-      return { kind: "trusted" };
+      return { kind: "trusted", recognized: false };
     }
     const deviceId = requestDeviceId(req);
     if (deviceId) {
       const known = await findTrustedDevice(user.id, deviceId);
       if (known) {
         await touchTrustedDevice(known.id);
-        return { kind: "trusted" };
+        // The one branch that actually matched an owner-approved device row.
+        return { kind: "trusted", recognized: true };
       }
     }
     const meta = deviceMeta(req);
@@ -1385,7 +1414,7 @@ export function setupAuth(app: Express) {
         if (gate.kind === "approval") {
           return res.json({ deviceApprovalRequired: true, pollToken: gate.pollToken, emailHint: maskEmail(user.email) });
         }
-        if (user.mfaEnabled) {
+        if (user.mfaEnabled && !mayShortCircuitMfa(gate)) {
           return res.json({ mfaRequired: true, mfaToken: signMfaPendingToken(user.id) });
         }
         completeLogin(req, res, next, user);
