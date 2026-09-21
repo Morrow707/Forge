@@ -1,0 +1,252 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
+import { db } from "./db";
+import { exercises, users, workoutLogs, workoutSetEntries } from "@shared/schema";
+import { NORM_MIN_COHORT } from "@shared/cohort-norms";
+import {
+  resetDatabase,
+  makeExercise,
+  makeAssignedProgram,
+} from "./test-support/fixtures";
+import {
+  startTestServer,
+  makeLoginableUser,
+  addToRoster,
+  loginAs,
+  type TestServer,
+  type TestClient,
+} from "./test-support/http-app";
+
+/**
+ * THE STRENGTH PROFILE'S THREE RULES, PROVED AGAINST A REAL DATABASE.
+ *
+ * Scott set all three on 2026-09-21 and each one is invisible once broken -- every failure
+ * mode here produces a NUMBER, not an error, and a wrong percentile looks exactly like a right
+ * one:
+ *
+ *  1. **Forge-official exercises only.** A coach's own lift is not a standard anybody can be
+ *     measured against.
+ *  2. **Hand-logged weight and reps only.** Never a camera number: everything the camera
+ *     produces is uncalibrated, and a score built on it inherits that caveat.
+ *  3. **A percentile, never a rank, and never under the cohort floor.** A rank identifies;
+ *     this platform has already learned once what a leaderboard gives away.
+ */
+describe("the strength profile", () => {
+  let server: TestServer;
+  let athlete: TestClient;
+  let coach: TestClient;
+  let stranger: TestClient;
+  let athleteId: number;
+  let coachId: number;
+  let forgeSquat: number;
+  let coachSquat: number;
+  let ids: { assignmentId: number; programDayId: number };
+
+  beforeAll(async () => {
+    server = await startTestServer();
+    await resetDatabase();
+    const adminUser = await makeLoginableUser({ role: "admin" });
+    const coachUser = await makeLoginableUser({ role: "coach" });
+    // ADULTS on purpose. The under-18 gate makes a minor's account inert until a guardian
+    // claims it, which would 403 every request here and answer a question this file is not
+    // asking -- the same reason makeLoginableUser defaults to an adult.
+    const athleteUser = await makeLoginableUser({
+      role: "athlete",
+      dateOfBirth: "2004-05-01",
+      bodyWeightLbs: 180,
+    });
+    const strangerUser = await makeLoginableUser({ role: "coach" });
+    await addToRoster(coachUser.id, athleteUser.id);
+    coachId = coachUser.id;
+    athleteId = athleteUser.id;
+
+    // A Forge-official exercise (admin-authored, flagged) and a coach's own, same muscle group.
+    const forge = await makeExercise(adminUser.id, { name: "Back Squat", muscleGroup: "Quads" });
+    await db.update(exercises).set({ isForgeOfficial: true }).where(eq(exercises.id, forge.id));
+    const own = await makeExercise(coachUser.id, { name: "Heavy Squat Variation", muscleGroup: "Quads" });
+    forgeSquat = forge.id;
+    coachSquat = own.id;
+
+    const assigned = await makeAssignedProgram({
+      coachId: coachUser.id,
+      athleteId: athleteUser.id,
+      exerciseIds: [forge.id, own.id],
+    });
+    ids = { assignmentId: assigned.assignment.id, programDayId: assigned.day.id };
+
+    coach = await loginAs(server.baseUrl, coachUser);
+    athlete = await loginAs(server.baseUrl, athleteUser);
+    stranger = await loginAs(server.baseUrl, strangerUser);
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  beforeEach(async () => {
+    await db.delete(workoutLogs);
+  });
+
+  // workout_logs is unique on (assignment, day, date) -- one session per day, which is right.
+  // Each synthetic set therefore gets its own date rather than sharing one.
+  let dayCounter = 0;
+  function nextDate(): string {
+    dayCounter += 1;
+    const d = new Date(Date.UTC(2026, 0, 1));
+    d.setUTCDate(d.getUTCDate() + dayCounter);
+    return d.toISOString().slice(0, 10);
+  }
+
+  /** Writes one logged set directly, so a test can control exactly what the scorer sees. */
+  async function logSet(opts: {
+    exerciseId: number;
+    weightLbs: number | null;
+    reps: number | null;
+    forAthlete?: number;
+  }) {
+    const { workoutLogEntries } = await import("@shared/schema");
+    const [log] = await db
+      .insert(workoutLogs)
+      .values({
+        assignmentId: ids.assignmentId,
+        programDayId: ids.programDayId,
+        athleteId: opts.forAthlete ?? athleteId,
+        date: nextDate(),
+        completed: true,
+      })
+      .returning();
+    const [entry] = await db
+      .insert(workoutLogEntries)
+      .values({ workoutLogId: log.id, exerciseId: opts.exerciseId, weightMode: "numeric" })
+      .returning();
+    await db.insert(workoutSetEntries).values({
+      logEntryId: entry.id,
+      setNumber: 1,
+      reps: String(opts.reps ?? ""),
+      weight: String(opts.weightLbs ?? ""),
+      weightUnit: "lbs",
+      weightLbs: opts.weightLbs,
+      repsCount: opts.reps,
+    });
+  }
+
+  it("scores a Forge exercise and ignores the coach's own", async () => {
+    // RULE 1. Both are tagged Quads and the coach's is heavier, so if it were counted it would
+    // win -- which is exactly how this would go unnoticed.
+    await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5 });
+    await logSet({ exerciseId: coachSquat, weightLbs: 405, reps: 5 });
+
+    const res = await athlete.get("/api/athlete/strength-profile");
+    expect(res.status).toBe(200);
+    const quads = (res.body.groups as { group: string; exerciseName: string | null }[]).find(
+      (g) => g.group === "Quads",
+    );
+    expect(quads?.exerciseName).toBe("Back Squat");
+  });
+
+  it("ignores a set with no logged weight or reps", async () => {
+    // RULE 2. A camera-only capture writes its own columns and leaves these null; it must not
+    // reach the score at all.
+    await logSet({ exerciseId: forgeSquat, weightLbs: null, reps: null });
+    const res = await athlete.get("/api/athlete/strength-profile");
+    const quads = (res.body.groups as { group: string; ratio: number | null }[]).find(
+      (g) => g.group === "Quads",
+    );
+    expect(quads?.ratio).toBeNull();
+  });
+
+  it("refuses to turn a set of thirty into a maximal claim", async () => {
+    await logSet({ exerciseId: forgeSquat, weightLbs: 135, reps: 30 });
+    const res = await athlete.get("/api/athlete/strength-profile");
+    const quads = (res.body.groups as { group: string; ratio: number | null }[]).find(
+      (g) => g.group === "Quads",
+    );
+    expect(quads?.ratio).toBeNull();
+  });
+
+  it("picks the best ESTIMATED max, not the heaviest bar", async () => {
+    // 225x5 estimates to ~262; 245x1 is 245. The heavier bar is the worse lift, and ranking by
+    // raw weight would always choose it.
+    await logSet({ exerciseId: forgeSquat, weightLbs: 245, reps: 1 });
+    await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5 });
+    const res = await athlete.get("/api/athlete/strength-profile");
+    const quads = (res.body.groups as { group: string; ratio: number | null; reps: number | null }[])
+      .find((g) => g.group === "Quads");
+    expect(quads?.reps).toBe(5);
+  });
+
+  it("gives no percentile under the cohort floor", async () => {
+    // RULE 3. One athlete is not a distribution. The honest answer is nothing, which is the
+    // same answer the existing cohort norms give.
+    await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5 });
+    const res = await athlete.get("/api/athlete/strength-profile");
+    const quads = (res.body.groups as { group: string; percentile: number | null }[]).find(
+      (g) => g.group === "Quads",
+    );
+    expect(quads?.percentile).toBeNull();
+    expect(res.body.cohortSize).toBeLessThan(NORM_MIN_COHORT);
+  });
+
+  it("gives a percentile once the cohort is real, and never a rank or a name", async () => {
+    await logSet({ exerciseId: forgeSquat, weightLbs: 315, reps: 5 });
+    // Enough same-age peers, all weaker, so the athlete should land near the top.
+    for (let i = 0; i < NORM_MIN_COHORT + 2; i++) {
+      const peer = await makeLoginableUser({
+        role: "athlete",
+        dateOfBirth: "2004-06-01",
+        bodyWeightLbs: 180,
+      });
+      await logSet({ exerciseId: forgeSquat, weightLbs: 100 + i, reps: 5, forAthlete: peer.id });
+    }
+
+    const res = await athlete.get("/api/athlete/strength-profile");
+    const quads = (res.body.groups as { group: string; percentile: number | null }[]).find(
+      (g) => g.group === "Quads",
+    );
+    expect(quads?.percentile).not.toBeNull();
+    expect(quads!.percentile!).toBeGreaterThan(90);
+
+    // Nothing that resolves to a person, and no ordinal position.
+    const body = JSON.stringify(res.body);
+    expect(body).not.toMatch(/"name"/);
+    expect(body).not.toMatch(/"rank"/);
+    expect(body).not.toMatch(/@example\.test/);
+  });
+
+  it("leaves an opted-out athlete out of the distribution", async () => {
+    await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5 });
+    const optedOut = await makeLoginableUser({
+      role: "athlete",
+      dateOfBirth: "2004-06-01",
+      bodyWeightLbs: 180,
+      trackingOptOut: true,
+    });
+    await logSet({ exerciseId: forgeSquat, weightLbs: 500, reps: 5, forAthlete: optedOut.id });
+
+    const res = await athlete.get("/api/athlete/strength-profile");
+    // Their 500 never enters the comparison; with the cohort still under the floor there is no
+    // percentile at all, which is the point -- they were not counted.
+    expect(res.body.cohortSize).toBeLessThan(NORM_MIN_COHORT);
+  });
+
+  it("says nothing without a bodyweight rather than assuming one", async () => {
+    // A score computed against a guessed bodyweight looks exactly like a real one.
+    await db.update(users).set({ bodyWeightLbs: null }).where(eq(users.id, athleteId));
+    await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5 });
+    const res = await athlete.get("/api/athlete/strength-profile");
+    expect((res.body.groups as { percentile: number | null }[]).every((g) => g.percentile == null)).toBe(true);
+    await db.update(users).set({ bodyWeightLbs: 180 }).where(eq(users.id, athleteId));
+  });
+
+  it("lets the athlete's own coach read it, and nobody else's", async () => {
+    await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5 });
+    expect((await coach.get(`/api/coach/roster/${athleteId}/strength-profile`)).status).toBe(200);
+    expect((await stranger.get(`/api/coach/roster/${athleteId}/strength-profile`)).status).toBe(404);
+  });
+
+  it("refuses an unauthenticated caller", async () => {
+    expect([401, 403]).toContain(
+      (await fetch(`${server.baseUrl}/api/athlete/strength-profile`)).status,
+    );
+  });
+});

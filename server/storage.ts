@@ -157,6 +157,14 @@ import {
   type ResearchConsentRequest,
   type MediaRemovalRequest,
 } from "@shared/schema";
+import { ageBandFor, ageBandBounds, NORM_MIN_COHORT } from "@shared/cohort-norms";
+import { ageFromDateOfBirth } from "@shared/privacy-tiers";
+import {
+  SCORABLE_MUSCLE_GROUPS,
+  isScorableMuscleGroup,
+  strengthRatio,
+  MAX_SCORING_REPS,
+} from "@shared/strength-score";
 import {
   ageLineForAi,
   derivePrivacyTier,
@@ -21554,6 +21562,179 @@ ${catalog}`;
     const athlete = await this.getAthleteForGuardianScoped(guardianId, athleteId);
     if (!athlete) return null;
     return this.getVideoReviewForAthlete(athleteId, reviewId);
+  },
+
+  // ---------- The strength profile (2026-09-21) ----------
+  //
+  // Scott's two rules are enforced HERE, in the query, not at a call site: Forge-official
+  // exercises only, and hand-logged weight for a set number of reps only. A caller that forgot
+  // either would produce a number indistinguishable from a real one.
+
+  /**
+   * The athlete's best qualifying lift per muscle group, as a bodyweight multiple.
+   *
+   * WHY EVERY CLAUSE IS THERE:
+   *  - `is_forge_official` -- a coach's own "Heavy Squat Variation" is not a standard anyone
+   *    can be measured against. Including it would make every percentile on the platform
+   *    slightly wrong in a way nobody could see.
+   *  - `weight_lbs IS NOT NULL AND reps_count IS NOT NULL` -- the normalised load columns, the
+   *    ones normalizeSetLoad fills. Never the camera's numbers: everything the camera produces
+   *    is uncalibrated and carries a warning, and a score built on it would inherit that
+   *    warning. Hand-logged load is the one measurement in this app that is simply true.
+   *  - `reps_count <= MAX_SCORING_REPS` -- past twelve the 1RM estimate is extrapolating
+   *    endurance into a maximal claim. Enforced in SQL as well as in the helper so a set of
+   *    thirty never even reaches the maths.
+   *  - the athlete's own sets only, through workout_logs.athlete_id.
+   */
+  async getStrengthProfileForAthlete(athleteId: number) {
+    const athlete = await this.getUser(athleteId);
+    if (!athlete) return null;
+    const bodyweight = athlete.bodyWeightLbs ?? null;
+
+    const rows = await db.execute<{
+      muscle_group: string;
+      weight_lbs: number;
+      reps_count: number;
+      exercise_name: string;
+      logged_on: string;
+    }>(sql`
+      SELECT DISTINCT ON (e.muscle_group)
+        e.muscle_group, wse.weight_lbs, wse.reps_count, e.name AS exercise_name,
+        wl.date::text AS logged_on
+      FROM workout_set_entries wse
+      JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+      JOIN workout_logs wl ON wl.id = wle.workout_log_id
+      JOIN exercises e ON e.id = wle.exercise_id
+      WHERE wl.athlete_id = ${athleteId}
+        AND e.is_forge_official = true
+        AND wse.weight_lbs IS NOT NULL
+        AND wse.reps_count IS NOT NULL
+        AND wse.weight_lbs > 0
+        AND wse.reps_count > 0
+        AND wse.reps_count <= ${MAX_SCORING_REPS}
+      ORDER BY e.muscle_group,
+        -- Epley in SQL, so "best" means best ESTIMATED MAX rather than heaviest bar: a heavy
+        -- single and a lighter set of eight have to be ranked against each other, and picking
+        -- by raw weight would always choose the single even when the eight is the better lift.
+        (wse.weight_lbs * (1 + wse.reps_count / 30.0)) DESC
+    `);
+
+    const best = new Map<string, { ratio: number | null; exerciseName: string; loggedOn: string; weightLbs: number; reps: number }>();
+    for (const r of rows.rows ?? []) {
+      if (!isScorableMuscleGroup(r.muscle_group)) continue;
+      best.set(r.muscle_group, {
+        ratio: strengthRatio(Number(r.weight_lbs), Number(r.reps_count), bodyweight),
+        exerciseName: r.exercise_name,
+        loggedOn: r.logged_on,
+        weightLbs: Number(r.weight_lbs),
+        reps: Number(r.reps_count),
+      });
+    }
+
+    return {
+      bodyweightLbs: bodyweight,
+      // Reported so the UI can say "add your weight to see scores" rather than showing an
+      // empty profile that reads as "you have not trained".
+      hasBodyweight: bodyweight != null && bodyweight > 0,
+      groups: SCORABLE_MUSCLE_GROUPS.map((group) => {
+        const hit = best.get(group);
+        return {
+          group,
+          ratio: hit?.ratio ?? null,
+          exerciseName: hit?.exerciseName ?? null,
+          loggedOn: hit?.loggedOn ?? null,
+          weightLbs: hit?.weightLbs ?? null,
+          reps: hit?.reps ?? null,
+        };
+      }),
+    };
+  },
+
+  /**
+   * WHERE THIS ATHLETE SITS AMONG PEERS THE SAME AGE -- as a percentile, never as a rank.
+   *
+   * A rank identifies. "#4 of 11 in 16-17" plus a coach who knows their roster is a name, and
+   * leaderboard-teammate-privacy.itest.ts documents what that already cost this platform once.
+   * A percentile says the same useful thing -- am I ahead or behind for my age -- and says it
+   * about a distribution rather than about a list of people.
+   *
+   * NORM_MIN_COHORT (30) is the floor, and it is not the anonymity floor: it is the number
+   * below which a percentile stops meaning anything. Under it this returns null, exactly as
+   * the existing cohort norms do, because "you are 80th percentile of nine people" is a
+   * different kind of claim rather than a weaker one.
+   *
+   * Compared on the bodyweight-relative ratio, so it is a comparison of strength rather than
+   * of who hit puberty first.
+   */
+  async getStrengthPercentilesForAthlete(athleteId: number) {
+    const athlete = await this.getUser(athleteId);
+    if (!athlete) return null;
+    const age = athlete.dateOfBirth ? ageFromDateOfBirth(athlete.dateOfBirth) : null;
+    const band = ageBandFor(age);
+    const profile = await this.getStrengthProfileForAthlete(athleteId);
+    if (!profile) return null;
+
+    // No age band means no peer group -- an athlete with no date of birth is not compared to
+    // everybody, they are simply not compared. Widening to "all ages" would put a fourteen
+    // year old in with adults and call the result a percentile.
+    if (!band || !profile.hasBodyweight) {
+      return { ageBand: band, cohortSize: 0, groups: profile.groups.map((g) => ({ ...g, percentile: null })) };
+    }
+
+    const peers = await db.execute<{ muscle_group: string; ratio: number; user_id: number }>(sql`
+      SELECT e.muscle_group, u.id AS user_id,
+        MAX(wse.weight_lbs * (1 + wse.reps_count / 30.0) / NULLIF(u.body_weight_lbs, 0)) AS ratio
+      FROM workout_set_entries wse
+      JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+      JOIN workout_logs wl ON wl.id = wle.workout_log_id
+      JOIN exercises e ON e.id = wle.exercise_id
+      JOIN users u ON u.id = wl.athlete_id
+      WHERE e.is_forge_official = true
+        AND wse.weight_lbs IS NOT NULL AND wse.reps_count IS NOT NULL
+        AND wse.weight_lbs > 0 AND wse.reps_count > 0
+        AND wse.reps_count <= ${MAX_SCORING_REPS}
+        AND u.body_weight_lbs IS NOT NULL AND u.body_weight_lbs > 0
+        AND u.date_of_birth IS NOT NULL
+        -- Same age band, computed the same way ageBandFor does, and the athlete's own rows are
+        -- included: they are part of their own cohort, and excluding them would shift every
+        -- percentile slightly for no reason anybody could explain.
+        AND date_part('year', age(u.date_of_birth::date)) BETWEEN ${ageBandBounds(band)!.min} AND ${ageBandBounds(band)!.max}
+        -- Research/analytics rules do not apply here (this never leaves the platform and
+        -- resolves to nobody), but tracking opt-out does: an athlete who asked not to be
+        -- measured is not quietly made part of the distribution either.
+        AND u.tracking_opt_out = false
+      GROUP BY e.muscle_group, u.id
+    `);
+
+    const byGroup = new Map<string, number[]>();
+    const cohortMembers = new Set<number>();
+    for (const r of peers.rows ?? []) {
+      if (r.ratio == null) continue;
+      cohortMembers.add(Number(r.user_id));
+      const list = byGroup.get(r.muscle_group) ?? [];
+      list.push(Number(r.ratio));
+      byGroup.set(r.muscle_group, list);
+    }
+
+    return {
+      ageBand: band,
+      cohortSize: cohortMembers.size,
+      groups: profile.groups.map((g) => {
+        const peerRatios = byGroup.get(g.group) ?? [];
+        // Per GROUP, not per cohort: thirty athletes in the age band does not mean thirty of
+        // them have ever trained calves, and a percentile over the four who have is exactly
+        // the thin claim the floor exists to refuse.
+        if (g.ratio == null || peerRatios.length < NORM_MIN_COHORT) {
+          return { ...g, percentile: null, peerCount: peerRatios.length };
+        }
+        const below = peerRatios.filter((r) => r < g.ratio!).length;
+        return {
+          ...g,
+          percentile: Math.round((below / peerRatios.length) * 100),
+          peerCount: peerRatios.length,
+        };
+      }),
+    };
   },
 
   // ---------- Burned-in export (Phase 5 of docs/video-review-plan.md) ----------

@@ -81,6 +81,33 @@ export function ageBandFor(age: number | null | undefined): string | null {
   return "25+";
 }
 
+/**
+ * The inclusive age range a band covers.
+ *
+ * Lives beside ageBandFor deliberately: any query that has to select a cohort in SQL needs the
+ * numbers rather than the label, and a second copy of these boundaries written at a call site
+ * is one that silently stops matching the day a band moves. cohort-norms.test.ts round-trips
+ * every age through both so they cannot diverge.
+ */
+export function ageBandBounds(band: string | null): { min: number; max: number } | null {
+  switch (band) {
+    case "12-13":
+      return { min: 8, max: 13 };
+    case "14-15":
+      return { min: 14, max: 15 };
+    case "16-17":
+      return { min: 16, max: 17 };
+    case "18-19":
+      return { min: 18, max: 19 };
+    case "20-24":
+      return { min: 20, max: 24 };
+    case "25+":
+      return { min: 25, max: 60 };
+    default:
+      return null;
+  }
+}
+
 export function cohortLabel(key: CohortKey): string {
   const parts = [
     key.ageBand,

@@ -5200,6 +5200,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(events);
   });
 
+  // ---------- The strength profile (2026-09-21) ----------
+  //
+  // An athlete's own scores, and where they sit among peers their age. The percentile is the
+  // only comparison offered: a RANK would identify, and this platform has already learned once
+  // what a leaderboard can give away (see leaderboard-teammate-privacy.itest.ts).
+
+  app.get("/api/athlete/strength-profile", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const profile = await storage.getStrengthPercentilesForAthlete(user.id);
+    if (!profile) return res.status(404).json({ message: "No profile" });
+    res.json(profile);
+  });
+
+  // The coach's read of one of their athletes, through the same resolver every other
+  // per-athlete coach route uses, so per-team narrowing applies here too.
+  app.get("/api/coach/roster/:athleteId/strength-profile", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    res.json(await storage.getStrengthPercentilesForAthlete(athleteId));
+  });
+
   // ---------- The cue library (Phase 4b of docs/video-review-plan.md) ----------
   //
   // A cue dropped onto a timeline becomes an ordinary `cue` event carrying a COPY of its text.
