@@ -657,6 +657,25 @@ export function scaleWorldLandmarks(worldLandmarks: Landmark[], factor: number):
 // method, not a replacement for it.
 const SHOULDER_HEIGHT_FRACTION = 0.818;
 
+// ...BUT THE SPAN THIS IS DIVIDED INTO ENDS AT THE ANKLE, NOT AT THE FLOOR.
+//
+// 0.818 is acromion height above the GROUND. What the fallback below actually measures is the
+// vertical drop from shoulder to the ANKLE JOINT, and the ankle sits about 0.039 of stature up
+// -- Drillis & Contini again, the same table the figure above comes from. Dividing a
+// shoulder-to-ankle span by a shoulder-to-FLOOR fraction therefore implies an athlete shorter
+// than they are, which makes metres-per-unit too small, which makes every distance downstream
+// too small. One-sided, like the compression error the percentile below already answers.
+//
+// Measured against an OVR bar sensor on 2026-09-21: range of motion came back 17% LOW on a back
+// squat, identically at 60fps and at 120fps, on a set the sensor says travels 29.8in. A pure
+// multiplicative error, which is what a wrong divisor looks like. This accounts for about 5
+// points of that 17 and is the part that can be derived rather than fitted; the residual is
+// still open and is NOT papered over with a multiplier here, because a fudge factor that makes
+// one athlete's squat match one sensor is exactly the uncalibrated number this pipeline exists
+// to stop shipping. calibrationImpliedHeightIn (below) is what will localise the rest.
+const ANKLE_HEIGHT_FRACTION = 0.039;
+const SHOULDER_TO_ANKLE_FRACTION = SHOULDER_HEIGHT_FRACTION - ANKLE_HEIGHT_FRACTION;
+
 // SHOULDER BREADTH, FOR THE LIFTS WHERE BODY LENGTH IS NOT AVAILABLE.
 //
 // Every scale this file derives measures the athlete along their own long axis -- nose to ankle,
@@ -1154,7 +1173,7 @@ function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1
       y: shoulderY,
       z: (lShoulder.z + rShoulder.z) / 2,
     };
-    const impliedHeight = shoulderToAnkle / SHOULDER_HEIGHT_FRACTION;
+    const impliedHeight = shoulderToAnkle / SHOULDER_TO_ANKLE_FRACTION;
     if (
       shoulderToAnkle > 0 &&
       uprightEnough(shoulderToAnkle, shoulderMid, ankleY, ankleX, ankleZ) &&
