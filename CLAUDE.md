@@ -270,8 +270,37 @@ them will read as an arbitrary constraint to somebody who wasn't here:
   than two that can disagree. Collapsed on a phone and open on a desktop, decided by CSS --
   a viewport read in JavaScript is wrong on a tablet, wrong after a rotation, and wrong on
   first paint.
-- **Sex is not in the cohort yet.** Age band only. Adding it narrows every cohort and fights
-  the 30 floor, so it is a volume decision rather than a code one.
+- **THE ATHLETE NARROWS THEIR OWN COMPARISON.** Added 2026-09-21, same day, after Scott asked
+  "can we create a filter? so the athlete can get a more narrow view when they want?" -- a
+  17-year-old sees all 17-year-olds, then can choose males, then male football players. Two
+  optional toggles (gender, sport); age band is never optional, because a fourteen-year-old
+  measured against adults is not being given a percentile, they are being given a
+  discouragement.
+- **The earlier differencing objection to this was OVERSTATED, and that correction matters.**
+  The Query Engine warning is about an ADMIN with arbitrary predicates and 50 queries a day,
+  who can construct two cohorts differing by one person. An athlete has two preset toggles,
+  cannot express "everyone except this teammate", and the 30 floor applies to EVERY view --
+  so the smallest group any comparison can describe is thirty people, and the difference
+  between two views is a fact about aggregates. Do not re-raise this as a reason to remove the
+  filter; it was considered and answered.
+- **A filter can only ever make the number disappear**, never make it describe a group too
+  small to be a distribution. Narrowing to a thin cohort shows nothing, and the chips stay on
+  screen in that state -- they are deliberately rendered OUTSIDE the empty/scored branch,
+  because a filter that hides the control which undoes it strands the athlete. That exact bug
+  was written and caught before it ran; `client/src/lib/cohort-filter-has-an-escape.test.ts`
+  keeps it caught.
+- **Gender narrows only for male and female**, and not because the other answers are less
+  valid: a cohort of athletes who chose "prefer not to say" is a group defined by a privacy
+  choice, and measuring somebody against it would turn that choice into a category. They get
+  the broad comparison, which is the default everybody starts on. `readableGender` also exists
+  so a storage word like `non_binary` can never appear in a sentence about a child.
+- **A filter the athlete cannot satisfy is dropped, not applied.** Somebody with no sport on
+  file asking to narrow by sport would otherwise meet "not enough athletes" forever with
+  nothing to explain why. The response carries `available` so the UI hides a toggle rather
+  than drawing one that does nothing.
+- **The cohort sentence comes from the SERVER** (`cohortLabel`). A client that assembled its
+  own description could drift from the group the query actually used, and the drift would be
+  invisible.
 
 ## Speed and findability, 2026-09-20
 

@@ -11,6 +11,10 @@ import {
   estimatedOneRepMax,
   strengthRatio,
   MAX_SCORING_REPS,
+  BROADEST_COHORT,
+  cohortDescription,
+  canNarrowByGender,
+  readableGender,
 } from "./strength-score";
 import { MUSCLE_GROUPS } from "./exercise-taxonomy";
 
@@ -148,5 +152,46 @@ describe("the comparable number", () => {
     // why this returns null instead of picking a default.
     expect(strengthRatio(200, 1, null)).toBeNull();
     expect(strengthRatio(200, 1, 0)).toBeNull();
+  });
+});
+
+describe("the comparison cohort", () => {
+  it("describes the group in words the athlete would use", () => {
+    expect(cohortDescription(BROADEST_COHORT, { ageBand: "16-17" })).toBe("athletes aged 16-17");
+    expect(
+      cohortDescription({ gender: true, sport: false }, { ageBand: "16-17", gender: "male" }),
+    ).toBe("male athletes aged 16-17");
+    expect(
+      cohortDescription(
+        { gender: true, sport: true },
+        { ageBand: "16-17", gender: "male", sport: "Football" },
+      ),
+    ).toBe("male Football athletes aged 16-17");
+  });
+
+  it("offers the gender filter only where it would not turn a privacy answer into a category", () => {
+    // Not because the other answers are less valid -- because a cohort of athletes who chose
+    // "prefer not to say" is a group defined by a privacy choice, and measuring somebody
+    // against it would make that choice a label. They get the broad comparison, which is the
+    // default everybody gets anyway.
+    expect(canNarrowByGender("male")).toBe(true);
+    expect(canNarrowByGender("female")).toBe(true);
+    expect(canNarrowByGender("non_binary")).toBe(false);
+    expect(canNarrowByGender("prefer_not_to_say")).toBe(false);
+    expect(canNarrowByGender(null)).toBe(false);
+  });
+
+  it("never lets a storage word reach a sentence about a child", () => {
+    // "non_binary athletes aged 14-15" must never render. readableGender returns empty and the
+    // description falls back to the broad wording.
+    expect(readableGender("non_binary")).toBe("");
+    expect(
+      cohortDescription({ gender: true, sport: false }, { ageBand: "14-15", gender: "non_binary" }),
+    ).not.toContain("non_binary");
+  });
+
+  it("starts at the broadest group", () => {
+    // The default is the comparison that assumes least and fills up soonest.
+    expect(BROADEST_COHORT).toEqual({ gender: false, sport: false });
   });
 });

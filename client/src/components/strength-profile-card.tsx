@@ -18,6 +18,12 @@ type GroupRow = {
 type Profile = {
   ageBand: string | null;
   cohortSize: number;
+  /** The server's own sentence for the group, so the claim on screen and the group the query
+   * actually used cannot drift into describing different things. */
+  cohortLabel: string;
+  /** What can be offered to THIS athlete -- somebody with no sport on file gets no sport
+   * toggle rather than a toggle that does nothing. */
+  available: { gender: boolean; sport: boolean };
   groups: GroupRow[];
 };
 
@@ -33,13 +39,44 @@ type Profile = {
  * than a control here, so it can start small in a corner of the profile and open when somebody
  * wants it, without pushing the rest of the page down for everyone.
  */
+function CohortChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+        active
+          ? "border-primary bg-primary/10 text-foreground"
+          : "border-border text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"front" | "back">("front");
 
+  // Starts broad. The default is the comparison that fills up soonest and assumes least;
+  // narrowing is something the athlete asks for.
+  const [cohort, setCohort] = useState({ gender: false, sport: false });
+  const query = `${fetchUrl}?gender=${cohort.gender}&sport=${cohort.sport}`;
+
   const { data, isLoading, isError, refetch } = useQuery<Profile>({
-    queryKey: [fetchUrl],
-    queryFn: () => getJson(fetchUrl),
+    queryKey: [query],
+    queryFn: () => getJson(query),
   });
 
   // isError before any emptiness claim: "you have not trained this" and "we could not ask" are
@@ -96,12 +133,45 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
 
         {open && (
           <div className="space-y-3 border-t border-border pt-3">
+            {/* NARROWING, stacked the way somebody thinks about it: everyone my age, then my
+                own gender, then my own sport. Rendered OUTSIDE the empty/scored branch on
+                purpose -- narrowing to a thin cohort shows no number, and taking away the
+                control that undoes it would strand the athlete there. */}
+            {(data.available.gender || data.available.sport) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">Compare against</span>
+                <CohortChip
+                  label="Everyone my age"
+                  active={!cohort.gender && !cohort.sport}
+                  onClick={() => setCohort({ gender: false, sport: false })}
+                />
+                {data.available.gender && (
+                  <CohortChip
+                    label="My gender"
+                    active={cohort.gender}
+                    onClick={() => setCohort((c) => ({ ...c, gender: !c.gender }))}
+                  />
+                )}
+                {data.available.sport && (
+                  <CohortChip
+                    label="My sport"
+                    active={cohort.sport}
+                    onClick={() => setCohort((c) => ({ ...c, sport: !c.sport }))}
+                  />
+                )}
+              </div>
+            )}
+
             {scored.length === 0 ? (
               // Said plainly, with the reason. A blank card reads as "you have done nothing".
               <p className="text-sm text-muted-foreground">
                 {data.ageBand == null
                   ? "Add your date of birth to compare against athletes your age."
-                  : `Not enough athletes in the ${data.ageBand} group yet to compare fairly. Your lifts are still being recorded.`}
+                  : `Not enough ${data.cohortLabel} on Forge yet to compare fairly.${
+                      cohort.gender || cohort.sport
+                        ? " Widen the comparison above to see where you stand."
+                        : " Your lifts are still being recorded."
+                    }`}
               </p>
             ) : (
               <>
@@ -158,8 +228,8 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
                     statistics lesson -- and the sample size, because a percentile without one
                     is a claim with its uncertainty hidden. */}
                 <p className="text-xs text-muted-foreground">
-                  Compared with {data.cohortSize} athletes aged {data.ageBand} on Forge, using your
-                  best logged lift on each movement relative to your bodyweight. Names are never
+                  Compared with {data.cohortSize} {data.cohortLabel} on Forge, using your best
+                  logged lift on each movement relative to your bodyweight. Names are never
                   shown or ranked — only where you sit in the spread.
                 </p>
               </>
