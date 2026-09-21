@@ -1142,7 +1142,11 @@ function foreshorteningPlausible(impliedHeight: number, worldLandmarks: Landmark
   return impliedHeight / shoulderWidth >= MIN_HEIGHT_TO_SHOULDER_RATIO;
 }
 
-function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1 | -1): number | null {
+function impliedStandingHeightPixels(
+  worldLandmarks: Landmark[],
+  verticalSign: 1 | -1,
+  shoulderFraction: number = SHOULDER_TO_ANKLE_FRACTION,
+): number | null {
   const lAnkle = worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
   const rAnkle = worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE];
   if (!visible(lAnkle) || !visible(rAnkle)) return null;
@@ -1173,7 +1177,7 @@ function impliedStandingHeightPixels(worldLandmarks: Landmark[], verticalSign: 1
       y: shoulderY,
       z: (lShoulder.z + rShoulder.z) / 2,
     };
-    const impliedHeight = shoulderToAnkle / SHOULDER_TO_ANKLE_FRACTION;
+    const impliedHeight = shoulderToAnkle / shoulderFraction;
     if (
       shoulderToAnkle > 0 &&
       uprightEnough(shoulderToAnkle, shoulderMid, ankleY, ankleX, ankleZ) &&
@@ -1374,9 +1378,10 @@ export function computePixelToMeterScale(
   worldLandmarks: Landmark[],
   verticalSign: 1 | -1,
   athleteHeightIn: number | null | undefined,
+  shoulderFraction: number = SHOULDER_TO_ANKLE_FRACTION,
 ): number | null {
   if (!athleteHeightIn || athleteHeightIn <= 0) return null;
-  const impliedHeightPixels = impliedStandingHeightPixels(worldLandmarks, verticalSign);
+  const impliedHeightPixels = impliedStandingHeightPixels(worldLandmarks, verticalSign, shoulderFraction);
   if (impliedHeightPixels == null) return null;
   const trueHeightM = athleteHeightIn * 0.0254;
   return trueHeightM / impliedHeightPixels;
@@ -1698,11 +1703,82 @@ export function isDuplicateLandmarkFrame(a: Landmark[], b: Landmark[]): boolean 
   return true;
 }
 
+/**
+ * THIS ATHLETE'S OWN SHOULDER FRACTION, MEASURED, NOT ASSUMED.
+ *
+ * Scott, 2026-09-21: "no athlete will be filming from the front, it will be back or behind."
+ * That is the whole point. Filmed from behind the NOSE is never visible, so the nose-to-ankle
+ * path -- the one that measures the athlete directly -- carries almost nothing, and the
+ * shoulder path carries the set. On a real back squat that split was 86 frames against 977.
+ *
+ * The shoulder path divides by SHOULDER_TO_ANKLE_FRACTION, a POPULATION AVERAGE. So for the
+ * standard camera angle, every distance this pipeline reports rests on an assumption about
+ * where an average person's shoulders sit, and an athlete whose proportions differ from that
+ * average carries the difference into every number, every take, invisibly.
+ *
+ * But the athlete is measured directly on the frames where the nose IS visible -- a turn of the
+ * head, a glance at the rack -- and 86 frames is far more than enough to fit one ratio. So those
+ * frames are spent teaching the pipeline this athlete's real proportion, and the other 977 use
+ * it instead of the average. The population figure survives only as the fallback for a take
+ * where the nose is never seen at all.
+ *
+ * MEDIAN, not mean: a single frame with a jumped nose landmark would drag a mean, and the whole
+ * reason to prefer a measured ratio is that it is less arbitrary than the constant it replaces.
+ * The plausibility band is deliberately wide enough to admit real human variation and narrow
+ * enough to refuse a mis-tracked frame -- outside it, the population average is the better bet.
+ */
+const MIN_FRACTION_SAMPLES = 12;
+const FRACTION_PLAUSIBLE_MIN = 0.70;
+const FRACTION_PLAUSIBLE_MAX = 0.86;
+
+export function measureShoulderToAnkleFraction(
+  frames: { worldLandmarks: Landmark[] }[],
+): number | null {
+  const ratios: number[] = [];
+  let lastSign: 1 | -1 = 1;
+  for (const f of frames) {
+    const lm = f.worldLandmarks;
+    const sign: 1 | -1 = worldVerticalSign(lm) ?? lastSign;
+    lastSign = sign;
+    const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
+    const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
+    const nose = lm[POSE_LANDMARKS.NOSE];
+    const lShoulder = lm[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rShoulder = lm[POSE_LANDMARKS.RIGHT_SHOULDER];
+    if (!visible(lAnkle) || !visible(rAnkle) || !visible(nose)) continue;
+    if (!visible(lShoulder) || !visible(rShoulder)) continue;
+    const ankleY = (lAnkle.y + rAnkle.y) / 2;
+    const ankleX = (lAnkle.x + rAnkle.x) / 2;
+    const ankleZ = (lAnkle.z + rAnkle.z) / 2;
+    // The SAME span and the SAME two guards the nose branch of impliedStandingHeightPixels
+    // applies, deliberately: a frame this ratio is learned from has to be one that branch would
+    // itself have trusted, or the fraction is fitted to frames the pipeline would have refused.
+    const viaNose = sign * (ankleY - nose.y);
+    if (
+      !(viaNose > 0) ||
+      !uprightEnough(viaNose, nose, ankleY, ankleX, ankleZ) ||
+      !foreshorteningPlausible(viaNose, lm)
+    ) {
+      continue;
+    }
+    const shoulderY = (lShoulder.y + rShoulder.y) / 2;
+    const shoulderToAnkle = sign * (ankleY - shoulderY);
+    if (!(shoulderToAnkle > 0)) continue;
+    const ratio = shoulderToAnkle / viaNose;
+    if (ratio >= FRACTION_PLAUSIBLE_MIN && ratio <= FRACTION_PLAUSIBLE_MAX) ratios.push(ratio);
+  }
+  if (ratios.length < MIN_FRACTION_SAMPLES) return null;
+  const sorted = [...ratios].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
 export function calibrateFromFrames(
   frames: { worldLandmarks: Landmark[] }[],
   heightIn: number | null | undefined,
 ): number | null {
   if (!heightIn || heightIn <= 0) return null;
+  // Spend the nose frames on learning this athlete, then use what was learned on the rest.
+  const measuredFraction = measureShoulderToAnkleFraction(frames) ?? SHOULDER_TO_ANKLE_FRACTION;
   let lastSign: 1 | -1 = 1;
   const samples: number[] = [];
   let previous: Landmark[] | null = null;
@@ -1714,7 +1790,7 @@ export function calibrateFromFrames(
     previous = f.worldLandmarks;
     const sign: 1 | -1 = worldVerticalSign(f.worldLandmarks) ?? lastSign;
     lastSign = sign;
-    const candidate = computePixelToMeterScale(f.worldLandmarks, sign, heightIn);
+    const candidate = computePixelToMeterScale(f.worldLandmarks, sign, heightIn, measuredFraction);
     if (candidate != null) samples.push(candidate);
   }
   if (samples.length < MIN_CALIBRATION_SAMPLES) return null;

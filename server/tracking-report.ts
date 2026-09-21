@@ -661,9 +661,19 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
       label: "Calibration",
       value:
         c.scaleFactor != null
-          ? `succeeded -- nose-to-ankle on ${c.noseToAnkleFrames}/${totalFrames} frames, ` +
-            `shoulder-to-ankle fallback on ${c.shoulderToAnkleFrames}/${totalFrames}, ` +
-            `lying-flat full-length on ${supineFrames}/${totalFrames}`
+          ? // A SPLIT BETWEEN METHODS, NOT A SUCCESS COUNT AND THREE FAILURES.
+            //
+            // This read "nose-to-ankle on 86/1251 frames, shoulder-to-ankle FALLBACK on
+            // 977/1251" and was taken to mean 86 frames worked and the rest were lost -- by
+            // the person who knows this system best, on 2026-09-21. The numbers sum to the
+            // total; each names how many frames took that route. Say the total that resolved
+            // first, then the split, and never call the common route a fallback: filmed from
+            // behind, which is how athletes actually film, the nose is not visible and the
+            // shoulder route is the NORMAL one. It carries the set.
+            `succeeded on ${c.noseToAnkleFrames + c.shoulderToAnkleFrames + supineFrames}/${totalFrames} frames ` +
+            `(${c.unresolvedFrames} resolved nothing) -- measured the athlete directly ` +
+            `nose-to-ankle on ${c.noseToAnkleFrames}, from the shoulders on ` +
+            `${c.shoulderToAnkleFrames}, lying-flat full-length on ${supineFrames}`
           : `failed -- unresolved on ${c.unresolvedFrames}/${totalFrames} frames. Either no frame ` +
             `showed ankles plus nose/shoulders, or the body was too foreshortened to measure ` +
             `(pointing away from the lens -- e.g. a bench filmed from the head or foot of the ` +
