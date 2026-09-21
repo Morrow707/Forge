@@ -254,9 +254,19 @@ them will read as an arbitrary constraint to somebody who wasn't here:
   claim -- a set of thirty bodyweight squats is not a 3x bodyweight single, and without the cap
   it scores as one.
 - **No bodyweight means no score.** A number computed against a guessed bodyweight looks
-  exactly like a real one. Known gap: `users.bodyWeightLbs` is a single current value, so a
-  lift from eight months ago is scored against today's weight. A weight history is its own
-  piece of work and was deliberately not smuggled into #156.
+  exactly like a real one.
+- **A LIFT IS SCORED AGAINST THE WEIGHT THE ATHLETE ACTUALLY WAS ON THE DAY.** Fixed
+  2026-09-21; this section used to carry it as a known gap on the grounds that a weight history
+  was its own piece of work. It was not: `body_metrics` has been a dated per-athlete weight log
+  since long before the strength profile, and the score simply was not reading it.
+  `bodyweightAtLiftSql` takes the most recent entry on or before the lift's date and falls back
+  to `users.bodyWeightLbs` -- the number the score used before, so an athlete who has never
+  weighed in sees exactly what they saw yesterday. Three consequences worth keeping straight:
+  a kg weigh-in is converted before it becomes a denominator; the best lift for a group is now
+  the best RATIO, which is not always the heaviest bar once the denominator can move; and the
+  COHORT query uses the same rule, because a mixed denominator would put the two sides of a
+  percentile on different scales. `server/strength-profile.itest.ts` proves each against real
+  Postgres.
 - **The bands are relative to FORGE'S population, not world standards.** Forge has no validated
   standards table and inventing one would repeat the uncalibrated-numbers problem the camera
   work spent months on. The card says "ahead of 68% of athletes your age", which is a claim the
@@ -300,6 +310,33 @@ them will read as an arbitrary constraint to somebody who wasn't here:
   file asking to narrow by sport would otherwise meet "not enough athletes" forever with
   nothing to explain why. The response carries `available` so the UI hides a toggle rather
   than drawing one that does nothing.
+- **The body map is a CONTROL in both places it is drawn, and the two taps do different jobs.**
+  In the exercise picker a tap filters exercises; in the strength profile a tap opens what was
+  actually lifted for that area (date, lift, reps x weight, nothing more). The scored list beside
+  the figure opens the same sheet, because several scorable groups have no drawn region and a
+  map-only entry point would make their history unreachable.
+- **The muscle-group history is FORGE-OFFICIAL ONLY, and it says so on screen.** Scott,
+  2026-09-21: "only forge specific exercises, not coach created exercises" -- which overruled the
+  recommendation to show every lift. It is also structurally required: the history sits under the
+  percentile, so if it widened to coach-created exercises a tap could show a lift heavier than the
+  one the score was computed from and the score would read as broken rather than as scoped.
+  Enforced in the SQL (`getMuscleGroupHistoryForAthlete`), stated in the dialog so a missing lift
+  reads as a rule rather than as lost data. The history URL is DERIVED from the profile URL
+  (`strength-profile` -> `muscle-history`) so a caller cannot wire an athlete's own history behind
+  a coach's roster-scoped profile by getting one prop right and the other wrong.
+
+- **A logged load is shown in the READER'S unit, and a set already in that unit is never
+  converted.** Scott, 2026-09-21: "if they want to see kg let them see kilos, even if the other
+  athletes put it in lbs the conversion is 2.2." `weight_lbs` is a normalised comparison column,
+  so display is a separate concern: the history carries the AS-LOGGED weight and unit beside it,
+  and a kg set read back in kg prints exactly what the athlete typed. `shared/weight-units.ts`
+  is the one conversion. The factor is 2.20462 rather than 2.2 for one visible reason -- a kg
+  lift is stored through 2.20462, so reading it back at 2.2 turns a 100 kg lift into 100.2 kg,
+  a number nobody lifted.
+- **The history's date window is a server-side inclusive floor** (`since=YYYY-MM-DD`), not a
+  client-side slice, and "All time" is always offered so a narrow window can never be mistaken
+  for an empty history. Same reasoning as the cohort chips.
+
 - **The cohort sentence comes from the SERVER** (`cohortLabel`). A client that assembled its
   own description could drift from the group the query actually used, and the drift would be
   invisible.

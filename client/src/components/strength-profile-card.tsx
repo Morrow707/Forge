@@ -4,6 +4,7 @@ import { ChevronDown, TrendingUp, Navigation } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReadFailed } from "@/components/read-failed";
 import { BodyMap } from "@/components/body-map";
+import { MuscleHistoryDialog } from "@/components/muscle-history-dialog";
 import { getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { bandForScore, balanceHint, overallScore, MOVEMENT_FOR_GROUP } from "@shared/strength-score";
@@ -68,6 +69,14 @@ function CohortChip({
 export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"front" | "back">("front");
+  // Which muscle's lift history is open. The map in the card was a readout until now; tapping
+  // a region is the one thing every athlete tried to do with it.
+  const [historyGroup, setHistoryGroup] = useState<string | null>(null);
+
+  // Derived from the profile URL rather than passed in, so a caller cannot wire the athlete's
+  // own history behind a coach's roster-scoped profile (or the reverse) by getting one prop
+  // right and the other wrong.
+  const historyUrl = fetchUrl.replace(/strength-profile$/, "muscle-history");
 
   // Starts broad. The default is the comparison that fills up soonest and assumes least;
   // narrowing is something the athlete asks for.
@@ -177,13 +186,23 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
               <>
                 <div className="flex items-start gap-3">
                   <div className="h-48 flex-1 text-muted-foreground">
-                    <BodyMap view={view} fills={fills} />
+                    <BodyMap
+                      view={view}
+                      fills={fills}
+                      selected={historyGroup}
+                      onSelect={setHistoryGroup}
+                    />
                   </div>
                   <div className="min-w-0 flex-1 space-y-1.5">
                     {sorted.map((g) => {
                       const band = bandForScore(g.percentile!);
                       return (
-                        <div key={g.group} className="flex items-center gap-2 text-sm">
+                        <button
+                          key={g.group}
+                          type="button"
+                          onClick={() => setHistoryGroup(g.group)}
+                          className="flex w-full items-center gap-2 rounded-sm text-left text-sm hover:bg-muted"
+                        >
                           <span
                             className="h-2 w-2 shrink-0 rounded-full"
                             style={{ backgroundColor: band.color }}
@@ -194,7 +213,7 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
                           <span className="shrink-0 tabular-nums text-muted-foreground">
                             {g.percentile}%
                           </span>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -236,6 +255,12 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
             )}
           </div>
         )}
+
+        <MuscleHistoryDialog
+          group={historyGroup}
+          fetchUrl={historyUrl}
+          onClose={() => setHistoryGroup(null)}
+        />
       </CardContent>
     </Card>
   );

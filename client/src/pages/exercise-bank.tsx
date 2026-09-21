@@ -103,7 +103,14 @@ export function ExerciseBankPage({
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
   const [movementFilter, setMovementFilter] = useState<Set<string>>(new Set());
-  const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(new Set());
+  // Seeded from ?muscle= so "show me exercises for this" can be a link from anywhere -- the
+  // strength profile's history sheet uses it when an athlete has nothing logged for a muscle.
+  // Read ONCE, in the initialiser, rather than in an effect: an effect would also fire on a
+  // later render and stamp the URL's group back over a filter the athlete has since changed.
+  const [muscleGroupFilter, setMuscleGroupFilter] = useState<Set<string>>(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("muscle");
+    return fromUrl ? new Set([fromUrl]) : new Set();
+  });
   const [lateralityFilter, setLateralityFilter] = useState<Set<string>>(new Set());
   const [bodyRegionFilter, setBodyRegionFilter] = useState<Set<string>>(new Set());
   const [planeFilter, setPlaneFilter] = useState<Set<string>>(new Set());
