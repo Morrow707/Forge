@@ -24,7 +24,6 @@ import {
   findApprovalByPollToken,
   findTrustedDevice,
   forgetAllDevices,
-  forgetDevice,
   forgetDeviceById,
   hashDeviceId,
   isDeviceVerificationDisabled,
@@ -1623,11 +1622,27 @@ export function setupAuth(app: Express) {
     try {
       const user = req.user as { id: number } | undefined;
       const sessionRecordId = currentSessionRecordId(req);
-      // Signing out is the one gesture that means "this device is not mine to
-      // keep" -- a shared computer, a phone being handed on. The next sign-in
-      // here goes through the email again.
-      const deviceId = user ? requestDeviceId(req) : null;
-      if (user && deviceId) await forgetDevice(user.id, deviceId);
+      // SIGNING OUT ENDS THE SESSION. IT DOES NOT UNTRUST THE DEVICE.
+      //
+      // This used to call forgetDevice here, on the reasoning that "signing out is the one
+      // gesture that means this device is not mine to keep -- a shared computer, a phone being
+      // handed on." That holds for a library computer and is wrong for the case that is nearly
+      // all of them: somebody signing out of their OWN phone. Trust is a property of an account
+      // AND a device, established when the owner approved it from their inbox; signing out says
+      // "I am done for now", not "this hardware is not mine".
+      //
+      // The cost was not theoretical and not evenly shared. Reported 2026-09-21 by the platform
+      // owner: approve the device, sign out, sign back in, and the email starts over. Forge has
+      // thirteen-year-olds on it whose address is a guardian's or was typed in by a coach, and
+      // this file already accepts that such an athlete cannot reach a NEW device until that is
+      // fixed. Revoking on sign-out turned that from a one-time cost into the price of every
+      // sign-out, for exactly the people least able to pay it.
+      //
+      // Every case the old rule was reaching for still has an answer, and a better-aimed one:
+      // trust expires 30 days after the last sign-in on that device; the sessions list revokes
+      // a device explicitly; and changing or resetting the password forgets devices, which is
+      // where that belongs, because a compromise is what those gestures actually signal.
+      // A shared computer is served by not approving it in the first place.
       if (user && sessionRecordId !== null) {
         const revoked = await storage.revokeSession(user.id, sessionRecordId);
         if (revoked?.webSessionId) {

@@ -124,16 +124,35 @@ describe("a new device waits on the email", () => {
     expect(list.body.some((d: any) => d.isCurrent)).toBe(false);
   });
 
-  it("signing out forgets the device, so the next sign-in waits on the email again", async () => {
+  /**
+   * THIS ASSERTION USED TO RUN THE OTHER WAY, and the reasoning behind it was aimed at the
+   * wrong case. Signing out revoked the device, on the grounds that it means "this device is
+   * not mine to keep -- a shared computer, a phone being handed on." That is true of a library
+   * computer and false of the case that is nearly all of them: somebody signing out of their
+   * own phone. Reported 2026-09-21 by the platform owner, who approved a device, signed out,
+   * signed back in, and met the email again.
+   *
+   * It fell hardest on the people least able to pay it. A minor's address here is often a
+   * guardian's or was typed in by a coach, and this suite already accepts that such an athlete
+   * cannot reach a NEW device until that is fixed -- revoking on sign-out made that the price
+   * of every sign-out rather than a one-off.
+   */
+  it("signing out ends the session but keeps the device trusted", async () => {
     const user = await makeLoginableUser({ role: "athlete" });
     const phone = new TestClient(server.baseUrl);
     await trustClientDevice(phone, user);
     const inRes = await phone.login(user.email, TEST_PASSWORD);
     expect(inRes.body.deviceApprovalRequired).toBeUndefined();
+
     const out = await phone.post("/api/auth/logout");
     expect(out.status).toBe(204);
+    // The SESSION is genuinely gone -- signing out still signs you out.
+    expect((await phone.get("/api/auth/me")).status).toBe(401);
+
+    // ...but the device is still known, so the password alone gets back in.
     const again = await phone.login(user.email, TEST_PASSWORD);
-    expect(again.body.deviceApprovalRequired).toBe(true);
+    expect(again.body.deviceApprovalRequired).toBeUndefined();
+    expect((await phone.get("/api/auth/me")).status).toBe(200);
   });
 
   it("deny signs every device out, forgets them all, and hands over a password reset", async () => {
