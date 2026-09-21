@@ -103,6 +103,8 @@ describe("the strength profile", () => {
     weightLbs: number | null;
     reps: number | null;
     forAthlete?: number;
+    /** Only the bodyweight-at-the-time tests care; everything else takes the next free day. */
+    date?: string;
   }) {
     const { workoutLogEntries } = await import("@shared/schema");
     const [log] = await db
@@ -111,7 +113,7 @@ describe("the strength profile", () => {
         assignmentId: ids.assignmentId,
         programDayId: ids.programDayId,
         athleteId: opts.forAthlete ?? athleteId,
-        date: nextDate(),
+        date: opts.date ?? nextDate(),
         completed: true,
       })
       .returning();
@@ -305,5 +307,167 @@ describe("the strength profile", () => {
     expect([401, 403]).toContain(
       (await fetch(`${server.baseUrl}/api/athlete/strength-profile`)).status,
     );
+  });
+
+  /**
+   * A SCORE IS A RATIO, SO THE DENOMINATOR HAS TO BE FROM THE SAME DAY AS THE NUMERATOR.
+   *
+   * body_metrics has always been a dated weight log; the score simply was not reading it, so a
+   * lift from eight months ago was divided by today's weight. The error is largest for exactly
+   * the population this feature is for -- a teenager can put on twenty pounds in a season.
+   */
+  describe("bodyweight at the time of the lift", () => {
+    it("scores against the weight logged on or before the lift, not today's", async () => {
+      const { bodyMetrics } = await import("@shared/schema");
+      await db.delete(bodyMetrics).where(eq(bodyMetrics.athleteId, athleteId));
+      // Profile says 180 today; the athlete was 150 when they lifted.
+      await db.insert(bodyMetrics).values({
+        athleteId,
+        date: "2026-03-01",
+        weight: 150,
+        weightUnit: "lbs",
+      });
+      await logSet({ exerciseId: forgeSquat, weightLbs: 300, reps: 1, date: "2026-03-10" });
+
+      const res = await athlete.get("/api/athlete/strength-profile");
+      const quads = res.body.groups.find((g: any) => g.group === "Quads");
+      // A single IS the max -- estimatedOneRepMax does not extrapolate one rep -- so the
+      // ratio is 300 over the weight ON THE DAY, 150, not over today's 180.
+      expect(quads.ratio).toBeCloseTo(300 / 150, 2);
+      expect(quads.bodyweightThenLbs).toBeCloseTo(150, 1);
+
+      await db.delete(bodyMetrics).where(eq(bodyMetrics.athleteId, athleteId));
+    });
+
+    it("converts a weight logged in kilos before using it as the denominator", async () => {
+      const { bodyMetrics } = await import("@shared/schema");
+      await db.delete(bodyMetrics).where(eq(bodyMetrics.athleteId, athleteId));
+      await db.insert(bodyMetrics).values({
+        athleteId,
+        date: "2026-03-01",
+        weight: 68,
+        weightUnit: "kg",
+      });
+      await logSet({ exerciseId: forgeSquat, weightLbs: 300, reps: 1, date: "2026-03-10" });
+
+      const res = await athlete.get("/api/athlete/strength-profile");
+      const quads = res.body.groups.find((g: any) => g.group === "Quads");
+      expect(quads.bodyweightThenLbs).toBeCloseTo(68 * 2.20462, 1);
+
+      await db.delete(bodyMetrics).where(eq(bodyMetrics.athleteId, athleteId));
+    });
+
+    it("falls back to the profile weight when nothing was logged that early", async () => {
+      const { bodyMetrics } = await import("@shared/schema");
+      await db.delete(bodyMetrics).where(eq(bodyMetrics.athleteId, athleteId));
+      // The only entry is AFTER the lift, so it cannot be used -- an athlete who weighed in
+      // last week tells you nothing about what they weighed last year.
+      await db.insert(bodyMetrics).values({
+        athleteId,
+        date: "2026-06-01",
+        weight: 150,
+        weightUnit: "lbs",
+      });
+      await logSet({ exerciseId: forgeSquat, weightLbs: 300, reps: 1, date: "2026-03-10" });
+
+      const res = await athlete.get("/api/athlete/strength-profile");
+      const quads = res.body.groups.find((g: any) => g.group === "Quads");
+      // The fallback is the number the score used before any of this existed, so an athlete
+      // who has never weighed in sees exactly what they saw yesterday.
+      expect(quads.ratio).toBeCloseTo(300 / 180, 2);
+
+      await db.delete(bodyMetrics).where(eq(bodyMetrics.athleteId, athleteId));
+    });
+
+    it("picks the best RATIO, which is not always the heaviest lift", async () => {
+      const { bodyMetrics } = await import("@shared/schema");
+      await db.delete(bodyMetrics).where(eq(bodyMetrics.athleteId, athleteId));
+      await db.insert(bodyMetrics).values([
+        { athleteId, date: "2026-02-01", weight: 150, weightUnit: "lbs" },
+        { athleteId, date: "2026-05-01", weight: 200, weightUnit: "lbs" },
+      ]);
+      // Lighter bar at a much lighter bodyweight beats a heavier bar at 200.
+      await logSet({ exerciseId: forgeSquat, weightLbs: 270, reps: 1, date: "2026-02-10" });
+      await logSet({ exerciseId: forgeSquat, weightLbs: 300, reps: 1, date: "2026-05-10" });
+
+      const res = await athlete.get("/api/athlete/strength-profile");
+      const quads = res.body.groups.find((g: any) => g.group === "Quads");
+      expect(quads.weightLbs).toBe(270);
+      expect(quads.ratio).toBeCloseTo(270 / 150, 2);
+
+      await db.delete(bodyMetrics).where(eq(bodyMetrics.athleteId, athleteId));
+    });
+  });
+
+  /** The readback behind tapping a muscle on the body map. */
+  describe("the muscle-group history", () => {
+    it("lists the Forge sets and leaves the coach's own exercise out", async () => {
+      await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5, date: "2026-04-01" });
+      await logSet({ exerciseId: coachSquat, weightLbs: 315, reps: 5, date: "2026-04-02" });
+
+      const res = await athlete.get("/api/athlete/muscle-history?group=Quads");
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].exerciseName).toBe("Back Squat");
+      expect(res.body[0].reps).toBe(5);
+      expect(res.body[0].weightLbs).toBe(225);
+    });
+
+    it("hands back the as-logged weight and unit, so a kilo set never round-trips", async () => {
+      const { workoutLogEntries } = await import("@shared/schema");
+      const [log] = await db
+        .insert(workoutLogs)
+        .values({
+          assignmentId: ids.assignmentId,
+          programDayId: ids.programDayId,
+          athleteId,
+          date: "2026-04-05",
+          completed: true,
+        })
+        .returning();
+      const [entry] = await db
+        .insert(workoutLogEntries)
+        .values({ workoutLogId: log.id, exerciseId: forgeSquat, weightMode: "numeric" })
+        .returning();
+      await db.insert(workoutSetEntries).values({
+        logEntryId: entry.id,
+        setNumber: 1,
+        reps: "3",
+        weight: "100",
+        weightUnit: "kg",
+        weightLbs: 100 * 2.20462,
+        repsCount: 3,
+      });
+
+      const res = await athlete.get("/api/athlete/muscle-history?group=Quads");
+      expect(res.body[0].loggedUnit).toBe("kg");
+      expect(res.body[0].loggedWeight).toBe(100);
+    });
+
+    it("applies the since floor on the server", async () => {
+      await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5, date: "2026-01-15" });
+      await logSet({ exerciseId: forgeSquat, weightLbs: 235, reps: 5, date: "2026-07-15" });
+
+      const all = await athlete.get("/api/athlete/muscle-history?group=Quads");
+      expect(all.body).toHaveLength(2);
+      const recent = await athlete.get("/api/athlete/muscle-history?group=Quads&since=2026-06-01");
+      expect(recent.body).toHaveLength(1);
+      expect(recent.body[0].date).toBe("2026-07-15");
+    });
+
+    it("lets the athlete's own coach read it, and nobody else's", async () => {
+      await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5, date: "2026-04-01" });
+      const mine = await coach.get(`/api/coach/roster/${athleteId}/muscle-history?group=Quads`);
+      expect(mine.status).toBe(200);
+      expect(mine.body).toHaveLength(1);
+      const theirs = await stranger.get(`/api/coach/roster/${athleteId}/muscle-history?group=Quads`);
+      expect(theirs.status).toBe(404);
+    });
+
+    it("returns nothing for a group that is not scorable rather than guessing", async () => {
+      const res = await athlete.get("/api/athlete/muscle-history?group=NotAMuscle");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
   });
 });

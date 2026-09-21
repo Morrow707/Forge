@@ -368,6 +368,7 @@ import {
   sql,
   ilike,
   count,
+  type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -876,6 +877,39 @@ function extractPerformanceHistory(logs: RecentWorkoutLog[], exerciseId: number)
 // surrounding whitespace -- because the point is to change which UNIT the
 // number is in, not which strings count as a number. Null rather than zero
 // when there is nothing numeric to read: a bodyweight set did not lift zero.
+/**
+ * THE BODYWEIGHT THE ATHLETE ACTUALLY WAS ON THE DAY OF THE LIFT.
+ *
+ * A strength score is a ratio, so the denominator has to be contemporaneous with the numerator.
+ * `users.body_weight_lbs` is a single CURRENT value: scoring a lift from eight months ago
+ * against it credits or penalises the athlete for weight they have gained or lost since, and
+ * the error is largest for exactly the population this feature is for -- teenagers, who can put
+ * on twenty pounds in a season. CLAUDE.md carried this as a known gap on the grounds that a
+ * weight history was its own piece of work; it is not, because `body_metrics` has been a dated,
+ * per-athlete weight log since long before the strength profile existed.
+ *
+ * The rule: the most recent logged weight on or before the lift's date, falling back to the
+ * current profile weight when the athlete has no entry that old. The fallback is not a guess --
+ * it is the same number the score used before this existed, so an athlete who has never used
+ * the weight log sees exactly what they saw yesterday.
+ *
+ * Takes the lift-date and athlete-id expressions from the caller so the same fragment serves
+ * both the athlete's own query and the cohort query; they alias those columns differently and
+ * two copies of this would drift.
+ */
+function bodyweightAtLiftSql(athleteIdExpr: SQL, liftDateExpr: SQL, currentWeightExpr: SQL) {
+  return sql`COALESCE(
+    (SELECT CASE WHEN bm.weight_unit = 'kg' THEN bm.weight * 2.20462 ELSE bm.weight END
+       FROM body_metrics bm
+      WHERE bm.athlete_id = ${athleteIdExpr}
+        AND bm.date <= ${liftDateExpr}
+        AND bm.weight > 0
+      ORDER BY bm.date DESC
+      LIMIT 1),
+    ${currentWeightExpr}
+  )`;
+}
+
 // One scale for comparing two logged lifts. Display keeps the unit the set
 // was logged in; anything that asks "which of these is heavier" has to
 // convert first, or a 100 kg lift loses to a 200 lb one.
@@ -21601,10 +21635,12 @@ ${catalog}`;
       reps_count: number;
       exercise_name: string;
       logged_on: string;
+      bodyweight_then: number | null;
     }>(sql`
       SELECT DISTINCT ON (e.muscle_group)
         e.muscle_group, wse.weight_lbs, wse.reps_count, e.name AS exercise_name,
-        wl.date::text AS logged_on
+        wl.date::text AS logged_on,
+        ${bodyweightAtLiftSql(sql`wl.athlete_id`, sql`wl.date`, sql`${bodyweight}`)} AS bodyweight_then
       FROM workout_set_entries wse
       JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
       JOIN workout_logs wl ON wl.id = wle.workout_log_id
@@ -21620,14 +21656,19 @@ ${catalog}`;
         -- Epley in SQL, so "best" means best ESTIMATED MAX rather than heaviest bar: a heavy
         -- single and a lighter set of eight have to be ranked against each other, and picking
         -- by raw weight would always choose the single even when the eight is the better lift.
-        (wse.weight_lbs * (1 + wse.reps_count / 30.0)) DESC
+        -- Divided by the bodyweight ON THE DAY, because the score is a ratio and the best
+        -- ratio is not always the best absolute lift once the denominator can move.
+        (wse.weight_lbs * (1 + wse.reps_count / 30.0)
+          / NULLIF(${bodyweightAtLiftSql(sql`wl.athlete_id`, sql`wl.date`, sql`${bodyweight}`)}, 0)) DESC
     `);
 
-    const best = new Map<string, { ratio: number | null; exerciseName: string; loggedOn: string; weightLbs: number; reps: number }>();
+    const best = new Map<string, { ratio: number | null; exerciseName: string; loggedOn: string; weightLbs: number; reps: number; bodyweightThen: number | null }>();
     for (const r of rows.rows ?? []) {
       if (!isScorableMuscleGroup(r.muscle_group)) continue;
+      const bodyweightThen = r.bodyweight_then != null ? Number(r.bodyweight_then) : bodyweight;
       best.set(r.muscle_group, {
-        ratio: strengthRatio(Number(r.weight_lbs), Number(r.reps_count), bodyweight),
+        bodyweightThen,
+        ratio: strengthRatio(Number(r.weight_lbs), Number(r.reps_count), bodyweightThen),
         exerciseName: r.exercise_name,
         loggedOn: r.logged_on,
         weightLbs: Number(r.weight_lbs),
@@ -21649,6 +21690,9 @@ ${catalog}`;
           loggedOn: hit?.loggedOn ?? null,
           weightLbs: hit?.weightLbs ?? null,
           reps: hit?.reps ?? null,
+          // Surfaced so a reader can see the score was computed against the weight the athlete
+          // was at the time, rather than silently against today's.
+          bodyweightThenLbs: hit?.bodyweightThen ?? null,
         };
       }),
     };
@@ -21800,7 +21844,11 @@ ${catalog}`;
 
     const peers = await db.execute<{ muscle_group: string; ratio: number; user_id: number }>(sql`
       SELECT e.muscle_group, u.id AS user_id,
-        MAX(wse.weight_lbs * (1 + wse.reps_count / 30.0) / NULLIF(u.body_weight_lbs, 0)) AS ratio
+        -- Every peer is scored against their OWN weight on the day of their own lift, the same
+        -- rule the athlete's own number uses. A mixed denominator here would put the two sides
+        -- of the percentile on different scales, which is worse than either rule alone.
+        MAX(wse.weight_lbs * (1 + wse.reps_count / 30.0)
+          / NULLIF(${bodyweightAtLiftSql(sql`wl.athlete_id`, sql`wl.date`, sql`u.body_weight_lbs`)}, 0)) AS ratio
       FROM workout_set_entries wse
       JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
       JOIN workout_logs wl ON wl.id = wle.workout_log_id

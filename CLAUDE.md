@@ -254,9 +254,19 @@ them will read as an arbitrary constraint to somebody who wasn't here:
   claim -- a set of thirty bodyweight squats is not a 3x bodyweight single, and without the cap
   it scores as one.
 - **No bodyweight means no score.** A number computed against a guessed bodyweight looks
-  exactly like a real one. Known gap: `users.bodyWeightLbs` is a single current value, so a
-  lift from eight months ago is scored against today's weight. A weight history is its own
-  piece of work and was deliberately not smuggled into #156.
+  exactly like a real one.
+- **A LIFT IS SCORED AGAINST THE WEIGHT THE ATHLETE ACTUALLY WAS ON THE DAY.** Fixed
+  2026-09-21; this section used to carry it as a known gap on the grounds that a weight history
+  was its own piece of work. It was not: `body_metrics` has been a dated per-athlete weight log
+  since long before the strength profile, and the score simply was not reading it.
+  `bodyweightAtLiftSql` takes the most recent entry on or before the lift's date and falls back
+  to `users.bodyWeightLbs` -- the number the score used before, so an athlete who has never
+  weighed in sees exactly what they saw yesterday. Three consequences worth keeping straight:
+  a kg weigh-in is converted before it becomes a denominator; the best lift for a group is now
+  the best RATIO, which is not always the heaviest bar once the denominator can move; and the
+  COHORT query uses the same rule, because a mixed denominator would put the two sides of a
+  percentile on different scales. `server/strength-profile.itest.ts` proves each against real
+  Postgres.
 - **The bands are relative to FORGE'S population, not world standards.** Forge has no validated
   standards table and inventing one would repeat the uncalibrated-numbers problem the camera
   work spent months on. The card says "ahead of 68% of athletes your age", which is a claim the
