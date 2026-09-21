@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Film, Search, Users, Library } from "lucide-react";
+import { Film, Search, Users, Library, History } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +11,7 @@ import { getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import type { ClipSummary } from "@shared/video-clips";
 import type { PoseFrame } from "@/lib/pose-tracking";
+import { agoLabel, priorClipRouteFor } from "@/lib/prior-clip";
 
 /**
  * Who the clips on the table belong to. The compare tool is opened FROM somewhere -- an
@@ -31,6 +32,10 @@ export type CompareClip = {
   label: string;
   sublabel?: string;
   repBreakdown?: { repNumber: number; startT: number; endT: number }[] | null;
+  /** The movement and the day, kept apart from the display label so the "you versus you"
+   * suggestion can ask for the same lift on an earlier date. */
+  exerciseName?: string;
+  date?: string;
   framesUrl?: string | null;
   /** Frames already in hand (the workout page holds the set it just captured); wins over framesUrl. */
   skeletonFrames?: PoseFrame[] | null;
@@ -61,6 +66,8 @@ function toCompareClip(c: ClipSummary, listRoute: string, owner: string | null):
     label: c.setNumber != null ? `${c.exerciseName} — Set ${c.setNumber}` : c.exerciseName,
     sublabel: owner ? `${owner} · ${day}` : day,
     repBreakdown: c.repBreakdown,
+    exerciseName: c.exerciseName,
+    date: c.date,
     framesUrl: c.source === "set" && c.hasSkeletonFrames ? `${listRoute}/${c.id}/frames` : null,
   };
 }
@@ -192,6 +199,68 @@ function RosterClips({
   );
 }
 
+/**
+ * "YOU VERSUS YOU" -- Phase 4b of docs/video-review-plan.md.
+ *
+ * The comparison worth offering by default is the athlete against their own earlier self on
+ * the same lift, far enough back that a difference means something. The server decides both
+ * halves of that (the 14-day floor and the preference for a clip with a rep breakdown, which
+ * is what lets the two sides auto-sync); this only draws the answer.
+ *
+ * A failed or empty read draws nothing. There is a whole picker underneath, so a missing
+ * shortcut costs a reader one extra tap -- an error message here would be louder than the
+ * thing it is reporting.
+ */
+function PriorClipSuggestion({
+  subject,
+  from,
+  excludeKey,
+  onPick,
+}: {
+  subject: CompareSubject;
+  from: CompareClip;
+  excludeKey?: string;
+  onPick: (clip: CompareClip) => void;
+}) {
+  const route = priorClipRouteFor(subject);
+  const exercise = from.exerciseName;
+  const before = from.date;
+  const enabled = Boolean(route && exercise && before);
+  const query = enabled
+    ? `${route}?exercise=${encodeURIComponent(exercise!)}&before=${encodeURIComponent(before!)}`
+    : "";
+
+  const prior = useQuery<ClipSummary | null>({
+    queryKey: [query],
+    queryFn: () => getJson(query),
+    enabled,
+  });
+
+  if (!enabled || prior.isError || !prior.data) return null;
+  const clip = toCompareClip(prior.data, clipsRouteFor(subject), null);
+  if (clip.key === excludeKey || clip.key === from.key) return null;
+  const ago = agoLabel(prior.data.date, before!);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(clip)}
+      className="flex w-full items-center gap-3 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-left text-sm transition-colors hover:bg-primary/10"
+    >
+      <History className="h-4 w-4 shrink-0 text-primary" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">
+          {ago ? `Compare to ${ago}` : `Compare to an earlier ${clip.exerciseName ?? "set"}`}
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {clip.label}
+          {clip.repBreakdown?.length ? " · reps line up automatically" : ""}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 type Tab = "subject" | "roster" | "reference";
 
 /**
@@ -207,6 +276,7 @@ export function ClipPickerDialog({
   subject,
   sideLabel,
   excludeKey,
+  suggestFrom,
   onPick,
 }: {
   open: boolean;
@@ -214,6 +284,9 @@ export function ClipPickerDialog({
   subject: CompareSubject;
   /** "left" or "right", for the title. */
   sideLabel: string;
+  /** The clip already on the OTHER side, if there is one: what the "you versus you"
+   * suggestion is measured back from. */
+  suggestFrom?: CompareClip | null;
   /** The clip already on this side, greyed so it is not picked against itself. */
   excludeKey?: string;
   onPick: (clip: CompareClip) => void;
@@ -272,6 +345,14 @@ export function ClipPickerDialog({
               aria-label="Filter clips by movement"
             />
           </div>
+        )}
+        {tab === "subject" && suggestFrom && (
+          <PriorClipSuggestion
+            subject={subject}
+            from={suggestFrom}
+            excludeKey={excludeKey}
+            onPick={pick}
+          />
         )}
         {tab === "subject" && (
           <ClipList route={subjectRoute} owner={subjectName} filter={filter} excludeKey={excludeKey} onPick={pick} />

@@ -26602,6 +26602,42 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   },
 
   /**
+   * The same athlete's last clip of the same movement, from far enough back to be worth
+   * comparing against. "You versus you" (Phase 4b of docs/video-review-plan.md).
+   *
+   * THE MINIMUM AGE IS THE WHOLE IDEA. Comparing a lift against one from the same session shows
+   * fatigue, which is a different question and usually a discouraging answer. Fourteen days is
+   * long enough for training to have changed something and short enough that the athlete
+   * remembers the session. It is a judgement call, not a derivation, and it is a parameter so a
+   * coach comparing a twelve-week block can widen it.
+   *
+   * Prefers a clip that carries repBreakdown, because that is what lets the sync suggestion
+   * work -- a comparison the tool can line up is worth more than one three days older that it
+   * cannot. Falls back to the most recent qualifying clip either way rather than returning
+   * nothing: "no rep data" is not "no clip".
+   */
+  async getPriorClipForAthlete(
+    athleteId: number,
+    exerciseName: string,
+    before: string,
+    minimumDaysApart = 14,
+  ): Promise<ClipSummary | null> {
+    const clips = await this.getClipsForAthlete(athleteId, exerciseName);
+    const cutoff = new Date(before);
+    if (Number.isNaN(cutoff.getTime())) return null;
+    cutoff.setDate(cutoff.getDate() - minimumDaysApart);
+
+    const eligible = clips.filter((c) => {
+      const d = new Date(c.date);
+      return !Number.isNaN(d.getTime()) && d <= cutoff;
+    });
+    if (eligible.length === 0) return null;
+    // getClipsForAthlete is already newest-first, so the first hit of each kind is the most
+    // recent one. Prefer alignable, fall back to merely eligible.
+    return eligible.find((c) => (c.repBreakdown?.length ?? 0) > 0) ?? eligible[0];
+  },
+
+  /**
    * The saved skeleton for ONE set clip, fetched when that clip is chosen. Scoped by the athlete
    * the caller has already been authorised for: a set id that belongs to somebody else reads as
    * "no such clip", never as their frames. Null frames (a web/Android capture, a plain form

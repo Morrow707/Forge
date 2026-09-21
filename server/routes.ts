@@ -5004,6 +5004,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(await storage.getClipsForAthlete(athleteId, movement));
   });
 
+  // "Compare to N weeks ago" -- the same athlete's last clip of the same movement.
+  app.get("/api/coach/roster/:athleteId/clips/prior", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    const exercise = String(req.query.exercise ?? "").trim();
+    const before = String(req.query.before ?? "").trim();
+    if (!exercise || !before) {
+      return res.status(400).json({ message: "exercise and before are required" });
+    }
+    const days = req.query.minDays ? Number(req.query.minDays) : undefined;
+    const clip = await storage.getPriorClipForAthlete(athleteId, exercise, before, days);
+    // 200 with null, not 404: "this athlete has no earlier clip of this lift" is an ordinary
+    // answer the UI renders as a hidden button, not an error worth a retry.
+    res.json(clip);
+  });
+
   // The saved skeleton for one chosen set clip. Fetched per clip, never with the list.
   app.get("/api/coach/roster/:athleteId/clips/:setId/frames", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
@@ -10723,6 +10741,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const movement = typeof req.query.movement === "string" ? req.query.movement : null;
     res.json(await storage.getClipsForAthlete(user.id, movement));
+  });
+
+  app.get("/api/athlete/clips/prior", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const exercise = String(req.query.exercise ?? "").trim();
+    const before = String(req.query.before ?? "").trim();
+    if (!exercise || !before) {
+      return res.status(400).json({ message: "exercise and before are required" });
+    }
+    const days = req.query.minDays ? Number(req.query.minDays) : undefined;
+    res.json(await storage.getPriorClipForAthlete(user.id, exercise, before, days));
   });
 
   app.get("/api/athlete/clips/:setId/frames", requireRole(["athlete", "coach", "admin"]), async (req, res) => {

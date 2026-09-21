@@ -744,6 +744,7 @@ export function VideoCompareDialog({
           subject={subject}
           sideLabel={picking}
           excludeKey={clips[picking]?.key}
+          suggestFrom={clips[otherSide(picking)]}
           onPick={(clip) => putClip(picking, clip)}
         />
       )}
