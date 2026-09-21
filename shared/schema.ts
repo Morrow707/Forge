@@ -8778,6 +8778,17 @@ export const trackingDiagnosticsSchema = z.object({
       assetDurationSeconds: z.number().optional(),
       readerStatus: z.string().optional(),
       readerErrorMessage: z.string().optional(),
+      // WHICH IMPLEMENTATION PRODUCED THIS TAKE. "live" means the trace was built from the
+      // capture buffers while the athlete was still lifting; "file" is the post-capture
+      // re-read, which is also the fallback whenever the live trace cannot be shown to be
+      // complete. There are two feeders into one per-frame implementation now (see
+      // AvBodyTrackingPlugin.swift's processFrame), and a calibration run against a stored
+      // capture is worthless if nobody can say which one produced it.
+      analysisPath: z.string().optional(),
+      // Frames the live path let go rather than back the capture session up behind Vision.
+      // Present only on the live path, and only ever a count that passed the acceptance gate
+      // -- too many of these fails the take back to the file read instead.
+      liveDroppedFrames: z.number().optional(),
       // Analysis-time device/pipeline conditions -- see AvBodyTrackingPlugin.swift's own
       // comments on why each is worth reading. Optional for the same reason as
       // assetDurationSeconds above: persisted diagnostics from before these fields existed

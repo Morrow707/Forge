@@ -1950,7 +1950,7 @@ export function AvBarTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording();
+                  startRecording({ trackingMode: coreMlTrackingMode });
                 }}
                 disabled={!supported || !heightIn}
               >

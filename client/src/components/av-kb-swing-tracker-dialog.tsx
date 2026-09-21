@@ -486,7 +486,7 @@ export function AvKbSwingTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording();
+                  startRecording({});
                 }}
                 disabled={!supported || !heightIn}
               >

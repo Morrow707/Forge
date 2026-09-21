@@ -72,9 +72,13 @@ describe("the capture format", () => {
     //
     // The caller's number means a RATE -- its own comment says "30fps-equivalent on a 60fps
     // recording" -- so it is scaled against that baseline rather than used as a frame count.
-    expect(plugin).toContain("let baselineStride = max(1, call.getInt(\"sampleEveryNthFrame\") ?? 1)");
+    //
+    // It now lives in one helper rather than inline, because the live path (Phase 5b) has to
+    // arrive at the SAME number -- two feeders sampling different frames are two different
+    // measurements, and the native side refuses a live trace whose stride does not match.
+    expect(plugin).toContain("private func effectiveSampleStride(baseline: Int) -> Int");
     expect(plugin).toContain("let rateRatio = max(1.0, activeCaptureFrameRate / 60.0)");
-    expect(plugin).toContain("Double(baselineStride) * rateRatio");
+    expect(plugin).toContain("Double(max(1, baseline)) * rateRatio");
   });
 
   it("reports the rate it actually got, not the one it wanted", () => {

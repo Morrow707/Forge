@@ -766,7 +766,7 @@ export function AvJumpTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording();
+                  startRecording({ detectBox: usesBox === true });
                 }}
                 disabled={!supported || !heightIn}
               >

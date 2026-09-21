@@ -39,7 +39,8 @@ import Capacitor
 // would (this app already has direct on-device proof thermal state is a real, measurable
 // variable -- see the AR camera diagnostic work that motivated this whole rewrite).
 @objc(AvBodyTrackingPlugin)
-public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOutputRecordingDelegate {
+public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOutputRecordingDelegate,
+    AVCaptureVideoDataOutputSampleBufferDelegate {
     public let identifier = "AvBodyTrackingPlugin"
     public let jsName = "AvBodyTracking"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -100,6 +101,23 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var currentInput: AVCaptureDeviceInput?
     private var movieOutput: AVCaptureMovieFileOutput?
+    // PHASE 5B: THE SAME ANALYSIS, WHILE THE ATHLETE IS STILL LIFTING.
+    //
+    // A second output on the same session, running alongside movieOutput rather than instead of
+    // it -- the recording still comes from AVCaptureMovieFileOutput, which is the thing that
+    // must not break. This one only feeds processFrame, so by the time stopRecording returns the
+    // trace already exists and analyzeRecording can resolve without re-reading the file.
+    private var videoDataOutput: AVCaptureVideoDataOutput?
+    // Its own queue, never sessionQueue (camera setup) and never main (the web view). Serial, so
+    // one take's AvFrameRunState is only ever touched from here -- which is what lets that class
+    // be plain mutable state with no locking of its own.
+    private static let liveAnalysisQueue = DispatchQueue(label: "com.forge.avbodytracking.live")
+    // Read and written ONLY on liveAnalysisQueue. Everything outside goes through async/sync on
+    // that queue rather than touching it directly.
+    private var liveRun: AvLiveAnalysisRun?
+    // Both feeders decode to the same budget, or they are two different measurements and a
+    // calibration run describes whichever one happened to produce the take.
+    private static let analysisDecodeMaxDimension: CGFloat = 1280
     // What applyHighestFrameRate actually settled on. Read by analyzeRecording to pick a
     // sampling stride, so raising the capture rate cannot silently double the analysis wait.
     private var activeCaptureFrameRate: Double = 60
@@ -424,6 +442,34 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 self.logDiag("WARNING: cannot add movie output -- recording unavailable")
             }
 
+            // PHASE 5B's feeder. Added here, but it does nothing until startRecording builds a
+            // run for it -- an athlete framing a shot should not be paying for Vision.
+            let videoDataOutput = AVCaptureVideoDataOutput()
+            // TRUE, and this is a trade made on purpose. A data output that does not discard
+            // late frames applies backpressure to the whole session, and the output sharing
+            // that session is the recording. A dropped frame costs one sample out of a trace
+            // that is already strided; a stalled session costs the take. Drops are counted
+            // (see captureOutput(_:didDrop:from:)) and enough of them fail the take back to
+            // the file path rather than shipping a thinned trace as if it were a full one.
+            videoDataOutput.alwaysDiscardsLateVideoFrames = true
+            videoDataOutput.setSampleBufferDelegate(self, queue: Self.liveAnalysisQueue)
+            if session.canAddOutput(videoDataOutput) {
+                session.addOutput(videoDataOutput)
+                self.videoDataOutput = videoDataOutput
+                // Rotating here, in the connection, is what lets the live path hand Vision an
+                // already-upright buffer and pass .up as the orientation. The file path cannot
+                // do that -- AVAssetReader returns buffers in their raw stored orientation and
+                // does not apply the track's preferredTransform -- so it derives the
+                // orientation instead. Different routes, same upright image, which is the only
+                // thing Vision's normalized coordinates are measured against.
+                if let liveConnection = videoDataOutput.connection(with: .video),
+                   liveConnection.isVideoOrientationSupported {
+                    liveConnection.videoOrientation = self.captureOrientation
+                }
+            } else {
+                self.logDiag("WARNING: cannot add video data output -- live analysis unavailable")
+            }
+
             session.commitConfiguration()
             self.session = session
             NotificationCenter.default.addObserver(
@@ -433,6 +479,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
             self.applyHighestFrameRate(to: captureDevice)
             self.applyContinuousFocusAndExposure(to: captureDevice)
+            // AFTER applyHighestFrameRate, not before: that call is what chooses activeFormat,
+            // and sizing against the pre-selection format would ask the hardware to scale to a
+            // shape the session no longer produces. videoSettings is an output property, not
+            // session configuration, so it is set outside the begin/commit block above.
+            self.applyLiveAnalysisBufferSize(for: captureDevice)
 
             if self.previewLayerView != nil {
                 self.logDiag("WARNING: previewLayerView already existed at start() -- removing stale view")
@@ -1086,6 +1137,42 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
     // MARK: - Recording (record-first, analyze-later -- see file comment)
 
+
+    /// Matches the live buffers to the size the file path decodes to (see
+    /// analysisDecodeMaxDimension). Without this the two feeders hand Vision different pixels
+    /// and the traces stop being comparable -- which is the whole failure mode Phase 5b has to
+    /// avoid, because the one being calibrated against a bar sensor has to be the one that runs.
+    private func applyLiveAnalysisBufferSize(for device: AVCaptureDevice) {
+        guard let output = videoDataOutput else { return }
+        var settings: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+        // The connection above rotates the delivered buffer, so the dimensions that matter are
+        // the format's, un-rotated -- the scale factor is the same either way.
+        let width = Double(dims.width)
+        let height = Double(dims.height)
+        let longest = max(width, height)
+        if longest > Double(Self.analysisDecodeMaxDimension) {
+            let scale = Double(Self.analysisDecodeMaxDimension) / longest
+            settings[kCVPixelBufferWidthKey as String] = Int((width * scale).rounded())
+            settings[kCVPixelBufferHeightKey as String] = Int((height * scale).rounded())
+        }
+        output.videoSettings = settings
+        logDiag("live analysis buffers: \(settings[kCVPixelBufferWidthKey as String] ?? Int(width))x\(settings[kCVPixelBufferHeightKey as String] ?? Int(height))")
+    }
+
+    /// A STRIDE IS A TARGET RATE, NOT A FRAME COUNT.
+    ///
+    /// The caller's number is written against a 60fps baseline ("every 2nd frame still gives a
+    /// 30fps-equivalent trace on a 60fps recording"). Raising capture to 120 silently turned
+    /// that same 2 into 60Hz -- double the Vision work, measured on a real phone as a 25.6s clip
+    /// going from ~19s of analysis to 66s. So it is scaled to whatever the camera actually ran
+    /// at. Lives here rather than inline in analyzeRecording because the live path has to reach
+    /// the SAME number: two feeders sampling different frames is two different measurements.
+    private func effectiveSampleStride(baseline: Int) -> Int {
+        let rateRatio = max(1.0, activeCaptureFrameRate / 60.0)
+        return max(1, Int((Double(max(1, baseline)) * rateRatio).rounded()))
+    }
+
     @objc func startRecording(_ call: CAPPluginCall) {
         guard let movieOutput = self.movieOutput else {
             call.reject("Recording not available")
@@ -1101,9 +1188,64 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Registered before the write starts, not after -- purgeStaleRecordings runs off a
         // start() call this plugin doesn't control the timing of.
         Self.markPathActive(outputURL.path)
+
+        // LIVE ANALYSIS IS OPT-IN PER TAKE, AND SILENCE MEANS NO.
+        //
+        // The context has to be built now, from what the caller says it is about to film, and a
+        // caller that says nothing would get a context with no tracking mode -- which on a
+        // barbell lift means no object detector and no real-world scale, a materially WORSE
+        // trace than the file path would have produced. Degrading a measurement silently is the
+        // one outcome worth more than the wait it saves, so an absent liveAnalysis flag leaves
+        // this take behaving exactly as it did before Phase 5b existed.
+        let liveRequested = call.getBool("liveAnalysis") ?? false
+        let thermalState = ProcessInfo.processInfo.thermalState
+        let liveContext: AvFrameContext? = {
+            guard liveRequested else { return nil }
+            guard videoDataOutput != nil else {
+                logDiag("live analysis skipped: no video data output on this session")
+                return nil
+            }
+            // Vision now runs WHILE the encoder does, rather than after it. The total work is
+            // unchanged (same stride, same frames) but the peak is higher, and a phone already
+            // in trouble should not be asked. The file path still runs after the take, on a
+            // device that has had the whole recording to cool down.
+            guard thermalState != .serious && thermalState != .critical else {
+                logDiag("live analysis skipped: thermalState=\(thermalStateDescription(thermalState))")
+                return nil
+            }
+            let trackingMode = call.getString("trackingMode")
+            return AvFrameContext(
+                // .up, not a derived orientation: the data output's connection already rotated
+                // the buffer (see continueStart). The file path cannot do that and derives its
+                // own. Same upright image by two routes.
+                orientation: .up,
+                sampleEveryNthFrame: effectiveSampleStride(baseline: call.getInt("sampleEveryNthFrame") ?? 1),
+                detectBox: call.getBool("detectBox") ?? false,
+                coreMlTargetLabel: AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode),
+                coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
+                coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
+                coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable
+            )
+        }()
+        if liveContext != nil {
+            // The same resets analyzeRecording does before a file read -- the detectors and
+            // overwatch carry lock state across frames, and last take's lock is not this take's.
+            leftImplementTracker.reset()
+            rightImplementTracker.reset()
+            coreMlImplementDetector.reset()
+            coreMlSecondaryDetector.reset()
+            cameraStabilizer.reset()
+            overwatch.reset()
+        }
+        Self.liveAnalysisQueue.async {
+            self.liveRun = liveContext.map { AvLiveAnalysisRun(ctx: $0) }
+        }
+
         DispatchQueue.main.async {
             movieOutput.startRecording(to: outputURL, recordingDelegate: self)
-            self.logDiag("startRecording -> \(outputURL.lastPathComponent)")
+            self.logDiag(
+                "startRecording -> \(outputURL.lastPathComponent) live=\(liveContext != nil)"
+            )
             call.resolve()
         }
     }
@@ -1129,6 +1271,14 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             guard let self = self else { return }
             UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
             self.backgroundTaskID = .invalid
+        }
+        // Closes the live run, if there was one. Async, so the frames already queued ahead of
+        // this on liveAnalysisQueue finish first -- marking it inactive from here would throw
+        // away the tail of the take, which is the part with the last rep in it.
+        Self.liveAnalysisQueue.async {
+            guard let run = self.liveRun else { return }
+            run.active = false
+            run.elapsedSeconds = Date().timeIntervalSince(run.startedAt)
         }
         movieOutput.stopRecording()
     }
@@ -1192,6 +1342,105 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // recording already stopped. sampleEveryNthFrame defaults to 1 (every frame) -- Phase 2's
     // own job is finding out, on real hardware, whether that's fast enough during a rest
     // period or needs downsampling; not assumed either way here.
+
+    // MARK: - Live capture frames (Phase 5b)
+
+    public func captureOutput(
+        _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection
+    ) {
+        // Already on liveAnalysisQueue, which is where liveRun may be touched.
+        guard let run = liveRun, run.active else { return }
+        processFrame(sampleBuffer: sampleBuffer, ctx: run.ctx, state: run.state, progress: nil) { [weak self] data in
+            self?.notifyListeners("poseFrame", data: data)
+        }
+    }
+
+    public func captureOutput(
+        _ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection
+    ) {
+        // The cost of alwaysDiscardsLateVideoFrames, counted rather than assumed away. A take
+        // that drops enough of these is failed back to the file path (see liveAnalysisResult),
+        // because a thinned trace that still reports a rep count is worse than a slower one.
+        guard let run = liveRun, run.active else { return }
+        run.droppedFrames += 1
+    }
+
+    /// The live run's own result, IF it can stand in for a full file read.
+    ///
+    /// Returns nil -- meaning "fall back, re-read the clip" -- whenever the trace cannot be shown
+    /// to be complete. Every gate here is a refusal to pass off a partial measurement as a whole
+    /// one; the wait this feature exists to remove is worth less than a number nobody can trust.
+    /// Must be called on liveAnalysisQueue.
+    private func liveAnalysisResult(run: AvLiveAnalysisRun, expectedStride: Int) -> [String: Any]? {
+        guard !run.active else { return nil }
+        // A DIFFERENT TAKE'S TRACE IS NOT THIS TAKE'S. A caller that recorded with one stride or
+        // one tracking mode and then analyzed with another gets the file path, not a trace
+        // measured to different rules.
+        guard run.ctx.sampleEveryNthFrame == expectedStride else {
+            logDiag("live analysis unusable: stride \(run.ctx.sampleEveryNthFrame) != requested \(expectedStride)")
+            return nil
+        }
+        let expectedFrames = run.elapsedSeconds * activeCaptureFrameRate / Double(run.ctx.sampleEveryNthFrame)
+        guard expectedFrames >= 1 else { return nil }
+        let coverage = Double(run.state.processedCount) / expectedFrames
+        let dropRate = Double(run.droppedFrames) / max(1.0, expectedFrames)
+        guard coverage >= 0.9, dropRate <= 0.05 else {
+            logDiag(
+                "live analysis unusable: coverage=\(String(format: "%.2f", coverage)) "
+                    + "dropRate=\(String(format: "%.3f", dropRate)) "
+                    + "processed=\(run.state.processedCount) expected=\(String(format: "%.0f", expectedFrames))"
+            )
+            return nil
+        }
+        let state = run.state
+        let ctx = run.ctx
+        let body3DAvailable: Bool = {
+            if #available(iOS 17.0, *) { return true }
+            return false
+        }()
+        let minBoxTopSamples = 5
+        var result: [String: Any] = [
+            "frameCount": state.processedCount,
+            "trackedFrameCount": state.trackedCount,
+            "elapsedSeconds": run.elapsedSeconds,
+            "assetDurationSeconds": run.elapsedSeconds,
+            // Not a reader status -- there was no reader. Named so the report can tell the two
+            // producers apart at a glance without reading analysisPath separately.
+            "readerStatus": "live",
+            // WHICH IMPLEMENTATION PRODUCED THIS TAKE. A calibration run against a trace nobody
+            // can attribute to a code path is worthless, and there are now two paths.
+            "analysisPath": "live",
+            "liveDroppedFrames": run.droppedFrames,
+            "visionFailureCount": state.visionFailureCount,
+            "thermalState": thermalStateDescription(ProcessInfo.processInfo.thermalState),
+            "lowPowerModeEnabled": ProcessInfo.processInfo.isLowPowerModeEnabled,
+            "handPoseElapsedSeconds": state.handPoseElapsedSeconds,
+            "body3DElapsedSeconds": state.body3DElapsedSeconds,
+            "body3DFrameCount": state.body3DFrameCount,
+            "body3DAvailable": body3DAvailable,
+        ]
+        if ctx.coreMlDetectionEnabled {
+            result["objectLock"] = coreMlImplementDetector.telemetry.dictionary
+        }
+        if ctx.coreMlSecondaryEnabled {
+            result["objectLockSecondary"] = coreMlSecondaryDetector.telemetry.dictionary
+        }
+        if state.boxTopCandidates.count >= minBoxTopSamples {
+            result["boxTopNormalizedY"] = Self.median(state.boxTopCandidates)
+        }
+        if let freeDiskSpaceBytes = availableDiskSpaceBytes() {
+            result["freeDiskSpaceBytes"] = freeDiskSpaceBytes
+        }
+        if let maxInterFrameGapSeconds = state.maxInterFrameGapSeconds {
+            result["maxInterFrameGapSeconds"] = maxInterFrameGapSeconds
+        }
+        logDiag(
+            "live analysis usable: \(state.processedCount) frames processed, \(state.trackedCount) tracked, "
+                + "\(run.droppedFrames) dropped, \(String(format: "%.2f", run.elapsedSeconds))s of capture"
+        )
+        return result
+    }
+
     @objc func analyzeRecording(_ call: CAPPluginCall) {
         guard let pathString = call.getString("path") else {
             call.reject("Missing path")
@@ -1212,9 +1461,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // wants every frame (1) still gets 60Hz at 120fps rather than 120, which is deliberate:
         // nothing downstream asked for more, and the whole point of the ratio is that the cost
         // tracks the intent rather than the hardware.
-        let baselineStride = max(1, call.getInt("sampleEveryNthFrame") ?? 1)
-        let rateRatio = max(1.0, activeCaptureFrameRate / 60.0)
-        let sampleEveryNthFrame = max(1, Int((Double(baselineStride) * rateRatio).rounded()))
+        let sampleEveryNthFrame = effectiveSampleStride(baseline: call.getInt("sampleEveryNthFrame") ?? 1)
         // Box jump only (see this file's own comment on detectBoxTop below) -- every other AV
         // dialog omits this and pays nothing extra per frame.
         let detectBox = call.getBool("detectBox") ?? false
@@ -1234,6 +1481,26 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             "analyzeRecording() called for \(url.lastPathComponent), sampleEveryNthFrame=\(sampleEveryNthFrame), "
                 + "detectBox=\(detectBox), trackingMode=\(trackingMode ?? "none")"
         )
+        // PHASE 5B: IF THE TAKE WAS ALREADY ANALYZED WHILE IT WAS BEING FILMED, STOP HERE.
+        //
+        // sync, not async: this call has to either resolve from the live trace or fall through
+        // to the file read, and it cannot do both. The wait is one frame of Vision work at
+        // worst, because liveAnalysisQueue is serial and every frame of the take has already
+        // been fed to it by the time stopRecording resolved.
+        var liveResult: [String: Any]?
+        Self.liveAnalysisQueue.sync {
+            guard let run = self.liveRun else { return }
+            liveResult = self.liveAnalysisResult(run: run, expectedStride: sampleEveryNthFrame)
+            // Cleared either way. A run kept past its own take would be offered to the NEXT
+            // analyzeRecording call, which is a trace of the wrong set -- worse than any wait.
+            self.liveRun = nil
+        }
+        if let liveResult = liveResult {
+            logDiag("analyzeRecording resolved from the live trace -- no file read")
+            call.resolve(liveResult)
+            return
+        }
+
         analysisCancelled = false
         leftImplementTracker.reset()
         rightImplementTracker.reset()
@@ -1369,13 +1636,6 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     ) {
         // (AvAnalysisProgress itself is defined near the bottom of this file, alongside
         // AvCoreMlImplementDetector and the other small per-call helper types.)
-        let coreMlTargetLabel = AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode)
-        let coreMlDetectionEnabled = coreMlTargetLabel != nil && coreMlImplementDetector.isAvailable
-        // The other half of a loaded barbell. Whichever class the caller asked for, the pipeline
-        // also wants the one it did not: the plate carries real-world scale and the bar survives
-        // a setup with no plates the detector recognises.
-        let coreMlSecondaryLabel = AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode)
-        let coreMlSecondaryEnabled = coreMlSecondaryLabel != nil && coreMlSecondaryDetector.isAvailable
         // Background-execution edge case, same as stopRecording's finalize step -- a coach
         // backgrounding the app to check something mid-analysis shouldn't kill this partway
         // through a clip.
@@ -1444,9 +1704,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // re-read of it for analysis decodes into memory.
         var outputSettings: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         let naturalSize = track.naturalSize
-        let decodeMaxDim: CGFloat = 1280
-        if naturalSize.width > 0, naturalSize.height > 0, max(naturalSize.width, naturalSize.height) > decodeMaxDim {
-            let scale = decodeMaxDim / max(naturalSize.width, naturalSize.height)
+        if naturalSize.width > 0, naturalSize.height > 0, max(naturalSize.width, naturalSize.height) > Self.analysisDecodeMaxDimension {
+            let scale = Self.analysisDecodeMaxDimension / max(naturalSize.width, naturalSize.height)
             outputSettings[kCVPixelBufferWidthKey as String] = Int((naturalSize.width * scale).rounded())
             outputSettings[kCVPixelBufferHeightKey as String] = Int((naturalSize.height * scale).rounded())
         }
@@ -1459,484 +1718,36 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         reader.add(trackOutput)
         reader.startReading()
 
-        let poseRequest = VNDetectHumanBodyPoseRequest()
-        // Grip-point corroboration signal (see av-bar-tracker-dialog.tsx's own fuseSide comment
-        // on why this only ever nudges an existing confidence value, never replaces the wrist
-        // seed the way Android's MediaPipe HandLandmarker can) -- configured once, reused every
-        // sampled frame, same "safe to reuse across perform() calls" reasoning as poseRequest.
-        // maximumHandCount=2 matches hand-tracking.ts's own numHands:2 on the MediaPipe side.
-        let handPoseRequest = VNDetectHumanHandPoseRequest()
-        handPoseRequest.maximumHandCount = 2
-        // Phase B: real depth, iOS 17+ only -- first #available gate in this file (deployment
-        // target is iOS 15.0). Built inside the guard itself (not constructed unconditionally
-        // and merely left unused pre-17) so the iOS-17-only initializer is never actually called
-        // on an older device -- nil here reads downstream as "not available," the same
-        // omit-rather-than-fail convention every other optional signal in this file already
-        // uses. A genuinely new, heavier per-frame cost with no existing precedent to size
-        // against, which is exactly why it's gated behind its own stride constant from day one
-        // (see body3DDetectionStride below) rather than trusted to run every sampled frame like
-        // poseRequest/handPoseRequest already are.
-        // Typed as the pre-17-available VNRequest base class, not
-        // VNDetectHumanBodyPose3DRequest itself -- verify_build caught that a stored
-        // variable's static TYPE ANNOTATION is checked against the deployment target
-        // (15.0) independent of the runtime #available guard inside the closure below;
-        // only the guarded CONSTRUCTOR CALL was ever conditional, but the type name in
-        // the annotation still needed to resolve on every deployment target. VNRequest
-        // (the same common base every other request in this file already uses) sidesteps
-        // that entirely -- .perform([body3DRequest]) and .results below both operate on
-        // VNRequest's own pre-17 API surface, so nothing downstream needs to change.
-        let body3DRequest: VNRequest? = {
-            guard #available(iOS 17.0, *) else { return nil }
-            return VNDetectHumanBodyPose3DRequest()
-        }()
-        // Placeholder, not a measured value -- see body3DElapsedSeconds/body3DFrameCount below,
-        // the numbers this needs correcting from once real on-device timing exists.
-        let body3DDetectionStride = 3
-        // Box jump's own object-detection signal -- see this file's own comment on
-        // detectBoxTopCandidate below for the full reasoning. Configured once, reused every
-        // sampled frame (Vision requests are safe to reuse across perform() calls -- only
-        // .results gets overwritten each time).
-        let rectanglesRequest = VNDetectRectanglesRequest()
-        rectanglesRequest.minimumConfidence = 0.5
-        rectanglesRequest.minimumSize = 0.15
-        rectanglesRequest.maximumObservations = 8
-        var boxTopCandidates: [Double] = []
-        // Every frame would be needless extra Vision work for a signal that's checking a
-        // STATIONARY object -- the box doesn't move frame to frame the way an implement does,
-        // so a sparse sample across the whole clip is exactly as informative as every frame,
-        // for a fraction of the cost. See detectBoxTopCandidate's own comment for why sampling
-        // across the whole clip (not just an early "calibration window") and taking the median
-        // is the right shape here, same reasoning calibrateFromFrames already established for
-        // height calibration in pose-tracking.ts.
-        let boxDetectionStride = 5
-
-        var frameIndex = 0
-        var processedCount = 0
-        var trackedCount = 0
-        // Vision genuinely erroring on a frame (perform() throwing) is a different, worse
-        // signal than Vision running cleanly and just not finding a body -- the latter is
-        // normal (a rep's bottom position, the athlete stepping out of frame), the former means
-        // something is wrong with the frame/buffer itself. Counted separately so a clip that's
-        // mostly Vision *errors* isn't indistinguishable from one that's mostly clean "no body"
-        // reads.
-        var visionFailureCount = 0
-        // Largest gap between two consecutively-PROCESSED (i.e. already past the
-        // sampleEveryNthFrame stride) frames' own presentation timestamps -- a stall signal
-        // distinct from readerStatus/assetDurationSeconds above. Those catch the reader giving
-        // up outright; this catches the read loop staying alive but the underlying frames
-        // themselves having a large timestamp discontinuity (e.g. the capture session dropping
-        // frames under load), which reader status alone reads as "completed" and would
-        // otherwise look identical to a clean, evenly-paced recording.
-        var previousProcessedTimestamp: Double?
-        var maxInterFrameGapSeconds: Double?
+        // ONE PER-FRAME IMPLEMENTATION, TWO FEEDERS.
+        //
+        // What used to be ~390 lines of loop body lives in processFrame below, and the state
+        // it carries across frames lives in these two objects rather than in twenty locals
+        // only this function could see. The reason is Phase 5b: the same work now also runs on
+        // the LIVE capture buffers while the athlete is still lifting (see
+        // captureOutput(_:didOutput:from:)), and two copies of this analysis would drift --
+        // leaving the calibration runs describing whichever one happened to produce the take.
+        let ctx = AvFrameContext(
+            orientation: orientation,
+            sampleEveryNthFrame: sampleEveryNthFrame,
+            detectBox: detectBox,
+            coreMlTargetLabel: AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode),
+            coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
+            coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
+            coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable
+        )
+        let state = AvFrameRunState()
         let startTime = Date()
-        // Measured as its own separate handler.perform() call (see below), not folded into the
-        // existing poseRequest timing -- the whole point is isolating hand-pose's OWN
-        // incremental per-frame cost, since that's what actually decides whether it's safe to
-        // keep running on every sampled frame (see this file's own thermal-throttling history).
-        var handPoseElapsedSeconds: Double = 0
-        // Phase B diagnostics -- same reasoning as handPoseElapsedSeconds above, isolating this
-        // genuinely new request's own cost so it's visible before deciding whether
-        // body3DDetectionStride needs widening. body3DFrameCount counts frames that actually got
-        // a gated perform() call (not every sampled frame -- see the stride check below), so
-        // elapsed/count gives a real per-call average, not one diluted by skipped frames.
-        var body3DElapsedSeconds: Double = 0
-        var body3DFrameCount = 0
 
         while reader.status == .reading {
             if analysisCancelled {
                 reader.cancelReading()
-                logDiag("analyzeRecording cancelled after \(processedCount) frames")
+                logDiag("analyzeRecording cancelled after \(state.processedCount) frames")
                 settle { DispatchQueue.main.async { call.reject("Analysis cancelled") } }
                 return
             }
             guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
-            let thisFrameIndex = frameIndex
-            frameIndex += 1
-            guard thisFrameIndex % sampleEveryNthFrame == 0 else { continue }
-            guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { continue }
-            // Every frame of this loop runs Vision pose estimation, optionally Vision hand
-            // pose, a CoreML object detection and a camera-drift estimate, and each of those
-            // leaves autoreleased temporaries behind. Without a pool inside the loop they all
-            // accumulate until the whole analysis finishes -- thousands of frames' worth of
-            // transient image buffers held at once on a 60-second 1080p60 clip.
-            //
-            // That is the same memory pressure that produced "Cannot Complete Action" and the
-            // media-services reset on a real device, which cut the athlete's music mid-set. The
-            // 4K-to-1080p decode change addressed one contributor; this is the other one, and
-            // it was still here: there was not a single autoreleasepool anywhere in this file.
-            //
-            // Wrapped from AFTER the sampling guards so the `continue` above still targets the
-            // while loop -- a break or continue cannot cross a closure boundary in Swift. Every
-            // `continue` inside the wrapped body belongs to an inner joint loop, so those are
-            // unaffected. The body is deliberately not re-indented, to keep this a two-line
-            // change that can be read against the original.
-            autoreleasepool {
-            let timestampSeconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
-            if let previous = previousProcessedTimestamp {
-                let gap = timestampSeconds - previous
-                if gap > (maxInterFrameGapSeconds ?? 0) { maxInterFrameGapSeconds = gap }
-            }
-            previousProcessedTimestamp = timestampSeconds
-            // Vision's normalized joint coordinates are relative to the UPRIGHT (oriented)
-            // image, not the raw pixel buffer's own native layout -- CVPixelBufferGetWidth/
-            // Height report the raw buffer (landscape sensor order for a 90-degree-rotated
-            // recording), so width/height get swapped here to match what Vision actually
-            // measured against. The JS bridge (vision-body-landmarks.ts) needs real pixel
-            // dimensions, not just normalized 0-1 values, to undo the aspect-ratio distortion
-            // pose-tracking.ts's own angle math is sensitive to on non-square (portrait) video
-            // -- see that file's comment on why angle computations need proportionally-correct
-            // coordinates, not independently-normalized-per-axis ones.
-            let rawWidth = CVPixelBufferGetWidth(pixelBuffer)
-            let rawHeight = CVPixelBufferGetHeight(pixelBuffer)
-            let swapDimensions: Bool
-            switch orientation {
-            case .left, .right, .leftMirrored, .rightMirrored: swapDimensions = true
-            default: swapDimensions = false
-            }
-            let frameWidth = swapDimensions ? rawHeight : rawWidth
-            let frameHeight = swapDimensions ? rawWidth : rawHeight
-
-            var joints: [[String: Any]] = []
-            // Every body landmark this frame, flattened, for AvOverwatch's frozen-frame check --
-            // a pose that is bit-for-bit identical to the last frame's is a pose request
-            // returning cached results, not an athlete who did not move.
-            var landmarkSignature: [Double] = []
-            var tracked = false
-            var leftWristJoint: (x: Double, y: Double)?
-            var rightWristJoint: (x: Double, y: Double)?
-            // The body's own measuring stick for the object tracker's plausibility gate -- the
-            // shoulders are the fallback span when a wrist drops out. See
-            // AvTrackerArbiter.bodyYardstickPx and shared/tracker-arbiter.ts.
-            var leftShoulderJoint: (x: Double, y: Double)?
-            var rightShoulderJoint: (x: Double, y: Double)?
-            var leftAnkleJoint: (x: Double, y: Double)?
-            var rightAnkleJoint: (x: Double, y: Double)?
-            // pixelBuffer already comes back downscaled straight from the reader's own decode
-            // (see outputSettings' own comment above, where the reader is set up) -- no
-            // separate per-frame Vision-side downscale needed on top of that; a first attempt at
-            // exactly that (rendering a scaled CIImage per sampled frame) made the "Cannot
-            // Complete Action" failures below worse, not better, most likely by adding its own
-            // Core Image render pass on top of a decode that was still happening at full 4K
-            // regardless. Decoding smaller in the first place fixes the actual bulk of the cost
-            // (every frame gets decoded, not just the sampled ones) instead of shaving cost off
-            // only the fraction of frames Vision ever touches.
-            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
-            do {
-                try handler.perform([poseRequest])
-                if let observation = poseRequest.results?.first as? VNHumanBodyPoseObservation {
-                    tracked = true
-                    trackedCount += 1
-                    for (jointName, label) in Self.bodyPoseJoints {
-                        guard let point = try? observation.recognizedPoint(jointName), point.confidence > 0.1 else {
-                            continue
-                        }
-                        // Vision's own coordinate convention: normalized 0-1, origin at
-                        // BOTTOM-left -- different from the top-left-origin image space most
-                        // of the rest of this app assumes. Left as raw Vision coordinates
-                        // here; Phase 3's vision-body-landmarks.ts bridge is where that
-                        // Y-flip belongs (matching how ar-body-landmarks.ts's own comment
-                        // handles ARKit's own coordinate quirks at the bridge layer, not
-                        // here at the source).
-                        joints.append([
-                            "name": label,
-                            "x": Double(point.location.x),
-                            "y": Double(point.location.y),
-                            "confidence": Double(point.confidence),
-                        ])
-                        landmarkSignature.append(Double(point.location.x))
-                        landmarkSignature.append(Double(point.location.y))
-                        if label == "leftWrist" {
-                            leftWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
-                        } else if label == "rightWrist" {
-                            rightWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
-                        } else if label == "leftShoulder" {
-                            leftShoulderJoint = (x: Double(point.location.x), y: Double(point.location.y))
-                        } else if label == "rightShoulder" {
-                            rightShoulderJoint = (x: Double(point.location.x), y: Double(point.location.y))
-                        } else if label == "leftAnkle" {
-                            leftAnkleJoint = (x: Double(point.location.x), y: Double(point.location.y))
-                        } else if label == "rightAnkle" {
-                            rightAnkleJoint = (x: Double(point.location.x), y: Double(point.location.y))
-                        }
-                    }
-                }
-            } catch {
-                visionFailureCount += 1
-                logDiag("Vision request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
-            }
-
-            // A separate perform() call reusing the same handler -- same precedent
-            // detectBoxTopCandidate below already establishes for rectanglesRequest -- rather
-            // than bundling into the poseRequest call above, specifically so
-            // handPoseElapsedSeconds measures hand-pose's own cost in isolation, not a total
-            // that conflates it with the already-accepted pose-only cost.
-            var handJoints: [[String: Any]] = []
-            let handPoseStart = Date()
-            do {
-                try handler.perform([handPoseRequest])
-                if let handObservations = handPoseRequest.results as? [VNHumanHandPoseObservation] {
-                    for (handIndex, observation) in handObservations.enumerated() {
-                        // Chirality (.left/.right/.unknown) is available here but deliberately
-                        // not read -- see vision-body-landmarks.ts's visionRefineGripSeed for
-                        // why grip-seed matching goes by proximity to the Pose-derived wrist
-                        // instead: its sense depends on camera mirroring this app doesn't
-                        // consistently control. `hand` is just a stable per-frame index (0/1)
-                        // so the JS bridge can group a frame's joints back into per-hand sets.
-                        guard let points = try? observation.recognizedPoints(forGroupKey: .all) else { continue }
-                        for (jointName, label) in Self.handPoseJoints {
-                            // recognizedPoints(forGroupKey:) returns [VNRecognizedPointKey: VNRecognizedPoint] --
-                            // JointName's own .rawValue is what actually indexes it, not the JointName enum
-                            // case directly (real compiler error caught in CI: "cannot convert value of type
-                            // 'VNHumanHandPoseObservation.JointName' to expected argument type
-                            // 'VNRecognizedPointKey'").
-                            guard let point = points[jointName.rawValue], point.confidence > 0.1 else { continue }
-                            handJoints.append([
-                                "hand": handIndex,
-                                "name": label,
-                                "x": Double(point.location.x),
-                                "y": Double(point.location.y),
-                                "confidence": Double(point.confidence),
-                            ])
-                        }
-                    }
-                }
-            } catch {
-                // Deliberately not folded into visionFailureCount -- that counter's whole
-                // purpose (see its own comment above) is distinguishing "Vision errored" from
-                // "Vision ran cleanly and found nothing," and conflating a brand-new, still-
-                // unproven request's failures with the already-trusted pose request's would
-                // hide exactly the signal Section A5's on-device validation needs to see.
-                logDiag("Hand pose request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
-            }
-            handPoseElapsedSeconds += Date().timeIntervalSince(handPoseStart)
-
-            // Phase B: real depth, iOS 17+ only -- see body3DRequest's own comment above for why
-            // this is nil (and this whole block a no-op) below that OS version. A separate
-            // perform() call on the same handler, same "isolate this request's own timing"
-            // reasoning as handPoseElapsedSeconds above, gated by its own stride (unlike hand
-            // pose, this hasn't earned "every sampled frame" trust yet -- see
-            // body3DDetectionStride's own comment).
-            var body3DJoints: [[String: Any]] = []
-            if let body3DRequest = body3DRequest, thisFrameIndex % body3DDetectionStride == 0 {
-                let body3DStart = Date()
-                do {
-                    try handler.perform([body3DRequest])
-                    if #available(iOS 17.0, *), let observation = body3DRequest.results?.first as? VNHumanBodyPose3DObservation {
-                        for (jointName, label) in Self.body3DPoseJoints {
-                            // Unlike the 2D VNRecognizedPoint this plugin's other requests use,
-                            // VNHumanBodyRecognizedPoint3D has no confidence property at all (its
-                            // real class hierarchy -- confirmed against Apple's own docs after
-                            // verify_build caught the build assuming one -- is
-                            // NSObject -> VNPoint3D(position) -> VNRecognizedPoint3D(identifier) ->
-                            // VNHumanBodyRecognizedPoint3D(localPosition, parentJoint), nothing in
-                            // that chain adds confidence). recognizedPoint(_:) itself is the
-                            // availability gate: it throws for any joint Vision isn't reporting this
-                            // frame, so a joint that reaches here at all is one Vision is already
-                            // vouching for -- try? converts that throw into skip via continue, same
-                            // effect the old confidence guard was reaching for.
-                            guard let point = try? observation.recognizedPoint(jointName) else {
-                                continue
-                            }
-                            // .position is a simd_float4x4 (Apple's own documented convention for
-                            // every 3D point Vision reports, matching ARKit's own transform-matrix
-                            // shape) -- real-world meters, relative to the skeleton's root joint
-                            // (center of the hip), translation in the 4th column. NOT .localPosition
-                            // (relative to the PARENT joint in the skeleton hierarchy) -- every other
-                            // joint this plugin emits shares ONE coordinate space, and .position is
-                            // the one that matches that convention.
-                            let translation = point.position.columns.3
-                            body3DJoints.append([
-                                "name": label,
-                                "x": Double(translation.x),
-                                "y": Double(translation.y),
-                                "z": Double(translation.z),
-                                // No real per-joint confidence to report (see above) -- 1.0 for
-                                // every joint that resolved, so the JS bridge's shared Landmark
-                                // shape (visibility/confidence-gated like every other source) still
-                                // treats these as fully trusted rather than reading a fabricated
-                                // partial score.
-                                "confidence": 1.0,
-                            ])
-                        }
-                    }
-                } catch {
-                    // Deliberately not folded into visionFailureCount -- same reasoning as hand
-                    // pose's own catch block above: this is a brand-new, still-unproven request,
-                    // and conflating its failures with the already-trusted pose request's would
-                    // hide exactly the signal on-device validation needs to see.
-                    logDiag("3D body pose request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
-                }
-                body3DFrameCount += 1
-                body3DElapsedSeconds += Date().timeIntervalSince(body3DStart)
-            }
-
-            if detectBox, thisFrameIndex % boxDetectionStride == 0,
-               let candidate = detectBoxTopCandidate(
-                   handler: handler, request: rectanglesRequest,
-                   leftAnkle: leftAnkleJoint, rightAnkle: rightAnkleJoint
-               ) {
-                boxTopCandidates.append(candidate)
-            }
-
-            // OVERWATCH SPEAKS FIRST, BEFORE EITHER OBJECT TRACKER RUNS.
-            //
-            // What the BODY tracker knows, plus overwatch's verdict on whether it can be believed
-            // this frame and whether this frame is new at all, handed to BOTH object trackers so
-            // they are checked against the same referee. The motion-diff implement trackers
-            // below used to run outside arbitration entirely -- a jumped wrist that the CoreML
-            // detector correctly abstained on still re-seeded the motion-diff lock on the wrong
-            // part of the image. See AvOverwatch, AvTrackerArbiter and shared/tracker-arbiter.ts.
-            let overwatchFrame = overwatch.judge(
-                pixelBuffer: pixelBuffer,
-                landmarkSignature: landmarkSignature,
-                anchor: AvTrackerArbiter.handAnchor(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
-                yardstick: AvTrackerArbiter.bodyYardstick(
-                    leftWrist: leftWristJoint, rightWrist: rightWristJoint,
-                    leftShoulder: leftShoulderJoint, rightShoulder: rightShoulderJoint,
-                    frameWidth: Double(frameWidth), frameHeight: Double(frameHeight)
-                ),
-                frameWidth: Double(frameWidth), frameHeight: Double(frameHeight)
-            )
-            let bodyContext = overwatchFrame.body
-
-            // Phase 5: object/implement tracking -- only worth the extra downscale+render
-            // work on a frame that actually has a wrist to anchor the search on, same
-            // "skip when there's nothing to track from" precedent bar-tracker-dialog.tsx
-            // and ar-bar-tracker-dialog.tsx both already establish for their own callers.
-            var leftImplement: [String: Any]?
-            var rightImplement: [String: Any]?
-            if leftWristJoint != nil || rightWristJoint != nil,
-               let working = extractWorkingFrame(
-                   pixelBuffer: pixelBuffer, orientation: orientation, frameWidth: frameWidth, frameHeight: frameHeight
-               ) {
-                if let wrist = leftWristJoint {
-                    let wristWorkingX = wrist.x * Double(working.width)
-                    let wristWorkingY = (1.0 - wrist.y) * Double(working.height)
-                    if let result = leftImplementTracker.track(
-                        rgba: working.rgba, luma: working.luma, width: working.width, height: working.height,
-                        wristX: wristWorkingX, wristY: wristWorkingY,
-                        overwatch: overwatchFrame
-                    ) {
-                        leftImplement = implementResultDict(result)
-                    }
-                }
-                if let wrist = rightWristJoint {
-                    let wristWorkingX = wrist.x * Double(working.width)
-                    let wristWorkingY = (1.0 - wrist.y) * Double(working.height)
-                    if let result = rightImplementTracker.track(
-                        rgba: working.rgba, luma: working.luma, width: working.width, height: working.height,
-                        wristX: wristWorkingX, wristY: wristWorkingY,
-                        overwatch: overwatchFrame
-                    ) {
-                        rightImplement = implementResultDict(result)
-                    }
-                }
-            }
-
-            // Additive signal -- see AvCoreMlImplementDetector's own header comment. Runs on the
-            // full pixelBuffer (not the downscaled working frame the motion-diff trackers above
-            // use), since Vision's own CoreML/tracking requests do their own internal scaling and
-            // want real image data to track a visual appearance against, not a coarse 160px
-            // proxy. coreMlTargetLabel picks which of the model's classes this call actually
-            // cares about (see runPoseAnalysis's own comment) -- med-ball throws and now
-            // barbell/dumbbell/kettlebell lifts share this exact detector and wiring, just
-            // pointed at a different class. wristRegionOfInterest (nil when neither wrist was
-            // found this frame) narrows the SEARCH area for a fresh detection to roughly where
-            // the equipment already is -- see AvCoreMlImplementDetector.regionOfInterest's own
-            // comment for why that's a meaningfully cheaper lever than downscaling the image
-            // (already tried, made things worse -- see extractWorkingFrame's own comment above)
-            // or running detection concurrently with capture (already tried, caused real
-            // on-device thermal throttling -- see this file's header comment).
-            // bodyContext (built by overwatch above, before the motion-diff trackers ran) is what
-            // the BODY tracker knows, handed to the object tracker so it can be checked against
-            // it. This is the whole unification in one variable: the two systems ran side by
-            // side for a year and never once compared notes, and every drifted lock that cost a
-            // take was a lock nobody asked the obvious question about. See AvTrackerArbiter and
-            // shared/tracker-arbiter.ts.
-            var coreMlImplement: [String: Any]?
-            if coreMlDetectionEnabled, let targetLabel = coreMlTargetLabel,
-               let result = coreMlImplementDetector.track(
-                   pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, orientation: orientation, targetLabel: targetLabel,
-                   regionOfInterest: AvCoreMlImplementDetector.regionOfInterest(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
-                   body: bodyContext
-               ) {
-                coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence, held: result.held)
-            }
-
-            // The second class, sampled rather than tracked every frame.
-            //
-            // Every-frame detection is what the primary class is for: it follows the implement,
-            // so a gap in it is a gap in the trace. The secondary exists to answer questions that
-            // need a good sample rather than a continuous one -- above all real-world scale from
-            // a plate's diameter, which is a median over the take and needs tens of readings, not
-            // hundreds. Running it on every frame would double the per-frame Vision work on a
-            // phone this file's own header records as already thermally constrained, for
-            // measurements that do not improve past a few dozen samples.
-            //
-            // No region of interest either: the primary is narrowed to where the wrists are
-            // because it is following the thing in the hands, while a plate sits out at the end
-            // of the bar, well outside that box. Searching the whole frame is the point.
-            var coreMlSecondary: [String: Any]?
-            if coreMlSecondaryEnabled, let secondaryLabel = coreMlSecondaryLabel,
-               processedCount % Self.coreMlSecondaryEveryNthFrame == 0,
-               let secondary = coreMlSecondaryDetector.track(
-                   pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, orientation: orientation,
-                   targetLabel: secondaryLabel, regionOfInterest: nil,
-                   // The same body context, and the secondary needs it MORE than the primary
-                   // does. It searches the whole frame by design -- a plate sits out at the end
-                   // of the bar, well outside a wrist-anchored region -- so until now it was the
-                   // one detector with no spatial constraint of any kind on what it could pick
-                   // up. On a barbell lift it is also the detector that sets the real-world
-                   // scale, which makes it the one whose mistakes are most expensive.
-                   body: bodyContext
-               ) {
-                var dict = coreMlResultDict(secondary.box, confidence: secondary.confidence, held: secondary.held)
-                dict["label"] = secondaryLabel
-                coreMlSecondary = dict
-            }
-
-            // Same gate as the CoreML detector above -- handheld camera shake is a real problem
-            // for every tracking mode; this rides along on the same enable/disable decision
-            // rather than a separate one, since a session worth enabling object detection for is
-            // also worth stabilizing.
-            var cameraDrift: [String: Any]?
-            if coreMlDetectionEnabled,
-               let drift = cameraStabilizer.drift(for: pixelBuffer, orientation: orientation, frameWidth: frameWidth, frameHeight: frameHeight) {
-                cameraDrift = ["x": drift.x, "y": drift.y]
-            }
-
-            processedCount += 1
-            // Mirrors processedCount into the thread-safe counter analyzeRecording's watchdog
-            // reads from a different queue -- see AvAnalysisProgress's own comment. Kept as a
-            // separate increment rather than replacing processedCount everywhere it's already
-            // used below, so this stays a pure addition with no risk to the existing diagnostic
-            // reporting this function already does.
-            progress.increment()
-            var eventData: [String: Any] = [
-                "frameIndex": thisFrameIndex,
-                "timestamp": timestampSeconds,
-                "tracked": tracked,
-                "joints": joints,
-                "frameWidth": frameWidth,
-                "frameHeight": frameHeight,
-            ]
-            // Omit-when-nil, matching ArCameraPreviewPlugin's own
-            // implementResultDict pattern -- the JS bridge treats a missing key the
-            // same as "no lock this frame," not a zeroed/default point.
-            if let leftImplement = leftImplement { eventData["leftImplement"] = leftImplement }
-            if let rightImplement = rightImplement { eventData["rightImplement"] = rightImplement }
-            if let coreMlImplement = coreMlImplement { eventData["coreMlImplement"] = coreMlImplement }
-            if let coreMlSecondary = coreMlSecondary { eventData["coreMlSecondary"] = coreMlSecondary }
-            if let cameraDrift = cameraDrift { eventData["cameraDrift"] = cameraDrift }
-            // Omit-when-empty, not always-present like joints above -- a hand out of frame is
-            // genuinely "nothing to report this frame," the same semantics leftImplement/
-            // cameraDrift already use, not core per-frame state every consumer depends on.
-            if !handJoints.isEmpty { eventData["handJoints"] = handJoints }
-            if !body3DJoints.isEmpty { eventData["body3DJoints"] = body3DJoints }
-            DispatchQueue.main.async {
-                self.notifyListeners("poseFrame", data: eventData)
-            }
+            processFrame(sampleBuffer: sampleBuffer, ctx: ctx, state: state, progress: progress) { [weak self] data in
+                self?.notifyListeners("poseFrame", data: data)
             }
         }
 
@@ -1975,10 +1786,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         logDiag(
             "analyzeRecording conditions: thermalState=\(thermalState) lowPowerMode=\(lowPowerModeEnabled) "
                 + "freeDiskSpaceBytes=\(freeDiskSpaceBytes.map { String($0) } ?? "unknown") "
-                + "visionFailureCount=\(visionFailureCount) "
-                + "maxInterFrameGapSeconds=\(maxInterFrameGapSeconds.map { String(format: "%.2f", $0) } ?? "n/a") "
-                + "handPoseElapsedSeconds=\(String(format: "%.2f", handPoseElapsedSeconds)) "
-                + "(avg \(processedCount > 0 ? String(format: "%.4f", handPoseElapsedSeconds / Double(processedCount)) : "n/a")s/frame)"
+                + "visionFailureCount=\(state.visionFailureCount) "
+                + "maxInterFrameGapSeconds=\(state.maxInterFrameGapSeconds.map { String(format: "%.2f", $0) } ?? "n/a") "
+                + "handPoseElapsedSeconds=\(String(format: "%.2f", state.handPoseElapsedSeconds)) "
+                + "(avg \(state.processedCount > 0 ? String(format: "%.4f", state.handPoseElapsedSeconds / Double(state.processedCount)) : "n/a")s/frame)"
         )
         // body3DAvailable reflects the #available(iOS 17.0, *) gate itself, independent of
         // whether any frame actually got a gated perform() call this clip -- confirms the OS
@@ -1988,9 +1799,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             return false
         }()
         logDiag(
-            "analyzeRecording body3D: available=\(body3DAvailable) framesAttempted=\(body3DFrameCount) "
-                + "elapsedSeconds=\(String(format: "%.2f", body3DElapsedSeconds)) "
-                + "(avg \(body3DFrameCount > 0 ? String(format: "%.4f", body3DElapsedSeconds / Double(body3DFrameCount)) : "n/a")s/frame)"
+            "analyzeRecording body3D: available=\(body3DAvailable) framesAttempted=\(state.body3DFrameCount) "
+                + "elapsedSeconds=\(String(format: "%.2f", state.body3DElapsedSeconds)) "
+                + "(avg \(state.body3DFrameCount > 0 ? String(format: "%.4f", state.body3DElapsedSeconds / Double(state.body3DFrameCount)) : "n/a")s/frame)"
         )
         // Below MIN_BOX_TOP_SAMPLES, this isn't a confident read -- reporting a "detection"
         // off one or two lucky/unlucky frames would be worse than reporting nothing at all
@@ -2000,11 +1811,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // candidate, not just a noisy one) can't drag the result toward themselves the way an
         // average would.
         let minBoxTopSamples = 5
-        let boxTopNormalizedY: Double? = boxTopCandidates.count >= minBoxTopSamples
-            ? Self.median(boxTopCandidates) : nil
-        if detectBox {
+        let boxTopNormalizedY: Double? = state.boxTopCandidates.count >= minBoxTopSamples
+            ? Self.median(state.boxTopCandidates) : nil
+        if ctx.detectBox {
             logDiag(
-                "box detection: \(boxTopCandidates.count) candidate frames, "
+                "box detection: \(state.boxTopCandidates.count) candidate frames, "
                     + (boxTopNormalizedY.map { "boxTopNormalizedY=\(String(format: "%.4f", $0))" } ?? "no confident read")
             )
         }
@@ -2020,9 +1831,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // and read detector state from a different queue after analysis has finished. A plain
         // local snapshot avoids the whole question.
         let objectLockTelemetry: [String: Any]? =
-            coreMlDetectionEnabled ? coreMlImplementDetector.telemetry.dictionary : nil
+            ctx.coreMlDetectionEnabled ? coreMlImplementDetector.telemetry.dictionary : nil
         let objectLockSecondaryTelemetry: [String: Any]? =
-            coreMlSecondaryEnabled ? coreMlSecondaryDetector.telemetry.dictionary : nil
+            ctx.coreMlSecondaryEnabled ? coreMlSecondaryDetector.telemetry.dictionary : nil
         if let objectLockTelemetry {
             logDiag("object lock: \(objectLockTelemetry.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
         }
@@ -2034,23 +1845,26 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 + "right=\(rightImplementTracker.telemetry.summary) overwatch=\(overwatch.summary)"
         )
         logDiag(
-            "analyzeRecording finished: \(processedCount) frames processed, "
-                + "\(trackedCount) tracked, \(String(format: "%.2f", elapsed))s elapsed"
+            "analyzeRecording finished: \(state.processedCount) frames processed, "
+                + "\(state.trackedCount) tracked, \(String(format: "%.2f", elapsed))s elapsed"
         )
         settle {
             DispatchQueue.main.async {
                 var result: [String: Any] = [
-                    "frameCount": processedCount,
-                    "trackedFrameCount": trackedCount,
+                    "frameCount": state.processedCount,
+                    "trackedFrameCount": state.trackedCount,
                     "elapsedSeconds": elapsed,
                     "assetDurationSeconds": assetDurationSeconds,
                     "readerStatus": readerStatusString,
-                    "visionFailureCount": visionFailureCount,
+                    // See liveAnalysisResult's own comment -- two paths now produce a take, and
+                    // a calibration run has to be able to say which one it is describing.
+                    "analysisPath": "file",
+                    "visionFailureCount": state.visionFailureCount,
                     "thermalState": thermalState,
                     "lowPowerModeEnabled": lowPowerModeEnabled,
-                    "handPoseElapsedSeconds": handPoseElapsedSeconds,
-                    "body3DElapsedSeconds": body3DElapsedSeconds,
-                    "body3DFrameCount": body3DFrameCount,
+                    "handPoseElapsedSeconds": state.handPoseElapsedSeconds,
+                    "body3DElapsedSeconds": state.body3DElapsedSeconds,
+                    "body3DFrameCount": state.body3DFrameCount,
                     "body3DAvailable": body3DAvailable,
                 ]
                 if let error = reader.error {
@@ -2070,11 +1884,423 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 if let freeDiskSpaceBytes = freeDiskSpaceBytes {
                     result["freeDiskSpaceBytes"] = freeDiskSpaceBytes
                 }
-                if let maxInterFrameGapSeconds = maxInterFrameGapSeconds {
-                    result["maxInterFrameGapSeconds"] = maxInterFrameGapSeconds
+                if let maxInterFrameGapSeconds = state.maxInterFrameGapSeconds {
+                    result["maxInterFrameGapSeconds"] = state.maxInterFrameGapSeconds
                 }
                 call.resolve(result)
             }
+        }
+    }
+
+    /// ONE FRAME, WHICHEVER SIDE IT ARRIVED FROM.
+    ///
+    /// Fed by the AVAssetReader loop in runPoseAnalysis (a clip already on disk) and by the
+    /// live AVCaptureVideoDataOutput delegate (the athlete is still lifting). Everything that
+    /// used to be a local of that loop is now on `ctx` (fixed for the take) or `state`
+    /// (accumulating across frames), so the two feeders cannot diverge by accident.
+    ///
+    /// Applies the sampling stride itself -- a caller must NOT pre-filter, or the two paths
+    /// end up sampling different frames and the numbers stop comparing.
+    ///
+    /// `progress` is the watchdog counter the file path's own stall check reads; the live path
+    /// has no watchdog (there is no reader to get stuck) and passes nil.
+    private func processFrame(
+        sampleBuffer: CMSampleBuffer,
+        ctx: AvFrameContext,
+        state: AvFrameRunState,
+        progress: AvAnalysisProgress?,
+        emit: @escaping ([String: Any]) -> Void
+    ) {
+        let thisFrameIndex = state.frameIndex
+        state.frameIndex += 1
+        guard thisFrameIndex % ctx.sampleEveryNthFrame == 0 else { return }
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        // Every frame of this loop runs Vision pose estimation, optionally Vision hand
+        // pose, a CoreML object detection and a camera-drift estimate, and each of those
+        // leaves autoreleased temporaries behind. Without a pool inside the loop they all
+        // accumulate until the whole analysis finishes -- thousands of frames' worth of
+        // transient image buffers held at once on a 60-second 1080p60 clip.
+        //
+        // That is the same memory pressure that produced "Cannot Complete Action" and the
+        // media-services reset on a real device, which cut the athlete's music mid-set. The
+        // 4K-to-1080p decode change addressed one contributor; this is the other one, and
+        // it was still here: there was not a single autoreleasepool anywhere in this file.
+        //
+        // Wrapped from AFTER the sampling guards, which `return` out of this method rather
+        // than crossing the closure boundary (a break or continue cannot, in Swift). Every
+        // `continue` inside the wrapped body belongs to an inner joint loop, so those are
+        // unaffected. The body is deliberately not re-indented past the pool, to keep the
+        // diff readable against the original.
+        autoreleasepool {
+        let rawTimestampSeconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        // See AvFrameRunState.timestampOrigin -- a no-op on the file path, and the difference
+        // between a usable trace and a nonsensical one on the live path.
+        if state.timestampOrigin == nil { state.timestampOrigin = rawTimestampSeconds }
+        let timestampSeconds = rawTimestampSeconds - (state.timestampOrigin ?? 0)
+        if let previous = state.previousProcessedTimestamp {
+            let gap = timestampSeconds - previous
+            if gap > (state.maxInterFrameGapSeconds ?? 0) { state.maxInterFrameGapSeconds = gap }
+        }
+        state.previousProcessedTimestamp = timestampSeconds
+        // Vision's normalized joint coordinates are relative to the UPRIGHT (oriented)
+        // image, not the raw pixel buffer's own native layout -- CVPixelBufferGetWidth/
+        // Height report the raw buffer (landscape sensor order for a 90-degree-rotated
+        // recording), so width/height get swapped here to match what Vision actually
+        // measured against. The JS bridge (vision-body-landmarks.ts) needs real pixel
+        // dimensions, not just normalized 0-1 values, to undo the aspect-ratio distortion
+        // pose-tracking.ts's own angle math is sensitive to on non-square (portrait) video
+        // -- see that file's comment on why angle computations need proportionally-correct
+        // coordinates, not independently-normalized-per-axis ones.
+        let rawWidth = CVPixelBufferGetWidth(pixelBuffer)
+        let rawHeight = CVPixelBufferGetHeight(pixelBuffer)
+        let swapDimensions: Bool
+        switch ctx.orientation {
+        case .left, .right, .leftMirrored, .rightMirrored: swapDimensions = true
+        default: swapDimensions = false
+        }
+        let frameWidth = swapDimensions ? rawHeight : rawWidth
+        let frameHeight = swapDimensions ? rawWidth : rawHeight
+
+        var joints: [[String: Any]] = []
+        // Every body landmark this frame, flattened, for AvOverwatch's frozen-frame check --
+        // a pose that is bit-for-bit identical to the last frame's is a pose request
+        // returning cached results, not an athlete who did not move.
+        var landmarkSignature: [Double] = []
+        var tracked = false
+        var leftWristJoint: (x: Double, y: Double)?
+        var rightWristJoint: (x: Double, y: Double)?
+        // The body's own measuring stick for the object tracker's plausibility gate -- the
+        // shoulders are the fallback span when a wrist drops out. See
+        // AvTrackerArbiter.bodyYardstickPx and shared/tracker-arbiter.ts.
+        var leftShoulderJoint: (x: Double, y: Double)?
+        var rightShoulderJoint: (x: Double, y: Double)?
+        var leftAnkleJoint: (x: Double, y: Double)?
+        var rightAnkleJoint: (x: Double, y: Double)?
+        // pixelBuffer already comes back downscaled straight from the reader's own decode
+        // (see outputSettings' own comment above, where the reader is set up) -- no
+        // separate per-frame Vision-side downscale needed on top of that; a first attempt at
+        // exactly that (rendering a scaled CIImage per sampled frame) made the "Cannot
+        // Complete Action" failures below worse, not better, most likely by adding its own
+        // Core Image render pass on top of a decode that was still happening at full 4K
+        // regardless. Decoding smaller in the first place fixes the actual bulk of the cost
+        // (every frame gets decoded, not just the sampled ones) instead of shaving cost off
+        // only the fraction of frames Vision ever touches.
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, ctx.orientation: ctx.orientation, options: [:])
+        do {
+            try handler.perform([ctx.poseRequest])
+            if let observation = ctx.poseRequest.results?.first as? VNHumanBodyPoseObservation {
+                tracked = true
+                state.trackedCount += 1
+                for (jointName, label) in Self.bodyPoseJoints {
+                    guard let point = try? observation.recognizedPoint(jointName), point.confidence > 0.1 else {
+                        continue
+                    }
+                    // Vision's own coordinate convention: normalized 0-1, origin at
+                    // BOTTOM-left -- different from the top-left-origin image space most
+                    // of the rest of this app assumes. Left as raw Vision coordinates
+                    // here; Phase 3's vision-body-landmarks.ts bridge is where that
+                    // Y-flip belongs (matching how ar-body-landmarks.ts's own comment
+                    // handles ARKit's own coordinate quirks at the bridge layer, not
+                    // here at the source).
+                    joints.append([
+                        "name": label,
+                        "x": Double(point.location.x),
+                        "y": Double(point.location.y),
+                        "confidence": Double(point.confidence),
+                    ])
+                    landmarkSignature.append(Double(point.location.x))
+                    landmarkSignature.append(Double(point.location.y))
+                    if label == "leftWrist" {
+                        leftWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                    } else if label == "rightWrist" {
+                        rightWristJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                    } else if label == "leftShoulder" {
+                        leftShoulderJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                    } else if label == "rightShoulder" {
+                        rightShoulderJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                    } else if label == "leftAnkle" {
+                        leftAnkleJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                    } else if label == "rightAnkle" {
+                        rightAnkleJoint = (x: Double(point.location.x), y: Double(point.location.y))
+                    }
+                }
+            }
+        } catch {
+            state.visionFailureCount += 1
+            logDiag("Vision request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
+        }
+
+        // A separate perform() call reusing the same handler -- same precedent
+        // detectBoxTopCandidate below already establishes for rectanglesRequest -- rather
+        // than bundling into the poseRequest call above, specifically so
+        // handPoseElapsedSeconds measures hand-pose's own cost in isolation, not a total
+        // that conflates it with the already-accepted pose-only cost.
+        var handJoints: [[String: Any]] = []
+        let handPoseStart = Date()
+        do {
+            try handler.perform([ctx.handPoseRequest])
+            if let handObservations = ctx.handPoseRequest.results as? [VNHumanHandPoseObservation] {
+                for (handIndex, observation) in handObservations.enumerated() {
+                    // Chirality (.left/.right/.unknown) is available here but deliberately
+                    // not read -- see vision-body-landmarks.ts's visionRefineGripSeed for
+                    // why grip-seed matching goes by proximity to the Pose-derived wrist
+                    // instead: its sense depends on camera mirroring this app doesn't
+                    // consistently control. `hand` is just a stable per-frame index (0/1)
+                    // so the JS bridge can group a frame's joints back into per-hand sets.
+                    guard let points = try? observation.recognizedPoints(forGroupKey: .all) else { continue }
+                    for (jointName, label) in Self.handPoseJoints {
+                        // recognizedPoints(forGroupKey:) returns [VNRecognizedPointKey: VNRecognizedPoint] --
+                        // JointName's own .rawValue is what actually indexes it, not the JointName enum
+                        // case directly (real compiler error caught in CI: "cannot convert value of type
+                        // 'VNHumanHandPoseObservation.JointName' to expected argument type
+                        // 'VNRecognizedPointKey'").
+                        guard let point = points[jointName.rawValue], point.confidence > 0.1 else { continue }
+                        handJoints.append([
+                            "hand": handIndex,
+                            "name": label,
+                            "x": Double(point.location.x),
+                            "y": Double(point.location.y),
+                            "confidence": Double(point.confidence),
+                        ])
+                    }
+                }
+            }
+        } catch {
+            // Deliberately not folded into visionFailureCount -- that counter's whole
+            // purpose (see its own comment above) is distinguishing "Vision errored" from
+            // "Vision ran cleanly and found nothing," and conflating a brand-new, still-
+            // unproven request's failures with the already-trusted pose request's would
+            // hide exactly the signal Section A5's on-device validation needs to see.
+            logDiag("Hand pose request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
+        }
+        state.handPoseElapsedSeconds += Date().timeIntervalSince(handPoseStart)
+
+        // Phase B: real depth, iOS 17+ only -- see body3DRequest's own comment above for why
+        // this is nil (and this whole block a no-op) below that OS version. A separate
+        // perform() call on the same handler, same "isolate this request's own timing"
+        // reasoning as handPoseElapsedSeconds above, gated by its own stride (unlike hand
+        // pose, this hasn't earned "every sampled frame" trust yet -- see
+        // body3DDetectionStride's own comment).
+        var body3DJoints: [[String: Any]] = []
+        if let body3DRequest = ctx.body3DRequest, thisFrameIndex % ctx.body3DDetectionStride == 0 {
+            let body3DStart = Date()
+            do {
+                try handler.perform([ctx.body3DRequest])
+                if #available(iOS 17.0, *), let observation = ctx.body3DRequest.results?.first as? VNHumanBodyPose3DObservation {
+                    for (jointName, label) in Self.body3DPoseJoints {
+                        // Unlike the 2D VNRecognizedPoint this plugin's other requests use,
+                        // VNHumanBodyRecognizedPoint3D has no confidence property at all (its
+                        // real class hierarchy -- confirmed against Apple's own docs after
+                        // verify_build caught the build assuming one -- is
+                        // NSObject -> VNPoint3D(position) -> VNRecognizedPoint3D(identifier) ->
+                        // VNHumanBodyRecognizedPoint3D(localPosition, parentJoint), nothing in
+                        // that chain adds confidence). recognizedPoint(_:) itself is the
+                        // availability gate: it throws for any joint Vision isn't reporting this
+                        // frame, so a joint that reaches here at all is one Vision is already
+                        // vouching for -- try? converts that throw into skip via continue, same
+                        // effect the old confidence guard was reaching for.
+                        guard let point = try? observation.recognizedPoint(jointName) else {
+                            continue
+                        }
+                        // .position is a simd_float4x4 (Apple's own documented convention for
+                        // every 3D point Vision reports, matching ARKit's own transform-matrix
+                        // shape) -- real-world meters, relative to the skeleton's root joint
+                        // (center of the hip), translation in the 4th column. NOT .localPosition
+                        // (relative to the PARENT joint in the skeleton hierarchy) -- every other
+                        // joint this plugin emits shares ONE coordinate space, and .position is
+                        // the one that matches that convention.
+                        let translation = point.position.columns.3
+                        body3DJoints.append([
+                            "name": label,
+                            "x": Double(translation.x),
+                            "y": Double(translation.y),
+                            "z": Double(translation.z),
+                            // No real per-joint confidence to report (see above) -- 1.0 for
+                            // every joint that resolved, so the JS bridge's shared Landmark
+                            // shape (visibility/confidence-gated like every other source) still
+                            // treats these as fully trusted rather than reading a fabricated
+                            // partial score.
+                            "confidence": 1.0,
+                        ])
+                    }
+                }
+            } catch {
+                // Deliberately not folded into visionFailureCount -- same reasoning as hand
+                // pose's own catch block above: this is a brand-new, still-unproven request,
+                // and conflating its failures with the already-trusted pose request's would
+                // hide exactly the signal on-device validation needs to see.
+                logDiag("3D body pose request failed on frame \(thisFrameIndex): \(error.localizedDescription)")
+            }
+            state.body3DFrameCount += 1
+            state.body3DElapsedSeconds += Date().timeIntervalSince(body3DStart)
+        }
+
+        if ctx.detectBox, thisFrameIndex % ctx.boxDetectionStride == 0,
+           let candidate = detectBoxTopCandidate(
+               handler: handler, request: ctx.rectanglesRequest,
+               leftAnkle: leftAnkleJoint, rightAnkle: rightAnkleJoint
+           ) {
+            state.boxTopCandidates.append(candidate)
+        }
+
+        // OVERWATCH SPEAKS FIRST, BEFORE EITHER OBJECT TRACKER RUNS.
+        //
+        // What the BODY tracker knows, plus overwatch's verdict on whether it can be believed
+        // this frame and whether this frame is new at all, handed to BOTH object trackers so
+        // they are checked against the same referee. The motion-diff implement trackers
+        // below used to run outside arbitration entirely -- a jumped wrist that the CoreML
+        // detector correctly abstained on still re-seeded the motion-diff lock on the wrong
+        // part of the image. See AvOverwatch, AvTrackerArbiter and shared/tracker-arbiter.ts.
+        let overwatchFrame = overwatch.judge(
+            pixelBuffer: pixelBuffer,
+            landmarkSignature: landmarkSignature,
+            anchor: AvTrackerArbiter.handAnchor(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
+            yardstick: AvTrackerArbiter.bodyYardstick(
+                leftWrist: leftWristJoint, rightWrist: rightWristJoint,
+                leftShoulder: leftShoulderJoint, rightShoulder: rightShoulderJoint,
+                frameWidth: Double(frameWidth), frameHeight: Double(frameHeight)
+            ),
+            frameWidth: Double(frameWidth), frameHeight: Double(frameHeight)
+        )
+        let bodyContext = overwatchFrame.body
+
+        // Phase 5: object/implement tracking -- only worth the extra downscale+render
+        // work on a frame that actually has a wrist to anchor the search on, same
+        // "skip when there's nothing to track from" precedent bar-tracker-dialog.tsx
+        // and ar-bar-tracker-dialog.tsx both already establish for their own callers.
+        var leftImplement: [String: Any]?
+        var rightImplement: [String: Any]?
+        if leftWristJoint != nil || rightWristJoint != nil,
+           let working = extractWorkingFrame(
+               pixelBuffer: pixelBuffer, ctx.orientation: ctx.orientation, frameWidth: frameWidth, frameHeight: frameHeight
+           ) {
+            if let wrist = leftWristJoint {
+                let wristWorkingX = wrist.x * Double(working.width)
+                let wristWorkingY = (1.0 - wrist.y) * Double(working.height)
+                if let result = leftImplementTracker.track(
+                    rgba: working.rgba, luma: working.luma, width: working.width, height: working.height,
+                    wristX: wristWorkingX, wristY: wristWorkingY,
+                    overwatch: overwatchFrame
+                ) {
+                    leftImplement = implementResultDict(result)
+                }
+            }
+            if let wrist = rightWristJoint {
+                let wristWorkingX = wrist.x * Double(working.width)
+                let wristWorkingY = (1.0 - wrist.y) * Double(working.height)
+                if let result = rightImplementTracker.track(
+                    rgba: working.rgba, luma: working.luma, width: working.width, height: working.height,
+                    wristX: wristWorkingX, wristY: wristWorkingY,
+                    overwatch: overwatchFrame
+                ) {
+                    rightImplement = implementResultDict(result)
+                }
+            }
+        }
+
+        // Additive signal -- see AvCoreMlImplementDetector's own header comment. Runs on the
+        // full pixelBuffer (not the downscaled working frame the motion-diff trackers above
+        // use), since Vision's own CoreML/tracking requests do their own internal scaling and
+        // want real image data to track a visual appearance against, not a coarse 160px
+        // proxy. coreMlTargetLabel picks which of the model's classes this call actually
+        // cares about (see runPoseAnalysis's own comment) -- med-ball throws and now
+        // barbell/dumbbell/kettlebell lifts share this exact detector and wiring, just
+        // pointed at a different class. wristRegionOfInterest (nil when neither wrist was
+        // found this frame) narrows the SEARCH area for a fresh detection to roughly where
+        // the equipment already is -- see AvCoreMlImplementDetector.regionOfInterest's own
+        // comment for why that's a meaningfully cheaper lever than downscaling the image
+        // (already tried, made things worse -- see extractWorkingFrame's own comment above)
+        // or running detection concurrently with capture (already tried, caused real
+        // on-device thermal throttling -- see this file's header comment).
+        // bodyContext (built by overwatch above, before the motion-diff trackers ran) is what
+        // the BODY tracker knows, handed to the object tracker so it can be checked against
+        // it. This is the whole unification in one variable: the two systems ran side by
+        // side for a year and never once compared notes, and every drifted lock that cost a
+        // take was a lock nobody asked the obvious question about. See AvTrackerArbiter and
+        // shared/tracker-arbiter.ts.
+        var coreMlImplement: [String: Any]?
+        if ctx.coreMlDetectionEnabled, let targetLabel = ctx.coreMlTargetLabel,
+           let result = coreMlImplementDetector.track(
+               pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, ctx.orientation: ctx.orientation, targetLabel: targetLabel,
+               regionOfInterest: AvCoreMlImplementDetector.regionOfInterest(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
+               body: bodyContext
+           ) {
+            coreMlImplement = coreMlResultDict(result.box, confidence: result.confidence, held: result.held)
+        }
+
+        // The second class, sampled rather than tracked every frame.
+        //
+        // Every-frame detection is what the primary class is for: it follows the implement,
+        // so a gap in it is a gap in the trace. The secondary exists to answer questions that
+        // need a good sample rather than a continuous one -- above all real-world scale from
+        // a plate's diameter, which is a median over the take and needs tens of readings, not
+        // hundreds. Running it on every frame would double the per-frame Vision work on a
+        // phone this file's own header records as already thermally constrained, for
+        // measurements that do not improve past a few dozen samples.
+        //
+        // No region of interest either: the primary is narrowed to where the wrists are
+        // because it is following the thing in the hands, while a plate sits out at the end
+        // of the bar, well outside that box. Searching the whole frame is the point.
+        var coreMlSecondary: [String: Any]?
+        if ctx.coreMlSecondaryEnabled, let secondaryLabel = ctx.coreMlSecondaryLabel,
+           state.processedCount % Self.coreMlSecondaryEveryNthFrame == 0,
+           let secondary = coreMlSecondaryDetector.track(
+               pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, ctx.orientation: ctx.orientation,
+               targetLabel: secondaryLabel, regionOfInterest: nil,
+               // The same body context, and the secondary needs it MORE than the primary
+               // does. It searches the whole frame by design -- a plate sits out at the end
+               // of the bar, well outside a wrist-anchored region -- so until now it was the
+               // one detector with no spatial constraint of any kind on what it could pick
+               // up. On a barbell lift it is also the detector that sets the real-world
+               // scale, which makes it the one whose mistakes are most expensive.
+               body: bodyContext
+           ) {
+            var dict = coreMlResultDict(secondary.box, confidence: secondary.confidence, held: secondary.held)
+            dict["label"] = secondaryLabel
+            coreMlSecondary = dict
+        }
+
+        // Same gate as the CoreML detector above -- handheld camera shake is a real problem
+        // for every tracking mode; this rides along on the same enable/disable decision
+        // rather than a separate one, since a session worth enabling object detection for is
+        // also worth stabilizing.
+        var cameraDrift: [String: Any]?
+        if ctx.coreMlDetectionEnabled,
+           let drift = cameraStabilizer.drift(for: pixelBuffer, ctx.orientation: ctx.orientation, frameWidth: frameWidth, frameHeight: frameHeight) {
+            cameraDrift = ["x": drift.x, "y": drift.y]
+        }
+
+        state.processedCount += 1
+        // Mirrors processedCount into the thread-safe counter analyzeRecording's watchdog
+        // reads from a different queue -- see AvAnalysisProgress's own comment. Kept as a
+        // separate increment rather than replacing processedCount everywhere it's already
+        // used below, so this stays a pure addition with no risk to the existing diagnostic
+        // reporting this function already does.
+        progress?.increment()
+        var eventData: [String: Any] = [
+            "frameIndex": thisFrameIndex,
+            "timestamp": timestampSeconds,
+            "tracked": tracked,
+            "joints": joints,
+            "frameWidth": frameWidth,
+            "frameHeight": frameHeight,
+        ]
+        // Omit-when-nil, matching ArCameraPreviewPlugin's own
+        // implementResultDict pattern -- the JS bridge treats a missing key the
+        // same as "no lock this frame," not a zeroed/default point.
+        if let leftImplement = leftImplement { eventData["leftImplement"] = leftImplement }
+        if let rightImplement = rightImplement { eventData["rightImplement"] = rightImplement }
+        if let coreMlImplement = coreMlImplement { eventData["coreMlImplement"] = coreMlImplement }
+        if let coreMlSecondary = coreMlSecondary { eventData["coreMlSecondary"] = coreMlSecondary }
+        if let cameraDrift = cameraDrift { eventData["cameraDrift"] = cameraDrift }
+        // Omit-when-empty, not always-present like joints above -- a hand out of frame is
+        // genuinely "nothing to report this frame," the same semantics leftImplement/
+        // cameraDrift already use, not core per-frame state every consumer depends on.
+        if !handJoints.isEmpty { eventData["handJoints"] = handJoints }
+        if !body3DJoints.isEmpty { eventData["body3DJoints"] = body3DJoints }
+        DispatchQueue.main.async {
+            emit(eventData)
+        }
         }
     }
 
@@ -2395,6 +2621,142 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 // down into runPoseAnalysis. lastChangedAt starts at construction time (effectively "when this
 // analysis call began") rather than nil, so a stall check running before the very first
 // increment() still gets a real answer to "how long has it been since anything happened."
+// ONE LIVE TAKE IN PROGRESS.
+//
+// Created by startRecording, fed by captureOutput(_:didOutput:from:), closed by stopRecording,
+// consumed and discarded by analyzeRecording. Every one of those touches it on
+// liveAnalysisQueue and nowhere else, which is what lets it -- and the AvFrameRunState it owns
+// -- be plain mutable state with no locking.
+private final class AvLiveAnalysisRun {
+    let ctx: AvFrameContext
+    let state = AvFrameRunState()
+    let startedAt = Date()
+    var droppedFrames = 0
+    // False from the moment stopRecording is called. The delegate checks it so frames that
+    // arrive after the take has ended (the session keeps running for the next set) cannot
+    // append themselves to a finished trace.
+    var active = true
+    var elapsedSeconds: Double = 0
+
+    init(ctx: AvFrameContext) { self.ctx = ctx }
+}
+
+// EVERYTHING ABOUT A TAKE THAT DOES NOT CHANGE FRAME TO FRAME.
+//
+// Built once per take and handed to processFrame. The Vision requests live here because they
+// are safe to reuse across perform() calls (only .results gets overwritten each time) and
+// rebuilding them per frame would be pure cost.
+//
+// The live path and the file path construct this the same way ON PURPOSE, with one deliberate
+// difference: `orientation`. The file path derives it from the track's preferredTransform
+// (AVAssetReader hands back buffers in their raw stored orientation and does not apply it for
+// you); the live path derives it from the capture connection, because a live buffer has no
+// track and no transform. Everything else -- above all the sampling stride and the decode
+// size -- has to match, or the two paths are two different measurements and a calibration run
+// describes whichever one happened to produce the take.
+private final class AvFrameContext {
+    let orientation: CGImagePropertyOrientation
+    let sampleEveryNthFrame: Int
+    let detectBox: Bool
+    let coreMlTargetLabel: String?
+    let coreMlDetectionEnabled: Bool
+    // The other half of a loaded barbell. Whichever class the caller asked for, the pipeline
+    // also wants the one it did not: the plate carries real-world scale and the bar survives
+    // a setup with no plates the detector recognises.
+    let coreMlSecondaryLabel: String?
+    let coreMlSecondaryEnabled: Bool
+
+    let poseRequest = VNDetectHumanBodyPoseRequest()
+    // Grip-point corroboration signal -- see av-bar-tracker-dialog.tsx's own fuseSide comment on
+    // why this only ever nudges an existing confidence value, never replaces the wrist seed.
+    // maximumHandCount=2 matches hand-tracking.ts's own numHands:2 on the MediaPipe side.
+    let handPoseRequest: VNDetectHumanHandPoseRequest = {
+        let request = VNDetectHumanHandPoseRequest()
+        request.maximumHandCount = 2
+        return request
+    }()
+    // Phase B: real depth, iOS 17+ only (deployment target is 15.0). Typed as the pre-17
+    // VNRequest base class, not VNDetectHumanBodyPose3DRequest itself -- verify_build caught
+    // that a stored variable's static TYPE ANNOTATION is checked against the deployment target
+    // independent of the runtime #available guard around the constructor. nil here reads
+    // downstream as "not available", the same omit-rather-than-fail convention every other
+    // optional signal in this file uses.
+    let body3DRequest: VNRequest? = {
+        guard #available(iOS 17.0, *) else { return nil }
+        return VNDetectHumanBodyPose3DRequest()
+    }()
+    // Placeholder, not a measured value -- see AvFrameRunState's body3DElapsedSeconds/
+    // body3DFrameCount, the numbers this needs correcting from once real on-device timing exists.
+    let body3DDetectionStride = 3
+    // Box jump's own object-detection signal. Every frame would be needless extra Vision work
+    // for a signal that is checking a STATIONARY object, so a sparse sample across the whole
+    // clip is exactly as informative as every frame, for a fraction of the cost.
+    let rectanglesRequest: VNDetectRectanglesRequest = {
+        let request = VNDetectRectanglesRequest()
+        request.minimumConfidence = 0.5
+        request.minimumSize = 0.15
+        request.maximumObservations = 8
+        return request
+    }()
+    let boxDetectionStride = 5
+
+    init(
+        orientation: CGImagePropertyOrientation,
+        sampleEveryNthFrame: Int,
+        detectBox: Bool,
+        coreMlTargetLabel: String?,
+        coreMlImplementAvailable: Bool,
+        coreMlSecondaryLabel: String?,
+        coreMlSecondaryAvailable: Bool
+    ) {
+        self.orientation = orientation
+        self.sampleEveryNthFrame = max(1, sampleEveryNthFrame)
+        self.detectBox = detectBox
+        self.coreMlTargetLabel = coreMlTargetLabel
+        self.coreMlDetectionEnabled = coreMlTargetLabel != nil && coreMlImplementAvailable
+        self.coreMlSecondaryLabel = coreMlSecondaryLabel
+        self.coreMlSecondaryEnabled = coreMlSecondaryLabel != nil && coreMlSecondaryAvailable
+    }
+}
+
+// THE COUNTERS THAT LIVE ACROSS FRAMES.
+//
+// These were twenty locals of one 390-line loop, which is exactly why the same work could not
+// be run from anywhere else. Not thread-safe and does not need to be: one take is fed by one
+// serial queue -- the analysis queue for a clip on disk, the video-data-output queue for a
+// live take -- and never by both.
+private final class AvFrameRunState {
+    var frameIndex = 0
+    var processedCount = 0
+    var trackedCount = 0
+    // Vision genuinely erroring on a frame (perform() throwing) is a different, worse signal
+    // than Vision running cleanly and just not finding a body -- the latter is normal (a rep's
+    // bottom position, the athlete stepping out of frame), the former means something is wrong
+    // with the frame/buffer itself.
+    var visionFailureCount = 0
+    // Largest gap between two consecutively-PROCESSED frames' presentation timestamps -- a
+    // stall signal that reader status alone reads as "completed".
+    var previousProcessedTimestamp: Double?
+    var maxInterFrameGapSeconds: Double?
+    // Isolating hand-pose's OWN incremental per-frame cost, since that is what decides whether
+    // it is safe to keep running on every sampled frame.
+    var handPoseElapsedSeconds: Double = 0
+    var body3DElapsedSeconds: Double = 0
+    var body3DFrameCount = 0
+    var boxTopCandidates: [Double] = []
+    // ZERO-BASING THE CLOCK, WHICH ONLY THE LIVE PATH NEEDS.
+    //
+    // An AVAssetReader hands back presentation timestamps already relative to the start of the
+    // clip. A live capture buffer's timestamp is on the session clock, which started whenever
+    // the camera opened -- often minutes before the athlete pressed record. The JS side reads
+    // `timestamp` as "seconds since the start of the take" and computes velocity from the
+    // differences, so an offset would leave every rep's TIMING fine and every ABSOLUTE position
+    // in the trace wrong. Set from the first processed frame, so on the file path it is ~0 and
+    // this subtraction is a no-op.
+    var timestampOrigin: Double?
+}
+
+
 private final class AvAnalysisProgress {
     private let lock = NSLock()
     private var count = 0

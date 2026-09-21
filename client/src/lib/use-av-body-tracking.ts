@@ -254,10 +254,20 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     };
   }, []);
 
-  function startRecording() {
+  // PHASE 5B: A CALLER THAT SAYS WHAT IT IS FILMING GETS ITS ANALYSIS DONE BY THE TIME IT
+  // STOPS. One that does not behaves exactly as before -- the native side will not build a
+  // live trace it cannot build properly. The stride is this hook's own constant, the same one
+  // stopRecordingAndAnalyze passes to analyzeAvRecording, because the native side refuses a
+  // live trace measured to a different one.
+  function startRecording(options?: { detectBox?: boolean; trackingMode?: string }) {
     setError(null);
     setRecording(true);
-    startAvRecording().catch((err) => {
+    startAvRecording({
+      liveAnalysis: options != null,
+      sampleEveryNthFrame: ANALYSIS_SAMPLE_STRIDE,
+      detectBox: options?.detectBox,
+      trackingMode: options?.trackingMode,
+    }).catch((err) => {
       setError(err instanceof Error ? err.message : "Could not start recording");
       setRecording(false);
     });

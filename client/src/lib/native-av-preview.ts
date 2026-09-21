@@ -136,7 +136,20 @@ export type AvAnalysisResult = {
   // count and a fast elapsed time). See AvBodyTrackingPlugin.swift's own comment on this same
   // pair for the real bar-tracking bug that motivated adding it.
   assetDurationSeconds: number;
-  readerStatus: "completed" | "failed" | "cancelled" | "reading" | "unknown";
+  readerStatus: "completed" | "failed" | "cancelled" | "reading" | "unknown" | "live";
+  // WHICH IMPLEMENTATION PRODUCED THIS TAKE.
+  //
+  // "live" means the trace was built from the capture buffers while the athlete was still
+  // lifting and no re-read of the file happened; "file" is the original post-capture path,
+  // which is also what every take falls back to when the live trace cannot be shown to be
+  // complete. There are two implementations of the same per-frame work now (one Swift method,
+  // two feeders -- see AvBodyTrackingPlugin.swift's processFrame), and a calibration run
+  // against a trace is worthless if nobody can say which feeder produced it.
+  analysisPath?: "live" | "file";
+  // Frames the live path let go rather than back the capture session up behind Vision. Present
+  // only on the live path. Enough of them fails the take back to the file read, so a value here
+  // is a count that was judged acceptable, not one that was ignored.
+  liveDroppedFrames?: number;
   readerErrorMessage?: string;
   // Analysis-time device/pipeline conditions, read once at the end of the Vision loop -- see
   // AvBodyTrackingPlugin.swift's own comments on thermalStateDescription/
@@ -252,7 +265,15 @@ interface AvBodyTrackingPlugin {
   selectLens(options: { lens: string }): Promise<void>;
   setZoom(options: { factor: number }): Promise<{ appliedFactor: number }>;
   setFocusPoint(options: { x: number; y: number }): Promise<void>;
-  startRecording(): Promise<void>;
+  startRecording(options?: {
+    // Opt-in per take, and silence means no -- see the plugin's own comment. A caller that
+    // does not say what it is filming would get a live trace with no object detector and no
+    // real-world scale, which is a WORSE measurement than the file path would have produced.
+    liveAnalysis?: boolean;
+    sampleEveryNthFrame?: number;
+    detectBox?: boolean;
+    trackingMode?: string;
+  }): Promise<void>;
   stopRecording(): Promise<{ path: string }>;
   deleteRecording(options: { path: string }): Promise<void>;
   analyzeRecording(options: {
@@ -350,8 +371,18 @@ export async function setAvFocusPoint(x: number, y: number): Promise<void> {
   await AvBodyTracking.setFocusPoint({ x, y });
 }
 
-export async function startAvRecording(): Promise<void> {
-  await AvBodyTracking.startRecording();
+// Passing the analysis options HERE, not just at stop, is what lets the native side run the
+// pose analysis on the live capture buffers instead of re-reading the clip afterwards (Phase
+// 5b). They have to be the same values the later analyzeAvRecording call passes -- above all
+// the stride, since two feeders sampling different frames are two different measurements, and
+// the native side refuses a live trace whose stride does not match what analysis asked for.
+export async function startAvRecording(options?: {
+  liveAnalysis?: boolean;
+  sampleEveryNthFrame?: number;
+  detectBox?: boolean;
+  trackingMode?: string;
+}): Promise<void> {
+  await AvBodyTracking.startRecording(options);
 }
 
 // Mirrors stopArRecording in native-ar-preview.ts, but does NOT delete the native file --

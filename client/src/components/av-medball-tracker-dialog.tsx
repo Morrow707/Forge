@@ -645,7 +645,7 @@ export function AvMedballTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording();
+                  startRecording({ trackingMode: "med_ball" });
                 }}
                 disabled={!supported || !heightIn}
               >

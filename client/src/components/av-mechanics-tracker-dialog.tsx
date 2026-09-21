@@ -412,7 +412,7 @@ export function AvMechanicsTrackerDialog({
             </p>
             <DialogFooter>
               {step === "capture" && !recording && (
-                <Button onClick={startRecording} disabled={supported === false}>
+                <Button onClick={() => startRecording({})} disabled={supported === false}>
                   <Play className="h-4 w-4" />
                   Start Recording
                 </Button>

@@ -399,7 +399,7 @@ export function AvSwingTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording();
+                  startRecording({});
                 }}
                 disabled={!supported}
               >

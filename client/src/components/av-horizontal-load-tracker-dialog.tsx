@@ -292,7 +292,7 @@ export function AvHorizontalLoadTrackerDialog({
 
   function startCapture() {
     changeStep("capture");
-    startRecording();
+    startRecording({});
     recordingTimeoutRef.current = setTimeout(() => {
       if (stepRef.current === "capture") void stopCaptureAndAnalyze();
     }, MAX_RECORDING_MS);

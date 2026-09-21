@@ -107,6 +107,11 @@ export type TrackingDiagnostics = {
     assetDurationSeconds?: number;
     readerStatus?: string;
     readerErrorMessage?: string;
+    // See shared/schema.ts's trackingDiagnosticsSchema comment on this pair -- which of the
+    // two feeders produced the trace, and what the live one dropped to stay out of the
+    // recording's way.
+    analysisPath?: string;
+    liveDroppedFrames?: number;
     visionFailureCount?: number;
     thermalState?: string;
     lowPowerModeEnabled?: boolean;
@@ -433,6 +438,11 @@ export function buildTrackingDiagnostics(args: {
     assetDurationSeconds?: number;
     readerStatus?: string;
     readerErrorMessage?: string;
+    // See shared/schema.ts's trackingDiagnosticsSchema comment on this pair -- which of the
+    // two feeders produced the trace, and what the live one dropped to stay out of the
+    // recording's way.
+    analysisPath?: string;
+    liveDroppedFrames?: number;
     visionFailureCount?: number;
     thermalState?: string;
     lowPowerModeEnabled?: boolean;
