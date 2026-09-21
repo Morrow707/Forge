@@ -1985,7 +1985,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // regardless. Decoding smaller in the first place fixes the actual bulk of the cost
         // (every frame gets decoded, not just the sampled ones) instead of shaving cost off
         // only the fraction of frames Vision ever touches.
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, ctx.orientation: ctx.orientation, options: [:])
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: ctx.orientation, options: [:])
         do {
             try handler.perform([ctx.poseRequest])
             if let observation = ctx.poseRequest.results?.first as? VNHumanBodyPoseObservation {
@@ -2172,7 +2172,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         var rightImplement: [String: Any]?
         if leftWristJoint != nil || rightWristJoint != nil,
            let working = extractWorkingFrame(
-               pixelBuffer: pixelBuffer, ctx.orientation: ctx.orientation, frameWidth: frameWidth, frameHeight: frameHeight
+               pixelBuffer: pixelBuffer, orientation: ctx.orientation, frameWidth: frameWidth, frameHeight: frameHeight
            ) {
             if let wrist = leftWristJoint {
                 let wristWorkingX = wrist.x * Double(working.width)
@@ -2221,7 +2221,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         var coreMlImplement: [String: Any]?
         if ctx.coreMlDetectionEnabled, let targetLabel = ctx.coreMlTargetLabel,
            let result = coreMlImplementDetector.track(
-               pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, ctx.orientation: ctx.orientation, targetLabel: targetLabel,
+               pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, orientation: ctx.orientation, targetLabel: targetLabel,
                regionOfInterest: AvCoreMlImplementDetector.regionOfInterest(leftWrist: leftWristJoint, rightWrist: rightWristJoint),
                body: bodyContext
            ) {
@@ -2245,7 +2245,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         if ctx.coreMlSecondaryEnabled, let secondaryLabel = ctx.coreMlSecondaryLabel,
            state.processedCount % Self.coreMlSecondaryEveryNthFrame == 0,
            let secondary = coreMlSecondaryDetector.track(
-               pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, ctx.orientation: ctx.orientation,
+               pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer, orientation: ctx.orientation,
                targetLabel: secondaryLabel, regionOfInterest: nil,
                // The same body context, and the secondary needs it MORE than the primary
                // does. It searches the whole frame by design -- a plate sits out at the end
@@ -2266,7 +2266,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // also worth stabilizing.
         var cameraDrift: [String: Any]?
         if ctx.coreMlDetectionEnabled,
-           let drift = cameraStabilizer.drift(for: pixelBuffer, ctx.orientation: ctx.orientation, frameWidth: frameWidth, frameHeight: frameHeight) {
+           let drift = cameraStabilizer.drift(for: pixelBuffer, orientation: ctx.orientation, frameWidth: frameWidth, frameHeight: frameHeight) {
             cameraDrift = ["x": drift.x, "y": drift.y]
         }
 
