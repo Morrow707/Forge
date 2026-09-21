@@ -3582,9 +3582,16 @@ function ExerciseLogContent({
                       // number while this one's still in flight.
                       <span className="flex items-center gap-1.5 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-semibold text-primary/70">
                         <Loader2 className="h-3 w-3 animate-spin" />
+                        {/* TWO PHASES, NAMED. One bar was doing the work of two and wearing
+                            the wrong label: the percentage here has only ever been fed by
+                            onUploadProgress, so "Processing… 79%" was really the SAVE at 79%,
+                            and analysis -- the slower half -- showed no number at all. Reported
+                            2026-09-21: "still only shows the processing bar". A percentage that
+                            appears is the upload having started, which is exactly the signal
+                            needed to tell the athlete which half they are waiting on. */}
                         {processingProgress[set.setNumber] != null
-                          ? `Processing… ${processingProgress[set.setNumber]}%`
-                          : "Processing…"}
+                          ? `Saving… ${processingProgress[set.setNumber]}%`
+                          : "Analyzing…"}
                       </span>
                     )}
                     {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
