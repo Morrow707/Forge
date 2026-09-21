@@ -39,11 +39,38 @@ export interface ButtonProps
   asChild?: boolean;
 }
 
+/**
+ * ONE TAP SUBMITS, EVEN WITH THE KEYBOARD UP.
+ *
+ * Reported on-device 2026-09-21 (Scott): on the login screen, typing an email and password and
+ * then tapping Log In did nothing except dismiss the keyboard. A SECOND tap logged you in.
+ *
+ * It is not a missing handler -- it is a reflow race, and iOS WKWebView is where it bites.
+ * A tap on a button while a text field holds focus fires the compatibility mouse events after
+ * the finger lifts: mousedown, mouseup, click. The BLUR happens at mousedown, which dismisses
+ * the keyboard, which grows the visual viewport and moves every element on the page. By the
+ * time click is dispatched the button is no longer under the touch point, so the click lands
+ * on whatever moved into that spot -- usually nothing. The user sees the keyboard close and
+ * the button do nothing.
+ *
+ * Preventing mousedown's default stops the focus change, so nothing blurs, nothing reflows,
+ * and the click lands on the first tap. Click is still dispatched: preventing mousedown
+ * suppresses focus and selection, not the click that follows.
+ *
+ * Applied HERE rather than on each form because every submit button in the app sits under a
+ * field somebody was just typing in, and the ones that do not are unaffected by it. A caller
+ * that genuinely needs the blur can pass its own onMouseDown, which wins.
+ */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, type, onMouseDown, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
+        type={type}
+        onMouseDown={
+          onMouseDown ??
+          (type === "submit" ? (e: React.MouseEvent<HTMLButtonElement>) => e.preventDefault() : undefined)
+        }
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props}
