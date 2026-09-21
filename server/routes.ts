@@ -697,6 +697,24 @@ const pushTestLimiter = rateLimit({
   message: { message: "Too many test notifications. Try again in a little while." },
 });
 
+// The review-export share link (Phase 5 of docs/video-review-plan.md). The ONLY
+// unauthenticated route in the app that touches the filesystem, and the only one where a
+// wrong guess is cheap to make and a right one hands over footage of a person -- so it is the
+// one place where "the token is unguessable" is not the whole answer. 32 random bytes are not
+// brute-forceable, but an unbounded endpoint that does file work per request is a DoS surface
+// whether or not the guesses ever land, and the limit costs nothing to a parent opening a link
+// their coach sent them.
+//
+// Generous on purpose: a <video> element range-requests the same URL several times while
+// scrubbing, and a limit tight enough to feel like security would break ordinary playback.
+const exportShareLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please try again in a few minutes." },
+});
+
 function currentUser(req: any) {
   return req.user as {
     id: number;
@@ -5093,16 +5111,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // whole point of a link somebody can send to a parent who has no Forge account. It streams
   // the file rather than redirecting to the stored path, so the underlying file stays behind
   // the signed-URL gate and cannot be fetched directly once this token expires or is revoked.
-  app.get("/api/review-exports/:token", async (req, res) => {
+  app.get("/api/review-exports/:token", exportShareLimiter, async (req, res) => {
     const row = await storage.resolveVideoReviewExport(String(req.params.token));
     // Wrong, expired and revoked all answer the same way. "This link has expired" tells a
     // stranger the review exists, which is the thing the expiry was protecting.
     if (!row) return res.status(404).json({ message: "This link is no longer available." });
+    // The path is derived through uploadedFileDiskPath, which applies the same containment
+    // check every other file helper does -- the url is ours (multer wrote the name) but the
+    // guard is what makes that true rather than assumed.
     const filePath = uploadedFileDiskPath(row.videoUrl);
-    if (!filePath || !fs.existsSync(filePath)) {
-      return res.status(404).json({ message: "This link is no longer available." });
-    }
-    res.sendFile(filePath);
+    if (!filePath) return res.status(404).json({ message: "This link is no longer available." });
+    // sendFile's own callback rather than an existsSync first: the sync stat blocks the event
+    // loop on every request, and it is a race anyway -- the retention sweep can take the file
+    // between the check and the send.
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ message: "This link is no longer available." });
+      }
+    });
   });
 
   // ---------- Athlete self-review (Phase 4b of docs/video-review-plan.md) ----------
