@@ -47,6 +47,7 @@ import {
   UPLOADS_ROOT,
   inspectUploadsStorage,
   deleteUploadedFile,
+  copyUploadedFile,
 } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
@@ -118,6 +119,8 @@ import {
   updateSkillFaultThresholdsSchema,
   updateAssignmentSchema,
   submitWorkoutLogSchema,
+  createReferenceClipSchema,
+  saveClipAsReferenceSchema,
   createVideoReviewSchema,
   updateVideoReviewSchema,
   replaceVideoReviewEventsSchema,
@@ -326,6 +329,25 @@ fs.mkdirSync(SKILL_VIDEOS_DIR, { recursive: true });
 // Whatever MediaRecorder produced is stored as-is. iOS yields audio/mp4 and the web yields
 // audio/webm off the same code, and transcoding to a single format would mean a server-side
 // encode for no benefit: <audio> plays both natively on the platform that produced them.
+const REFERENCE_CLIPS_DIR = path.join(UPLOADS_ROOT, "reference-clips");
+fs.mkdirSync(REFERENCE_CLIPS_DIR, { recursive: true });
+
+// The coach's own library. Its own directory because its retention is the COACH's, not any
+// athlete's -- see shared/schema.ts's referenceClips on why a reference is always a copy.
+const uploadReferenceClip = multer({
+  storage: multer.diskStorage({
+    destination: REFERENCE_CLIPS_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${videoExtensionForMimetype(file.mimetype) ?? ""}`);
+    },
+  }),
+  limits: { fileSize: MAX_TRACKED_VIDEO_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (!videoExtensionForMimetype(file.mimetype)) return cb(new Error("Unsupported video format"));
+    cb(null, true);
+  },
+});
+
 const REVIEW_AUDIO_DIR = path.join(UPLOADS_ROOT, "reviews");
 fs.mkdirSync(REVIEW_AUDIO_DIR, { recursive: true });
 
@@ -4747,6 +4769,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
     if (!athlete) return res.status(404).json({ message: "Athlete not found" });
     res.json(await storage.listUnattachedVideoUploads(athleteId));
+  });
+
+  // ---------- The coach's reference library (Phase 4) ----------
+
+  app.get("/api/coach/reference-clips", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listReferenceClips(user.id));
+  });
+
+  app.post(
+    "/api/coach/reference-clips",
+    requireRole("coach"),
+    uploadReferenceClip.single("video"),
+    async (req, res) => {
+      const user = currentUser(req);
+      if (!req.file) return res.status(400).json({ message: "No video uploaded" });
+      const url = `/uploads/reference-clips/${req.file.filename}`;
+      const parsed = createReferenceClipSchema.safeParse(req.body);
+      if (!parsed.success) {
+        await deleteUploadedFile(url).catch(() => {});
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const row = await storage.createReferenceClip({
+        coachId: user.id,
+        ...parsed.data,
+        videoUrl: url,
+        source: "uploaded",
+      });
+      res.status(201).json(row);
+    },
+  );
+
+  // "Save as reference" from a roster athlete's clip. THE FILE IS COPIED, and that is the whole
+  // point of the route: a library entry pointing at the athlete's file would break when their
+  // retention cap purged it, or would keep their footage alive after they asked for it to go.
+  app.post("/api/coach/reference-clips/from-athlete", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = saveClipAsReferenceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    // The athlete has to be one this coach may actually see -- the same resolver the clip list
+    // uses, so per-team narrowing applies here too.
+    const athlete = await storage.getRosterAthleteForCoach(user.id, parsed.data.athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+
+    const copied = await copyUploadedFile(parsed.data.videoUrl, "reference-clips");
+    if (!copied) return res.status(404).json({ message: "Clip not found" });
+
+    const row = await storage.createReferenceClip({
+      coachId: user.id,
+      title: parsed.data.title,
+      movement: parsed.data.movement,
+      notes: parsed.data.notes,
+      videoUrl: copied,
+      source: "from_athlete",
+      sourceAthleteId: parsed.data.athleteId,
+    });
+    res.status(201).json(row);
+  });
+
+  app.delete("/api/coach/reference-clips/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const url = await storage.deleteReferenceClip(user.id, Number(req.params.id));
+    if (!url) return res.status(404).json({ message: "Reference not found" });
+    // Safe to delete outright: the copy is the coach's and nothing else points at it.
+    await deleteUploadedFile(url).catch(() => {});
+    res.json({ ok: true });
   });
 
   // ---------- Saved video reviews (Phase 2 of docs/video-review-plan.md) ----------

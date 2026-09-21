@@ -2639,6 +2639,46 @@ export const workoutComments = pgTable(
   }),
 );
 
+/** A coach's own library of model lifts to compare an athlete against.
+ *
+ * THE COPY IS THE POINT, and it is the one rule here that cannot be relaxed. A reference taken
+ * from a roster athlete's clip COPIES the file rather than pointing at it, because the athlete's
+ * clip is subject to their retention cap and their deletion rights: a reference that pointed at
+ * it would either break when the cap purged it, or -- far worse -- quietly keep an athlete's
+ * footage alive after they asked for it to go. The copy belongs to the coach and is governed by
+ * the coach's own retention, and `sourceAthleteId` records where it came from so the provenance
+ * is answerable later.
+ *
+ * Visible to the coach and their staff. Never to an athlete: a reference is teaching material a
+ * coach curated, and one athlete's lift becoming another athlete's "model" is a decision the
+ * coach makes explicitly, not a side effect of the library existing.
+ */
+export const referenceClips = pgTable(
+  "reference_clips",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** Free text rather than an exercise id: a reference is often a lift Forge's library does
+     * not carry (a competition clean from video, a drill the coach invented). */
+    movement: text("movement"),
+    videoUrl: text("video_url").notNull(),
+    /** "uploaded" or "from_athlete" -- which path produced this copy. */
+    source: text("source").notNull().default("uploaded"),
+    /** Present only for source = from_athlete. Provenance, never a live link to their clip. */
+    sourceAthleteId: integer("source_athlete_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachIdx: index("reference_clips_coach_idx").on(table.coachId),
+  }),
+);
+
 /** A SAVED REVIEW IS DATA, NOT A RENDERED VIDEO.
  *
  * The clip reference(s) plus a timed event log; playback re-renders it. That is the whole
@@ -8943,6 +8983,22 @@ export const replaceVideoReviewEventsSchema = z.object({
       }),
     )
     .max(2000),
+});
+
+export const createReferenceClipSchema = z.object({
+  title: z.string().min(1).max(200),
+  movement: z.string().max(120).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+/** Saving a roster athlete's clip as a reference. The server copies the FILE; the client only
+ * names which clip and why. */
+export const saveClipAsReferenceSchema = z.object({
+  athleteId: z.number().int().positive(),
+  videoUrl: z.string().min(1),
+  title: z.string().min(1).max(200),
+  movement: z.string().max(120).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
 });
 
 // ---------- Types ----------

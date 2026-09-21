@@ -164,3 +164,70 @@ export function driftToleranceSeconds(speed: number, fps?: number | null): numbe
 export function swapMarks(marks: SyncMarks): SyncMarks {
   return { syncL: marks.syncR, syncR: marks.syncL };
 }
+
+// ---------------------------------------------------------------------------
+// Auto-sync suggestion (Phase 4 of docs/video-review-plan.md)
+// ---------------------------------------------------------------------------
+
+/** A proposed pair of sync marks, with what it was derived from and how much to trust it.
+ *
+ * `confidence` is deliberately three words rather than a number. Every threshold in the camera
+ * pipeline is uncalibrated (CLAUDE.md), and a percentage would invite a coach to read precision
+ * into a guess. "high / medium / low" says the same useful thing and cannot be misread as
+ * measurement.
+ */
+export type SyncSuggestion = {
+  marks: SyncMarks;
+  basis: "rep" | "trace";
+  confidence: "high" | "medium" | "low";
+  /** Plain-language, shown next to the button. Never a bare number. */
+  because: string;
+};
+
+/**
+ * Where the two clips probably line up.
+ *
+ * A SUGGESTION, NEVER AN APPLICATION. It returns marks for the caller to offer; the coach
+ * accepts or ignores. That is not politeness -- rep segmentation is the part of this pipeline
+ * with a known history of being wrong (ten presses reported as fifteen, see
+ * docs/camera-tracking-notes.md), and a tool that silently re-aligned two clips off a bad rep
+ * boundary would be moving the thing the coach came to look at without telling them.
+ *
+ * Rep 1's start is the anchor rather than the deepest point or the bar's first movement: it is
+ * the one landmark both takes definitely share, it is what "Align to rep N" already uses, and a
+ * coach comparing two lifts is comparing the lifts, not the walk-ups.
+ */
+export function suggestSync(
+  leftReps: RepSpan[] | null | undefined,
+  rightReps: RepSpan[] | null | undefined,
+): SyncSuggestion | null {
+  const shared = alignableReps(leftReps, rightReps);
+  if (shared.length === 0) return null;
+
+  const marks = marksForRep(leftReps, rightReps, shared[0]);
+  if (!marks) return null;
+
+  // More shared reps means the segmenter found a consistent structure in both takes, which is
+  // the only evidence available here that it found the right one. One rep each is a guess.
+  const confidence = shared.length >= 3 ? "high" : shared.length === 2 ? "medium" : "low";
+
+  return {
+    marks,
+    basis: "rep",
+    confidence,
+    because:
+      shared.length === 1
+        ? "Lined up on the first rep. Only one rep matched, so check it before you trust it."
+        : `Lined up on the first of ${shared.length} reps that matched in both clips.`,
+  };
+}
+
+/** Whether a suggestion is worth offering at all.
+ *
+ * A low-confidence suggestion is still offered -- a coach can see in one frame whether two lifts
+ * are aligned, and refusing to suggest anything is less useful than suggesting something
+ * labelled as weak. What must never happen is applying it without being asked.
+ */
+export function shouldOfferSuggestion(s: SyncSuggestion | null): s is SyncSuggestion {
+  return s != null;
+}

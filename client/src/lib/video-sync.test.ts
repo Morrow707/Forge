@@ -10,6 +10,8 @@ import {
   marksForRep,
   rightToLeft,
   sidesToDrive,
+  suggestSync,
+  shouldOfferSuggestion,
   stepFrame,
   swapMarks,
 } from "./video-sync";
@@ -154,5 +156,46 @@ describe("video-sync: which sides a control drives", () => {
   it("a linked side drives itself first and the other follows", () => {
     expect(sidesToDrive("left", true)).toEqual(["left", "right"]);
     expect(sidesToDrive("right", true)).toEqual(["right", "left"]);
+  });
+});
+
+describe("suggestSync", () => {
+  const reps = (starts: number[]) =>
+    starts.map((startT, i) => ({ repNumber: i + 1, startT, endT: startT + 1 }));
+
+  it("suggests nothing when a side has no reps", () => {
+    expect(suggestSync(null, reps([1, 2]))).toBeNull();
+    expect(suggestSync(reps([1, 2]), null)).toBeNull();
+    expect(suggestSync([], [])).toBeNull();
+  });
+
+  it("lines up on the first rep both clips have", () => {
+    const s = suggestSync(reps([2, 4, 6]), reps([10, 12, 14]));
+    expect(s?.marks).toEqual({ syncL: 2, syncR: 10 });
+    expect(s?.basis).toBe("rep");
+  });
+
+  it("is more confident the more reps matched", () => {
+    expect(suggestSync(reps([1]), reps([5]))?.confidence).toBe("low");
+    expect(suggestSync(reps([1, 2]), reps([5, 6]))?.confidence).toBe("medium");
+    expect(suggestSync(reps([1, 2, 3]), reps([5, 6, 7]))?.confidence).toBe("high");
+  });
+
+  it("says why, in words rather than a number", () => {
+    // Every threshold behind this is uncalibrated. A percentage would invite a coach to read
+    // precision into a guess; a sentence cannot be misread as measurement.
+    const s = suggestSync(reps([1]), reps([5]));
+    expect(s?.because).toMatch(/check it before you trust it/i);
+    expect(s?.because).not.toMatch(/\d+%/);
+  });
+
+  it("only ever proposes marks -- it does not apply them", () => {
+    // The whole contract. Rep segmentation is the part of this pipeline with a known history of
+    // being wrong, and a tool that silently re-aligned two clips off a bad boundary would move
+    // the thing the coach came to look at without telling them.
+    const s = suggestSync(reps([1, 2, 3]), reps([5, 6, 7]));
+    expect(Object.keys(s!)).toEqual(expect.arrayContaining(["marks", "confidence", "because"]));
+    expect(shouldOfferSuggestion(s)).toBe(true);
+    expect(shouldOfferSuggestion(null)).toBe(false);
   });
 });

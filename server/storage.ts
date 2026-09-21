@@ -52,6 +52,7 @@ import {
   workoutComments,
   videoReviews,
   videoReviewEvents,
+  referenceClips,
   exerciseSubmissions,
   exerciseReports,
   apnsDeviceTokens,
@@ -21082,6 +21083,56 @@ ${catalog}`;
    * address a clip has before its set was ever saved, and what it falls back to after the day
    * moved on. Both go through the same ownership check: the row must hang off a log that is
    * this athlete's. */
+  // ---------- The coach's reference library (Phase 4) ----------
+
+  async listReferenceClips(coachId: number) {
+    // The coach's own plus their staff's -- getEffectiveCoachIds is what makes a head coach and
+    // their assistants share a library rather than each building their own.
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db
+      .select()
+      .from(referenceClips)
+      .where(inArray(referenceClips.coachId, coachIds))
+      .orderBy(desc(referenceClips.createdAt));
+  },
+
+  async createReferenceClip(input: {
+    coachId: number;
+    title: string;
+    movement?: string | null;
+    videoUrl: string;
+    source: "uploaded" | "from_athlete";
+    sourceAthleteId?: number | null;
+    notes?: string | null;
+  }) {
+    const [row] = await db
+      .insert(referenceClips)
+      .values({
+        coachId: input.coachId,
+        title: input.title,
+        movement: input.movement ?? null,
+        videoUrl: input.videoUrl,
+        source: input.source,
+        sourceAthleteId: input.sourceAthleteId ?? null,
+        notes: input.notes ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  async deleteReferenceClip(coachId: number, id: number): Promise<string | null> {
+    // Only the coach who made it, not the whole staff: a shared library that anybody can delete
+    // from is one where a head coach's teaching material disappears without a trace.
+    const [row] = await db
+      .select({ id: referenceClips.id, videoUrl: referenceClips.videoUrl })
+      .from(referenceClips)
+      .where(and(eq(referenceClips.id, id), eq(referenceClips.coachId, coachId)));
+    if (!row) return null;
+    await db.delete(referenceClips).where(eq(referenceClips.id, id));
+    // The caller deletes the file: the copy is the coach's and nothing else points at it.
+    return row.videoUrl;
+  },
+
   // ---------- Saved video reviews (Phase 2 of docs/video-review-plan.md) ----------
   //
   // Every read below resolves the caller against the review rather than trusting an id from the

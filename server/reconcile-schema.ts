@@ -3378,6 +3378,24 @@ CREATE TABLE IF NOT EXISTS "video_review_events" (
 CREATE INDEX IF NOT EXISTS "video_review_events_review_time_idx"
   ON "video_review_events" ("review_id", "t");
 
+-- 2026-09-21: the coach's reference library (Phase 4).
+--
+-- A reference taken from an athlete's clip COPIES the file. Pointing at theirs would either
+-- break when their retention cap purged it, or keep their footage alive after they asked for it
+-- to go. source_athlete_id is provenance, not a link.
+CREATE TABLE IF NOT EXISTS "reference_clips" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "title" text NOT NULL,
+  "movement" text,
+  "video_url" text NOT NULL,
+  "source" text NOT NULL DEFAULT 'uploaded',
+  "source_athlete_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "notes" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "reference_clips_coach_idx" ON "reference_clips" ("coach_id");
+
 -- 2026-09-20: voice-over on a review (Phase 3). Audio lives under STORAGE_PATH/reviews/ and
 -- dies with the review rather than with the athlete's clip cap.
 ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_url" text;
