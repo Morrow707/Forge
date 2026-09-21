@@ -1475,10 +1475,27 @@ export function setupAuth(app: Express) {
       // has to come from the device that started the attempt, which is what
       // matching the hash asserts.
       const deviceId = requestDeviceId(req);
+      // Whether this device actually BECAME trusted, which is not the same as the approval
+      // having been granted: a device that cannot identify itself gets the session the owner
+      // approved and is never remembered.
+      let becameTrusted = false;
       if (deviceId && hashDeviceId(deviceId) === row.deviceIdHash) {
         await trustDevice(user.id, deviceId, { deviceLabel: row.deviceLabel, ipAddress: row.ipAddress, location: row.location });
+        becameTrusted = true;
       }
-      if (user.mfaEnabled) {
+      // THE SAME RULE AS THE LOGIN PATH, AND IT WAS MISSED HERE FIRST TIME ROUND.
+      //
+      // mayShortCircuitMfa lets a trusted device skip the authenticator code, because the
+      // device is itself the second factor -- the owner proved it from their own inbox. This
+      // path is that proof happening RIGHT NOW: the approval was just granted by email and the
+      // device just claimed it. Asking for the code here demands a third factor at the exact
+      // moment the second one was established, which is the worst place to ask for it: the
+      // athlete has just been through the email round trip. Reported on-device 2026-09-21,
+      // still being asked after approving.
+      //
+      // Only when the device genuinely became trusted. A device that could not identify itself
+      // is not remembered, so it has no second factor and still owes the code.
+      if (user.mfaEnabled && !becameTrusted) {
         return res.json({ mfaRequired: true, mfaToken: signMfaPendingToken(user.id) });
       }
       completeLogin(req, res, next, user);

@@ -207,7 +207,20 @@ describe("a new device waits on the email", () => {
     expect(resend.status).toBe(400);
   });
 
-  it("an account with an authenticator meets the email first and the code second", async () => {
+  /**
+   * THE EMAIL IS THE SECOND FACTOR, SO THE CODE WOULD BE A THIRD.
+   *
+   * This asserted the opposite -- approve from the email, then still type the authenticator
+   * code -- and its old title said so: "meets the email first and the code second". Scott,
+   * 2026-09-21, after living it: "if I've already gone through the two verifications and am on
+   * a trusted device that's overkill."
+   *
+   * A device approved from the owner's own inbox is something they HAVE, proven at that moment.
+   * Password plus that device is already two factors. Asking for the code at the instant the
+   * second factor is established is the worst possible moment to ask, and it was pushing the
+   * owner through finite backup codes, which is a lockout waiting to happen.
+   */
+  it("an account with an authenticator is signed in by the approval itself", async () => {
     const user = await makeLoginableUser({ role: "coach", mfaEnabled: true, mfaSecret: "JBSWY3DPEHPK3PXP" });
     const laptop = new TestClient(server.baseUrl);
     const first = await laptop.login(user.email, TEST_PASSWORD);
@@ -217,9 +230,15 @@ describe("a new device waits on the email", () => {
     await new TestClient(server.baseUrl).post("/api/auth/device-approval/decide", { token, decision: "approve" });
     const claimed = await laptop.post("/api/auth/device-approval/complete", { pollToken: first.body.pollToken });
     expect(claimed.status).toBe(200);
-    expect(claimed.body.mfaRequired).toBe(true);
-    expect(typeof claimed.body.mfaToken).toBe("string");
-    expect(laptop.hasSessionCookie()).toBe(false);
+    // No third factor: the device that claimed the approval became trusted, so it is in.
+    expect(claimed.body.mfaRequired).toBeUndefined();
+    expect(laptop.hasSessionCookie()).toBe(true);
+
+    // ...and it stays in on the next sign-in, without the email or the code.
+    await laptop.post("/api/auth/logout");
+    const again = await laptop.login(user.email, TEST_PASSWORD);
+    expect(again.body.deviceApprovalRequired).toBeUndefined();
+    expect(again.body.mfaRequired).toBeUndefined();
   });
 
   it("a wrong password never reaches the device step or sends anything", async () => {
