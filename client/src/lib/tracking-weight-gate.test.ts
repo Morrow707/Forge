@@ -75,14 +75,20 @@ describe("the tracking report's membership test", () => {
   });
 
   it("still excludes a set that was never put through the camera", () => {
-    // Membership is any camera-derived column, and it is now built from the one classified list
-    // in shared/schema.ts rather than four columns named here. It used to name four, which
-    // between them describe bar-path and jump captures and nothing else -- see
-    // shared/camera-columns-are-classified.test.ts, which is where that list is actually
-    // guarded. What this file still pins is the SHAPE: the membership test reads the list.
-    expect(fn).toContain("CAMERA_DERIVED_SET_COLUMNS.map");
-    // A hand-logged set has none of those columns, which is what keeps this report from filling
-    // with sets nobody pointed a camera at -- and is why the program-row clause was redundant.
+    // Membership is built from the one classified list in shared/schema.ts rather than columns
+    // named here. It used to name four, which between them describe bar-path and jump captures
+    // and nothing else -- see shared/camera-columns-are-classified.test.ts, which is where that
+    // list is actually guarded. What this file pins is the SHAPE: the test reads a list.
+    //
+    // THE LIST IS NARROWER THAN "camera-derived", and this test's own title is why. Reading
+    // every camera-derived column included `captureDeviceInfo`, which describes the PHONE and
+    // is stamped when the camera is available rather than when a take is produced -- so sets
+    // the athlete had not performed appeared on the report reading "No data points recorded",
+    // which is exactly how a capture that ran and FAILED reads. Reported from a real session
+    // on 2026-09-21. A failed capture still qualifies through trackingDiagnostics, so this
+    // narrowing does not repeat the three silent drops this query has already suffered.
+    expect(fn).toContain("CAMERA_CAPTURE_EVIDENCE_COLUMNS.map");
+    expect(fn).not.toContain("CAMERA_DERIVED_SET_COLUMNS.map");
   });
 
   it("does not inner-join the set's identity away", () => {
