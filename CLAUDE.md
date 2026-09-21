@@ -189,9 +189,10 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- A `beta` was triggered on `main` at `8d1a4920` on 2026-09-21 for #158: the
-  tap-a-muscle history, the reader's-unit display, the date window, and
-  bodyweight-at-the-time scoring. Record the build number here when it lands.
+- Build **493** is the newest TestFlight build, cut from `8d1a4920` on 2026-09-21.
+  It carries #158: the tap-a-muscle lift history (Forge-official only), the
+  reader's-unit display with the date window, the demo-account device exemption,
+  and bodyweight-at-the-time scoring.
 - Build **492** was cut from `4f245a8` on 2026-09-21. It carries #157: the
   athlete's own cohort filter (gender and sport, on top of the age band).
 - Build **491** shipped from `1d5ecc8` the same day with #156: the strength
@@ -201,7 +202,7 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- **Nothing on `main` is waiting on an upload** beyond the #158 `beta` above, which is in flight.
+- **Nothing on `main` is waiting on an upload.**
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
