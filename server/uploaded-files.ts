@@ -255,7 +255,10 @@ export async function deleteUploadedFile(url: string | null | undefined): Promis
     return true;
   } catch (err: any) {
     if (err?.code === "ENOENT") return true;
-    console.error(`Failed to delete uploaded file at ${url}:`, err);
+    // The url is an ARGUMENT, never part of the format string. console.error treats its
+    // first argument as a printf format, so a url carrying "%s" would swallow `err` and the
+    // reason the delete failed would vanish out of the log -- from a path a caller supplies.
+    console.error("Failed to delete uploaded file at", url, err);
     return false;
   }
 }
@@ -366,7 +369,8 @@ export async function copyUploadedFile(
     return `/uploads/${destinationDir}/${filename}`;
   } catch (err: any) {
     if (err?.code === "ENOENT") return null;
-    console.error(`Failed to copy uploaded file ${sourceUrl}:`, err);
+    // Argument, not format string -- same reason as deleteUploadedFile above.
+    console.error("Failed to copy uploaded file", sourceUrl, err);
     return null;
   }
 }
