@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   normalizeDeviceId,
   approvalState,
@@ -7,6 +8,7 @@ import {
   isDeviceVerificationDisabled,
   hashDeviceId,
   TRUSTED_DEVICE_TTL_MS,
+  DEMO_ACCOUNT_EMAILS,
 } from "./device-trust-policy";
 import { NOINDEX_PREFIXES } from "@shared/public-routes";
 
@@ -59,7 +61,9 @@ describe("standing down", () => {
     process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS = "Review@Forge.app , demo@forge.app";
     expect(isDeviceVerificationExempt("review@forge.app")).toBe(true);
     expect(isDeviceVerificationExempt("demo@forge.app")).toBe(true);
-    expect(isDeviceVerificationExempt("coach@forge.app")).toBe(false);
+    // A seeded demo account is exempt with or without the variable, so it is no longer the
+    // example of "not on the list" -- see the demo-account block at the end of this file.
+    expect(isDeviceVerificationExempt("someone@else.test")).toBe(false);
     delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
     expect(isDeviceVerificationExempt("review@forge.app")).toBe(false);
   });
@@ -99,5 +103,45 @@ describe("the shape the code has to keep", () => {
     expect(auth).toMatch(/app\.get\("\/api\/auth\/device-approval\/review"/);
     expect(auth).toMatch(/app\.post\("\/api\/auth\/device-approval\/decide"/);
     expect(auth).not.toMatch(/app\.get\("\/api\/auth\/device-approval\/decide"/);
+  });
+});
+
+/**
+ * The three seeded demo accounts have addresses nothing delivers to, so the new-device email is
+ * a door with no key for them. This was an env var and one unset variable locked out App Review.
+ */
+describe("the demo accounts never meet the new-device email", () => {
+  const saved = process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
+    else process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS = saved;
+  });
+
+  it("exempts all three with no environment variable set at all", () => {
+    delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
+    for (const email of ["coach@forge.app", "athlete@forge.app", "freeagent@forge.app"]) {
+      expect(isDeviceVerificationExempt(email)).toBe(true);
+    }
+  });
+
+  it("matches the addresses the seed actually creates", () => {
+    // If the seed renames an account, the exemption has to move with it -- a stale literal here
+    // would read as covered while locking the real account out.
+    const seed = readFileSync(resolve(__dirname, "seed.ts"), "utf-8");
+    for (const email of DEMO_ACCOUNT_EMAILS) {
+      expect(seed).toContain(`"${email}"`);
+    }
+  });
+
+  it("is exact-match, so no real account falls into it", () => {
+    expect(isDeviceVerificationExempt("coach@forge.app.attacker.test")).toBe(false);
+    expect(isDeviceVerificationExempt("notcoach@forge.app")).toBe(false);
+    expect(isDeviceVerificationExempt("scott.morrow@live.com")).toBe(false);
+  });
+
+  it("still adds whatever the environment variable lists", () => {
+    process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS = "review@apple.test";
+    expect(isDeviceVerificationExempt("review@apple.test")).toBe(true);
+    expect(isDeviceVerificationExempt("coach@forge.app")).toBe(true);
   });
 });
