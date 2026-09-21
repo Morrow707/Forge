@@ -14,6 +14,9 @@ import {
   shouldOfferSuggestion,
   stepFrame,
   swapMarks,
+  trimmedTime,
+  hasTrim,
+  NO_TRIM,
 } from "./video-sync";
 
 /** THE COMPARE TOOL'S TIME MODEL, PINNED.
@@ -197,5 +200,34 @@ describe("suggestSync", () => {
     expect(Object.keys(s!)).toEqual(expect.arrayContaining(["marks", "confidence", "because"]));
     expect(shouldOfferSuggestion(s)).toBe(true);
     expect(shouldOfferSuggestion(null)).toBe(false);
+  });
+});
+
+describe("trim marks", () => {
+  it("loops back to the in point at the out point", () => {
+    // The whole reason trim marks exist: watch one rep over and over without cutting a file.
+    expect(trimmedTime(4.0, { in: 2, out: 4 }, 10)).toBe(2);
+    expect(trimmedTime(9.9, { in: 2, out: 4 }, 10)).toBe(2);
+  });
+
+  it("snaps a scrub that landed before the in point", () => {
+    expect(trimmedTime(0.5, { in: 2, out: 4 }, 10)).toBe(2);
+  });
+
+  it("leaves a time inside the range exactly alone", () => {
+    // Returned unchanged so the caller can compare and skip the seek. Reassigning currentTime
+    // every frame is what makes playback stutter on iOS.
+    expect(trimmedTime(3, { in: 2, out: 4 }, 10)).toBe(3);
+    expect(trimmedTime(3, NO_TRIM, 10)).toBe(3);
+  });
+
+  it("ignores an inverted or empty pair rather than swallowing the clip", () => {
+    // Somebody sets OUT before IN while scrubbing. A range that ends before it starts must
+    // not mean "play nothing" -- that reads as a broken video.
+    expect(trimmedTime(5, { in: 8, out: 2 }, 10)).toBe(5);
+    expect(hasTrim({ in: 8, out: 2 }, 10)).toBe(false);
+    expect(hasTrim(NO_TRIM, 10)).toBe(false);
+    expect(hasTrim({ in: 2, out: null }, 10)).toBe(true);
+    expect(hasTrim({ in: null, out: 4 }, 10)).toBe(true);
   });
 });

@@ -231,3 +231,41 @@ export function suggestSync(
 export function shouldOfferSuggestion(s: SyncSuggestion | null): s is SyncSuggestion {
   return s != null;
 }
+
+// ---------------------------------------------------------------------------
+// Trim marks (Phase 4 polish of docs/video-review-plan.md)
+// ---------------------------------------------------------------------------
+
+/** An in/out pair on one clip's own timeline. Either end may be unset. */
+export type TrimRange = { in: number | null; out: number | null };
+
+export const NO_TRIM: TrimRange = { in: null, out: null };
+
+/**
+ * Where playback should actually be, given a trim.
+ *
+ * TRIMMING NEVER RE-ENCODES ANYTHING. It is two numbers and a loop: the point is to watch the
+ * third rep over and over without cutting a file, so the clip on disk is untouched and the
+ * marks are free to move. Returning a time rather than calling seek keeps this testable and
+ * keeps the one-place-plays rule in the component intact.
+ *
+ * Returns the same time when there is nothing to do, so a caller can compare and skip the seek
+ * -- reassigning currentTime every frame is what makes iOS stutter.
+ */
+export function trimmedTime(t: number, trim: TrimRange, duration: number): number {
+  const start = trim.in ?? 0;
+  const end = trim.out ?? duration;
+  if (!(end > start)) return t;
+  // Past the out point loops back, which is the behaviour somebody setting marks on one rep
+  // is asking for. Before the in point is a scrub that landed outside; snap forward.
+  if (t >= end || t < start) return start;
+  return t;
+}
+
+/** Whether a trim actually constrains anything -- an unset pair, or an inverted one somebody
+ * made by putting OUT before IN, is not a trim and must not silently swallow the clip. */
+export function hasTrim(trim: TrimRange, duration: number): boolean {
+  const start = trim.in ?? 0;
+  const end = trim.out ?? duration;
+  return end > start && (trim.in != null || trim.out != null);
+}

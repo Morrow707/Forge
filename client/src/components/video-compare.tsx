@@ -15,6 +15,7 @@ import {
   X,
   Flag,
   Film,
+  Grid3x3,
 } from "lucide-react";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,10 @@ import { drawSkeleton, nearestSkeletonFrame } from "@/lib/skeleton-draw";
 import type { PoseFrame } from "@/lib/pose-tracking";
 import {
   COMPARE_SPEEDS,
+  NO_TRIM,
+  trimmedTime,
+  hasTrim,
+  type TrimRange,
   alignableReps,
   clampTime,
   driftToleranceSeconds,
@@ -166,6 +171,13 @@ export function VideoCompareDialog({
 
   // Which side is the ruler while linked: the side the last control was aimed at. The follower
   // is corrected towards it in the animation loop.
+  const [showGrid, setShowGrid] = useState(false);
+  /** Per side, because the two clips are different takes: the rep worth looping on one is not
+   * at the same second on the other. Phase 4 polish of docs/video-review-plan.md. */
+  const [trims, setTrims] = useState<{ left: TrimRange; right: TrimRange }>({
+    left: NO_TRIM,
+    right: NO_TRIM,
+  });
   const [savingReview, setSavingReview] = useState(false);
   const [editingReview, setEditingReview] = useState<
     { id: number; title: string; clipUrl: string; clipLabel: string } | null
@@ -221,6 +233,9 @@ export function VideoCompareDialog({
   }
 
   const masterRef = useRef<Side>("left");
+  // Read inside the rAF loop, which does not re-subscribe on every state change.
+  const trimsRef = useRef(trims);
+  trimsRef.current = trims;
   const linkedRef = useRef(linked);
   linkedRef.current = linked;
   const marksRef = useRef(marks);
@@ -387,6 +402,18 @@ export function VideoCompareDialog({
       }
 
       if (modeRef.current === "split") {
+        // TRIM. Two numbers and a loop, never a re-encode: the point is to watch one rep over
+        // and over, so the file on disk is untouched and the marks stay free to move. Applied
+        // here rather than at seek time because it has to hold during playback, which is when
+        // somebody is actually using it.
+        for (const side of ["left", "right"] as const) {
+          const v = side === "left" ? vl : vr;
+          if (!v) continue;
+          const want = trimmedTime(v.currentTime, trimsRef.current[side], v.duration || 0);
+          // Compared before assigning: writing currentTime every frame is what makes iOS
+          // stutter, and trimmedTime returns the same number when there is nothing to do.
+          if (want !== v.currentTime) v.currentTime = want;
+        }
         for (const side of ["left", "right"] as const) {
           const v = side === "left" ? vl : vr;
           const c = canvasRefs[side].current;
@@ -506,6 +533,52 @@ export function VideoCompareDialog({
     );
   }
 
+
+  /**
+   * KEYBOARD, ON WEB (Phase 4 polish of docs/video-review-plan.md).
+   *
+   * Space plays both, the arrows step a frame, and [ and ] set the sync marks -- which is the
+   * pair of keys anybody who has used a video editor reaches for, and the one action here that
+   * is genuinely fiddly with a mouse: marking a sync point means landing on a frame, and
+   * clicking a button moves the pointer off the thing you were looking at.
+   *
+   * Ignored while a text field has focus, or the filter box in the picker would swallow every
+   * letter into the transport.
+   */
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      const el = e.target as HTMLElement | null;
+      const typing =
+        el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || el?.isContentEditable === true;
+      if (typing) return;
+      switch (e.key) {
+        case " ":
+          e.preventDefault();
+          driveSides("both", playing.left || playing.right ? "pause" : "play");
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          step("both", 1);
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          step("both", -1);
+          break;
+        case "[":
+          markSync("left");
+          break;
+        case "]":
+          markSync("right");
+          break;
+        default:
+          break;
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   function sideHeader(side: Side) {
     const clip = clips[side];
     const frames = side === "left" ? leftFrames : rightFrames;
@@ -579,6 +652,47 @@ export function VideoCompareDialog({
             sync {fmtTime(side === "left" ? marks.syncL : marks.syncR)}
           </span>
         </div>
+        {/* TRIM: loop one rep without cutting the file. Per side, because the rep worth
+            looping is not at the same second on two different takes. */}
+        <div className="flex items-center gap-1.5 text-[10px] text-white/70">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setTrims((prev) => ({ ...prev, [side]: { ...prev[side], in: times[side] } }))}
+            className="rounded-full border border-white/20 px-2 py-0.5 font-semibold hover:text-white disabled:opacity-40"
+          >
+            Set in
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setTrims((prev) => ({ ...prev, [side]: { ...prev[side], out: times[side] } }))}
+            className="rounded-full border border-white/20 px-2 py-0.5 font-semibold hover:text-white disabled:opacity-40"
+          >
+            Set out
+          </button>
+          {hasTrim(trims[side], dur) ? (
+            <>
+              <span className="font-mono text-white/50">
+                {fmtTime(trims[side].in ?? 0)}–{fmtTime(trims[side].out ?? dur)} looping
+              </span>
+              <button
+                type="button"
+                onClick={() => setTrims((prev) => ({ ...prev, [side]: NO_TRIM }))}
+                className="underline hover:text-white"
+              >
+                clear
+              </button>
+            </>
+          ) : (
+            // Said rather than silently ignored: somebody who put OUT before IN has made a
+            // range that ends before it starts, and a clip that simply refused to play would
+            // read as broken video.
+            (trims[side].in != null || trims[side].out != null) && (
+              <span className="text-amber-300">out must come after in</span>
+            )
+          )}
+        </div>
         {clip && sideFooter ? <div>{sideFooter(clip, side)}</div> : null}
       </div>
     );
@@ -608,6 +722,21 @@ export function VideoCompareDialog({
           {videoEl(side)}
           {clip && !loadErrors[side] && (
             <canvas ref={canvasRefs[side]} className="pointer-events-none absolute inset-0 h-full w-full" />
+          )}
+          {/* An optional grid -- thirds, for judging whether a bar drifted or the CAMERA did.
+              Drawn in CSS rather than on the skeleton canvas so it never lands in an export or
+              a saved review: it is a viewing aid, not something the coach drew. */}
+          {showGrid && clip && !loadErrors[side] && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{
+                backgroundImage:
+                  "linear-gradient(to right, rgba(255,255,255,0.25) 1px, transparent 1px)," +
+                  "linear-gradient(to bottom, rgba(255,255,255,0.25) 1px, transparent 1px)",
+                backgroundSize: "33.333% 33.333%",
+              }}
+            />
           )}
         </div>
         {sideTransport(side)}
@@ -758,6 +887,16 @@ export function VideoCompareDialog({
                 disabled={!leftFrames.frames?.length && !rightFrames.frames?.length}
               >
                 Skeleton
+              </Button>
+              <Button
+                size="sm"
+                variant={showGrid ? "default" : "outline"}
+                className="h-7 text-xs"
+                aria-pressed={showGrid}
+                onClick={() => setShowGrid((g) => !g)}
+              >
+                <Grid3x3 className="h-3.5 w-3.5" />
+                Grid
               </Button>
               <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!clips.left && !clips.right} onClick={swapSides}>
                 <ArrowLeftRight className="h-3.5 w-3.5" />
