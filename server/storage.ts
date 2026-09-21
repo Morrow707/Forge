@@ -160,6 +160,10 @@ import {
 import { ageBandFor, ageBandBounds, NORM_MIN_COHORT } from "@shared/cohort-norms";
 import { ageFromDateOfBirth } from "@shared/privacy-tiers";
 import {
+  BROADEST_COHORT,
+  canNarrowByGender,
+  cohortDescription,
+  type CohortSelection,
   SCORABLE_MUSCLE_GROUPS,
   isScorableMuscleGroup,
   strengthRatio,
@@ -21666,7 +21670,10 @@ ${catalog}`;
    * Compared on the bodyweight-relative ratio, so it is a comparison of strength rather than
    * of who hit puberty first.
    */
-  async getStrengthPercentilesForAthlete(athleteId: number) {
+  async getStrengthPercentilesForAthlete(
+    athleteId: number,
+    selection: CohortSelection = BROADEST_COHORT,
+  ) {
     const athlete = await this.getUser(athleteId);
     if (!athlete) return null;
     const age = athlete.dateOfBirth ? ageFromDateOfBirth(athlete.dateOfBirth) : null;
@@ -21674,11 +21681,33 @@ ${catalog}`;
     const profile = await this.getStrengthProfileForAthlete(athleteId);
     if (!profile) return null;
 
+    // A filter the athlete cannot actually satisfy is silently dropped rather than producing
+    // an empty cohort: somebody with no sport recorded asking to narrow by sport would
+    // otherwise get "not enough athletes" forever with no way to tell why.
+    const narrowGender = selection.gender && canNarrowByGender(athlete.gender);
+    const narrowSport = selection.sport && Boolean(athlete.sport);
+    const applied: CohortSelection = { gender: narrowGender, sport: narrowSport };
+
     // No age band means no peer group -- an athlete with no date of birth is not compared to
     // everybody, they are simply not compared. Widening to "all ages" would put a fourteen
     // year old in with adults and call the result a percentile.
     if (!band || !profile.hasBodyweight) {
-      return { ageBand: band, cohortSize: 0, groups: profile.groups.map((g) => ({ ...g, percentile: null })) };
+      return {
+        ageBand: band,
+        cohortSize: 0,
+        requested: selection,
+        applied,
+        available: {
+          gender: canNarrowByGender(athlete.gender),
+          sport: Boolean(athlete.sport),
+        },
+        cohortLabel: cohortDescription(applied, {
+          ageBand: band,
+          gender: athlete.gender,
+          sport: athlete.sport,
+        }),
+        groups: profile.groups.map((g) => ({ ...g, percentile: null })),
+      };
     }
 
     const peers = await db.execute<{ muscle_group: string; ratio: number; user_id: number }>(sql`
@@ -21703,6 +21732,11 @@ ${catalog}`;
         -- resolves to nobody), but tracking opt-out does: an athlete who asked not to be
         -- measured is not quietly made part of the distribution either.
         AND u.tracking_opt_out = false
+        -- THE ATHLETE'S OWN NARROWING. Both are optional and both keep the 30 floor below, so
+        -- a filter can only ever make the number disappear, never make it describe a group too
+        -- small to be a distribution.
+        ${narrowGender ? sql`AND u.gender = ${athlete.gender}` : sql``}
+        ${narrowSport ? sql`AND u.sport = ${athlete.sport}` : sql``}
       GROUP BY e.muscle_group, u.id
     `);
 
@@ -21719,6 +21753,20 @@ ${catalog}`;
     return {
       ageBand: band,
       cohortSize: cohortMembers.size,
+      /** What was asked for, what was actually applied, and what could be offered -- the three
+       * differ whenever an athlete has no sport on file, and the UI has to be able to say so
+       * rather than showing a toggle that does nothing. */
+      requested: selection,
+      applied,
+      available: {
+        gender: canNarrowByGender(athlete.gender),
+        sport: Boolean(athlete.sport),
+      },
+      cohortLabel: cohortDescription(applied, {
+        ageBand: band,
+        gender: athlete.gender,
+        sport: athlete.sport,
+      }),
       groups: profile.groups.map((g) => {
         const peerRatios = byGroup.get(g.group) ?? [];
         // Per GROUP, not per cohort: thirty athletes in the age band does not mean thirty of

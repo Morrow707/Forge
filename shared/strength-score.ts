@@ -187,3 +187,82 @@ export function strengthRatio(
   if (e1rm == null) return null;
   return e1rm / bodyweightLbs;
 }
+
+// ---------------------------------------------------------------------------
+// The comparison cohort (2026-09-21)
+// ---------------------------------------------------------------------------
+
+/**
+ * WHICH ATHLETES THIS ONE IS BEING MEASURED AGAINST.
+ *
+ * The default is the broadest honest group: everyone on Forge in the same age band, whatever
+ * their sport, wherever they are. The athlete can NARROW it from there -- a seventeen-year-old
+ * can ask to stand against other seventeen-year-old males, or other seventeen-year-old male
+ * swimmers -- which is what makes the number fair to a distance runner instead of measuring
+ * them against linemen and calling it strength.
+ *
+ * WHY A FILTER IS SAFE HERE, when the Query Engine's differencing warning exists:
+ * that warning is about an ADMIN with arbitrary predicates and fifty queries a day, who can
+ * build two cohorts differing by one person. An athlete has two preset toggles. They cannot
+ * express "everyone except this teammate", and the 30 floor applies to EVERY view including
+ * the narrowed ones -- so the smallest group any comparison can describe is thirty people, and
+ * the difference between two views is a fact about aggregates rather than about anybody.
+ *
+ * Age band is NOT optional. It is the axis that makes the comparison mean anything at all: a
+ * fourteen-year-old measured against adults is not being given a percentile, they are being
+ * given a discouragement.
+ */
+export const COHORT_FILTERS = ["gender", "sport"] as const;
+export type CohortFilter = (typeof COHORT_FILTERS)[number];
+
+export type CohortSelection = {
+  /** Narrow to athletes of the same gender. */
+  gender: boolean;
+  /** Narrow to athletes playing the same sport. */
+  sport: boolean;
+};
+
+export const BROADEST_COHORT: CohortSelection = { gender: false, sport: false };
+
+/**
+ * What the card says it compared against. Written as a sentence rather than assembled from
+ * chips in the UI, so the claim and the query cannot drift into describing different groups.
+ */
+export function cohortDescription(
+  selection: CohortSelection,
+  parts: { ageBand: string | null; gender?: string | null; sport?: string | null },
+): string {
+  if (!parts.ageBand) return "athletes on Forge";
+  const bits: string[] = [];
+  if (selection.gender && parts.gender) bits.push(readableGender(parts.gender));
+  if (selection.sport && parts.sport) bits.push(parts.sport);
+  const who = bits.length > 0 ? `${bits.join(" ")} athletes` : "athletes";
+  return `${who} aged ${parts.ageBand}`;
+}
+
+/** The enum values are storage words; these are the words a person would use. */
+export function readableGender(value: string): string {
+  switch (value) {
+    case "male":
+      return "male";
+    case "female":
+      return "female";
+    default:
+      // non_binary and prefer_not_to_say are never used to narrow a cohort -- see
+      // canNarrowByGender. This exists so a stray value renders as something rather than
+      // "non_binary" appearing in a sentence about a child.
+      return "";
+  }
+}
+
+/**
+ * Whether the gender filter can be offered at all.
+ *
+ * Only male and female can narrow, and NOT because the other answers are less valid -- because
+ * a cohort of athletes who chose "prefer not to say" is a group defined by a privacy choice,
+ * and measuring somebody against it would turn that choice into a category. Those athletes get
+ * the broad comparison, which is the one everybody gets by default anyway.
+ */
+export function canNarrowByGender(gender: string | null | undefined): boolean {
+  return gender === "male" || gender === "female";
+}

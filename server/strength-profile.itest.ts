@@ -244,6 +244,63 @@ describe("the strength profile", () => {
     expect((await stranger.get(`/api/coach/roster/${athleteId}/strength-profile`)).status).toBe(404);
   });
 
+  it("narrows to the athlete's own gender when asked, and still needs the floor", async () => {
+    // A 17-year-old male seeing all 17-year-olds, then choosing males. The filter must
+    // actually change the pool: the females logged here are stronger, so if the filter were
+    // ignored the male athlete's percentile would be LOWER, not higher.
+    await logSet({ exerciseId: forgeSquat, weightLbs: 300, reps: 5 });
+    for (let i = 0; i < NORM_MIN_COHORT + 2; i++) {
+      const male = await makeLoginableUser({
+        role: "athlete",
+        dateOfBirth: "2004-06-01",
+        bodyWeightLbs: 180,
+        gender: "male",
+      });
+      await logSet({ exerciseId: forgeSquat, weightLbs: 100 + i, reps: 5, forAthlete: male.id });
+      const female = await makeLoginableUser({
+        role: "athlete",
+        dateOfBirth: "2004-06-01",
+        bodyWeightLbs: 180,
+        gender: "female",
+      });
+      await logSet({ exerciseId: forgeSquat, weightLbs: 400 + i, reps: 5, forAthlete: female.id });
+    }
+    await db.update(users).set({ gender: "male" }).where(eq(users.id, athleteId));
+
+    const broad = await athlete.get("/api/athlete/strength-profile");
+    const narrowed = await athlete.get("/api/athlete/strength-profile?gender=true");
+    const quadsOf = (body: any) =>
+      (body.groups as { group: string; percentile: number | null }[]).find((g) => g.group === "Quads");
+
+    // Against everyone the strong females drag this athlete down; against males alone they are
+    // near the top. Different pools, different answers -- which is the filter working.
+    expect(quadsOf(broad.body)!.percentile!).toBeLessThan(quadsOf(narrowed.body)!.percentile!);
+    expect(narrowed.body.cohortSize).toBeLessThan(broad.body.cohortSize);
+    expect(narrowed.body.cohortLabel).toContain("male");
+  });
+
+  it("drops a filter the athlete cannot satisfy instead of emptying the cohort", async () => {
+    // Somebody with no sport on file asking to narrow by sport would otherwise get "not
+    // enough athletes" forever, with nothing to say why.
+    await db.update(users).set({ sport: null }).where(eq(users.id, athleteId));
+    await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5 });
+    const res = await athlete.get("/api/athlete/strength-profile?sport=true");
+    expect(res.status).toBe(200);
+    expect(res.body.available.sport).toBe(false);
+    expect(res.body.cohortLabel).not.toContain("null");
+  });
+
+  it("never narrows by a gender answer that is a privacy choice", async () => {
+    // A cohort of athletes who chose "prefer not to say" is a group defined by that choice.
+    // Measuring somebody against it would turn the choice into a category.
+    await db.update(users).set({ gender: "prefer_not_to_say" }).where(eq(users.id, athleteId));
+    await logSet({ exerciseId: forgeSquat, weightLbs: 225, reps: 5 });
+    const res = await athlete.get("/api/athlete/strength-profile?gender=true");
+    expect(res.body.available.gender).toBe(false);
+    expect(res.body.cohortLabel).not.toContain("prefer_not_to_say");
+    await db.update(users).set({ gender: "male" }).where(eq(users.id, athleteId));
+  });
+
   it("refuses an unauthenticated caller", async () => {
     expect([401, 403]).toContain(
       (await fetch(`${server.baseUrl}/api/athlete/strength-profile`)).status,

@@ -5206,9 +5206,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // only comparison offered: a RANK would identify, and this platform has already learned once
   // what a leaderboard can give away (see leaderboard-teammate-privacy.itest.ts).
 
+  // The athlete narrows their own comparison: all athletes their age by default, then their
+  // own gender, then their own sport. Every narrowed view still has to clear the same cohort
+  // floor, so a filter can only ever make the number disappear -- never make it describe a
+  // group too small to be a distribution.
+  const cohortQuerySchema = z.object({
+    gender: z.coerce.boolean().optional().default(false),
+    sport: z.coerce.boolean().optional().default(false),
+  });
+
   app.get("/api/athlete/strength-profile", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
     const user = currentUser(req);
-    const profile = await storage.getStrengthPercentilesForAthlete(user.id);
+    const parsed = cohortQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const profile = await storage.getStrengthPercentilesForAthlete(user.id, parsed.data);
     if (!profile) return res.status(404).json({ message: "No profile" });
     res.json(profile);
   });
@@ -5220,7 +5233,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athleteId = Number(req.params.athleteId);
     const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
     if (!athlete) return res.status(404).json({ message: "Athlete not found" });
-    res.json(await storage.getStrengthPercentilesForAthlete(athleteId));
+    const parsed = cohortQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    res.json(await storage.getStrengthPercentilesForAthlete(athleteId, parsed.data));
   });
 
   // ---------- The cue library (Phase 4b of docs/video-review-plan.md) ----------
