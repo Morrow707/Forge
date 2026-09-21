@@ -2746,6 +2746,37 @@ export function WorkoutPage({
   );
 }
 
+/** One phase of the post-record wait, with its own number.
+ *
+ * Two of these stack: Processing (Vision analysis) and Saving (the upload). They are separate
+ * because they are separate waits -- they overlap in time, they fail independently, and the
+ * athlete's question is which one they are in. A phase with no percentage yet shows an
+ * indeterminate bar rather than 0%, because "not started" and "started, nothing done" are
+ * different states and 0% claims the second one. */
+function ProcessingPhaseBar({
+  label,
+  percent,
+  done,
+}: {
+  label: string;
+  percent: number | undefined;
+  done: boolean;
+}) {
+  const shown = done ? 100 : percent;
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="w-[58px] shrink-0 text-left">{label}</span>
+      <span className="relative h-1 w-16 overflow-hidden rounded-full bg-primary/20">
+        <span
+          className="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-200"
+          style={{ width: `${shown ?? 0}%` }}
+        />
+      </span>
+      <span className="w-8 shrink-0 tabular-nums text-right">{shown != null ? `${shown}%` : "--"}</span>
+    </span>
+  );
+}
+
 function ExerciseLogContent({
   item,
   linked,
@@ -2837,6 +2868,13 @@ function ExerciseLogContent({
   // "Processing…" indicator below can show real progress instead of a bare spinner for however
   // long analysis+upload takes.
   const [processingProgress, setProcessingProgress] = useState<Record<number, number>>({});
+  // THE OTHER HALF OF THE WAIT. processingProgress above is the UPLOAD; this is the analysis,
+  // which is the slower of the two and showed no number at all until now. Two maps rather than
+  // one shared percentage, because the athlete's question is which half they are waiting on and
+  // a single bar cannot answer it -- asked twice: "I asked you to put a save bar as well, still
+  // only shows the processing bar", then "I want a processing percentage, and a saving
+  // percentage, so it should be two bars not just the one".
+  const [analysisProgress, setAnalysisProgress] = useState<Record<number, number>>({});
   // Which key this exercise's profile lives under. bar_path/full look it up by the
   // exercise's own movementType, because their thresholds really are lift-pattern
   // judgments (knee depth, torso lean, bar drift) shared by every squat or every
@@ -3580,18 +3618,25 @@ function ExerciseLogContent({
                       // onAnalysisStarted/onProcessingSettled above). Disabled rather than the
                       // normal button so a second tap can't start a new take for the same set
                       // number while this one's still in flight.
-                      <span className="flex items-center gap-1.5 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-semibold text-primary/70">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        {/* TWO PHASES, NAMED. One bar was doing the work of two and wearing
-                            the wrong label: the percentage here has only ever been fed by
-                            onUploadProgress, so "Processing… 79%" was really the SAVE at 79%,
-                            and analysis -- the slower half -- showed no number at all. Reported
-                            2026-09-21: "still only shows the processing bar". A percentage that
-                            appears is the upload having started, which is exactly the signal
-                            needed to tell the athlete which half they are waiting on. */}
-                        {processingProgress[set.setNumber] != null
-                          ? `Saving… ${processingProgress[set.setNumber]}%`
-                          : "Analyzing…"}
+                      <span className="flex flex-col gap-1 rounded-lg border border-primary/40 px-2 py-1 text-[10px] font-semibold text-primary/70">
+                        {/* TWO PHASES, TWO BARS, EACH WITH ITS OWN NUMBER. One bar was doing
+                            the work of two and wearing the wrong label: its percentage was
+                            only ever fed by onUploadProgress, so "Processing… 79%" was really
+                            the SAVE at 79% and analysis -- the slower half -- showed no number
+                            at all. Analysis now reports its own progress from each frame's
+                            timestamp against the length of the take (see
+                            use-av-body-tracking's onAnalysisProgress), so both waits are
+                            visible and the athlete can see which one they are in. */}
+                        <ProcessingPhaseBar
+                          label="Processing"
+                          percent={analysisProgress[set.setNumber]}
+                          // Analysis is finished the moment the upload starts reporting: the
+                          // two run concurrently, but a save cannot begin before the blob
+                          // exists. Without this the analysis bar would sit at its last frame's
+                          // 99% for the whole upload.
+                          done={processingProgress[set.setNumber] != null}
+                        />
+                        <ProcessingPhaseBar label="Saving" percent={processingProgress[set.setNumber]} done={false} />
                       </span>
                     )}
                     {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
@@ -4319,9 +4364,19 @@ function ExerciseLogContent({
                     const { [setNumber]: _removed, ...rest } = prev;
                     return rest;
                   });
+                  // Both phases clear together -- a leftover analysis percentage would show up
+                  // on the NEXT take of this set number as a bar already part-full.
+                  setAnalysisProgress((prev) => {
+                    if (!(setNumber in prev)) return prev;
+                    const { [setNumber]: _removedAnalysis, ...rest } = prev;
+                    return rest;
+                  });
                 }}
                 onUploadProgress={(setNumber, percent) =>
                   setProcessingProgress((prev) => ({ ...prev, [setNumber]: percent }))
+                }
+                onAnalysisProgress={(setNumber, percent) =>
+                  setAnalysisProgress((prev) => ({ ...prev, [setNumber]: percent }))
                 }
                 onCapture={handleTrackerCapture}
                 videoContext={videoContextFor(trackingSet)}
@@ -4371,9 +4426,19 @@ function ExerciseLogContent({
                     const { [setNumber]: _removed, ...rest } = prev;
                     return rest;
                   });
+                  // Both phases clear together -- a leftover analysis percentage would show up
+                  // on the NEXT take of this set number as a bar already part-full.
+                  setAnalysisProgress((prev) => {
+                    if (!(setNumber in prev)) return prev;
+                    const { [setNumber]: _removedAnalysis, ...rest } = prev;
+                    return rest;
+                  });
                 }}
                 onUploadProgress={(setNumber, percent) =>
                   setProcessingProgress((prev) => ({ ...prev, [setNumber]: percent }))
+                }
+                onAnalysisProgress={(setNumber, percent) =>
+                  setAnalysisProgress((prev) => ({ ...prev, [setNumber]: percent }))
                 }
                 onCapture={handleTrackerCapture}
                 videoContext={videoContextFor(trackingSet)}

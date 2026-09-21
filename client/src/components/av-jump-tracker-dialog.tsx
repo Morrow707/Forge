@@ -79,6 +79,7 @@ export function AvJumpTrackerDialog({
   onAnalysisStarted,
   onProcessingSettled,
   onUploadProgress,
+  onAnalysisProgress,
   onCapture,
   videoContext,
   formFaultThresholds,
@@ -109,6 +110,11 @@ export function AvJumpTrackerDialog({
   onAnalysisStarted: (setNumber: number) => void;
   onProcessingSettled: (setNumber: number) => void;
   onUploadProgress?: (setNumber: number, percent: number) => void;
+  // THE OTHER HALF OF THE WAIT, REPORTED SEPARATELY. onUploadProgress is the save; this is the
+  // analysis, which is the slower of the two and until now showed no number at all. Two
+  // callbacks rather than one shared percentage, because the athlete is asking which half they
+  // are waiting on, and one bar cannot answer that.
+  onAnalysisProgress?: (setNumber: number, percent: number) => void;
   onCapture: (metrics: JumpSetMetrics, videoUrl?: string, setNumber?: number, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
   formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
@@ -167,6 +173,7 @@ export function AvJumpTrackerDialog({
       // in-flight upload rather than starting a fresh one.
       let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
       const result = await stopRecordingAndAnalyze({
+        onAnalysisProgress: (percent) => onAnalysisProgress?.(forSetNumber, percent),
         detectBox: usesBox === true,
         // Always provided now (not just when recordVideo) -- see AvBarTrackerDialog's own
         // identical comment: recording has stopped and analysis is about to start regardless

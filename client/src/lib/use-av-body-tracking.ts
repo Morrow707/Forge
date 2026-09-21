@@ -77,6 +77,15 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   const [analyzedFrames, setAnalyzedFrames] = useState(0);
 
   const recordingPathRef = useRef<string | null>(null);
+  // Wall-clock length of the take, captured at stop. ANALYSIS PROGRESS IS MEASURED AGAINST IT.
+  //
+  // The native side reports no progress of its own, but every sampled frame already arrives as
+  // a poseFrame carrying its own timestamp in seconds from the start of the clip -- so how far
+  // into the take the analysis has reached is on the wire already, and dividing it by how long
+  // the athlete actually filmed turns it into a real percentage instead of a spinner. Nothing
+  // native has to change for this, which is why it lives here.
+  const recordedSecondsRef = useRef<number | null>(null);
+  const recordStartedAtRef = useRef<number | null>(null);
   // Distinguishes an analysis that failed for a real reason from one that stopped because
   // cancelAnalysis() was called -- analyzeAvRecording's promise rejects either way (see its
   // own comment), and only the former should surface as an `error` state.
@@ -262,6 +271,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   function startRecording(options?: { detectBox?: boolean; trackingMode?: string }) {
     setError(null);
     setRecording(true);
+    recordStartedAtRef.current = Date.now();
     startAvRecording({
       liveAnalysis: options != null,
       sampleEveryNthFrame: ANALYSIS_SAMPLE_STRIDE,
@@ -315,6 +325,11 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     // hook; a caller that doesn't pass it loses nothing (nothing changes from before this
     // existed).
     onBlobReady?: (blob: Blob) => void;
+    // ANALYSIS PROGRESS, 0-99, AND IT IS NOT THE UPLOAD'S. Derived from each poseFrame's own
+    // timestamp against the length of the take. Separate from onUploadProgress on purpose:
+    // they are two different waits, and one bar wearing both labels was reported twice as
+    // "still only shows the processing bar".
+    onAnalysisProgress?: (percent: number) => void;
   }): Promise<
     | {
         blob: Blob;
@@ -338,6 +353,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     detectBox?: boolean;
     trackingMode?: string;
     onBlobReady?: (blob: Blob) => void;
+    onAnalysisProgress?: (percent: number) => void;
   }): Promise<
     | {
         blob: Blob;
@@ -367,10 +383,24 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       return null;
     }
     recordingPathRef.current = path;
+    recordedSecondsRef.current =
+      recordStartedAtRef.current != null ? (Date.now() - recordStartedAtRef.current) / 1000 : null;
     options?.onBlobReady?.(blob);
 
     const rawFrames: NativePoseFrame[] = [];
     const unsubscribe = onAvPoseFrame((frame) => {
+      // BEFORE the tracked check, deliberately. Progress means "how far through the clip has
+      // the analysis got", and a frame Vision found no body in is just as analyzed as one it
+      // did -- gating this on `tracked` would make the bar crawl on exactly the takes that are
+      // hardest to read, which is when the athlete most needs to see something happening.
+      const totalSeconds = recordedSecondsRef.current;
+      if (options?.onAnalysisProgress && totalSeconds != null && totalSeconds > 0) {
+        // Never 100 from here: the last sampled frame is not the end of the work (the summary,
+        // the metrics and the diagnostics all follow it), and a bar sitting full while the
+        // athlete still waits is worse than one that stops at 99.
+        const percent = Math.max(0, Math.min(99, Math.round((frame.timestamp / totalSeconds) * 100)));
+        options.onAnalysisProgress(percent);
+      }
       if (!frame.tracked) return;
       rawFrames.push(frame);
       setAnalyzedFrames((n) => n + 1);

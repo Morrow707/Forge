@@ -1338,13 +1338,51 @@ export function setupAuth(app: Express) {
     return gate.kind === "trusted" && gate.recognized === true;
   }
 
+  /** The gate stands down from the EMAIL, and still remembers the device.
+   *
+   * See the call sites for why the two were conflated and what it cost. First sight of a
+   * device here is trusted silently and still returns recognized:false, so that one sign-in
+   * meets the authenticator code; every sign-in after it is recognised and skips it. */
+  async function standDownButRememberDevice(
+    req: any,
+    user: { id: number; email: string; name: string },
+  ): Promise<DeviceGate> {
+    const deviceId = requestDeviceId(req);
+    if (!deviceId) return { kind: "trusted", recognized: false };
+    const known = await findTrustedDevice(user.id, deviceId);
+    if (known) {
+      await touchTrustedDevice(known.id);
+      return { kind: "trusted", recognized: true };
+    }
+    // Best-effort: failing to record the device must never fail a sign-in that was otherwise
+    // going to succeed. The cost of a miss is one more code next time, not a lockout.
+    await trustDevice(user.id, deviceId, deviceMeta(req)).catch(() => {});
+    return { kind: "trusted", recognized: false };
+  }
+
   // Password was right. Is this a device we know? See trusted-devices.ts for
   // the rule; this is where it is applied, and it runs BEFORE the
   // authenticator step so a stolen password meets the inbox first.
   async function deviceGate(req: any, user: { id: number; email: string; name: string }): Promise<DeviceGate> {
-    // Standing down, not recognising. recognized:false keeps the authenticator code in place.
+    // STANDING DOWN FROM THE EMAIL IS NOT THE SAME AS REFUSING TO REMEMBER THE DEVICE.
+    //
+    // This branch used to return before the device lookup below, which had a consequence
+    // nobody intended: an exempt account could never be `recognized`, so mayShortCircuitMfa
+    // was false on EVERY sign-in, so an MFA-enabled exempt account was asked for an
+    // authenticator code forever, on a device it had signed in from a dozen times. Reported
+    // 2026-09-21 on the admin account, which had just been added to the exemption list to get
+    // around a broken approval link: "I've uploaded 3 backup codes and two of the
+    // authentication codes, why isn't it saving my device?" -- it wasn't, and the exemption
+    // meant for the email step is what stopped it.
+    //
+    // The three stand-down reasons (the kill switch, an exempt account, no email provider)
+    // all mean "the question cannot or should not go to the inbox". None of them mean "do not
+    // record where this person signs in from". So the lookup still runs: a device seen before
+    // is recognised and skips the code, and a device seen for the FIRST time is trusted
+    // silently but still meets the code once -- nothing has confirmed the holder is the owner
+    // yet, and there is no inbox here to ask.
     if (isDeviceVerificationDisabled() || isDeviceVerificationExempt(user.email)) {
-      return { kind: "trusted", recognized: false };
+      return await standDownButRememberDevice(req, user);
     }
     if (!isEmailConfigured()) {
       // A dev box with no Resend key. Locking every login here would help
@@ -1353,7 +1391,7 @@ export function setupAuth(app: Express) {
         warnedNoEmailForDeviceGate = true;
         console.warn("New-device approval is standing down: no email provider is configured, so the approval email could not be sent.");
       }
-      return { kind: "trusted", recognized: false };
+      return await standDownButRememberDevice(req, user);
     }
     const deviceId = requestDeviceId(req);
     if (deviceId) {

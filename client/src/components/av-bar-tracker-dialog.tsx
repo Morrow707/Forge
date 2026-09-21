@@ -468,6 +468,7 @@ export function AvBarTrackerDialog({
   formFaultThresholds,
   positionScaleCorrection,
   onUploadProgress,
+  onAnalysisProgress,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -517,6 +518,11 @@ export function AvBarTrackerDialog({
   // indicator that replaces this dialog once it's closed, instead of a bare "Processing..."
   // with no further detail for however long analysis+upload takes.
   onUploadProgress?: (setNumber: number, percent: number) => void;
+  // THE OTHER HALF OF THE WAIT, REPORTED SEPARATELY. onUploadProgress is the save; this is the
+  // analysis, which is the slower of the two and until now showed no number at all. Two
+  // callbacks rather than one shared percentage, because the athlete is asking which half they
+  // are waiting on, and one bar cannot answer that.
+  onAnalysisProgress?: (setNumber: number, percent: number) => void;
 }) {
   const filmGuidance = filmGuidanceForExercise(exerciseName);
   // Where to film from is the one instruction that decides whether the take is measurable at
@@ -778,6 +784,7 @@ export function AvBarTrackerDialog({
       // this same in-flight upload instead of starting a fresh one once they're ready for it.
       let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
       const result = await stopRecordingAndAnalyze({
+        onAnalysisProgress: (percent) => onAnalysisProgress?.(forSetNumber, percent),
         trackingMode: coreMlTrackingMode,
         // Always provided now (not just when recordVideo) -- recording has stopped and the slow
         // on-device analysis pass is about to start regardless of whether a video gets uploaded,

@@ -3,30 +3,51 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const workout = readFileSync(resolve(__dirname, "../pages/workout.tsx"), "utf-8");
+const hook = readFileSync(resolve(__dirname, "./use-av-body-tracking.ts"), "utf-8");
 
 /**
- * The athlete waits through two phases and only ever saw one name. The percentage is fed
- * exclusively by onUploadProgress, so "Processing... 79%" was the SAVE at 79% while analysis --
- * the slower half -- showed no number. Reported on-device: "still only shows the processing bar."
+ * TWO WAITS, TWO BARS, TWO NUMBERS.
+ *
+ * The athlete waits through analysis and then a save, and for a long time saw one bar whose
+ * percentage was fed only by onUploadProgress -- so "Processing... 79%" was really the SAVE at
+ * 79%, and analysis, the slower half, showed no number at all. Naming the two phases was the
+ * first fix and was not enough: "I want a processing percentage, and a saving percentage, so it
+ * should be two bars not just the one."
  */
-describe("the wait is named for what it is doing", () => {
-  it("calls the upload phase saving, with its percentage", () => {
-    expect(workout).toContain("`Saving… ${processingProgress[set.setNumber]}%`");
+describe("both halves of the wait have their own bar", () => {
+  it("draws a phase bar for each of the two waits", () => {
+    expect(workout).toContain('<ProcessingPhaseBar\n                          label="Processing"');
+    expect(workout).toContain('<ProcessingPhaseBar label="Saving"');
   });
 
-  it("calls the analysis phase analyzing", () => {
-    expect(workout).toContain('"Analyzing…"');
-  });
-
-  it("no longer labels both phases the same thing", () => {
-    expect(workout).not.toContain("`Processing… ${processingProgress[set.setNumber]}%`");
-  });
-
-  it("still only feeds the percentage from real upload progress", () => {
-    // A percentage invented for the analysis phase would be a progress bar that lies, which is
-    // worse than one that is absent -- the whole complaint here was not knowing which half.
-    const feeds = workout.match(/setProcessingProgress\(\(prev\) => \(\{ \.\.\.prev, \[setNumber\]: percent \}\)\)/g);
-    expect(feeds?.length).toBeGreaterThanOrEqual(1);
+  it("feeds them from two different sources", () => {
+    // The whole complaint was one number standing in for two. If both bars read the same map
+    // again, that is the same bug with twice the furniture.
+    expect(workout).toContain("percent={analysisProgress[set.setNumber]}");
+    expect(workout).toContain("percent={processingProgress[set.setNumber]}");
+    expect(workout).toContain("onAnalysisProgress={(setNumber, percent) =>");
     expect(workout).toContain("onUploadProgress={(setNumber, percent) =>");
+  });
+
+  it("never invents the analysis percentage", () => {
+    // A progress bar that lies is worse than one that is absent. This number is measured: every
+    // sampled frame arrives carrying its own timestamp into the clip, and it is divided by how
+    // long the athlete actually filmed. No timer, no easing, no fabricated ramp.
+    expect(hook).toContain("Math.round((frame.timestamp / totalSeconds) * 100)");
+    expect(hook).toContain("const totalSeconds = recordedSecondsRef.current;");
+  });
+
+  it("does not let the analysis bar reach 100 on its own", () => {
+    // The last sampled frame is not the end of the work -- the summary, the metrics and the
+    // diagnostics all follow it. A bar sitting full while the athlete still waits is its own
+    // kind of lie, so analysis is capped at 99 and only completes when the upload starts.
+    expect(hook).toContain("Math.min(99,");
+    expect(workout).toContain("done={processingProgress[set.setNumber] != null}");
+  });
+
+  it("clears both phases together", () => {
+    // A leftover analysis percentage shows up on the NEXT take of this set number as a bar
+    // that is already part-full.
+    expect(workout).toContain("setAnalysisProgress((prev) => {");
   });
 });
