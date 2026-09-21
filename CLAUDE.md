@@ -300,6 +300,21 @@ them will read as an arbitrary constraint to somebody who wasn't here:
   file asking to narrow by sport would otherwise meet "not enough athletes" forever with
   nothing to explain why. The response carries `available` so the UI hides a toggle rather
   than drawing one that does nothing.
+- **The body map is a CONTROL in both places it is drawn, and the two taps do different jobs.**
+  In the exercise picker a tap filters exercises; in the strength profile a tap opens what was
+  actually lifted for that area (date, lift, reps x weight, nothing more). The scored list beside
+  the figure opens the same sheet, because several scorable groups have no drawn region and a
+  map-only entry point would make their history unreachable.
+- **The muscle-group history is FORGE-OFFICIAL ONLY, and it says so on screen.** Scott,
+  2026-09-21: "only forge specific exercises, not coach created exercises" -- which overruled the
+  recommendation to show every lift. It is also structurally required: the history sits under the
+  percentile, so if it widened to coach-created exercises a tap could show a lift heavier than the
+  one the score was computed from and the score would read as broken rather than as scoped.
+  Enforced in the SQL (`getMuscleGroupHistoryForAthlete`), stated in the dialog so a missing lift
+  reads as a rule rather than as lost data. The history URL is DERIVED from the profile URL
+  (`strength-profile` -> `muscle-history`) so a caller cannot wire an athlete's own history behind
+  a coach's roster-scoped profile by getting one prop right and the other wrong.
+
 - **The cohort sentence comes from the SERVER** (`cohortLabel`). A client that assembled its
   own description could drift from the group the query actually used, and the drift would be
   invisible.

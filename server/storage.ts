@@ -21655,6 +21655,79 @@ ${catalog}`;
   },
 
   /**
+   * THE LIFTS BEHIND ONE MUSCLE GROUP'S SCORE -- date, exercise, reps and weight, nothing more.
+   *
+   * This is the readback for tapping a muscle on the body map: "what did I actually do for
+   * this?" It is deliberately NOT another analytics surface -- no velocity, no bar path, no
+   * trend line. Those exist elsewhere and are camera-derived.
+   *
+   * FORGE-OFFICIAL EXERCISES ONLY, matching getStrengthProfileForAthlete exactly. Scott,
+   * 2026-09-21: "only forge specific exercises, not coach created exercises". The history has
+   * to be drawn from the same population as the score above it, or tapping a group would show
+   * a coach-created lift heavier than the one the percentile was computed from, and the number
+   * would read as broken. The UI says the rule out loud so an absent lift reads as a rule
+   * rather than as lost data.
+   *
+   * Hand-logged weight and reps only, same as the score -- a camera number is uncalibrated and
+   * has no business in a list somebody reads as a record of what they lifted.
+   */
+  async getMuscleGroupHistoryForAthlete(athleteId: number, muscleGroup: string, limit = 50) {
+    if (!isScorableMuscleGroup(muscleGroup)) return [];
+
+    const rows = await db.execute<{
+      logged_on: string;
+      exercise_name: string;
+      weight_lbs: number;
+      reps_count: number;
+      set_number: number;
+    }>(sql`
+      SELECT wl.date::text AS logged_on, e.name AS exercise_name,
+        wse.weight_lbs, wse.reps_count, wse.set_number
+      FROM workout_set_entries wse
+      JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+      JOIN workout_logs wl ON wl.id = wle.workout_log_id
+      JOIN exercises e ON e.id = wle.exercise_id
+      WHERE wl.athlete_id = ${athleteId}
+        AND e.muscle_group = ${muscleGroup}
+        AND e.is_forge_official = true
+        AND wse.weight_lbs IS NOT NULL
+        AND wse.reps_count IS NOT NULL
+        AND wse.weight_lbs > 0
+        AND wse.reps_count > 0
+      ORDER BY wl.date DESC, wse.set_number ASC
+      LIMIT ${limit}
+    `);
+
+    // The best estimated max in the window is marked so the list has an anchor -- it is the
+    // lift the percentile above it was computed from, which is the question somebody taps the
+    // muscle to ask. Reps past the scoring cap are shown but can never be the best: Epley
+    // past twelve turns endurance into a maximal claim, which is why the score refuses them.
+    let bestIdx = -1;
+    let bestEst = -Infinity;
+    const mapped = (rows.rows ?? []).map((r, i) => {
+      const weightLbs = Number(r.weight_lbs);
+      const reps = Number(r.reps_count);
+      const scorable = reps <= MAX_SCORING_REPS;
+      const est = scorable ? weightLbs * (1 + reps / 30) : null;
+      if (est != null && est > bestEst) {
+        bestEst = est;
+        bestIdx = i;
+      }
+      return {
+        date: r.logged_on,
+        exerciseName: r.exercise_name,
+        weightLbs,
+        reps,
+        setNumber: Number(r.set_number),
+        countsTowardScore: scorable,
+        isBest: false,
+      };
+    });
+    if (bestIdx >= 0) mapped[bestIdx].isBest = true;
+    return mapped;
+  },
+
+  /**
    * WHERE THIS ATHLETE SITS AMONG PEERS THE SAME AGE -- as a percentile, never as a rank.
    *
    * A rank identifies. "#4 of 11 in 16-17" plus a coach who knows their roster is a name, and

@@ -5240,6 +5240,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(await storage.getStrengthPercentilesForAthlete(athleteId, parsed.data));
   });
 
+  // Tapping a muscle on the body map asks "what did I actually lift for this?". Same
+  // Forge-official-only population as the score above it -- see
+  // getMuscleGroupHistoryForAthlete for why the two cannot differ.
+  const muscleHistoryQuerySchema = z.object({ group: z.string().min(1) });
+
+  app.get("/api/athlete/muscle-history", requireRole(["athlete", "coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = muscleHistoryQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "group query param required" });
+    }
+    res.json(await storage.getMuscleGroupHistoryForAthlete(user.id, parsed.data.group));
+  });
+
+  app.get("/api/coach/roster/:athleteId/muscle-history", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const athlete = await storage.getRosterAthleteForCoach(user.id, athleteId);
+    if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    const parsed = muscleHistoryQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "group query param required" });
+    }
+    res.json(await storage.getMuscleGroupHistoryForAthlete(athleteId, parsed.data.group));
+  });
+
   // ---------- The cue library (Phase 4b of docs/video-review-plan.md) ----------
   //
   // A cue dropped onto a timeline becomes an ordinary `cue` event carrying a COPY of its text.
