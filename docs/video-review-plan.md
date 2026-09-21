@@ -289,7 +289,11 @@ Everything else in this file is unstarted. Build 488 is on TestFlight; #154 (SEO
 - [ ] Phase 2: saved reviews with timed drawings, shared as a comment
 - [ ] Phase 3: voice-over
 - [ ] Phase 4: reference library, zoom/pan, auto-sync, trim
-- [ ] Phase 4b: you-versus-you, review queue, cue library, review-to-program, self-review, 120 fps
+- [x] Phase 4b.1: you versus you (prior-clip routes, the picker's first suggestion)
+- [x] Phase 4b.2: review queue (athlete asks, coach queue oldest-first, resolve on share)
+- [x] Phase 4b.3: cue library (coach_cues, the drawer, a `cue` event carrying a copy of the text)
+- [x] Phase 4b.4: review to program (a per-athlete corrective on their next unlogged day)
+- [ ] Phase 4b: self-review, 120 fps
 - [ ] Phase 5: export and share
 - [ ] Phase 5b: analyse while recording (native, needs a phone)
 - [ ] Phase 6: AI draft notes (only if asked)

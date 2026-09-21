@@ -51,7 +51,9 @@ import {
   workoutSetEntries,
   workoutComments,
   videoReviews,
+  coachCues,
   videoReviewEvents,
+  videoReviewRequests,
   referenceClips,
   exerciseSubmissions,
   exerciseReports,
@@ -21133,6 +21135,181 @@ ${catalog}`;
     return row.videoUrl;
   },
 
+  // ---------- Review to program (Phase 4b of docs/video-review-plan.md) ----------
+
+  /**
+   * "Add a corrective" from a saved review: the drill lands on the athlete's next training day.
+   *
+   * It is written to `assignment_correctives`, NOT to `program_exercises` as the plan said. A
+   * program day is shared by every athlete on that program, so appending there would give the
+   * whole squad a drill prescribed for one person's knee. The correctives table is the existing
+   * per-athlete vehicle for exactly this and already renders inside the athlete's day.
+   *
+   * "Next" is the earliest non-rest day of their newest assignment that has no workout log yet.
+   * That is what an athlete opens next, whatever the calendar says -- somebody a week behind
+   * should get the drill on the session they actually do, not on one that has already gone by.
+   */
+  async addCorrectiveFromReview(
+    coachId: number,
+    reviewId: number,
+    input: { exerciseId: number; sets?: number; reps?: string; notes?: string | null },
+  ): Promise<
+    | { ok: true; corrective: typeof assignmentCorrectives.$inferSelect; programDayId: number }
+    | { ok: false; reason: "no_review" | "no_athlete" | "no_upcoming_day" }
+  > {
+    const review = await this.getVideoReviewForCoach(coachId, reviewId);
+    if (!review) return { ok: false, reason: "no_review" };
+    if (review.athleteId == null) return { ok: false, reason: "no_athlete" };
+    await this.assertExerciseIdsVisibleTo(coachId, [input.exerciseId]);
+
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const [assignment] = await db
+      .select({ id: assignments.id, programId: assignments.programId })
+      .from(assignments)
+      .where(
+        and(eq(assignments.athleteId, review.athleteId), inArray(assignments.coachId, coachIds)),
+      )
+      .orderBy(desc(assignments.id))
+      .limit(1);
+    if (!assignment) return { ok: false, reason: "no_upcoming_day" };
+
+    const [day] = await db
+      .select({ id: programDays.id })
+      .from(programDays)
+      .innerJoin(programWeeks, eq(programWeeks.id, programDays.weekId))
+      .leftJoin(
+        workoutLogs,
+        and(
+          eq(workoutLogs.programDayId, programDays.id),
+          eq(workoutLogs.assignmentId, assignment.id),
+        ),
+      )
+      .where(
+        and(
+          eq(programWeeks.programId, assignment.programId),
+          eq(programDays.isRestDay, false),
+          isNull(workoutLogs.id),
+        ),
+      )
+      .orderBy(asc(programWeeks.weekNumber), asc(programDays.dayNumber))
+      .limit(1);
+    // Every day already logged: the program is finished, and there is nothing to append to.
+    // Said as its own answer rather than silently writing the drill onto a past session.
+    if (!day) return { ok: false, reason: "no_upcoming_day" };
+
+    const [maxOrder] = await db
+      .select({ n: sql<number>`coalesce(max(${assignmentCorrectives.orderIndex}), -1)` })
+      .from(assignmentCorrectives)
+      .where(
+        and(
+          eq(assignmentCorrectives.assignmentId, assignment.id),
+          eq(assignmentCorrectives.programDayId, day.id),
+        ),
+      );
+
+    const [row] = await db
+      .insert(assignmentCorrectives)
+      .values({
+        assignmentId: assignment.id,
+        programDayId: day.id,
+        exerciseId: input.exerciseId,
+        orderIndex: Number(maxOrder?.n ?? -1) + 1,
+        sets: input.sets ?? 3,
+        reps: input.reps ?? "10",
+        notes: input.notes ?? null,
+        sourceReviewId: reviewId,
+      })
+      .returning();
+    return { ok: true, corrective: row, programDayId: day.id };
+  },
+
+  // ---------- The cue library (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // The things a coach says over and over, ready to drop onto a timeline. Shared with their
+  // staff for the same reason the reference library is, and deletable only by whoever made it
+  // for the same reason: a shared library anybody can delete from is one where a head coach's
+  // teaching material disappears without a trace.
+
+  async listCoachCues(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    return db
+      .select()
+      .from(coachCues)
+      .where(inArray(coachCues.coachId, coachIds))
+      .orderBy(asc(coachCues.label));
+  },
+
+  async createCoachCue(input: {
+    coachId: number;
+    label: string;
+    body: string;
+    audioUrl?: string | null;
+  }) {
+    const [row] = await db
+      .insert(coachCues)
+      .values({
+        coachId: input.coachId,
+        label: input.label,
+        body: input.body,
+        // An audio cue still carries its text, so it reads on screen with the sound off --
+        // which on a phone, in a gym, is most of the time.
+        kind: input.audioUrl ? "audio" : "text",
+        audioUrl: input.audioUrl ?? null,
+      })
+      .returning();
+    return row;
+  },
+
+  async updateCoachCue(
+    coachId: number,
+    id: number,
+    patch: { label?: string; body?: string },
+  ) {
+    const [existing] = await db
+      .select({ id: coachCues.id })
+      .from(coachCues)
+      .where(and(eq(coachCues.id, id), eq(coachCues.coachId, coachId)));
+    if (!existing) return null;
+    const [row] = await db
+      .update(coachCues)
+      .set({
+        ...(patch.label !== undefined ? { label: patch.label } : {}),
+        ...(patch.body !== undefined ? { body: patch.body } : {}),
+      })
+      .where(eq(coachCues.id, id))
+      .returning();
+    // Editing a cue deliberately does NOT touch reviews that already used it: a `cue` event
+    // carries a copy of the text, so what a coach already said stays said.
+    return row;
+  },
+
+  /** Returns the audio url to clean up, or null when there is nothing to delete. */
+  async deleteCoachCue(coachId: number, id: number): Promise<{ audioUrl: string | null } | null> {
+    const [row] = await db
+      .select({ id: coachCues.id, audioUrl: coachCues.audioUrl })
+      .from(coachCues)
+      .where(and(eq(coachCues.id, id), eq(coachCues.coachId, coachId)));
+    if (!row) return null;
+    await db.delete(coachCues).where(eq(coachCues.id, id));
+    return { audioUrl: row.audioUrl };
+  },
+
+  /** Set or replace a cue's audio. The previous take is deleted rather than orphaned, the same
+   * way a re-recorded voice-over is. */
+  async setCoachCueAudio(
+    coachId: number,
+    id: number,
+    audioUrl: string,
+  ): Promise<{ previousUrl: string | null } | null> {
+    const [existing] = await db
+      .select({ id: coachCues.id, audioUrl: coachCues.audioUrl })
+      .from(coachCues)
+      .where(and(eq(coachCues.id, id), eq(coachCues.coachId, coachId)));
+    if (!existing) return null;
+    await db.update(coachCues).set({ audioUrl, kind: "audio" }).where(eq(coachCues.id, id));
+    return { previousUrl: existing.audioUrl };
+  },
+
   // ---------- Saved video reviews (Phase 2 of docs/video-review-plan.md) ----------
   //
   // Every read below resolves the caller against the review rather than trusting an id from the
@@ -21244,6 +21421,21 @@ ${catalog}`;
       })
       .where(eq(videoReviews.id, reviewId))
       .returning();
+    // SHARING is what answers an ask, and it is hooked here rather than at the route so every
+    // future caller closes the queue entry too. Saving a draft deliberately does not: telling
+    // an athlete they have been answered by something they cannot see is worse than silence.
+    if (patch.shared === true) {
+      const resolved = await this.resolveVideoReviewRequestsForReview(reviewId);
+      if (resolved.length > 0 && row.athleteId != null) {
+        await this.createNotification(
+          row.athleteId,
+          "video_review",
+          "Your coach reviewed your clip",
+          row.title,
+          `/athlete/video-reviews/${reviewId}`,
+        );
+      }
+    }
     return row;
   },
 
@@ -21345,6 +21537,188 @@ ${catalog}`;
     const athlete = await this.getAthleteForGuardianScoped(guardianId, athleteId);
     if (!athlete) return null;
     return this.getVideoReviewForAthlete(athleteId, reviewId);
+  },
+
+  // ---------- The review queue (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // "I filmed it and nobody watched it" is the failure this exists for. A request is an ask
+  // with a resolvedAt on it, so a coach can be shown what is still owed and how long it has
+  // been waiting -- which a comment cannot do.
+
+  /**
+   * An athlete asks for one of their own sets to be looked at.
+   *
+   * The set must be theirs and must actually have a clip: a request for footage that does not
+   * exist opens a queue entry the coach cannot act on, and they have no way to tell that from
+   * a clip that failed to load.
+   *
+   * Asking twice is the same ask. The partial unique index is the rule; this returns the
+   * existing open request rather than erroring, because from the athlete's side tapping again
+   * means "yes, please" and not "something went wrong".
+   */
+  async requestVideoReview(
+    athleteId: number,
+    setId: number,
+    note?: string | null,
+  ): Promise<
+    | { ok: true; request: typeof videoReviewRequests.$inferSelect; alreadyOpen: boolean }
+    | { ok: false; reason: "no_such_clip" | "no_coach" }
+  > {
+    const [set] = await db
+      .select({ id: workoutSetEntries.id, videoUrl: workoutSetEntries.formCheckVideoUrl })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutLogEntries.id, workoutSetEntries.logEntryId))
+      .innerJoin(workoutLogs, eq(workoutLogs.id, workoutLogEntries.workoutLogId))
+      .where(and(eq(workoutSetEntries.id, setId), eq(workoutLogs.athleteId, athleteId)));
+    // One answer for "not yours" and "no clip on it": a distinct refusal for the first would
+    // tell an athlete whether a set id belongs to somebody else.
+    if (!set || !set.videoUrl) return { ok: false, reason: "no_such_clip" };
+
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    // A Free Agent has nobody to ask. Phase 4b item 5 gives them self-review instead.
+    if (coaches.length === 0) return { ok: false, reason: "no_coach" };
+
+    const [open] = await db
+      .select()
+      .from(videoReviewRequests)
+      .where(and(eq(videoReviewRequests.setId, setId), isNull(videoReviewRequests.resolvedAt)));
+    if (open) return { ok: true, request: open, alreadyOpen: true };
+
+    const [row] = await db
+      .insert(videoReviewRequests)
+      .values({
+        athleteId,
+        coachId: coaches[0].id,
+        setId,
+        note: note?.trim() ? note.trim() : null,
+      })
+      .returning();
+    return { ok: true, request: row, alreadyOpen: false };
+  },
+
+  /**
+   * The coach's queue: open asks, OLDEST FIRST.
+   *
+   * Oldest-first is the whole point of a queue rather than a feed. The thing that has been
+   * waiting eleven days is the one that has gone wrong, and a newest-first list buries it
+   * under this morning's.
+   *
+   * Scoped through getEffectiveCoachIds, so an assistant sees the staff's asks -- and then
+   * narrowed by the per-team scope, so an assigned coach sees only their own athletes'. The
+   * clip is joined LEFT: a purged or re-uploaded clip still leaves a real ask on the queue,
+   * and dropping the row would hide exactly the request that has been waiting longest.
+   */
+  async listVideoReviewRequestsForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    // Narrowed to the athletes this coach may actually open. getRosterForCoach is the one
+    // resolver that already applies both the staff union and the per-team assignment, so the
+    // queue cannot drift from the roster page -- and an athlete who has left the roster stops
+    // appearing here, which is the same answer every other coach surface gives.
+    const visible = new Set((await this.getRosterForCoach(coachId)).map((a) => a.id));
+    const rows = await db
+      .select({
+        id: videoReviewRequests.id,
+        athleteId: videoReviewRequests.athleteId,
+        athleteName: users.name,
+        setId: videoReviewRequests.setId,
+        note: videoReviewRequests.note,
+        createdAt: videoReviewRequests.createdAt,
+        videoUrl: workoutSetEntries.formCheckVideoUrl,
+        setNumber: workoutSetEntries.setNumber,
+        exerciseName: exercises.name,
+        date: workoutLogs.date,
+      })
+      .from(videoReviewRequests)
+      .innerJoin(users, eq(users.id, videoReviewRequests.athleteId))
+      .leftJoin(workoutSetEntries, eq(workoutSetEntries.id, videoReviewRequests.setId))
+      .leftJoin(workoutLogEntries, eq(workoutLogEntries.id, workoutSetEntries.logEntryId))
+      .leftJoin(workoutLogs, eq(workoutLogs.id, workoutLogEntries.workoutLogId))
+      .leftJoin(exercises, eq(exercises.id, workoutLogEntries.exerciseId))
+      .where(
+        and(
+          inArray(videoReviewRequests.coachId, coachIds),
+          isNull(videoReviewRequests.resolvedAt),
+          visible.size === 0
+            ? sql`false`
+            : inArray(videoReviewRequests.athleteId, [...visible]),
+        ),
+      )
+      .orderBy(asc(videoReviewRequests.createdAt));
+    return rows.map((r) => ({
+      ...r,
+      exerciseName: r.exerciseName ?? "(exercise no longer resolves)",
+      // The clip is gone (retention cap, or the set was cleared). The ask is still real and
+      // the coach should see it said so rather than see nothing.
+      clipAvailable: Boolean(r.videoUrl),
+    }));
+  },
+
+  /** Just the number, for the nav badge. Same scoping as the list -- a badge counting asks the
+   * coach cannot open is worse than no badge. */
+  async countOpenVideoReviewRequestsForCoach(coachId: number): Promise<number> {
+    const rows = await this.listVideoReviewRequestsForCoach(coachId);
+    return rows.length;
+  },
+
+  /**
+   * Marks every open ask about this review's clip answered, and points them at the review.
+   *
+   * Called when the coach SHARES a review, never when they save a draft: an unshared review is
+   * work in progress, and closing the ask on it tells the athlete they have been answered by
+   * something they cannot see.
+   */
+  async resolveVideoReviewRequestsForReview(reviewId: number): Promise<number[]> {
+    const [review] = await db.select().from(videoReviews).where(eq(videoReviews.id, reviewId));
+    if (!review || review.athleteId == null) return [];
+    const clip = review.leftClip as { setId?: number } | null;
+    const setId = typeof clip?.setId === "number" ? clip.setId : null;
+    if (setId == null) return [];
+    const resolved = await db
+      .update(videoReviewRequests)
+      .set({ resolvedAt: new Date(), reviewId })
+      .where(
+        and(
+          eq(videoReviewRequests.setId, setId),
+          eq(videoReviewRequests.athleteId, review.athleteId),
+          isNull(videoReviewRequests.resolvedAt),
+        ),
+      )
+      .returning({ id: videoReviewRequests.id });
+    return resolved.map((r) => r.id);
+  },
+
+  /** The athlete's own view of what they have asked for and what came back. */
+  async listVideoReviewRequestsForAthlete(athleteId: number) {
+    return db
+      .select({
+        id: videoReviewRequests.id,
+        setId: videoReviewRequests.setId,
+        note: videoReviewRequests.note,
+        createdAt: videoReviewRequests.createdAt,
+        resolvedAt: videoReviewRequests.resolvedAt,
+        reviewId: videoReviewRequests.reviewId,
+      })
+      .from(videoReviewRequests)
+      .where(eq(videoReviewRequests.athleteId, athleteId))
+      .orderBy(desc(videoReviewRequests.createdAt));
+  },
+
+  /** An athlete withdrawing their own ask. Resolves rather than deletes: the coach may already
+   * have started on it, and a row that vanishes from under them is confusing in a way a
+   * closed one is not. */
+  async cancelVideoReviewRequest(athleteId: number, requestId: number): Promise<boolean> {
+    const rows = await db
+      .update(videoReviewRequests)
+      .set({ resolvedAt: new Date() })
+      .where(
+        and(
+          eq(videoReviewRequests.id, requestId),
+          eq(videoReviewRequests.athleteId, athleteId),
+          isNull(videoReviewRequests.resolvedAt),
+        ),
+      )
+      .returning({ id: videoReviewRequests.id });
+    return rows.length > 0;
   },
 
   async attachVideoToLoggedSet(

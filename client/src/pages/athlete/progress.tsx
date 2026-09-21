@@ -45,6 +45,7 @@ import { average } from "@/lib/wellness-metrics";
 import { Link } from "wouter";
 import { GoalsPanel } from "@/components/goals-panel";
 import { VideoReviewList } from "@/components/video-review-list";
+import { AskCoachForReview } from "@/components/ask-coach-for-review";
 import { ReadFailed } from "@/components/read-failed";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { StreakBadges } from "@/components/streak-badge";
@@ -264,6 +265,16 @@ export default function AthleteProgress() {
                 reviewUrl={(id) => `/api/athlete/video-reviews/${id}`}
                 emptyHint="When your coach breaks down one of your lifts, it shows up here."
               />
+            </CardContent>
+          </Card>
+
+          {/* The other direction: what the athlete has ASKED for, and whether it came back.
+              A button that fires and forgets would leave them exactly where they started --
+              which is the failure the queue exists for. */}
+          <Card className="mb-6">
+            <CardContent className="space-y-3 p-5">
+              <p className="font-semibold">Ask your coach to check a lift</p>
+              <AskCoachForReview />
             </CardContent>
           </Card>
 

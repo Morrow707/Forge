@@ -12,6 +12,7 @@ const SkillDayViewDialog = lazyDialog(() => import("@/components/skill-day-view-
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { WeeklyDigestCard } from "@/components/weekly-digest-card";
 import { TeamPrWallCard } from "@/components/team-pr-wall-card";
+import { ReviewQueueCard } from "@/components/review-queue-card";
 import { ReengagementBanner } from "@/components/reengagement-banner";
 import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
@@ -165,6 +166,9 @@ export default function CoachDashboard() {
   // coach's saved layout instead of reshuffling it.
   const WIDGET_IDS = [
     "digest-banner",
+    // Above the digest on purpose: somebody is waiting on these, and the oldest one is the
+    // point of the whole queue.
+    "review-queue",
     "weekly-digest",
     "team-pr-wall",
     "reengagement",
@@ -197,6 +201,17 @@ export default function CoachDashboard() {
         onToggle={widgetVisibility.setHidden}
       >
         <CoachDigestBanner />
+      </SortableHideableWidget>
+    ),
+    "review-queue": (
+      <SortableHideableWidget
+        id="review-queue"
+        label="Clips Waiting For You"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("review-queue")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <ReviewQueueCard />
       </SortableHideableWidget>
     ),
     "weekly-digest": (

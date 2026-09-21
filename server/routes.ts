@@ -122,6 +122,9 @@ import {
   createReferenceClipSchema,
   saveClipAsReferenceSchema,
   createVideoReviewSchema,
+  createVideoReviewRequestSchema,
+  createCoachCueSchema,
+  updateCoachCueSchema,
   updateVideoReviewSchema,
   replaceVideoReviewEventsSchema,
   attachVideoToSetSchema,
@@ -4940,6 +4943,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json({ voiceOverUrl: url });
     },
   );
+
+  // From a saved review straight to the athlete's next session (Phase 4b). The drill is a
+  // per-athlete corrective, never an edit to the shared program day -- see
+  // addCorrectiveFromReview for why the plan's programExercises route would have prescribed one
+  // athlete's drill to the whole squad.
+  app.post("/api/coach/video-reviews/:id/corrective", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({
+      exerciseId: z.number().int().positive(),
+      sets: z.number().int().min(1).max(20).optional(),
+      reps: z.string().trim().min(1).max(40).optional(),
+      notes: z.string().trim().max(500).optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.addCorrectiveFromReview(user.id, Number(req.params.id), parsed.data);
+    if (!result.ok) {
+      if (result.reason === "no_upcoming_day") {
+        return res
+          .status(409)
+          .json({ message: "This athlete has no upcoming training day to add it to." });
+      }
+      if (result.reason === "no_athlete") {
+        return res.status(409).json({ message: "This review is not about an athlete." });
+      }
+      return res.status(404).json({ message: "Review not found" });
+    }
+    res.status(201).json(result);
+  });
+
+  // ---------- The cue library (Phase 4b of docs/video-review-plan.md) ----------
+  //
+  // A cue dropped onto a timeline becomes an ordinary `cue` event carrying a COPY of its text.
+  // Nothing here rewrites an existing review, on purpose: the library is a source of new
+  // events, never the storage for old ones.
+
+  app.get("/api/coach/cues", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listCoachCues(user.id));
+  });
+
+  app.post("/api/coach/cues", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createCoachCueSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    res.status(201).json(await storage.createCoachCue({ coachId: user.id, ...parsed.data }));
+  });
+
+  app.patch("/api/coach/cues/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateCoachCueSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const row = await storage.updateCoachCue(user.id, Number(req.params.id), parsed.data);
+    if (!row) return res.status(404).json({ message: "Cue not found" });
+    res.json(row);
+  });
+
+  app.delete("/api/coach/cues/:id", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const result = await storage.deleteCoachCue(user.id, Number(req.params.id));
+    if (!result) return res.status(404).json({ message: "Cue not found" });
+    if (result.audioUrl) await deleteUploadedFile(result.audioUrl).catch(() => {});
+    res.json({ ok: true });
+  });
+
+  // A short recorded cue. Same storage and the same re-record cleanup as a review's voice-over.
+  app.post(
+    "/api/coach/cues/:id/audio",
+    requireRole("coach"),
+    uploadReviewAudio.single("audio"),
+    async (req, res) => {
+      const user = currentUser(req);
+      if (!req.file) return res.status(400).json({ message: "No audio uploaded" });
+      const url = `/uploads/reviews/${req.file.filename}`;
+      const result = await storage.setCoachCueAudio(user.id, Number(req.params.id), url);
+      if (!result) {
+        // Written before the owner check could run, so it is removed rather than left as an
+        // unreferenced blob uploaded against somebody else's id.
+        await deleteUploadedFile(url).catch(() => {});
+        return res.status(404).json({ message: "Cue not found" });
+      }
+      if (result.previousUrl && result.previousUrl !== url) {
+        await deleteUploadedFile(result.previousUrl).catch(() => {});
+      }
+      res.status(201).json({ audioUrl: url });
+    },
+  );
+
+  // ---------- The review queue (Phase 4b of docs/video-review-plan.md) ----------
+
+  // Open asks, oldest first, and a count for the nav badge. Both scope through the roster, so
+  // the badge can never count something the coach cannot open.
+  app.get("/api/coach/video-review-requests", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listVideoReviewRequestsForCoach(user.id));
+  });
+
+  app.get("/api/coach/video-review-requests/count", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    res.json({ open: await storage.countOpenVideoReviewRequestsForCoach(user.id) });
+  });
+
+  // "Ask my coach to check this." The set has to be the caller's own and has to have a clip;
+  // both refusals read the same, because a distinct answer for "not yours" would tell an
+  // athlete whether a set id belongs to somebody else.
+  app.post("/api/athlete/video-review-requests", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = createVideoReviewRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.requestVideoReview(user.id, parsed.data.setId, parsed.data.note);
+    if (!result.ok) {
+      if (result.reason === "no_coach") {
+        return res.status(409).json({ message: "You do not have a coach to ask." });
+      }
+      return res.status(404).json({ message: "Clip not found" });
+    }
+    // 200 rather than 201 for a repeat ask: tapping again means "yes, please", and the athlete
+    // should see the ask they already have rather than an error about having made it.
+    res.status(result.alreadyOpen ? 200 : 201).json(result.request);
+  });
+
+  app.get("/api/athlete/video-review-requests", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.listVideoReviewRequestsForAthlete(user.id));
+  });
+
+  // Withdrawing an ask resolves it rather than deleting it: the coach may already have started
+  // on it, and a row that vanishes from under them is confusing in a way a closed one is not.
+  app.delete("/api/athlete/video-review-requests/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const ok = await storage.cancelVideoReviewRequest(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Request not found" });
+    res.json({ ok: true });
+  });
 
   app.get("/api/athlete/video-reviews", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);

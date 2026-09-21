@@ -126,6 +126,25 @@ export function drawEvent(
       ctx.fillText(p.text, at.x, at.y);
       break;
     }
+    case "cue": {
+      // A cue is the coach's own words, so it is anchored rather than placed: bottom-centre,
+      // full width, the way a caption sits. A tapped cue has no pointer position to place it
+      // at, and asking the coach to aim one would defeat the point of a one-tap library.
+      const size = Math.max(13, Math.min(box.width, box.height) * 0.05);
+      ctx.font = `600 ${size}px system-ui, sans-serif`;
+      ctx.textBaseline = "bottom";
+      ctx.textAlign = "center";
+      const metrics = ctx.measureText(p.text);
+      const cx = box.width / 2;
+      const baseline = box.height - size * 0.9;
+      ctx.fillStyle = "rgba(0,0,0,0.65)";
+      ctx.fillRect(cx - metrics.width / 2 - 8, baseline - size - 4, metrics.width + 16, size + 10);
+      ctx.fillStyle = p.color;
+      ctx.fillText(p.text, cx, baseline);
+      // Restored: every other case draws left-aligned and this one runs in the same context.
+      ctx.textAlign = "left";
+      break;
+    }
     case "angle": {
       const v = px(p.vertex, box);
       const a = px(p.a, box);
@@ -213,4 +232,5 @@ export const PAINTED_KINDS: ReviewEventPayload["kind"][] = [
   "angle",
   "ruler",
   "guide",
+  "cue",
 ];

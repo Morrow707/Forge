@@ -10,6 +10,7 @@ import { drawEvents } from "@/lib/review-draw";
 import { drawSkeleton, nearestSkeletonFrame } from "@/lib/skeleton-draw";
 import {
   visibleAt,
+  audioCuesCrossed,
   speedAt,
   videoTimeForAudioTime,
   type ReviewEvent,
@@ -93,6 +94,9 @@ export function VideoReviewPlayerDialog({
 function ReviewPlayback({ review }: { review: SavedReview }) {
   const leftRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  /** Where the cue clock was last frame. Seeded to the start, so a cue at t=0 fires when
+   * playback first moves past it rather than on the first paint of a paused review. */
+  const lastCueT = useRef(0);
   const hasVoiceOver = !!review.voiceOverUrl;
   const rightRef = useRef<HTMLVideoElement | null>(null);
   const leftCanvas = useRef<HTMLCanvasElement | null>(null);
@@ -166,6 +170,17 @@ function ReviewPlayback({ review }: { review: SavedReview }) {
             r.currentTime = want;
           }
         }
+        // AUDIO CUES fire on the interval the frame crossed, never on an equality or a >=
+        // test: a rAF loop can skip 300ms under load, which drops a cue entirely, and >= would
+        // replay one on every frame after it. See audioCuesCrossed.
+        for (const cue of audioCuesCrossed(events, lastCueT.current, l.currentTime)) {
+          const el = new Audio(resolveApiUrl(cue.audioUrl));
+          // A cue that will not play (a missing file, an autoplay refusal) must not take the
+          // review down with it -- the words are on screen either way.
+          void el.play().catch(() => {});
+        }
+        lastCueT.current = l.currentTime;
+
         paint(leftCanvas.current, l, "left", l.currentTime);
         paint(rightCanvas.current, rightRef.current, "right", l.currentTime);
       }

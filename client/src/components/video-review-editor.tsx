@@ -17,12 +17,15 @@ import {
   Undo2,
   Trash2,
   Share2,
+  ClipboardPlus,
   Save,
   Mic,
   Square as StopIcon,
 } from "lucide-react";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { resolveApiUrl, apiRequest } from "@/lib/queryClient";
+import { CueDrawer } from "@/components/cue-drawer";
+import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { drawEvents } from "@/lib/review-draw";
 import { visibleAt, type ReviewEvent, type ReviewEventPayload } from "@shared/video-review";
 import { toast } from "sonner";
@@ -91,6 +94,21 @@ export function VideoReviewEditorDialog({
   const [duration, setDuration] = useState(0);
   const [saving, setSaving] = useState(false);
   const [shared, setShared] = useState(initialShared);
+  const [pickingCorrective, setPickingCorrective] = useState(false);
+
+  /** The review has to EXIST on the server for this, and it does -- the editor is only ever
+   * opened on a saved review. Unsaved marks are a separate thing and are not implied by
+   * prescribing a drill, so this deliberately does not save them first. */
+  async function addCorrective(exerciseId: number) {
+    try {
+      await apiRequest("POST", `/api/coach/video-reviews/${reviewId}/corrective`, { exerciseId });
+      toast.success("Added to their next training day");
+    } catch (err) {
+      // The server says which of the real refusals this is ("no upcoming training day", "not
+      // about an athlete"), and those are the useful sentences -- not a generic failure.
+      toast.error(err instanceof Error ? err.message : "Couldn't add that corrective.");
+    }
+  }
   const [dirty, setDirty] = useState(false);
   // VOICE-OVER. While recording, the coach's actions are logged against the AUDIO clock rather
   // than the video's -- see shared/video-review.ts's videoTimeForAudioTime for why the two are
@@ -370,6 +388,21 @@ export function VideoReviewEditorDialog({
           </span>
         </div>
 
+        {/* A cue carries a COPY of its text into the event, never the cue's id: editing or
+            deleting a cue later must not change what the coach already said in a review
+            somebody has watched. cueId rides along only as provenance. */}
+        <CueDrawer
+          onDrop={(cue) =>
+            addEvent({
+              kind: "cue",
+              text: cue.body,
+              audioUrl: cue.audioUrl,
+              cueId: cue.id,
+              color,
+            })
+          }
+        />
+
         <div className="flex flex-wrap items-center gap-1.5">
           {TOOLS.map((tl) => (
             <Button
@@ -463,6 +496,12 @@ export function VideoReviewEditorDialog({
             {recording ? <StopIcon className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
             {recording ? "Stop" : "Voice-over"}
           </Button>
+          {/* From the review straight to the athlete's next session. It writes a per-athlete
+              corrective, never an edit to the shared program day -- see
+              addCorrectiveFromReview in storage.ts. */}
+          <Button size="sm" variant="outline" onClick={() => setPickingCorrective(true)}>
+            <ClipboardPlus className="h-3.5 w-3.5" /> Add a corrective
+          </Button>
           <span className="flex-1" />
           <Button size="sm" variant={shared ? "default" : "outline"} onClick={() => void toggleShare()}>
             <Share2 className="h-3.5 w-3.5" /> {shared ? "Shared" : "Share"}
@@ -474,6 +513,16 @@ export function VideoReviewEditorDialog({
 
         <CameraMetricCaveat variant="inline" />
       </DialogContent>
+      <ExercisePickerDialog
+        open={pickingCorrective}
+        onOpenChange={setPickingCorrective}
+        correctivesOnly
+        title="Add a corrective from this review"
+        onSelect={(exercise) => {
+          setPickingCorrective(false);
+          void addCorrective(exercise.id);
+        }}
+      />
     </Dialog>
   );
 }

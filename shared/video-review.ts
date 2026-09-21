@@ -31,6 +31,7 @@ export const REVIEW_EVENT_KINDS = [
   "scrub",
   "speed",
   "flag",
+  "cue",
 ] as const;
 export type ReviewEventKind = (typeof REVIEW_EVENT_KINDS)[number];
 
@@ -48,6 +49,9 @@ export const DRAWING_KINDS = [
   "guide",
   "barPath",
   "trackedAngle",
+  // A cue DRAWS: it puts the coach's words on screen at that moment, and an audio cue plays
+  // alongside. Classing it as transport would make it clear the held drawing under it.
+  "cue",
 ] as const;
 
 /** A boundary event: reaching one clears any drawing that was being held indefinitely.
@@ -93,6 +97,21 @@ export const reviewEventPayloadSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("scrub"), to: z.number() }),
   z.object({ kind: z.literal("speed"), rate: z.number() }),
   z.object({ kind: z.literal("flag"), note: z.string().max(280).optional() }),
+  /** A saved cue from the coach's library, dropped onto the timeline (Phase 4b).
+   *
+   * The TEXT is copied in rather than referenced by id. A cue the coach later edits or deletes
+   * must not silently change or blank what they already said in a review somebody has watched;
+   * the library is a source of new events, never the storage for old ones. `cueId` is kept as
+   * provenance so "which cues do I actually use" stays answerable.
+   *
+   * An audio cue carries the url the same way, for the same reason. */
+  z.object({
+    kind: z.literal("cue"),
+    text: z.string().max(280),
+    audioUrl: z.string().max(500).nullable().optional(),
+    cueId: z.number().int().positive().nullable().optional(),
+    color: z.string(),
+  }),
 ]);
 
 export type ReviewEventPayload = z.infer<typeof reviewEventPayloadSchema>;
@@ -281,4 +300,33 @@ export function audioTimeForVideoTime(
 
   const finalEnd = video + (audioDuration - last) * rate;
   return reachedIn(video, finalEnd, rate, last);
+}
+
+/**
+ * The AUDIO cues crossed between two moments on the review's clock.
+ *
+ * A cue with a recording plays once, when playback reaches it. That makes "has it played yet"
+ * a question about an INTERVAL, not about the current time: a rAF loop samples at ~16ms, and
+ * an equality test on `t` misses every cue on a slow frame while a >= test replays one on
+ * every frame after it.
+ *
+ * Scrubbing backwards re-arms whatever is behind the playhead, because the coach's words go
+ * with that part of the lift -- a listener who rewinds to hear a cue again should hear it.
+ * Passing `to` <= `from` (a seek backwards) therefore fires nothing on that step; the next
+ * forward step across the cue fires it.
+ */
+export function audioCuesCrossed(
+  events: ReviewEvent[],
+  from: number,
+  to: number,
+): { t: number; audioUrl: string }[] {
+  if (!(to > from)) return [];
+  const out: { t: number; audioUrl: string }[] = [];
+  for (const e of events) {
+    if (e.payload.kind !== "cue") continue;
+    const url = e.payload.audioUrl;
+    if (!url) continue;
+    if (e.t > from && e.t <= to) out.push({ t: e.t, audioUrl: url });
+  }
+  return out;
 }

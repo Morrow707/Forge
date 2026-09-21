@@ -166,3 +166,22 @@ describe("the review renderer", () => {
     expect(calls.filter((c) => c !== "save" && c !== "restore")).toEqual([]);
   });
 });
+
+describe("a cue on screen", () => {
+  it("paints the coach's words with their own backing", () => {
+    // Drawn over footage that may be any colour, like the text tool -- a caption that relied on
+    // the frame behind it being dark is unreadable on half the clips in a gym.
+    const { ctx, calls } = fakeCtx();
+    drawEvent(ctx, ev({ kind: "cue", text: "Knees out", audioUrl: null, color: "#fff" }), BOX);
+    expect(calls).toContain("fillRect");
+    expect(calls).toContain("fillText");
+  });
+
+  it("leaves the context left-aligned for whatever paints next", () => {
+    // Every other case draws left-aligned and they all share one context. A cue that kept
+    // textAlign = "center" would silently shift the next label on the same frame.
+    const { ctx } = fakeCtx();
+    drawEvent(ctx, ev({ kind: "cue", text: "Knees out", audioUrl: null, color: "#fff" }), BOX);
+    expect(ctx.textAlign).toBe("left");
+  });
+});

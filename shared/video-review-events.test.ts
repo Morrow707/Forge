@@ -8,6 +8,7 @@ import {
   speedAt,
   reviewDuration,
   isDrawing,
+  audioCuesCrossed,
   type ReviewEvent,
 } from "./video-review";
 
@@ -178,5 +179,39 @@ describe("reviewDuration", () => {
 
   it("takes the furthest end, not the last event", () => {
     expect(reviewDuration([draw(10, { holdSeconds: 20 }), draw(12)])).toBe(30);
+  });
+});
+
+describe("audio cues fire once, on the interval that crosses them", () => {
+  const withCue = (t: number, audioUrl: string | null): ReviewEvent => ({
+    t,
+    side: "left",
+    payload: { kind: "cue", text: "Knees out", audioUrl, color: "#fff" },
+  });
+
+  it("fires a cue the step crossed, and not the one it has not reached", () => {
+    const events = [withCue(1.0, "/uploads/reviews/a.m4a"), withCue(5.0, "/uploads/reviews/b.m4a")];
+    expect(audioCuesCrossed(events, 0.9, 1.02)).toEqual([{ t: 1, audioUrl: "/uploads/reviews/a.m4a" }]);
+    expect(audioCuesCrossed(events, 1.02, 1.05)).toEqual([]);
+  });
+
+  it("does not fire a cue that has no recording", () => {
+    // A text-only cue is drawn, not played. Firing it would be an empty <audio> per tap.
+    expect(audioCuesCrossed([withCue(1, null)], 0.5, 1.5)).toEqual([]);
+  });
+
+  it("fires nothing on a backwards seek, so a rewind re-arms rather than replays mid-jump", () => {
+    const events = [withCue(1, "/a.m4a")];
+    expect(audioCuesCrossed(events, 5, 0)).toEqual([]);
+    // ...and the next forward step across it plays it again, which is what a listener who
+    // rewound to hear it asked for.
+    expect(audioCuesCrossed(events, 0.5, 1.5)).toHaveLength(1);
+  });
+
+  it("fires every cue inside one slow frame, not just the last", () => {
+    // A rAF loop can skip 300ms under load. Dropping the earlier cue would silently lose a
+    // thing the coach said.
+    const events = [withCue(1, "/a.m4a"), withCue(1.1, "/b.m4a")];
+    expect(audioCuesCrossed(events, 0.9, 1.2)).toHaveLength(2);
   });
 });

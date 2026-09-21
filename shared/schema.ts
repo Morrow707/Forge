@@ -2071,6 +2071,17 @@ export const assignmentCorrectives = pgTable(
     weight: text("weight"),
     restSeconds: integer("rest_seconds"),
     notes: text("notes"),
+    /** The review this corrective came out of, when it came out of one (Phase 4b of
+     * docs/video-review-plan.md). ON DELETE SET NULL: a deleted review must not take the
+     * athlete's prescribed work with it -- the drill is still the right drill.
+     *
+     * It sits HERE and not on programExercises, which is what the plan said. A program day is
+     * shared by every athlete on that program, so appending to it would give the whole squad a
+     * corrective prescribed for one person's knee. assignment_correctives is the existing
+     * per-athlete vehicle for exactly this and already renders in the athlete's day. */
+    sourceReviewId: integer("source_review_id").references(() => videoReviews.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -2679,6 +2690,45 @@ export const referenceClips = pgTable(
   }),
 );
 
+/**
+ * A coach's saved cues -- the things they say over and over (Phase 4b of
+ * docs/video-review-plan.md). Dropped onto a review's timeline, a cue becomes an ordinary
+ * `cue` event carrying a COPY of its text.
+ *
+ * That copy is the design decision. A cue the coach later edits or deletes must not change or
+ * blank what they already said in a review somebody has watched: the library is a source of
+ * new events, never the storage for old ones.
+ *
+ * Cues belong to the coach and are visible to their staff, the same way a shared roster is.
+ */
+export const coachCues = pgTable(
+  "coach_cues",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "text" | "audio". An audio cue carries text too, so it still reads on screen for an
+     * athlete watching with the sound off -- which on a phone, in a gym, is most of them. */
+    kind: text("kind").notNull().default("text"),
+    label: text("label").notNull(),
+    body: text("body").notNull(),
+    /** Under STORAGE_PATH/reviews/, same place a voice-over lives. Null for a text cue. */
+    audioUrl: text("audio_url"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachIdx: index("coach_cues_coach_idx").on(table.coachId),
+  }),
+);
+
+export const createCoachCueSchema = z.object({
+  label: z.string().trim().min(1).max(80),
+  body: z.string().trim().min(1).max(280),
+});
+export const updateCoachCueSchema = createCoachCueSchema.partial();
+export type CreateCoachCue = z.infer<typeof createCoachCueSchema>;
+
 /** A SAVED REVIEW IS DATA, NOT A RENDERED VIDEO.
  *
  * The clip reference(s) plus a timed event log; playback re-renders it. That is the whole
@@ -2777,6 +2827,59 @@ export const videoReviewEvents = pgTable(
     reviewTimeIdx: index("video_review_events_review_time_idx").on(table.reviewId, table.t),
   }),
 );
+
+/**
+ * An athlete asking their coach to look at one clip. Phase 4b of docs/video-review-plan.md.
+ *
+ * The row exists because "I filmed it and nobody watched it" is the failure this feature is
+ * for. A comment can be read and forgotten; a request has a resolvedAt, so a coach can be
+ * shown what is still owed and how long it has been waiting.
+ *
+ * Two rules the queries depend on:
+ *  - ONE OPEN REQUEST PER SET. Asking twice is the same ask, and a queue that shows the same
+ *    clip three times is one a coach learns to ignore. The partial unique index enforces it
+ *    rather than a read-then-insert, which two taps on a slow connection lose.
+ *  - The request points at the SET, not at a video url. A clip that is re-uploaded or purged
+ *    is still the same set, and the queue entry stays meaningful (or reads as purged) instead
+ *    of dangling.
+ *
+ * reviewId is the answer, filled when the coach shares a review made from this clip. It is
+ * nullable and ON DELETE SET NULL: a deleted review leaves the request resolved, because the
+ * coach did look -- unresolving it would put a stale ask back in front of them.
+ */
+export const videoReviewRequests = pgTable(
+  "video_review_requests",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The coach the ask is FOR, resolved at request time. An athlete whose coach changes
+     * keeps the ask with the coach they made it to, which is who owes them an answer. */
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    setId: integer("set_id")
+      .notNull()
+      .references(() => workoutSetEntries.id, { onDelete: "cascade" }),
+    /** What the athlete wants looked at. Optional: most asks are "is this right?". */
+    note: text("note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+    reviewId: integer("review_id").references(() => videoReviews.id, { onDelete: "set null" }),
+  },
+  (table) => ({
+    // The coach's queue: their open asks, oldest first.
+    coachOpenIdx: index("video_review_requests_coach_open_idx").on(table.coachId, table.createdAt),
+    athleteIdx: index("video_review_requests_athlete_idx").on(table.athleteId),
+  }),
+);
+
+export const createVideoReviewRequestSchema = z.object({
+  setId: z.number().int().positive(),
+  note: z.string().trim().max(500).optional(),
+});
+export type CreateVideoReviewRequest = z.infer<typeof createVideoReviewRequestSchema>;
 
 // In-app notification inbox. Deliberately narrow: only ever created for a
 // coach when an athlete comments or attaches a video, never for program

@@ -3378,6 +3378,29 @@ CREATE TABLE IF NOT EXISTS "video_review_events" (
 CREATE INDEX IF NOT EXISTS "video_review_events_review_time_idx"
   ON "video_review_events" ("review_id", "t");
 
+-- 2026-09-21: an athlete asking their coach to look at one clip (Phase 4b).
+--
+-- The partial unique index is the rule, not a nicety: one OPEN request per set. Two taps on a
+-- slow connection are the same ask, and a queue showing the same clip three times is one a
+-- coach stops reading. Partial so a set can be asked about again after the first ask is
+-- answered, which is a genuinely new request.
+CREATE TABLE IF NOT EXISTS "video_review_requests" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "set_id" integer NOT NULL REFERENCES "workout_set_entries"("id") ON DELETE CASCADE,
+  "note" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "resolved_at" timestamp,
+  "review_id" integer REFERENCES "video_reviews"("id") ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS "video_review_requests_coach_open_idx"
+  ON "video_review_requests" ("coach_id", "created_at");
+CREATE INDEX IF NOT EXISTS "video_review_requests_athlete_idx"
+  ON "video_review_requests" ("athlete_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "video_review_requests_one_open_per_set_idx"
+  ON "video_review_requests" ("set_id") WHERE "resolved_at" IS NULL;
+
 -- 2026-09-21: the coach's reference library (Phase 4).
 --
 -- A reference taken from an athlete's clip COPIES the file. Pointing at theirs would either
@@ -3396,6 +3419,22 @@ CREATE TABLE IF NOT EXISTS "reference_clips" (
 );
 CREATE INDEX IF NOT EXISTS "reference_clips_coach_idx" ON "reference_clips" ("coach_id");
 
+-- 2026-09-21: the coach's cue library (Phase 4b).
+--
+-- A cue dropped on a timeline copies its text into the event. The library is a source of new
+-- events, never the storage for old ones -- editing a cue must not rewrite what a coach already
+-- said in a review somebody has watched.
+CREATE TABLE IF NOT EXISTS "coach_cues" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "kind" text NOT NULL DEFAULT 'text',
+  "label" text NOT NULL,
+  "body" text NOT NULL,
+  "audio_url" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "coach_cues_coach_idx" ON "coach_cues" ("coach_id");
+
 -- 2026-09-20: voice-over on a review (Phase 3). Audio lives under STORAGE_PATH/reviews/ and
 -- dies with the review rather than with the athlete's clip cap.
 ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_url" text;
@@ -3405,6 +3444,15 @@ ALTER TABLE "video_reviews" ADD COLUMN IF NOT EXISTS "voice_over_start_at" real;
 -- annotation already lands. SET NULL rather than CASCADE: deleting a review should not delete
 -- the conversation that referenced it.
 ALTER TABLE "workout_comments" ADD COLUMN IF NOT EXISTS "video_review_id" integer
+  REFERENCES "video_reviews"("id") ON DELETE SET NULL;
+
+-- 2026-09-21: a corrective that came out of a review (Phase 4b).
+--
+-- On assignment_correctives, NOT on program_exercises as the plan said: a program day is shared
+-- by every athlete on that program, so appending there would give the whole squad a drill
+-- prescribed for one person. SET NULL so deleting a review never takes the athlete's prescribed
+-- work with it.
+ALTER TABLE "assignment_correctives" ADD COLUMN IF NOT EXISTS "source_review_id" integer
   REFERENCES "video_reviews"("id") ON DELETE SET NULL;
 
 DO $$
