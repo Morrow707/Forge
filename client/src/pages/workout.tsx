@@ -4145,11 +4145,16 @@ function ExerciseLogContent({
           // JumpSetMetrics union that function already narrows between,
           // and reusing that narrowing here would mean widening it across
           // every other call site that pattern-matches on it instead.
-          function handleSwingCapture(metrics: AvSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) {
-            if (trackingSet == null) return;
-            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+          function handleSwingCapture(metrics: AvSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null, forSetNumber?: number) {
+            // THE SET THE TAKE WAS FILMED FOR, not whatever is selected now. These dialogs close
+            // the camera the moment the recorder stops, which clears trackingSet, so the old
+            // `if (trackingSet == null) return` would have thrown the capture away in silence.
+            // The dialog pins the number at stop and hands it back here.
+            const targetSet = forSetNumber ?? trackingSet;
+            if (targetSet == null) return;
+                        const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             onUpdateSet(
-              trackingSet,
+              targetSet,
               {
                 swingSeparationDeg: metrics.peakSeparationDeg,
                 swingTempoRatio: metrics.tempoRatio,
@@ -4165,18 +4170,23 @@ function ExerciseLogContent({
               { immediate: true },
             );
             if (videoUrl) {
-              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
-              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: targetSet, videoUrl });
             }
           }
 
           // Separate from handleTrackerCapture above, same reasoning as handleSwingCapture --
           // MedballSetMetrics doesn't fit the RepMetrics/JumpSetMetrics union either.
-          function handleMedballCapture(metrics: MedballSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) {
-            if (trackingSet == null) return;
-            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+          function handleMedballCapture(metrics: MedballSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null, forSetNumber?: number) {
+            // THE SET THE TAKE WAS FILMED FOR, not whatever is selected now. These dialogs close
+            // the camera the moment the recorder stops, which clears trackingSet, so the old
+            // `if (trackingSet == null) return` would have thrown the capture away in silence.
+            // The dialog pins the number at stop and hands it back here.
+            const targetSet = forSetNumber ?? trackingSet;
+            if (targetSet == null) return;
+                        const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             onUpdateSet(
-              trackingSet,
+              targetSet,
               {
                 medBallPeakSpeedMps: metrics.peakSpeedMps,
                 medBallReleaseHeightCm: metrics.releaseHeightCm,
@@ -4190,18 +4200,23 @@ function ExerciseLogContent({
               { immediate: true },
             );
             if (videoUrl) {
-              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
-              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: targetSet, videoUrl });
             }
           }
 
           // Separate from handleTrackerCapture above, same reasoning as handleSwingCapture --
           // KbSwingSetMetrics doesn't fit the RepMetrics/JumpSetMetrics union either.
-          function handleKbSwingCapture(metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) {
-            if (trackingSet == null) return;
-            const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
+          function handleKbSwingCapture(metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null, forSetNumber?: number) {
+            // THE SET THE TAKE WAS FILMED FOR, not whatever is selected now. These dialogs close
+            // the camera the moment the recorder stops, which clears trackingSet, so the old
+            // `if (trackingSet == null) return` would have thrown the capture away in silence.
+            // The dialog pins the number at stop and hands it back here.
+            const targetSet = forSetNumber ?? trackingSet;
+            if (targetSet == null) return;
+                        const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
             onUpdateSet(
-              trackingSet,
+              targetSet,
               {
                 kbSwingPeakSpeedMps: metrics.peakSpeedMps,
                 kbSwingPeakHeightCm: metrics.peakHeightCm,
@@ -4214,8 +4229,8 @@ function ExerciseLogContent({
               { immediate: true },
             );
             if (videoUrl) {
-              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
-              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSet, videoUrl });
+              else postFormVideoMutation.mutate({ setNumber: targetSet, videoUrl });
             }
           }
 
@@ -4259,6 +4274,19 @@ function ExerciseLogContent({
                     onOpenChange={(open) => !open && setTrackingSet(null)}
                     heightIn={user?.heightIn}
                     recordVideo={mergedTracking}
+                    setNumber={trackingSet ?? -1}
+                    onAnalysisStarted={(setNumber) => {
+                    setTrackingSet(null);
+                    setProcessingSets((prev) => new Set(prev).add(setNumber));
+                    }}
+                    onProcessingSettled={(setNumber) => {
+                    setProcessingSets((prev) => {
+                    if (!prev.has(setNumber)) return prev;
+                    const next = new Set(prev);
+                    next.delete(setNumber);
+                    return next;
+                    });
+                    }}
                     onCapture={handleKbSwingCapture}
                     movementProfile={activeMovementProfile}
                     videoContext={videoContextFor(trackingSet)}
@@ -4311,6 +4339,19 @@ function ExerciseLogContent({
                   onOpenChange={(open) => !open && setTrackingSet(null)}
                   heightIn={user?.heightIn}
                   recordVideo={mergedTracking}
+                  setNumber={trackingSet ?? -1}
+                  onAnalysisStarted={(setNumber) => {
+                  setTrackingSet(null);
+                  setProcessingSets((prev) => new Set(prev).add(setNumber));
+                  }}
+                  onProcessingSettled={(setNumber) => {
+                  setProcessingSets((prev) => {
+                  if (!prev.has(setNumber)) return prev;
+                  const next = new Set(prev);
+                  next.delete(setNumber);
+                  return next;
+                  });
+                  }}
                   onCapture={handleMedballCapture}
                   movementProfile={activeMovementProfile}
                   videoContext={videoContextFor(trackingSet)}
@@ -4342,6 +4383,19 @@ function ExerciseLogContent({
                   sport={item.trackingLevel === "golf_swing" ? "golf" : "baseball"}
                   heightIn={user?.heightIn}
                   recordVideo={mergedTracking}
+                  setNumber={trackingSet ?? -1}
+                  onAnalysisStarted={(setNumber) => {
+                  setTrackingSet(null);
+                  setProcessingSets((prev) => new Set(prev).add(setNumber));
+                  }}
+                  onProcessingSettled={(setNumber) => {
+                  setProcessingSets((prev) => {
+                  if (!prev.has(setNumber)) return prev;
+                  const next = new Set(prev);
+                  next.delete(setNumber);
+                  return next;
+                  });
+                  }}
                   onCapture={handleSwingCapture}
                   movementProfile={activeMovementProfile}
                   videoContext={videoContextFor(trackingSet)}

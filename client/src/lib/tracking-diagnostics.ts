@@ -125,6 +125,15 @@ export type TrackingDiagnostics = {
     maxInterFrameGapSeconds?: number;
     // Box-jump-only -- see shared/schema.ts's trackingDiagnosticsSchema comment on this same
     // field for the full explanation of why it's separate from objectDetection below.
+    // See shared/schema.ts's trackingDiagnosticsSchema for why each of these is here. All six
+    // are produced natively on every take and were stripped on every insert until the schema
+    // named them.
+    handPoseElapsedSeconds?: number;
+    body3DElapsedSeconds?: number;
+    body3DFrameCount?: number;
+    body3DAvailable?: boolean;
+    captureFrameRate?: number;
+    sampleStride?: number;
     boxTopNormalizedY?: number;
   } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence: number | null };
@@ -466,6 +475,15 @@ export function buildTrackingDiagnostics(args: {
     lowPowerModeEnabled?: boolean;
     freeDiskSpaceBytes?: number;
     maxInterFrameGapSeconds?: number;
+    // See shared/schema.ts's trackingDiagnosticsSchema for why each of these is here. All six
+    // are produced natively on every take and were stripped on every insert until the schema
+    // named them.
+    handPoseElapsedSeconds?: number;
+    body3DElapsedSeconds?: number;
+    body3DFrameCount?: number;
+    body3DAvailable?: boolean;
+    captureFrameRate?: number;
+    sampleStride?: number;
     boxTopNormalizedY?: number;
   } | null;
   calibration?: TrackingDiagnostics["calibration"];

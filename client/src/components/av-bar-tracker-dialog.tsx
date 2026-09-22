@@ -1823,6 +1823,8 @@ export function AvBarTrackerDialog({
       undefined,
       metrics.repBreakdown.map((r) => ({ startT: r.startT, endT: r.endT })),
       formFaultThresholds,
+      // The grip separation the tilt angle would be divided by. See MIN_TILT_GRIP_SPAN_PX.
+      gripWidthPx ?? null,
     );
 
     if (movementType === "Squat" && laterality !== "unilateral") {

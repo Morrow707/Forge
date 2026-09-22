@@ -44,3 +44,37 @@ describe("the camera never rejects a take", () => {
     expect(read("server/tracking-report.ts")).toContain('| "scale_suspect"');
   });
 });
+
+// THE TILT LINE IS THE ONE THING THIS BUILD STOPS SAYING, AND IT IS NOT A REFUSAL.
+//
+// "Bar tilted ~17 degrees toward the left arm" appeared on a take the same diagnostics show was
+// filmed about 39 degrees off square. Tilt is a height difference divided by the separation
+// between the two grips, and when the bar points near the camera that denominator collapses, so
+// wrist noise becomes tens of degrees.
+//
+// Rule #1 is about never refusing to WRITE A NUMBER. This writes every number as before,
+// diagnostics included. What it withholds is a coaching CLAIM about the athlete's technique
+// whose input was never measured -- telling somebody their bar is crooked on arithmetic that
+// could not see it is not a wrong number, it is a wrong instruction.
+describe("a claim about technique needs the measurement behind it", () => {
+  it("gates the tilt fault on the grip separation it is divided by", () => {
+    const src = read("client/src/lib/pose-tracking.ts");
+    expect(src).toContain("MIN_TILT_GRIP_SPAN_PX");
+    expect(src).toContain("if (tiltAngles.length && tiltSpanUsable)");
+  });
+
+  it("still writes every metric and every diagnostic on such a take", () => {
+    // The gate lives inside detectFormFaults and nowhere near the metrics, which is the whole
+    // point. Nothing in the fault detector may null a measurement.
+    const src = read("client/src/lib/pose-tracking.ts");
+    const block = src.slice(src.indexOf("const tiltSpanUsable"), src.indexOf("const tiltSpanUsable") + 1200);
+    expect(block).not.toMatch(/metrics\.\w+\s*=\s*null/);
+  });
+
+  it("names the load when the load is what is wrong", () => {
+    // The 1 lb typo computed 12 W and nothing said the load was the problem.
+    const src = read("server/tracking-report.ts");
+    expect(src).toContain("IMPLAUSIBLE_LOAD_MIN_LBS");
+    expect(src).toContain("Velocity and range of motion do not use load and are unaffected");
+  });
+});

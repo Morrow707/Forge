@@ -849,6 +849,13 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
 // tracking probably failed" -- e.g. the reader not completing explains everything else about
 // to be true of the same set, so it's checked (and returned alone, via the early `else`) ahead
 // of a duration mismatch that's really the same underlying symptom read a different way.
+// A LOAD OUTSIDE THESE IS A TYPING ERROR, NOT A LIFT. The floor sits under an empty women's
+// bar (33 lb) with room for a dumbbell or a bare technique bar; the ceiling is well past the
+// heaviest lift anyone has recorded. Neither is a judgement about the athlete -- they are the
+// range outside which the number cannot be what somebody meant to type.
+export const IMPLAUSIBLE_LOAD_MIN_LBS = 5;
+export const IMPLAUSIBLE_LOAD_MAX_LBS = 1000;
+
 // The fastest a loaded barbell actually moves, from published velocity-based-training data --
 // roughly 1.5-2.2 m/s at the top end, for deliberately explosive empty-bar or speed work. Sits
 // well BELOW bar-tracking.ts's MAX_PLAUSIBLE_LIFT_VELOCITY_MPS (3), and that gap is the point:
@@ -964,6 +971,33 @@ function computeFlags(r: TrackedSetRow): string[] {
             : null;
     if (trackedReps != null && trackedReps < loggedReps) {
       flags.push(`Logged ${loggedReps} reps but tracking only found ${trackedReps}`);
+    }
+    // THE LOAD ITSELF, BECAUSE EVERY WATT ON THE ROW IS MULTIPLIED BY IT.
+    //
+    // Scott filmed a 135 lb bench and the set was logged at 1 lb -- a typo, and a completely
+    // ordinary one. The pipeline did exactly as told: mass times gravity times velocity gave
+    // 12 W peak and 5 W mean, numbers that are off by more than a hundredfold, sitting on the
+    // report beside velocities that were fine. Nothing anywhere said the load was the problem,
+    // so the only reading available was "the power maths is broken".
+    //
+    // Power is the one metric with a hand-typed input, so it is the one that can be wrong for a
+    // reason that has nothing to do with the camera. The flag says which.
+    const loggedWeight = r.weight == null ? null : Number.parseFloat(r.weight);
+    if (loggedWeight != null && Number.isFinite(loggedWeight) && loggedWeight > 0) {
+      const unit = (r.weightUnit ?? "lbs").toLowerCase();
+      const lbs = unit.startsWith("kg") ? loggedWeight * 2.20462 : loggedWeight;
+      if (lbs < IMPLAUSIBLE_LOAD_MIN_LBS) {
+        flags.push(
+          `Logged load is ${r.weight} ${r.weightUnit ?? "lbs"}, which is below anything a barbell `
+          + `set is done at -- the watts on this row are computed from it and are wrong by however `
+          + `far the real load was. Velocity and range of motion do not use load and are unaffected.`,
+        );
+      } else if (lbs > IMPLAUSIBLE_LOAD_MAX_LBS) {
+        flags.push(
+          `Logged load is ${r.weight} ${r.weightUnit ?? "lbs"}, past any lift on record -- likely a `
+          + `unit or typing error, and the watts on this row inherit it.`,
+        );
+      }
     }
     // THE OTHER DIRECTION, WHICH WAS NEVER CHECKED AND IS THE WORSE ONE.
     //

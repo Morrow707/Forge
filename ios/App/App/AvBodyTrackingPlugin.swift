@@ -1562,6 +1562,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             "body3DElapsedSeconds": state.body3DElapsedSeconds,
             "body3DFrameCount": state.body3DFrameCount,
             "body3DAvailable": body3DAvailable,
+            // See the file path's own note on these two.
+            "captureFrameRate": activeCaptureFrameRate,
+            "sampleStride": ctx.sampleEveryNthFrame,
         ]
         if ctx.coreMlDetectionEnabled {
             result["objectLock"] = coreMlImplementDetector.telemetry.dictionary
@@ -1926,6 +1929,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // availableDiskSpaceBytes comments for why each is worth reading at all.
         let thermalState = thermalStateDescription(ProcessInfo.processInfo.thermalState)
         let lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
+        // Snapshotted here rather than read inside the settle closure: by the time that runs the
+        // session may have been reconfigured, and the number worth reporting is the one the clip
+        // was filmed at.
+        let captureFrameRateAtAnalysis = self.activeCaptureFrameRate
         let freeDiskSpaceBytes = availableDiskSpaceBytes()
         logDiag(
             "analyzeRecording conditions: thermalState=\(thermalState) lowPowerMode=\(lowPowerModeEnabled) "
@@ -2010,6 +2017,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     "body3DElapsedSeconds": state.body3DElapsedSeconds,
                     "body3DFrameCount": state.body3DFrameCount,
                     "body3DAvailable": body3DAvailable,
+                    // FRAME-RATE TRUTH. What the camera negotiated, what the analysis actually
+                    // stepped by, and (with elapsedSeconds and frameCount) how many frames a
+                    // second the analysis managed. A 28.4s clip taking 37.9s to analyse was only
+                    // recoverable by hand off frameCount; the stride was not recoverable at all,
+                    // so nobody could tell a slow pass from a dense one.
+                    "captureFrameRate": captureFrameRateAtAnalysis,
+                    "sampleStride": sampleEveryNthFrame,
                 ]
                 if let error = reader.error {
                     result["readerErrorMessage"] = error.localizedDescription

@@ -8849,6 +8849,20 @@ export const trackingDiagnosticsSchema = z.object({
       // this clip never requested box detection (not a box-jump exercise) or Vision genuinely
       // never got a confident read, indistinguishable from this field alone; the report
       // renders both as "not detected" since neither has a number worth showing.
+      // WHERE THE ANALYSIS TIME WENT. Measured natively on every take since the Vision work
+      // landed, and silently stripped here on every insert because this schema never declared
+      // them -- the documented failure mode at the top of this file. Scott's bench, 2026-09-22:
+      // 37.9 seconds of analysis for a 28.4-second clip, and the only way to ask which request
+      // cost it was to read the numbers off a phone nobody can attach a console to.
+      handPoseElapsedSeconds: z.number().optional(),
+      body3DElapsedSeconds: z.number().optional(),
+      body3DFrameCount: z.number().optional(),
+      body3DAvailable: z.boolean().optional(),
+      // FRAME-RATE TRUTH. What the camera negotiated and what the analysis stepped by. 851
+      // frames from a 28.4s clip is a 30Hz sampling of a 120fps recording, which took hand
+      // arithmetic to work out and is the first thing anyone asks about a slow pass.
+      captureFrameRate: z.number().optional(),
+      sampleStride: z.number().optional(),
       boxTopNormalizedY: z.number().optional(),
     })
     .optional()

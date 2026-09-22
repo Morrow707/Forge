@@ -1,5 +1,5 @@
 import type { MovementProfile } from "@shared/schema";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/queryClient";
@@ -76,13 +76,19 @@ const EMPTY_KB_SWING_METRICS: KbSwingSetMetrics = {
 // constant: a couple of lucky frames isn't a real trace.
 const MIN_BELL_SPEED_SAMPLES = 4;
 
+
+type OnCaptureFn = (metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
+
 export function AvKbSwingTrackerDialog({
   open,
   onOpenChange,
   heightIn,
   recordVideo,
   movementProfile,
-  onCapture,
+  onCapture: onCaptureProp,
+  setNumber,
+  onAnalysisStarted,
+  onProcessingSettled,
   videoContext,
 }: {
   open: boolean;
@@ -94,9 +100,38 @@ export function AvKbSwingTrackerDialog({
    * mean "use this file's own default", so a profile can tune one threshold without
    * restating the rest. */
   movementProfile?: MovementProfile | null;
-  onCapture: (metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
+  onCapture: (metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null, forSetNumber?: number) => void;
+  // THE SET THIS TAKE BELONGS TO, AND THE TWO CALLBACKS THAT LET THE CAMERA CLOSE EARLY.
+  //
+  // All three are optional so a caller that does not supply them gets exactly the old behaviour:
+  // the dialog stays open through the analysis. Supplying onAnalysisStarted is what turns the
+  // early close on, and it has to come with setNumber -- the parent's capture handler used to
+  // read the set being filmed off its own state, and that state is cleared by the close, so
+  // closing first without threading the number through would have dropped the capture on the
+  // floor silently. See the fourth argument on onCapture above.
+  setNumber?: number;
+  onAnalysisStarted?: (setNumber: number) => void;
+  onProcessingSettled?: (setNumber: number) => void;
   videoContext?: VideoRecordContext;
 }) {
+
+  // WHICH SET THIS TAKE IS FOR, PINNED AT STOP. Every onCapture below goes through here, so no
+  // exit has to remember to carry it and none of them can forget.
+  //
+  // The parent's capture handler reads the set off its own state and returns early when that
+  // state is null. Closing the camera when the recorder stops clears it, so without this the
+  // capture would arrive after the close and be dropped without a word -- the exact shape of
+  // failure the capture-diagnostics invariants exist to prevent.
+  const capturedSetRef = useRef<number | null>(null);
+  const onCapture: OnCaptureFn = (metrics, videoUrl, skeletonFrames) => {
+    const forSetNumber = capturedSetRef.current ?? undefined;
+    onCaptureProp(metrics, videoUrl, skeletonFrames, forSetNumber);
+    // The processing chip comes down with the capture rather than in a finally, because every
+    // exit from this dialog's save path goes through onCapture -- that is the invariant
+    // refused-capture-survives.test.ts already enforces, so hanging the chip off it cannot
+    // leave one stuck on screen.
+    if (forSetNumber != null) onProcessingSettled?.(forSetNumber);
+  };
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -187,7 +222,21 @@ export function AvKbSwingTrackerDialog({
     // comment. saveEmptyAndWarn and finishWithRecording's own success path both just await
     // this same in-flight upload instead of starting a fresh one once they're ready for it.
     let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
+    // Pinned before anything can close the dialog -- see capturedSetRef.
+    capturedSetRef.current = setNumber ?? null;
     const result = await stopRecordingAndAnalyze({
+      // THE CAMERA CLOSES WHEN THE RECORDER STOPS, not when the analysis ends -- same
+      // change the bar and jump dialogs got, and the reason this one needed a set number
+      // threading through it first. Only when the parent gave us somewhere to hand the
+      // progress to; without that the athlete would be left with no sign anything is
+      // still running, which is worse than the wait.
+      onRecordingStopped:
+        onAnalysisStarted && setNumber != null
+          ? () => {
+              onAnalysisStarted(setNumber);
+              onOpenChange(false);
+            }
+          : undefined,
       // THE OBJECT TRACKER, WHICH THIS DIALOG HAS NEVER ONCE ASKED FOR.
       //
       // A kettlebell is an implement and "kettlebell" is one of the model's eight classes, and

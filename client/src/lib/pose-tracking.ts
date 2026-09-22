@@ -2737,6 +2737,10 @@ function resolveFormFaultThresholds(
   return resolved;
 }
 
+// See the tilt block inside detectFormFaults. Roughly: 4px of wrist jitter over this span is
+// about 2 degrees, comfortably inside any tilt threshold worth reporting.
+export const MIN_TILT_GRIP_SPAN_PX = 110;
+
 export function detectFormFaults(
   frames: PoseFrame[],
   barPathDeviationCm: number,
@@ -2794,6 +2798,11 @@ export function detectFormFaults(
   // undefined/null for everyone else, which resolves to the same defaults
   // this always used. See resolveFormFaultThresholds above.
   thresholdOverrides?: Partial<Record<keyof FormFaultThresholds, number | null>> | null,
+  // How far apart the two grips were in the image, in pixels, for this take -- the denominator
+  // the tilt angle is computed from. See the tilt block's own comment: below a floor the angle
+  // is noise, and a coaching claim built on noise is worse than none. Undefined leaves the
+  // behaviour exactly as it was, so no existing caller changes.
+  tiltGripSpanPx?: number | null,
 ): FormFault[] {
   const faults: FormFault[] = [];
   // Every distance-based fault label below respects the same device-level
@@ -3082,7 +3091,26 @@ export function detectFormFaults(
     });
   }
 
-  if (tiltAngles.length) {
+  // AN ANGLE BETWEEN TWO POINTS NEEDS THE TWO POINTS TO BE APART.
+  //
+  // Tilt is the height difference between the two grips divided by their separation. When the
+  // bar points anywhere near the camera that separation collapses, so the same few pixels of
+  // wrist noise that mean nothing at a wide grip become tens of degrees. Scott's bench,
+  // 2026-09-22, reported "Bar tilted ~17 degrees toward the left arm" on a take the same
+  // diagnostics show was filmed about 39 degrees off square -- a number nobody could act on,
+  // sitting on the set card next to real ones.
+  //
+  // This is NOT the camera refusing a take (RULE #1). The take, its numbers and its diagnostics
+  // are all written exactly as before. This suppresses one COACHING CLAIM about the athlete's
+  // technique whose input was not measured -- telling somebody their bar is crooked on the
+  // strength of arithmetic that could not see it is not a wrong number, it is a wrong
+  // instruction. Every other fault and every metric is untouched.
+  //
+  // The floor is where the geometry stops working: about 4px of wrist jitter across a span of
+  // MIN_TILT_GRIP_SPAN_PX resolves to well under the tilt threshold, so a fault that fires is
+  // one the separation could actually support.
+  const tiltSpanUsable = tiltGripSpanPx == null || tiltGripSpanPx >= MIN_TILT_GRIP_SPAN_PX;
+  if (tiltAngles.length && tiltSpanUsable) {
     // 95th percentile of |tilt|, not a raw max -- see percentile's own
     // comment. Sign comes from the first sample that reaches this robust
     // magnitude, so the label still says which side was actually dropping.
