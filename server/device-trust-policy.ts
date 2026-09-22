@@ -28,6 +28,34 @@ export function isDeviceVerificationDisabled(): boolean {
 }
 
 /**
+ * THE SAME KILL SWITCH, FOR THE AUTHENTICATOR STEP.
+ *
+ * Set MFA_ENFORCEMENT_DISABLED=true and a login stops asking for the six-digit code. It is an
+ * OPERATOR control with the same shape and the same reasoning as the device one above, and it
+ * exists for beta: an account is reinstalled off TestFlight several times a day, every install
+ * is a fresh device, and the code is demanded on every one of them. Scott, 2026-09-22: "the
+ * keys spawn, everything works, disable forge wanting it."
+ *
+ * TWO PROPERTIES MATTER, AND BOTH ARE WHY THIS IS A SWITCH RATHER THAN A DATA CHANGE.
+ *
+ * It does not touch a single row. `mfaEnabled`, the secret and the backup codes are left
+ * exactly as they are, so turning the variable off again restores every account's second
+ * factor with the authenticator that is already paired -- nobody re-enrols and nobody is
+ * quietly left unprotected after beta without it being visible right here.
+ *
+ * And it is deliberately NOT per-account. An exemption for one email is the thing that gets
+ * forgotten: it reads as normal code, nothing points at it, and it survives into production
+ * protecting nobody's attention. A platform-wide variable is impossible to forget, because
+ * the day it is still set is the day every account is running without a second factor.
+ *
+ * It does not disable the enrolment routes: an account can still set MFA up and confirm it
+ * while this is on. Only the DEMAND at login stands down.
+ */
+export function isMfaEnforcementDisabled(): boolean {
+  return process.env.MFA_ENFORCEMENT_DISABLED === "true";
+}
+
+/**
  * THE DEMO ACCOUNTS, EXEMPT IN CODE RATHER THAN IN AN ENVIRONMENT VARIABLE.
  *
  * These three are the accounts Apple's reviewers and anyone demonstrating Forge sign in with.

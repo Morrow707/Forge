@@ -28,6 +28,7 @@ import {
   hashDeviceId,
   isDeviceVerificationDisabled,
   isDeviceVerificationExempt,
+  isMfaEnforcementDisabled,
   listTrustedDevices,
   normalizeDeviceId,
   setApprovalLocation,
@@ -1452,7 +1453,7 @@ export function setupAuth(app: Express) {
         if (gate.kind === "approval") {
           return res.json({ deviceApprovalRequired: true, pollToken: gate.pollToken, emailHint: maskEmail(user.email) });
         }
-        if (user.mfaEnabled && !mayShortCircuitMfa(gate)) {
+        if (user.mfaEnabled && !isMfaEnforcementDisabled() && !mayShortCircuitMfa(gate)) {
           return res.json({ mfaRequired: true, mfaToken: signMfaPendingToken(user.id) });
         }
         completeLogin(req, res, next, user);
@@ -1533,7 +1534,7 @@ export function setupAuth(app: Express) {
       //
       // Only when the device genuinely became trusted. A device that could not identify itself
       // is not remembered, so it has no second factor and still owes the code.
-      if (user.mfaEnabled && !becameTrusted) {
+      if (user.mfaEnabled && !isMfaEnforcementDisabled() && !becameTrusted) {
         return res.json({ mfaRequired: true, mfaToken: signMfaPendingToken(user.id) });
       }
       completeLogin(req, res, next, user);
