@@ -117,6 +117,10 @@ export function NutritionPanel({
   // move the food log to that day too -- the two used to track the date
   // independently, which is why the chart's bars couldn't do anything.
   const [foodLogDate, setFoodLogDate] = useState(() => todayIso());
+  // Declared up here with the rest of the state, NOT beside macrosAllSet where it is used --
+  // that sits below `if (isLoading) return`, and a hook after an early return is a hook that
+  // does not run on every render. client/src/lib/hooks-after-early-return.test.ts caught it.
+  const [targetsOpen, setTargetsOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
   // A clarifying question the assistant asked instead of answering. Held
@@ -189,6 +193,10 @@ export function NutritionPanel({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [nutritionUrl] });
+      // Folds away on save, which is what the note above the form promised would happen.
+      // targetsExpanded still falls back to open until the macros are actually complete, so a
+      // partial save leaves the fields where the athlete can finish them.
+      setTargetsOpen(false);
       toast.success("Nutrition targets saved");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't save"),
@@ -255,17 +263,84 @@ export function NutritionPanel({
 
   const hasAnyTarget =
     !!data && [...MACRO_FIELDS, ...MICRO_FIELDS].some((f) => data[f.key] != null);
+  // THE RINGS ARE THE PAGE; THE FORM IS SETUP.
+  //
+  // Every macro and micro field was stacked above the rings, so an athlete opening this at a
+  // glance scrolled past fourteen inputs to reach the one thing they came for. Reported
+  // 2026-09-22: "I want the rings to show up first so at a fast glance the free agent can see
+  // their daily goals". The form is not removed -- targets change -- it folds away once the
+  // macros are set, and says so before it does.
+  const macrosAllSet = !!data && MACRO_FIELDS.every((f) => data[f.key] != null);
+  // Only latched from "set" to closed: an athlete who has just filled the form watches it fold
+  // on save, and one arriving later finds it already folded. Someone who opens it to change a
+  // number keeps it open until they say otherwise, which is why this is state and not a
+  // derived boolean.
+  const targetsExpanded = targetsOpen || !macrosAllSet;
 
   return (
     <div className="space-y-5">
+      {/* FIRST ON THE PAGE, above the setup form. See macrosAllSet for why. */}
+      {foodLogUrl && (
+        <FoodLogPanel
+          fetchUrl={foodLogUrl}
+          editable={!!foodLogEditable}
+          date={foodLogDate}
+          onDateChange={setFoodLogDate}
+          targets={
+            data
+              ? {
+                  caloriesKcal: data.caloriesKcal,
+                  proteinG: data.proteinG,
+                  carbsG: data.carbsG,
+                  fatG: data.fatG,
+                  fiberG: data.fiberG,
+                  waterOz: data.waterOz,
+                  calciumMg: data.calciumMg,
+                  ironMg: data.ironMg,
+                  vitaminDMcg: data.vitaminDMcg,
+                  potassiumMg: data.potassiumMg,
+                  magnesiumMg: data.magnesiumMg,
+                  sodiumMg: data.sodiumMg,
+                  vitaminB12Mcg: data.vitaminB12Mcg,
+                  zincMg: data.zincMg,
+                }
+              : null
+          }
+        />
+      )}
       {!editable && !hasAnyTarget && (
         <p className="py-4 text-center text-sm text-muted-foreground">
           No nutrition targets set yet -- your coach hasn't added a plan here.
         </p>
       )}
 
-      {(editable || hasAnyTarget) && (
+      {editable && macrosAllSet && !targetsOpen && (
+        <button
+          type="button"
+          onClick={() => setTargetsOpen(true)}
+          className="flex w-full items-center justify-between rounded-md border border-border p-3 text-left text-sm"
+        >
+          <span>
+            <span className="font-semibold">Your targets are set.</span>{" "}
+            <span className="text-muted-foreground">
+              {data?.caloriesKcal != null ? `${data.caloriesKcal} kcal` : "--"}
+              {data?.proteinG != null ? ` - ${data.proteinG}g protein` : ""}
+            </span>
+          </span>
+          <span className="shrink-0 font-semibold text-primary">Edit</span>
+        </button>
+      )}
+
+      {(editable || hasAnyTarget) && targetsExpanded && (
         <>
+          {editable && !macrosAllSet && (
+            // The heads-up, so the fields disappearing later reads as designed rather than as
+            // the app having lost them.
+            <p className="rounded-md border border-border bg-surface-elevated p-3 text-xs text-muted-foreground">
+              Fill these in and save, and they tuck away into a single line -- your daily rings
+              move to the top. You can reopen them any time to change a number.
+            </p>
+          )}
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Macros
@@ -281,7 +356,7 @@ export function NutritionPanel({
         </>
       )}
 
-      {editable ? (
+      {editable && targetsExpanded ? (
         <div className="space-y-1.5">
           <Label htmlFor="nutrition-notes">Notes</Label>
           <Textarea
@@ -301,7 +376,7 @@ export function NutritionPanel({
         )
       )}
 
-      {editable && (
+      {editable && targetsExpanded && (
         <Button
           type="button"
           onClick={() => saveMutation.mutate()}
@@ -450,34 +525,6 @@ export function NutritionPanel({
         />
       )}
 
-      {foodLogUrl && (
-        <FoodLogPanel
-          fetchUrl={foodLogUrl}
-          editable={!!foodLogEditable}
-          date={foodLogDate}
-          onDateChange={setFoodLogDate}
-          targets={
-            data
-              ? {
-                  caloriesKcal: data.caloriesKcal,
-                  proteinG: data.proteinG,
-                  carbsG: data.carbsG,
-                  fatG: data.fatG,
-                  fiberG: data.fiberG,
-                  waterOz: data.waterOz,
-                  calciumMg: data.calciumMg,
-                  ironMg: data.ironMg,
-                  vitaminDMcg: data.vitaminDMcg,
-                  potassiumMg: data.potassiumMg,
-                  magnesiumMg: data.magnesiumMg,
-                  sodiumMg: data.sodiumMg,
-                  vitaminB12Mcg: data.vitaminB12Mcg,
-                  zincMg: data.zincMg,
-                }
-              : null
-          }
-        />
-      )}
     </div>
   );
 }
