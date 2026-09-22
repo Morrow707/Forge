@@ -816,6 +816,21 @@ export function AvBarTrackerDialog({
         // no video.
         onBlobReady: (blob) => {
           onAnalysisStarted(forSetNumber);
+          // BACK OUT OF THE CAMERA HERE. THIS LINE IS THE WHOLE REDESIGN AND IT WAS MISSING.
+          //
+          // The comment on onAnalysisStarted has said "the dialog closes as soon as this fires"
+          // since it was written, and nothing closed it -- the only onOpenChange(false) calls
+          // were at the END of the save path, after the analysis. So the athlete sat on a live
+          // camera preview behind "Analyzing recording -- 0 frames processed..." for the length
+          // of the analysis, which on a 28s take at 120fps is 39 seconds. Scott, 2026-09-22:
+          // "it should back out of the camera completely to upload in the background."
+          //
+          // Closing is safe and always was: tracker dialogs are mounted through lazyDialog and
+          // STAY mounted after close (see CLAUDE.md), precisely so a save path can finish after
+          // this call. The set card takes over from here -- onAnalysisStarted has already put
+          // this set into the processing list, and the analysis and upload report their progress
+          // onto that card.
+          onOpenChange(false);
           if (recordVideo) {
             setSaving(true);
             setUploadProgress(0);

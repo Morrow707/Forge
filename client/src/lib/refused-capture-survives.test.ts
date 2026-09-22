@@ -88,3 +88,28 @@ describe("a capture whose save path threw", () => {
     });
   }
 });
+
+// THE CAMERA CLOSES WHEN THE ANALYSIS STARTS, NOT WHEN IT FINISHES.
+//
+// onAnalysisStarted's own comment has always said the dialog closes as soon as it fires, and
+// nothing closed it -- every onOpenChange(false) sat at the end of the save path, after the
+// analysis. So the athlete stared at "Analyzing recording -- 0 frames processed..." over a live
+// camera preview for 39 seconds on a 28-second take. Scott, 2026-09-22: "it should back out of
+// the camera completely to upload in the background."
+describe("the tracker dialog hands over to the set card", () => {
+  it("closes in the same breath as onAnalysisStarted", () => {
+    const src = readFileSync(
+      join(process.cwd(), "client/src/components/av-bar-tracker-dialog.tsx"),
+      "utf8",
+    );
+    const started = src.indexOf("onAnalysisStarted(forSetNumber);");
+    expect(started).toBeGreaterThan(-1);
+    // The close has to be the next thing that happens, not something a later branch might skip.
+    const nextFewLines = src.slice(started, started + 1400);
+    expect(nextFewLines).toContain("onOpenChange(false);");
+    // ...and before the upload is even started, so a video has no chance to hold the camera open.
+    expect(nextFewLines.indexOf("onOpenChange(false);")).toBeLessThan(
+      nextFewLines.indexOf("uploadOrQueueVideo("),
+    );
+  });
+});
