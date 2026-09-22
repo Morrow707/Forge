@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/queryClient";
 import {
   uploadOrQueueVideo,
+  attachUploadedVideoInBackground,
   hasWarnedAboutQueueing,
   markWarnedAboutQueueing,
   type VideoRecordContext,
@@ -633,6 +634,49 @@ export function AvBarTrackerDialog({
   // still wants a video of every set even with no trustworthy numbers to go
   // with it, same reasoning as ArBarTrackerDialog/AvJumpTrackerDialog's own
   // near-identical branches.
+  // THE SET COMES BACK NOW. THE VIDEO CATCHES UP ON ITS OWN.
+  //
+  // Every path below used to AWAIT the upload before handing the metrics up and closing, so the
+  // athlete stood watching a bar for a file that has nothing to do with their numbers -- counted
+  // at about 22 seconds on a 1080p/120fps take, 2026-09-22: "22 seconds is far too long."
+  //
+  // The analysis is finished by the time any of this runs. So the set is handed up and the
+  // dialog closes immediately, and the upload continues in the background: when it lands,
+  // attachUploadedVideoInBackground links it to the set by row id (tuple fallback) and announces
+  // it, which is the same path a Wi-Fi-queued clip already takes. An open workout page patches
+  // its own copy from that event -- without it the next autosave would overwrite the day and
+  // take the fresh attachment with it.
+  //
+  // `videoContext.reattach` is what makes the link possible. Without it the clip lands in the
+  // Video Bank's unattached list rather than on the set, which is the existing behaviour for a
+  // clip whose target is unknown -- worse than attaching, far better than making somebody wait.
+  function uploadInBackground(
+    uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }>,
+    context: VideoRecordContext,
+  ) {
+    void uploadPromise
+      .then(async (result) => {
+        if (result.status === "queued") {
+          if (!hasWarnedAboutQueueing()) {
+            markWarnedAboutQueueing();
+            toast.info(
+              "No Wi-Fi -- the video is saved on your device and will upload for your coach once connected. "
+                + "You can also send it manually from the Video Bank.",
+              { duration: 10000 },
+            );
+          }
+          return;
+        }
+        await attachUploadedVideoInBackground(context, result.url);
+      })
+      .catch((err) => {
+        const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
+        // The SET is already saved by this point, which is the whole intent -- this toast is
+        // about the clip alone, and says so rather than reading as a lost set.
+        toast.error(`Your set saved, but the video didn't: ${detail}`);
+      });
+  }
+
   async function saveEmptyAndWarn(
     blob: Blob,
     message: string,
@@ -644,25 +688,10 @@ export function AvBarTrackerDialog({
     const emptyMetrics: RepMetrics = { ...EMPTY_REP_METRICS, captureDeviceInfo, trackingDiagnostics };
     if (recordVideo && uploadPromise) {
       try {
-        const result = await uploadPromise;
-        toast.error(
-          result.status === "queued"
-            ? `${message} (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)`
-            : `${message} (Video saved for your coach.)`,
-        );
-        if (result.status === "queued") {
-          if (!hasWarnedAboutQueueing()) {
-            markWarnedAboutQueueing();
-            toast.info(
-              "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
-              { duration: 10000 },
-            );
-          }
-          onCapture(emptyMetrics, undefined, forSetNumber);
-        } else {
-          onCapture(emptyMetrics, result.url, forSetNumber);
-        }
+        toast.error(`${message} (Video uploading for your coach.)`);
+        onCapture(emptyMetrics, undefined, forSetNumber);
         onOpenChange(false);
+        uploadInBackground(uploadPromise, videoContext ?? { label: exerciseName });
       } catch (err) {
         const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
         toast.error(`${message} And the video didn't save either: ${detail}`);
@@ -734,25 +763,12 @@ export function AvBarTrackerDialog({
     const full = `${message} ${summary}`;
     if (recordVideo && uploadPromise) {
       try {
-        const result = await uploadPromise;
-        toast.warning(
-          result.status === "queued"
-            ? `${full} (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)`
-            : `${full} (Video saved for your coach.)`,
-        );
-        if (result.status === "queued") {
-          if (!hasWarnedAboutQueueing()) {
-            markWarnedAboutQueueing();
-            toast.info(
-              "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
-              { duration: 10000 },
-            );
-          }
-          onCapture(metrics, undefined, forSetNumber);
-        } else {
-          onCapture(metrics, result.url, forSetNumber);
-        }
+        // Same as the refusal path above: the set is handed up and the dialog closes now, and
+        // the clip attaches itself when it lands. See uploadInBackground.
+        toast.warning(`${full} (Video uploading for your coach.)`);
+        onCapture(metrics, undefined, forSetNumber);
         onOpenChange(false);
+        uploadInBackground(uploadPromise, videoContext ?? { label: exerciseName });
       } catch (err) {
         const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
         toast.error(`${full} And the video didn't save either: ${detail}`);

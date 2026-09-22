@@ -9322,7 +9322,16 @@ export type SubmitWorkoutLogInput = z.infer<typeof submitWorkoutLogSchema>;
 // and falls back to the tuple when the id no longer exists (the day was resaved -- ids are
 // never reused, so a stale id can only miss, never land on the wrong set). The tuple stays
 // required because it is the only address a clip filmed before its first save can have.
-export const VIDEO_ATTACH_REASONS = ["offline_flush", "server_error_retry", "manual"] as const;
+export const VIDEO_ATTACH_REASONS = [
+  "offline_flush",
+  "server_error_retry",
+  "manual",
+  // A live upload that outlived the dialog that started it. Nothing was ever queued -- the clip
+  // went straight up and the athlete simply was not made to wait for it. Distinct from
+  // offline_flush so a coach reading the row can tell "no Wi-Fi at the time" from "uploaded
+  // normally, just after the set was saved".
+  "background_upload",
+] as const;
 export type VideoAttachReason = (typeof VIDEO_ATTACH_REASONS)[number];
 export const attachVideoToSetSchema = z.object({
   assignmentId: z.number(),

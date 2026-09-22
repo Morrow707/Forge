@@ -68,7 +68,14 @@ export type VideoReattachTarget = {
 
 /** Why a clip is being attached out of band -- recorded on the set row so a coach or an
  * audit can tell a Wi-Fi-queued clip from one that met a 5xx from one linked by hand. */
-export type VideoAttachReason = "offline_flush" | "server_error_retry" | "manual";
+export type VideoAttachReason =
+  | "offline_flush"
+  | "server_error_retry"
+  | "manual"
+  // A live upload that outlived the dialog that started it -- see
+  // attachUploadedVideoInBackground. Distinct from offline_flush because nothing was ever
+  // queued: the clip went straight up, the athlete just did not wait for it.
+  | "background_upload";
 
 // What a recording dialog needs to pass in -- everything queuing/upload
 // needs beyond the blob itself.
@@ -329,6 +336,50 @@ async function attachVideoToSet(
  * produced, so a clip still waiting in the queue names the CURRENT row of its set rather than
  * one a resave has since replaced. Keyed by the tuple the clip already carries. Best-effort:
  * a manifest that cannot be written keeps its old ids, and the tuple fallback still lands it. */
+/**
+ * ATTACH A CLIP THAT FINISHED UPLOADING AFTER THE DIALOG CLOSED.
+ *
+ * The tracker dialogs used to AWAIT the upload before handing the set up and closing, so the
+ * athlete stood watching a progress bar for a video that has nothing to do with their numbers --
+ * measured at about 22 seconds on a 1080p/120fps take, 2026-09-22: "22 seconds is far too long."
+ * The metrics are finished the moment the on-device analysis ends; the upload is a separate
+ * concern and belongs in the background.
+ *
+ * This is the same path a queued clip takes when Wi-Fi comes back (flushPendingVideos below),
+ * for the same reason: the set row may have been resaved since, so the server is asked to attach
+ * by row id with a tuple fallback, and the event tells an OPEN workout page to patch its own
+ * in-memory copy -- otherwise the next autosave overwrites the whole day and takes the fresh
+ * attachment with it. That race is why this cannot simply POST and hope.
+ *
+ * ONE RETRY, because this races the set's own first save. onCapture and this upload start at the
+ * same moment; if the row has not landed yet the server declines, and declining is permanent
+ * from the caller's point of view. A single retry a few seconds later covers the ordinary case
+ * without turning a failed attach into a loop.
+ *
+ * Every failure ends in the unattached list, which the Video Bank already surfaces, so a clip is
+ * never lost -- it is at worst one tap from the set it belongs to.
+ */
+export async function attachUploadedVideoInBackground(
+  context: VideoRecordContext,
+  videoUrl: string,
+): Promise<void> {
+  const target = context.reattach;
+  if (!target) {
+    recordUnattachedUpload({ url: videoUrl, label: context.label, uploadedAt: new Date().toISOString() });
+    return;
+  }
+  let outcome = await attachVideoToSet(target, videoUrl, "background_upload", context.label);
+  if (outcome !== "attached") {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    outcome = await attachVideoToSet(target, videoUrl, "background_upload", context.label);
+  }
+  if (outcome === "attached") {
+    announceReattached(target, videoUrl);
+    return;
+  }
+  recordUnattachedUpload({ url: videoUrl, label: context.label, uploadedAt: new Date().toISOString() });
+}
+
 export function refreshQueuedVideoRowIds(
   day: { assignmentId: number; programDayId: number; date: string },
   rows: { programExerciseId: number | null; setNumber: number; id: number }[],

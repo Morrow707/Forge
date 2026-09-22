@@ -1409,8 +1409,41 @@ export function WorkoutPage({
       replay?: boolean;
     }) => {
       try {
+        // HOW BIG IS THIS SAVE, AND HOW LONG DID IT TAKE.
+        //
+        // The athlete counted about 22 seconds of "Finishing" after a filmed set, and the video
+        // upload was assumed to be the whole of it. It may not be: this payload carries the day,
+        // and a tracked set's skeletonFrames are roughly 900 frames x 33 landmarks -- the
+        // express.json limit was raised to 25MB for exactly this shape. On cellular that is tens
+        // of seconds on its own.
+        //
+        // Nobody has measured which of the two it is, and every camera wait before this one was
+        // guessed at before somebody measured. So the size and the round trip are both recorded,
+        // per save, on the one instrument that works on a phone.
+        const bytes = JSON.stringify(payload).length;
+        const skeletonBytes = (payload.entries ?? []).reduce(
+          (sum: number, e: any) =>
+            sum
+            + (e.sets ?? []).reduce(
+              (setSum: number, set: any) =>
+                setSum
+                + (set.skeletonFrames ? JSON.stringify(set.skeletonFrames).length : 0)
+                + (set.barPathTrace ? JSON.stringify(set.barPathTrace).length : 0)
+                + (set.armPathTrace ? JSON.stringify(set.armPathTrace).length : 0),
+              0,
+            ),
+          0,
+        );
+        logDebug(
+          "SAVE",
+          `log POST sending ${Math.round(bytes / 1024)}KB (traces ${Math.round(skeletonBytes / 1024)}KB)`,
+        );
+        const startedAt = Date.now();
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
-        logDebug("SAVE", `log POST ok (${payload.entries?.length ?? 0} exercises)`);
+        logDebug(
+          "SAVE",
+          `log POST ok (${payload.entries?.length ?? 0} exercises) in ${Date.now() - startedAt}ms`,
+        );
         return { synced: true as const, data: await res.json(), silent };
       } catch (err) {
         // WHETHER A SET REACHED THE SERVER IS THE FIRST QUESTION AND THERE WAS NO WAY TO ASK IT.
