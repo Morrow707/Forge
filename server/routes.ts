@@ -8242,6 +8242,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         audience,
         complete: missing.length === 0,
         missing: missing.map((d) => ({ kind: d.kind, label: d.label, why: d.why })),
+        // WHETHER A MISSING DOCUMENT ACTUALLY STOPS ANYTHING, AND IN BETA IT DOES NOT.
+        //
+        // The same switch billing uses, for the same reason: the checklist and the wall are two
+        // different decisions. `missing` is a fact and the banner says it either way, so an
+        // athlete still knows what is outstanding. Blocking them from training on it is
+        // enforcement, and Forge does not enforce during beta -- "we are still in beta, build
+        // the framework, but keep it free for now."
+        //
+        // This matters more here than it does for a price. Only medical_clearance is beta
+        // deferred, so participation_waiver is outstanding for essentially every athlete on the
+        // platform right now; a gate that read `complete` alone would have locked the whole
+        // roster out of training the moment it shipped. The client requires this to be true
+        // before it blocks anything.
+        enforced: ENFORCEMENT_ENABLED,
       });
     } catch (err) {
       next(err);

@@ -1,4 +1,5 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
+import { DocumentsGate } from "@/components/document-gate";
 import { useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Toaster } from "sonner";
@@ -577,11 +578,28 @@ function Router() {
         <Route path="/athlete/classes">
           <ProtectedRoute role="athlete" component={AthleteClasses} />
         </Route>
+        {/* TRAINING AND SKILLS SIT BEHIND THE DOCUMENT GATE, which is what the gate's own dialog
+            has promised since it was written ("training, skills and the camera stay locked until
+            these are on file") while nothing whatsoever enforced it -- useDocumentGuard existed
+            and had no callers, so an athlete with no participation waiver read the warning and
+            trained anyway.
+
+            At the ROUTE rather than on each button, same reasoning as SkillsGate: these screens
+            are reached from the dashboard, the calendar and a deep link, and guarding every
+            control that leads to one is a list somebody falls off. The camera lives inside these
+            pages, so it is covered by the same wrapper rather than needing its own.
+
+            Inert through beta -- the gate requires the server's `enforced` flag, which follows
+            BILLING_ENFORCEMENT_ENABLED. */}
         <Route path="/athlete/day/:assignmentId/:programDayId/:date">
-          <ProtectedRoute role="athlete" component={AthleteWorkout} />
+          <DocumentsGate>
+            <ProtectedRoute role="athlete" component={AthleteWorkout} />
+          </DocumentsGate>
         </Route>
         <Route path="/athlete/skill-day/:skillAssignmentId/:skillProgramDayId/:date">
-          <ProtectedRoute role="athlete" component={AthleteSkillWorkout} />
+          <DocumentsGate>
+            <ProtectedRoute role="athlete" component={AthleteSkillWorkout} />
+          </DocumentsGate>
         </Route>
         <Route path="/athlete/about">
           <ProtectedRoute role="athlete" component={TeamAboutPage} />

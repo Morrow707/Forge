@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { FileWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,9 @@ export type DocumentCompliance = {
   audience: string;
   complete: boolean;
   missing: { kind: string; label: string; why: string }[];
+  // Whether an outstanding document actually stops anything. False through beta -- see the
+  // route's own comment. Optional so an older cached response cannot read as "enforce now".
+  enforced?: boolean;
 };
 
 /** MAY THIS ACCOUNT TRAIN YET?
@@ -43,7 +46,13 @@ export function useDocumentGate(): {
   });
   if (user?.role !== "athlete") return { blocked: false, missing: [] };
   if (!data) return { blocked: undefined, missing: [] };
-  return { blocked: !data.complete, missing: data.missing };
+  // ENFORCEMENT IS A SEPARATE ANSWER FROM COMPLETENESS, and both have to be true to block.
+  //
+  // `missing` is still returned in every case, because the banner naming what is outstanding is
+  // useful whether or not it stops anything. What changes is whether a control refuses.
+  // Blocking on `complete` alone would strand every athlete who has not filed a participation
+  // waiver, which today is almost all of them.
+  return { blocked: data.enforced === true && !data.complete, missing: data.missing };
 }
 
 /** The wall, with the way through it.
@@ -114,13 +123,32 @@ export function DocumentsRequiredDialog({
 export function useDocumentGuard() {
   const { blocked, missing } = useDocumentGate();
   const [open, setOpen] = useState(false);
+  // A TAP THAT ARRIVES BEFORE THE ANSWER IS HELD, NOT DROPPED.
+  //
+  // Swallowing it -- which is what this did -- makes the button dead for as long as the request
+  // is in flight, with no spinner and no refusal, so the athlete taps again and nothing happens
+  // twice. "Unknown is not yes and not no" is the right rule for what to DRAW; it is the wrong
+  // rule for what to do with a press somebody has already made. The press is remembered and
+  // runs the instant the answer lands, or meets the wall if the answer is no.
+  const pending = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (blocked === undefined) return;
+    const held = pending.current;
+    if (!held) return;
+    pending.current = null;
+    if (blocked) setOpen(true);
+    else held();
+  }, [blocked]);
   function guard<T extends unknown[]>(action: (...args: T) => void) {
     return (...args: T) => {
       if (blocked === true) {
         setOpen(true);
         return;
       }
-      if (blocked === undefined) return;
+      if (blocked === undefined) {
+        pending.current = () => action(...args);
+        return;
+      }
       action(...args);
     };
   }
@@ -129,4 +157,44 @@ export function useDocumentGuard() {
     guard,
     gateDialog: <DocumentsRequiredDialog open={open} onOpenChange={setOpen} missing={missing} />,
   };
+}
+
+
+/** THE WALL AS A PAGE, for a whole screen rather than one control.
+ *
+ * Same shape as SkillsGate and FreeAgentGate, deliberately: training and skills are screens an
+ * athlete reaches by several routes, and guarding every button that leads to one is a list
+ * somebody will fall off. The per-control useDocumentGuard above stays for the places where a
+ * page is legitimately open and one action inside it is not.
+ *
+ * `blocked === undefined` renders the children rather than a spinner. That is the opposite of
+ * SkillsGate and it is deliberate: a skills page behind an unpaid tier should not flash into
+ * view, but a training page is one this athlete is overwhelmingly likely to be allowed on --
+ * enforcement is off entirely through beta -- so holding their workout behind a spinner on every
+ * navigation costs every athlete a wait to catch a case that currently never fires.
+ */
+export function DocumentsGate({ children }: { children: ReactNode }) {
+  const { blocked, missing } = useDocumentGate();
+  const [, navigate] = useLocation();
+  if (blocked !== true) return <>{children}</>;
+  return (
+    <div className="mx-auto max-w-md px-4 py-16 text-center">
+      <FileWarning className="mx-auto h-10 w-10 text-primary" />
+      <h2 className="mt-4 text-xl font-semibold">Finish your documents first</h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Training, skills and the camera unlock as soon as these are on file.
+      </p>
+      <ul className="mt-5 space-y-2 text-left">
+        {missing.map((doc) => (
+          <li key={doc.kind} className="rounded-md border border-border p-3">
+            <p className="text-sm font-semibold">{doc.label}</p>
+            <p className="text-xs text-muted-foreground">{doc.why}</p>
+          </li>
+        ))}
+      </ul>
+      <Button type="button" className="mt-6 w-full" onClick={() => navigate("/documents")}>
+        Take me to my documents
+      </Button>
+    </div>
+  );
 }

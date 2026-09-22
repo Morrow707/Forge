@@ -475,6 +475,42 @@ see whats live on their profiles and whats missing"). State of the code:
 - **The admin research card cites the export cell floor from the server** (`exportMinCell`),
   never a hand-typed 10.
 
+## The document gate now gates something, and is inert through beta
+
+Added 2026-09-22. The gate's own dialog has said "You can look around Forge, but training,
+skills and the camera stay locked until these are on file" since it was written, and
+`useDocumentGuard` -- the hook that does the locking -- had NO CALLERS. The only thing wired up
+was an informational banner on the athlete dashboard, so an athlete with no participation waiver
+read the warning and trained anyway.
+
+- **`DocumentsGate` wraps the athlete's workout and skill-workout ROUTES**, not each button.
+  Same reasoning as `SkillsGate`: those screens are reached from the dashboard, the calendar and
+  a deep link, and guarding every control that leads to one is a list somebody falls off. The
+  camera lives inside those pages, so it needs no gate of its own.
+- **BLOCKING REQUIRES THE SERVER'S `enforced` FLAG, and in beta it is false.** This is the part
+  that matters: only `medical_clearance` is in `BETA_DEFERRED_DOCUMENTS`, so
+  `participation_waiver` is outstanding for essentially every athlete on the platform right now.
+  A gate reading `complete` alone would have locked the entire roster out of training the moment
+  it shipped. `enforced` follows `BILLING_ENFORCEMENT_ENABLED`, the same switch billing uses, so
+  the two cannot drift. `missing` is still returned either way -- the banner naming what is
+  outstanding is useful whether or not it stops anything. The checklist and the wall are two
+  different decisions.
+- **A tap made before the answer arrives is HELD, not swallowed.** `useDocumentGuard` used to
+  return early on `blocked === undefined`, which makes the button dead while the request is in
+  flight with no spinner and no refusal -- so the athlete taps again and nothing happens twice.
+  "Unknown is not yes and not no" is the right rule for what to DRAW (see `useCameraAccess`); it
+  is the wrong rule for a press somebody has already made.
+- **`DocumentsGate` renders its children while the answer is unknown**, which is the opposite of
+  `SkillsGate` and deliberate. A skills page behind an unpaid tier should not flash into view; a
+  training page is one the athlete is overwhelmingly likely to be allowed on, and enforcement is
+  off entirely today, so a spinner on every navigation would cost every athlete a wait to catch
+  a case that currently never fires.
+- **Only an athlete is gated.** A coach's credentials matter as much, but locking a coach out of
+  their own roster mid-season is a different decision with a different blast radius and has not
+  been made. The server answers for a coach too; nothing acts on it.
+- `client/src/lib/the-document-gate-actually-gates.test.ts` pins all four: the routes are inside
+  the gate, blocking requires `enforced`, the held tap, and the dialog naming each document.
+
 ## A school picks its plan at signup by typing a number
 
 Added 2026-09-19. Scott: "make schools pick a plan at signup ... can we have them type in how
