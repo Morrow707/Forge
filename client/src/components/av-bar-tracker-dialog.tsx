@@ -87,7 +87,7 @@ import {
   filmGuidanceForExercise,
   barPathAssumptionInvalid,
   expectedCameraView,
-  calibrationRefusalReason,
+  calibrationRefusalReasonForScale,
   firstMoveForExercise,
   romBucketForExercise,
 } from "@/lib/exercise-camera-profile";
@@ -1131,7 +1131,20 @@ export function AvBarTrackerDialog({
     const scaleRefusalMessage =
       scaleFactor != null
         ? null
-        : (calibrationRefusalReason(posture) ??
+        // THE POSTURE-SPECIFIC REFUSAL IS GONE, AND THIS IS THE SECOND PLACE IT LIVED.
+        //
+        // Restoring the shoulder ruler removed the refusal in pose-tracking.ts and NOT this one,
+        // so a lying lift whose scale failed for any other reason still met "Distances and
+        // speeds can't be measured on a lying lift yet ... Forge won't guess." Scott, on seeing
+        // it again after the revert: "But again it rejected, you turned it off."
+        //
+        // It was wrong twice over. It told the athlete their exercise was the problem, when the
+        // actual failure was a scale source that did not resolve -- and it named a limitation
+        // that nothing they could do would fix, on a set where the reps, the durations and the
+        // velocity loss were all still perfectly measurable and all still saved below. A lying
+        // lift is not a different kind of take; it is a take whose scale failed, which is
+        // already what the generic messages below say.
+        : (calibrationRefusalReasonForScale(posture) ??
           (!canUseHeight
             ? "This is a hold or a stretch rather than a lift with reps, so there's no range of motion to measure and your height can't be used to set scale. Numbers are withheld rather than guessed."
             : coreMlTrackingMode === "plate"

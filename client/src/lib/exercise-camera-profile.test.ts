@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   postureForExercise,
   heightCalibrationUnreliable,
-  calibrationRefusalReason,
+  calibrationRefusalReasonForScale,
   firstMoveForExercise,
   romBucketForExercise,
   filmGuidanceForExercise,
@@ -86,34 +86,23 @@ describe("postureForExercise", () => {
     expect(postureForExercise(null)).toBe("standing");
   });
 
-  it("gives a posture-specific reason and none for a standing lift", () => {
-    expect(calibrationRefusalReason("seated")).toContain("Seated");
-    // A LYING LIFT'S MESSAGE MUST NOT ASK FOR A DIFFERENT FRAMING.
-    //
-    // It used to say "film from the side, level with the bar, with both shoulders in frame",
-    // which is exactly how a bench press is already filmed -- and since the shoulder ruler is
-    // refused outright for a lying athlete, no framing can satisfy it. An instruction the
-    // athlete cannot act on reads as the app blaming them, and sends them off to re-film a set
-    // that will refuse again.
-    const lying = calibrationRefusalReason("lying")!;
-    expect(lying).toContain("lying lift");
-    expect(lying).toContain("video is saved");
-    expect(lying.toLowerCase()).not.toContain("film from");
-    expect(calibrationRefusalReason("standing")).toBeNull();
-    expect(calibrationRefusalReason("hanging")).toBeNull();
+  // NO POSTURE IS A REFUSAL ANY MORE. The posture-specific sentences named the LIFT as the
+  // reason numbers were withheld -- a verdict on the exercise rather than on the footage -- and
+  // the lying one told the athlete nothing they could do would fix it. A scale source that did
+  // not resolve is the real failure, and the caller has better sentences for that. See
+  // calibrationRefusalReasonForScale.
+  it("never withholds numbers because of the posture alone", () => {
+    for (const posture of ["standing", "seated", "lying", "supported", "hanging"] as const) {
+      expect(calibrationRefusalReasonForScale(posture)).toBeNull();
+    }
   });
 
-  it("names something the athlete can change, not a verdict on the lift", () => {
-    // These used to fire on the exercise's NAME before any measurement was attempted, so a bench
-    // press was told its numbers were withheld because it is done lying down -- true, permanent,
-    // and impossible to act on. They fire now only once the shoulder-breadth fallback has also
-    // failed, which is a property of the take.
-    for (const posture of ["lying", "seated", "supported"] as const) {
-      const reason = calibrationRefusalReason(posture)!;
-      expect(reason).toContain("shoulder");
-      expect(reason).toContain("camera");
-      expect(reason).not.toContain("withheld rather than guessed");
-    }
+  // Superseded by the test above. This used to assert that each posture's sentence named
+  // something in the TAKE rather than the lift -- a real improvement at the time, on refusals
+  // that should not have existed at all. The refusals are gone; the sentence an athlete gets
+  // now comes from whichever scale source failed, which is written where that is known.
+  it("leaves the explanation to whichever scale source actually failed", () => {
+    expect(calibrationRefusalReasonForScale("lying")).toBeNull();
   });
 });
 

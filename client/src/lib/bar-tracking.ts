@@ -670,14 +670,44 @@ export function rejectImplausibleAccelerationSpikes(points: TrackedPoint[]): Tra
   return cleaned;
 }
 
-// Central-difference speed (pixels/second, always positive) from a smoothed
-// vertical-position trace.
+// A VELOCITY NEEDS A LONG ENOUGH BASELINE, AND 120fps DOES NOT GIVE IT ONE.
+//
+// Velocity is a rate, so the noise in it is the position noise DIVIDED BY dt. At 60fps the
+// central difference spans 33ms and a pixel of landmark jitter is a small number; at 120fps it
+// spans 16ms and the same jitter reads twice as fast. The capture moved to 120fps for the
+// tracker's benefit and this function was left measuring frame-to-frame, so the plausibility
+// gates downstream -- which were tuned against 60fps traces -- started rejecting real frames as
+// impossibly fast.
+//
+// Measured on a real bench take, 2026-09-22: 352 of 460 frames "thrown out by the speed filter",
+// 518 side-reads dropped, and the whole set came out as TWO tracked points with reps not
+// segmented. The athlete's own bar sensor read a steady 0.78 m/s mean over the same ten reps.
+//
+// So the baseline is a DURATION, not a frame count: walk outward from each sample until at least
+// MIN_VELOCITY_BASELINE_MS have passed, and divide by the time actually spanned. At 30fps that
+// is the neighbouring frames and nothing changes; at 60fps it is still the immediate neighbours;
+// at 120fps it widens to four frames, which is the same 33ms window the 60fps fixtures were
+// tuned against. One rule, correct at every capture rate, with no per-rate constant to keep in
+// step -- the same reasoning the arbiter's grip-width threshold follows.
+const MIN_VELOCITY_BASELINE_MS = 33;
+
 function computeSpeeds(points: TrackedPoint[], positions: number[]): number[] {
   const speeds: number[] = new Array(points.length).fill(0);
   for (let i = 1; i < points.length - 1; i++) {
-    const dt = (points[i + 1].t - points[i - 1].t) / 1000;
+    let lo = i - 1;
+    let hi = i + 1;
+    // Widen symmetrically where there is room, so the sample stays centred and the estimate
+    // does not lag the motion; at the ends of the trace it widens whichever way it can.
+    while (points[hi].t - points[lo].t < MIN_VELOCITY_BASELINE_MS) {
+      const canLo = lo > 0;
+      const canHi = hi < points.length - 1;
+      if (!canLo && !canHi) break;
+      if (canLo && (!canHi || i - lo <= hi - i)) lo--;
+      else hi++;
+    }
+    const dt = (points[hi].t - points[lo].t) / 1000;
     if (dt <= 0) continue;
-    speeds[i] = Math.abs(positions[i + 1] - positions[i - 1]) / dt;
+    speeds[i] = Math.abs(positions[hi] - positions[lo]) / dt;
   }
   return speeds;
 }
