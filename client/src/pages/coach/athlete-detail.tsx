@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { lazyDialog } from "@/components/lazy-dialog";
 import { VideoReviewList } from "@/components/video-review-list";
 import { StrengthProfileCard } from "@/components/strength-profile-card";
+import { CoachVideoWorkbenchCard } from "@/components/video-workbench";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { AthleteSwitcher } from "@/components/athlete-switcher";
@@ -604,6 +605,15 @@ export default function AthleteDetailPage() {
                       <StrengthProfileCard
                         fetchUrl={`/api/coach/roster/${athlete.id}/strength-profile`}
                       />
+                    </div>
+
+                    {/* The same workbench the Free Agent add-on sells, unpaid for a coach:
+                        video review is what the coach product IS, and the add-on exists so an
+                        athlete with no coach can do for themselves what a coach would
+                        otherwise do for them. Charging a coach for their own tool would be
+                        backwards. */}
+                    <div className="space-y-2 border-t border-border pt-4">
+                      <CoachVideoWorkbenchCard athleteId={athlete.id} athleteName={athlete.name} />
                     </div>
 
                     {/* Saved reviews for this athlete. Lives beside the clips they were made

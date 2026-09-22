@@ -8,6 +8,7 @@ import { SessionRecorderControls } from "@/components/session-recorder-controls"
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { getJson } from "@/lib/queryClient";
 import type { FreeAgentAddOnId } from "@shared/free-agent-tiers";
+import type { CompareSubject } from "@/components/clip-picker";
 
 type AthleteEntitlements = {
   addOns: Record<FreeAgentAddOnId, boolean>;
@@ -39,7 +40,47 @@ export function VideoWorkbenchCard() {
   // Unknown is not yes. Same convention as useCameraAccess: drawing this before the answer
   // lands flashes a bought feature at somebody who has not bought it.
   if (data?.addOns?.video_analysis !== true) return null;
+  return <WorkbenchBody open={open} setOpen={setOpen} subject={{ kind: "self" }} />;
+}
 
+/** THE COACH'S COPY, and it needs no entitlement.
+ *
+ * A coach is not buying the camera back from us -- video review is what the coach product IS,
+ * and the add-on exists so a Free Agent with no coach can do for themselves what a coach would
+ * otherwise do for them. Gating this would charge a coach for their own tool.
+ *
+ * Same workbench, same recorder, one difference: the clips on each side are the ATHLETE's,
+ * because that is whose lift is being reviewed.
+ */
+export function CoachVideoWorkbenchCard({
+  athleteId,
+  athleteName,
+}: {
+  athleteId: number;
+  athleteName: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <WorkbenchBody
+      open={open}
+      setOpen={setOpen}
+      subject={{ kind: "roster", athleteId, athleteName }}
+      heading={`Video analysis -- ${athleteName}`}
+    />
+  );
+}
+
+function WorkbenchBody({
+  open,
+  setOpen,
+  subject,
+  heading = "Video analysis",
+}: {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  subject: CompareSubject;
+  heading?: string;
+}) {
   return (
     <>
       <Card>
@@ -49,7 +90,7 @@ export function VideoWorkbenchCard() {
               <Clapperboard className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold">Video analysis</p>
+              <p className="font-semibold">{heading}</p>
               <p className="text-sm text-muted-foreground">
                 Put one of your lifts next to a reference clip, step through them together, draw
                 on them and talk over the top. Record the session and save it to your phone --
@@ -68,10 +109,8 @@ export function VideoWorkbenchCard() {
       <VideoCompareDialog
         open={open}
         onOpenChange={setOpen}
-        // "self": the athlete's own clips. A Free Agent has no roster and no guardian view --
-        // the only footage they can put on a side is their own.
-        subject={{ kind: "self" }}
-        title="Video analysis"
+        subject={subject}
+        title={heading}
         footer={<SessionRecorderControls />}
       />
     </>
