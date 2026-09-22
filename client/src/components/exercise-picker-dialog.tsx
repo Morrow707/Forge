@@ -291,12 +291,14 @@ export function ExercisePickerDialog({
             selected={muscleGroupFilter}
             onToggle={(group) =>
               setMuscleGroupFilter((prev) => {
-                const next = new Set(prev);
-                // Tapping the selected region clears it -- the same toggle-to-reset the family
-                // accordion already follows, so the figure behaves like the rest of the sheet.
-                if (next.has(group)) next.delete(group);
-                else next.add(group);
-                return next;
+                // ONE MUSCLE GROUP AT A TIME. Scott, 2026-09-22: "I don't want to be able to
+                // click multiple muscle groups, only one". Tapping the selected region still
+                // clears it -- the same toggle-to-reset the family accordion follows -- but
+                // tapping a different one REPLACES rather than adds. The filter state stays a
+                // Set because the chips and the query both read it that way; what changed is
+                // that the figure never puts more than one thing in it.
+                if (prev.has(group) && prev.size === 1) return new Set<string>();
+                return new Set([group]);
               })
             }
             onClear={() => setMuscleGroupFilter(new Set())}

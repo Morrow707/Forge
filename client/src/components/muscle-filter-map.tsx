@@ -64,7 +64,10 @@ export function MuscleFilterMap({
         <div className="flex items-start gap-3">
           {/* Both views at once where there is room; one at a time on a phone, with a toggle,
               because two half-size figures are two figures nobody can hit accurately. */}
-          <div className="h-44 flex-1 text-primary sm:h-56">
+          {/* MUCH BIGGER, because it was unusable small -- "it's wayyyyyyyy too freaking
+              small". A figure this is meant to be TAPPED on cannot be the size of an icon, and
+              the regions it is built from are the thinnest things on the screen. */}
+          <div className="h-80 flex-1 text-primary sm:h-96">
             <BodyMap
               view={view}
               selected={chosen[chosen.length - 1] ?? null}
@@ -72,7 +75,7 @@ export function MuscleFilterMap({
               compact
             />
           </div>
-          <div className="hidden h-56 flex-1 text-primary sm:block">
+          <div className="hidden h-96 flex-1 text-primary sm:block">
             <BodyMap
               view="back"
               selected={chosen[chosen.length - 1] ?? null}

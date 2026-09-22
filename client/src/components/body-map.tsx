@@ -22,52 +22,82 @@ import { SCORABLE_MUSCLE_GROUPS } from "@shared/strength-score";
 
 export type BodyMapView = "front" | "back";
 
-/** A muscle region: which view it is drawn on, and the shapes that make it. */
+/** A muscle region: which view it is drawn on, and the shape that makes it.
+ *
+ * `w` is what keeps the figure honest. A limb muscle drawn as a hand-written outline has to be
+ * kept in sync with the limb it sits on by eye, and it was not -- the legs visibly missed the
+ * body ("have it actually line up the legs don't"). With `w` the region is a STROKE along the
+ * same centre line the figure's own limb is stroked on, at a narrower width, so it cannot drift:
+ * both are generated from one coordinate. Torso muscles keep real outlines, because a pec or a
+ * lat is a shape rather than a thickness.
+ */
 type Region = {
   group: string;
   view: BodyMapView;
   label: string;
-  /** SVG path data, drawn in a 220x460 viewBox. */
+  /** SVG path data, drawn in a 240x470 viewBox. */
   d: string;
+  /** Stroke width when this region is a limb line rather than an outlined shape. */
+  w?: number;
+};
+
+// ONE SKELETON, SHARED BY THE FIGURE AND ITS MUSCLES.
+//
+// Every limb below is a line between two points, drawn once as the body (thick, faint) and
+// again as the muscle on it (narrower, tinted). Changing a limb's position moves both, which is
+// the whole point -- the previous figure kept two hand-drawn copies and they disagreed.
+const LIMB = {
+  upperArmL: "M84 112 L68 178",
+  upperArmR: "M156 112 L172 178",
+  forearmL: "M68 178 L57 250",
+  forearmR: "M172 178 L183 250",
+  thighL: "M104 252 L99 348",
+  thighR: "M136 252 L141 348",
+  shinL: "M99 348 L97 428",
+  shinR: "M141 348 L143 428",
 };
 
 const REGIONS: Region[] = [
   // ---- FRONT ----
-  { group: "Shoulders", view: "front", label: "Shoulders", d: "M62 116 q-16 4 -20 24 q-2 14 2 22 l20 -8 q2 -22 8 -32 Z M158 116 q16 4 20 24 q2 14 -2 22 l-20 -8 q-2 -22 -8 -32 Z" },
-  { group: "Chest", view: "front", label: "Chest", d: "M76 120 q34 -10 68 0 q4 26 -2 42 q-32 8 -64 0 q-6 -16 -2 -42 Z" },
-  { group: "Biceps", view: "front", label: "Biceps", d: "M44 160 q-8 22 -6 44 l18 4 q2 -26 6 -44 Z M176 160 q8 22 6 44 l-18 4 q-2 -26 -6 -44 Z" },
-  { group: "Forearms", view: "front", label: "Forearms", d: "M36 210 q-6 28 -2 50 l18 2 q2 -28 4 -48 Z M184 210 q6 28 2 50 l-18 2 q-2 -28 -4 -48 Z" },
-  { group: "Abs", view: "front", label: "Abs", d: "M86 168 q24 -6 48 0 q4 34 0 62 q-24 6 -48 0 q-4 -28 0 -62 Z" },
-  { group: "Core", view: "front", label: "Obliques", d: "M74 172 q6 30 4 56 l-10 -4 q-6 -26 -4 -50 Z M146 172 q-6 30 -4 56 l10 -4 q6 -26 4 -50 Z" },
-  { group: "Quads", view: "front", label: "Quads", d: "M82 244 q18 -6 34 0 q4 44 -4 78 q-14 4 -26 0 q-8 -36 -4 -78 Z M122 244 q18 -6 34 0 q4 44 -4 78 q-14 4 -26 0 q-8 -36 -4 -78 Z" },
-  { group: "Calves", view: "front", label: "Calves", d: "M88 336 q14 -4 24 0 q2 34 -4 56 q-10 2 -16 0 q-6 -24 -4 -56 Z M128 336 q14 -4 24 0 q2 34 -4 56 q-10 2 -16 0 q-6 -24 -4 -56 Z" },
+  // Three-headed look without three shapes: a short stroke with a round cap reads as the cap of
+  // the deltoid, which is what a shoulder looks like from the front.
+  { group: "Shoulders", view: "front", label: "Shoulders", w: 27, d: "M84 106 L85 120 M156 106 L155 120" },
+  { group: "Chest", view: "front", label: "Chest", d: "M116 116 q-24 1 -31 11 q-4 17 3 29 q15 7 27 2 q4 -21 1 -42 Z M124 116 q24 1 31 11 q4 17 -3 29 q-15 7 -27 2 q-4 -21 -1 -42 Z" },
+  { group: "Biceps", view: "front", label: "Biceps", w: 20, d: "M82 124 L70 170 M158 124 L170 170" },
+  { group: "Forearms", view: "front", label: "Forearms", w: 15, d: "M67 188 L58 244 M173 188 L182 244" },
+  // Segmented, because an undivided slab does not read as abs at any size.
+  { group: "Abs", view: "front", label: "Abs", d: "M106 158 q14 -3 28 0 q3 12 0 20 q-14 3 -28 0 q-3 -8 0 -20 Z M106 184 q14 -3 28 0 q3 12 0 20 q-14 3 -28 0 q-3 -8 0 -20 Z M107 210 q13 -3 26 0 q3 12 0 22 q-13 3 -26 0 q-3 -10 0 -22 Z" },
+  { group: "Core", view: "front", label: "Obliques", d: "M101 160 q-5 30 -3 58 l-9 -7 q-4 -27 -2 -49 Z M139 160 q5 30 3 58 l9 -7 q4 -27 2 -49 Z" },
+  { group: "Quads", view: "front", label: "Quads", w: 31, d: LIMB.thighL + " " + LIMB.thighR },
+  { group: "Calves", view: "front", label: "Calves", w: 19, d: "M99 362 L98 418 M141 362 L142 418" },
 
   // ---- BACK ----
-  { group: "Shoulders", view: "back", label: "Rear delts", d: "M62 116 q-16 4 -20 24 q-2 14 2 22 l20 -8 q2 -22 8 -32 Z M158 116 q16 4 20 24 q2 14 -2 22 l-20 -8 q-2 -22 -8 -32 Z" },
-  { group: "Back", view: "back", label: "Upper back & traps", d: "M78 108 q32 -8 64 0 q6 20 2 38 q-34 8 -68 0 q-4 -18 2 -38 Z" },
-  { group: "Lats", view: "back", label: "Lats", d: "M74 150 q30 8 72 0 q-4 34 -16 52 q-20 6 -40 0 q-12 -18 -16 -52 Z" },
-  { group: "Triceps", view: "back", label: "Triceps", d: "M44 160 q-8 22 -6 44 l18 4 q2 -26 6 -44 Z M176 160 q8 22 6 44 l-18 4 q-2 -26 -6 -44 Z" },
-  { group: "Forearms", view: "back", label: "Forearms", d: "M36 210 q-6 28 -2 50 l18 2 q2 -28 4 -48 Z M184 210 q6 28 2 50 l-18 2 q-2 -28 -4 -48 Z" },
-  { group: "Lower Back", view: "back", label: "Lower back", d: "M90 204 q20 -4 40 0 q2 20 -2 32 q-18 4 -36 0 q-4 -14 -2 -32 Z" },
-  { group: "Glutes", view: "back", label: "Glutes", d: "M84 240 q24 -8 52 0 q4 24 -4 38 q-22 6 -44 0 q-8 -16 -4 -38 Z" },
-  { group: "Hamstrings", view: "back", label: "Hamstrings", d: "M84 284 q18 -6 32 0 q2 34 -4 58 q-12 4 -22 0 q-6 -26 -6 -58 Z M124 284 q18 -6 32 0 q2 34 -4 58 q-12 4 -22 0 q-6 -26 -6 -58 Z" },
-  { group: "Calves", view: "back", label: "Calves", d: "M88 348 q14 -4 24 0 q2 30 -4 48 q-10 2 -16 0 q-6 -20 -4 -48 Z M128 348 q14 -4 24 0 q2 30 -4 48 q-10 2 -16 0 q-6 -20 -4 -48 Z" },
+  { group: "Shoulders", view: "back", label: "Rear delts", w: 27, d: "M84 106 L85 120 M156 106 L155 120" },
+  { group: "Back", view: "back", label: "Upper back & traps", d: "M120 90 q26 2 34 14 q4 14 -2 26 q-14 6 -32 6 q-18 0 -32 -6 q-6 -12 -2 -26 q8 -12 34 -14 Z" },
+  { group: "Lats", view: "back", label: "Lats", d: "M92 136 q28 9 56 0 q-3 33 -15 51 q-18 6 -26 0 q-12 -18 -15 -51 Z" },
+  { group: "Triceps", view: "back", label: "Triceps", w: 20, d: "M82 124 L70 170 M158 124 L170 170" },
+  { group: "Forearms", view: "back", label: "Forearms", w: 15, d: "M67 188 L58 244 M173 188 L182 244" },
+  { group: "Lower Back", view: "back", label: "Lower back", d: "M107 190 q13 -3 26 0 q3 17 0 30 q-13 3 -26 0 q-3 -13 0 -30 Z" },
+  { group: "Glutes", view: "back", label: "Glutes", d: "M118 224 q-16 0 -22 12 q-3 15 6 22 q12 5 18 -5 q2 -16 -2 -29 Z M122 224 q16 0 22 12 q3 15 -6 22 q-12 5 -18 -5 q-2 -16 2 -29 Z" },
+  { group: "Hamstrings", view: "back", label: "Hamstrings", w: 29, d: "M104 272 L99 344 M136 272 L141 344" },
+  { group: "Calves", view: "back", label: "Calves", w: 19, d: "M99 362 L98 418 M141 362 L142 418" },
 ];
 
-/** The body outline, drawn under every region so the figure reads as a body rather than a set
- * of floating shapes. Never interactive. */
-const OUTLINE =
-  "M110 40 q-16 0 -16 18 q0 14 6 22 q-26 8 -34 30 q-8 22 -10 54 q-4 34 -8 54 q-2 12 6 14 q8 2 12 -10 q6 -22 10 -42 q2 26 0 50 q-2 26 2 48 q4 30 2 60 q-2 24 -6 44 q-2 12 8 14 q10 2 12 -10 q6 -34 10 -62 q4 -28 6 -46 q2 18 6 46 q4 28 10 62 q2 12 12 10 q10 -2 8 -14 q-4 -20 -6 -44 q-2 -30 2 -60 q4 -22 2 -48 q-2 -24 0 -50 q4 20 10 42 q4 12 12 10 q8 -2 6 -14 q-4 -20 -8 -54 q-2 -32 -10 -54 q-8 -22 -34 -30 q6 -8 6 -22 q0 -18 -16 -18 Z";
+/** The figure itself, under every region so it reads as a body rather than floating shapes.
+ * Never interactive. Limbs are the same lines the regions use; only the torso and head are
+ * shapes of their own. */
+const TORSO =
+  "M84 108 q36 -16 72 0 q-4 28 -6 46 q-2 22 0 40 q2 20 2 38 q-16 8 -32 8 q-16 0 -32 -8 q0 -18 2 -38 q2 -18 0 -40 q-2 -18 -6 -46 Z";
 
 export function BodyMap({
   view = "front",
-  /** Regions that should read as selected. */
+  /** The one region that should read as selected. Single by design -- see the picker. */
   selected,
   /** Muscle group -> fill colour, for the profile heat view. Regions with no entry stay neutral. */
   fills,
   onSelect,
   className,
-  /** Compact drops the labels and shrinks the hit padding -- see the picker's mobile strip. */
+  /** Compact drops the hit padding -- see the picker's mobile strip. */
   compact = false,
 }: {
   view?: BodyMapView;
@@ -83,24 +113,51 @@ export function BodyMap({
 
   return (
     <svg
-      viewBox="0 0 220 460"
+      viewBox="0 0 240 470"
       className={cn("h-full w-full select-none", className)}
       role={interactive ? "group" : "img"}
       aria-labelledby={titleId}
     >
       <title id={titleId}>
         {view === "front" ? "Front of the body" : "Back of the body"}
-        {interactive ? " — choose a muscle group" : ""}
+        {interactive ? " -- choose a muscle group" : ""}
       </title>
-      <path d={OUTLINE} fill="none" stroke="currentColor" strokeWidth={2} opacity={0.5} />
+
+      {/* THE FIGURE. Limbs are stroked along the same lines their muscles are, which is what
+          makes them line up; round caps give shoulders, elbows, knees and ankles without four
+          more shapes to keep in sync. */}
+      <g stroke="currentColor" fill="none" opacity={0.45} strokeLinecap="round">
+        <ellipse cx={120} cy={48} rx={21} ry={25} strokeWidth={2} />
+        <path d="M110 70 L110 88 M130 70 L130 88" strokeWidth={2} />
+        <path d={TORSO} strokeWidth={2} />
+        <path d={`${LIMB.upperArmL} ${LIMB.upperArmR}`} strokeWidth={24} opacity={0.35} />
+        <path d={`${LIMB.forearmL} ${LIMB.forearmR}`} strokeWidth={18} opacity={0.35} />
+        <path d={`${LIMB.thighL} ${LIMB.thighR}`} strokeWidth={36} opacity={0.35} />
+        <path d={`${LIMB.shinL} ${LIMB.shinR}`} strokeWidth={23} opacity={0.35} />
+        {/* Hands and feet: the figure stops dead without them. */}
+        <path d="M57 250 L54 266 M183 250 L186 266" strokeWidth={13} opacity={0.35} />
+        <path d="M97 432 L90 440 M143 432 L150 440" strokeWidth={12} opacity={0.35} />
+      </g>
+
       {regions.map((r) => {
         const isSelected = selected === r.group;
         const fill = fills?.[r.group];
-        const shape = (
+        const tint = fill ?? "currentColor";
+        const opacity = fill ? 0.85 : isSelected ? 0.9 : 0.22;
+        const shape = r.w ? (
           <path
             d={r.d}
-            fill={fill ?? (isSelected ? "currentColor" : "currentColor")}
-            fillOpacity={fill ? 0.85 : isSelected ? 0.85 : 0.18}
+            fill="none"
+            stroke={tint}
+            strokeOpacity={opacity}
+            strokeWidth={r.w}
+            strokeLinecap="round"
+          />
+        ) : (
+          <path
+            d={r.d}
+            fill={tint}
+            fillOpacity={opacity}
             stroke={isSelected ? "currentColor" : "none"}
             strokeWidth={1.5}
           />
@@ -125,9 +182,14 @@ export function BodyMap({
             }}
           >
             {shape}
-            {/* A transparent wider stroke so a fingertip hits the region, not just the fill.
-                Without it the thin shapes (forearms, calves) are unusable on a phone. */}
-            <path d={r.d} fill="none" stroke="transparent" strokeWidth={compact ? 10 : 16} />
+            {/* A transparent wider stroke so a fingertip hits the region, not just the fill. */}
+            <path
+              d={r.d}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={(r.w ?? 0) + (compact ? 12 : 18)}
+              strokeLinecap="round"
+            />
           </g>
         );
       })}

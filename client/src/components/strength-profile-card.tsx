@@ -185,7 +185,9 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
             ) : (
               <>
                 <div className="flex items-start gap-3">
-                  <div className="h-48 flex-1 text-muted-foreground">
+                  {/* Same size as the exercise picker's -- this one is tapped too, and a
+                      figure somebody aims a finger at cannot be thumbnail-sized. */}
+                  <div className="h-80 flex-1 text-muted-foreground">
                     <BodyMap
                       view={view}
                       fills={fills}
