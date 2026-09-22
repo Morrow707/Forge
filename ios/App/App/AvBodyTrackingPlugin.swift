@@ -118,6 +118,26 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // Both feeders decode to the same budget, or they are two different measurements and a
     // calibration run describes whichever one happened to produce the take.
     private static let analysisDecodeMaxDimension: CGFloat = 1280
+
+    // LIVE ANALYSIS IS OFF, AND THE CAMERA COMES FIRST.
+    //
+    // Build 510 force-closed the app the moment somebody tapped Record. Phase 5b adds a second
+    // output to the same capture session and sets videoSettings on it, and one of those is the
+    // difference between a working camera and no camera -- the session now carries an
+    // AVCaptureVideoDataOutput alongside the movie output, and its videoSettings ask
+    // AVFoundation to scale buffers with kCVPixelBufferWidthKey/HeightKey, which raises an
+    // Objective-C exception rather than returning an error if the shape is not one the output
+    // supports. A raised exception in AVFoundation is not catchable from Swift; it terminates
+    // the process, which is exactly what an athlete sees as the app force-closing.
+    //
+    // I have not proven WHICH of those it is, and guessing again is what produced four
+    // verify_build round trips on this file already. So the whole path is switched off and the
+    // session goes back to exactly the shape it had in build 498, which filmed fine. Analysis
+    // returns to running after the take, which is slower and works.
+    //
+    // Turning this back on needs evidence, not a hunch: the data output added with NO
+    // videoSettings at all first, confirmed on a device, and only then the scaling.
+    private static let liveAnalysisEnabled = false
     // What applyHighestFrameRate actually settled on. Read by analyzeRecording to pick a
     // sampling stride, so raising the capture rate cannot silently double the analysis wait.
     private var activeCaptureFrameRate: Double = 60
@@ -444,6 +464,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
             // PHASE 5B's feeder. Added here, but it does nothing until startRecording builds a
             // run for it -- an athlete framing a shot should not be paying for Vision.
+            //
+            // Skipped entirely while liveAnalysisEnabled is false: not added, not configured,
+            // no delegate. Nothing downstream can then build a live run either, because
+            // startRecording requires videoDataOutput to be non-nil.
+            if Self.liveAnalysisEnabled {
             let videoDataOutput = AVCaptureVideoDataOutput()
             // TRUE, and this is a trade made on purpose. A data output that does not discard
             // late frames applies backpressure to the whole session, and the output sharing
@@ -468,6 +493,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 }
             } else {
                 self.logDiag("WARNING: cannot add video data output -- live analysis unavailable")
+            }
             }
 
             session.commitConfiguration()
@@ -1143,6 +1169,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     /// and the traces stop being comparable -- which is the whole failure mode Phase 5b has to
     /// avoid, because the one being calibrated against a bar sensor has to be the one that runs.
     private func applyLiveAnalysisBufferSize(for device: AVCaptureDevice) {
+        guard Self.liveAnalysisEnabled else { return }
         guard let output = videoDataOutput else { return }
         var settings: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
