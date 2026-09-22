@@ -191,6 +191,134 @@ export const OVR_BENCH_2026_09_18 = {
   ],
 } as const;
 
+/**
+ * THE FIRST PAIRED SIDE-ON BENCH. Scott's bar sensor and Forge's camera, same set, 2026-09-22.
+ *
+ * Every earlier paired set was filmed from the foot of the bench, where the bar points at the
+ * lens and nothing about it is measurable. This one was filmed square to the side, and the body
+ * tracking was excellent: a body on 719 of 719 frames, both hands most frames, 614 frames giving
+ * a bar point. So what is left is not a tracking failure, and that is what makes it worth
+ * keeping -- it isolates the two faults underneath.
+ *
+ * The ratios below say they are TWO faults, not one, and this is the whole reason for recording
+ * per-metric rather than a single accuracy number:
+ *
+ *   ROM              37.3 cm -> 47.8 cm   1.28x
+ *   Mean velocity    0.70    -> 1.09      1.56x
+ *   Peak velocity    1.01    -> 2.61      2.58x
+ *   Reps             10      -> 9         one lost
+ *
+ * ROM and mean velocity are both a little over 1.3x. That is a SCALE error -- the picture was
+ * sized about 30% too large and every distance inherits it. Peak is 2.58x, and scale alone does
+ * not get you there: the rest is jitter. At 120fps the per-frame plausibility gate measured
+ * speed over 8.3ms, so landmark noise read as enormous instantaneous velocity, 284 reads were
+ * thrown out as "impossibly fast", and the survivors were still inflated. A whole rep went into
+ * that hole (largest trace gap 1.735s).
+ *
+ * Forge logged the set at 1 lb -- a typo, the real load was 135 lb -- so the watts on the Forge
+ * side of this set are meaningless and are deliberately not recorded as a comparison.
+ *
+ * TOLERANCE: 10% for ROM, 15% for the velocities, exact for rep count.
+ *
+ * Not a round number pulled out of the air. The sensor's own per-rep spread across the ten reps
+ * of this set is about 8% on ROM (14.0 to 17.2 in) and about 12% on peak velocity (0.85 to 1.14
+ * m/s) -- and that is one man doing one set of ten, so it is the floor on what "agreement" can
+ * mean at all. A camera that lands inside the instrument's own rep-to-rep variation has nothing
+ * left to fix that this fixture can see. Rep count gets no tolerance because a miscounted rep is
+ * not a small error in a number, it is a different set.
+ */
+export const OVR_BENCH_SIDE_ON_2026_09_22 = {
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "side, level with bar",
+  /** What the phone negotiated, because the velocity fault is a frame-rate fault. */
+  captureFormat: "1920x1080 @ 120fps",
+  tolerance: { romCm: 0.1, meanVelocityMps: 0.15, peakVelocityMps: 0.15, repCount: 0 },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.14, romIn: 14.4, meanW: 461, peakW: 694, tpvS: 0.31, eai: 3.67 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.12, romIn: 15.4, meanW: 465, peakW: 677, tpvS: 0.33, eai: 3.38 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.05, romIn: 14.4, meanW: 436, peakW: 628, tpvS: 0.35, eai: 2.98 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.09, romIn: 14.4, meanW: 477, peakW: 652, tpvS: 0.27, eai: 4.01 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.03, romIn: 14.7, meanW: 436, peakW: 619, tpvS: 0.33, eai: 3.09 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 0.96, romIn: 14.0, meanW: 422, peakW: 578, tpvS: 0.26, eai: 3.69 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 0.98, romIn: 14.9, meanW: 434, peakW: 586, tpvS: 0.32, eai: 3.01 },
+      { meanVelocityMps: 0.68, peakVelocityMps: 0.91, romIn: 14.1, meanW: 407, peakW: 545, tpvS: 0.34, eai: 2.65 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 0.99, romIn: 14.3, meanW: 434, peakW: 595, tpvS: 0.34, eai: 2.89 },
+      // The grindy last rep again, in both instruments and in every set so far. It is the lift.
+      { meanVelocityMps: 0.39, peakVelocityMps: 0.85, romIn: 17.2, meanW: 236, peakW: 512, tpvS: 0.27, eai: 3.05 },
+    ],
+    reported: { meanVelocityMps: 0.70, peakVelocityMps: 1.01, romIn: 14.7, meanW: 420, peakW: 608, tpvS: 0.31, eai: 3.24 },
+  },
+  /** What Forge produced from the same set, build 493. Watts omitted: the 1 lb typo. */
+  forge: {
+    romCm: 47.8,
+    meanVelocityMps: 1.09,
+    peakVelocityMps: 2.61,
+    eccentricMeanVelocityMps: 1.27,
+    concentricSeconds: 0.63,
+    barPathDeviationCm: 18.1,
+    repCount: 9,
+    velocityLossPercent: 33.1,
+  },
+  /** The pipeline's own account of the take, for anything reasoning about WHY. */
+  diagnostics: {
+    framesWithBody: 719,
+    framesAnalyzed: 851,
+    framesGivingABarPoint: 614,
+    framesDroppedAsImpossiblyFast: 284,
+    largestTraceGapSeconds: 1.735,
+    scaleSource: "shoulder_width",
+    scaleFactorMPerUnit: 0.004981024004809343,
+    shoulderMeasuredPx: 87.96,
+    gripWidthPx: 148,
+    plateRejectedReasons: ["size_vs_grip", "too_far_from_athlete"],
+    analysisSeconds: 37.92,
+    clipSeconds: 28.385,
+  },
+} as const;
+
+/**
+ * THE SAME MAN, THE SAME BENCH, THE SAME DAY, FILMED HEAD-ON. The unusable-framing fixture.
+ *
+ * Kept deliberately as the counter-example: from the foot of the bench the bar points at the
+ * lens, so its travel projects to almost nothing and no framing advice can recover it. Anything
+ * claiming to fix the side-on set must NOT start reporting confident numbers here.
+ *
+ * Its sensor numbers are close to the side-on set's (it is the same lifter doing the same work),
+ * which is exactly what makes it a good control: the truth barely moved, so any difference in
+ * what Forge produces is the camera angle and nothing else.
+ */
+export const OVR_BENCH_HEAD_ON_2026_09_22 = {
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "head-on, from the foot of the bench -- unusable framing",
+  sensor: { meanVelocityMps: 0.78, peakVelocityMps: 1.10, romIn: 15.2, meanW: 469, peakW: 662, tpvS: 0.28 },
+  forge: {
+    romCm: 42.9,
+    meanVelocityMps: 0.91,
+    peakVelocityMps: 2.93,
+    repCount: null,
+    barPathDeviationCm: 21.2,
+  },
+  diagnostics: {
+    scaleSource: "shoulder_width",
+    scaleFactorMPerUnit: 0.0037990873614300075,
+    shoulderMeasuredPx: 115.33,
+    gripWidthPx: 129.5,
+    // The 583px "plate" that is really a rack upright -- see PLATE_DISC_MAX_GRIP_RATIO.
+    plateMeasuredPx: 583.94,
+    plateAspectRatio: 1.03,
+    analysisSeconds: 39.28,
+    clipSeconds: 29.85,
+  },
+} as const;
+
+/** Inches to centimetres, so a fixture can stay in the units its instrument printed. */
+export function inchesToCm(inches: number): number {
+  return inches * 2.54;
+}
+
 /** Signed error as a fraction of the true value. Positive means over-reported. */
 export function relativeError(entry: GroundTruthEntry): number {
   if (entry.trueValue === 0) return Number.NaN;

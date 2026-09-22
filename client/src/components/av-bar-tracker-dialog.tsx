@@ -466,17 +466,48 @@ const EMPTY_REP_METRICS: RepMetrics = {
 };
 
 
+// THE BASELINE THIS IS MEASURED OVER HAS TO BE A REAL INTERVAL, NOT ONE FRAME.
+//
+// Same 120fps arithmetic that MIN_VELOCITY_BASELINE_MS fixed in bar-tracking.ts, in the gate
+// that runs BEFORE any of that: this compared each point to the one immediately before it, which
+// at 120fps is 8.3ms apart. Divide any landmark jitter by 0.0083s and it reads as an enormous
+// instantaneous velocity, so the filter threw out real bar points for the crime of being sampled
+// quickly. On Scott's side-on bench, 2026-09-22, it dropped 284 of them -- and took a whole rep
+// with them (9 found against 10 on the bar sensor, largest trace gap 1.735s).
+//
+// The threshold itself was never wrong; the denominator was. Comparing against the most recent
+// accepted point at least MIN_PLAUSIBILITY_BASELINE_MS old measures how fast the bar is actually
+// travelling instead of how noisy one frame was. A take that really does contain an impossible
+// jump still fails it, because a jump does not undo itself over 33ms.
+//
+// This is not the camera rejecting a take (RULE #1): it drops a SAMPLE, which is exactly the
+// filtering that rule explicitly preserves. The point is that it was dropping GOOD samples.
+const MIN_PLAUSIBILITY_BASELINE_MS = 33;
+
 function isPlausibleVelocity(
-  prev: { x: number; y: number; t: number } | null,
+  recent: { x: number; y: number; t: number }[],
   next: { x: number; y: number; t: number },
 ): boolean {
-  if (!prev) return true;
-  const dt = (next.t - prev.t) / 1000;
+  if (recent.length === 0) return true;
+  // The oldest accepted point still inside the window, falling back to the newest when the
+  // window has not filled yet (the first frames of a take, or a 30fps device where one frame
+  // already spans the baseline).
+  let baseline = recent[recent.length - 1];
+  for (const p of recent) {
+    if (next.t - p.t >= MIN_PLAUSIBILITY_BASELINE_MS) {
+      baseline = p;
+      break;
+    }
+  }
+  const dt = (next.t - baseline.t) / 1000;
   if (dt <= 0) return false;
   const MAX_PLAUSIBLE_VELOCITY_MPS = 3;
-  const dist = Math.hypot(next.x - prev.x, next.y - prev.y);
+  const dist = Math.hypot(next.x - baseline.x, next.y - baseline.y);
   return dist / dt <= MAX_PLAUSIBLE_VELOCITY_MPS;
 }
+
+// Enough accepted points to span the baseline at 120fps with room to spare.
+const PLAUSIBILITY_HISTORY = 8;
 
 export function AvBarTrackerDialog({
   open,
@@ -1280,8 +1311,8 @@ export function AvBarTrackerDialog({
     let framesVelocityRejected = 0;
     let framesUsable = 0;
     let lastHalfSpan: { x: number; y: number } | null = null;
-    let prevFusedLeft: { x: number; y: number; t: number } | null = null;
-    let prevFusedRight: { x: number; y: number; t: number } | null = null;
+    let prevFusedLeft: { x: number; y: number; t: number }[] = [];
+    let prevFusedRight: { x: number; y: number; t: number }[] = [];
     // Substitutes for ArBarTrackerDialog's "assessed right when Start Set is
     // tapped" moment -- there's no live frame to snapshot in a record-first
     // pipeline, so this locks in from the first frame the replay itself has
@@ -1302,12 +1333,13 @@ export function AvBarTrackerDialog({
       worldLm: Landmark[],
       side: "left" | "right",
       implement: ImplementPoint | null,
-      prevFused: { x: number; y: number; t: number } | null,
+      // A SHORT HISTORY, not just the last point -- see isPlausibleVelocity. Oldest first.
+      prevFused: { x: number; y: number; t: number }[],
       velocitySamples: VelocitySample[],
       t: number,
       coreMlPoint: ImplementPoint | null,
       frame: NativePoseFrame,
-    ): { fused: { x: number; y: number; confidence: number } | null; nextPrev: { x: number; y: number; t: number } | null } {
+    ): { fused: { x: number; y: number; confidence: number } | null; nextPrev: { x: number; y: number; t: number }[] } {
       const wristWorld = worldLm[side === "left" ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST];
       const rawWristConf = wristConfidence(worldLm, side);
       // Corroboration nudge, not a seed replacement -- AvImplementTracker's own motion-diff
@@ -1348,7 +1380,7 @@ export function AvBarTrackerDialog({
       }
       let nextPrev = prevFused;
       if (fused) {
-        nextPrev = { x: fused.x, y: fused.y, t };
+        nextPrev = [...prevFused, { x: fused.x, y: fused.y, t }].slice(-PLAUSIBILITY_HISTORY);
         velocitySamples.push({ t, y: verticalSign * fused.y, confidence: fused.confidence });
       }
       return { fused, nextPrev };
