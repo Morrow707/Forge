@@ -2036,11 +2036,9 @@ export function setupAuth(app: Express) {
       userId: user.id,
       ipAddress: req.ip,
       userAgent: req.get("user-agent") ?? undefined,
-      // Stored on the front of the snapshotted document, which is the evidentiary record this
-      // consent already keeps -- the same hook the guardian path uses to record who relayed an
-      // acceptance. No new column for a string that only ever means something attached to the
-      // exact text it was typed against.
-      documentTextPrefix: `Signed by typed initials: ${parsed.data.initials.toUpperCase()}\n\n`,
+      // Its own column, not the front of the document: documentText is the EXACT text shown at
+      // the moment of consent, and documentVersion is a hash of it.
+      signedInitials: parsed.data.initials.toUpperCase(),
     });
     res.json({ acceptedAt });
   });

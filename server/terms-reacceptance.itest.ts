@@ -115,7 +115,7 @@ describe("an adult whose terms went stale", () => {
     expect(before.body.text).toBe(NEW_TERMS);
     expect((await client.get("/api/auth/me")).body.needsTermsAcceptance).toBe(true);
 
-    const accepted = await client.post("/api/auth/accept-terms", { agreed: true });
+    const accepted = await client.post("/api/auth/accept-terms", { agreed: true, initials: "AB" });
     expect(accepted.status).toBe(200);
     expect(typeof accepted.body.acceptedAt).toBe("string");
 
@@ -151,7 +151,7 @@ describe("an adult whose terms went stale", () => {
   it("answers 401 to somebody who is not signed in", async () => {
     const anon = new TestClient(server.baseUrl);
     expect((await anon.get("/api/auth/terms-status")).status).toBe(401);
-    expect((await anon.post("/api/auth/accept-terms", { agreed: true })).status).toBe(401);
+    expect((await anon.post("/api/auth/accept-terms", { agreed: true, initials: "AB" })).status).toBe(401);
   });
 });
 
@@ -175,7 +175,7 @@ describe("a minor, and the guardian who answers for them", () => {
     expect(status.guardianDecides).toBe(true);
 
     const client = await loginAs(server.baseUrl, athlete);
-    const refused = await client.post("/api/auth/accept-terms", { agreed: true });
+    const refused = await client.post("/api/auth/accept-terms", { agreed: true, initials: "AB" });
     expect(refused.status).toBe(403);
     expect(refused.body.guardianDecides).toBe(true);
     // Refused, and nothing written: a 403 that still moved the snapshot would be worse than

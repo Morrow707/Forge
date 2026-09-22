@@ -5524,6 +5524,18 @@ export const consentRecords = pgTable(
     // acting as the provisioning agent for a Tier 1 athlete who can't
     // legally consent on their own behalf.
     givenByUserId: integer("given_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    // WHAT THEY TYPED TO SIGN, and it lives here rather than in documentText.
+    //
+    // The first version of this prefixed the initials onto the snapshotted text, which broke
+    // the invariant the column above states outright: documentText is the EXACT text shown at
+    // the moment of consent. A prefixed copy is not that document -- a reader verifying what
+    // somebody agreed to would find a line the original never had, and documentVersion, which
+    // is a hash of documentText, would stop matching the real document's hash for every signed
+    // record. The itest that asserts "snapshots the document text, not a stand-in" caught it.
+    //
+    // A signature is a property of the SIGNING, not of the document. Null for every consent
+    // given by ticking a box rather than typing a name -- most of them.
+    signedInitials: text("signed_initials"),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

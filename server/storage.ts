@@ -15894,6 +15894,9 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
     userId: number;
     byUserId?: number;
     documentTextPrefix?: string;
+    /** Typed initials, when the acceptance was signed rather than ticked. Stored in its own
+     *  column -- never folded into the snapshotted text. */
+    signedInitials?: string | null;
     ipAddress?: string;
     userAgent?: string;
   }): Promise<{ acceptedAt: Date }> {
@@ -15913,6 +15916,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       userId: input.userId,
       consentType: "terms_of_service",
       documentText: `${input.documentTextPrefix ?? ""}${text}`,
+      signedInitials: input.signedInitials ?? null,
       givenByUserId: input.byUserId ?? input.userId,
       ipAddress: input.ipAddress,
       userAgent: input.userAgent,
@@ -28722,13 +28726,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     await this.logConsentRecord({
       userId: athleteId,
       consentType: "assumption_of_risk",
-      // The signature rides on the front of the snapshotted text, the same shape
-      // acceptCurrentTerms uses for a typed acceptance. It only means anything attached to
-      // the exact document it was typed against, which is why it lives here and not in a
-      // column of its own.
-      documentText: context?.initials
-        ? `Signed by typed initials: ${context.initials.toUpperCase()}\n\n${doc.content}`
-        : doc.content,
+      documentText: doc.content,
+      signedInitials: context?.initials?.toUpperCase() ?? null,
       ipAddress: context?.ipAddress,
       userAgent: context?.userAgent,
     });
@@ -29428,6 +29427,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     // at the declaration that was actually stale.
     consentType: (typeof consentTypeEnum.enumValues)[number];
     documentText: string;
+    /** What the person typed to sign, where signing was by typed initials rather than a tick.
+     *  Never folded into documentText -- see the column's own comment. */
+    signedInitials?: string | null;
     givenByUserId?: number;
     ipAddress?: string;
     userAgent?: string;
@@ -29440,6 +29442,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         consentType: input.consentType,
         documentText: input.documentText,
         documentVersion,
+        signedInitials: input.signedInitials ?? null,
         givenByUserId: input.givenByUserId ?? null,
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,

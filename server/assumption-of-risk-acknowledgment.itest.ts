@@ -62,16 +62,29 @@ describe("the athlete's own acknowledgment of the risk terms", () => {
     expect(res.status).toBe(201);
     expect(res.body.assumptionOfRiskRequired).toBe(true);
 
-    const ack = await client.post("/api/account/assumption-of-risk", {});
+    const ack = await client.post("/api/account/assumption-of-risk", { initials: "AB" });
     expect(ack.status).toBe(200);
     expect(ack.body.assumptionOfRiskRequired).toBe(false);
 
     expect(await storage.hasAcknowledgedAssumptionOfRisk(row.id)).toBe(true);
   });
 
+  it("refuses an acknowledgment with no signature on it", async () => {
+    // The dialog will not let anybody reach the button without typing initials, but a client is
+    // a thing anybody can edit -- a signature enforced only on screen is a suggestion. Added
+    // 2026-09-22 with the read-to-the-end gate; the itests posting {} is what turned CI red for
+    // eleven commits, which is its own argument for checking this here.
+    const { client } = await signUpAthlete();
+    expect((await client.post("/api/account/assumption-of-risk", {})).status).toBe(400);
+    expect((await client.post("/api/account/assumption-of-risk", { initials: "A" })).status).toBe(400);
+    expect(
+      (await client.post("/api/account/assumption-of-risk", { initials: "Alex Morrow" })).status,
+    ).toBe(400);
+  });
+
   it("snapshots the document text, not a stand-in", async () => {
     const { client, row } = await signUpAthlete();
-    await client.post("/api/account/assumption-of-risk", {});
+    await client.post("/api/account/assumption-of-risk", { initials: "AB" });
     const rows = await db.query.consentRecords.findMany({
       where: and(
         eq(consentRecords.userId, row.id),
@@ -88,7 +101,7 @@ describe("the athlete's own acknowledgment of the risk terms", () => {
   it("refuses rather than recording a consent to a document that does not exist", async () => {
     await db.delete(legalDocuments).where(eq(legalDocuments.docType, "assumption_of_risk"));
     const { client, row } = await signUpAthlete();
-    const ack = await client.post("/api/account/assumption-of-risk", {});
+    const ack = await client.post("/api/account/assumption-of-risk", { initials: "AB" });
     expect(ack.status).toBe(503);
     expect(await storage.hasAcknowledgedAssumptionOfRisk(row.id)).toBe(false);
   });
@@ -112,7 +125,7 @@ describe("the athlete's own acknowledgment of the risk terms", () => {
     const body = { ...signupBody(), role: "coach", expectedAthletes: 25 };
     const client = new TestClient(server.baseUrl);
     await client.post("/api/auth/signup", body);
-    const ack = await client.post("/api/account/assumption-of-risk", {});
+    const ack = await client.post("/api/account/assumption-of-risk", { initials: "AB" });
     expect(ack.status).toBe(400);
   });
 });

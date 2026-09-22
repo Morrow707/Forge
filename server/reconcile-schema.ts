@@ -1753,6 +1753,7 @@ CREATE TABLE IF NOT EXISTS "consent_records" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "consent_records_user_idx" ON "consent_records" ("user_id", "created_at");
+ALTER TABLE "consent_records" ADD COLUMN IF NOT EXISTS "signed_initials" text;
 
 -- Immutable per-record access audit log (shared/schema.ts recordAccessAuditLogs).
 DO $$ BEGIN
