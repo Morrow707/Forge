@@ -1469,8 +1469,27 @@ export function WorkoutPage({
         // what makes autosave safe to run silently: a queued entry gets
         // replayed by startOfflineLogSync on the next reconnect/reload, so
         // nothing typed is ever lost to a transient hiccup.
+        // A 409 IS "YOU ARE OUT OF DATE", NOT "YOUR DATA IS BAD".
+        //
+        // The workout log answers 409 when the day changed since this screen loaded. That is a
+        // stale-version problem -- the payload is fine and the same payload against a refreshed
+        // day would land. Classifying it with the other 4xx threw it away: the save was thrown
+        // rather than queued, the offline rescue that exists for exactly this could not run, and
+        // Scott's set 3 never reached the server while the queue flushed every twenty seconds
+        // forever. Confirmed from his own debug console, 2026-09-22:
+        //   log POST FAILED: 409 This workout was updated somewhere else since this screen loaded
+        //   classified PERMANENT (409) -- not queued
+        //   flush: 1 queued day(s)   [repeating]
+        //
+        // Same shape as the NetworkError-as-ApiError bug this classifier already carries a note
+        // about: a retryable failure wearing a permanent failure's clothes, and the cost is a
+        // logged set. 401 was already excluded for the same reason -- a stalled session looks
+        // identical to a real logout from here.
         const isPermanentRejection =
-          err instanceof ApiError && err.status !== 401 && err.status < 500;
+          err instanceof ApiError
+          && err.status !== 401
+          && err.status !== 409
+          && err.status < 500;
         // Remembered for the unmount handler below, which used to re-queue this exact
         // payload unconditionally. That turned a visible error into silent data loss: the
         // queue replays it, gets the same 4xx, and DELETES the entry as unsyncable. The
@@ -4022,45 +4041,24 @@ function ExerciseLogContent({
             const incomingRepCount = metrics.repBreakdown.length;
             const existingSet = item.sets.find((s) => s.setNumber === targetSetNumber);
             const existingRepCount = existingSet?.repBreakdown?.length ?? existingSet?.jumpBreakdown?.length ?? 0;
-            if (incomingRepCount === 0 && existingRepCount > 0) {
-              onUpdateSet(
-                targetSetNumber,
-                {
-                  captureDeviceInfo: metrics.captureDeviceInfo ?? null,
-                  trackingDiagnostics: metrics.trackingDiagnostics ?? null,
-                  ...videoPatch,
-                },
-                { immediate: true },
-              );
-              // The keep is the safe DEFAULT, not a verdict. Preserving beats silently zeroing a
-              // good take, but it also preserves a BAD one: a set whose numbers came from a
-              // calibration that has since been proven wrong is now un-clearable by re-recording,
-              // because every retake refuses and every refusal keeps. Reported immediately by the
-              // first athlete to hit it, on a set still showing 18 reps from a 4x scale error.
-              // So the athlete gets the other option, explicitly, at the one moment they are
-              // looking at the problem.
-              toast.warning(
-                "That retake couldn't be measured, so this set kept the numbers it already had. The new video was still sent to your coach.",
-                {
-                  duration: 12000,
-                  action: {
-                    label: "Clear old numbers",
-                    onClick: () => {
-                      // Explicit nulls, not omitted keys. The server reads an absent field as
-                      // "keep what you have" and an explicit null as "clear it", so this is
-                      // the only shape that actually erases the stored capture data.
-                      onUpdateSet(targetSetNumber, CLEARED_TRACKING_PATCH, { immediate: true });
-                      toast.success("Cleared. Record the set again to measure it fresh.");
-                    },
-                  },
-                },
-              );
-              if (videoUrl) {
-                if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSetNumber, videoUrl });
-                else postFormVideoMutation.mutate({ setNumber: targetSetNumber, videoUrl });
-              }
-              return;
-            }
+            // A RETAKE REPLACES THE SET. NUMBERS AND VIDEO, TOGETHER, ALWAYS.
+            //
+            // This used to KEEP the old numbers when a retake produced no reps, while the new
+            // video uploaded regardless -- so the set ended up showing one take's numbers beside
+            // a different take's video, with a toast as the only hint. Scott, 2026-09-22: "it
+            // automatically recorded over, so I just tested with nothing to show for it." He is
+            // right that it is worse than losing the retake: two halves that describe different
+            // lifts cannot be told apart later by anyone.
+            //
+            // The keep was already recorded here as a compromise that "preserves a BAD one" --
+            // a set whose numbers came from a calibration since proven wrong became
+            // un-clearable, because every retake refused and every refusal kept. Pressing record
+            // again is the athlete saying "use this one", and under the camera invariant a take
+            // that measured badly still writes its numbers and its diagnostics rather than
+            // nothing. So there is no case left where keeping the old numbers is the right
+            // answer, and the "Clear old numbers" escape hatch it needed goes with it.
+            void incomingRepCount;
+            void existingRepCount;
             if ("bestJumpHeightCm" in metrics) {
               // A box jump's flight time is cut short by landing on the
               // elevated box, not the ground -- jumpHeightCm's flight-time

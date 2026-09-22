@@ -40,7 +40,7 @@ describe("a fetch that never reached the server", () => {
     // Pinned so the classifier and the error type stay in the same conversation: if this
     // condition is ever rewritten, whoever does it has to come back here.
     expect(workout).toMatch(
-      /err instanceof ApiError && err\.status !== 401 && err\.status < 500/,
+      /err instanceof ApiError\s*\n?\s*&& err\.status !== 401\s*\n?\s*&& err\.status !== 409\s*\n?\s*&& err\.status < 500/,
     );
   });
 
