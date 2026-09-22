@@ -88,7 +88,17 @@ describe("postureForExercise", () => {
 
   it("gives a posture-specific reason and none for a standing lift", () => {
     expect(calibrationRefusalReason("seated")).toContain("Seated");
-    expect(calibrationRefusalReason("lying")).toContain("Lying down");
+    // A LYING LIFT'S MESSAGE MUST NOT ASK FOR A DIFFERENT FRAMING.
+    //
+    // It used to say "film from the side, level with the bar, with both shoulders in frame",
+    // which is exactly how a bench press is already filmed -- and since the shoulder ruler is
+    // refused outright for a lying athlete, no framing can satisfy it. An instruction the
+    // athlete cannot act on reads as the app blaming them, and sends them off to re-film a set
+    // that will refuse again.
+    const lying = calibrationRefusalReason("lying")!;
+    expect(lying).toContain("lying lift");
+    expect(lying).toContain("video is saved");
+    expect(lying.toLowerCase()).not.toContain("film from");
     expect(calibrationRefusalReason("standing")).toBeNull();
     expect(calibrationRefusalReason("hanging")).toBeNull();
   });

@@ -187,7 +187,19 @@ export function calibrationRefusalReason(posture: CameraPosture): string | null 
     // not a fault an athlete can correct, and a bench press is not an exotic case to opt out of.
     // Each now names the thing in THIS take that could not be measured, and what would fix it.
     case "lying":
-      return "Couldn't work out real-world scale for this take. Lying down, your height can't be measured along your body, so scale comes from your shoulder width instead -- and your shoulders need to be square to the camera for that. Film from the side, level with the bar, with both shoulders in frame.";
+      // NEVER ASK FOR SOMETHING THE ATHLETE CANNOT DO.
+      //
+      // This used to say "film from the side, level with the bar, with both shoulders in frame",
+      // which is exactly how a bench press IS filmed -- and since 2026-09-22 the shoulder ruler
+      // is refused outright for a lying athlete, because a supine athlete's shoulders point down
+      // the camera's axis and the same shoulders measured 88.0px and 115.3px on two sets minutes
+      // apart. So the old text asked for a framing that already existed and could not have
+      // helped: the athlete reads it as the app blaming them for its own limitation, and the
+      // natural next move is to re-film the set, which cannot work either.
+      //
+      // Say what is true instead: the video is saved, the numbers are not available for this
+      // lift yet, and there is nothing to do about it from behind the camera.
+      return "Distances and speeds can't be measured on a lying lift yet -- there's no reliable way to size the picture when your shoulders point at the camera, so Forge won't guess. Nothing you can change in the framing fixes it. Your video is saved and your reps still count.";
     case "seated":
       return "Couldn't work out real-world scale for this take. Seated, the camera can't measure your standing height, so scale comes from your shoulder width instead -- and your shoulders need to be square to the camera for that. Film from the side with both shoulders in frame.";
     case "supported":
