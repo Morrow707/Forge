@@ -31,6 +31,11 @@ export default function LoginPage() {
   const emailRef = useRef("");
   emailRef.current = email;
 
+  // ONE TAP, NOT TWO. See the button below for why the tap has to be taken on
+  // pointerup. Both paths land here, and this ref is what stops a touch that
+  // WAS followed by a synthesised click from logging in twice.
+  const lastSubmitAt = useRef(0);
+
   const present = useCallback(() => {
     presentNativeLogin(emailRef.current || undefined).then((outcome) => {
       // null is web/unavailable/native failure; dismissed is the athlete swiping it away. Both
@@ -83,9 +88,16 @@ export default function LoginPage() {
     );
   }
 
+  function submitLogin() {
+    const now = Date.now();
+    if (now - lastSubmitAt.current < 700) return;
+    lastSubmitAt.current = now;
+    loginMutation.mutate({ email, password });
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    loginMutation.mutate({ email, password });
+    submitLogin();
   }
 
   // Two ways to reach the authenticator step: straight from the password on a
@@ -208,15 +220,23 @@ export default function LoginPage() {
                   // longer under the finger. The tap was never lost; it landed on whatever
                   // moved into that spot.
                   //
-                  // preventDefault on POINTERDOWN is what stops it, because pointerdown fires
-                  // before focus moves. No blur, so no keyboard dismissal, so no reflow, so the
-                  // click lands on the button that was tapped. The keyboard then goes away with
-                  // the screen on submit, which is what it looked like was happening anyway.
+                  // Two earlier attempts tried to stop the reflow and both failed on device:
+                  // onMouseDown (WebKit synthesises mouse events AFTER the touch sequence has
+                  // already blurred the field, so it fired too late to prevent anything) and
+                  // preventDefault on pointerdown (build 510 -- still two taps, so whatever
+                  // moves the layout in this WKWebView is not something pointerdown can cancel).
                   //
-                  // An earlier attempt used onMouseDown. WebKit synthesises mouse events AFTER
-                  // the touch sequence has already blurred the field, so it fired too late to
-                  // prevent anything -- the reason this was reported fixed and was not.
-                  onPointerDown={(e) => e.preventDefault()}
+                  // So stop trying to keep the click: TAKE THE TAP ON POINTERUP instead. The
+                  // finger is still on the button at pointerup -- the reflow happens between
+                  // there and the click -- so this fires on the tap the athlete actually made,
+                  // whatever the layout does afterwards. preventDefault suppresses the
+                  // synthesised click, and submitLogin's 700ms guard covers the case where a
+                  // browser sends it anyway. Mouse and keyboard still go through onSubmit.
+                  onPointerUp={(e) => {
+                    if (e.pointerType === "mouse") return;
+                    e.preventDefault();
+                    if (!loginMutation.isPending) submitLogin();
+                  }}
                 >
                   {loginMutation.isPending ? "Logging in…" : "Log In"}
                 </Button>
