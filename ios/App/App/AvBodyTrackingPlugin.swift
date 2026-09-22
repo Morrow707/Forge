@@ -131,14 +131,57 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // supports. A raised exception in AVFoundation is not catchable from Swift; it terminates
     // the process, which is exactly what an athlete sees as the app force-closing.
     //
-    // I have not proven WHICH of those it is, and guessing again is what produced four
-    // verify_build round trips on this file already. So the whole path is switched off and the
+    // RESOLVED 2026-09-22, and the remaining uncertainty is instrumented rather than guessed.
+    //
+    // Of the two candidates, only ONE is documented to raise: AVCaptureVideoDataOutput accepts
+    // kCVPixelBufferWidthKey/HeightKey only for sizes the source can deliver and raises
+    // NSInvalidArgumentException otherwise. Adding the output itself cannot crash -- it is
+    // guarded by canAddOutput, which returns false rather than throwing when a second output
+    // will not fit alongside the movie output at 120fps. So the size keys are gone (see
+    // applyLiveAnalysisBufferSize) and the output stays.
+    //
+    // That is reasoning, not proof, and the last four round trips on this file came from acting
+    // on reasoning. So every step of the live-path setup now drops a breadcrumb into
+    // UserDefaults BEFORE it runs and clears it after the camera is up. A crash leaves the last
+    // breadcrumb behind, and the next launch reports it -- so one more force-close produces the
+    // name of the line that did it instead of another hypothesis. See liveSetupBreadcrumb.
+    //
+    // The older note, kept because it is the reasoning this replaced: the whole path was
     // session goes back to exactly the shape it had in build 498, which filmed fine. Analysis
     // returns to running after the take, which is slower and works.
     //
     // Turning this back on needs evidence, not a hunch: the data output added with NO
     // videoSettings at all first, confirmed on a device, and only then the scaling.
-    private static let liveAnalysisEnabled = false
+    // BACK ON, with the one line that crashed it removed rather than the whole path disabled.
+    // See applyLiveAnalysisBufferSize for what actually raised. Scott, 2026-09-22: "it should
+    // start processing and saving right when the player hits record, not when it's done, it's
+    // possible, make it work."
+    private static let liveAnalysisEnabled = true
+
+    /// WHERE THE CAMERA GOT TO BEFORE IT DIED.
+    ///
+    /// An AVFoundation exception terminates the process, so logDiag's in-memory buffer goes with
+    /// it and the athlete reports "it force-closed" with nothing to read. A breadcrumb survives,
+    /// because UserDefaults is written before the risky call and the crash cannot unwrite it.
+    /// Cleared once the session is running; anything left over is reported on the next launch.
+    private static let liveSetupBreadcrumbKey = "forge.liveSetup.lastStep"
+
+    private func liveSetupBreadcrumb(_ step: String) {
+        UserDefaults.standard.set(step, forKey: Self.liveSetupBreadcrumbKey)
+        UserDefaults.standard.synchronize()
+    }
+
+    private func clearLiveSetupBreadcrumb() {
+        UserDefaults.standard.removeObject(forKey: Self.liveSetupBreadcrumbKey)
+    }
+
+    /// Read once per start and logged, so a previous run's fatal step shows up in the diagnostics
+    /// the athlete can screenshot rather than only in a crash report nobody collects.
+    private func reportPreviousLiveSetupCrash() {
+        guard let step = UserDefaults.standard.string(forKey: Self.liveSetupBreadcrumbKey) else { return }
+        logDiag("PREVIOUS LAUNCH DIED DURING LIVE SETUP AT: \(step)")
+        clearLiveSetupBreadcrumb()
+    }
     // What applyHighestFrameRate actually settled on. Read by analyzeRecording to pick a
     // sampling stride, so raising the capture rate cannot silently double the analysis wait.
     private var activeCaptureFrameRate: Double = 60
@@ -470,6 +513,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // no delegate. Nothing downstream can then build a live run either, because
             // startRecording requires videoDataOutput to be non-nil.
             if Self.liveAnalysisEnabled {
+            reportPreviousLiveSetupCrash()
+            liveSetupBreadcrumb("creating AVCaptureVideoDataOutput")
             let videoDataOutput = AVCaptureVideoDataOutput()
             // TRUE, and this is a trade made on purpose. A data output that does not discard
             // late frames applies backpressure to the whole session, and the output sharing
@@ -478,7 +523,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // (see captureOutput(_:didDrop:from:)) and enough of them fail the take back to
             // the file path rather than shipping a thinned trace as if it were a full one.
             videoDataOutput.alwaysDiscardsLateVideoFrames = true
+            liveSetupBreadcrumb("setSampleBufferDelegate")
             videoDataOutput.setSampleBufferDelegate(self, queue: Self.liveAnalysisQueue)
+            liveSetupBreadcrumb("session.addOutput(videoDataOutput)")
             if session.canAddOutput(videoDataOutput) {
                 session.addOutput(videoDataOutput)
                 self.videoDataOutput = videoDataOutput
@@ -488,10 +535,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 // does not apply the track's preferredTransform -- so it derives the
                 // orientation instead. Different routes, same upright image, which is the only
                 // thing Vision's normalized coordinates are measured against.
+                liveSetupBreadcrumb("live connection videoOrientation")
                 if let liveConnection = videoDataOutput.connection(with: .video),
                    liveConnection.isVideoOrientationSupported {
                     liveConnection.videoOrientation = self.captureOrientation
                 }
+                clearLiveSetupBreadcrumb()
             } else {
                 self.logDiag("WARNING: cannot add video data output -- live analysis unavailable")
             }
@@ -1172,20 +1221,26 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     private func applyLiveAnalysisBufferSize(for device: AVCaptureDevice) {
         guard Self.liveAnalysisEnabled else { return }
         guard let output = videoDataOutput else { return }
-        var settings: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        // THE SIZE KEYS ARE WHAT CRASHED THE CAMERA IN BUILD 510, AND THEY ARE NOT COMING BACK.
+        //
+        // This used to add kCVPixelBufferWidthKey/HeightKey here to make the live buffers match
+        // what the file path decodes to. AVCaptureVideoDataOutput accepts those keys only for
+        // sizes the source can actually deliver, and rejects anything else by RAISING an
+        // Objective-C exception from the property setter -- which Swift cannot catch, so the app
+        // force-closed the instant the camera opened. Reported on-device: "it's crashing when I
+        // click on record, I can't film a set." The whole live path was switched off to stop the
+        // bleeding rather than diagnosed, which is why it stayed off.
+        //
+        // The pixel FORMAT is safe and is all this needs. Matching the two feeders' resolution is
+        // still the right goal -- a trace calibrated against a bar sensor has to come from the
+        // same pixels the file path produces -- so the scaling moves to the analysis step, where
+        // it is a Vision request option rather than a demand on the capture hardware, and a
+        // refusal there is a value we can read instead of a crash we cannot.
+        liveSetupBreadcrumb("videoSettings (pixel format only)")
+        output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        clearLiveSetupBreadcrumb()
         let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
-        // The connection above rotates the delivered buffer, so the dimensions that matter are
-        // the format's, un-rotated -- the scale factor is the same either way.
-        let width = Double(dims.width)
-        let height = Double(dims.height)
-        let longest = max(width, height)
-        if longest > Double(Self.analysisDecodeMaxDimension) {
-            let scale = Double(Self.analysisDecodeMaxDimension) / longest
-            settings[kCVPixelBufferWidthKey as String] = Int((width * scale).rounded())
-            settings[kCVPixelBufferHeightKey as String] = Int((height * scale).rounded())
-        }
-        output.videoSettings = settings
-        logDiag("live analysis buffers: \(settings[kCVPixelBufferWidthKey as String] ?? Int(width))x\(settings[kCVPixelBufferHeightKey as String] ?? Int(height))")
+        logDiag("live analysis buffers: \(dims.width)x\(dims.height) (format's own size, never requested)")
     }
 
     /// A STRIDE IS A TARGET RATE, NOT A FRAME COUNT.

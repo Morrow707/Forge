@@ -42,10 +42,36 @@ describe("live analysis and file analysis are one implementation", () => {
     expect(source).not.toMatch(/activeCaptureFrameRate\s*\/\s*60\.0\s*\)?\s*\n\s*let sampleEveryNthFrame/);
   });
 
-  it("decodes both paths to one budget", () => {
+  it("decodes the FILE path to the shared budget, and never demands it of the camera", () => {
     expect(source).toMatch(/static let analysisDecodeMaxDimension/);
+    // The file path decodes-and-scales through AVAssetReader, which takes the size keys and
+    // returns an error if it cannot honour them.
     const uses = source.match(/Self\.analysisDecodeMaxDimension/g) ?? [];
-    expect(uses.length).toBeGreaterThanOrEqual(3);
+    expect(uses.length).toBeGreaterThanOrEqual(2);
+
+    // THE LIVE PATH MUST NEVER ASK THE CAPTURE OUTPUT TO SCALE.
+    //
+    // AVCaptureVideoDataOutput accepts kCVPixelBufferWidthKey/HeightKey only for sizes the
+    // source can deliver and RAISES an Objective-C exception otherwise -- uncatchable from
+    // Swift, so the app force-closes the instant the camera opens. That is what build 510 did:
+    // "it's crashing when I click on record, I can't film a set." The two APIs look alike and
+    // behave completely differently, which is exactly how this gets rewritten by accident.
+    const liveSettings = source.slice(
+      source.indexOf("private func applyLiveAnalysisBufferSize"),
+      source.indexOf("private func applyLiveAnalysisBufferSize") + 2000,
+    );
+    expect(liveSettings).not.toMatch(/settings\[kCVPixelBufferWidthKey/);
+    expect(liveSettings).not.toMatch(/settings\[kCVPixelBufferHeightKey/);
+  });
+
+  // One more force-close has to produce the name of the line that did it. An AVFoundation
+  // exception kills the process and takes logDiag's in-memory buffer with it, so the step is
+  // written to UserDefaults before it runs and reported on the next launch.
+  it("leaves a breadcrumb through live setup so a crash names itself", () => {
+    expect(source).toContain("private func liveSetupBreadcrumb");
+    expect(source).toContain("reportPreviousLiveSetupCrash()");
+    expect(source).toContain('liveSetupBreadcrumb("session.addOutput(videoDataOutput)")');
+    expect(source).toContain("PREVIOUS LAUNCH DIED DURING LIVE SETUP AT:");
   });
 
   it("never lets the live output back the capture session up behind Vision", () => {
