@@ -51,3 +51,28 @@ describe("both halves of the wait have their own bar", () => {
     expect(workout).toContain("setAnalysisProgress((prev) => {");
   });
 });
+
+// 100% MEANS THE SERVER HAS IT, NOT THAT THE BYTES LEFT THE PHONE.
+//
+// upload.onprogress counts bytes handed to the network stack, so it hits loaded === total
+// before the server has received the tail, written the clip and answered. On a large take
+// that gap was twenty seconds of a bar sitting at 100% -- indistinguishable from a save that
+// died. Reported on-device 2026-09-22.
+describe("the saving bar cannot claim 100% early", () => {
+  const client = readFileSync(resolve(__dirname, "./queryClient.ts"), "utf-8");
+
+  it("caps the streamed fraction below 1", () => {
+    expect(client).toContain("Math.min(e.loaded / e.total, 0.99)");
+  });
+
+  it("reports 1 only once the response has landed", () => {
+    const onload = client.indexOf("xhr.onload");
+    const full = client.indexOf("onProgress?.(1)");
+    expect(full).toBeGreaterThan(onload);
+  });
+
+  it("renames the last stretch instead of parking on a number", () => {
+    expect(workout).toContain('finishing ? "Finishing" : label');
+    expect(workout).toContain("shown >= 99");
+  });
+});

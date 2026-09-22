@@ -2763,16 +2763,26 @@ function ProcessingPhaseBar({
   done: boolean;
 }) {
   const shown = done ? 100 : percent;
+  // THE LAST STRETCH IS A WAIT, AND IT SAYS SO.
+  //
+  // uploadWithProgress deliberately stops counting at 99% because its bytes-sent number goes
+  // full before the server has written the clip and answered (see queryClient.ts). That last
+  // stretch is a real wait -- twenty seconds on a large take -- and a bar parked on a number
+  // is indistinguishable from a save that died. So once the bytes are gone the bar fills,
+  // pulses, and renames itself to what is actually happening.
+  const finishing = !done && shown != null && shown >= 99;
   return (
     <span className="flex items-center gap-1.5">
-      <span className="w-[58px] shrink-0 text-left">{label}</span>
+      <span className="w-[58px] shrink-0 text-left">{finishing ? "Finishing" : label}</span>
       <span className="relative h-1 w-16 overflow-hidden rounded-full bg-primary/20">
         <span
-          className="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-200"
-          style={{ width: `${shown ?? 0}%` }}
+          className={`absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-200${finishing ? " animate-pulse" : ""}`}
+          style={{ width: `${finishing ? 100 : (shown ?? 0)}%` }}
         />
       </span>
-      <span className="w-8 shrink-0 tabular-nums text-right">{shown != null ? `${shown}%` : "--"}</span>
+      <span className="w-8 shrink-0 tabular-nums text-right">
+        {finishing ? "\u2026" : shown != null ? `${shown}%` : "--"}
+      </span>
     </span>
   );
 }

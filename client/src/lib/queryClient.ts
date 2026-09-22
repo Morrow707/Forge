@@ -191,8 +191,16 @@ export function uploadWithProgress(
     xhr.withCredentials = true;
     const token = getNativeToken();
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    // NEVER REPORT 1 FROM upload.onprogress. It counts bytes handed to the network stack, so
+    // it reaches loaded === total the moment the request body is flushed -- with the server
+    // yet to receive the tail, write the clip to STORAGE_PATH, insert the row and answer.
+    // On a 60MB take that gap is real: reported on-device 2026-09-22 as "it took 20 seconds
+    // after the saving finished, 100% shown, before it actually uploaded the video". A bar
+    // sitting at 100% for twenty seconds reads as hung, which is worse than no bar -- the
+    // athlete has no way to tell it apart from a save that died. 1 comes from the RESPONSE
+    // below and nowhere else, so the bar is full only when the server has the video.
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+      if (e.lengthComputable && onProgress) onProgress(Math.min(e.loaded / e.total, 0.99));
     };
     xhr.onload = () => {
       let data: any = null;
@@ -204,6 +212,7 @@ export function uploadWithProgress(
         // to statusText below.
       }
       if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(1);
         resolve(data);
       } else {
         reject(new ApiError(xhr.status, data?.message || xhr.statusText || "Upload failed"));
