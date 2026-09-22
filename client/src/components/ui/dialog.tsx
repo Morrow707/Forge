@@ -47,10 +47,34 @@ const DialogContent = React.forwardRef<
         // more contrast to stay legible while still reading as glass.
         // Rim/inset-highlight driven by --rim, ambient --glow layer added
         // same as card.tsx (invisible until a coach personalizes).
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border border-[hsl(var(--rim)/0.3)] bg-card/85 p-6 shadow-[inset_0_1px_0_0_hsl(var(--rim)/0.08),0_24px_60px_-20px_rgba(0,0,0,0.7),0_28px_64px_-10px_hsl(var(--glow)/var(--glow-alpha))] backdrop-blur-xl backdrop-saturate-150 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-lg max-h-[85vh] overflow-y-auto",
+        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border border-[hsl(var(--rim)/0.3)] bg-card/85 p-6 shadow-[inset_0_1px_0_0_hsl(var(--rim)/0.08),0_24px_60px_-20px_rgba(0,0,0,0.7),0_28px_64px_-10px_hsl(var(--glow)/var(--glow-alpha))] backdrop-blur-xl backdrop-saturate-150 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-lg overflow-y-auto",
         className,
       )}
+      // CENTRED IN THE SAFE AREA, NOT IN THE RAW VIEWPORT.
+      //
+      // A tall dialog centred at exactly 50% of a notched phone's screen puts its own top under
+      // the status bar: the close button and the title sat behind the clock and the battery,
+      // and there was no way out of the sheet. Reported on-device 2026-09-22 ("I can't exit out
+      // the top hides behind the camera and time and battery").
+      //
+      // Two parts, and both are needed. The height budget is the safe viewport rather than
+      // 85vh, so a full-height dialog cannot reach into either inset. The top offset shifts the
+      // centre by HALF the difference between the insets -- an iPhone's top inset is much
+      // larger than its bottom one, so a dialog centred on the raw viewport is always too high
+      // by exactly that amount.
+      //
+      // dvh, not vh: vh on iOS is the viewport with the browser chrome hidden, which is not the
+      // height the dialog actually has while the chrome is showing.
       {...props}
+      // AFTER the spread, deliberately: a caller passing its own style would otherwise replace
+      // this wholesale and put its dialog back under the notch. Its style is merged in, so a
+      // caller can still set anything except the two properties that keep the sheet reachable.
+      style={{
+        top: "calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2)",
+        maxHeight:
+          "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2rem)",
+        ...props.style,
+      }}
     >
       {children}
       {!hideClose && (
