@@ -108,6 +108,32 @@
 - Only back squat, Pendlay row, bench press and box jump have been tested
   against real lifts. Everything else is unvalidated.
 
+## THE CAMERA NEVER REJECTS A TAKE. IT RECORDS WHAT IT GOT AND SAYS WHAT IT IS.
+
+Ratified by Scott 2026-09-22, after a refusal shipped ahead of its replacement and cost him two
+testing sessions: "our camera system should never, ever reject data, accept it wrong, that gives
+us something to work with, rejected data does nothing for us."
+
+This is an invariant, not a preference, and it OVERRIDES the instinct that produced the refusal.
+A wrong number carries information: it can be compared against a bar sensor, replayed through
+the harness, and used to find the fault. A refusal carries none -- the athlete filmed a set, the
+app kept the video, and nobody can tell a 40% scale error from a broken tracker from a bad angle,
+because no number was written down.
+
+- **A capture always writes its numbers**, however little the pipeline trusts them, alongside the
+  accuracy caveat (`shared/camera-accuracy-copy.ts`) and the `trackingDiagnostics` blob saying
+  what went wrong. The caveat is how an athlete is told not to trust it; silence is not.
+- **Withholding a number is a LAST resort and needs a reason that is not "it might be wrong."**
+  Every number this pipeline produces might be wrong; that is what calibration is for. The bar is
+  "a reader would be actively harmed by seeing this", not "we are not confident".
+- **Never ship a refusal before its replacement.** The shoulder-width refusal (2026-09-22) was
+  correct on the geometry and still wrong to ship: it removed the only ruler a bench press had,
+  with nothing behind it, so two builds produced less than the morning had. If a source is going
+  to be refused, the source that replaces it lands first, in the same build or an earlier one.
+- **This does not weaken the plausibility gates.** A single frame that implies an impossible
+  velocity is still dropped -- that is filtering a sample, not refusing a take. The rule is about
+  the SET: a set that was filmed gets a row, a number and an explanation, always.
+
 ## THE CAMERA ARCHITECTURE: three parts, answering to each other
 
 **This is how the camera system works. Not one fix among several -- the shape
