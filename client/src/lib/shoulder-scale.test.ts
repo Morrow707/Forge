@@ -44,11 +44,13 @@ describe("shoulderWidthScaleFromFrames", () => {
   // a standing one's. It shipped in build 515 and refused nothing: the bench set it was written
   // for still calibrated off the shoulders. The evidence for refusing is two bench sets minutes
   // apart measuring the same shoulders at 88.0px and 115.3px.
-  it("refuses a lying athlete, whose shoulder breadth is foreshortened by the pose itself", () => {
-    expect(shoulderWidthScaleFromFrames(torsoFrames("supine"), HEIGHT_IN, "lying").scale).toBeNull();
-    expect(shoulderWidthScaleFromFrames(torsoFrames("supine"), HEIGHT_IN, "lying").rejectedBecause).toBe(
-      "foreshortened_by_posture",
-    );
+  // WITHDRAWN the day it shipped -- see the note in pose-tracking.ts. The refusal was right and
+  // it arrived before its replacement, which left a lying lift with no numbers at all rather
+  // than imprecise ones. This asserts the CURRENT behaviour so the withdrawal is visible rather
+  // than a deleted test nobody notices; when the plate can carry the measurement, this flips
+  // back and the assertion above it comes with it.
+  it("still measures a lying athlete, until the plate can replace it", () => {
+    expect(shoulderWidthScaleFromFrames(torsoFrames("supine"), HEIGHT_IN, "lying").scale).not.toBeNull();
   });
 
   it("still measures a standing athlete, whose shoulders are square to the lens", () => {

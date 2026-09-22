@@ -959,7 +959,21 @@ export function shoulderWidthScaleFromFrames(
     rejectedBecause: null,
   };
   if (!heightIn || heightIn <= 0) return { ...empty, rejectedBecause: "no_height" };
-  if (posture === "lying") return { ...empty, rejectedBecause: "foreshortened_by_posture" };
+  // WITHDRAWN 2026-09-22, THE SAME DAY IT SHIPPED, AND THE REASON IS NOT THAT IT WAS WRONG.
+  //
+  // Refusing here is defensible: a shoulder ruler read at an oblique angle measured the same
+  // athlete's shoulders at 88.0px and 115.3px on two sets minutes apart. But the refusal landed
+  // before anything replaced it, so the athlete filmed four bench sets across two builds and got
+  // less than he had that morning -- the numbers were wrong before and absent after, and absent
+  // is not an improvement when there is nothing else on offer. Scott, on the fourth one: "Dude
+  // ..... again."
+  //
+  // So the shoulder ruler is back, with the accuracy caveat that was always attached to it, and
+  // it stays until the plate can carry the measurement. When it can, this refusal comes back
+  // with it -- in that order, not this one. Never ship the refusal before the replacement.
+  //
+  // (The posture argument itself stands and is written up in docs/camera-tracking-notes.md.)
+  void posture;
 
   const widths: number[] = [];
   let framesRejectedForAngle = 0;
