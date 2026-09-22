@@ -23,6 +23,7 @@
 		958DCC822DB07C7200EA8C72 /* ArMeasureViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958DCC832DB07C7200EA8C73 /* ArMeasureViewController.swift */; };
 		AB0DCE10AB0DCE10AB0DCE10 /* AvBodyTrackingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0DCE10AB0DCE10AB0DCE11 /* AvBodyTrackingPlugin.swift */; };
 		AB1E1A99AB1E1A99AB1E1A90 /* AppleIapPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1E1A99AB1E1A99AB1E1A91 /* AppleIapPlugin.swift */; };
+		AB1E1A99AB1E1A99AB1E1AA0 /* AvSessionRecorderPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1E1A99AB1E1A99AB1E1AA1 /* AvSessionRecorderPlugin.swift */; };
 		D1F1F6E770C5EEAF7EE373A2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D18EFC9C75F5A71CBE1CDE92 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -45,6 +46,7 @@
 		9833D72362FC8476DFEDACF6 /* PasswordPickerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordPickerPlugin.swift; sourceTree = "<group>"; };
 		AB0DCE10AB0DCE10AB0DCE11 /* AvBodyTrackingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvBodyTrackingPlugin.swift; sourceTree = "<group>"; };
 		AB1E1A99AB1E1A99AB1E1A91 /* AppleIapPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIapPlugin.swift; sourceTree = "<group>"; };
+		AB1E1A99AB1E1A99AB1E1AA1 /* AvSessionRecorderPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvSessionRecorderPlugin.swift; sourceTree = "<group>"; };
 		D18EFC9C75F5A71CBE1CDE92 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F0C916CC5DB6FD72D7964BB0 /* ForgeBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgeBridgeViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -88,6 +90,7 @@
 				9833D72362FC8476DFEDACF6 /* PasswordPickerPlugin.swift */,
 				AB0DCE10AB0DCE10AB0DCE11 /* AvBodyTrackingPlugin.swift */,
 				AB1E1A99AB1E1A99AB1E1A91 /* AppleIapPlugin.swift */,
+				AB1E1A99AB1E1A99AB1E1AA1 /* AvSessionRecorderPlugin.swift */,
 				958DCC812DB07C7200EA8C71 /* ArMeasurePlugin.swift */,
 				958DCC832DB07C7200EA8C73 /* ArMeasureViewController.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -194,6 +197,7 @@
 				4A7AFEECA4CC21CADA48F9FE /* PasswordPickerPlugin.swift in Sources */,
 				AB0DCE10AB0DCE10AB0DCE10 /* AvBodyTrackingPlugin.swift in Sources */,
 				AB1E1A99AB1E1A99AB1E1A90 /* AppleIapPlugin.swift in Sources */,
+				AB1E1A99AB1E1A99AB1E1AA0 /* AvSessionRecorderPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
