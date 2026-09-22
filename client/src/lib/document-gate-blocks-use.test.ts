@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  BETA_DEFERRED_DOCUMENTS,
   REQUIRED_DOCUMENTS,
   documentAudienceFor,
   missingRequiredDocuments,
@@ -48,6 +49,24 @@ describe("what the document gate actually blocks", () => {
       REQUIRED_DOCUMENTS[freeAgent].map((d) => [d.kind, "pending_review" as const]),
     );
     expect(missingRequiredDocuments(freeAgent, pending)).toEqual([]);
+  });
+
+  it("does not hold up a beta tester over a document that needs a physician", () => {
+    // Requiring a doctor's signature before anybody may open a workout is right on the day
+    // Forge charges money and wrong today -- it would be an empty beta, not a gate.
+    const nothing = {};
+    expect(missingRequiredDocuments(freeAgent, nothing, { beta: true }).map((d) => d.kind))
+      .not.toContain("medical_clearance");
+    // ...and the deferral is exactly that, not a quiet removal: outside beta it blocks again.
+    expect(missingRequiredDocuments(freeAgent, nothing).map((d) => d.kind))
+      .toContain("medical_clearance");
+  });
+
+  it("keeps the deferred row ON the checklist", () => {
+    // Hiding it would mean nobody uploads one until the day it suddenly locks them out.
+    for (const kind of BETA_DEFERRED_DOCUMENTS) {
+      expect(REQUIRED_DOCUMENTS[freeAgent].map((d) => d.kind)).toContain(kind);
+    }
   });
 
   it("blocks again when a clearance has expired", () => {

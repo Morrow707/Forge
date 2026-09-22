@@ -219,11 +219,31 @@ export function documentNeedsAction(status: DocumentStatus): boolean {
  * would punish somebody for our review queue, and in beta that queue is a person checking
  * manually.
  */
+/** REQUIRED AT LAUNCH, NOT DURING BETA.
+ *
+ * A medical clearance is a physician's signature. Requiring one before anybody may train would
+ * be right on the day Forge charges money and wrong today: every beta tester would have to book
+ * a physical before they could open a workout, which is not a gate, it is an empty beta. Scott,
+ * 2026-09-22: "make it not required during beta".
+ *
+ * The row stays ON the checklist either way -- it is still the document that matters, and
+ * hiding it would mean nobody uploads one until the day it suddenly locks them out. What beta
+ * changes is only whether its absence blocks training.
+ *
+ * Tied to the SAME switch that already means "we are in beta" (BILLING_ENFORCEMENT_ENABLED,
+ * off by default) rather than a second flag of its own, so beta cannot end for billing and
+ * continue for paperwork.
+ */
+export const BETA_DEFERRED_DOCUMENTS: DocumentKind[] = ["medical_clearance"];
+
 export function missingRequiredDocuments(
   audience: DocumentAudience,
   statusByKind: Partial<Record<DocumentKind, DocumentStatus>>,
+  options?: { beta?: boolean },
 ): RequiredDocument[] {
-  return REQUIRED_DOCUMENTS[audience].filter(
-    (doc) => doc.required && documentNeedsAction(statusByKind[doc.kind] ?? "missing"),
-  );
+  return REQUIRED_DOCUMENTS[audience].filter((doc) => {
+    if (!doc.required) return false;
+    if (options?.beta && BETA_DEFERRED_DOCUMENTS.includes(doc.kind)) return false;
+    return documentNeedsAction(statusByKind[doc.kind] ?? "missing");
+  });
 }

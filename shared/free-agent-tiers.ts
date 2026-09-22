@@ -193,7 +193,26 @@ export function appleProductIdForFreeAgentTier(tier: FreeAgentTierId): string {
   return `${APPLE_BUNDLE_ID}.freeagent.${tier}_v2`;
 }
 
-export type FreeAgentAddOnId = "golf_swing" | "hitting" | "pitching";
+/** THE THREE SPORT COACHES, WHICH ARE ONE KIND OF THING.
+ *
+ * Each is an AI chat coach for a sport, and server/storage.ts keys its prompts, labels and
+ * topics off exactly these. Kept as its own type so a non-coach add-on cannot be handed to
+ * sendSportCoachChatMessage and ask a barbell question of a putting coach -- which is what the
+ * compiler caught the moment video_analysis was added to one flat union.
+ */
+export type SportCoachAddOnId = "golf_swing" | "hitting" | "pitching";
+
+/** Everything a Free Agent can buy ON TOP of their tier. The sport coaches, plus add-ons that
+ * are not coaches at all. Two names rather than one for the same reason FREE_AGENT_TIER_ORDER
+ * and ALL_FREE_AGENT_TIER_IDS are two lists: they answer different questions, and the day they
+ * stop being identical is the day conflating them breaks something. */
+export type FreeAgentAddOnId = SportCoachAddOnId | "video_analysis";
+
+export const SPORT_COACH_ADD_ON_IDS: SportCoachAddOnId[] = ["golf_swing", "hitting", "pitching"];
+
+export function isSportCoachAddOn(id: FreeAgentAddOnId): id is SportCoachAddOnId {
+  return (SPORT_COACH_ADD_ON_IDS as string[]).includes(id);
+}
 
 export interface FreeAgentAddOnDef {
   id: FreeAgentAddOnId;
@@ -227,6 +246,31 @@ export const FREE_AGENT_ADD_ONS: Record<FreeAgentAddOnId, FreeAgentAddOnDef> = {
     monthlyPriceCents: 799,
     description: "AI pitching mechanics analysis and drills.",
   },
+  // THE VIDEO WORKBENCH, AND IT IS SOLD ON THE VIDEO RATHER THAN THE NUMBERS.
+  //
+  // Side-by-side comparison of the athlete's own lift against a reference clip they supply,
+  // with angle lines and a recorded voice-over, exported to their phone. Nothing about it is
+  // stored in Forge (Scott, 2026-09-22: "I don't want to save this in forge ... make them
+  // download the video to their phones"), which is also why it can be priced as its own thing
+  // rather than as more storage.
+  //
+  // $14.99/mo on top of the tier that has the camera. Reference point: Inform charges $9.99
+  // standard and $14.99 premium. Free through beta like every other add-on -- the short-circuit
+  // in getEntitlements unlocks all of them while enforcement is off, which is how it gets
+  // tested before anybody is charged.
+  //
+  // What it must NOT claim: the CAMERA-derived numbers are still uncalibrated and still carry
+  // CAMERA_ACCURACY_PURCHASE_WARNING. A squat's ROM currently reads about 9% under a bar
+  // sensor (see docs/camera-tracking-notes.md). What is being sold here is the video work --
+  // watching two lifts together, drawing on them, talking over them -- which is real and
+  // correct today.
+  video_analysis: {
+    id: "video_analysis",
+    label: "Video Analysis",
+    monthlyPriceCents: 1499,
+    description:
+      "Compare your lift against a reference clip side by side, mark angles, record a voice-over, and export it to your phone.",
+  },
 };
 
 // Which of the three above have an actual feature behind them -- same
@@ -241,9 +285,18 @@ export const BUILT_FREE_AGENT_ADD_ONS: Set<FreeAgentAddOnId> = new Set([
   "golf_swing",
   "hitting",
   "pitching",
+  // video_analysis is deliberately absent until the workbench actually ships. This Set is the
+  // "don't sell what doesn't exist" gate, and the price above being real code is the whole
+  // point of declaring it before the feature lands -- same order billing-tiers.ts followed
+  // before Stripe existed.
 ]);
 
-export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching"];
+export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = [
+  "golf_swing",
+  "hitting",
+  "pitching",
+  "video_analysis",
+];
 
 /** The App Store Connect Product id for a sport-coach add-on.
  *

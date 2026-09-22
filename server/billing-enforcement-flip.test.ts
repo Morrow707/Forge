@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
 
 // Turning BILLING_ENFORCEMENT_ENABLED on is a single switch that arms
 // paywalls AND video trimming across the whole platform at once. What keeps
@@ -59,7 +60,10 @@ describe("flipping enforcement on restricts nobody who is still a beta account",
       hasAiChat: true,
       hasVideoFormCheck: true,
       hasSkills: true,
-      addOns: { golf_swing: true, hitting: true, pitching: true },
+      // Derived, not restated: beta unlocks EVERY add-on, and a list written out here would
+      // have to be edited every time one is added -- which is how a new add-on quietly ships
+      // locked. See FREE_AGENT_ADD_ON_ORDER.
+      addOns: Object.fromEntries(FREE_AGENT_ADD_ON_ORDER.map((id) => [id, true])),
     });
   });
 
@@ -80,7 +84,7 @@ describe("flipping enforcement on restricts nobody who is still a beta account",
     ).toBe(false);
     expect(
       getFreeAgentEntitlements({ ...paying, freeAgentTier: null, freeAgentAddOns: [] } as any).addOns,
-    ).toEqual({ golf_swing: false, hitting: false, pitching: false });
+    ).toEqual(Object.fromEntries(FREE_AGENT_ADD_ON_ORDER.map((id) => [id, false])));
   });
 
   it("gives a non-beta account exactly the add-ons it bought", async () => {
@@ -91,7 +95,9 @@ describe("flipping enforcement on restricts nobody who is still a beta account",
         freeAgentTier: "basic",
         freeAgentAddOns: ["hitting"],
       } as any).addOns,
-    ).toEqual({ golf_swing: false, hitting: true, pitching: false });
+    ).toEqual(
+      Object.fromEntries(FREE_AGENT_ADD_ON_ORDER.map((id) => [id, id === "hitting"])),
+    );
   });
 
   it("leaves video retention unlimited, so nothing starts being trimmed", async () => {

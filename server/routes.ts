@@ -53,7 +53,7 @@ import {
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier, ageFromDateOfBirth } from "@shared/privacy-tiers";
-import { BILLING_LIVE } from "./billing";
+import { BILLING_LIVE, ENFORCEMENT_ENABLED } from "./billing";
 import {
   createBillingPortalSession,
   createCoachAddOnCheckout,
@@ -112,6 +112,7 @@ import {
   BUILT_FREE_AGENT_ADD_ONS,
   FREE_AGENT_ADD_ON_ORDER,
   type FreeAgentAddOnId,
+  isSportCoachAddOn,
 } from "@shared/free-agent-tiers";
 import {
   insertExerciseSchema,
@@ -8233,7 +8234,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const summary = await storage.externalWaiverSummary(user.id);
       const statusByKind: Record<string, DocumentStatus> = {};
       for (const line of summary) statusByKind[line.kind] = line.status as DocumentStatus;
-      const missing = missingRequiredDocuments(audience, statusByKind);
+      // Beta is the same switch billing uses, so the two cannot drift apart.
+      const missing = missingRequiredDocuments(audience, statusByKind, {
+        beta: !ENFORCEMENT_ENABLED,
+      });
       res.json({
         audience,
         complete: missing.length === 0,
@@ -10692,7 +10696,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireFreeAgentAddOn,
     async (req, res) => {
       const user = currentUser(req);
+      // Narrowed, not cast. These two routes are the SPORT COACH chat; an add-on that is not a
+      // coach has no prompt, no topic and no principles behind it, and casting one through
+      // would ask a putting coach a barbell question. The compiler caught exactly this when
+      // video_analysis joined the add-on union.
       const addOnId = req.params.addOnId as FreeAgentAddOnId;
+      if (!isSportCoachAddOn(addOnId)) return res.status(404).json({ message: "No such coach" });
       const messages = await storage.getSportCoachChatMessages(user.id, addOnId);
       res.json(messages);
     },
@@ -10706,6 +10715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       const user = currentUser(req);
       const addOnId = req.params.addOnId as FreeAgentAddOnId;
+      if (!isSportCoachAddOn(addOnId)) return res.status(404).json({ message: "No such coach" });
       const parsed = sendChatMessageSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid message" });
       const result = await storage.sendSportCoachChatMessage(user.id, addOnId, parsed.data.content);
