@@ -3663,10 +3663,11 @@ private final class AvCoreMlImplementDetector {
     // VNTrackObjectRequest (right below) does its own local search around the previous frame's
     // box already, via Vision's own tracking algorithm, so applying a wrist-anchored region on
     // top of that would be redundant at best and could clip a fast-moving implement that's
-    // legitimately drifted outside the margin at worst. nil regionOfInterest (no wrist this
-    // frame) skips a fresh detection outright rather than falling back to a full-frame scan --
-    // same "only worth it when there's a wrist to anchor on" precedent
-    // extractWorkingFrame's own caller already established for the motion-diff tracker.
+    // legitimately drifted outside the margin at worst. A nil regionOfInterest (no wrist this
+    // frame) now falls back to a FULL-FRAME scan rather than skipping the detection: it used to
+    // skip, and on a bench press -- where the wrists are the least reliable joints in the frame
+    // -- that switched the object tracker off for 96% of the set. See the guard at the fresh
+    // detection itself for the measured cost and why searching wide beats not searching.
     //
     /// `held` is true only on a frozen frame, where the last box is repeated without any tracking
     /// having run -- the JS side discounts a held reading rather than treating it as a fresh one.
@@ -3712,7 +3713,33 @@ private final class AvCoreMlImplementDetector {
                 telemetry.framesBodySuspect += 1
             }
         }
-        if bodySuspectThisFrame { return nil }
+        // ...BUT A BLIND OBJECT TRACKER IS NOT AN ABSTENTION, IT IS A SECOND FAILURE.
+        //
+        // Abstaining used to mean returning here, which skipped the fresh-detection path too.
+        // The reasoning was sound for a LOCKED tracker and wrong for an unlocked one, and the
+        // difference is the whole of the bench press problem. Measured 2026-09-22 across one
+        // athlete's own captures, same gym, same week: the plate was found on 595/805, 645/832
+        // and 827/989 frames of a back squat, and on 34/851 and 43/895 frames of a bench -- one
+        // fresh detection each, a lock held for about 45 frames, then blind for the remaining
+        // 800. The bench trace was therefore built from the WRISTS for 96% of the set, which is
+        // the hardest thing Vision has to find on a bench (both arms toward the lens, hands
+        // close together, the bar across them, the chest occluding them at the bottom of every
+        // rep) -- 12-15% of frames rejected as physically impossible against 3-5% on a squat.
+        //
+        // The body's ruler is needed to JUDGE an object reading. It is not needed to MAKE one:
+        // a fresh classification asks the model what is in the picture and owes the body
+        // nothing. So a suspect body still abstains from judging, and the lock is still left
+        // exactly as it was -- but when there is NO lock to protect, the detector is allowed to
+        // look. Anything it finds is judged the moment a trustworthy body reading returns, by
+        // the distance and motion gates below, which is where that judgement belongs.
+        //
+        // This is the asymmetry the architecture asks for, applied in the direction it was
+        // missing: neither tracker may be made useless by the other being unreliable.
+        if bodySuspectThisFrame {
+            if trackingRequest != nil { return nil }
+            // No lock to protect. Fall through to a fresh detection, unseeded -- see the
+            // regionOfInterest guard below for why a jumped wrist must not aim it.
+        }
 
         // A FROZEN FRAME ADVANCES NOTHING (overwatch). Identical bytes are no new evidence: the
         // lock is neither confirmed nor broken, the held-frame count and the re-classify clock
@@ -3934,11 +3961,25 @@ private final class AvCoreMlImplementDetector {
             }
         }
 
-        guard let regionOfInterest else { return nil }
+        // NO WRIST IS A REASON NOT TO AIM, NOT A REASON NOT TO LOOK.
+        //
+        // This used to `guard let regionOfInterest else { return nil }`: no confident wrist pair
+        // on this frame meant no fresh detection at all. On a squat the wrists sit still on a
+        // bar behind the neck and that costs nothing. On a bench they are the least reliable
+        // joints in the frame, so the object tracker was switched off for most of the set by
+        // the one part of the body it can least rely on -- see the abstention above for the
+        // measured cost.
+        //
+        // A missing region means the search cannot be NARROWED, which is a reason to search the
+        // whole frame, not to skip the frame. The region is an optimisation and a guard against
+        // a jumped wrist aiming the detector at the wrong place; neither is served by not
+        // looking. A full-frame result still has to clear the distance and motion gates before
+        // it can survive, so a rack plate found this way dies as soon as the body can speak.
+        let seededRegion = bodySuspectThisFrame ? nil : regionOfInterest
 
         guard let best = freshDetection(
             pixelBuffer: pixelBuffer, orientation: orientation,
-            targetLabel: targetLabel, regionOfInterest: regionOfInterest, body: body
+            targetLabel: targetLabel, regionOfInterest: seededRegion, body: body
         ) else { return nil }
 
         telemetry.freshDetections += 1

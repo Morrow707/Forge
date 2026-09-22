@@ -25,7 +25,11 @@ import { summarizeRotation, type RotationSample } from "@/lib/rotation-tracking"
 import { summarizeSwing } from "@/lib/swing-tracking";
 import type { Landmark } from "@mediapipe/tasks-vision";
 import { videoFilenameForBlob } from "@/lib/video-recording";
-import type { CaptureDeviceInfo, PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
+import type {
+  CaptureDeviceInfo,
+  PoseFrame as NativePoseFrame,
+  AvObjectLockTelemetry,
+} from "@/lib/native-av-preview";
 import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
 
 // Was defined in ar-swing-tracker-dialog.tsx (the now-deleted ARKit dialog this one replaced)
@@ -134,6 +138,18 @@ export function AvSwingTrackerDialog({
     // in-flight upload instead of starting a fresh one once they're ready for it.
     let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
     const result = await stopRecordingAndAnalyze({
+      // THE OBJECT TRACKER, WHICH THIS DIALOG HAS NEVER ONCE ASKED FOR.
+      //
+      // Same gap as the kettlebell dialog, audited the same day: no trackingMode meant the
+      // detector was inert for every golf and baseball swing ever filmed, so the body tracker
+      // carried the take alone and overwatch had nothing to hold it against.
+      //
+      // The BALL rather than the club or the bat, and that is the better half of the trade:
+      // "golf_ball" and "baseball" are both classes the model knows, neither is occluded by the
+      // athlete's own body at the moment that matters, and both are objects whose real diameter
+      // is fixed by the rules of the sport -- which makes them a scale reference as well as a
+      // tracking target. A club head is none of those things.
+      trackingMode: sport === "golf" ? "golf_ball" : "baseball",
       onBlobReady: recordVideo
         ? (blob) => {
             setSaving(true);
@@ -193,7 +209,20 @@ export function AvSwingTrackerDialog({
     skeletonFrames: PoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
     nativeRawFrames: NativePoseFrame[],
-    recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+    // THIS DIALOG NOW RUNS THE IMPLEMENT DETECTOR, SO IT HAS LOCK TELEMETRY TO REPORT.
+    //
+    // Typing this as three counters is what silently dropped objectLock on the med ball dialog
+    // for every take: the caller passes the whole AvAnalysisResult and the narrower type threw
+    // the rest away, with no error anywhere because the schema fields are optional. Every
+    // unlock and every abstention has to be visible or the thresholds behind them can never be
+    // tuned -- see CLAUDE.md, "Every unlock and every abstention is recorded."
+    recordingStats: {
+      frameCount: number;
+      trackedFrameCount: number;
+      elapsedSeconds: number;
+      objectLock?: AvObjectLockTelemetry;
+      objectLockSecondary?: AvObjectLockTelemetry;
+    },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
@@ -235,6 +264,8 @@ export function AvSwingTrackerDialog({
               outcome: "tracked",
               rawFrames: nativeRawFrames,
               recording: recordingStats,
+              objectLock: recordingStats.objectLock ?? null,
+              objectLockSecondary: recordingStats.objectLockSecondary ?? null,
               calibration: { scaleFactor, ...calibrationFrames },
             }),
           }
@@ -246,6 +277,8 @@ export function AvSwingTrackerDialog({
         message: "Couldn't get a clean read -- make sure your whole swing stays in frame.",
         rawFrames: nativeRawFrames,
         recording: recordingStats,
+        objectLock: recordingStats.objectLock ?? null,
+        objectLockSecondary: recordingStats.objectLockSecondary ?? null,
         calibration: { scaleFactor, ...calibrationFrames },
       });
       const emptyMetrics: AvSwingSetMetrics = { ...EMPTY_SWING_METRICS, captureDeviceInfo, trackingDiagnostics: diagnostics };

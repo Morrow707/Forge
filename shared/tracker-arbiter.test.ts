@@ -341,16 +341,43 @@ describe("the Swift port carries the same numbers", () => {
   });
 
   it("still checks the BODY before anything else the frame does", () => {
-    // Both halves matter and they fail differently. The body check has to come before the
-    // tracked-lock gate (or a jumped landmark convicts a good lock) AND before the fresh
-    // detection (or a jumped wrist drags regionOfInterest with it and the detector seeds on
-    // whatever happens to be in the wrong part of the image).
+    // The body check has to come before the tracked-lock gate, or a jumped landmark convicts a
+    // good lock.
     const bodyCheck = swift.indexOf("var bodySuspectThisFrame = false");
-    const abstain = swift.indexOf("if bodySuspectThisFrame { return nil }");
+    const abstain = swift.indexOf("if bodySuspectThisFrame {");
     const objectGate = swift.indexOf("let call = arbitration(for: newBox, body: body)");
     expect(bodyCheck).toBeGreaterThan(-1);
     expect(abstain).toBeGreaterThan(bodyCheck);
     expect(objectGate).toBeGreaterThan(abstain);
+  });
+
+  // EQUAL, NEVER SUBORDINATE. Scott, 2026-09-22: "They both need to be, both, not just one,
+  // that's why we have two systems with the ai overwatch" / "Not subordinate, equal, always
+  // equal."
+  //
+  // The abstention used to return outright, which skipped the fresh-detection path as well as
+  // the gate -- so an unreliable body switched the object tracker OFF. Measured on one
+  // athlete's own captures: the plate was found on 595/805, 645/832 and 827/989 frames of a
+  // back squat and 34/851 and 43/895 of a bench, where the wrists are the least reliable joints
+  // in the frame. The body's ruler is needed to JUDGE an object reading, never to MAKE one.
+  it("lets the object tracker look when the body cannot be trusted", () => {
+    // A lock is still protected -- that half of the asymmetry is the original fix and stands.
+    expect(swift).toMatch(
+      /if bodySuspectThisFrame \{[\s\S]{0,40}?if trackingRequest != nil \{ return nil \}/,
+    );
+    // ...and with no lock to protect, the detection is attempted, unseeded.
+    expect(swift).toContain("let seededRegion = bodySuspectThisFrame ? nil : regionOfInterest");
+    // The old unconditional bail must not come back.
+    expect(swift).not.toContain("if bodySuspectThisFrame { return nil }");
+  });
+
+  it("searches the whole frame rather than skipping when there is no wrist to aim with", () => {
+    // `guard let regionOfInterest else { return nil }` is what switched the detector off for
+    // 96% of a bench set. A missing region means the search cannot be NARROWED, which is a
+    // reason to search wide, not a reason not to look.
+    // Matched at the start of a line so the explanatory comment that quotes the old guard
+    // (deliberately, so the next reader knows what was removed and why) is not mistaken for it.
+    expect(swift).not.toMatch(/^\s*guard let regionOfInterest else \{ return nil \}/m);
   });
 
   it("never lets a rejected body reading into the history it is judged against", () => {

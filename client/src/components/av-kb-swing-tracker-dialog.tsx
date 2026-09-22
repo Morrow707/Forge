@@ -18,7 +18,11 @@ import {
   visionImplementToPoint,
   type ImplementPoint,
 } from "@/lib/vision-body-landmarks";
-import type { PoseFrame as NativePoseFrame, CaptureDeviceInfo } from "@/lib/native-av-preview";
+import type {
+  PoseFrame as NativePoseFrame,
+  CaptureDeviceInfo,
+  AvObjectLockTelemetry,
+} from "@/lib/native-av-preview";
 import {
   calibrateFromFrames,
   calibrationMethodBreakdown,
@@ -184,6 +188,15 @@ export function AvKbSwingTrackerDialog({
     // this same in-flight upload instead of starting a fresh one once they're ready for it.
     let uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null = null;
     const result = await stopRecordingAndAnalyze({
+      // THE OBJECT TRACKER, WHICH THIS DIALOG HAS NEVER ONCE ASKED FOR.
+      //
+      // A kettlebell is an implement and "kettlebell" is one of the model's eight classes, and
+      // this dialog never passed a trackingMode -- so the detector was inert for every swing
+      // ever filmed, the body tracker carried the whole take alone, and overwatch had nothing
+      // to hold it against. Audited across every AV dialog on 2026-09-22: only the bar and med
+      // ball dialogs asked for a class at all. Scott: "every camera system needs to run the
+      // same as squat and box jump, in unison."
+      trackingMode: "kettlebell",
       onBlobReady: recordVideo
         ? (blob) => {
             setSaving(true);
@@ -236,7 +249,20 @@ export function AvKbSwingTrackerDialog({
     rawFrames: NativePoseFrame[],
     skeletonFrames: PoseFrame[],
     captureDeviceInfo: CaptureDeviceInfo,
-    recordingStats: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number },
+    // THIS DIALOG NOW RUNS THE IMPLEMENT DETECTOR, SO IT HAS LOCK TELEMETRY TO REPORT.
+    //
+    // Typing this as three counters is what silently dropped objectLock on the med ball dialog
+    // for every take: the caller passes the whole AvAnalysisResult and the narrower type threw
+    // the rest away, with no error anywhere because the schema fields are optional. Every
+    // unlock and every abstention has to be visible or the thresholds behind them can never be
+    // tuned -- see CLAUDE.md, "Every unlock and every abstention is recorded."
+    recordingStats: {
+      frameCount: number;
+      trackedFrameCount: number;
+      elapsedSeconds: number;
+      objectLock?: AvObjectLockTelemetry;
+      objectLockSecondary?: AvObjectLockTelemetry;
+    },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
@@ -254,6 +280,8 @@ export function AvKbSwingTrackerDialog({
           message,
           rawFrames,
           recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor: null, ...calibrationFrames },
         }),
         uploadPromise,
@@ -318,6 +346,8 @@ export function AvKbSwingTrackerDialog({
           message,
           rawFrames,
           recording: recordingStats,
+          objectLock: recordingStats.objectLock ?? null,
+          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor, ...calibrationFrames },
         }),
         uploadPromise,
@@ -372,6 +402,8 @@ export function AvKbSwingTrackerDialog({
         outcome: "tracked",
         rawFrames,
         recording: recordingStats,
+        objectLock: recordingStats.objectLock ?? null,
+        objectLockSecondary: recordingStats.objectLockSecondary ?? null,
         calibration: { scaleFactor, ...calibrationFrames },
       }),
     };
