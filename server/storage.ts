@@ -311,7 +311,7 @@ const APPLE_PRODUCT_ID_TO_ADD_ON: Record<string, FreeAgentAddOnId> = Object.from
   FREE_AGENT_ADD_ON_ORDER.map((addOn) => [appleProductIdForFreeAgentAddOn(addOn), addOn]),
 );
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
-import { CAMERA_CAPTURE_EVIDENCE_COLUMNS } from "@shared/schema";
+import { CAMERA_CAPTURE_EVIDENCE_COLUMNS, CAMERA_EVIDENCE_NEEDS_A_VALUE } from "@shared/schema";
 import type { ClipSource, ClipSummary } from "@shared/video-clips";
 import { classAiDraftSchema } from "@shared/schema";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
@@ -23148,10 +23148,27 @@ ${catalog}`;
           // the phone rather than for a take, so including it put sets nobody had filmed onto
           // this report -- see CAMERA_CAPTURE_EVIDENCE_COLUMNS for the whole argument and why
           // a FAILED capture still qualifies.
+          // ...AND A VALUE, NOT JUST A COLUMN. A refused take writes 0 into the two duration
+          // columns and [] into the three json ones, because the client type does not offer null
+          // for them -- so isNotNull read five columns of nothing as proof of a capture. See
+          // CAMERA_EVIDENCE_NEEDS_A_VALUE. A real refusal still qualifies through
+          // trackingDiagnostics, which is the blob that exists to explain an empty take.
           or(
-            ...CAMERA_CAPTURE_EVIDENCE_COLUMNS.map((c) =>
-              isNotNull(workoutSetEntries[c as keyof typeof workoutSetEntries] as never),
-            ),
+            ...CAMERA_CAPTURE_EVIDENCE_COLUMNS.map((c) => {
+              const col = workoutSetEntries[c as keyof typeof workoutSetEntries] as never;
+              if ((CAMERA_EVIDENCE_NEEDS_A_VALUE.numeric as readonly string[]).includes(c)) {
+                return and(isNotNull(col), ne(col, 0 as never));
+              }
+              if ((CAMERA_EVIDENCE_NEEDS_A_VALUE.json as readonly string[]).includes(c)) {
+                // jsonb_array_length on a stored [] is 0; a non-array (null handled above) is
+                // not evidence either, hence the type guard in the same expression.
+                return and(
+                  isNotNull(col),
+                  sql`jsonb_typeof(${col}::jsonb) = 'array' and jsonb_array_length(${col}::jsonb) > 0`,
+                );
+              }
+              return isNotNull(col);
+            }),
           ),
           // WHAT THE PROGRAM ROW SAYS TODAY IS NOT WHAT THE CAMERA DID THEN.
           //

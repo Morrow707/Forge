@@ -8676,6 +8676,32 @@ export const CAMERA_CAPTURE_EVIDENCE_COLUMNS = CAMERA_DERIVED_SET_COLUMNS.filter
   (c) => c !== "captureDeviceInfo",
 );
 
+/**
+ * PRESENT IS NOT THE SAME AS MEASURED.
+ *
+ * A refused take writes EMPTY_REP_METRICS (av-bar-tracker-dialog.tsx), and the TYPE does not
+ * offer null for some of those fields -- `concentricSeconds` and `eccentricSeconds` are written
+ * as 0, and `barPathTrace`, `repBreakdown` and `formFaults` as []. Every one of them is
+ * non-null, so `isNotNull` reads all five as evidence that a capture happened, and a set carrying
+ * nothing but zeros and empty arrays sat on the tracking report forever reading "No data points
+ * recorded for this set". Reported on 2026-09-22 against Barbell Shoulder Press and Machine
+ * Chest Fly sets the athlete had never filmed: "Videos that haven't been filmed yet should not
+ * be showing up in the ar diagnosis."
+ *
+ * This is the SECOND time this report has admitted sets nobody recorded -- captureDeviceInfo was
+ * the first, and the fix then was to drop one column. The shape of the mistake is the same both
+ * times: treating the presence of a field as proof of a take. So these columns are listed as
+ * needing a MEANINGFUL value rather than merely a present one, and the query asks accordingly.
+ *
+ * A genuinely refused capture still qualifies, through `trackingDiagnostics` -- the blob that
+ * exists precisely to say why a take produced nothing. That is the difference between a capture
+ * that ran and failed (which this report exists to show) and a set that was never filmed.
+ */
+export const CAMERA_EVIDENCE_NEEDS_A_VALUE = {
+  numeric: ["concentricSeconds", "eccentricSeconds"],
+  json: ["barPathTrace", "repBreakdown", "formFaults"],
+} as const;
+
 /** The rest of workoutSetEntries, listed for the same reason: so the classification test can
  * tell "considered and ruled out" apart from "nobody looked at it yet". */
 export const NON_CAMERA_SET_COLUMNS = [
