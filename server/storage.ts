@@ -23156,15 +23156,27 @@ ${catalog}`;
           or(
             ...CAMERA_CAPTURE_EVIDENCE_COLUMNS.map((c) => {
               const col = workoutSetEntries[c as keyof typeof workoutSetEntries] as never;
-              if ((CAMERA_EVIDENCE_NEEDS_A_VALUE.numeric as readonly string[]).includes(c)) {
-                return and(isNotNull(col), ne(col, 0 as never));
-              }
-              if ((CAMERA_EVIDENCE_NEEDS_A_VALUE.json as readonly string[]).includes(c)) {
-                // jsonb_array_length on a stored [] is 0; a non-array (null handled above) is
-                // not evidence either, hence the type guard in the same expression.
+              // BY THE COLUMN'S TYPE, NOT BY A LIST OF COLUMNS.
+              //
+              // The first version of this narrowing named five columns by hand -- the ones the
+              // bar tracker's EMPTY_REP_METRICS fills with 0 and [] -- and missed every other
+              // mode: the jump dialog writes bestJumpHeightCm 0 and pathTrace [], the kettlebell
+              // one peakSpeedMps/peakHeightCm/meanSpeedMps 0, the swing one rotationTrace [].
+              // Scott, on being shown sets he had never filmed: "If the video hasn't been
+              // recorded yet, REGARDLESS OF THE EXERCISE, it shouldn't show up."
+              //
+              // A hand-written list is how the next mode slips through, the same way the first
+              // list did. The rule is derived from the column instead: a number that is 0 and an
+              // array that is empty are not evidence of anything, whichever capture mode wrote
+              // them. A real capture has at least one non-zero number or one non-empty trace,
+              // and a REFUSED one still qualifies through trackingDiagnostics -- the blob that
+              // exists precisely to explain an empty take.
+              const kind = (col as unknown as { dataType?: string }).dataType;
+              if (kind === "number") return and(isNotNull(col), ne(col, 0 as never));
+              if (kind === "json") {
                 return and(
                   isNotNull(col),
-                  sql`jsonb_typeof(${col}::jsonb) = 'array' and jsonb_array_length(${col}::jsonb) > 0`,
+                  sql`(jsonb_typeof(${col}::jsonb) <> 'array' or jsonb_array_length(${col}::jsonb) > 0)`,
                 );
               }
               return isNotNull(col);

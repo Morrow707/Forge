@@ -8698,8 +8698,9 @@ export const CAMERA_CAPTURE_EVIDENCE_COLUMNS = CAMERA_DERIVED_SET_COLUMNS.filter
  * that ran and failed (which this report exists to show) and a set that was never filmed.
  */
 export const CAMERA_EVIDENCE_NEEDS_A_VALUE = {
-  numeric: ["concentricSeconds", "eccentricSeconds"],
-  json: ["barPathTrace", "repBreakdown", "formFaults"],
+  // Kept for the one case the general rule cannot see: a TEXT or JSON column whose empty value
+  // is a string rather than an array. Nothing is in it today; the rule below covers the rest.
+  alwaysMeaningful: [] as readonly string[],
 } as const;
 
 /** The rest of workoutSetEntries, listed for the same reason: so the classification test can
