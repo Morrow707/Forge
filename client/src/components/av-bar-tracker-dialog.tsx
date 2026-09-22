@@ -1072,6 +1072,8 @@ export function AvBarTrackerDialog({
       referenceObject?: ReferenceObjectRead | null;
       gripWidthPx?: number | null;
       plateRejectedAgainstGrip?: boolean;
+      plateMeasuredPx?: number | null;
+      plateToGripRatio?: number | null;
       plateRejectedReasons?: string[];
     } = {
       scaleSource,
@@ -1087,6 +1089,11 @@ export function AvBarTrackerDialog({
       referenceObject: (plateScale ?? plateScaleRaw)?.shape ?? null,
       gripWidthPx: gripWidthPx == null ? null : Math.round(gripWidthPx * 10) / 10,
       plateRejectedAgainstGrip: plateFailedGripCheck,
+      plateMeasuredPx: plateScaleRaw?.measured ?? null,
+      plateToGripRatio:
+        plateScaleRaw != null && gripWidthPx != null && gripWidthPx > 0
+          ? Math.round((plateScaleRaw.measured / gripWidthPx) * 1000) / 1000
+          : null,
       plateRejectedReasons,
     };
 

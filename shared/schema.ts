@@ -8941,6 +8941,11 @@ export const trackingDiagnosticsSchema = z.object({
       // the bar; shape and position are what say whether it found one at all.
       gripWidthPx: z.number().optional().nullable(),
       plateRejectedAgainstGrip: z.boolean().optional(),
+      // Declared so a REJECTED plate read keeps its number. A zod object strips what it does not
+      // declare, silently -- see plateMeasuredPx in client/src/lib/tracking-diagnostics.ts for
+      // why the rejected reads are the ones worth keeping.
+      plateMeasuredPx: z.number().optional().nullable(),
+      plateToGripRatio: z.number().optional().nullable(),
       // See plateRejectedReasons in client/src/lib/tracking-diagnostics.ts. A loose string array
       // rather than an enum on purpose: a new rejection reason must never be the thing that
       // makes an insert fail, and the report renders whatever arrives. The client side is where

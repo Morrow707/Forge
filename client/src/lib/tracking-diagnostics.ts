@@ -266,6 +266,18 @@ export type TrackingDiagnostics = {
      *  span. Recorded because the read still appears under referenceObject above, and a number
      *  shown without saying it was discarded is how a bad scale looked like a good one. */
     plateRejectedAgainstGrip?: boolean;
+    /** The plate's measured pixel size, and its ratio to the grip span above, RECORDED EVEN WHEN
+     *  THE READ WAS REJECTED.
+     *
+     *  plateReadIsPlausibleAgainstGrip's window (0.45 to 2.0) is derived from geometry rather
+     *  than from footage, and its own comment says the next revision has to come from takes.
+     *  That was impossible: a rejected read was discarded without its number, so every rejection
+     *  recorded the fact and destroyed the evidence. The one take shape that needs it most is a
+     *  side-on bench, where the grip line points down the camera's axis and the denominator is
+     *  foreshortened -- measured 2026-09-22 at 148px against 216-253px for the same athlete's
+     *  squats, when a real bench grip is the WIDER of the two. */
+    plateMeasuredPx?: number | null;
+    plateToGripRatio?: number | null;
     // EVERY reason the reference-object scale was refused, not just whether it was.
     //
     // "size_vs_grip" is the old size-ratio check. "aspect_ratio" is a box that is not a disc --
