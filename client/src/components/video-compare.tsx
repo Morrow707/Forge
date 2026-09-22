@@ -123,6 +123,7 @@ export function VideoCompareDialog({
   initialRight = null,
   title = "Compare",
   sideFooter,
+  footer,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -132,6 +133,12 @@ export function VideoCompareDialog({
   title?: string;
   /** Extra per-side controls from the caller (set-video-review's best/worst flags). */
   sideFooter?: (clip: CompareClip, side: Side) => ReactNode;
+  /** A strip across the bottom of the whole dialog, under both sides.
+   *
+   * The Free Agent workbench puts its session recorder here. Kept as a slot rather than built
+   * in, because recording is a bought add-on and this dialog is also the coach's compare tool --
+   * which has a server behind it and needs no recorder at all. */
+  footer?: ReactNode;
 }) {
   const [clips, setClips] = useState<{ left: CompareClip | null; right: CompareClip | null }>({
     left: initialLeft,
@@ -947,6 +954,8 @@ export function VideoCompareDialog({
             )}
           </div>
         </div>
+
+        {footer && <div className="border-t border-white/10 px-3 py-2">{footer}</div>}
 
       </DialogContent>
       {editingReview && (
