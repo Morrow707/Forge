@@ -47,6 +47,7 @@ import { GoalsPanel } from "@/components/goals-panel";
 import { VideoReviewList } from "@/components/video-review-list";
 import { AskCoachForReview } from "@/components/ask-coach-for-review";
 import { StrengthProfileCard } from "@/components/strength-profile-card";
+import { VideoWorkbenchCard } from "@/components/video-workbench";
 import { ReadFailed } from "@/components/read-failed";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { StreakBadges } from "@/components/streak-badge";
@@ -286,6 +287,12 @@ export default function AthleteProgress() {
               </Card>
             </>
           )}
+
+          {/* WHAT REPLACES THE COACH CARDS FOR A FREE AGENT. They lost three cards that all
+              ended at a coach who does not exist; this is the one that ends somewhere real --
+              their own footage, their own phone. Gated on the add-on by the server, so it is
+              simply absent for anybody without it. */}
+          {isFreeAgent && <VideoWorkbenchCard />}
 
           {/* Where each movement sits against athletes the same age. Percentile only, never a
               rank, and never a name -- see getStrengthPercentilesForAthlete. */}

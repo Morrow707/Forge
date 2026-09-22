@@ -73,6 +73,21 @@ describe("the session recorder", () => {
     expect(controls).toContain("if (!support.supported)");
   });
 
+  it("is actually mounted, for a Free Agent, behind the add-on", () => {
+    // feature-nav-coverage caught this built and never mounted. The controls existing is not
+    // the feature; somewhere to open them is.
+    const workbench = readFileSync(
+      join(__dirname, "..", "components", "video-workbench.tsx"),
+      "utf8",
+    );
+    const progress = readFileSync(join(__dirname, "..", "pages", "athlete", "progress.tsx"), "utf8");
+    expect(workbench).toContain("footer={<SessionRecorderControls />}");
+    // Access comes from the server, and unknown is not yes -- drawing this before the answer
+    // lands flashes a bought feature at somebody who has not bought it.
+    expect(workbench).toContain('data?.addOns?.video_analysis !== true) return null');
+    expect(progress).toContain("{isFreeAgent && <VideoWorkbenchCard />}");
+  });
+
   it("hangs off the compare dialog as a slot, not baked into it", () => {
     // The same dialog is the coach's compare tool, which has a server behind it and needs no
     // recorder at all.
