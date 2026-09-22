@@ -326,6 +326,13 @@ function takeBodyReference(frames: NativePoseFrame[]): {
 }
 
 
+// How square a box has to be before it can only be a disc seen face-on. A 450mm plate viewed
+// square is 1.0; the tolerance covers the detector's own box slop and a few degrees of tilt.
+// Wider than this and the ellipse is telling you the camera is off-axis, so the long edge is no
+// longer a diameter and the grip cross-check earns its place again.
+const PLATE_DISC_ASPECT_LOW = 0.8;
+const PLATE_DISC_ASPECT_HIGH = 1.25;
+
 function plateScaleFromFrames(
   frames: NativePoseFrame[],
   trackingMode: string | undefined,
@@ -927,8 +934,34 @@ export function AvBarTrackerDialog({
     // rejectImplausibleScales, which needs a measured body and therefore cannot help on the one
     // take shape where the plate is the only source.
     const gripWidthPx = gripWidthPxFromFrames(rawFrames);
+    // A DISC THAT READS AS A DISC NEEDS NO SECOND OPINION FROM THE HANDS.
+    //
+    // The grip check divides the plate's pixel size by the span between the wrists. That span is
+    // only a ruler when the grip line is broadside; the moment the camera moves off square to the
+    // bar it foreshortens, the denominator collapses, the ratio shoots up, and a perfectly good
+    // plate is thrown out for being "the wrong size next to that grip". Measured on Scott's
+    // bench sets, 2026-09-22: ratios of 2.22x and 4.51x against a window of 0.45-2.0, with hands
+    // reading 152px apart where a real bench grip is 55-60cm.
+    //
+    // But the object tracker already reports something the camera angle cannot fake. A plate is
+    // a circle, and a circle photographed from any direction projects to an ellipse -- so a box
+    // that comes back NEARLY SQUARE can only be a disc seen close to face-on, and a disc seen
+    // face-on is a 450mm ruler measured on its true diameter. Nothing about the athlete is
+    // needed to know that, which is the point: the two trackers are equal, and the object one
+    // does not have to ask the body's permission to be believed when its own evidence is this
+    // direct.
+    //
+    // So the grip check still runs -- it is the thing that catches a rack plate at twice the
+    // athlete's distance -- but only on a box whose shape leaves the size in doubt. Scott,
+    // shown a photo of his own setup with one plate reading as a clean circle: "I will be
+    // benching from this angle, make it work."
+    const plateAspect = plateScaleRaw?.shape.aspectRatio ?? 0;
+    const plateReadsAsADisc =
+      plateAspect >= PLATE_DISC_ASPECT_LOW && plateAspect <= PLATE_DISC_ASPECT_HIGH;
     const plateFailedGripCheck =
-      plateScaleRaw != null && !plateReadIsPlausibleAgainstGrip(plateScaleRaw.measured, gripWidthPx);
+      plateScaleRaw != null
+      && !plateReadsAsADisc
+      && !plateReadIsPlausibleAgainstGrip(plateScaleRaw.measured, gripWidthPx);
 
     // IS IT THE RIGHT SHAPE, AND IS IT ANYWHERE NEAR THE ATHLETE.
     //
