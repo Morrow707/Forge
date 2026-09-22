@@ -275,6 +275,9 @@ interface AvBodyTrackingPlugin {
     trackingMode?: string;
   }): Promise<void>;
   stopRecording(): Promise<{ path: string }>;
+  /** A smaller copy for upload -- see stopAvRecording. Resolves the ORIGINAL path with
+   *  compressed:false when it could not run, so a caller never has to branch on failure. */
+  compressForUpload(options: { path: string }): Promise<{ path: string; compressed: boolean; bytes?: number }>;
   deleteRecording(options: { path: string }): Promise<void>;
   analyzeRecording(options: {
     path: string;
@@ -401,12 +404,36 @@ export async function startAvRecording(options?: {
 // bridge ever needing to serialize the whole file through a JS string at all.
 export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
   const { path } = await AvBodyTracking.stopRecording();
+  // WHAT GETS UPLOADED IS A SMALLER COPY. WHAT GETS ANALYSED IS THE ORIGINAL.
+  //
+  // The camera runs at 1920x1080/120fps because the tracker needs the frame rate, and that makes
+  // a 30-second take 50-70MB. Measured on-device 2026-09-22: about 22 seconds of "Finishing"
+  // after the progress bar filled, which is the phone still pushing bytes rather than the server
+  // working. Re-encoding to 720p cuts it roughly four-fold.
+  //
+  // `path` deliberately stays the ORIGINAL below: every caller passes it to analyzeAvRecording
+  // (which needs every one of those 120 frames) and then to deleteAvRecording. Only the BLOB --
+  // the thing a coach watches -- comes from the compressed copy, and that copy is deleted the
+  // moment its bytes are in memory, so nothing new accumulates on the device.
+  //
+  // Any failure returns the original path, so the worst case is the upload it was before.
+  let uploadPath = path;
+  let compressedTemp: string | null = null;
+  try {
+    const compressed = await AvBodyTracking.compressForUpload({ path });
+    if (compressed.compressed && compressed.path !== path) {
+      uploadPath = compressed.path;
+      compressedTemp = compressed.path;
+    }
+  } catch {
+    // Older build, or an export that could not run. The original uploads exactly as before.
+  }
   // convertFileSrc wants the bare filesystem path -- same raw (no file:// scheme) path
   // deleteAvRecording/analyzeAvRecording already pass straight back to native calls that
   // expect exactly that form (FileManager's removeItem(atPath:) and URL(fileURLWithPath:)
   // respectively). Prepending file:// here would double up the scheme Capacitor's own
   // internal URL already adds.
-  const url = Capacitor.convertFileSrc(path);
+  const url = Capacitor.convertFileSrc(uploadPath);
   const response = await fetch(url);
   const rawBlob = await response.blob();
   // Same class of bug recordedVideoType() in video-recording.ts exists to fix on the OTHER
@@ -420,7 +447,15 @@ export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
   // always records via AVCaptureMovieFileOutput to a ".mov" path (see startRecording), which
   // only ever writes a QuickTime container, so the correct type is a known constant, not
   // something to detect.
-  const blob = rawBlob.type === "video/quicktime" ? rawBlob : new Blob([rawBlob], { type: "video/quicktime" });
+  // The compressed copy is an .mp4, the original a .mov -- label whichever one was actually read
+  // rather than assuming the recorder's container, or the server's fileFilter rejects it.
+  const type = compressedTemp ? "video/mp4" : "video/quicktime";
+  const blob = rawBlob.type === type ? rawBlob : new Blob([rawBlob], { type });
+  if (compressedTemp) {
+    // Its bytes are in the Blob now. Best-effort: a temp file left behind is a storage problem, not a
+    // failed save, so it must never throw into the save path.
+    void deleteAvRecording(compressedTemp).catch(() => {});
+  }
   return { blob, path };
 }
 

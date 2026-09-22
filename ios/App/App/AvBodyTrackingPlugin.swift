@@ -55,6 +55,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         CAPPluginMethod(name: "setFocusPoint", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "compressForUpload", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "analyzeRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelAnalysis", returnType: CAPPluginReturnPromise),
@@ -1340,6 +1341,67 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
         logDiag("recording finished: \(outputFileURL.lastPathComponent)")
         call.resolve(["path": outputFileURL.path])
+    }
+
+    // THE COACH'S COPY IS NOT THE TRACKER'S COPY, AND IT DOES NOT NEED TO BE.
+    //
+    // The camera negotiates 1920x1080 at 120fps because the TRACKER needs the frame rate -- a
+    // 0.3s concentric sampled at 30fps is nine points. That analysis happens on this device,
+    // against this file, before anything is uploaded. What goes to the server afterwards is a
+    // video a human watches, and a human watching a bench press does not need 120 frames a
+    // second.
+    //
+    // Measured on-device 2026-09-22: a 30-second take is 50-70MB, and the athlete counted about
+    // 22 seconds of "Finishing" after the progress bar filled -- that is the phone still pushing
+    // bytes, not the server thinking. Re-encoding to 720p takes the file down roughly four-fold,
+    // which is the difference between twenty seconds and five.
+    //
+    // A SEPARATE FILE, never in place. The original stays exactly as recorded until the JS side
+    // deletes it, because the analysis reads it and a re-encode is lossy -- compressing before
+    // the tracker has finished would trade the numbers for the upload speed, which is the wrong
+    // way round. Falls back to the original path on any failure: a slower upload is always
+    // better than no video, and this is an optimisation, not a step the save depends on.
+    @objc func compressForUpload(_ call: CAPPluginCall) {
+        guard let path = call.getString("path"), FileManager.default.fileExists(atPath: path) else {
+            call.reject("No recording at that path")
+            return
+        }
+        let sourceURL = URL(fileURLWithPath: path)
+        let asset = AVURLAsset(url: sourceURL)
+        let preset = AVAssetExportPreset1280x720
+        guard AVAssetExportSession.exportPresets(compatibleWith: asset).contains(preset),
+              let session = AVAssetExportSession(asset: asset, presetName: preset)
+        else {
+            logDiag("compressForUpload: preset unavailable, sending the original")
+            call.resolve(["path": path, "compressed": false])
+            return
+        }
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("forge-upload-\(UUID().uuidString).mp4")
+        session.outputURL = outputURL
+        session.outputFileType = .mp4
+        session.shouldOptimizeForNetworkUse = true
+        let startedAt = Date()
+        session.exportAsynchronously {
+            DispatchQueue.main.async {
+                guard session.status == .completed,
+                      let size = try? FileManager.default.attributesOfItem(atPath: outputURL.path)[.size] as? Int
+                else {
+                    let why = session.error?.localizedDescription ?? "status \(session.status.rawValue)"
+                    self.logDiag("compressForUpload failed (\(why)), sending the original")
+                    call.resolve(["path": path, "compressed": false])
+                    return
+                }
+                let originalSize =
+                    (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? nil
+                self.logDiag(
+                    "compressForUpload: \(originalSize.map { $0 / 1_000_000 } ?? -1)MB -> "
+                        + "\(size / 1_000_000)MB in \(Int(Date().timeIntervalSince(startedAt) * 1000))ms"
+                )
+                Self.markPathActive(outputURL.path)
+                call.resolve(["path": outputURL.path, "compressed": true, "bytes": size])
+            }
+        }
     }
 
     // Local-storage-bloat edge case: 60/120fps at 1080p+ writes large files fast enough that
