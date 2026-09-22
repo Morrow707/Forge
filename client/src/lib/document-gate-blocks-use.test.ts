@@ -112,7 +112,13 @@ describe("the demo accounts are not locked out of the app they demonstrate", () 
     // Their addresses deliver nowhere and they have no physician to ask, so without this the
     // three seeded accounts could never clear the gate. Same shape as the device-trust
     // exemption: a fact about the software, not an operator's decision.
-    expect(seed).toContain("for (const demo of [athlete, freeAgent])");
+    expect(seed).toContain("{ user: athlete, role: \"athlete\", hasCoach: true }");
+    expect(seed).toContain("{ user: freeAgent, role: \"athlete\", hasCoach: false }");
+    // The coach is papered with the COACH checklist -- credentials, not a medical. Filing a
+    // medical clearance against a coach would be invisible: not on their checklist, read by
+    // nothing, and refused from a real coach by the upload route.
+    expect(seed).toContain("{ user: coach, role: \"coach\", hasCoach: false }");
+    expect(seed).toContain("documentAudienceFor({ role: demo.role, hasCoach: demo.hasCoach })");
     expect(seed).toContain('reviewSource: "seed_demo_account"');
     expect(seed).toContain('reviewStatus: "accepted"');
     // And it never fabricates a file that claims to be a physician's clearance.

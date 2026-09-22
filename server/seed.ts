@@ -6338,20 +6338,25 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // Accepted rather than pending, because a pending row would sit in the admin review queue
   // forever waiting for somebody to read a file that does not exist. reviewSource says plainly
   // what they are so nobody later mistakes one for a real clearance.
-  for (const demo of [athlete, freeAgent]) {
-    const summary = await storage.externalWaiverSummary(demo.id);
+  // The COACH is papered too, and with the coach checklist -- a background check, a coaching
+  // certification and CPR. Filing a medical clearance against a coach would be invisible: it is
+  // not on their checklist, nothing reads it, and the upload route would refuse the same kind
+  // from a real coach. What each account needs is its OWN required documents.
+  for (const demo of [
+    { user: athlete, role: "athlete", hasCoach: true },
+    { user: freeAgent, role: "athlete", hasCoach: false },
+    { user: coach, role: "coach", hasCoach: false },
+  ]) {
+    const summary = await storage.externalWaiverSummary(demo.user.id);
     const onFile = new Set(
       summary.filter((line) => line.status === "accepted").map((line) => line.kind),
     );
-    const audience = documentAudienceFor({
-      role: "athlete",
-      hasCoach: demo.id === athlete.id,
-    });
+    const audience = documentAudienceFor({ role: demo.role, hasCoach: demo.hasCoach });
     for (const doc of REQUIRED_DOCUMENTS[audience]) {
       if (!doc.required || onFile.has(doc.kind)) continue;
       await storage.createExternalWaiver({
-        athleteId: demo.id,
-        uploadedByUserId: demo.id,
+        athleteId: demo.user.id,
+        uploadedByUserId: demo.user.id,
         kind: doc.kind,
         // No file is written: nothing reads it for a seeded row, and inventing a PDF that
         // claims to be a physician's clearance is the one thing this must not do.
