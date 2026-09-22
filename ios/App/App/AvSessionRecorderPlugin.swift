@@ -78,18 +78,25 @@ public class AvSessionRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
         lastOutputURL = outputURL
 
         if #available(iOS 15.0, *) {
-            // The closure parameter is annotated because RPScreenRecorder has several
-            // startRecording overloads and the trailing-closure form left the compiler unable
-            // to pick one ("cannot infer type of closure parameter 'error'"). Saying Error?
-            // out loud settles it rather than relying on inference across an overload set.
-            recorder.startRecording(withOutput: outputURL) { [weak self] (error: Error?) in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        self?.lastOutputURL = nil
+            // ASYNC, NOT A HANDLER. startRecording(withOutput:) takes no completion closure --
+            // it is `async throws`. Written with a trailing closure it does not fail to find an
+            // overload, it silently matches the DEPRECATED
+            // startRecording(withMicrophoneEnabled:handler:) and then complains that a URL is
+            // not a Bool, which is how verify_build reported it.
+            //
+            // stopRecording below deliberately keeps its handler form: that overload does exist
+            // and compiles, and there is no reason to move a working call onto a second API I
+            // would be guessing at again.
+            Task { [weak self] in
+                guard let self = self else { return }
+                do {
+                    try await self.recorder.startRecording(withOutput: outputURL)
+                    await MainActor.run { call.resolve() }
+                } catch {
+                    await MainActor.run {
+                        self.lastOutputURL = nil
                         call.reject("Couldn't start recording: \(error.localizedDescription)")
-                        return
                     }
-                    call.resolve()
                 }
             }
         } else {
