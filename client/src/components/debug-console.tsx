@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Bug, X, Trash2 } from "lucide-react";
 import { subscribeDebug, clearDebug, logDebug, type DebugEntry } from "@/lib/debug-console";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 
 /** Temporary, on-screen debug console -- a floating toggle that opens a
  * scrollable, timestamped log of AUTH/NAV events so they can be screenshotted
@@ -18,6 +20,23 @@ export function DebugConsole() {
   const lastLoggedLocation = useRef<string | null>(null);
 
   useEffect(() => subscribeDebug(setEntries), []);
+
+  // THE BUILD NUMBER, BECAUSE "IS THIS FIX EVEN INSTALLED" KEPT BEING THE QUESTION.
+  //
+  // Several fixes in a row were tested against a build that predated them, and the only way to
+  // tell was to cross-reference a TestFlight screen against a commit. It comes from
+  // CFBundleVersion via Capacitor rather than anything baked into the web bundle: the web
+  // bundle is compiled into the binary, so a number written at web build time would be right
+  // by accident and wrong the moment anything is rebuilt without it.
+  const [buildLabel, setBuildLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    CapacitorApp.getInfo()
+      .then((info) => setBuildLabel(`v${info.version} (${info.build})`))
+      .catch(() => {
+        // A missing build number must never be the thing that hides the log.
+      });
+  }, []);
 
   useEffect(() => {
     if (lastLoggedLocation.current === location) return;
@@ -55,6 +74,7 @@ export function DebugConsole() {
           <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
             <span className="font-mono text-[11px] font-semibold text-white/80">
               DEBUG CONSOLE -- {entries.length} lines
+              {buildLabel ? <span className="ml-2 text-primary">{buildLabel}</span> : null}
             </span>
             <div className="flex items-center gap-1">
               <button

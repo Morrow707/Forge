@@ -981,7 +981,7 @@ export function AvBarTrackerDialog({
     // All three run now and reconcileScaleEstimates compares them: agreement between independent
     // sources is the strongest evidence available here, and disagreement is the signal that
     // something is wrong, which is worth far more than a single confident-looking number.
-    const shoulderScale = shoulderWidthScaleFromFrames(calibrationInput, heightIn);
+    const shoulderScale = shoulderWidthScaleFromFrames(calibrationInput, heightIn, posture);
     const shoulderScaleValue = shoulderScale.scale;
 
     // Every candidate is checked against the athlete's own height before any of them is ranked --

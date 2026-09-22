@@ -37,12 +37,32 @@ describe("shoulderWidthScaleFromFrames", () => {
   // measured against an OVR bar sensor on 2026-09-22 the take calibrated at 0.004981 m/unit
   // where the same phone's squats sat at 0.0035-0.0042, and reported a ROM 41% over the
   // sensor's. The torso's orientation says it without any z at all.
-  it("refuses a supine athlete, whose shoulder breadth is foreshortened by the pose itself", () => {
-    expect(shoulderWidthScaleFromFrames(torsoFrames("supine"), HEIGHT_IN).scale).toBeNull();
+  // REFUSED BY POSTURE, NOT BY GEOMETRY, AND THE DIFFERENCE IS THE WHOLE POINT.
+  //
+  // The first attempt read the torso's orientation out of the frames. These are WORLD
+  // landmarks -- body-centred -- so a supine athlete's torso is "vertical" in them exactly like
+  // a standing one's. It shipped in build 515 and refused nothing: the bench set it was written
+  // for still calibrated off the shoulders. The evidence for refusing is two bench sets minutes
+  // apart measuring the same shoulders at 88.0px and 115.3px.
+  it("refuses a lying athlete, whose shoulder breadth is foreshortened by the pose itself", () => {
+    expect(shoulderWidthScaleFromFrames(torsoFrames("supine"), HEIGHT_IN, "lying").scale).toBeNull();
+    expect(shoulderWidthScaleFromFrames(torsoFrames("supine"), HEIGHT_IN, "lying").rejectedBecause).toBe(
+      "foreshortened_by_posture",
+    );
   });
 
   it("still measures a standing athlete, whose shoulders are square to the lens", () => {
-    expect(shoulderWidthScaleFromFrames(torsoFrames("upright"), HEIGHT_IN).scale).not.toBeNull();
+    expect(
+      shoulderWidthScaleFromFrames(torsoFrames("upright"), HEIGHT_IN, "standing").scale,
+    ).not.toBeNull();
+  });
+
+  // The frames cannot tell the two apart, which is why the posture has to be passed in. If this
+  // ever starts failing, someone has found a geometric signal that works -- keep it.
+  it("cannot tell them apart from the frames alone", () => {
+    const supine = shoulderWidthScaleFromFrames(torsoFrames("supine"), HEIGHT_IN).scale;
+    const upright = shoulderWidthScaleFromFrames(torsoFrames("upright"), HEIGHT_IN).scale;
+    expect(supine).toEqual(upright);
   });
 
   it("gives a scale where body length could never provide one", () => {

@@ -973,3 +973,41 @@ the sensor gave a number to disagree with.
   "concentrics" recorded earlier in this file. Same root area, not the same bug.
 - **Box jump rep counts were untouched** by either fix and remain 4-9 against a logged 5.
   Different tracker (`jump-tracking.ts`), different work.
+
+## Bench calibration, build 515: what the second set settled
+
+Two bench sets of 10 at 135lb, same session, same camera position, both against an OVR bar
+sensor. Set 1 was filmed on build 512, set 2 on 515.
+
+**The segmentation fix works.** Set 2 found 10 reps against 10 logged. Set 1, replayed, went
+11 -> 10. Nothing else moved.
+
+**The shoulder-width ruler is not a ruler, and now there is proof rather than geometry.** The
+same athlete's shoulders measured 88.0px on set 1 and 115.3px on set 2, minutes apart, with the
+camera untouched: a 31% spread. The scales that came out were 0.004981 and 0.003799 m/unit,
+against 0.0035-0.0042 for the same phone's squats. Set 2's ROM landed 10% over the sensor and
+set 1's 41% over -- the closeness of set 2 is the ruler being wrong by less, not being right.
+
+**The geometric refusal shipped in 515 and refused nothing.** It read the torso's orientation
+out of `worldLandmarks`, which are body-centred, so a supine athlete's torso is "vertical" in
+them exactly like a standing one's. Replaced with a refusal by POSTURE: `postureForExercise`
+already says a bench press is filmed lying, it is known before a frame is read, and it cannot
+be defeated by which landmark space the caller passes.
+
+**The plate window is NOT too tight -- the bench plate read is junk.** This was the open
+question the instrumentation was added for, and the number settles it: the detector boxed
+582.8 x 567.4px at aspect 1.03, centred at (0.43, 0.46), against a grip span of 129.5px --
+a ratio of 4.51 where a real plate on the same bar lands between 0.56 and 1.6. Taken as a
+45cm plate it implies 0.00077 m/unit, five times smaller than any other source, which would
+have put this set's ROM at about 8cm. `plateReadIsPlausibleAgainstGrip` rejected it correctly.
+Do not widen that window; the work is in the detector.
+
+**The per-rep numbers are noise even when the set mean is not.** Set 2's per-rep excursions ran
+22.0, 31.3, 22.6, 50.1, 59.4, 56.1, 94.5, 29.2, 25.7cm against the sensor's 14.6-17.3in
+(37-44cm) -- one rep at 94.5cm is more than double the next. The mean of 42.9cm sitting 10%
+off the sensor's 39.0cm is two large errors cancelling, not a measurement. Peak velocity runs
+0.33 to 2.93 m/s within one set where the sensor reads 0.92 to 1.12. **Any future scale work is
+worthless until the trace itself is stable**: a correct metres-per-pixel applied to this trace
+produces correctly-scaled noise.
+
+That is the next piece of work, and it is a trace problem rather than a calibration one.

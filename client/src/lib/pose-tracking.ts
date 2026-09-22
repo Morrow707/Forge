@@ -911,7 +911,12 @@ export type ShoulderScaleReading = {
   framesUsed: number;
   framesRejectedForAngle: number;
   medianSpanUnits: number | null;
-  rejectedBecause: "no_height" | "too_few_frames" | "implausible_span" | null;
+  rejectedBecause:
+    | "no_height"
+    | "too_few_frames"
+    | "implausible_span"
+    | "foreshortened_by_posture"
+    | null;
 };
 
 /**
@@ -925,6 +930,25 @@ export type ShoulderScaleReading = {
 export function shoulderWidthScaleFromFrames(
   frames: { worldLandmarks: Landmark[] }[],
   heightIn: number | null | undefined,
+  // A LYING ATHLETE'S SHOULDERS POINT AT THE LENS, AND NOTHING IN THE FRAMES CAN SAY SO.
+  //
+  // The depth guard below leans on Vision's z, the least trustworthy axis it produces, and an
+  // attempt to read the torso's orientation instead was worse than useless: these are WORLD
+  // landmarks, which are body-centred, so a supine athlete's torso is "vertical" in them just
+  // like a standing one's. It shipped in build 515 and refused nothing.
+  //
+  // What the frames cannot say, the exercise can. A bench press is filmed from the side with
+  // the athlete supine, so the line between the shoulders runs down the camera's axis and the
+  // apparent breadth is a foreshortened fraction of the real one. Two bench sets minutes apart
+  // on 2026-09-22 measured that breadth at 88.0px and 115.3px -- a 31% spread on an athlete
+  // whose shoulders had not changed -- and produced scales of 0.004981 and 0.003799 m/unit,
+  // against 0.0035-0.0042 for the same phone's squats. A ruler that disagrees with itself by a
+  // third between two sets is not a ruler.
+  //
+  // Refusing by POSTURE rather than by geometry is the honest shape: it is a fact about how the
+  // lift is filmed, it is already known before a frame is read, and it cannot be defeated by
+  // the landmark space the caller happens to pass.
+  posture?: "standing" | "seated" | "lying" | "supported" | "hanging",
 ): ShoulderScaleReading {
   const empty: ShoulderScaleReading = {
     scale: null,
@@ -935,6 +959,7 @@ export function shoulderWidthScaleFromFrames(
     rejectedBecause: null,
   };
   if (!heightIn || heightIn <= 0) return { ...empty, rejectedBecause: "no_height" };
+  if (posture === "lying") return { ...empty, rejectedBecause: "foreshortened_by_posture" };
 
   const widths: number[] = [];
   let framesRejectedForAngle = 0;
@@ -950,33 +975,6 @@ export function shoulderWidthScaleFromFrames(
     if (depth > 0 && across / depth < MIN_SHOULDER_BROADSIDE_RATIO) {
       framesRejectedForAngle++;
       continue;
-    }
-    // A LYING ATHLETE'S SHOULDERS POINT AT THE LENS, AND THE GUARD ABOVE CANNOT SEE IT.
-    //
-    // That guard leans on Vision's z, the least trustworthy axis it produces. A bench press
-    // filmed from the side is the worst case for it: the athlete is supine, the line between
-    // the shoulders runs almost straight down the camera's axis, and the apparent width is a
-    // foreshortened fraction of the real breadth -- but the z estimates do not separate
-    // cleanly enough to say so, so every frame passed.
-    //
-    // Dividing a real breadth by too few pixels inflates metres-per-pixel, and with it every
-    // distance and every velocity in the take. Measured 2026-09-22 against an OVR bar sensor
-    // on the same set: 0.004981 m/unit where the same phone's squats calibrated at 0.0035 to
-    // 0.0042, and a bench ROM 41% over the sensor's.
-    //
-    // The torso's ORIENTATION is the signal, and it needs no z at all. Standing, the line from
-    // the shoulders to the hips is close to vertical in the image; lying down it is close to
-    // horizontal. A torso nearer horizontal than vertical is an athlete whose shoulder breadth
-    // this camera cannot measure, so the frame is refused rather than guessed at.
-    const lh = f.worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
-    const rh = f.worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
-    if (visible(lh) && visible(rh)) {
-      const torsoRun = Math.abs((l.x + r.x) / 2 - (lh.x + rh.x) / 2);
-      const torsoRise = Math.abs((l.y + r.y) / 2 - (lh.y + rh.y) / 2);
-      if (torsoRun > torsoRise) {
-        framesRejectedForAngle++;
-        continue;
-      }
     }
     widths.push(across);
   }
