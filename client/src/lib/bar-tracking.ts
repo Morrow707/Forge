@@ -1406,9 +1406,36 @@ export function summarizeTrackedSet(
     return amplitude > medianConcentricAmplitude * PHANTOM_OVERSHOOT_RATIO;
   }
 
+  // AN ARTIFACT THAT IS NOT AT AN EDGE IS STILL AN ARTIFACT.
+  //
+  // The long-duration test above only runs on the first and last concentric phase, on the
+  // reasoning that a rack artifact can only sit at one end of a set. That is true of a rack
+  // artifact and false of the thing it was written to catch. A phase that takes several times
+  // as long as every rep around it is not a rep wherever it falls: a paused re-grip, a bar
+  // settling in the hooks between reps, a stretch where the lock is lost and slowly recovered.
+  //
+  // Measured on 2026-09-22 against the 20 stored captures with the OVR bar sensor as ground
+  // truth. Today's bench set of 10 came back as 11: the extra phase ran 6.4s against a set
+  // median of 1.03s, with every genuine rep between 0.83s and 1.97s. Two back squat sets of 5
+  // came back as 6 the same way. Across every calibration set no genuine rep exceeded about
+  // 1.3x its set's own median and the artifacts started at 2.4x -- nothing sits in between,
+  // which is what makes a ratio test safe here rather than a judgement call.
+  //
+  // Same 2.5 as the edge test, deliberately: it is the same phenomenon and a second number
+  // would be two thresholds to keep in step for no reason. Measured against the set's own
+  // median, so it needs no constant, no calibration and no real-world scale.
+  //
+  // The 3-phase floor is the same one every other relative test here carries -- a median over
+  // two phases is not a median, and under-counting is the worse failure.
+  function isOverlongPhantom(phase: (typeof phaseStats)[number]): boolean {
+    if (concentric.length < 3 || medianConcentricDuration <= 0) return false;
+    return phase.duration > medianConcentricDuration * EDGE_PHANTOM_DURATION_RATIO;
+  }
+
   function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
     if (isEdgeRackArtifact(phase)) return true;
     if (isOversizedPhantom(phase)) return true;
+    if (isOverlongPhantom(phase)) return true;
     // Fewer than 3 concentric phases isn't enough of a sample to call
     // anything "anomalously short" relative to the rest of the set with
     // any confidence -- skip the filter entirely rather than risk a bad

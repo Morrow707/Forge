@@ -951,6 +951,33 @@ export function shoulderWidthScaleFromFrames(
       framesRejectedForAngle++;
       continue;
     }
+    // A LYING ATHLETE'S SHOULDERS POINT AT THE LENS, AND THE GUARD ABOVE CANNOT SEE IT.
+    //
+    // That guard leans on Vision's z, the least trustworthy axis it produces. A bench press
+    // filmed from the side is the worst case for it: the athlete is supine, the line between
+    // the shoulders runs almost straight down the camera's axis, and the apparent width is a
+    // foreshortened fraction of the real breadth -- but the z estimates do not separate
+    // cleanly enough to say so, so every frame passed.
+    //
+    // Dividing a real breadth by too few pixels inflates metres-per-pixel, and with it every
+    // distance and every velocity in the take. Measured 2026-09-22 against an OVR bar sensor
+    // on the same set: 0.004981 m/unit where the same phone's squats calibrated at 0.0035 to
+    // 0.0042, and a bench ROM 41% over the sensor's.
+    //
+    // The torso's ORIENTATION is the signal, and it needs no z at all. Standing, the line from
+    // the shoulders to the hips is close to vertical in the image; lying down it is close to
+    // horizontal. A torso nearer horizontal than vertical is an athlete whose shoulder breadth
+    // this camera cannot measure, so the frame is refused rather than guessed at.
+    const lh = f.worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
+    const rh = f.worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
+    if (visible(lh) && visible(rh)) {
+      const torsoRun = Math.abs((l.x + r.x) / 2 - (lh.x + rh.x) / 2);
+      const torsoRise = Math.abs((l.y + r.y) / 2 - (lh.y + rh.y) / 2);
+      if (torsoRun > torsoRise) {
+        framesRejectedForAngle++;
+        continue;
+      }
+    }
     widths.push(across);
   }
   if (widths.length < MIN_CALIBRATION_SAMPLES) {

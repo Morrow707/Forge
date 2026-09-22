@@ -927,3 +927,49 @@ Two sets in the same export are a different failure and should not be pooled wit
 **Bench is worse and has had no attention.** The same export has bench sets of 10 reps
 segmenting to 1, 2, 2 and 4. The squat's +1 is a rounding error next to that.
 
+
+## Bench press, 2026-09-22: segmentation and the shoulder-width ruler
+
+One bench set (135lb x 10) filmed alongside an OVR bar sensor, plus the 19 other stored
+captures replayed through `scripts/replay-captures.mjs`. Two separate defects, found because
+the sensor gave a number to disagree with.
+
+**Sensor:** 10 reps, mean 0.75 m/s, peak 1.08 m/s, ROM 14.7 in (37.2 cm).
+**Forge, before:** 11 reps (device reported 9), ROM 18.9 in, mean 1.09 m/s, peak 1.86 m/s.
+
+1. **A phase several times longer than the set's own reps was counted as a rep.** The un-rack
+   and settle ran 6.4 s against a set median concentric of 1.03 s; every genuine rep sat
+   between 0.83 s and 1.97 s. The long-duration test already existed but only ran on the FIRST
+   and LAST concentric of a set, on the reasoning that a rack artifact can only sit at an edge.
+   True of a rack artifact, false of the phenomenon. `isOverlongPhantom` now applies the same
+   2.5x ratio mid-set. Across every calibration set no genuine rep exceeded ~1.3x its set's own
+   median and the artifacts started at 2.4x, with nothing in between -- which is what makes a
+   ratio test safe rather than a judgement call. Replay: bench 11 -> 10, two back squat sets
+   6 -> 5, and the known residual phantom on set 11945 (recorded in `walkout-phantom-rep.test.ts`
+   as a separate defect) went with it. No set moved the wrong way.
+
+2. **Bench calibrated off SHOULDER WIDTH, and a supine athlete's shoulders point at the lens.**
+   The take's only scale candidate was `shoulder_width` at 0.004981 m/unit; the same phone's
+   squats, which calibrate off standing height, sat at 0.0035-0.0042. Dividing a real breadth
+   by a foreshortened pixel span inflates metres-per-pixel and with it every distance and
+   velocity in the take -- the 41% ROM error, and a velocity error LARGER than the ROM error
+   because peak is additionally picked off single-frame jumps (see below). The existing guard
+   leans on Vision's z, the least trustworthy axis it produces, and did not separate a supine
+   torso at all. The torso's ORIENTATION needs no z: standing, shoulders-to-hips is near
+   vertical in the image; lying down it is near horizontal. A torso nearer horizontal than
+   vertical now refuses the frame.
+
+**Still open, deliberately not guessed at:**
+
+- **Peak velocity is picked off unsmoothed frame-to-frame jumps.** Even after the scale fix the
+  peak error exceeds the ROM error (1.73x vs 1.29x on this set), and rep 1's curve carries a
+  lone 3.00 m/s sample between neighbours of 2.36 and 2.61. That is a separate fix and needs
+  its own evidence.
+- **There is no bench ruler yet.** With shoulder width refused, a side-on bench has no scale
+  source at all and takes the scale-free path. The plate candidate is the obvious ruler for it
+  and is currently only produced on squats. Until then bench reports shape, not distance.
+- **The Sept 8 bench sets had NO scale candidate** (`scaleSource: null`, fallback 0.00068 to
+  0.0012 m/unit, ~4x too small) which is what produced the 7-9 cm ROMs and 19-second
+  "concentrics" recorded earlier in this file. Same root area, not the same bug.
+- **Box jump rep counts were untouched** by either fix and remain 4-9 against a logged 5.
+  Different tracker (`jump-tracking.ts`), different work.

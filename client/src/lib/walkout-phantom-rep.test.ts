@@ -28,12 +28,15 @@ describe("walkout phases in real captures", () => {
     expect(result.metrics!.repBreakdown.every((r) => r.romCm < 100)).toBe(true);
   });
 
-  // 175cm of walkout ahead of five ~66cm reps. The walkout goes, but a shallow reversal ahead of
-  // the real reps survives the amplitude gate by a hair, so this take still reads one over. The
-  // walkout being gone is the claim; the residue is a separate defect and is not hidden here.
+  // 175cm of walkout ahead of five ~66cm reps. This used to read SIX: the walkout went, but a
+  // shallow reversal ahead of the real reps survived the amplitude gate by a hair, and that
+  // residue was recorded here as a known separate defect rather than hidden. The mid-set
+  // long-duration filter (2026-09-22, isOverlongPhantom) is what removed it -- the residual
+  // phase ran several times the set's median concentric, which no genuine rep in any
+  // calibration set does. Lands on the five the athlete logged.
   it("does not report set 11945's walkout as a rep", () => {
     const result = replayCapture(capture(11945));
-    expect(result.repCount).toBe(6);
+    expect(result.repCount).toBe(5);
     expect(result.metrics!.repBreakdown.every((r) => r.romCm < 100)).toBe(true);
   });
 

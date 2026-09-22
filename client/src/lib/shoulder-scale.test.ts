@@ -15,8 +15,37 @@ function frames(across: number, depth = 0, count = 40) {
   });
 }
 
+/** Frames whose torso runs from the shoulders to the hips along the given axis. "upright" is a
+ *  standing lifter; "supine" is one lying down, filmed from the side. */
+function torsoFrames(orientation: "upright" | "supine", across = 0.5, count = 40) {
+  return Array.from({ length: count }, () => {
+    const lm: Landmark[] = Array.from({ length: 33 }, () => ({ x: 0, y: 0, z: 0, visibility: 1 }));
+    lm[11] = { x: -across / 2, y: 0, z: 0, visibility: 1 };
+    lm[12] = { x: across / 2, y: 0, z: 0, visibility: 1 };
+    const hipX = orientation === "supine" ? 0.6 : 0;
+    const hipY = orientation === "supine" ? 0 : 0.6;
+    lm[23] = { x: hipX - across / 2, y: hipY, z: 0, visibility: 1 };
+    lm[24] = { x: hipX + across / 2, y: hipY, z: 0, visibility: 1 };
+    return { worldLandmarks: lm };
+  });
+}
+
 describe("shoulderWidthScaleFromFrames", () => {
-  it("gives a bench press a scale where body length could never provide one", () => {
+  // A LYING ATHLETE'S SHOULDERS POINT AT THE LENS.
+  //
+  // The depth guard below leans on Vision's z and a real bench press walked straight through it:
+  // measured against an OVR bar sensor on 2026-09-22 the take calibrated at 0.004981 m/unit
+  // where the same phone's squats sat at 0.0035-0.0042, and reported a ROM 41% over the
+  // sensor's. The torso's orientation says it without any z at all.
+  it("refuses a supine athlete, whose shoulder breadth is foreshortened by the pose itself", () => {
+    expect(shoulderWidthScaleFromFrames(torsoFrames("supine"), HEIGHT_IN).scale).toBeNull();
+  });
+
+  it("still measures a standing athlete, whose shoulders are square to the lens", () => {
+    expect(shoulderWidthScaleFromFrames(torsoFrames("upright"), HEIGHT_IN).scale).not.toBeNull();
+  });
+
+  it("gives a scale where body length could never provide one", () => {
     // Shoulders 0.409m of real breadth spanning 0.5 units of pixel space.
     const result = shoulderWidthScaleFromFrames(frames(0.5), HEIGHT_IN);
     expect(result.scale).not.toBeNull();
