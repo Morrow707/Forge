@@ -23,6 +23,26 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+// Exported for the test: a full-bleed dialog pins its own top and height with classes, and
+// this must not paint over them. Returns undefined when the caller set neither, so a dialog
+// that passes no style of its own gets no style attribute at all.
+export function fullBleedStyle(
+  className: string | undefined,
+  callerStyle: React.CSSProperties | undefined,
+): React.CSSProperties | undefined {
+  const classes = className ?? "";
+  const style: React.CSSProperties = {};
+  if (!/(^|\s)top-0(\s|$)/.test(classes)) {
+    style.top = "calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2)";
+  }
+  if (!/(^|\s)max-h-none(\s|$)/.test(classes)) {
+    style.maxHeight =
+      "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2rem)";
+  }
+  const merged = { ...style, ...callerStyle };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
@@ -69,12 +89,17 @@ const DialogContent = React.forwardRef<
       // AFTER the spread, deliberately: a caller passing its own style would otherwise replace
       // this wholesale and put its dialog back under the notch. Its style is merged in, so a
       // caller can still set anything except the two properties that keep the sheet reachable.
-      style={{
-        top: "calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2)",
-        maxHeight:
-          "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2rem)",
-        ...props.style,
-      }}
+      //
+      // AND NOT AT ALL ON A FULL-BLEED DIALOG. An inline style beats every Tailwind class, so
+      // this centring silently overrode the `top-0 max-h-none` that the twenty-odd full-screen
+      // camera and reader dialogs set -- their content started halfway down the screen with
+      // black above it, which on a tracker dialog reads as the camera itself being broken
+      // (reported on-device 2026-09-22: "the camera should be full screen ... why is it
+      // minimized?"). Keying off those two classes rather than a new prop is deliberate: they
+      // are the exact declarations being stomped, every such dialog already carries them, and
+      // a new one is written by copying that same className -- so it cannot be forgotten the
+      // way a prop can.
+      style={fullBleedStyle(className, props.style)}
     >
       {children}
       {!hideClose && (

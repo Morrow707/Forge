@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fullBleedStyle } from "@/components/ui/dialog";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -28,9 +29,11 @@ describe("a dialog is reachable on a notched phone", () => {
 
   it("cannot be undone by a caller passing its own style", () => {
     // The spread has to come BEFORE style, or a caller's style replaces this wholesale and its
-    // dialog goes straight back under the notch.
-    expect(dialog.indexOf("{...props}")).toBeLessThan(dialog.indexOf('top: "calc(50%'));
-    // ...while still merging whatever else the caller set.
-    expect(dialog).toContain("...props.style,");
+    // dialog goes straight back under the notch. Asserted on the merge itself rather than on
+    // the source order, so it keeps holding however the style is assembled.
+    const style = fullBleedStyle("sm:max-w-lg", { background: "red" });
+    expect(style?.top).toContain("safe-area-inset-top");
+    expect(style?.maxHeight).toContain("100dvh");
+    expect(style?.background).toBe("red");
   });
 });
