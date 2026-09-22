@@ -103,7 +103,13 @@ public class AvSessionRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Not recording")
             return
         }
-        recorder.stopRecording { [weak self] error in
+        // TWO parameters, not one. stopRecording's handler is
+        // (RPPreviewViewController?, Error?) -- the preview controller is what the SYSTEM
+        // recorder hands back so the user can trim and share, and it is nil when recording was
+        // started with startRecording(withOutput:) as it is here, because the file is already
+        // where we asked for it. A single-argument closure binds to the same overload and
+        // silently names the preview controller `error`, which is what verify_build caught.
+        recorder.stopRecording { [weak self] _, error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if let error = error {
