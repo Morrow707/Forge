@@ -11,13 +11,18 @@
   ("Yes upload to testflight, don't ask anymore just do it" / "Make a note to
   always upload to Apple") -- the "don't ask first" half still stands, it is
   only the per-change upload that stops. Neither lane needs confirmation.
-- **CALIBRATION WORK IS EXEMPT FROM THE BATCH, AND FROM ASKING.** A change whose whole purpose
-  is to make the next filmed set measurable -- a new diagnostic, a segmentation rule, a scale
-  source -- is worthless on `main`: it only produces evidence once it is on the phone that does
-  the filming. Push `beta` the moment such a change is committed, and do not ask first. Scott,
-  2026-09-22: "stop asking me to upload I've been waiting on you this whole time, when youre
-  calibrating push then right away." This does not reopen per-change uploads for ordinary work;
-  the batch above still governs everything that is not blocking a capture.
+- **NEVER ASK WHETHER TO PUSH OR UPLOAD. SCOTT SAYS WHEN NOT TO.** Scott, 2026-09-22: "I will
+  tell you when I don't want you to push things", after "stop asking me to upload I've been
+  waiting on you this whole time." The default is ship; a hold is something he states, and it
+  lasts until he lifts it (he held one earlier the same day -- "don't ship it I want to test
+  the camera first" -- which is exactly how a hold is meant to arrive). Asking costs him a
+  round trip he has already paid for twice.
+- **CALIBRATION WORK IS ALSO EXEMPT FROM THE BATCH.** A change whose whole purpose is to make
+  the next filmed set measurable -- a new diagnostic, a segmentation rule, a scale source -- is
+  worthless on `main`: it only produces evidence once it is on the phone that does the filming.
+  Push `beta` the moment such a change is committed. Scott: "when youre calibrating push then
+  right away." This does not reopen per-change uploads for ordinary work; the batch above still
+  governs everything that is not blocking a capture.
 - `verify_build` is now a real pre-flight, not just a compile check: it archives,
   signs, AND runs `xcrun altool --validate-app` against the archive, so it
   answers "would App Store Connect accept this binary" without creating a build
