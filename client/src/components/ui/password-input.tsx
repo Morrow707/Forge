@@ -57,7 +57,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(
         {/* Clears the toggle's whole 40px hit area plus its inset, not just the glyph. */}
         <Input
           type={visible ? "text" : "password"}
-          className={cn("pr-14", className)}
+          className={cn("pr-16", className)}
           ref={ref}
           {...props}
         />
@@ -70,7 +70,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(
           // edge lands ~18px in rather than the 12px it used to -- and shrinking the icon to
           // buy that space was explicitly rejected ("last time all you did was shrink the
           // dimensions and I don't want that"), so the hit area grew instead.
-          className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
+          className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
           aria-label={visible ? "Hide password" : "Show password"}
         >
           <EyeGlyph hidden={!visible} />

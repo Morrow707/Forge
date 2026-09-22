@@ -448,8 +448,31 @@ final class NativeLoginViewController: UIViewController {
 
         // Tapping off the fields also works. cancelsTouchesInView false so the buttons under it
         // still receive their taps.
+        //
+        // ONE TAP ON LOG IN, NOT TWO -- AND THIS RECOGNISER IS WHY IT WAS TWO.
+        //
+        // cancelsTouchesInView alone is not enough, because the other default is
+        // delaysTouchesEnded = true: the ENDED touch is withheld from the view under the finger
+        // until this recogniser has decided. So the order was recognise -> dismissKeyboard ->
+        // keyboardWillHide -> apply(keyboardOverlap: 0), which moves pageCenterY and un-hides
+        // the header, and ONLY THEN does the button receive its touch-up. A UIButton fires
+        // touchUpInside by testing the point against its CURRENT frame, and by then the card
+        // has started animating out from under the finger, so the tap was tested against a
+        // button that is no longer there. The second tap always worked because the keyboard was
+        // already down and nothing moved.
+        //
+        // Two changes, and each one alone would fix it: the ended touch is no longer delayed,
+        // and a tap that lands on a control is not this recogniser's business at all. Both,
+        // because the delay is the mechanism and the control guard is the intent.
+        //
+        // Reported on-device three times (2026-09-22). The first two fixes were made in
+        // client/src/pages/login.tsx, which is the WEB login screen -- on iOS this Swift screen
+        // is what is actually presented, so neither of them ever ran. Check which screen a
+        // login bug is on before changing anything.
         let dismissTap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         dismissTap.cancelsTouchesInView = false
+        dismissTap.delaysTouchesEnded = false
+        dismissTap.delegate = self
         view.addGestureRecognizer(dismissTap)
 
         NotificationCenter.default.addObserver(
@@ -554,7 +577,12 @@ final class NativeLoginViewController: UIViewController {
         // The glyph is drawn at its natural size -- image insets shrink it, which is what made
         // it look squashed. Widening the container is what moves it in off the border, since the
         // button centres its image and the container is right-aligned in the field.
-        toggle.frame = CGRect(x: 0, y: 0, width: 52, height: 46)
+        //
+        // 52 was still reported as touching the border on-device (2026-09-22, twice). The field
+        // is right-aligned against the container, so every point of width moves the centred
+        // glyph half a point inward; 68 puts about 8pt of air between the glyph and the edge,
+        // which is the same gap the rest of the card uses.
+        toggle.frame = CGRect(x: 0, y: 0, width: 68, height: 46)
         toggle.addTarget(self, action: #selector(toggleReveal(_:)), for: .touchUpInside)
         field.rightView = toggle
         field.rightViewMode = .always
@@ -633,6 +661,19 @@ final class NativeLoginViewController: UIViewController {
     }
 
     deinit { NotificationCenter.default.removeObserver(self) }
+}
+
+extension NativeLoginViewController: UIGestureRecognizerDelegate {
+    // A tap that lands on a button is that button's tap, not a request to dismiss the keyboard.
+    // The button resigns first responder on its own through the action it runs, so nothing is
+    // lost by staying out of the way -- and the keyboard-dismissal relayout no longer races the
+    // touch-up that fires the button. See the recogniser's own comment in setUpKeyboardBar.
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldReceive touch: UITouch
+    ) -> Bool {
+        !(touch.view is UIControl)
+    }
 }
 
 extension NativeLoginViewController: UITextFieldDelegate {
