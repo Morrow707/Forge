@@ -65,7 +65,12 @@ import {
 import { missingPriceEnvVars } from "./stripe-prices";
 import { getHealthSnapshot } from "./health-probes";
 import { RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION } from "@shared/research-consent";
-import { documentAudienceFor, uploadableKindsFor } from "@shared/required-documents";
+import {
+  documentAudienceFor,
+  missingRequiredDocuments,
+  uploadableKindsFor,
+  type DocumentStatus,
+} from "@shared/required-documents";
 import { requireGuardianAccess } from "./auth";
 import { transcribeScannedPdf } from "./pdf-vision";
 import { tagPassages } from "./passage-tagging";
@@ -8205,6 +8210,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /** WHAT YOU'VE AGREED TO -- the account holder's own copy of their consent ledger. See
    * storage.listConsentsForUser for the rules (latest row per type, withdrawn, stale, role words
    * for who answered). Three readers, one function: */
+  /** WHAT IS STILL MISSING BEFORE THIS ACCOUNT MAY TRAIN.
+   *
+   * The client gates on this rather than deriving it: two copies of "may I train yet" disagree
+   * silently, and the disagreement is only visible to the person it strands. Returns the
+   * REQUIRED rows that still need something from them, in the order the checklist shows them,
+   * so the dialog can name each one instead of saying "some documents".
+   *
+   * A coach is answered too -- their credentials gate supervising the same way an athlete's
+   * clearance gates training -- but only an athlete is blocked today; see useDocumentGate.
+   */
+  app.get("/api/account/document-compliance", requireAuth, async (req, res, next) => {
+    try {
+      const user = req.user as any;
+      const audience = documentAudienceFor({
+        role: user.role,
+        // An athlete with no coach is a Free Agent, which is what decides whether a
+        // participation waiver is even on their checklist.
+        hasCoach:
+          user.role === "athlete" ? (await storage.getCoachesForAthlete(user.id)).length > 0 : false,
+      });
+      const summary = await storage.externalWaiverSummary(user.id);
+      const statusByKind: Record<string, DocumentStatus> = {};
+      for (const line of summary) statusByKind[line.kind] = line.status as DocumentStatus;
+      const missing = missingRequiredDocuments(audience, statusByKind);
+      res.json({
+        audience,
+        complete: missing.length === 0,
+        missing: missing.map((d) => ({ kind: d.kind, label: d.label, why: d.why })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.get("/api/account/consents", requireAuth, async (req, res, next) => {
     try {
       res.json(await storage.listConsentsForUser(currentUser(req).id, { includeGivenBy: true }));

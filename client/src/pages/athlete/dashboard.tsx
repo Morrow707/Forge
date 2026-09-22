@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
+import { DocumentsOutstandingBanner } from "@/components/documents-outstanding-banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -261,6 +262,8 @@ export default function AthleteDashboard() {
         </Button>
       }
     >
+      {/* Before anything else on the page: it explains every locked control below it. */}
+      <DocumentsOutstandingBanner />
       <div ref={containerRef} className="relative">
         {/* Grows from 0 as the user pulls down from the top of the list --
             purely visual, so it's hidden from screen readers; the refetch

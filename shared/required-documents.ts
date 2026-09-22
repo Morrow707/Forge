@@ -203,3 +203,27 @@ export function addDays(isoDate: string, days: number): string {
 export function documentNeedsAction(status: DocumentStatus): boolean {
   return status !== "accepted" && status !== "pending_review";
 }
+
+/** CAN THIS PERSON ACTUALLY USE THE APP YET?
+ *
+ * Browsing is always allowed -- an account that cannot look at anything cannot decide whether
+ * to finish signing up. What this gates is USE: starting or logging a workout, running a skill
+ * session, filming, logging food. Scott, 2026-09-22: "they can browse, but not use".
+ *
+ * Only REQUIRED rows count, for the same reason the roster's outstanding count only counts
+ * them: a recommended document nobody has is not a gap, and counting it would lock everybody
+ * out forever over a row they were never asked to satisfy.
+ *
+ * `pending_review` does NOT block, because documentNeedsAction already says it needs nothing
+ * from the person -- they uploaded what was asked for and the wait is ours. Blocking there
+ * would punish somebody for our review queue, and in beta that queue is a person checking
+ * manually.
+ */
+export function missingRequiredDocuments(
+  audience: DocumentAudience,
+  statusByKind: Partial<Record<DocumentKind, DocumentStatus>>,
+): RequiredDocument[] {
+  return REQUIRED_DOCUMENTS[audience].filter(
+    (doc) => doc.required && documentNeedsAction(statusByKind[doc.kind] ?? "missing"),
+  );
+}

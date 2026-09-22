@@ -29,6 +29,7 @@ import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments, HEALTHC
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
+import { REQUIRED_DOCUMENTS, documentAudienceFor } from "@shared/required-documents";
 import { AI_TERMS_OF_USE } from "./seed-data/ai-terms-of-use-draft";
 
 const LEGAL_DOC_TYPES = legalDocumentTypeEnum.enumValues;
@@ -6324,6 +6325,43 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   }
   if (!(await storage.getLegalDocument("ai_terms_of_use"))) {
     await storage.updateLegalDocument("ai_terms_of_use", AI_TERMS_OF_USE);
+  }
+
+  // THE THREE DEMO ACCOUNTS COME WITH THEIR PAPERWORK ALREADY ON FILE.
+  //
+  // Required documents now gate training, skills and the camera (see missingRequiredDocuments),
+  // and the seeded accounts have addresses nothing delivers to and no physician to ask -- so
+  // without this they would be permanently locked out of the app they exist to demonstrate.
+  // Exactly the same shape as the device-trust exemption: these three are a fact about the
+  // software, not an operator's decision.
+  //
+  // Accepted rather than pending, because a pending row would sit in the admin review queue
+  // forever waiting for somebody to read a file that does not exist. reviewSource says plainly
+  // what they are so nobody later mistakes one for a real clearance.
+  for (const demo of [athlete, freeAgent]) {
+    const summary = await storage.externalWaiverSummary(demo.id);
+    const onFile = new Set(
+      summary.filter((line) => line.status === "accepted").map((line) => line.kind),
+    );
+    const audience = documentAudienceFor({
+      role: "athlete",
+      hasCoach: demo.id === athlete.id,
+    });
+    for (const doc of REQUIRED_DOCUMENTS[audience]) {
+      if (!doc.required || onFile.has(doc.kind)) continue;
+      await storage.createExternalWaiver({
+        athleteId: demo.id,
+        uploadedByUserId: demo.id,
+        kind: doc.kind,
+        // No file is written: nothing reads it for a seeded row, and inventing a PDF that
+        // claims to be a physician's clearance is the one thing this must not do.
+        fileUrl: "seed://demo-account-placeholder",
+        issuingOrganization: "Forge demo data -- not a real document",
+        reviewStatus: "accepted",
+        reviewSource: "seed_demo_account",
+        reviewNote: "Seeded so the demo accounts are not blocked by the document gate.",
+      });
+    }
   }
 
   console.log("Seed complete.");
