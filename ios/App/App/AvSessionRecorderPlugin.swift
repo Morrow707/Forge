@@ -70,42 +70,27 @@ public class AvSessionRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
         // athlete's face into a file the app then hands to a share sheet.
         recorder.isCameraEnabled = false
 
+        // THE DESTINATION BELONGS TO stopRecording, NOT startRecording, and getting that
+        // backwards cost four verify_build round trips. RPScreenRecorder records into its own
+        // buffer and only writes a file when you stop it -- there is no startRecording(withOutput:)
+        // at all, which is why a trailing closure there silently matched the deprecated
+        // startRecording(withMicrophoneEnabled:handler:) and complained a URL was not a Bool.
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("forge-review-\(UUID().uuidString)")
             .appendingPathExtension("mp4")
-        // A stale file at the destination makes startRecording fail rather than overwrite.
+        // A stale file at the destination makes the write fail rather than overwrite.
         try? FileManager.default.removeItem(at: outputURL)
         lastOutputURL = outputURL
 
-        if #available(iOS 15.0, *) {
-            // ASYNC, NOT A HANDLER. startRecording(withOutput:) takes no completion closure --
-            // it is `async throws`. Written with a trailing closure it does not fail to find an
-            // overload, it silently matches the DEPRECATED
-            // startRecording(withMicrophoneEnabled:handler:) and then complains that a URL is
-            // not a Bool, which is how verify_build reported it.
-            //
-            // stopRecording below deliberately keeps its handler form: that overload does exist
-            // and compiles, and there is no reason to move a working call onto a second API I
-            // would be guessing at again.
-            Task { [weak self] in
-                guard let self = self else { return }
-                do {
-                    try await self.recorder.startRecording(withOutput: outputURL)
-                    await MainActor.run { call.resolve() }
-                } catch {
-                    await MainActor.run {
-                        self.lastOutputURL = nil
-                        call.reject("Couldn't start recording: \(error.localizedDescription)")
-                    }
+        recorder.startRecording { [weak self] (error: Error?) in
+            DispatchQueue.main.async {
+                if let error = error {
+                    self?.lastOutputURL = nil
+                    call.reject("Couldn't start recording: \(error.localizedDescription)")
+                    return
                 }
+                call.resolve()
             }
-        } else {
-            // startRecording(withOutput:) is iOS 15+. Below that the only route is the system's
-            // own recorder with its own preview UI, which cannot hand back a file -- so the
-            // workbench offers everything except the recording, rather than a button that
-            // silently does nothing.
-            lastOutputURL = nil
-            call.reject("Recording a session needs iOS 15 or later.")
         }
     }
 
@@ -114,26 +99,28 @@ public class AvSessionRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Not recording")
             return
         }
-        // TWO parameters, not one. stopRecording's handler is
-        // (RPPreviewViewController?, Error?) -- the preview controller is what the SYSTEM
-        // recorder hands back so the user can trim and share, and it is nil when recording was
-        // started with startRecording(withOutput:) as it is here, because the file is already
-        // where we asked for it. A single-argument closure binds to the same overload and
-        // silently names the preview controller `error`, which is what verify_build caught.
-        recorder.stopRecording { [weak self] _, error in
+        guard let outputURL = lastOutputURL else {
+            call.reject("Nothing was recording.")
+            return
+        }
+        // stopRecording(withOutput:completionHandler:) is iOS 14+; the deployment target is
+        // 15.0, so no availability guard is needed. The handler is (Error?) -> Void -- this is
+        // the overload that writes a file, as opposed to stopRecording(handler:), which hands
+        // back an RPPreviewViewController for the SYSTEM preview UI and no file at all.
+        recorder.stopRecording(withOutput: outputURL) { [weak self] (error: Error?) in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if let error = error {
                     call.reject("Couldn't finish the recording: \(error.localizedDescription)")
                     return
                 }
-                guard let url = self.lastOutputURL,
-                      FileManager.default.fileExists(atPath: url.path) else {
+                guard FileManager.default.fileExists(atPath: outputURL.path) else {
                     call.reject("The recording finished but no file was written.")
                     return
                 }
-                let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? nil
-                call.resolve(["path": url.path, "sizeBytes": size ?? 0])
+                let size = (try? FileManager.default.attributesOfItem(atPath: outputURL.path)[.size]) as? Int64
+                self.lastOutputURL = outputURL
+                call.resolve(["path": outputURL.path, "sizeBytes": size ?? 0])
             }
         }
     }
