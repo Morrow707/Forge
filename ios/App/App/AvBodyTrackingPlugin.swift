@@ -513,8 +513,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // no delegate. Nothing downstream can then build a live run either, because
             // startRecording requires videoDataOutput to be non-nil.
             if Self.liveAnalysisEnabled {
-            reportPreviousLiveSetupCrash()
-            liveSetupBreadcrumb("creating AVCaptureVideoDataOutput")
+            self.reportPreviousLiveSetupCrash()
+            self.liveSetupBreadcrumb("creating AVCaptureVideoDataOutput")
             let videoDataOutput = AVCaptureVideoDataOutput()
             // TRUE, and this is a trade made on purpose. A data output that does not discard
             // late frames applies backpressure to the whole session, and the output sharing
@@ -523,9 +523,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // (see captureOutput(_:didDrop:from:)) and enough of them fail the take back to
             // the file path rather than shipping a thinned trace as if it were a full one.
             videoDataOutput.alwaysDiscardsLateVideoFrames = true
-            liveSetupBreadcrumb("setSampleBufferDelegate")
+            self.liveSetupBreadcrumb("setSampleBufferDelegate")
             videoDataOutput.setSampleBufferDelegate(self, queue: Self.liveAnalysisQueue)
-            liveSetupBreadcrumb("session.addOutput(videoDataOutput)")
+            self.liveSetupBreadcrumb("session.addOutput(videoDataOutput)")
             if session.canAddOutput(videoDataOutput) {
                 session.addOutput(videoDataOutput)
                 self.videoDataOutput = videoDataOutput
@@ -535,12 +535,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 // does not apply the track's preferredTransform -- so it derives the
                 // orientation instead. Different routes, same upright image, which is the only
                 // thing Vision's normalized coordinates are measured against.
-                liveSetupBreadcrumb("live connection videoOrientation")
+                self.liveSetupBreadcrumb("live connection videoOrientation")
                 if let liveConnection = videoDataOutput.connection(with: .video),
                    liveConnection.isVideoOrientationSupported {
                     liveConnection.videoOrientation = self.captureOrientation
                 }
-                clearLiveSetupBreadcrumb()
+                self.clearLiveSetupBreadcrumb()
             } else {
                 self.logDiag("WARNING: cannot add video data output -- live analysis unavailable")
             }
