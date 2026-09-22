@@ -78,7 +78,11 @@ public class AvSessionRecorderPlugin: CAPPlugin, CAPBridgedPlugin {
         lastOutputURL = outputURL
 
         if #available(iOS 15.0, *) {
-            recorder.startRecording(withOutput: outputURL) { [weak self] error in
+            // The closure parameter is annotated because RPScreenRecorder has several
+            // startRecording overloads and the trailing-closure form left the compiler unable
+            // to pick one ("cannot infer type of closure parameter 'error'"). Saying Error?
+            // out loud settles it rather than relying on inference across an overload set.
+            recorder.startRecording(withOutput: outputURL) { [weak self] (error: Error?) in
                 DispatchQueue.main.async {
                     if let error = error {
                         self?.lastOutputURL = nil
