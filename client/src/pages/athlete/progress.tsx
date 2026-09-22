@@ -240,7 +240,15 @@ export default function AthleteProgress() {
       {isLoading ? (
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       ) : (
-        <>
+        // SPACING BELONGS TO THE COLUMN, NOT TO EACH CARD.
+        //
+        // Every card here carried its own mb-6, and StrengthProfileCard -- which renders a bare
+        // Card, as a shared component should -- carried none, so it sat flush against the card
+        // below it while everything else had a gap. Reported as "the spacing is wrong and
+        // different on this page". A rule each child has to remember is a rule the next shared
+        // component will not know about; a gap owned by the parent applies to whatever is
+        // dropped into it.
+        <div className="space-y-6">
           <DigestBanner />
 
           {/* Without this the three tiles below read 0 / 0 / 0 and the PR card says
@@ -248,57 +256,74 @@ export default function AthleteProgress() {
               about an athlete who may have years of them. The rest of the page is
               backed by its own queries, so it still renders. */}
           {isError && (
-            <Card className="mb-6">
+            <Card>
               <CardContent className="py-8">
                 <ReadFailed what="your training summary" onRetry={() => void refetch()} />
               </CardContent>
             </Card>
           )}
 
-          {/* Reviews the coach has SHARED. The route returns only those, so nothing here has to
-              filter -- and nothing here can accidentally stop filtering. */}
-          <Card className="mb-6">
-            <CardContent className="space-y-3 p-5">
-              <p className="font-semibold">Coach reviews</p>
-              <VideoReviewList
-                mode="read-only"
-                fetchUrl="/api/athlete/video-reviews"
-                reviewUrl={(id) => `/api/athlete/video-reviews/${id}`}
-                emptyHint="When your coach breaks down one of your lifts, it shows up here."
-              />
-            </CardContent>
-          </Card>
+          {/* EVERY CARD THAT NEEDS A COACH IS HIDDEN FROM SOMEONE WHO HAS NONE.
+              A Free Agent has no coach by definition, so all three of these described something
+              that could not happen: a list that can never fill, a breakdown whose whole purpose
+              is sending it to somebody, and a request with no recipient. Reported 2026-09-22 --
+              "what the does ask a coach do? What coach? The free agent doesn't have one".
+              A coached athlete keeps all three unchanged. */}
+          {!isFreeAgent && (
+            <>
+              {/* Reviews the coach has SHARED. The route returns only those, so nothing here
+                  has to filter -- and nothing here can accidentally stop filtering. */}
+              <Card>
+                <CardContent className="space-y-3 p-5">
+                  <p className="font-semibold">Coach reviews</p>
+                  <VideoReviewList
+                    mode="read-only"
+                    fetchUrl="/api/athlete/video-reviews"
+                    reviewUrl={(id) => `/api/athlete/video-reviews/${id}`}
+                    emptyHint="When your coach breaks down one of your lifts, it shows up here."
+                  />
+                </CardContent>
+              </Card>
+            </>
+          )}
 
           {/* Where each movement sits against athletes the same age. Percentile only, never a
               rank, and never a name -- see getStrengthPercentilesForAthlete. */}
           <StrengthProfileCard fetchUrl="/api/athlete/strength-profile" />
 
-          {/* The athlete's OWN breakdowns of their own lifts, which they can send to their
-              coach. Kept apart from "Coach reviews" above on purpose: one list mixing the two
-              would leave an athlete unable to tell their own notes from their coach's. */}
-          <Card className="mb-6">
-            <CardContent className="space-y-3 p-5">
-              <p className="font-semibold">Your own reviews</p>
-              <VideoReviewList
-                mode="self"
-                fetchUrl="/api/athlete/self-reviews"
-                reviewUrl={(id) => `/api/athlete/self-reviews/${id}`}
-                emptyHint="Break down one of your own lifts from the compare tool, then send it to your coach."
-              />
-            </CardContent>
-          </Card>
+          {!isFreeAgent && (
+            <>
+              {/* The athlete's OWN breakdowns of their own lifts, which they can send to their
+                  coach. Kept apart from "Coach reviews" above on purpose: one list mixing the
+                  two would leave an athlete unable to tell their own notes from their coach's.
+                  Hidden from a Free Agent because the sending is the point -- a self-review
+                  with nowhere to send it is a feature that stops halfway. Whether they should
+                  get a self-comparison tool INSTEAD is an open product question, not this. */}
+              <Card>
+                <CardContent className="space-y-3 p-5">
+                  <p className="font-semibold">Your own reviews</p>
+                  <VideoReviewList
+                    mode="self"
+                    fetchUrl="/api/athlete/self-reviews"
+                    reviewUrl={(id) => `/api/athlete/self-reviews/${id}`}
+                    emptyHint="Break down one of your own lifts from the compare tool, then send it to your coach."
+                  />
+                </CardContent>
+              </Card>
 
-          {/* The other direction: what the athlete has ASKED for, and whether it came back.
-              A button that fires and forgets would leave them exactly where they started --
-              which is the failure the queue exists for. */}
-          <Card className="mb-6">
-            <CardContent className="space-y-3 p-5">
-              <p className="font-semibold">Ask your coach to check a lift</p>
-              <AskCoachForReview />
-            </CardContent>
-          </Card>
+              {/* The other direction: what the athlete has ASKED for, and whether it came back.
+                  A button that fires and forgets would leave them exactly where they started --
+                  which is the failure the queue exists for. */}
+              <Card>
+                <CardContent className="space-y-3 p-5">
+                  <p className="font-semibold">Ask your coach to check a lift</p>
+                  <AskCoachForReview />
+                </CardContent>
+              </Card>
+            </>
+          )}
 
-          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-3">
             <Card>
               <CardContent className="flex items-center gap-4 p-5">
                 <div className="flex h-11 w-11 items-center justify-center rounded-md bg-primary/15 text-primary">
@@ -339,7 +364,7 @@ export default function AthleteProgress() {
           </div>
 
           {!!(data?.currentStreak || data?.totalCompleted) && (
-            <div className="mb-6 flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               <StreakBadges
                 currentStreak={data?.currentStreak ?? 0}
                 totalCompleted={data?.totalCompleted ?? 0}
@@ -675,7 +700,7 @@ export default function AthleteProgress() {
               <TrophyCase trophies={trophies ?? []} />
             </CardContent>
           </Card>
-        </>
+        </div>
       )}
 
       <ExerciseTrendDialog
