@@ -55,7 +55,9 @@ type TrackingDiagnostics = {
     | "empty_calibration_failed"
     | "empty_no_clean_read"
     | "empty_implausible_scale"
-    | "scale_free_only";
+    | "scale_free_only"
+    // Scaled numbers, saved with a warning. The camera never rejects a take.
+    | "scale_suspect";
   message?: string | null;
   // Present only on "scale_free_only": the reps and ratios that survived without a real-world
   // scale. Everything in here is a count, a duration or a ratio.

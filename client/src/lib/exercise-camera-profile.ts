@@ -1,3 +1,9 @@
+// RULE #1: THE CAMERA NEVER REJECTS A TAKE. A set that was filmed gets a row, a number and an
+// explanation, however little this code trusts it -- a wrong number can be calibrated against a
+// bar sensor, a refusal cannot. The filming angle is never a reason to withhold anything. If a
+// check here would drop a number the pipeline already computed, make it a flag and a caveat
+// instead. See RULE #1 at the top of CLAUDE.md.
+
 // What the camera needs to know about each exercise, taken from the execution manual
 // (docs/camera-tracking-notes.md points at it) rather than guessed from the exercise name at
 // the moment it is needed.

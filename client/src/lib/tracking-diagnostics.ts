@@ -16,7 +16,13 @@ export type TrackingOutcome =
   // Not empty at all: no real-world scale could be established, so the metres, the metres per
   // second and the watts are withheld, but the times and ratios that never needed a scale are
   // saved. Distinct from empty_calibration_failed, which is the same cause with nothing kept.
-  | "scale_free_only";
+  | "scale_free_only"
+  // Fully scaled metrics, saved, with a warning attached. Calibration succeeded but a
+  // plausibility check on the result is unhappy (see implausibleBarPathDeviation). THE CAMERA
+  // NEVER REJECTS A TAKE -- this outcome is what "accept it wrong and say what it is" looks
+  // like: the numbers are written, the caveat says not to trust them, and they can be
+  // calibrated later against a bar sensor. A refusal leaves nothing to calibrate.
+  | "scale_suspect";
 
 export type ScaleFreeSummary = {
   repCount: number;

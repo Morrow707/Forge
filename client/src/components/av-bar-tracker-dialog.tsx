@@ -737,6 +737,34 @@ export function AvBarTrackerDialog({
   // The per-rep detail rides in trackingDiagnostics rather than repBreakdown: that type's
   // velocity fields are non-null and read by every chart downstream, so widening them to carry
   // a null for this one case would push the question onto all of them.
+  /// A TAKE WHOSE SCALE IS SUSPECT STILL SAVES ITS NUMBERS.
+  ///
+  /// Same shape as saveScaleFreeAndWarn, and the opposite decision: that one withholds the
+  /// metres because there is no ruler at all, this one keeps them because there IS a ruler and
+  /// the only thing known about it is that it is probably off by a factor. Under
+  /// "THE CAMERA NEVER REJECTS A TAKE" that factor is the most useful thing in the capture --
+  /// it is the number a bar sensor can be held against. The accuracy caveat already sits on
+  /// every surface that displays one of these, so the reader is warned; withholding tells them
+  /// nothing and leaves nobody able to find the fault.
+  async function saveTrackedAndWarn(
+    blob: Blob,
+    metrics: RepMetrics,
+    captureDeviceInfo: CaptureDeviceInfo,
+    trackingDiagnostics: TrackingDiagnostics,
+    uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
+    forSetNumber: number,
+  ) {
+    const withDiagnostics: RepMetrics = { ...metrics, captureDeviceInfo, trackingDiagnostics };
+    if (recordVideo && uploadPromise) {
+      onCapture(withDiagnostics, undefined, forSetNumber);
+      onOpenChange(false);
+      uploadInBackground(uploadPromise, videoContext ?? { label: exerciseName });
+      return;
+    }
+    onCapture(withDiagnostics, undefined, forSetNumber);
+    onOpenChange(false);
+  }
+
   async function saveScaleFreeAndWarn(
     blob: Blob,
     scaleFree: ScaleFreeMetrics,
@@ -1652,51 +1680,32 @@ export function AvBarTrackerDialog({
         (traceSpanAlongLift(trace) ?? 0) * 100,
       ) ??
       implausibleBarPathDeviation(metrics.barPathDeviationCm, heightIn, romBucket);
+    // A SUSPECT SCALE IS NOT A REASON TO WITHHOLD THE NUMBERS. IT IS A REASON TO SAY SO.
+    //
+    // This branch used to throw away every scaled metric when the bar-path check said the scale
+    // was off by a known factor, and fall back to the scale-free set. The athlete pressed record,
+    // did ten reps, and got a red banner. Scott, after it happened to a retake: "it automatically
+    // recorded over, so I just tested with nothing to show for it" -- and then, flatly: "The
+    // camera should never reject. Ever. If I get one more rejection I'm going to flip out."
+    //
+    // He is right and it is already written down (CLAUDE.md, "THE CAMERA NEVER REJECTS A TAKE"):
+    // a number wrong by a known factor is EVIDENCE -- it can be held against a bar sensor,
+    // replayed, and used to find the fault -- and a withheld number is nothing at all. The
+    // accuracy caveat is already on every surface that shows one of these, which is how a reader
+    // is told not to trust it. Silence is not.
+    //
+    // So the scaled metrics are kept and the warning is attached, rather than the other way
+    // round. What was a refusal is now an annotation. The diagnostics still record the outcome
+    // so the tracking report can find these takes.
     if (romProblem) {
-      const message = `${romProblem} Film this lift square to the side, with the camera level with the bar, and make sure you're fully in frame.`;
-      // The scale is what's wrong here, not the trace -- rep count, tempo and velocity loss are
-      // times and ratios that don't need one, the same reasoning the scaleRefusalMessage branch
-      // above already applies when no scale resolves at all. Recompute the same way: normalize
-      // the trace to arbitrary units and summarize with no load, since a bad scale would corrupt
-      // watts as much as it corrupts centimetres.
-      const unscaledOnRomProblem = summarizeTrackedSet(
-        normalizeTraceScale(trace),
-        undefined,
-        undefined,
-        firstMoveForExercise(exerciseName),
-        rejectionEvents,
-        1,
-        true,
-      );
-      const scaleFreeOnRomProblem = unscaledOnRomProblem ? toScaleFreeMetrics(unscaledOnRomProblem) : null;
-      if (scaleFreeOnRomProblem) {
-        await saveScaleFreeAndWarn(
-          blob,
-          scaleFreeOnRomProblem,
-          message,
-          captureDeviceInfo,
-          buildTrackingDiagnostics({
-            outcome: "scale_free_only",
-            message,
-            rawFrames,
-            trackingMode: coreMlTrackingMode,
-            recording: recordingStats,
-          objectLock: recordingStats.objectLock ?? null,
-          objectLockSecondary: recordingStats.objectLockSecondary ?? null,
-            calibration: { scaleFactor: null, ...calibrationDiagnostics, ...calibrationFrames },
-            trace: traceDiagnostics(scaleFreeOnRomProblem.repCount),
-          }),
-          uploadPromise,
-          forSetNumber,
-        );
-        return;
-      }
-      await saveEmptyAndWarn(
+      const message = `${romProblem} The numbers below are saved anyway, so they can be checked -- but treat them as suspect. Filming square to the side, camera level with the bar, gives the most reliable read.`;
+      toast.warning(message, { duration: 12000 });
+      await saveTrackedAndWarn(
         blob,
-        message,
+        metrics,
         captureDeviceInfo,
         buildTrackingDiagnostics({
-          outcome: "empty_implausible_scale",
+          outcome: "scale_suspect",
           message,
           rawFrames,
           trackingMode: coreMlTrackingMode,
@@ -1704,7 +1713,7 @@ export function AvBarTrackerDialog({
           objectLock: recordingStats.objectLock ?? null,
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
-          trace: traceDiagnostics(null),
+          trace: traceDiagnostics(metrics.repBreakdown.length),
         }),
         uploadPromise,
         forSetNumber,
@@ -1724,27 +1733,27 @@ export function AvBarTrackerDialog({
     // On an Olympic lift the bar deliberately does not travel a straight vertical line -- it
     // loops back around the knees and in under the athlete. Bar-path deviation measures distance
     // from a straight line and peak velocity is read off that same trace, so on these lifts a
-    // technically correct rep scores WORSE than a bad one hauled up in a straight line. Those
-    // two numbers are not imprecise here, they are inverted, so they are withheld rather than
-    // shown with a caveat nobody reads. Range of motion, timing, velocity loss and rep count all
-    // still mean what they usually mean and are kept.
+    // technically correct rep scores WORSE than a bad one hauled up in a straight line.
+    //
+    // THE NUMBERS ARE STILL SAVED. They used to be nulled here, and that was a refusal: a
+    // clean filmed on a phone produced no bar path and no peak velocity at all, so there was
+    // nothing to compare against a bar sensor and nothing to calibrate the Olympic path model
+    // with. Rule #1 -- the camera never rejects a take. `barPathAssumptionInvalid` is the flag
+    // that tells a renderer not to chart them and tells a reader not to trust them, which is
+    // what "accept it wrong and say what it is" looks like. Range of motion, timing, velocity
+    // loss and rep count are unaffected and mean what they usually mean.
     const olympicPath = barPathAssumptionInvalid(exerciseName);
     if (olympicPath) {
-      metrics.barPathDeviationCm = null;
-      metrics.peakVelocityMps = null;
-      metrics.peakPowerWatts = null;
-      // Per-rep values are left as computed and flagged instead of nulled: they feed internal
-      // maths and several existing charts that type them as plain numbers, and threading a null
-      // through all of that to express one lift family's caveat would push the question onto
-      // every consumer. The flag is the signal not to chart them.
       metrics.barPathAssumptionInvalid = true;
     }
 
     metrics.formFaults = detectFormFaults(
       frames,
-      // 0, not the withheld null: on an Olympic lift there is no meaningful drift to flag, and
-      // 0 is how this parameter spells "nothing to report" to the fault detector.
-      metrics.barPathDeviationCm ?? 0,
+      // 0 on an Olympic lift: the deviation is saved above but it is measured against a
+      // straight-line assumption this lift breaks on purpose, so feeding it to the fault
+      // detector would flag correct technique as a fault. 0 is how this parameter spells
+      // "nothing to report". The number itself is still on the row.
+      olympicPath ? 0 : (metrics.barPathDeviationCm ?? 0),
       "lift",
       movementType,
       equipment,

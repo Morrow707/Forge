@@ -423,7 +423,9 @@ type TrackingDiagnostics = {
     | "empty_calibration_failed"
     | "empty_no_clean_read"
     | "empty_implausible_scale"
-    | "scale_free_only";
+    | "scale_free_only"
+    // Scaled numbers, saved with a warning. The camera never rejects a take.
+    | "scale_suspect";
   message: string | null;
   recording: { frameCount: number; trackedFrameCount: number; elapsedSeconds: number } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence: number | null };

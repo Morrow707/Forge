@@ -8763,6 +8763,10 @@ export const trackingDiagnosticsSchema = z.object({
     "empty_no_clean_read",
     "empty_implausible_scale",
     "scale_free_only",
+    // THE NUMBERS ARE SAVED ANYWAY. Scale was established and something about the take says it
+    // may be wrong (an implausible bar path, a suspect ruler). The camera never rejects a take:
+    // a wrong number can be compared against a bar sensor and calibrated, a refusal cannot.
+    "scale_suspect",
   ]),
   // The exact toast message shown to the athlete in the moment (see saveEmptyAndWarn) -- null
   // when outcome is "tracked".

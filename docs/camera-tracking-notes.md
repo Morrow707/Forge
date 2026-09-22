@@ -1,5 +1,19 @@
 # Camera tracking: what is validated, what is assumed, what will break
 
+## RULE #1, BEFORE ANYTHING ELSE IN THIS DOCUMENT: THE CAMERA NEVER REJECTS. EVER.
+
+Scott, 2026-09-22: "Camera should never ever reject, I'd rather have bad data then it reject the
+whole thing, we can calibrate bad data, we can't calibrate a rejection. Never ever, ever, ever,
+should the camera ever, reject my filming angle or data. Make that rule number 1."
+
+The filming angle is never a reason to refuse anything, and neither is a posture. A set that was
+filmed gets a row, a number and an explanation -- always, however little the pipeline trusts it.
+The caveat (`shared/camera-accuracy-copy.ts`) and the `trackingDiagnostics` blob are how a reader
+is told not to trust a number; silence is not. Everything below is written under this rule, and a
+check that withholds a number the pipeline already computed is wrong as written: make it a flag.
+
+See the RULE #1 section at the top of CLAUDE.md for the full statement.
+
 Written during the database audit, from reading the tracking code and from
 Scott's account of what has actually been tested on real lifts. The point of
 this file is that several of the constraints below are not visible from the
