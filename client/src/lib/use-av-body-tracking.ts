@@ -7,7 +7,8 @@ import {
   stopAvPreview,
   updateAvPreviewRect,
   startAvRecording,
-  stopAvRecording,
+  stopAvRecordingToPath,
+  readAvRecordingForUpload,
   deleteAvRecording,
   analyzeAvRecording,
   cancelAvAnalysis,
@@ -289,7 +290,9 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   async function cancelRecording() {
     setRecording(false);
     try {
-      const { path } = await stopAvRecording();
+      // ToPath, not the blob form: this recording is about to be deleted, and reading it meant
+      // a full 720p re-encode of a clip nobody will ever watch.
+      const { path } = await stopAvRecordingToPath();
       await deleteAvRecording(path);
     } catch {
       // Nothing to clean up if stopping itself failed.
@@ -325,6 +328,16 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     // hook; a caller that doesn't pass it loses nothing (nothing changes from before this
     // existed).
     onBlobReady?: (blob: Blob) => void;
+    // FIRED THE INSTANT THE RECORDER STOPS, BEFORE ANY OF THE SLOW WORK. This is where a dialog
+    // closes the camera.
+    //
+    // onBlobReady used to be that point and it was far too late: turning the recording into an
+    // uploadable Blob means a 720p re-encode of a 28-second 120fps movie plus reading the bytes
+    // across the bridge, tens of seconds, all of it while the athlete watched a live camera
+    // preview under "Analyzing recording -- 0 frames processed...". Scott, 2026-09-22: "Why am
+    // I still getting that weird screen after I hit stop ... the camera should instantly close
+    // and go back to the workout screen."
+    onRecordingStopped?: () => void;
     // ANALYSIS PROGRESS, 0-99, AND IT IS NOT THE UPLOAD'S. Derived from each poseFrame's own
     // timestamp against the length of the take. Separate from onUploadProgress on purpose:
     // they are two different waits, and one bar wearing both labels was reported twice as
@@ -353,6 +366,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     detectBox?: boolean;
     trackingMode?: string;
     onBlobReady?: (blob: Blob) => void;
+    onRecordingStopped?: () => void;
     onAnalysisProgress?: (percent: number) => void;
   }): Promise<
     | {
@@ -373,10 +387,10 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     // running, but the recording that snapshot describes has already stopped).
     const captureDeviceInfo = extractCaptureDeviceInfo(diagLog);
 
-    let blob: Blob;
     let path: string;
     try {
-      ({ blob, path } = await stopAvRecording());
+      // FAST. Only finalises the movie file the recorder has been writing all along.
+      ({ path } = await stopAvRecordingToPath());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save the recording");
       setAnalyzing(false);
@@ -385,7 +399,23 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     recordingPathRef.current = path;
     recordedSecondsRef.current =
       recordStartedAtRef.current != null ? (Date.now() - recordStartedAtRef.current) / 1000 : null;
-    options?.onBlobReady?.(blob);
+    // THE CAMERA CLOSES HERE, before anything slow. Everything below runs behind a dismissed
+    // dialog -- tracker dialogs stay mounted after close (lazyDialog, see CLAUDE.md) precisely
+    // so a save path can finish afterwards.
+    options?.onRecordingStopped?.();
+
+    // Started, NOT awaited. The re-encode and the Vision pass are two independent jobs over the
+    // same file -- one produces what a coach watches, the other what the metrics are made of --
+    // and running them in series stacked two long waits that have no reason to be ordered. The
+    // upload begins the moment its bytes exist, while analysis is still going.
+    const blobPromise = readAvRecordingForUpload(path).then((ready) => {
+      options?.onBlobReady?.(ready);
+      return ready;
+    });
+    // A rejection here is handled where the promise is awaited, at the end of this function. This
+    // second handler only stops the browser reporting it as unhandled in the window between the
+    // two, which is now long enough to matter.
+    blobPromise.catch(() => {});
 
     const rawFrames: NativePoseFrame[] = [];
     const unsubscribe = onAvPoseFrame((frame) => {
@@ -412,7 +442,9 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       );
     } catch (err) {
       unsubscribe();
-      void deleteAvRecording(path);
+      // AFTER the blob read, never before: deleting the original out from under an in-flight
+      // re-encode is how a failed analysis would also cost the video.
+      void blobPromise.catch(() => {}).then(() => deleteAvRecording(path));
       recordingPathRef.current = null;
       setAnalyzing(false);
       if (!cancelledRef.current) {
@@ -438,7 +470,6 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       return null;
     }
     unsubscribe();
-    void deleteAvRecording(path);
     recordingPathRef.current = null;
     setAnalyzing(false);
     // Built here, once, for every caller -- see buildSkeletonReplayFrames' own comment for why
@@ -447,6 +478,16 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     // this to its own capture payload loses nothing beyond skeleton replay -- it's dead weight,
     // not a dependency of anything else this hook returns.
     const skeletonFrames = buildSkeletonReplayFrames(rawFrames);
+    // Usually already resolved -- the re-encode has had the whole analysis to run in.
+    let blob: Blob;
+    try {
+      blob = await blobPromise;
+    } catch (err) {
+      void deleteAvRecording(path);
+      setError(err instanceof Error ? err.message : "Couldn't save the recording");
+      return null;
+    }
+    void deleteAvRecording(path);
     return { blob, rawFrames, skeletonFrames, captureDeviceInfo, recordingStats };
   }
 

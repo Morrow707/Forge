@@ -333,6 +333,28 @@ function takeBodyReference(frames: NativePoseFrame[]): {
 const PLATE_DISC_ASPECT_LOW = 0.8;
 const PLATE_DISC_ASPECT_HIGH = 1.25;
 
+// AND A DISC STILL HAS TO BE PLATE-SIZED. This is the bound the shape check had no business
+// going without.
+//
+// From Scott's bench, 2026-09-22, set 2: the detector boxed something 582.8 x 567.4px -- aspect
+// 1.03, as square as a read gets, 42 samples at 0.7-1.0 confidence, sitting dead centre in the
+// frame. Shape alone says disc, so the shape bypass would have handed its long edge over as a
+// 450mm diameter. His grip in that same take measured 129.5px. A 450mm plate 4.51x the width of
+// a man's bench grip is a plate two metres across; the object is a rack upright, a bench pad or
+// a mirror, and the scale it implies is out by about five.
+//
+// The bypass exists because an off-square GRIP cannot referee a plate (that is the foreshortened
+// ruler this whole angle problem is about). It does not follow that NOTHING can. A ratio this
+// gross is not a question about camera angle -- no angle makes a plate five times a grip -- so
+// the grip keeps its veto at the extremes and loses it only in the band where foreshortening is
+// a plausible explanation for the disagreement.
+//
+// This is not the camera rejecting a take. Nothing is withheld either way: it decides WHICH of
+// two rulers the take is measured with, and the other one (shoulder breadth) is still there. See
+// RULE #1 at the top of CLAUDE.md -- that rule is about never refusing to write a number, not
+// about accepting a ruler the geometry has already ruled out.
+const PLATE_DISC_MAX_GRIP_RATIO = 2.6;
+
 function plateScaleFromFrames(
   frames: NativePoseFrame[],
   trackingMode: string | undefined,
@@ -842,23 +864,26 @@ export function AvBarTrackerDialog({
         // and closing the dialog here (rather than leaving the athlete staring at "Analyzing
         // recording...") is the whole point of this redesign, not something to skip when there's
         // no video.
-        onBlobReady: (blob) => {
+        // BACK OUT OF THE CAMERA HERE, THE INSTANT THE RECORDER STOPS.
+        //
+        // This used to hang off onBlobReady, which sounded early and was not: turning the
+        // recording into an uploadable Blob means a 720p re-encode of a 28-second 120fps movie
+        // plus reading its bytes across the bridge, and every second of that ran with the camera
+        // still on screen under "Analyzing recording -- 0 frames processed...". Scott, 2026-09-22:
+        // "Why am I still getting that weird screen after I hit stop, we got rid of that weeks
+        // ago, the camera should instantly close and go back to the workout screen."
+        //
+        // Closing is safe and always was: tracker dialogs are mounted through lazyDialog and STAY
+        // mounted after close (see CLAUDE.md), precisely so a save path can finish after this
+        // call. The set card takes over from here -- onAnalysisStarted has already put this set
+        // into the processing list, and the analysis and upload report onto that card.
+        onRecordingStopped: () => {
           onAnalysisStarted(forSetNumber);
-          // BACK OUT OF THE CAMERA HERE. THIS LINE IS THE WHOLE REDESIGN AND IT WAS MISSING.
-          //
-          // The comment on onAnalysisStarted has said "the dialog closes as soon as this fires"
-          // since it was written, and nothing closed it -- the only onOpenChange(false) calls
-          // were at the END of the save path, after the analysis. So the athlete sat on a live
-          // camera preview behind "Analyzing recording -- 0 frames processed..." for the length
-          // of the analysis, which on a 28s take at 120fps is 39 seconds. Scott, 2026-09-22:
-          // "it should back out of the camera completely to upload in the background."
-          //
-          // Closing is safe and always was: tracker dialogs are mounted through lazyDialog and
-          // STAY mounted after close (see CLAUDE.md), precisely so a save path can finish after
-          // this call. The set card takes over from here -- onAnalysisStarted has already put
-          // this set into the processing list, and the analysis and upload report their progress
-          // onto that card.
           onOpenChange(false);
+        },
+        // Fires later, when the re-encoded copy is in hand. By now the camera is long gone and
+        // the analysis is already running; this only starts the upload alongside it.
+        onBlobReady: (blob) => {
           if (recordVideo) {
             setSaving(true);
             setUploadProgress(0);
@@ -999,8 +1024,16 @@ export function AvBarTrackerDialog({
     // shown a photo of his own setup with one plate reading as a clean circle: "I will be
     // benching from this angle, make it work."
     const plateAspect = plateScaleRaw?.shape.aspectRatio ?? 0;
+    const plateToGripRatio =
+      plateScaleRaw != null && gripWidthPx != null && gripWidthPx > 0
+        ? plateScaleRaw.measured / gripWidthPx
+        : null;
     const plateReadsAsADisc =
-      plateAspect >= PLATE_DISC_ASPECT_LOW && plateAspect <= PLATE_DISC_ASPECT_HIGH;
+      plateAspect >= PLATE_DISC_ASPECT_LOW
+      && plateAspect <= PLATE_DISC_ASPECT_HIGH
+      // See PLATE_DISC_MAX_GRIP_RATIO. Unmeasurable grip means nothing to bound against, and the
+      // shape is then the only evidence there is, so the bypass stands.
+      && (plateToGripRatio == null || plateToGripRatio <= PLATE_DISC_MAX_GRIP_RATIO);
     const plateFailedGripCheck =
       plateScaleRaw != null
       && !plateReadsAsADisc
@@ -1182,10 +1215,7 @@ export function AvBarTrackerDialog({
       gripWidthPx: gripWidthPx == null ? null : Math.round(gripWidthPx * 10) / 10,
       plateRejectedAgainstGrip: plateFailedGripCheck,
       plateMeasuredPx: plateScaleRaw?.measured ?? null,
-      plateToGripRatio:
-        plateScaleRaw != null && gripWidthPx != null && gripWidthPx > 0
-          ? Math.round((plateScaleRaw.measured / gripWidthPx) * 1000) / 1000
-          : null,
+      plateToGripRatio: plateToGripRatio == null ? null : Math.round(plateToGripRatio * 1000) / 1000,
       plateRejectedReasons,
     };
 

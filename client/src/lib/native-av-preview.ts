@@ -402,8 +402,26 @@ export async function startAvRecording(options?: {
 // device, on top of the UI-thread string-decode cost of atob() against something that size.
 // fetch()/response.blob() streams the response body directly into a Blob without Capacitor's
 // bridge ever needing to serialize the whole file through a JS string at all.
-export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
+/** Stops the recorder and returns the path, and NOTHING ELSE. Fast: the native side only has
+ *  to finalise the movie file it has been writing all along.
+ *
+ *  SPLIT OUT OF stopAvRecording ON PURPOSE. Everything that turns that path into an uploadable
+ *  Blob -- the 720p re-encode, reading the bytes across the bridge -- takes tens of seconds on
+ *  a 28-second 120fps take, and it used to run BEFORE the caller was told the recording had
+ *  stopped. So the athlete sat on a live camera preview under "Analyzing recording -- 0 frames
+ *  processed..." for the whole transcode, which is the screen the camera redesign exists to
+ *  get rid of. Scott, 2026-09-22: "Why am I still getting that weird screen after I hit stop
+ *  ... the camera should instantly close and go back to the workout screen."
+ *
+ *  The caller closes the camera on THIS resolving, then does the blob work behind it. */
+export async function stopAvRecordingToPath(): Promise<{ path: string }> {
   const { path } = await AvBodyTracking.stopRecording();
+  return { path };
+}
+
+/** Turns a stopped recording's path into the Blob a coach watches. SLOW -- see the note above
+ *  on what runs in here. Never call it before the camera has been dismissed. */
+export async function readAvRecordingForUpload(path: string): Promise<Blob> {
   // WHAT GETS UPLOADED IS A SMALLER COPY. WHAT GETS ANALYSED IS THE ORIGINAL.
   //
   // The camera runs at 1920x1080/120fps because the tracker needs the frame rate, and that makes
@@ -411,12 +429,12 @@ export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
   // after the progress bar filled, which is the phone still pushing bytes rather than the server
   // working. Re-encoding to 720p cuts it roughly four-fold.
   //
-  // `path` deliberately stays the ORIGINAL below: every caller passes it to analyzeAvRecording
+  // `path` is the ORIGINAL and stays untouched: the caller passes it to analyzeAvRecording
   // (which needs every one of those 120 frames) and then to deleteAvRecording. Only the BLOB --
   // the thing a coach watches -- comes from the compressed copy, and that copy is deleted the
   // moment its bytes are in memory, so nothing new accumulates on the device.
   //
-  // Any failure returns the original path, so the worst case is the upload it was before.
+  // Any failure falls back to the original path, so the worst case is the upload it was before.
   let uploadPath = path;
   let compressedTemp: string | null = null;
   try {
@@ -442,11 +460,7 @@ export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
   // Capacitor's handler doesn't reliably set blob.type at all, so this came back
   // empty/generic -- which then fails server/routes.ts's uploadFormVideo fileFilter outright
   // ("Unsupported video format") since it can't recognize the mimetype, rather than merely
-  // producing an unplayable-but-accepted file like the MediaRecorder-path bug does. Unlike
-  // that path, there's nothing to "read as source of truth" here -- AvBodyTrackingPlugin.swift
-  // always records via AVCaptureMovieFileOutput to a ".mov" path (see startRecording), which
-  // only ever writes a QuickTime container, so the correct type is a known constant, not
-  // something to detect.
+  // producing an unplayable-but-accepted file like the MediaRecorder-path bug does.
   // The compressed copy is an .mp4, the original a .mov -- label whichever one was actually read
   // rather than assuming the recorder's container, or the server's fileFilter rejects it.
   const type = compressedTemp ? "video/mp4" : "video/quicktime";
@@ -456,6 +470,13 @@ export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
     // failed save, so it must never throw into the save path.
     void deleteAvRecording(compressedTemp).catch(() => {});
   }
+  return blob;
+}
+
+/** The old one-shot form, kept for callers that have no camera to dismiss. */
+export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
+  const { path } = await stopAvRecordingToPath();
+  const blob = await readAvRecordingForUpload(path);
   return { blob, path };
 }
 

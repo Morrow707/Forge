@@ -179,8 +179,13 @@ export function AvJumpTrackerDialog({
         // identical comment: recording has stopped and analysis is about to start regardless
         // of whether a video gets uploaded, and closing the dialog here (instead of leaving
         // the athlete staring at "Analyzing recording...") is the whole point of this redesign.
-        onBlobReady: (blob) => {
+        // The camera closes the instant the recorder stops, not when the re-encoded blob is
+        // ready -- see the bar dialog's own note. The set card carries the progress from here.
+        onRecordingStopped: () => {
           onAnalysisStarted(forSetNumber);
+          onOpenChange(false);
+        },
+        onBlobReady: (blob) => {
           if (recordVideo) {
             setSaving(true);
             setUploadProgress(0);

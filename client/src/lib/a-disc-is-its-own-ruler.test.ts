@@ -46,3 +46,41 @@ describe("a plate that reads as a disc is trusted on its own evidence", () => {
     expect(plateReadIsPlausibleAgainstGrip(100, 400)).toBe(false);
   });
 });
+
+// AND THE SHAPE BYPASS NEEDS A SIZE BOUND, WHICH IT SHIPPED WITHOUT.
+//
+// Scott's bench, 2026-09-22, set 2, from his own capture export: the detector boxed something
+// 582.8 x 567.4px -- aspect 1.03, 42 samples, 0.7-1.0 confidence, centred at 0.43/0.46. As
+// square a read as the detector produces, so the shape bypass above would have skipped the grip
+// check and handed that 583px long edge over as a 450mm diameter. His grip in that same take
+// measured 129.5px: a ratio of 4.51, which is a plate two metres across. The scale it implies is
+// wrong by about five, and every number on the set inherits that.
+//
+// No camera angle makes a plate 4.5x a man's bench grip, so at that extreme the disagreement is
+// not evidence of foreshortening and the grip keeps its veto. Inside the band where
+// foreshortening IS a plausible explanation, the bypass still applies -- that is the whole point
+// of it and Scott's angle still has to work.
+describe("a disc still has to be plate-sized", () => {
+  it("bounds the shape bypass by the grip span", () => {
+    expect(dialog).toContain("PLATE_DISC_MAX_GRIP_RATIO = 2.6");
+    expect(dialog).toContain("plateToGripRatio <= PLATE_DISC_MAX_GRIP_RATIO");
+  });
+
+  it("refuses the 583px box from that take on size, whatever its shape", () => {
+    const measured = 582.79;
+    const gripPx = 129.5;
+    const aspect = 582.79 / 567.41;
+    // Shape alone says disc...
+    expect(aspect).toBeGreaterThan(0.8);
+    expect(aspect).toBeLessThan(1.25);
+    // ...and the size says it cannot be one.
+    expect(measured / gripPx).toBeGreaterThan(2.6);
+  });
+
+  it("still lets the disc through at the ratios his angle actually produces", () => {
+    // The two reads the bypass was built for: 2.22x and (on the earlier take) well inside it.
+    expect(2.22).toBeLessThanOrEqual(2.6);
+    // And that ratio is outside the grip window, which is why the bypass has to exist at all.
+    expect(plateReadIsPlausibleAgainstGrip(2.22 * 129.5, 129.5)).toBe(false);
+  });
+});
