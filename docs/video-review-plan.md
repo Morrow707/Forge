@@ -69,6 +69,103 @@ rep alignment, linked scrub. Record BROKEN with repro and fix anything small. Kn
 the perf pass: `VideoAnalysisDialog` is now lazy — confirm it still opens from all four callers
 (`set-video-review`, `skills-trends-panel`, `skill-sessions-panel`, `coach/analytics`).
 
+## Phase 0b: the 22-second "finishing" after a set (do this before Phase 1)
+
+Scott, 2026-09-22, with a screenshot: after a bench set the card shows "Processing 100%",
+"Saving 17%", and then "finishing" for about 22 seconds before the set reads as saved. "22
+seconds is far too long."
+
+### What the code says happens between "Processing 100%" and "saved"
+
+1. Native analysis finishes (`analyzeRecording`, stride 2, `use-av-body-tracking.ts:35`) and
+   hands the JS side every pose frame: on a 30 s set at 60 fps stride 2 that is ~900 frames ×
+   33 landmarks × (x, y, z, visibility) plus world landmarks, i.e. several megabytes of JSON.
+2. The dialog computes the metrics in JS on the main thread (`av-bar-tracker-dialog.tsx`,
+   bar-tracking, calibration, trust scores) and calls `onCapture` with `skeletonFrames`,
+   `barPathTrace`, `armPathTrace` and the diagnostics blob attached to the set.
+3. `workout.tsx` `queueSave` serialises the WHOLE DAY (`JSON.stringify(payload)`,
+   `workout.tsx:1856`) including those blobs and POSTs it to `/api/athlete/log`. The server's
+   `express.json` limit was raised to 25 MB for exactly this payload, and the client already
+   has a 413 fallback that strips the blobs (`log-payload-trim.ts`), which is evidence the
+   payload is routinely multi-megabyte.
+4. The server does a delete-and-reinsert of the day inside a transaction, writing the json
+   columns, then the response returns the row ids.
+5. Separately, the video upload ("Saving 17%") runs through `uploadOrQueueVideo`; it is
+   backgrounded and never blocks the save, and on cellular (the screenshot shows two bars) a
+   1080p60 clip is tens of megabytes.
+
+Hypothesis, in order of likelihood: (a) step 3 — a multi-megabyte JSON body on a two-bar
+cellular link is 10 to 30 seconds by itself; (b) step 2 — metrics over ~900 frames on the
+main thread, blocking the UI; (c) step 4 — jsonb parse and insert of megabytes per set. The
+video upload is NOT the cause of the label; it has its own progress.
+
+### Step 1: instrument before touching anything (one small PR)
+
+Add `logDebug("SAVE", ...)` timestamps (the phone has no other instrument, CLAUDE.md) at:
+analysis complete; metrics computed; `queueSave` called with `payload bytes = N`; POST sent;
+response received with status and elapsed ms. Also log `skeletonFrames.length` and the
+byte size of each heavy field. Scott films one set, sends the SAVE lines, and the numbers
+decide which of (a), (b), (c) to fix first. Do not skip this: every earlier camera wait was
+guessed at three times before somebody measured.
+
+### Step 2: the fix for (a), which is the expected one — save the set small, ship the frames after
+
+- The set save carries the metrics and the diagnostics only; `skeletonFrames`,
+  `barPathTrace` and `armPathTrace` are OMITTED from `/api/athlete/log` (omission means
+  "keep what the server has", the existing capture-column contract — never send null, that
+  clears it). The save becomes kilobytes and returns in well under a second, and the card
+  reads "Saved".
+- A new route `PATCH /api/athlete/log/sets/:workoutSetEntryId/traces` accepts the three
+  blobs for ONE set, by the row id the save response already returns (`savedSetRowIds`,
+  added 2026-09-20 for video reattachment; reuse exactly that plumbing). Ownership check
+  through the log's athleteId, same as `attachVideoToLoggedSet`. Coach and admin
+  self-training use it too (same three roles as the form-video route).
+- The client sends the traces in the background through the existing offline queue
+  (`offline-queue.ts`), retried like a queued day, so a phone that loses signal still
+  delivers them. Row ids can change on a resave (delete-and-reinsert): match by row id
+  first, then by the (programExerciseId, setNumber, date) tuple, exactly the video
+  reattachment precedence, and carry the blobs forward on resave the way `priorVideoByKey`
+  carries the video.
+- Compress before sending: quantise landmark floats to 4 decimals (they are 0–1
+  normalised; 4 decimals is sub-pixel at 1080p) and gzip the body with `CompressionStream`
+  where present (iOS 16.4+, Chrome) with `Content-Encoding: gzip`; the server already sits
+  behind `compression()` for responses, so add the request-side decompress middleware for
+  this one route. Expect 5–10× smaller. Measure with the Step 1 lines.
+- Every reader of `skeletonFrames` (the analysis dialog's overlay, the compare tool, the
+  tracking report) already treats the column as nullable, so a review opened before the
+  traces land shows the video without the skeleton and a "skeleton still uploading" note;
+  add that note where the overlay is drawn.
+- The 413 fallback in `workout.tsx:1920` and `dropHeavyFields` stay as the safety net.
+- Tests: itest that a set saved without traces then PATCHed by row id reads back with them;
+  stale row id falls to the tuple; another athlete's row id 404s; the day save payload for
+  a tracked set contains no `skeletonFrames` key (scan of the queueSave path); round-trip
+  of the quantised frames through the zod schema.
+
+### Step 3: the fix for (b), only if Step 1 shows it — metrics off the main thread
+
+Move the post-analysis computation (`bar-tracking.ts` metrics, calibration, trust scores)
+into a Web Worker (`client/src/workers/capture-metrics.worker.ts`) fed by `postMessage`
+with transferable buffers. The dialog stays responsive; the athlete can start the next set
+while the numbers finish. Keep the pure functions where they are; the worker imports them.
+Not before measuring: a worker adds a bundle chunk and a message-passing seam for nothing if
+the compute is under a second.
+
+### Step 4: the fix for (c), only if Step 1 shows it — server write
+
+If the insert is the wait: write the traces to their own table (`workout_set_traces`,
+one row per set, keyed by `workoutSetEntryId`) so the day's delete-and-reinsert never
+rewrites megabytes it did not change, and the set row stays small for every list read (the
+perf pass already excludes the blob columns from lists). This is a schema change; the
+reader functions get one join.
+
+### Step 5: the label
+
+Whatever the numbers say, the card must never show a bare "finishing". States, in order:
+"Analysing N%" → "Saved" (the moment the small save returns) → a secondary line "Video
+uploading N%" and "Skeleton uploading" that the athlete can ignore. The next set is never
+blocked on either upload. Phase 5b (analyse while recording) later removes the "Analysing"
+wait too.
+
 ## Phase 1: compare any two clips, synced, with a transport that can link or unlink
 
 New page-level component `client/src/components/video-compare.tsx` (replaces the pairing half of
@@ -288,6 +385,7 @@ Everything else in this file is unstarted. Build 488 is on TestFlight; #154 (SEO
 ## Checklist (tick as each lands: PR number, commit)
 
 - [ ] Phase 0: existing tools verified, fixes merged
+- [ ] Phase 0b: the 22-second finish (instrument, then small save + background traces)
 - [ ] Phase 1: compare any two clips, sync, linked/unlinked transport, overlay controls
 - [ ] Phase 2: saved reviews with timed drawings, shared as a comment
 - [ ] Phase 3: voice-over
