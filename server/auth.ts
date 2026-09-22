@@ -1906,9 +1906,25 @@ export function setupAuth(app: Express) {
     if (user.role !== "athlete") {
       return res.status(400).json({ message: "Only an athlete acknowledges this." });
     }
+    // Checked here as well as in the dialog: a client is a thing anybody can edit, so a
+    // signature enforced only on screen is a suggestion.
+    const signature = z
+      .object({
+        initials: z
+          .string()
+          .trim()
+          .min(2)
+          .max(5)
+          .regex(/^[A-Za-z](\.?\s?[A-Za-z]){1,4}\.?$/, "Initials only."),
+      })
+      .safeParse(req.body);
+    if (!signature.success) {
+      return res.status(400).json({ message: "Type your initials to sign this release." });
+    }
     const ok = await storage.recordAssumptionOfRiskAcknowledgment(user.id, {
       ipAddress: req.ip,
       userAgent: req.get("user-agent") ?? undefined,
+      initials: signature.data.initials,
     });
     if (!ok) {
       // No document configured. Better a visible failure than a consent record pointing at
@@ -1987,9 +2003,24 @@ export function setupAuth(app: Express) {
 
   app.post("/api/auth/accept-terms", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    const parsed = z.object({ agreed: z.literal(true) }).safeParse(req.body);
+    const parsed = z
+      .object({
+        agreed: z.literal(true),
+        // THE SIGNATURE, AND IT IS REQUIRED HERE TOO, NOT ONLY IN THE DIALOG.
+        //
+        // A client is a thing anybody can edit, so a gate that lives only in the UI is a
+        // suggestion. The same length and shape the field enforces on screen -- initials, not
+        // a name -- checked again where it actually decides whether a record is written.
+        initials: z
+          .string()
+          .trim()
+          .min(2)
+          .max(5)
+          .regex(/^[A-Za-z](\.?\s?[A-Za-z]){1,4}\.?$/, "Initials only."),
+      })
+      .safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: "You must agree to the terms to continue." });
+      return res.status(400).json({ message: "You must type your initials and agree to the terms to continue." });
     }
     const user = req.user as any;
     const status = await storage.getTermsAcceptanceStatus(user.id);
@@ -2005,6 +2036,11 @@ export function setupAuth(app: Express) {
       userId: user.id,
       ipAddress: req.ip,
       userAgent: req.get("user-agent") ?? undefined,
+      // Stored on the front of the snapshotted document, which is the evidentiary record this
+      // consent already keeps -- the same hook the guardian path uses to record who relayed an
+      // acceptance. No new column for a string that only ever means something attached to the
+      // exact text it was typed against.
+      documentTextPrefix: `Signed by typed initials: ${parsed.data.initials.toUpperCase()}\n\n`,
     });
     res.json({ acceptedAt });
   });

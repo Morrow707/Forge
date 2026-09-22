@@ -28715,14 +28715,20 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * client needs to know not to claim it succeeded. */
   async recordAssumptionOfRiskAcknowledgment(
     athleteId: number,
-    context?: { ipAddress?: string; userAgent?: string },
+    context?: { ipAddress?: string; userAgent?: string; initials?: string },
   ): Promise<boolean> {
     const doc = await this.getLegalDocument("assumption_of_risk");
     if (!doc?.content) return false;
     await this.logConsentRecord({
       userId: athleteId,
       consentType: "assumption_of_risk",
-      documentText: doc.content,
+      // The signature rides on the front of the snapshotted text, the same shape
+      // acceptCurrentTerms uses for a typed acceptance. It only means anything attached to
+      // the exact document it was typed against, which is why it lives here and not in a
+      // column of its own.
+      documentText: context?.initials
+        ? `Signed by typed initials: ${context.initials.toUpperCase()}\n\n${doc.content}`
+        : doc.content,
       ipAddress: context?.ipAddress,
       userAgent: context?.userAgent,
     });

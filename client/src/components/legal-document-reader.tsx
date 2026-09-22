@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useReadToEnd } from "@/components/read-and-initial";
 
 /** An in-place reader for a live legal document, for the places that ask
  * someone to agree to one.
@@ -38,12 +39,23 @@ export function LegalDocumentReader({
   docType,
   label,
   className,
+  onReadToEnd,
 }: {
   docType: ReadableDocType;
   label: string;
   className?: string;
+  /** Fired once the reader has scrolled this document to its end. A caller that gates a
+   *  consent on having been shown the whole text uses this; every other caller passes
+   *  nothing and the reader behaves exactly as it always has. */
+  onReadToEnd?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { ref: scrollRef, reachedEnd, onScroll } = useReadToEnd();
+  useEffect(() => {
+    // Only once the document is actually on screen. An unopened reader has a zero-height
+    // scroller, which the "nothing to scroll" branch would otherwise read as fully read.
+    if (open && reachedEnd) onReadToEnd?.();
+  }, [open, reachedEnd, onReadToEnd]);
   const { data, isLoading, isError } = useQuery<{ content: string; updatedAt?: string | null }>({
     queryKey: [
       docType === "signup_agreement" ? "/api/legal-agreement" : `/api/legal-documents/${docType}`,
@@ -63,7 +75,11 @@ export function LegalDocumentReader({
         <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-surface-elevated p-3">
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          className="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-surface-elevated p-3"
+        >
           {isLoading ? (
             <p className="text-xs text-muted-foreground">Loading…</p>
           ) : isError || !data?.content ? (

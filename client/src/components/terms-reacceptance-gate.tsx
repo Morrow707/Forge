@@ -5,6 +5,12 @@ import { getJson, apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  InitialsField,
+  ScrollToEndHint,
+  initialsLookValid,
+  useReadToEnd,
+} from "@/components/read-and-initial";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ReadFailed } from "@/components/read-failed";
 import { ScrollText } from "lucide-react";
@@ -38,6 +44,11 @@ export function TermsReacceptanceGate() {
   const { user, logoutMutation } = useAuth();
   const qc = useQueryClient();
   const [agreed, setAgreed] = useState(false);
+  const [initials, setInitials] = useState("");
+  // See read-and-initial.tsx: reaching the end is what the software can honestly claim, and
+  // the initials are the reader's own act. Both, because they answer different questions.
+  const { ref: termsRef, reachedEnd, onScroll } = useReadToEnd();
+  const canAccept = reachedEnd && agreed && initialsLookValid(initials);
 
   const needs = user?.needsTermsAcceptance === true;
 
@@ -54,7 +65,10 @@ export function TermsReacceptanceGate() {
 
   const accept = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/auth/accept-terms", { agreed: true });
+      const res = await apiRequest("POST", "/api/auth/accept-terms", {
+        agreed: true,
+        initials: initials.trim().toUpperCase(),
+      });
       return (await res.json()) as { acceptedAt: string };
     },
     onSuccess: () => {
@@ -106,17 +120,32 @@ export function TermsReacceptanceGate() {
             <p className="text-sm text-muted-foreground">
               Please read the updated terms and accept them to keep using Forge.
             </p>
-            <div className="max-h-[60vh] overflow-y-auto rounded-md border border-border bg-background/40 p-3 text-sm whitespace-pre-wrap">
+            <div
+              ref={termsRef}
+              onScroll={onScroll}
+              className="max-h-[60vh] overflow-y-auto rounded-md border border-border bg-background/40 p-3 text-sm whitespace-pre-wrap"
+            >
               {status.text}
             </div>
-            <label className="flex items-start gap-2 text-sm">
-              <Checkbox
-                checked={agreed}
-                onCheckedChange={(v) => setAgreed(v === true)}
-                className="mt-0.5"
-              />
-              <span>I have read the updated Terms of Use and agree to them</span>
-            </label>
+            {/* EVERYTHING THAT ACCEPTS IS BEHIND THE SCROLL, not merely disabled behind it.
+                A greyed-out Accept sitting under an unread document still tells the reader
+                the transaction is one tap away and invites them to hunt for what unlocks it;
+                nothing to tap says plainly that there is reading to do first. */}
+            {!reachedEnd ? (
+              <ScrollToEndHint />
+            ) : (
+              <>
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={agreed}
+                    onCheckedChange={(v) => setAgreed(v === true)}
+                    className="mt-0.5"
+                  />
+                  <span>I have read the updated Terms of Use and agree to them</span>
+                </label>
+                <InitialsField value={initials} onChange={setInitials} disabled={accept.isPending} />
+              </>
+            )}
             <div className="flex items-center justify-between gap-3">
               {/* Not a dismissal -- the only other honest answer to "accept these or stop". */}
               <button
@@ -126,13 +155,15 @@ export function TermsReacceptanceGate() {
               >
                 Sign out instead
               </button>
-              <Button
-                type="button"
-                disabled={!agreed || accept.isPending}
-                onClick={() => accept.mutate()}
-              >
-                {accept.isPending ? "Saving..." : "Accept"}
-              </Button>
+              {reachedEnd && (
+                <Button
+                  type="button"
+                  disabled={!canAccept || accept.isPending}
+                  onClick={() => accept.mutate()}
+                >
+                  {accept.isPending ? "Saving..." : "Accept"}
+                </Button>
+              )}
             </div>
           </div>
         )}

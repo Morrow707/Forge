@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ShieldAlert } from "lucide-react";
+import { InitialsField, initialsLookValid } from "@/components/read-and-initial";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,9 +44,13 @@ export function AssumptionOfRiskDialog({
 }) {
   const qc = useQueryClient();
 
+  const [readFullRelease, setReadFullRelease] = useState(false);
+  const [initials, setInitials] = useState("");
   const acknowledge = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/account/assumption-of-risk", {});
+      const res = await apiRequest("POST", "/api/account/assumption-of-risk", {
+        initials: initials.trim().toUpperCase(),
+      });
       return (await res.json()) as PublicUser;
     },
     onSuccess: (user) => {
@@ -96,19 +102,41 @@ export function AssumptionOfRiskDialog({
               <LegalDocumentReader
                 docType="assumption_of_risk"
                 label="Read the full assumption of risk and release"
+                onReadToEnd={() => setReadFullRelease(true)}
               />
             </div>
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <Button
-            type="button"
-            className="w-full"
-            onClick={() => acknowledge.mutate()}
-            disabled={acknowledge.isPending}
-          >
-            {acknowledge.isPending ? "Saving..." : "I understand"}
-          </Button>
+        <DialogFooter className="flex-col items-stretch gap-3 sm:flex-col sm:items-stretch">
+          {/* THE RELEASE HAS TO BE OPENED AND READ TO THE END, and it was neither.
+              The summary above is a summary; the document somebody is actually agreeing to
+              was folded behind a link nobody had to touch, and "I understand" sat there
+              ready the whole time. Scott, 2026-09-22: "make them read the whole document,
+              not just click through without reading". Nothing to acknowledge with appears
+              until the release has been scrolled to its end -- a disabled button under an
+              unopened document just invites hunting for the unlock. */}
+          {!readFullRelease ? (
+            <p className="text-sm text-muted-foreground">
+              Open the full release above and read to the end to continue.
+            </p>
+          ) : (
+            <>
+              <InitialsField
+                value={initials}
+                onChange={setInitials}
+                disabled={acknowledge.isPending}
+                label="Type your initials to sign"
+              />
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => acknowledge.mutate()}
+                disabled={!initialsLookValid(initials) || acknowledge.isPending}
+              >
+                {acknowledge.isPending ? "Saving..." : "I understand"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

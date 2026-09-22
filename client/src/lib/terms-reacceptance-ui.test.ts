@@ -48,13 +48,24 @@ describe("the terms re-acceptance gate", () => {
 
   it("gates Accept on the checkbox, and says exactly what is being agreed to", () => {
     expect(gate).toContain("I have read the updated Terms of Use and agree to them");
-    expect(gate).toContain("disabled={!agreed || accept.isPending}");
+    // THREE THINGS NOW GATE ACCEPT, NOT ONE. The checkbox was the whole gate, and a tick plus
+    // a tap cleared a contract with the document still on its first screen. Reaching the end of
+    // the text and typing initials were added 2026-09-22 -- "make them read the whole document,
+    // not just click through without reading", "make them sign their initials".
+    expect(gate).toContain("const canAccept = reachedEnd && agreed && initialsLookValid(initials);");
+    expect(gate).toContain("disabled={!canAccept || accept.isPending}");
+    // Hidden behind the scroll, not merely disabled behind it -- a greyed-out Accept under an
+    // unread document still says the transaction is one tap away.
+    expect(gate).toContain("{!reachedEnd ? (");
     expect(gate).toContain("Forge's Terms of Use have changed");
     expect(gate).toContain("Please read the updated terms and accept them to keep using Forge.");
   });
 
   it("posts the agreement and clears the flag it was gated on", () => {
-    expect(gate).toContain('apiRequest("POST", "/api/auth/accept-terms", { agreed: true })');
+    expect(gate).toContain('apiRequest("POST", "/api/auth/accept-terms", {');
+    // The typed initials go with the agreement -- the server records them on the front of the
+    // snapshotted document, which is the evidentiary record this consent already keeps.
+    expect(gate).toContain("initials: initials.trim().toUpperCase(),");
     expect(gate).toContain('qc.invalidateQueries({ queryKey: ["/api/auth/me"] })');
   });
 

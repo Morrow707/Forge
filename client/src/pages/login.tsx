@@ -199,6 +199,24 @@ export default function LoginPage() {
                   size="lg"
                   className="w-full"
                   disabled={loginMutation.isPending}
+                  // ONE TAP, NOT TWO.
+                  //
+                  // With the keyboard up, the first tap here only dismissed it and the second
+                  // one logged in. The sequence is: touching outside the focused field blurs
+                  // it, the keyboard animates away, the web view resizes, the layout reflows
+                  // upward -- and by the time the tap resolves into a click, this button is no
+                  // longer under the finger. The tap was never lost; it landed on whatever
+                  // moved into that spot.
+                  //
+                  // preventDefault on POINTERDOWN is what stops it, because pointerdown fires
+                  // before focus moves. No blur, so no keyboard dismissal, so no reflow, so the
+                  // click lands on the button that was tapped. The keyboard then goes away with
+                  // the screen on submit, which is what it looked like was happening anyway.
+                  //
+                  // An earlier attempt used onMouseDown. WebKit synthesises mouse events AFTER
+                  // the touch sequence has already blurred the field, so it fired too late to
+                  // prevent anything -- the reason this was reported fixed and was not.
+                  onPointerDown={(e) => e.preventDefault()}
                 >
                   {loginMutation.isPending ? "Logging in…" : "Log In"}
                 </Button>

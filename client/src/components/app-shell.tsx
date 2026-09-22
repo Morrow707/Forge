@@ -501,6 +501,22 @@ export function AppShell({
       ? [...nav, { href: "/guardian", label: "My Athlete", icon: ShieldCheck, overflow: true }]
       : nav;
 
+  // WHERE THE WORDMARK AND THE FLAME GO.
+  //
+  // Every role's dashboard, named explicitly rather than read off nav[0]: a coach can hide
+  // their own Dashboard entry through nav-customize, and deriving home from a list somebody
+  // can edit would leave the logo pointing at whatever happened to be first instead.
+  // Reported on-device from inside a lesson -- tapping either did nothing at all, because the
+  // brand block was a plain div and had never been a link on any profile.
+  const homeHref =
+    user?.role === "coach"
+      ? "/coach"
+      : user?.role === "admin"
+        ? "/admin"
+        : user?.role === "guardian"
+          ? "/guardian"
+          : "/athlete";
+
   const primaryNav = navWithGuardian.filter((item) => !item.overflow);
   const overflowNav = navWithGuardian.filter((item) => item.overflow);
 
@@ -560,7 +576,15 @@ export function AppShell({
         }}
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8">
-          <div className="flex items-center gap-2">
+          {/* The mark AND the wordmark are one link, because people tap both and expect the
+              same thing. Closing the mobile panel here as well: navigating with it still open
+              leaves the destination behind a sheet, which reads as the tap having failed. */}
+          <Link
+            href={homeHref}
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Go to your dashboard"
+            className="flex items-center gap-2 rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {branding?.brandLogoUrl ? (
               <img
                 src={resolveApiUrl(branding.brandLogoUrl)}
@@ -580,7 +604,7 @@ export function AppShell({
                 </span>
               )}
             </div>
-          </div>
+          </Link>
 
           {/* justify-start, not center -- when every item fits this looks
               identical either way, but once the roster grows past what
