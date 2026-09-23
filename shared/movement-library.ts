@@ -46,7 +46,7 @@ export const MOVEMENTS: Movement[] = [
     name: "Bench press",
     mode: "Bar path",
     filming:
-      "Low and behind the head of the bench, landscape. Getting the athlete's full body in frame matters more here than on any other lift, and it is harder -- see the caveat.",
+      "SQUARE TO THE SIDE of the bench, camera level with the bar, landscape. Not from the foot of the bench, not from behind the head, not raised. Far enough back that the whole athlete -- head to planted feet -- is in frame for the whole set.",
     measures: [
       "Bar speed through the press",
       "Range of motion from chest to lockout",
@@ -54,7 +54,7 @@ export const MOVEMENTS: Movement[] = [
       "Rep count and tempo",
     ],
     caveat:
-      "Scale comes from the athlete's own height, which needs their whole body visible. Somebody lying flat with their feet out of frame cannot produce that measurement, so on bench a wrong number is more likely to be a calibration failure than a tracking failure -- and the two look identical from outside. This is the movement where Forge is most likely to refuse a take rather than report it.",
+      "The side is the ONLY view that works here, and this is the one lift where that is true. Scale comes from the athlete's own height, and a lying body only shows its real length when it lies ACROSS the frame -- from the head or the foot of the bench it points straight at the lens, there is nothing in the picture about how long it is, and calibration fails on almost every frame. Every other movement Forge tracks has the athlete upright, where height reads from any angle. Bench is the exception, so the camera placement is not a preference on this one.",
   },
   {
     slug: "pendlay-row",
