@@ -469,6 +469,30 @@ function WaterSection({
     onSuccess: onChanged,
     onError: () => toast.error("Couldn't remove that"),
   });
+  // CORRECTING A POUR RATHER THAN DELETING IT. Scott, 2026-09-23: "if I put in the wrong water
+  // amount, there's no way to go back or edit it." Removing and re-tapping was the only route,
+  // and it throws away the time the drink was actually logged.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [draftOz, setDraftOz] = useState("");
+  const editMutation = useMutation({
+    mutationFn: ({ id, amountOz }: { id: number; amountOz: number }) =>
+      apiRequest("PATCH", `/api/athlete/water-log/${id}`, { amountOz }),
+    onSuccess: () => {
+      setEditingId(null);
+      onChanged();
+    },
+    onError: () => toast.error("Couldn't change that"),
+  });
+  function commitEdit(id: number) {
+    const oz = Number(draftOz);
+    // A blank or nonsense box closes the editor instead of writing -- the server would refuse it
+    // anyway, and an error toast for a box somebody just tapped out of is noise.
+    if (!Number.isFinite(oz) || oz <= 0) {
+      setEditingId(null);
+      return;
+    }
+    editMutation.mutate({ id, amountOz: oz });
+  }
 
   // Nothing logged and no target set means this athlete is not tracking water at all, and a
   // coach viewing a read-only day should not get an empty widget for it either.
@@ -504,9 +528,43 @@ function WaterSection({
               key={entry.id}
               className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs"
             >
-              <span>
-                {format(parseISO(entry.loggedAt), "h:mm a")} &middot; {entry.amountOz} oz
-              </span>
+              {editingId === entry.id ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">
+                    {format(parseISO(entry.loggedAt), "h:mm a")}
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    autoFocus
+                    value={draftOz}
+                    onChange={(e) => setDraftOz(e.target.value)}
+                    onBlur={() => commitEdit(entry.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitEdit(entry.id);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    className="w-16 rounded border border-primary bg-transparent px-1.5 py-0.5 text-xs"
+                    aria-label="Amount in ounces"
+                  />
+                  <span className="text-muted-foreground">oz</span>
+                </span>
+              ) : (
+                // The whole row is the control, not a pencil hiding in the corner: on a phone a
+                // 14px icon beside a delete is a coin toss, and the thing being corrected IS the
+                // number, so tapping the number is where anybody reaches first.
+                <button
+                  type="button"
+                  disabled={!editable}
+                  onClick={() => {
+                    setEditingId(entry.id);
+                    setDraftOz(String(entry.amountOz));
+                  }}
+                  className="text-left underline-offset-2 disabled:cursor-default hover:underline"
+                >
+                  {format(parseISO(entry.loggedAt), "h:mm a")} &middot; {entry.amountOz} oz
+                </button>
+              )}
               {editable && (
                 <Button
                   type="button"

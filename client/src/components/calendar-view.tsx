@@ -263,7 +263,12 @@ export function CalendarView({
         <WeekRow start={start} end={end} entriesByDate={entriesByDate} onEntryClick={onEntryClick} />
       )}
       {view === "day" && (
-        <ThreeDayAgenda centerDate={cursor} entriesByDate={entriesByDate} onEntryClick={onEntryClick} />
+        <ThreeDayAgenda
+          centerDate={cursor}
+          entriesByDate={entriesByDate}
+          onEntryClick={onEntryClick}
+          dayPreviewFetchUrl={dayPreviewFetchUrl}
+        />
       )}
       {view === "single-day" &&
         (singleDayContent ? (
@@ -433,15 +438,32 @@ function DayPreviewChevron({ open, onToggle, label }: { open: boolean; onToggle:
  * more detail. Query only fires once actually expanded, and stays cached
  * after that (a day's prescription doesn't change underneath you
  * mid-glance). */
-function DayPreviewList({ fetchUrl }: { fetchUrl: string }) {
+function DayPreviewList({
+  fetchUrl,
+  // HOW MANY LIFTS BEFORE "+N more", and it is the whole reason the 3-Day view can carry this
+  // at all. Scott, 2026-09-23: "I still want the 3 day to fit all 3 days on the same page on my
+  // phone without scrolling." Three days of an uncapped list is however long the longest session
+  // happens to be, which is exactly the thing that cannot be promised to fit. A cap makes the
+  // card's height bounded and therefore predictable: header, two lines of meta, at most `limit`
+  // lifts, one summary line.
+  limit,
+  className,
+}: {
+  fetchUrl: string;
+  limit?: number;
+  className?: string;
+}) {
   const { data, isLoading, isError, refetch } = useQuery<DayPreviewExercise[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
     staleTime: Infinity,
   });
 
+  const shown = limit != null && data ? data.slice(0, limit) : data;
+  const hidden = limit != null && data ? data.length - shown!.length : 0;
+
   return (
-    <div className="space-y-1 border-t border-border p-2.5">
+    <div className={cn("space-y-1 border-t border-border p-2.5", className)}>
       {isLoading ? (
         <div className="h-12 animate-pulse rounded bg-surface" />
       ) : isError ? (
@@ -455,14 +477,21 @@ function DayPreviewList({ fetchUrl }: { fetchUrl: string }) {
       ) : !data?.length ? (
         <p className="py-1 text-center text-xs text-muted-foreground">Nothing prescribed here yet.</p>
       ) : (
-        data.map((ex, i) => (
-          <div key={i} className="flex items-baseline justify-between gap-3 text-xs">
-            <span className="truncate">{ex.exerciseName}</span>
-            <span className="shrink-0 font-semibold text-muted-foreground">
-              {ex.sets}x{ex.reps}
-            </span>
-          </div>
-        ))
+        <>
+          {shown!.map((ex, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="truncate">{ex.exerciseName}</span>
+              <span className="shrink-0 font-semibold text-muted-foreground">
+                {ex.sets}x{ex.reps}
+              </span>
+            </div>
+          ))}
+          {hidden > 0 && (
+            <p className="pt-0.5 text-[11px] text-muted-foreground">
+              +{hidden} more {hidden === 1 ? "lift" : "lifts"}
+            </p>
+          )}
+        </>
       )}
     </div>
   );
@@ -485,7 +514,15 @@ function PreviewableEntryRow({
   onEntryClick: (entry: CalendarEntry) => void;
   previewFetchUrl?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  // OPEN ON ARRIVAL, not behind a tap. Scott, 2026-09-23: "let's make the single day a lot more
+  // detailed, what are we actually lifting? How many sets?"
+  //
+  // "Training Day -- 5 exercises" is a count, not an answer: it tells an athlete standing in the
+  // gym nothing about what to put on the bar. The list was already built and already fetched on
+  // demand; it was just hidden behind a chevron most people never pressed. The chevron stays so
+  // the list can be folded away, which is the right way round -- detail by default, tidy on
+  // request.
+  const [open, setOpen] = useState(!!previewFetchUrl);
   return (
     <div className="rounded-md border border-border">
       <div className="flex w-full items-center gap-2 p-2.5">
@@ -679,11 +716,13 @@ function DayAgendaRow({
   dayEntries,
   onEntryClick,
   label,
+  dayPreviewFetchUrl,
 }: {
   day: Date;
   dayEntries: CalendarEntry[];
   onEntryClick: (entry: CalendarEntry) => void;
   label: string;
+  dayPreviewFetchUrl?: (entry: CalendarEntry) => string;
 }) {
   return (
     <div>
@@ -702,11 +741,23 @@ function DayAgendaRow({
         </div>
       ) : (
         <div className="space-y-2">
-          {dayEntries.map((e) => (
-            <button
+          {dayEntries.map((e) => {
+            const previewUrl =
+              dayPreviewFetchUrl && !e.isRestDay && e.kind === "exercise"
+                ? dayPreviewFetchUrl(e)
+                : undefined;
+            return (
+            // A DIV WRAPPING A BUTTON, not a button wrapping everything. The card carries a list
+            // now, and a <button> may not contain interactive content -- nesting one would be
+            // invalid HTML and, more to the point, would make every line of the lift list part
+            // of one giant tap target. The header row stays the tappable thing.
+            <div
               key={`${e.assignmentId}-${e.programDayId}`}
+              className="overflow-hidden rounded-md border border-border"
+            >
+            <button
               onClick={() => onEntryClick(e)}
-              className="flex w-full items-center justify-between gap-3 rounded-md border border-border p-3.5 text-left transition-colors hover:bg-surface-elevated"
+              className="flex w-full items-center justify-between gap-3 p-3.5 text-left transition-colors hover:bg-surface-elevated"
             >
               <div className="flex items-center gap-3">
                 <div
@@ -736,7 +787,19 @@ function DayAgendaRow({
               </div>
               {e.completed && <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />}
             </button>
-          ))}
+            {/* WHAT IS ACTUALLY BEING LIFTED, on all three days at once. "2 exercises" above is
+                a count; this is the answer. Capped at THREE_DAY_PREVIEW_LIMIT so the card's
+                height stays bounded and the three days keep fitting on one screen. */}
+            {previewUrl && (
+              <DayPreviewList
+                fetchUrl={previewUrl}
+                limit={THREE_DAY_PREVIEW_LIMIT}
+                className="bg-surface/40 py-2"
+              />
+            )}
+            </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -859,14 +922,28 @@ function WeekRow({
   );
 }
 
+/** HOW MANY LIFTS EACH OF THE THREE DAYS SHOWS.
+ *
+ * Three, because three days have to fit on a phone at once and that is the arithmetic: a card is
+ * its header plus at most three 16px lines plus a summary line, so the tallest the whole view
+ * can get is fixed and known rather than "however long the longest session is". Scott,
+ * 2026-09-23: "I still want the 3 day to fit all 3 days on the same page on my phone without
+ * scrolling ... But a little more detailed than what is there now."
+ *
+ * The rest are not hidden, they are COUNTED -- "+4 more lifts" is the difference between a
+ * shortened list and a list that looks complete and is not. */
+const THREE_DAY_PREVIEW_LIMIT = 3;
+
 function ThreeDayAgenda({
   centerDate,
   entriesByDate,
   onEntryClick,
+  dayPreviewFetchUrl,
 }: {
   centerDate: Date;
   entriesByDate: Map<string, CalendarEntry[]>;
   onEntryClick: (entry: CalendarEntry) => void;
+  dayPreviewFetchUrl?: (entry: CalendarEntry) => string;
 }) {
   const days = [centerDate, addDays(centerDate, 1), addDays(centerDate, 2)];
   return (
@@ -887,6 +964,7 @@ function ThreeDayAgenda({
             dayEntries={entriesByDate.get(dateStr) ?? []}
             onEntryClick={onEntryClick}
             label={label}
+            dayPreviewFetchUrl={dayPreviewFetchUrl}
           />
         );
       })}

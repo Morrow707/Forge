@@ -539,7 +539,7 @@ function AnswerStyleSection() {
     onPick,
   }: {
     label: string;
-    options: readonly { key: string; label: string }[];
+    options: readonly { key: string; label: string; preview: string }[];
     value: string;
     onPick: (key: string) => void;
   }) => (
@@ -564,6 +564,15 @@ function AnswerStyleSection() {
           </button>
         ))}
       </div>
+      {/* WHAT THE CHOICE ACTUALLY SOUNDS LIKE. Scott, 2026-09-23: "what does it mean when it
+          talks more technically or writes more thoroughly?" -- a fair question about three
+          buttons whose labels describe prose nobody has seen. The three previews on an axis
+          answer the SAME question, so tapping between them shows the difference rather than a
+          different topic. Live in shared/answer-style.ts beside the instruction each one
+          describes, so a preview cannot drift from what the model is really told. */}
+      <p className="text-xs italic leading-relaxed text-muted-foreground">
+        {options.find((o) => o.key === value)?.preview}
+      </p>
     </div>
   );
 

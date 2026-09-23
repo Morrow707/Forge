@@ -6585,6 +6585,17 @@ export const storage = {
     return row;
   },
 
+  /** Scoped by athleteId as well as id, like the delete beside it -- the id alone would let one
+   *  athlete edit another's log by guessing a number. */
+  async updateWaterLogEntry(athleteId: number, id: number, amountOz: number) {
+    const [row] = await db
+      .update(waterLogEntries)
+      .set({ amountOz })
+      .where(and(eq(waterLogEntries.id, id), eq(waterLogEntries.athleteId, athleteId)))
+      .returning();
+    return row ?? null;
+  },
+
   async deleteWaterLogEntry(athleteId: number, id: number) {
     const [row] = await db
       .delete(waterLogEntries)

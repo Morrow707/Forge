@@ -3323,6 +3323,19 @@ export const createWaterLogEntrySchema = z.object({
 });
 export type CreateWaterLogEntryInput = z.infer<typeof createWaterLogEntrySchema>;
 
+/** CORRECTING A POUR, rather than deleting it and tapping again.
+ *
+ * Scott, 2026-09-23: "if I put in the wrong water amount, there's no way to go back or edit it."
+ * Delete-and-re-add was the only route, and it loses the time the drink was actually logged --
+ * which is the one thing the entry is FOR beyond its own number. The date is not editable here:
+ * moving a pour to another day is a different action from fixing a mistyped amount, and nothing
+ * in the UI asks for it.
+ */
+export const updateWaterLogEntrySchema = z.object({
+  amountOz: z.coerce.number().positive().max(512),
+});
+export type UpdateWaterLogEntryInput = z.infer<typeof updateWaterLogEntrySchema>;
+
 // One row per logged food item, on a given calendar date -- mostly never an
 // AI capability (see server/food-lookup.ts): barcode/name lookups just proxy
 // a public food database (Open Food Facts, USDA FoodData Central) for

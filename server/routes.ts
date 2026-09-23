@@ -200,6 +200,7 @@ import {
   submitInjurySchema,
   createFoodLogEntrySchema,
   createWaterLogEntrySchema,
+  updateWaterLogEntrySchema,
   updateFoodLogEntrySchema,
   logCaraActivitySchema,
   setCaraCapSchema,
@@ -10176,6 +10177,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const entry = await storage.addWaterLogEntry(user.id, parsed.data);
     res.status(201).json(entry);
+  });
+
+  app.patch("/api/athlete/water-log/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = updateWaterLogEntrySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const entry = await storage.updateWaterLogEntry(user.id, Number(req.params.id), parsed.data.amountOz);
+    if (!entry) return res.status(404).json({ message: "Entry not found" });
+    res.json(entry);
   });
 
   app.delete("/api/athlete/water-log/:id", requireRole("athlete"), async (req, res) => {

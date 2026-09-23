@@ -279,6 +279,22 @@ export function NutritionPanel({
 
   return (
     <div className="space-y-5">
+      {/* THE WEEK, THEN TODAY. Scott, 2026-09-22: "Put the last 7 days right above the rings,
+          right below the text that says set your macros, quick view of the week, then the rings,
+          they will both fit."
+
+          It used to sit at the very bottom, under the targets form, the goal picker and the
+          micros -- so the one view that answers "have I been eating at all this week" was the
+          last thing on a long scroll, and on a phone nobody reached it. The rings are today and
+          the strip is the week; reading the week first is what makes today mean something. */}
+      {trendUrl && (
+        <NutritionTrendPanel
+          fetchUrl={trendUrl}
+          selectedDate={foodLogDate}
+          onSelectDate={setFoodLogDate}
+        />
+      )}
+
       {/* FIRST ON THE PAGE, above the setup form. See macrosAllSet for why. */}
       {foodLogUrl && (
         <FoodLogPanel
@@ -515,14 +531,6 @@ export function NutritionPanel({
             </div>
           )}
         </div>
-      )}
-
-      {trendUrl && (
-        <NutritionTrendPanel
-          fetchUrl={trendUrl}
-          selectedDate={foodLogDate}
-          onSelectDate={setFoodLogDate}
-        />
       )}
 
     </div>
