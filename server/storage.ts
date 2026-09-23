@@ -20285,6 +20285,36 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
   // getWorkoutDayDetail above, for the calendar's Today view where a coach
   // comment thread, logged sets, and corrective history would be way more
   // than a glance needs.
+  /** THE SAME GLANCE, FOR A SKILL DAY.
+   *
+   * getWorkoutDayPreview answers "what am I actually doing today" for a strength day, and the
+   * calendar has shown it since it existed. A SKILL day got nothing -- the preview was gated on
+   * kind === "exercise" -- so an athlete whose programme is hitting or pitching opened the
+   * calendar and read a title and a programme name. Scott, 2026-09-23, on a day that was all
+   * skill work: "I don't notice a difference on the single day, I want much much more detail,
+   * what drills? How many reps and sets?"
+   *
+   * Deliberately the SAME {exerciseName, sets, reps} shape the strength preview returns, so the
+   * one list component renders either without knowing which it has. A drill and a lift are
+   * different things to do and the same thing to read at a glance.
+   *
+   * perSetReps wins over reps where a drill has it: "6, 6, 4" is the prescription in that case
+   * and flattening it to the first number would print a rep count nobody was asked for.
+   */
+  async getSkillDayPreview(athleteId: number, skillAssignmentId: number, skillProgramDayId: number) {
+    const detail = await this.getSkillDayForAthlete(athleteId, skillAssignmentId, skillProgramDayId);
+    if (!detail) return undefined;
+    return detail.exercises.map((ex) => ({
+      exerciseName: ex.name,
+      sets: ex.prescribedSets,
+      reps:
+        Array.isArray(ex.perSetReps) && ex.perSetReps.length > 0
+          ? ex.perSetReps.join(", ")
+          : ex.reps,
+      supersetGroup: null as string | null,
+    }));
+  },
+
   async getWorkoutDayPreview(athleteId: number, assignmentId: number, programDayId: number) {
     const assignment = await db.query.assignments.findFirst({
       where: and(eq(assignments.id, assignmentId), eq(assignments.athleteId, athleteId)),

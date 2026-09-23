@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJson } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
+import { BodyMap } from "@/components/body-map";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import {
@@ -19,100 +20,52 @@ const MUSCLE_LOAD_WINDOW_OPTIONS = [
 
 const GRAY = "hsl(var(--muted))";
 
-/** Front-view regions, in a 200x330 viewBox. Purely schematic (rounded
- * rects/ellipses), not anatomical art -- legible at a glance is the goal,
- * not realism. */
-const FRONT_SHAPES: { region?: MuscleRegion; d?: string; ellipse?: [number, number, number, number]; rect?: [number, number, number, number, number] }[] = [
-  { ellipse: [100, 28, 18, 22] }, // head
-  { region: "neck", rect: [92, 48, 16, 12, 4] },
-  { region: "shoulders", ellipse: [55, 72, 16, 14] },
-  { region: "shoulders", ellipse: [145, 72, 16, 14] },
-  { region: "chest", rect: [70, 62, 60, 38, 10] },
-  { region: "biceps", rect: [32, 80, 18, 48, 8] },
-  { region: "biceps", rect: [150, 80, 18, 48, 8] },
-  { region: "forearms", rect: [30, 130, 16, 46, 7] },
-  { region: "forearms", rect: [154, 130, 16, 46, 7] },
-  { ellipse: [38, 182, 9, 11] }, // hand
-  { ellipse: [162, 182, 9, 11] }, // hand
-  { region: "abs", rect: [78, 102, 44, 42, 8] },
-  { region: "obliques", rect: [64, 104, 12, 38, 5] },
-  { region: "obliques", rect: [124, 104, 12, 38, 5] },
-  { region: "hips", rect: [68, 146, 22, 18, 6] },
-  { region: "hips", rect: [110, 146, 22, 18, 6] },
-  { region: "adductors", rect: [84, 166, 14, 40, 6] },
-  { region: "adductors", rect: [102, 166, 14, 40, 6] },
-  { region: "quads", rect: [66, 166, 20, 70, 9] },
-  { region: "quads", rect: [114, 166, 20, 70, 9] },
-  { rect: [68, 238, 16, 60, 7] }, // shin
-  { rect: [116, 238, 16, 60, 7] }, // shin
-  { ellipse: [76, 306, 11, 8] }, // foot
-  { ellipse: [124, 306, 11, 8] }, // foot
-];
+/** THE HEAT MAP AND THE STRENGTH PROFILE DRAW THE SAME BODY.
+ *
+ * They did not. This file had its own figure -- rounded rects and ellipses, with its own comment
+ * calling it "purely schematic ... not anatomical art" -- while the strength profile had
+ * BodyMap. Two figures for the same athlete's muscles, and after body-map.tsx was redrawn as
+ * real anatomy this one was still the blocky one, which is what Scott was looking at when he
+ * said he saw no difference. Scott, 2026-09-23: "Both should be the same very very detailed
+ * anatomy."
+ *
+ * One drawing, used twice, is also the only arrangement that cannot drift. BodyMap already takes
+ * a `fills` map of muscle group to colour, which is exactly what a heat map is.
+ *
+ * THE TWO VOCABULARIES HAVE TO BE TRANSLATED, and this is the one seam.
+ *
+ * `MuscleRegion` (this file's rollup, 16 coarse regions) and BodyMap's groups (the exercise
+ * taxonomy's own names) were built for different jobs and do not line up one to one. Anything
+ * unmapped simply stays neutral on the figure and keeps its row in the list beside it -- a
+ * region with nowhere to be drawn is still a region somebody trained, and dropping it from the
+ * numbers to suit the picture would be the picture telling a lie about the training.
+ */
+const REGION_TO_BODY_MAP_GROUP: Partial<Record<MuscleRegion, string[]>> = {
+  shoulders: ["Shoulders"],
+  chest: ["Chest"],
+  // The rollup has no separate lat region, so the whole back above the waist is one number.
+  // Tinting both shapes from it is honest about that; tinting only the traps would leave the
+  // largest muscle on the back permanently grey for an athlete who rows every week.
+  upperBack: ["Back", "Lats"],
+  lowerBack: ["Lower Back"],
+  biceps: ["Biceps"],
+  triceps: ["Triceps"],
+  forearms: ["Forearms"],
+  abs: ["Abs"],
+  obliques: ["Core"],
+  glutes: ["Glutes"],
+  quads: ["Quads"],
+  hamstrings: ["Hamstrings"],
+  calves: ["Calves"],
+  // neck, hips and adductors have no region drawn on the figure. They keep their list rows.
+};
 
-const BACK_SHAPES: typeof FRONT_SHAPES = [
-  { ellipse: [100, 28, 18, 22] }, // head
-  { rect: [92, 48, 16, 12, 4] }, // neck (shown once, on front view)
-  { region: "shoulders", ellipse: [55, 72, 16, 14] },
-  { region: "shoulders", ellipse: [145, 72, 16, 14] },
-  { region: "upperBack", rect: [72, 64, 56, 44, 10] },
-  { region: "triceps", rect: [32, 80, 18, 48, 8] },
-  { region: "triceps", rect: [150, 80, 18, 48, 8] },
-  { rect: [30, 130, 16, 46, 7] }, // forearm (shown once, on front view)
-  { rect: [154, 130, 16, 46, 7] },
-  { ellipse: [38, 182, 9, 11] },
-  { ellipse: [162, 182, 9, 11] },
-  { region: "lowerBack", rect: [78, 110, 44, 32, 8] },
-  { region: "glutes", rect: [68, 144, 28, 32, 10] },
-  { region: "glutes", rect: [104, 144, 28, 32, 10] },
-  { region: "hamstrings", rect: [66, 178, 20, 64, 9] },
-  { region: "hamstrings", rect: [114, 178, 20, 64, 9] },
-  { region: "calves", rect: [68, 244, 16, 56, 7] },
-  { region: "calves", rect: [116, 244, 16, 56, 7] },
-  { ellipse: [76, 306, 11, 8] },
-  { ellipse: [124, 306, 11, 8] },
-];
-
-function BodySvg({
-  shapes,
-  colorByRegion,
-  countByRegion,
-}: {
-  shapes: typeof FRONT_SHAPES;
-  colorByRegion: Map<MuscleRegion, string>;
-  countByRegion: Map<MuscleRegion, number>;
-}) {
-  return (
-    <svg viewBox="0 0 200 330" className="h-full w-full">
-      {shapes.map((s, i) => {
-        const fill = s.region ? (colorByRegion.get(s.region) ?? GRAY) : GRAY;
-        const label = s.region
-          ? `${MUSCLE_REGION_LABEL[s.region]}: ${Math.round(countByRegion.get(s.region) ?? 0)} sets`
-          : undefined;
-        const common = {
-          fill,
-          stroke: "hsl(var(--background))",
-          strokeWidth: 1.5,
-        };
-        if (s.ellipse) {
-          const [cx, cy, rx, ry] = s.ellipse;
-          return (
-            <ellipse key={i} cx={cx} cy={cy} rx={rx} ry={ry} {...common}>
-              {label && <title>{label}</title>}
-            </ellipse>
-          );
-        }
-        if (s.rect) {
-          const [x, y, w, h, rx] = s.rect;
-          return (
-            <rect key={i} x={x} y={y} width={w} height={h} rx={rx} {...common}>
-              {label && <title>{label}</title>}
-            </rect>
-          );
-        }
-        return null;
-      })}
-    </svg>
-  );
+function fillsForBodyMap(colorByRegion: Map<MuscleRegion, string>): Record<string, string> {
+  const fills: Record<string, string> = {};
+  for (const [region, color] of colorByRegion) {
+    for (const group of REGION_TO_BODY_MAP_GROUP[region] ?? []) fills[group] = color;
+  }
+  return fills;
 }
 
 /** Whole-athlete, not exercise-specific -- lives alongside ACWR and the
@@ -187,13 +140,13 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
         ) : (
           <div className="grid gap-4 sm:grid-cols-[auto_auto_1fr] sm:items-start">
             <div className="mx-auto w-32 sm:w-36">
-              <BodySvg shapes={FRONT_SHAPES} colorByRegion={colorByRegion} countByRegion={countByRegion} />
+              <BodyMap view="front" fills={fillsForBodyMap(colorByRegion)} className="text-muted-foreground" />
               <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
                 Front
               </p>
             </div>
             <div className="mx-auto w-32 sm:w-36">
-              <BodySvg shapes={BACK_SHAPES} colorByRegion={colorByRegion} countByRegion={countByRegion} />
+              <BodyMap view="back" fills={fillsForBodyMap(colorByRegion)} className="text-muted-foreground" />
               <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
                 Back
               </p>

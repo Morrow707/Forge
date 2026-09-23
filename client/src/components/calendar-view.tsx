@@ -367,7 +367,11 @@ export function DayDetailList({
         // itself is the tappable row instead of a redundant "View details"
         // button underneath restating what's already on screen.
         if (group.length === 1 && !rep.athleteName) {
-          const canPreview = dayPreviewFetchUrl && !rep.isRestDay && rep.kind === "exercise";
+          // A SKILL DAY IS A DAY WITH THINGS TO DO ON IT. This used to also require
+          // kind === "exercise", so an athlete on a hitting or pitching programme opened the
+          // calendar and got a title and nothing else -- the one athlete for whom the day's
+          // content is least guessable. Rest days are still excluded: there is nothing to list.
+          const canPreview = dayPreviewFetchUrl && !rep.isRestDay;
           return (
             <PreviewableEntryRow
               key={groupKey(rep)}
@@ -743,9 +747,7 @@ function DayAgendaRow({
         <div className="space-y-2">
           {dayEntries.map((e) => {
             const previewUrl =
-              dayPreviewFetchUrl && !e.isRestDay && e.kind === "exercise"
-                ? dayPreviewFetchUrl(e)
-                : undefined;
+              dayPreviewFetchUrl && !e.isRestDay ? dayPreviewFetchUrl(e) : undefined;
             return (
             // A DIV WRAPPING A BUTTON, not a button wrapping everything. The card carries a list
             // now, and a <button> may not contain interactive content -- nesting one would be

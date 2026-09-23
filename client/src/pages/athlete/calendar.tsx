@@ -93,8 +93,11 @@ export default function AthleteCalendar() {
                 : `/athlete/day/${e.assignmentId}/${e.programDayId}/${e.date}`,
             )
           }
+          // SKILL DAYS GET THE PREVIEW TOO. The ids mean different things on the two
+          // programmes, so the kind has to travel with them; without it the server would look a
+          // skill assignment up in the strength tables and 404 on a day that exists.
           dayPreviewFetchUrl={(e) =>
-            `/api/athlete/day-preview?assignmentId=${e.assignmentId}&programDayId=${e.programDayId}`
+            `/api/athlete/day-preview?assignmentId=${e.assignmentId}&programDayId=${e.programDayId}&kind=${e.kind}`
           }
         />
       </div>

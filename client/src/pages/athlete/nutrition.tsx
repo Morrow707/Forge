@@ -66,18 +66,17 @@ export default function AthleteNutrition() {
       <div className="mb-6 space-y-2">
         <p className="text-sm text-muted-foreground">
           {isFreeAgent
-            ? "Set your own macro and micro targets, log what you eat, and ask general sports-nutrition questions."
-            : "Your macro and micro targets, set by your coach -- log what you eat here to track against them."}
+            ? "Set your targets, log what you eat, ask nutrition questions."
+            : "Your targets, set by your coach. Log what you eat to track against them."}
         </p>
-        {/* Said once, plainly, on the page rather than only next to the AI box. Forge is not run
-            by dietitians and does not employ any, so nothing here is a prescription -- it records
-            what an athlete ate and drank and compares it to numbers a person chose. The AI box
-            already carries its own version of this; a minor logging food should not have to open
-            that box to find out what this page is. */}
+        {/* Said once, plainly, on the page rather than only next to the AI box: Forge is not run
+            by dietitians and nothing here is a prescription. Cut to one sentence 2026-09-23 --
+            Scott, "just very wordy" -- and the cut is wording only. Every claim the long version
+            made survives: not a dietitian, not a prescription, go to a person who knows you.
+            A disclaimer nobody finishes reading protects nobody. */}
         <p className="text-xs text-muted-foreground">
-          Forge tracks what you log and can suggest general guidance. It is not a dietitian and
-          nothing here is a prescription -- individual targets should come from a coach or a
-          registered dietitian who knows you.
+          Not a dietitian, and nothing here is a prescription -- your own targets should come from
+          a coach or a registered dietitian who knows you.
         </p>
       </div>
       {wellnessFailed && (

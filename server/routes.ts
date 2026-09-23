@@ -10779,16 +10779,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const schema = z.object({
       assignmentId: z.coerce.number(),
       programDayId: z.coerce.number(),
+      // Which programme the ids belong to. Absent means exercise, so every caller that predates
+      // skill previews keeps working unchanged.
+      kind: z.enum(["exercise", "skill"]).optional(),
     });
     const parsed = schema.safeParse(req.query);
     if (!parsed.success) {
       return res.status(400).json({ message: "Missing or invalid query params" });
     }
-    const preview = await storage.getWorkoutDayPreview(
-      user.id,
-      parsed.data.assignmentId,
-      parsed.data.programDayId,
-    );
+    const preview =
+      parsed.data.kind === "skill"
+        ? await storage.getSkillDayPreview(user.id, parsed.data.assignmentId, parsed.data.programDayId)
+        : await storage.getWorkoutDayPreview(user.id, parsed.data.assignmentId, parsed.data.programDayId);
     if (!preview) return res.status(404).json({ message: "Workout not found" });
     res.json(preview);
   });
