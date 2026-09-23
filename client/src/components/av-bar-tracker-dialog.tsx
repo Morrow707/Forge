@@ -1302,6 +1302,14 @@ export function AvBarTrackerDialog({
     const leftVelocitySamples: VelocitySample[] = [];
     const rightVelocitySamples: VelocitySample[] = [];
     const rejectionEvents: number[] = [];
+    // The gate on the combined bar point, kept apart from the per-side one above so the report
+    // can say WHICH filter fired -- a side that read impossibly fast and a bar point that
+    // teleported because the sides swapped are different faults with different fixes.
+    const combinedRejectionEvents: number[] = [];
+    let barPointFromBothHands = 0;
+    let barPointFromLoneHandCarried = 0;
+    let barPointFromBareLoneHand = 0;
+    let prevCombined: { x: number; y: number; t: number }[] = [];
     let verticalSign: 1 | -1 = 1;
     // Half the measured distance from the left grip to the right, carried forward so a frame with
     // only one hand can still be placed at the middle of the bar -- see barPointFromSides.
@@ -1476,8 +1484,52 @@ export function AvBarTrackerDialog({
 
       // See barPointFromSides. A lone hand is carried back to the middle of the bar rather than
       // traced where it sits, so the point keeps meaning the same thing from frame to frame.
-      const { point: combined, halfSpan } = barPointFromSides(fusedLeft, fusedRight, lastHalfSpan);
+      let { point: combined, halfSpan } = barPointFromSides(fusedLeft, fusedRight, lastHalfSpan);
+      // WHICH BRANCH BUILT THIS POINT, COUNTED.
+      //
+      // The three branches mean three different things and the trace cannot be read without
+      // knowing which one ran. Both hands is the middle of the bar, measured. One hand carried
+      // back by the last half-span is the middle of the bar, inferred -- right if the half-span
+      // is current, off by up to half a grip if it is stale. One hand with no half-span yet is
+      // the END of the bar, and the point has silently changed what it means.
+      //
+      // The 2026-09-23 bench take is why: the trace sits at one x for a stretch, then ~50cm away
+      // for another stretch, then back -- sustained excursions, not single-frame spikes, so no
+      // speed gate or median filter reaches them. That shape is the point changing meaning, and
+      // there was no counter anywhere that could say so.
+      if (fusedLeft && fusedRight) barPointFromBothHands++;
+      else if (combined && lastHalfSpan) barPointFromLoneHandCarried++;
+      else if (combined) barPointFromBareLoneHand++;
       lastHalfSpan = halfSpan;
+
+      // THE COMBINED POINT NEEDS ITS OWN PLAUSIBILITY GATE, NOT JUST THE TWO SIDES.
+      //
+      // isPlausibleVelocity ran per SIDE, inside fuseSide, and each side on its own is smooth:
+      // the left hand moves like a left hand, the right hand moves like a right hand. What
+      // teleports is the point BUILT from them, because which sides exist changes frame to
+      // frame -- a left-only frame followed by a right-only one moves the bar point by up to a
+      // whole grip width even though neither hand went anywhere. barPointFromSides carries a
+      // lone hand back to the middle using the last measured half-span, which fixes the common
+      // case, but a stale or mismeasured half-span puts the reconstructed point half a grip or
+      // a whole grip off, and nothing downstream was checking.
+      //
+      // Measured on the 2026-09-23 bench take (10 reps logged, 3 found): 27 of 570 steps in the
+      // trace moved more than 25cm, most of them at 8-17 m/s on a 33ms frame, and the take
+      // reported "0 thrown out by the speed filter" -- because the filter had never seen this
+      // series. Those jumps are what the segmenter read as reps: rep 1's curve steps from
+      // -3.4cm to -79.6cm in a single sample. Range of motion came back 77.9cm on a bench
+      // press whose bar travels about 36.
+      //
+      // This drops a SAMPLE, never a take (RULE #1) -- the same filtering the rule explicitly
+      // preserves, and the counter below is what makes it visible rather than silent.
+      if (combined && !isPlausibleVelocity(prevCombined, { x: combined.x, y: combined.y, t })) {
+        combinedRejectionEvents.push(t);
+        combined = null;
+      }
+      if (combined) {
+        prevCombined = [...prevCombined, { x: combined.x, y: combined.y, t }].slice(-PLAUSIBILITY_HISTORY);
+      }
+
       if (combined) framesUsable++;
       else if (rejectedThisFrame) framesVelocityRejected++;
       else framesNoWristOrImplement++;
@@ -1509,6 +1561,10 @@ export function AvBarTrackerDialog({
         framesNoWristOrImplement,
         framesVelocityRejected,
         velocityRejections: rejectionEvents.length,
+        combinedVelocityRejections: combinedRejectionEvents.length,
+        barPointFromBothHands,
+        barPointFromLoneHandCarried,
+        barPointFromBareLoneHand,
         largestGapSeconds: largestGapSeconds == null ? null : Math.round(largestGapSeconds * 1000) / 1000,
       };
     };

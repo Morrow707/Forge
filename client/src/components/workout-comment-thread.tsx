@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { MessageSquare, Video, Send, X, Pencil, Download, Loader2 } from "lucide-react";
 import { formatDistanceToNow, format, parseISO } from "date-fns";
 import { watermarkVideo } from "@/lib/video-watermark";
-import { shareOrDownloadBlob } from "@/lib/share-file";
+import { shareOrDownloadBlob, describeSaveOutcome } from "@/lib/share-file";
 
 type Comment = {
   id: number;
@@ -60,21 +60,36 @@ export function WorkoutCommentThread({
   // Which comment's video is currently being watermarked for download --
   // a re-encode takes a few seconds for a longer clip, so this drives a
   // per-row loading state rather than a single global one.
+  const [downloadPct, setDownloadPct] = useState(0);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: [basePath],
   });
 
+  /** The watermark re-encode PLAYS the clip through a canvas, so it takes as
+   * long as the clip itself -- half a minute of a spinner with no number on
+   * it, and then, on native, a silent return once the video reached Photos.
+   * Both halves are reported: a percentage while it encodes (watermarkVideo
+   * has always offered onProgress; nothing was reading it), and a toast
+   * naming where the file actually went. A save nobody is told about is
+   * indistinguishable from one that never happened. */
   async function downloadWithWatermark(commentId: number, url: string) {
     setDownloadingId(commentId);
+    setDownloadPct(0);
     try {
-      const blob = await watermarkVideo(url);
-      await shareOrDownloadBlob(blob, "forge-form-check.webm", "Forge form check");
+      const blob = await watermarkVideo(url, (fraction) =>
+        setDownloadPct(Math.min(99, Math.round(fraction * 100))),
+      );
+      setDownloadPct(100);
+      const outcome = await shareOrDownloadBlob(blob, "forge-form-check.webm", "Forge form check");
+      if (outcome.kind === "failed") toast.error(describeSaveOutcome(outcome, "video"));
+      else toast.success(describeSaveOutcome(outcome, "video"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not prepare that video for download");
     } finally {
       setDownloadingId(null);
+      setDownloadPct(0);
     }
   }
 
@@ -180,7 +195,10 @@ export function WorkoutCommentThread({
                   >
                     {downloadingId === c.id ? (
                       <>
-                        <Loader2 className="h-3 w-3 animate-spin" /> Preparing…
+                        <Loader2 className="h-3 w-3 animate-spin" />{" "}
+                        {downloadPct >= 100
+                          ? "Saving…"
+                          : `Preparing… ${downloadPct}%`}
                       </>
                     ) : (
                       <>

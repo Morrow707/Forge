@@ -116,6 +116,10 @@ type TrackingDiagnostics = {
     framesNoWristOrImplement?: number;
     framesVelocityRejected?: number;
     velocityRejections: number;
+    combinedVelocityRejections?: number;
+    barPointFromBothHands?: number;
+    barPointFromLoneHandCarried?: number;
+    barPointFromBareLoneHand?: number;
     largestGapSeconds?: number | null;
   } | null;
   calibration?: {
@@ -571,6 +575,12 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
         `${d.trace.points} tracked points` +
         `${d.trace.repsFound != null ? `, ${d.trace.repsFound} rep${d.trace.repsFound === 1 ? "" : "s"} found` : ", reps not segmented"}` +
         `${d.trace.velocityRejections > 0 ? `, ${d.trace.velocityRejections} side-reads dropped as impossibly fast` : ""}` +
+        `${d.trace.combinedVelocityRejections ? `, ${d.trace.combinedVelocityRejections} bar points dropped for teleporting (the two hands swapping, not the bar moving)` : ""}` +
+        `${
+          d.trace.barPointFromBothHands != null
+            ? `. Bar point built from both hands on ${d.trace.barPointFromBothHands} frames, from one hand carried back to the middle on ${d.trace.barPointFromLoneHandCarried ?? 0}, from a bare single hand (so it marks the END of the bar, not the middle) on ${d.trace.barPointFromBareLoneHand ?? 0}`
+            : ""
+        }` +
         `${d.trace.largestGapSeconds != null ? `, largest gap ${d.trace.largestGapSeconds}s` : ""}`,
     });
     // An empty trace has two completely different causes and they look the same from outside:

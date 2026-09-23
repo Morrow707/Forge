@@ -35,7 +35,40 @@ function blobToBase64(blob: Blob): Promise<string> {
  * photo/video save that fails (permission denied, or Android without an
  * album identifier configured) -- keep going through the native share sheet
  * instead (via @capacitor/share), same as before this existed. */
-export async function shareOrDownloadBlob(blob: Blob, filename: string, shareTitle?: string) {
+/** What actually happened to the file, so a caller can SAY so. A save that
+ * finishes in silence is indistinguishable from one that never started --
+ * which is exactly how a form-check download read on a phone: the button
+ * spun, the button stopped, and nothing anywhere said whether a video had
+ * landed in Photos. `failed` carries the reason rather than only reaching
+ * console.warn, where nobody on an iPhone can read it. */
+export type SaveOutcome =
+  | { kind: "photos" }
+  | { kind: "shared" }
+  | { kind: "downloaded" }
+  | { kind: "cancelled" }
+  | { kind: "failed"; reason: string };
+
+/** One sentence for a toast, so every caller says the same thing. */
+export function describeSaveOutcome(outcome: SaveOutcome, noun = "file"): string {
+  switch (outcome.kind) {
+    case "photos":
+      return `Saved to your Photos.`;
+    case "shared":
+      return `Your ${noun} is ready -- pick where to save it.`;
+    case "downloaded":
+      return `Downloaded.`;
+    case "cancelled":
+      return `Save cancelled -- nothing was saved.`;
+    case "failed":
+      return `Could not save that ${noun}: ${outcome.reason}`;
+  }
+}
+
+export async function shareOrDownloadBlob(
+  blob: Blob,
+  filename: string,
+  shareTitle?: string,
+): Promise<SaveOutcome> {
   if (Capacitor.isNativePlatform()) {
     try {
       const written = await Filesystem.writeFile({
@@ -49,19 +82,23 @@ export async function shareOrDownloadBlob(blob: Blob, filename: string, shareTit
         try {
           if (isPhoto) await Media.savePhoto({ path: written.uri });
           else await Media.saveVideo({ path: written.uri });
-          return;
+          return { kind: "photos" };
         } catch (err) {
           console.warn("Could not save directly to Photos, falling back to the share sheet", err);
         }
       }
       await Share.share({ title: shareTitle, files: [written.uri] });
+      return { kind: "shared" };
     } catch (err) {
-      // A cancelled/dismissed share sheet rejects too on some platforms --
-      // there's no meaningful fallback to a "download" on native, so this
-      // is just swallowed the same way the web path below ignores AbortError.
+      // A cancelled/dismissed share sheet rejects too on some platforms, and
+      // there is no meaningful fallback to a "download" on native -- but the
+      // two are told apart and BOTH are reported, because a silent return
+      // here is what made a failed save look exactly like a finished one.
       console.warn("Native share failed", err);
+      const message = err instanceof Error ? err.message : String(err);
+      if (/cancel|abort|dismiss/i.test(message)) return { kind: "cancelled" };
+      return { kind: "failed", reason: message || "the save was refused" };
     }
-    return;
   }
 
   const file = new File([blob], filename, { type: blob.type });
@@ -69,9 +106,9 @@ export async function shareOrDownloadBlob(blob: Blob, filename: string, shareTit
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: shareTitle });
-      return;
+      return { kind: "shared" };
     } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") return;
+      if (err instanceof Error && err.name === "AbortError") return { kind: "cancelled" };
       // Fall through to download if sharing failed for any other reason.
     }
   }
@@ -84,12 +121,17 @@ export async function shareOrDownloadBlob(blob: Blob, filename: string, shareTit
   a.click();
   a.remove();
   URL.revokeObjectURL(objectUrl);
+  return { kind: "downloaded" };
 }
 
 /** Fetches a same-origin URL (auth cookie goes along automatically, plus the
  * native bearer token on native -- see queryClient.ts) and shares/downloads
  * the resulting blob -- see shareOrDownloadBlob above. */
-export async function shareOrDownloadFile(url: string, filename: string, shareTitle?: string) {
+export async function shareOrDownloadFile(
+  url: string,
+  filename: string,
+  shareTitle?: string,
+): Promise<SaveOutcome> {
   const token = getNativeToken();
   const res = await fetch(resolveApiUrl(url), {
     credentials: "include",
@@ -97,5 +139,5 @@ export async function shareOrDownloadFile(url: string, filename: string, shareTi
   });
   if (!res.ok) throw new Error("Couldn't generate that file");
   const blob = await res.blob();
-  await shareOrDownloadBlob(blob, filename, shareTitle);
+  return shareOrDownloadBlob(blob, filename, shareTitle);
 }

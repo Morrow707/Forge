@@ -64,6 +64,12 @@ export type TraceDiagnostics = {
   framesNoWristOrImplement?: number;
   framesVelocityRejected?: number;
   velocityRejections: number;
+  /** The gate on the COMBINED bar point, separate from the per-side one above. */
+  combinedVelocityRejections?: number;
+  /** Which branch of barPointFromSides built each point -- see its call site. */
+  barPointFromBothHands?: number;
+  barPointFromLoneHandCarried?: number;
+  barPointFromBareLoneHand?: number;
   largestGapSeconds: number | null;
 };
 
