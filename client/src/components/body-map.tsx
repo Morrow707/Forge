@@ -3,313 +3,226 @@ import { cn } from "@/lib/utils";
 import { SCORABLE_MUSCLE_GROUPS } from "@shared/strength-score";
 
 /**
- * ONE ANATOMICAL FIGURE, THREE JOBS.
+ * ONE ANATOMICAL FIGURE, EVERYWHERE A MUSCLE IS DRAWN.
  *
- * It is a filter in the exercise picker (tap a muscle, see the exercises that train it), a
- * readout on the profile (tinted by how each group scores), and the same drawing either way.
- * Built once as a shared component rather than twice, because two figures would drift and the
- * one that drifted would be the one showing somebody their own body.
+ * A filter in the exercise picker (tap a muscle, see the exercises that train it), a readout on
+ * the strength profile, and the body under the Muscle Load Map. One drawing, three jobs: two
+ * figures of the same athlete's muscles will always drift, and the one that drifts is the one
+ * showing somebody their own body.
  *
- * REGIONS ARE KEYED TO MUSCLE_GROUPS, not to invented ids. The exercise library already tags
- * every exercise with a muscleGroup, so a region whose key is not a real group is a region
- * nothing can ever fill -- body-map-regions.test.ts refuses one.
+ * REGIONS ARE KEYED TO MUSCLE_GROUPS, not invented ids. The exercise library tags every exercise
+ * with a muscleGroup, so a region keyed to anything else is a region nothing can ever fill --
+ * body-map-regions.test.ts refuses one.
  *
- * DRAWN, NOT DIAGRAMMED -- and this reverses the call the first version made.
+ * WHY IT LOOKS THE WAY IT DOES, after three goes at it.
  *
- * That version said so in its own comment: "deliberately schematic rather than an anatomy
- * illustration ... detail they cannot name is detail in the way." The reasoning was about a
- * beginner, and it was not wrong about beginners. It was wrong about what a schematic actually
- * communicates. Rectangles with rounded corners do not read as a body at all, so the figure
- * stopped being a picture of anything and became a legend you have to decode -- which helps
- * nobody, least of all the reader it was simplified for. Scott, 2026-09-23, against a
- * competitor's: "ours is just blocky, not smooth, just not appealing to the eyes."
+ * The first version was rounded rectangles, and its own comment defended that: "deliberately
+ * schematic ... detail they cannot name is detail in the way." Wrong -- a schematic body does not
+ * read as a body at all, so it stops being a picture and becomes a legend you decode.
  *
- * So: contoured muscle bellies with real insertions, on a silhouette with real proportions.
- * Detail is what makes a shape recognisable; a lat that is lat-shaped teaches the word to
- * somebody who did not know it, where an orange rectangle labelled "Lats" does not.
+ * The second was contoured, and still looked bad, because contour was never the problem.
+ * COVERAGE was. Scott's reference anatomy models have no empty space: every part of the body is
+ * some muscle, edge to edge. Isolated bellies floating on a grey silhouette look unfinished no
+ * matter how well each one is drawn. So the regions here TILE -- they abut, and barely any
+ * neutral body shows through.
  *
- * TWO THINGS SURVIVE FROM THE OLD VERSION AND MUST KEEP SURVIVING.
+ * Three things do the rest of the work, and all three came out of holding ours beside his
+ * references: a dark SEAM stroke between neighbours (without it two similar colours merge into
+ * one mass), a per-belly GRADIENT (light along the centre line, dark at the edges -- the cheapest
+ * thing that makes flat vector look rounded), and bellies that are actually belly-shaped, narrow
+ * at origin and insertion, full through the middle.
  *
- * 1. THE FIGURE HAS NO FACE. Forge has thirteen-year-olds on it. This is a diagram of muscles,
- *    not a picture of a person, and a body shown to a minor should be the former. The head is
- *    a blank contour on purpose -- never add eyes, hair or expression.
- * 2. NOTHING IS GENDERED. One neutral athletic build, the same for everybody. A figure that
- *    shifted shape with `users.gender` would make a category out of a field that exists for a
- *    percentile, and would put a body type in front of a child as though it were theirs.
+ * THE SHAPES ARE GENERATED, NOT TYPED. `belly()` takes a centre line and a width profile and
+ * emits a smooth closed outline. That is what makes a muscle land on its limb by construction
+ * rather than by eye -- the failure the very first version had, which the stroke-along-a-line
+ * trick fixed at the cost of every limb muscle being a capsule. This keeps the guarantee and
+ * loses the capsules.
  *
- * A note on how the paths are kept honest: every muscle is a CLOSED OUTLINE positioned inside
- * the silhouette, rather than the old "stroke along a shared limb line" trick. That trick
- * existed to stop limb muscles drifting off their limbs, which it did -- at the cost of every
- * limb muscle being a capsule. The outlines here are drawn against the same silhouette
- * coordinates listed in SILHOUETTE below, and body-map-regions.test.ts checks each region's
- * bounding box sits inside the figure, which is the same guarantee by measurement rather than
- * by construction.
+ * TWO RULES THAT ARE NOT STYLE AND MUST SURVIVE ANY REDRAW:
+ *  1. THE FIGURE HAS NO FACE. Forge has thirteen-year-olds on it. This is a diagram of muscles,
+ *     not a picture of a person. Never add eyes, hair or expression.
+ *  2. NOTHING IS GENDERED. One neutral athletic build for everybody. A figure that changed shape
+ *     with `users.gender` would make a category out of a field that exists for a percentile, and
+ *     would put a body type in front of a child as though it were theirs.
  */
 
 export type BodyMapView = "front" | "back";
 
-/** A muscle region: which view it is drawn on, and the closed outline that makes it. */
-type Region = {
+/** Where a label sits when leader lines are drawn, and the point on the muscle it points at. */
+export type BodyMapLeader = {
   group: string;
-  view: BodyMapView;
-  label: string;
-  /** SVG path data, drawn in a 240x470 viewBox. Always a closed, filled outline. */
-  d: string;
+  side: "left" | "right";
+  /** Label baseline in viewBox units. */
+  y: number;
+  /** The anchor on the muscle the line runs to. */
+  at: [number, number];
 };
 
-/** THE BODY THE MUSCLES SIT ON.
- *
- * One silhouette per view, as a single filled outline: head, neck, shoulders, torso tapering to
- * the waist, hips, legs to the feet, arms hanging slightly clear of the body so the upper arm
- * and the lat do not overlap into mush. Front and back differ only where the outline honestly
- * differs (the back's shoulders sit wider, the calves fuller), so the two read as one person
- * turned around rather than two drawings.
- */
-const SILHOUETTE: Record<BodyMapView, string> = {
-  front:
-    "M120 18 c-11 0 -19 9 -19 21 c0 9 3 16 8 20 l0 9 c-13 3 -26 8 -34 15 " +
-    "c-7 6 -11 16 -13 28 l-5 33 c-2 12 -5 25 -9 36 l-8 22 c-2 6 2 11 8 11 " +
-    "c5 0 8 -3 10 -8 l9 -23 l4 30 c1 10 2 19 2 27 l0 16 c0 11 2 21 5 30 " +
-    "l6 19 c2 7 3 14 3 21 l1 35 c0 12 -1 24 -3 35 l-4 25 c-1 6 3 10 9 10 " +
-    "c5 0 8 -3 9 -8 l7 -33 l5 -26 l4 26 l7 33 c1 5 4 8 9 8 c6 0 10 -4 9 -10 " +
-    "l-4 -25 c-2 -11 -3 -23 -3 -35 l1 -35 c0 -7 1 -14 3 -21 l6 -19 " +
-    "c3 -9 5 -19 5 -30 l0 -16 c0 -8 1 -17 2 -27 l4 -30 l9 23 c2 5 5 8 10 8 " +
-    "c6 0 10 -5 8 -11 l-8 -22 c-4 -11 -7 -24 -9 -36 l-5 -33 c-2 -12 -6 -22 -13 -28 " +
-    "c-8 -7 -21 -12 -34 -15 l0 -9 c5 -4 8 -11 8 -20 c0 -12 -8 -21 -19 -21 Z",
-  back:
-    "M120 18 c-11 0 -19 9 -19 21 c0 9 3 16 8 20 l0 9 c-14 3 -27 8 -35 16 " +
-    "c-7 6 -11 16 -13 28 l-5 33 c-2 12 -5 25 -9 36 l-8 22 c-2 6 2 11 8 11 " +
-    "c5 0 8 -3 10 -8 l9 -23 l4 30 c1 10 2 19 2 27 l0 16 c0 11 2 21 5 30 " +
-    "l6 19 c2 7 3 14 3 21 l1 35 c0 12 -1 24 -3 35 l-4 25 c-1 6 3 10 9 10 " +
-    "c5 0 8 -3 9 -8 l7 -33 l5 -26 l4 26 l7 33 c1 5 4 8 9 8 c6 0 10 -4 9 -10 " +
-    "l-4 -25 c-2 -11 -3 -23 -3 -35 l1 -35 c0 -7 1 -14 3 -21 l6 -19 " +
-    "c3 -9 5 -19 5 -30 l0 -16 c0 -8 1 -17 2 -27 l4 -30 l9 23 c2 5 5 8 10 8 " +
-    "c6 0 10 -5 8 -11 l-8 -22 c-4 -11 -7 -24 -9 -36 l-5 -33 c-2 -12 -6 -22 -13 -28 " +
-    "c-8 -8 -21 -13 -35 -16 l0 -9 c5 -4 8 -11 8 -20 c0 -12 -8 -21 -19 -21 Z",
-};
+const V = { w: 240, h: 470 };
+/** Extra room either side for labels. The figure's own coordinates never change. */
+const GUTTER = 48;
 
-/** Contour lines that belong to the BODY, not to any muscle -- the sternum, the knees, the
- *  achilles. Drawn faintly over the silhouette and under the muscles, never interactive. They
- *  are what stops the figure reading as a flat cut-out. */
-const CONTOURS: Record<BodyMapView, string> = {
-  front:
-    "M120 96 L120 152 M104 300 q16 6 32 0 M104 356 q16 5 32 0 " +
-    "M74 190 q6 3 12 0 M154 190 q6 3 12 0",
-  back:
-    "M120 92 L120 240 M104 300 q16 6 32 0 M104 356 q16 5 32 0 " +
-    "M112 424 L114 444 M128 424 L126 444",
-};
+/* ------------------------------------------------------------------ geometry */
+
+const fmt = (p: [number, number]) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
+
+/** Closed Catmull-Rom through the points, as cubic beziers. Smooth everywhere -- a polygon is
+ *  exactly the blockiness this drawing exists to get away from. */
+function through(pts: [number, number][]): string {
+  const n = pts.length;
+  const out = [`M${fmt(pts[0])}`];
+  for (let i = 0; i < n; i++) {
+    const a = pts[(i - 1 + n) % n];
+    const b = pts[i];
+    const c = pts[(i + 1) % n];
+    const d = pts[(i + 2) % n];
+    out.push(
+      `C${fmt([b[0] + (c[0] - a[0]) / 6, b[1] + (c[1] - a[1]) / 6])}` +
+        ` ${fmt([c[0] - (d[0] - b[0]) / 6, c[1] - (d[1] - b[1]) / 6])} ${fmt(c)}`,
+    );
+  }
+  return `${out.join(" ")} Z`;
+}
+
+/** A muscle belly along a centre line: narrow at the origin, full through the middle, narrow at
+ *  the insertion. `bow` sweeps it sideways -- the outer quad and the lat both need it. */
+function belly(
+  x0: number, y0: number, x1: number, y1: number,
+  wTop: number, wMid: number, wBot: number, bow = 0,
+): string {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy);
+  const px = -dy / len;
+  const py = dx / len;
+  const ts = [0, 0.22, 0.5, 0.78, 1];
+  const ws = [wTop, ((wTop + wMid) / 2) * 1.05, wMid, ((wMid + wBot) / 2) * 1.05, wBot];
+  const left: [number, number][] = [];
+  const right: [number, number][] = [];
+  ts.forEach((t, i) => {
+    const s = Math.sin(Math.PI * t) * bow;
+    const cx = x0 + dx * t + px * s;
+    const cy = y0 + dy * t + py * s;
+    left.push([cx - (px * ws[i]) / 2, cy - (py * ws[i]) / 2]);
+    right.push([cx + (px * ws[i]) / 2, cy + (py * ws[i]) / 2]);
+  });
+  return through(left.concat(right.reverse()));
+}
+
+/** Reflect a path about the figure's centre line. Only M/C/Z, which is all the generators emit. */
+function flip(d: string): string {
+  const toks = d.match(/[MCZ]|-?\d+\.?\d*/g) ?? [];
+  const out: string[] = [];
+  let i = 0;
+  while (i < toks.length) {
+    const t = toks[i];
+    if (t === "Z") {
+      out.push("Z");
+      i += 1;
+    } else if (t === "M" || t === "C") {
+      const k = t === "M" ? 2 : 6;
+      const nums = toks.slice(i + 1, i + 1 + k).map(Number);
+      for (let j = 0; j < k; j += 2) nums[j] = V.w - nums[j];
+      out.push(t + nums.map((v) => v.toFixed(1)).join(" "));
+      i += 1 + k;
+    } else i += 1;
+  }
+  return out.join(" ");
+}
+/** Both sides of a paired muscle, as one path -- they are one group and select together. */
+const both = (d: string) => `${d} ${flip(d)}`;
+
+/* ------------------------------------------------------------------ the body */
+
+const TORSO = through([
+  [86, 92], [120, 80], [154, 92], [159, 140], [150, 186], [151, 214],
+  [152, 246], [120, 258], [88, 246], [89, 214], [90, 186], [81, 140],
+]);
+
+/** Limb centre lines, mirrored by the renderer. The muscles below are generated against these
+ *  same numbers, which is why nothing can drift off a limb. */
+const LIMBS: [number, number, number, number, number][] = [
+  [86, 96, 70, 182, 31],   // upper arm
+  [70, 184, 61, 254, 25],  // forearm
+  [61, 256, 58, 278, 18],  // hand
+  [104, 252, 103, 344, 41],// thigh
+  [103, 348, 105, 428, 28],// shin
+  [105, 432, 95, 444, 16], // foot
+];
+
+/* ------------------------------------------------------------------ muscles */
+
+type Region = { group: string; view: BodyMapView; label: string; d: string };
 
 const REGIONS: Region[] = [
-  // ---------------- FRONT ----------------
-  // Deltoid: the cap over the shoulder joint, thick at the top and tapering to its insertion a
-  // third of the way down the arm. That taper is the whole shape of a shoulder.
-  {
-    group: "Shoulders",
-    view: "front",
-    label: "Shoulders",
-    d:
-      "M97 92 c-9 1 -16 6 -20 14 c-4 8 -5 18 -4 27 c1 5 6 7 10 4 c7 -5 12 -13 15 -23 " +
-      "c2 -8 3 -16 3 -22 Z " +
-      "M143 92 c9 1 16 6 20 14 c4 8 5 18 4 27 c-1 5 -6 7 -10 4 c-7 -5 -12 -13 -15 -23 " +
-      "c-2 -8 -3 -16 -3 -22 Z",
-  },
-  // Pectoral: broad at the sternum, sweeping up and out to the shoulder, with the lower border
-  // curving rather than cut square.
-  {
-    group: "Chest",
-    view: "front",
-    label: "Chest",
-    d:
-      "M118 98 c-13 1 -24 4 -31 9 c-6 4 -9 11 -9 19 c0 9 3 17 9 22 c8 6 19 8 27 5 " +
-      "c4 -2 5 -6 5 -12 l0 -40 c0 -2 -1 -3 -1 -3 Z " +
-      "M122 98 c13 1 24 4 31 9 c6 4 9 11 9 19 c0 9 -3 17 -9 22 c-8 6 -19 8 -27 5 " +
-      "c-4 -2 -5 -6 -5 -12 l0 -40 c0 -2 1 -3 1 -3 Z",
-  },
-  // Biceps: the belly bulges in the middle of the upper arm and narrows to the elbow.
-  {
-    group: "Biceps",
-    view: "front",
-    label: "Biceps",
-    d:
-      "M92 126 c-6 2 -10 8 -12 17 c-2 10 -2 21 0 30 c1 6 5 9 9 7 c5 -2 8 -9 10 -19 " +
-      "c2 -12 1 -25 -2 -33 c-1 -2 -3 -3 -5 -2 Z " +
-      "M148 126 c6 2 10 8 12 17 c2 10 2 21 0 30 c-1 6 -5 9 -9 7 c-5 -2 -8 -9 -10 -19 " +
-      "c-2 -12 -1 -25 2 -33 c1 -2 3 -3 5 -2 Z",
-  },
-  // Forearm: thick just below the elbow, tapering hard to the wrist.
-  {
-    group: "Forearms",
-    view: "front",
-    label: "Forearms",
-    d:
-      "M87 186 c-5 3 -8 10 -10 21 c-2 13 -3 27 -2 38 c0 5 3 8 6 7 c4 -1 6 -6 8 -16 " +
-      "c3 -16 3 -36 1 -47 c-1 -3 -2 -4 -3 -3 Z " +
-      "M153 186 c5 3 8 10 10 21 c2 13 3 27 2 38 c0 5 -3 8 -6 7 c-4 -1 -6 -6 -8 -16 " +
-      "c-3 -16 -3 -36 -1 -47 c1 -3 2 -4 3 -3 Z",
-  },
-  // Rectus abdominis: three visible bands a side, narrowing toward the navel, then the lower
-  // band. Segmented because an undivided slab does not read as abs at any size.
-  {
-    group: "Abs",
-    view: "front",
-    label: "Abs",
-    d:
-      "M106 158 c-2 6 -2 13 0 19 c4 2 9 2 12 0 c1 -6 1 -13 0 -19 c-3 -2 -9 -2 -12 0 Z " +
-      "M122 158 c-1 6 -1 13 0 19 c3 2 8 2 12 0 c2 -6 2 -13 0 -19 c-3 -2 -9 -2 -12 0 Z " +
-      "M107 182 c-2 6 -2 13 0 19 c4 2 8 2 11 0 c1 -6 1 -13 0 -19 c-3 -2 -7 -2 -11 0 Z " +
-      "M122 182 c-1 6 -1 13 0 19 c3 2 7 2 11 0 c2 -6 2 -13 0 -19 c-3 -2 -8 -2 -11 0 Z " +
-      "M108 207 c-2 7 -2 15 0 22 c4 2 7 2 10 0 c1 -7 1 -15 0 -22 c-3 -2 -7 -2 -10 0 Z " +
-      "M122 207 c-1 7 -1 15 0 22 c3 2 6 2 10 0 c2 -7 2 -15 0 -22 c-3 -2 -7 -2 -10 0 Z",
-  },
-  // Obliques: the flank, running from the ribs down to the hip and tucking in at the waist.
-  {
-    group: "Core",
-    view: "front",
-    label: "Obliques",
-    d:
-      "M103 158 c-5 3 -8 11 -9 22 c-1 14 0 29 3 40 c2 6 5 7 7 3 c3 -6 4 -17 4 -31 " +
-      "c0 -14 -1 -27 -3 -33 c0 -1 -1 -2 -2 -1 Z " +
-      "M137 158 c5 3 8 11 9 22 c1 14 0 29 -3 40 c-2 6 -5 7 -7 3 c-3 -6 -4 -17 -4 -31 " +
-      "c0 -14 1 -27 3 -33 c0 -1 1 -2 2 -1 Z",
-  },
-  // Quadriceps: the outer sweep and the teardrop above the knee are what make a thigh a thigh.
-  {
-    group: "Quads",
-    view: "front",
-    label: "Quads",
-    d:
-      "M112 252 c-7 3 -12 13 -15 29 c-3 18 -3 38 -1 53 c1 8 4 13 8 13 c5 0 8 -6 10 -18 " +
-      "c3 -19 3 -47 1 -64 c-1 -9 -2 -13 -3 -13 Z " +
-      "M128 252 c7 3 12 13 15 29 c3 18 3 38 1 53 c-1 8 -4 13 -8 13 c-5 0 -8 -6 -10 -18 " +
-      "c-3 -19 -3 -47 -1 -64 c1 -9 2 -13 3 -13 Z",
-  },
-  {
-    group: "Calves",
-    view: "front",
-    label: "Calves",
-    d:
-      "M106 364 c-4 4 -6 13 -7 26 c-1 13 0 25 2 32 c1 5 4 6 6 3 c3 -5 5 -16 5 -30 " +
-      "c0 -14 -2 -27 -4 -31 c-1 -1 -1 -1 -2 0 Z " +
-      "M134 364 c4 4 6 13 7 26 c1 13 0 25 -2 32 c-1 5 -4 6 -6 3 c-3 -5 -5 -16 -5 -30 " +
-      "c0 -14 2 -27 4 -31 c1 -1 1 -1 2 0 Z",
-  },
+  // ---- FRONT. Order matters: the delt cap overlays the pec, the way it does on a body.
+  { group: "Chest", view: "front", label: "Chest",
+    d: both(through([[118, 96], [99, 102], [87, 118], [90, 142], [105, 150], [118, 146]])) },
+  { group: "Shoulders", view: "front", label: "Shoulders", d: both(belly(88, 90, 70, 132, 26, 30, 20, -4)) },
+  { group: "Biceps", view: "front", label: "Biceps", d: both(belly(84, 124, 71, 180, 20, 25, 16, -2)) },
+  { group: "Forearms", view: "front", label: "Forearms", d: both(belly(70, 186, 62, 250, 20, 23, 12, -1)) },
+  { group: "Abs", view: "front", label: "Abs",
+    d: through([[120, 152], [136, 156], [139, 196], [134, 232], [120, 240], [106, 232], [101, 196], [104, 156]]) },
+  { group: "Core", view: "front", label: "Obliques", d: both(belly(100, 158, 94, 228, 14, 17, 10, -3)) },
+  { group: "Quads", view: "front", label: "Quads", d: both(belly(104, 250, 102, 340, 32, 37, 22, -5)) },
+  { group: "Calves", view: "front", label: "Calves", d: both(belly(103, 356, 105, 424, 22, 25, 13, -2)) },
 
-  // ---------------- BACK ----------------
-  {
-    group: "Shoulders",
-    view: "back",
-    label: "Rear delts",
-    d:
-      "M97 92 c-9 1 -16 6 -20 14 c-4 8 -5 18 -4 27 c1 5 6 7 10 4 c7 -5 12 -13 15 -23 " +
-      "c2 -8 3 -16 3 -22 Z " +
-      "M143 92 c9 1 16 6 20 14 c4 8 5 18 4 27 c-1 5 -6 7 -10 4 c-7 -5 -12 -13 -15 -23 " +
-      "c-2 -8 -3 -16 -3 -22 Z",
-  },
-  // Trapezius: the diamond. Up to the base of the skull, out to each shoulder, down to a point
-  // in the middle of the back -- the shape the word actually means.
-  {
-    group: "Back",
-    view: "back",
-    label: "Upper back & traps",
-    d:
-      "M120 78 c-12 1 -23 5 -31 11 c-6 4 -9 10 -9 16 c0 5 3 8 8 8 c9 0 17 2 23 7 " +
-      "c4 3 6 9 7 17 l2 26 c0 4 4 4 5 0 l2 -26 c1 -8 3 -14 7 -17 c6 -5 14 -7 23 -7 " +
-      "c5 0 8 -3 8 -8 c0 -6 -3 -12 -9 -16 c-8 -6 -19 -10 -31 -11 Z",
-  },
-  // Latissimus: wide under the armpit, sweeping down and IN to a narrow insertion at the lower
-  // back. The V.
-  {
-    group: "Lats",
-    view: "back",
-    label: "Lats",
-    d:
-      "M97 118 c-6 6 -9 17 -10 32 c-1 17 1 33 5 43 c3 7 7 9 11 6 c4 -3 6 -11 7 -23 " +
-      "l2 -30 c0 -11 -3 -20 -8 -25 c-3 -3 -5 -4 -7 -3 Z " +
-      "M143 118 c6 6 9 17 10 32 c1 17 -1 33 -5 43 c-3 7 -7 9 -11 6 c-4 -3 -6 -11 -7 -23 " +
-      "l-2 -30 c0 -11 3 -20 8 -25 c3 -3 5 -4 7 -3 Z",
-  },
-  {
-    group: "Triceps",
-    view: "back",
-    label: "Triceps",
-    d:
-      "M92 124 c-6 3 -10 10 -12 21 c-2 12 -2 24 0 33 c1 6 5 8 9 5 c5 -3 8 -11 10 -22 " +
-      "c2 -13 1 -27 -2 -35 c-1 -3 -3 -3 -5 -2 Z " +
-      "M148 124 c6 3 10 10 12 21 c2 12 2 24 0 33 c-1 6 -5 8 -9 5 c-5 -3 -8 -11 -10 -22 " +
-      "c-2 -13 -1 -27 2 -35 c1 -3 3 -3 5 -2 Z",
-  },
-  {
-    group: "Forearms",
-    view: "back",
-    label: "Forearms",
-    d:
-      "M87 186 c-5 3 -8 10 -10 21 c-2 13 -3 27 -2 38 c0 5 3 8 6 7 c4 -1 6 -6 8 -16 " +
-      "c3 -16 3 -36 1 -47 c-1 -3 -2 -4 -3 -3 Z " +
-      "M153 186 c5 3 8 10 10 21 c2 13 3 27 2 38 c0 5 -3 8 -6 7 c-4 -1 -6 -6 -8 -16 " +
-      "c-3 -16 -3 -36 -1 -47 c1 -3 2 -4 3 -3 Z",
-  },
-  // Erectors: the two columns either side of the spine, above the pelvis.
-  {
-    group: "Lower Back",
-    view: "back",
-    label: "Lower back",
-    d:
-      "M112 196 c-4 2 -6 8 -7 18 c-1 11 0 21 2 27 c1 4 4 4 5 1 c2 -6 3 -16 3 -27 " +
-      "c0 -11 -1 -18 -3 -19 Z " +
-      "M128 196 c4 2 6 8 7 18 c1 11 0 21 -2 27 c-1 4 -4 4 -5 1 c-2 -6 -3 -16 -3 -27 " +
-      "c0 -11 1 -18 3 -19 Z",
-  },
-  {
-    group: "Glutes",
-    view: "back",
-    label: "Glutes",
-    d:
-      "M118 244 c-11 0 -19 4 -24 12 c-4 7 -5 16 -2 23 c3 8 10 12 18 10 c7 -2 11 -8 12 -18 " +
-      "c1 -9 0 -19 -2 -26 c-1 -1 -1 -1 -2 -1 Z " +
-      "M122 244 c11 0 19 4 24 12 c4 7 5 16 2 23 c-3 8 -10 12 -18 10 c-7 -2 -11 -8 -12 -18 " +
-      "c-1 -9 0 -19 2 -26 c1 -1 1 -1 2 -1 Z",
-  },
-  // Hamstrings: two bellies a side is the honest shape, but at this size they read as one
-  // column split by a seam -- drawn as the outer and inner heads meeting near the knee.
-  {
-    group: "Hamstrings",
-    view: "back",
-    label: "Hamstrings",
-    d:
-      "M112 286 c-6 3 -10 12 -12 26 c-2 16 -2 32 0 42 c1 7 4 10 7 9 c4 -1 7 -8 8 -19 " +
-      "c2 -17 2 -42 0 -55 c-1 -3 -2 -4 -3 -3 Z " +
-      "M128 286 c6 3 10 12 12 26 c2 16 2 32 0 42 c-1 7 -4 10 -7 9 c-4 -1 -7 -8 -8 -19 " +
-      "c-2 -17 -2 -42 0 -55 c1 -3 2 -4 3 -3 Z",
-  },
-  // Gastrocnemius: two heads, the inner one hanging lower than the outer. That asymmetry is the
-  // single detail that makes a calf read as a calf.
-  {
-    group: "Calves",
-    view: "back",
-    label: "Calves",
-    d:
-      "M105 364 c-4 4 -6 14 -7 28 c-1 14 0 26 3 33 c1 4 4 4 6 1 c3 -6 4 -18 4 -33 " +
-      "c0 -15 -2 -28 -4 -30 c-1 -1 -1 -1 -2 1 Z " +
-      "M114 366 c-2 4 -3 13 -3 24 c0 11 1 20 3 25 c1 3 3 3 4 0 c2 -5 3 -14 3 -25 " +
-      "c0 -11 -1 -20 -3 -24 c-1 -2 -3 -2 -4 0 Z " +
-      "M135 364 c4 4 6 14 7 28 c1 14 0 26 -3 33 c-1 4 -4 4 -6 1 c-3 -6 -4 -18 -4 -33 " +
-      "c0 -15 2 -28 4 -30 c1 -1 1 -1 2 1 Z " +
-      "M126 366 c2 4 3 13 3 24 c0 11 -1 20 -3 25 c-1 3 -3 3 -4 0 c-2 -5 -3 -14 -3 -25 " +
-      "c0 -11 1 -20 3 -24 c1 -2 3 -2 4 0 Z",
-  },
+  // ---- BACK. Lats first, then the traps over them -- the trapezius overlays the lat at the
+  // mid-back, and drawing it the other way hid an 18-set group behind an 11-set one.
+  { group: "Lats", view: "back", label: "Lats", d: both(belly(92, 126, 112, 202, 30, 26, 12, -13)) },
+  { group: "Back", view: "back", label: "Upper back",
+    d: through([[120, 80], [146, 92], [158, 106], [148, 128], [131, 152], [120, 166], [109, 152], [92, 128], [82, 106], [94, 92]]) },
+  { group: "Shoulders", view: "back", label: "Rear delts", d: both(belly(88, 90, 70, 132, 26, 30, 20, -4)) },
+  { group: "Triceps", view: "back", label: "Triceps", d: both(belly(84, 122, 71, 180, 20, 25, 16, -2)) },
+  { group: "Forearms", view: "back", label: "Forearms", d: both(belly(70, 186, 62, 250, 20, 23, 12, -1)) },
+  { group: "Lower Back", view: "back", label: "Lower back", d: both(belly(112, 196, 114, 240, 14, 16, 12, 0)) },
+  { group: "Glutes", view: "back", label: "Glutes",
+    d: both(through([[120, 240], [103, 240], [92, 254], [94, 274], [110, 284], [120, 276]])) },
+  { group: "Hamstrings", view: "back", label: "Hamstrings", d: both(belly(104, 286, 102, 342, 32, 34, 22, -4)) },
+  { group: "Calves", view: "back", label: "Calves", d: both(belly(103, 356, 105, 424, 22, 25, 13, -2)) },
 ];
+
+/** Where each label sits and what it points at, when a caller asks for leader lines. */
+export const BODY_MAP_LEADERS: Record<BodyMapView, BodyMapLeader[]> = {
+  front: [
+    { group: "Shoulders", side: "left", y: 96, at: [74, 104] },
+    { group: "Chest", side: "right", y: 120, at: [143, 120] },
+    { group: "Biceps", side: "left", y: 152, at: [74, 150] },
+    { group: "Core", side: "right", y: 172, at: [142, 190] },
+    { group: "Abs", side: "right", y: 210, at: [126, 196] },
+    { group: "Forearms", side: "left", y: 216, at: [65, 216] },
+    { group: "Quads", side: "left", y: 296, at: [104, 292] },
+    { group: "Calves", side: "right", y: 392, at: [136, 388] },
+  ],
+  back: [
+    { group: "Shoulders", side: "right", y: 92, at: [166, 104] },
+    { group: "Back", side: "left", y: 100, at: [100, 108] },
+    { group: "Triceps", side: "right", y: 146, at: [166, 150] },
+    { group: "Lats", side: "left", y: 158, at: [100, 158] },
+    { group: "Lower Back", side: "left", y: 214, at: [114, 216] },
+    { group: "Forearms", side: "right", y: 216, at: [175, 216] },
+    { group: "Glutes", side: "left", y: 258, at: [104, 262] },
+    { group: "Hamstrings", side: "right", y: 312, at: [136, 310] },
+    { group: "Calves", side: "right", y: 392, at: [136, 388] },
+  ],
+};
+
+/* ------------------------------------------------------------------ render */
 
 export function BodyMap({
   view = "front",
-  /** The one region that should read as selected. Single by design -- see the picker. */
+  /** The one region that reads as selected. Single by design -- see the picker. */
   selected,
-  /** Muscle group -> fill colour, for the profile heat view. Regions with no entry stay neutral. */
+  /** Muscle group -> fill colour. Regions with no entry stay neutral. */
   fills,
   onSelect,
   className,
   /** Compact drops the hit padding -- see the picker's mobile strip. */
   compact = false,
+  /** Leader-lined labels around the figure. The caller supplies the caption for each group, so
+   *  the figure never has to know what a set count is. */
+  leaders,
+  captionFor,
 }: {
   view?: BodyMapView;
   selected?: string | null;
@@ -317,15 +230,27 @@ export function BodyMap({
   onSelect?: (group: string) => void;
   className?: string;
   compact?: boolean;
+  leaders?: BodyMapLeader[];
+  captionFor?: (group: string) => string | null;
 }) {
-  const titleId = useId();
+  const uid = useId().replace(/:/g, "");
+  const titleId = `${uid}-t`;
   const regions = REGIONS.filter((r) => r.view === view);
   const interactive = typeof onSelect === "function";
+  const labelled = !!leaders?.length;
+  const viewBox = labelled
+    ? `${-GUTTER} 0 ${V.w + GUTTER * 2} ${V.h}`
+    : `0 0 ${V.w} ${V.h}`;
+
+  /** One gradient per distinct fill. Keyed by index so a colour can be any CSS value. */
+  const palette = Array.from(new Set(Object.values(fills ?? {})));
+  const gradIdFor = (colour: string | undefined) =>
+    colour == null ? `${uid}-neutral` : `${uid}-g${palette.indexOf(colour)}`;
 
   return (
     <svg
-      viewBox="0 0 240 470"
-      className={cn("h-full w-full select-none", className)}
+      viewBox={viewBox}
+      className={cn("h-full w-full select-none", labelled && "overflow-visible", className)}
       role={interactive ? "group" : "img"}
       aria-labelledby={titleId}
     >
@@ -334,45 +259,53 @@ export function BodyMap({
         {interactive ? " -- choose a muscle group" : ""}
       </title>
 
-      {/* THE BODY, under every muscle so they read as sitting ON something. Filled faintly as
-          well as outlined: an outline alone is a wireframe, and the muscles then float in it.
-          No face -- see this file's header. */}
-      <g>
-        <path
-          d={SILHOUETTE[view]}
-          fill="currentColor"
-          fillOpacity={0.07}
-          stroke="currentColor"
-          strokeOpacity={0.5}
-          strokeWidth={1.6}
-          strokeLinejoin="round"
-        />
-        <path
-          d={CONTOURS[view]}
-          fill="none"
-          stroke="currentColor"
-          strokeOpacity={0.22}
-          strokeWidth={1.2}
-          strokeLinecap="round"
-        />
+      <defs>
+        {/* Light along the centre of each belly, dark at its edges. This is what stops a flat
+            fill reading as a sticker rather than a muscle. */}
+        {palette.map((c, i) => (
+          <linearGradient key={i} id={`${uid}-g${i}`} x1="0" x2="1">
+            <stop offset="0" stopColor={c} stopOpacity="0.5" />
+            <stop offset="0.42" stopColor={c} stopOpacity="1" />
+            <stop offset="1" stopColor={c} stopOpacity="0.45" />
+          </linearGradient>
+        ))}
+        <linearGradient id={`${uid}-neutral`} x1="0" x2="1">
+          <stop offset="0" stopColor="currentColor" stopOpacity="0.14" />
+          <stop offset="0.42" stopColor="currentColor" stopOpacity="0.26" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0.15" />
+        </linearGradient>
+      </defs>
+
+      {/* THE BODY. Under everything, so the muscles read as sitting on something. No face. */}
+      <g fill="currentColor" fillOpacity={0.16} stroke="currentColor" strokeOpacity={0.16} strokeLinecap="round">
+        <ellipse cx={120} cy={40} rx={18} ry={22} stroke="none" />
+        <rect x={111} y={56} width={18} height={22} rx={7} stroke="none" />
+        {LIMBS.map(([x0, y0, x1, y1, w], i) => (
+          <path
+            key={i}
+            d={`M${x0} ${y0} L${x1} ${y1} M${V.w - x0} ${y0} L${V.w - x1} ${y1}`}
+            fill="none"
+            strokeWidth={w}
+          />
+        ))}
+        <path d={TORSO} stroke="none" />
       </g>
 
       {regions.map((r) => {
         const isSelected = selected === r.group;
+        const dimmed = selected != null && !isSelected;
         const fill = fills?.[r.group];
-        const tint = fill ?? "currentColor";
-        // A scored region is solid enough to read its colour at a glance; an unscored one is a
-        // hint of shape, not a claim. Selection sits between the two.
-        const opacity = fill ? 0.88 : isSelected ? 0.9 : 0.26;
         const shape = (
           <path
             d={r.d}
-            fill={tint}
-            fillOpacity={opacity}
-            stroke={isSelected ? "currentColor" : tint}
-            strokeOpacity={isSelected ? 0.9 : opacity * 0.6}
-            strokeWidth={isSelected ? 1.6 : 0.8}
+            fill={`url(#${gradIdFor(fill)})`}
+            // The seam. Two neighbours on similar colours merge into one mass without it, which
+            // is most of what separates an anatomy plate from a blob.
+            stroke={isSelected ? "currentColor" : "var(--background, #000)"}
+            strokeOpacity={isSelected ? 0.95 : 0.55}
+            strokeWidth={isSelected ? 2 : 1.2}
             strokeLinejoin="round"
+            opacity={dimmed ? 0.45 : 1}
           />
         );
         if (!interactive) return <g key={`${r.view}-${r.group}`}>{shape}</g>;
@@ -386,8 +319,8 @@ export function BodyMap({
             className="cursor-pointer outline-none focus-visible:opacity-100"
             onClick={() => onSelect!(r.group)}
             onKeyDown={(e) => {
-              // Keyboard reaches every region: an SVG shape is not a button unless it behaves
-              // like one, and "tap the picture" cannot be the only way in.
+              // An SVG shape is not a button unless it behaves like one, and "tap the picture"
+              // cannot be the only way in.
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 onSelect!(r.group);
@@ -395,9 +328,8 @@ export function BodyMap({
             }}
           >
             {shape}
-            {/* A transparent stroke AROUND the outline so a fingertip hits the region rather
-                than only its fill. A contoured belly is narrower than the capsule it replaced,
-                so this matters more now, not less. */}
+            {/* A transparent stroke around the outline, so a fingertip hits the region and not
+                only its fill. A contoured belly is narrower than the capsule it replaced. */}
             <path
               d={r.d}
               fill="transparent"
@@ -408,6 +340,73 @@ export function BodyMap({
           </g>
         );
       })}
+
+      {leaders?.map((l) => {
+        const isSelected = selected === l.group;
+        const region = regions.find((r) => r.group === l.group);
+        const x = l.side === "left" ? -GUTTER + 4 : V.w + GUTTER - 4;
+        const elbow = l.side === "left" ? -6 : V.w + 6;
+        const anchor = l.side === "left" ? "start" : "end";
+        const caption = captionFor?.(l.group);
+        const Tag = interactive ? "g" : "g";
+        return (
+          <Tag
+            key={`lead-${l.group}`}
+            {...(interactive
+              ? {
+                  role: "button" as const,
+                  tabIndex: 0,
+                  "aria-pressed": isSelected,
+                  "aria-label": region?.label ?? l.group,
+                  className: "cursor-pointer outline-none",
+                  onClick: () => onSelect!(l.group),
+                  onKeyDown: (e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelect!(l.group);
+                    }
+                  },
+                }
+              : {})}
+          >
+            <path
+              d={`M${l.side === "left" ? x + 40 : x - 40} ${l.y} L${elbow} ${l.y} L${l.at[0]} ${l.at[1]}`}
+              fill="none"
+              stroke="currentColor"
+              strokeOpacity={isSelected ? 0.9 : 0.25}
+              strokeWidth={isSelected ? 1.6 : 1}
+            />
+            <circle
+              cx={l.at[0]}
+              cy={l.at[1]}
+              r={isSelected ? 3.2 : 2.2}
+              fill="currentColor"
+              fillOpacity={isSelected ? 0.95 : 0.35}
+            />
+            <text
+              x={x}
+              y={l.y - 2}
+              textAnchor={anchor}
+              className={cn("text-[13.5px] tracking-wide", isSelected ? "fill-foreground" : "fill-muted-foreground")}
+            >
+              {region?.label ?? l.group}
+            </text>
+            {caption && (
+              <text x={x} y={l.y + 10} textAnchor={anchor} className="fill-muted-foreground text-[10px] opacity-70">
+                {caption}
+              </text>
+            )}
+            {/* The label is a tap target too, not just the muscle. */}
+            <rect
+              x={l.side === "left" ? x - 6 : x - 96}
+              y={l.y - 16}
+              width={102}
+              height={26}
+              fill="transparent"
+            />
+          </Tag>
+        );
+      })}
     </svg>
   );
 }
@@ -415,8 +414,8 @@ export function BodyMap({
 /** Every group the figure can show, for tests and for callers that need the list. */
 export const BODY_MAP_GROUPS = Array.from(new Set(REGIONS.map((r) => r.group)));
 
-/** Groups that are scorable but have no region drawn -- the profile falls back to a list row
- * for these rather than pretending they are not part of the score. */
+/** Groups that are scorable but have no region drawn -- the profile falls back to a list row for
+ *  these rather than pretending they are not part of the score. */
 export const UNDRAWN_SCORABLE_GROUPS = SCORABLE_MUSCLE_GROUPS.filter(
   (g) => !BODY_MAP_GROUPS.includes(g),
 );

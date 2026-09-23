@@ -30,6 +30,14 @@ export const MUSCLE_GROUP_TO_REGION: Record<string, string> = {
   // specific muscle was hit, so it's excluded rather than guessed at.
 };
 
+/** The Muscle Load Map's whole payload: the group tally the figure is coloured from, and the
+ *  exercises that produced it. One shape so the two can never be fetched out of step with each
+ *  other -- a colour and a list disagreeing about the same week is worse than either alone. */
+export type MuscleLoadBreakdown = {
+  groups: Record<string, number>;
+  exercises: { name: string; group: string; role: "primary" | "secondary"; sets: number }[];
+};
+
 export const MUSCLE_REGIONS = [
   "neck",
   "shoulders",

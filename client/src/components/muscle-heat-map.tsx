@@ -10,7 +10,9 @@ import {
   muscleHeatColor,
   MUSCLE_REGION_LABEL,
   type MuscleRegion,
+  type MuscleLoadBreakdown,
 } from "@shared/muscle-map";
+import { BODY_MAP_LEADERS } from "@/components/body-map";
 
 const MUSCLE_LOAD_WINDOW_OPTIONS = [
   { label: "28d", days: 28 },
@@ -60,6 +62,15 @@ const REGION_TO_BODY_MAP_GROUP: Partial<Record<MuscleRegion, string[]>> = {
   // neck, hips and adductors have no region drawn on the figure. They keep their list rows.
 };
 
+/** The reverse lookup, derived rather than written twice. A tap lands on a BodyMap group and
+ *  every number this card holds is keyed by MuscleRegion, so something has to translate back --
+ *  and a second hand-written table is a second thing to get out of step. */
+const GROUP_TO_REGION: Record<string, MuscleRegion> = Object.fromEntries(
+  Object.entries(REGION_TO_BODY_MAP_GROUP).flatMap(([region, groups]) =>
+    (groups ?? []).map((g) => [g, region as MuscleRegion]),
+  ),
+);
+
 function fillsForBodyMap(colorByRegion: Map<MuscleRegion, string>): Record<string, string> {
   const fills: Record<string, string> = {};
   for (const [region, color] of colorByRegion) {
@@ -83,16 +94,19 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
   const path = athleteId
     ? `/api/coach/roster/${athleteId}/muscle-load?days=${windowDays}`
     : `/api/athlete/muscle-load?days=${windowDays}`;
-  const { data: rawByGroup, isLoading, isError, refetch } = useQuery<Record<string, number>>({
+  const { data, isLoading, isError, refetch } = useQuery<MuscleLoadBreakdown>({
     queryKey: ["muscle-load", athleteId ?? "self", windowDays],
     queryFn: () => getJson(path),
   });
+  // Which muscle the reader has open. Cleared when the window changes, because the list under a
+  // selection is window-scoped and leaving it up would attribute 90 days of work to 28.
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
 
-  if (isLoading && !rawByGroup) {
+  if (isLoading && !data) {
     return <div className="h-24 animate-pulse rounded-md bg-surface" />;
   }
 
-  const byRegion = rollUpMuscleLoad(rawByGroup ?? {});
+  const byRegion = rollUpMuscleLoad(data?.groups ?? {});
   const entries = Object.entries(byRegion) as [MuscleRegion, number][];
   const max = Math.max(...entries.map(([, v]) => v), 0);
   const colorByRegion = new Map<MuscleRegion, string>(
@@ -121,7 +135,10 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
             value={windowLabel}
             onChange={(label) => {
               const match = MUSCLE_LOAD_WINDOW_OPTIONS.find((o) => o.label === label);
-              if (match) setWindowDays(match.days);
+              if (match) {
+                setWindowDays(match.days);
+                setOpenGroup(null);
+              }
             }}
           />
         </div>
@@ -138,36 +155,129 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
             No sets logged in the last {windowDays} days -- try a wider window.
           </p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-[auto_auto_1fr] sm:items-start">
-            <div className="mx-auto w-32 sm:w-36">
-              <BodyMap view="front" fills={fillsForBodyMap(colorByRegion)} className="text-muted-foreground" />
-              <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
-                Front
-              </p>
-            </div>
-            <div className="mx-auto w-32 sm:w-36">
-              <BodyMap view="back" fills={fillsForBodyMap(colorByRegion)} className="text-muted-foreground" />
-              <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
-                Back
-              </p>
-            </div>
-            <div className="space-y-1.5 self-center">
-              {sorted.map(([region, count]) => (
-                <div key={region} className="flex items-center gap-2 text-sm">
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-sm"
-                    style={{ background: muscleHeatColor(max > 0 ? count / max : 0) }}
+          <>
+            {/* FRONT AND BACK, SIDE BY SIDE AND BIG, with every group labelled off the figure.
+                Scott, 2026-09-23: "give me little lines with what the muscle groups are
+                connecting them, I can click on the group, or click on the name, to pop up those
+                exercises."
+
+                The set count rides on the label, so the week reads without tapping anything --
+                the tap is for the next question (doing what?), not for the first one. */}
+            <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+              {(["front", "back"] as const).map((view) => (
+                <div key={view} className="flex min-w-0 flex-col gap-1.5">
+                  <BodyMap
+                    view={view}
+                    fills={fillsForBodyMap(colorByRegion)}
+                    selected={openGroup}
+                    onSelect={(g) => setOpenGroup((cur) => (cur === g ? null : g))}
+                    leaders={BODY_MAP_LEADERS[view]}
+                    captionFor={(g) => {
+                      const region = GROUP_TO_REGION[g];
+                      const count = region ? countByRegion.get(region) : undefined;
+                      return count ? `${Math.round(count)} sets` : "none logged";
+                    }}
+                    className="max-h-[58vh]"
                   />
-                  <span className="text-foreground">{MUSCLE_REGION_LABEL[region]}</span>
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {Math.round(count)} sets
-                  </span>
+                  <p className="text-center text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {view}
+                  </p>
                 </div>
               ))}
             </div>
-          </div>
+
+            <div className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1">
+              {sorted.slice(0, 6).map(([region, count]) => (
+                <span key={region} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                    style={{ background: muscleHeatColor(max > 0 ? count / max : 0) }}
+                  />
+                  {MUSCLE_REGION_LABEL[region]}
+                  <span className="tabular-nums opacity-70">{Math.round(count)}</span>
+                </span>
+              ))}
+            </div>
+
+            {/* WHAT PUT THE LOAD THERE. The card could always say a muscle was the hottest thing
+                the athlete owns and then stop; this is the answer to the obvious next question,
+                and it is the reason a coach opens this card at all. */}
+            <MuscleExerciseList
+              group={openGroup}
+              region={openGroup ? GROUP_TO_REGION[openGroup] : undefined}
+              sets={openGroup ? countByRegion.get(GROUP_TO_REGION[openGroup]) : undefined}
+              colour={openGroup ? colorByRegion.get(GROUP_TO_REGION[openGroup]) : undefined}
+              rows={(data?.exercises ?? []).filter((e) => e.group === openGroup)}
+              windowDays={windowDays}
+            />
+          </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** The list under the figure: what the athlete actually did to make this muscle hot.
+ *
+ * SECONDARY ROWS SHOW THE FULL SET COUNT, not the halved one. The group total weights a
+ * secondary muscle at half a set, which is right for a heat colour and wrong for a list: nobody
+ * performed "1.5 sets of bench press". The athlete did three, and some of it reached the
+ * shoulders. The role word says which, and the total above it is still the weighted one -- so
+ * the rows will not sum to the header, deliberately, and the header says what it is.
+ */
+function MuscleExerciseList({
+  group,
+  region,
+  sets,
+  colour,
+  rows,
+  windowDays,
+}: {
+  group: string | null;
+  region?: MuscleRegion;
+  sets?: number;
+  colour?: string;
+  rows: { name: string; role: "primary" | "secondary"; sets: number }[];
+  windowDays: number;
+}) {
+  if (!group) {
+    return (
+      <p className="mt-3 rounded-md border border-border bg-surface-elevated px-3 py-3 text-center text-xs text-muted-foreground">
+        Tap a muscle or a name to see what has been training it.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3 overflow-hidden rounded-md border border-border bg-surface-elevated">
+      <div className="flex items-baseline gap-2 border-b border-border px-3 py-2.5">
+        <span className="h-2.5 w-2.5 shrink-0 self-center rounded-sm" style={{ background: colour ?? GRAY }} />
+        <h4 className="text-sm font-semibold">{region ? MUSCLE_REGION_LABEL[region] : group}</h4>
+        <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
+          {sets ? `${Math.round(sets)} sets` : "none logged"} &middot; last {windowDays} days
+        </span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-3 py-3 text-xs text-muted-foreground">
+          Nothing logged for this one in the last {windowDays} days.
+        </p>
+      ) : (
+        <ul>
+          {rows.map((r) => (
+            <li
+              key={`${r.role}-${r.name}`}
+              className="flex items-baseline gap-2 px-3 py-2 text-sm [&+li]:border-t [&+li]:border-border"
+            >
+              <span className="min-w-0 truncate">{r.name}</span>
+              <span className="shrink-0 rounded border border-border px-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {r.role}
+              </span>
+              <span className="ml-auto shrink-0 tabular-nums text-xs text-muted-foreground">
+                {r.sets} sets
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

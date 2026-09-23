@@ -18,8 +18,33 @@ const heatMap = read("client/src/components/muscle-heat-map.tsx");
 describe("the muscle load map and the strength profile draw the same body", () => {
   it("renders BodyMap rather than a figure of its own", () => {
     expect(heatMap).toContain('import { BodyMap } from "@/components/body-map"');
-    expect(heatMap).toContain('<BodyMap view="front"');
-    expect(heatMap).toContain('<BodyMap view="back"');
+    expect(heatMap).toContain("<BodyMap");
+    // Both views, and from one loop rather than two hand-placed copies -- two copies is how the
+    // front and the back come to disagree about a prop.
+    expect(heatMap).toContain('(["front", "back"] as const).map');
+    expect(heatMap).toContain("view={view}");
+  });
+
+  it("labels every group off the figure and lets both the muscle and the name be tapped", () => {
+    // Scott, 2026-09-23: "little lines with what the muscle groups are connecting them, I can
+    // click on the group, or click on the name, to pop up those exercises."
+    expect(heatMap).toContain("leaders={BODY_MAP_LEADERS[view]}");
+    expect(heatMap).toContain("captionFor=");
+    expect(heatMap).toContain("onSelect=");
+    const bodyMap = read("client/src/components/body-map.tsx");
+    // The label carries its own tap target; the muscle is not the only way in.
+    expect(bodyMap).toContain("The label is a tap target too, not just the muscle.");
+  });
+
+  it("every leader points at a group the figure actually draws", () => {
+    const bodyMap = read("client/src/components/body-map.tsx");
+    const drawn = new Set(
+      Array.from(bodyMap.matchAll(/\{\s*group:\s*"([^"]+)"/g)).map((m) => m[1]),
+    );
+    const leadBlock = bodyMap.slice(bodyMap.indexOf("BODY_MAP_LEADERS"));
+    const leads = Array.from(leadBlock.matchAll(/group:\s*"([^"]+)"/g)).map((m) => m[1]);
+    expect(leads.length).toBeGreaterThan(12);
+    for (const g of leads) expect(drawn, `${g} is labelled but not drawn`).toContain(g);
   });
 
   it("keeps no schematic shapes behind", () => {

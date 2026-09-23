@@ -1,3 +1,4 @@
+import type { MuscleLoadBreakdown } from "@shared/muscle-map";
 import { db } from "./db";
 import {
   COACH_COPPA_ATTESTATION,
@@ -24635,7 +24636,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     coachId: number,
     athleteId: number,
     days = 28,
-  ): Promise<Record<string, number>> {
+  ): Promise<MuscleLoadBreakdown> {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const owned = await db
       .select({ id: assignments.id })
@@ -24654,7 +24655,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // see the work you programmed) and wrong here -- an athlete's heat map
   // has to cover everything they actually trained, whether it came from
   // their coach, a second coach, or their own self-assignment.
-  async getMuscleLoadForOwnTraining(athleteId: number, days = 28): Promise<Record<string, number>> {
+  async getMuscleLoadForOwnTraining(athleteId: number, days = 28): Promise<MuscleLoadBreakdown> {
     const owned = await db
       .select({ id: assignments.id })
       .from(assignments)
@@ -24670,8 +24671,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     athleteId: number,
     assignmentIds: number[],
     days: number,
-  ): Promise<Record<string, number>> {
-    if (assignmentIds.length === 0) return {};
+  ): Promise<MuscleLoadBreakdown> {
+    if (assignmentIds.length === 0) return { groups: {}, exercises: [] };
 
     // The athlete's own day, same correction as the load windows above --
     // a trailing 28 days drawn from UTC starts a day early or late for
@@ -24692,6 +24693,20 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     });
 
     const tally: Record<string, number> = {};
+    // WHICH EXERCISES PUT THE LOAD THERE, alongside how much.
+    //
+    // The tally alone answers "my shoulders are the hottest thing I own" and stops dead. The
+    // obvious next question -- doing WHAT? -- had no answer anywhere in the app, and it is the
+    // one that turns the figure from a picture into something you act on. Same loop, same
+    // completeness rule, so the per-exercise numbers can never disagree with the group total
+    // they are summed from.
+    const perExercise = new Map<string, { name: string; group: string; role: "primary" | "secondary"; sets: number }>();
+    const note = (name: string, group: string, role: "primary" | "secondary", sets: number) => {
+      const key = `${group}::${role}::${name}`;
+      const row = perExercise.get(key);
+      if (row) row.sets += sets;
+      else perExercise.set(key, { name, group, role, sets });
+    };
     for (const log of logs) {
       for (const entry of log.entries) {
         const exercise = entry.exercise ?? entry.programExercise?.exercise ?? entry.corrective?.exercise;
@@ -24713,12 +24728,21 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         const setCount = completedSets.length;
         if (setCount === 0) continue;
         tally[exercise.muscleGroup] = (tally[exercise.muscleGroup] ?? 0) + setCount;
+        note(exercise.name, exercise.muscleGroup, "primary", setCount);
         for (const secondary of exercise.secondaryMuscles ?? []) {
           tally[secondary] = (tally[secondary] ?? 0) + setCount * 0.5;
+          // The HALF weighting is the group total's business, not this list's. A row saying
+          // "Bench Press -- 1.5 sets" is a number nobody performed; the athlete did three sets
+          // of bench and some of that reached the shoulders. The role word carries that.
+          note(exercise.name, secondary, "secondary", setCount);
         }
       }
     }
-    return tally;
+    return {
+      groups: tally,
+      // Heaviest first, so the list answers "what is doing this" before it answers "what else".
+      exercises: [...perExercise.values()].sort((a, b) => b.sets - a.sets),
+    };
   },
 
   // Current ACWR snapshot for every athlete on this coach's roster -- one
