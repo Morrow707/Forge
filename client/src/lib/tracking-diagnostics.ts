@@ -70,6 +70,8 @@ export type TraceDiagnostics = {
   barPointFromBothHands?: number;
   barPointFromLoneHandCarried?: number;
   barPointFromBareLoneHand?: number;
+  /** Lone-hand frames where continuity overruled Vision's left/right label. */
+  barPointSideFlipped?: number;
   largestGapSeconds: number | null;
 };
 

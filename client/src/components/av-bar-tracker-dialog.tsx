@@ -65,6 +65,7 @@ import {
   summarizeTrackedSet,
   interpolateOcclusionGap,
   barPointFromSides,
+  medianHalfSpan,
   computeArmDriveAsymmetry,
   computeRepTrustScores,
   implausibleRangeOfMotion,
@@ -1306,6 +1307,8 @@ export function AvBarTrackerDialog({
     // can say WHICH filter fired -- a side that read impossibly fast and a bar point that
     // teleported because the sides swapped are different faults with different fixes.
     const combinedRejectionEvents: number[] = [];
+    const halfSpanHistory: { x: number; y: number }[] = [];
+    let barPointSideFlipped = 0;
     let barPointFromBothHands = 0;
     let barPointFromLoneHandCarried = 0;
     let barPointFromBareLoneHand = 0;
@@ -1484,7 +1487,19 @@ export function AvBarTrackerDialog({
 
       // See barPointFromSides. A lone hand is carried back to the middle of the bar rather than
       // traced where it sits, so the point keeps meaning the same thing from frame to frame.
-      let { point: combined, halfSpan } = barPointFromSides(fusedLeft, fusedRight, lastHalfSpan);
+      // The MEDIAN of every span measured this set, and the last accepted point to settle which
+      // side a lone hand is -- see medianHalfSpan and barPointFromSides.
+      if (fusedLeft && fusedRight) {
+        halfSpanHistory.push({ x: (fusedRight.x - fusedLeft.x) / 2, y: (fusedRight.y - fusedLeft.y) / 2 });
+      }
+      const carryBy = medianHalfSpan(halfSpanHistory) ?? lastHalfSpan;
+      const lastTracePoint = trace.length > 0 ? trace[trace.length - 1] : null;
+      let { point: combined, halfSpan, sideFlipped } = barPointFromSides(
+        fusedLeft,
+        fusedRight,
+        carryBy,
+        lastTracePoint ? { x: lastTracePoint.x, y: verticalSign * lastTracePoint.y } : null,
+      );
       // WHICH BRANCH BUILT THIS POINT, COUNTED.
       //
       // The three branches mean three different things and the trace cannot be read without
@@ -1497,8 +1512,9 @@ export function AvBarTrackerDialog({
       // for another stretch, then back -- sustained excursions, not single-frame spikes, so no
       // speed gate or median filter reaches them. That shape is the point changing meaning, and
       // there was no counter anywhere that could say so.
+      if (sideFlipped) barPointSideFlipped++;
       if (fusedLeft && fusedRight) barPointFromBothHands++;
-      else if (combined && lastHalfSpan) barPointFromLoneHandCarried++;
+      else if (combined && carryBy) barPointFromLoneHandCarried++;
       else if (combined) barPointFromBareLoneHand++;
       lastHalfSpan = halfSpan;
 
@@ -1563,6 +1579,7 @@ export function AvBarTrackerDialog({
         velocityRejections: rejectionEvents.length,
         combinedVelocityRejections: combinedRejectionEvents.length,
         barPointFromBothHands,
+        barPointSideFlipped,
         barPointFromLoneHandCarried,
         barPointFromBareLoneHand,
         largestGapSeconds: largestGapSeconds == null ? null : Math.round(largestGapSeconds * 1000) / 1000,

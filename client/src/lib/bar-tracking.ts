@@ -2678,7 +2678,16 @@ export function barPointFromSides(
   left: { x: number; y: number; confidence: number } | null,
   right: { x: number; y: number; confidence: number } | null,
   lastHalfSpan: { x: number; y: number } | null,
-): { point: { x: number; y: number; confidence: number } | null; halfSpan: { x: number; y: number } | null } {
+  // The last accepted bar point, used only to settle which side a lone hand is -- see below.
+  // Optional so a caller with no trace yet (and the unit tests for the raw geometry) can omit it.
+  prevPoint?: { x: number; y: number } | null,
+): {
+  point: { x: number; y: number; confidence: number } | null;
+  halfSpan: { x: number; y: number } | null;
+  /** True when continuity overruled Vision's left/right label -- counted, because a guard that
+   *  cannot be shown to have fired is a guard nobody can tune. */
+  sideFlipped?: boolean;
+} {
   if (left && right) {
     return {
       point: {
@@ -2694,7 +2703,41 @@ export function barPointFromSides(
   if (!lone) return { point: null, halfSpan: lastHalfSpan };
   if (!lastHalfSpan) return { point: lone, halfSpan: lastHalfSpan };
   // Left sits half a span short of the middle; right sits half a span past it.
-  const sign = left ? 1 : -1;
+  let sign = left ? 1 : -1;
+  let flipped = false;
+
+  // WHICH SIDE THIS IS, SETTLED BY CONTINUITY RATHER THAN BY THE LABEL.
+  //
+  // The sign above trusts Vision's left/right labelling, and on a bench press filmed head-on
+  // the arms sit either side of the midline at nearly the same depth -- which is exactly the
+  // case where that labelling swaps. A swapped label puts the reconstructed point a WHOLE grip
+  // width from the truth, in the wrong direction, and nothing downstream can tell that from
+  // the bar moving.
+  //
+  // The bar does not travel a grip width between two frames, so of the two candidate midpoints
+  // only one can continue the trace. Picking the nearer one fixes a swapped label and cannot
+  // hurt when the label was right, because the correct midpoint is then the near one by a whole
+  // span. This is the same reasoning the tracker already uses to prefer a detection near the
+  // hands over a better-lit one across the room.
+  //
+  // Measured on the 2026-09-23 set 3 take (533): the trace's across-axis positions are bimodal,
+  // two clouds about 40cm apart where half this athlete's grip is 33.5cm, and 224 of 593 points
+  // were built by this branch. Across-axis travel came out at 169cm on a bench press whose bar
+  // drifts sideways by a couple.
+  if (prevPoint) {
+    const near = Math.hypot(
+      lone.x + sign * lastHalfSpan.x - prevPoint.x,
+      lone.y + sign * lastHalfSpan.y - prevPoint.y,
+    );
+    const far = Math.hypot(
+      lone.x - sign * lastHalfSpan.x - prevPoint.x,
+      lone.y - sign * lastHalfSpan.y - prevPoint.y,
+    );
+    if (far < near) {
+      sign = -sign;
+      flipped = true;
+    }
+  }
   return {
     point: {
       x: lone.x + sign * lastHalfSpan.x,
@@ -2704,10 +2747,34 @@ export function barPointFromSides(
       confidence: lone.confidence * SINGLE_SIDE_CONFIDENCE_DISCOUNT,
     },
     halfSpan: lastHalfSpan,
+    sideFlipped: flipped,
   };
 }
 
 const SINGLE_SIDE_CONFIDENCE_DISCOUNT = 0.8;
+
+/** The half-span to carry a lone hand back by: the component-wise MEDIAN of what has been
+ *  measured this set, not the most recent measurement.
+ *
+ *  A grip is fixed for the length of a set, so every honest measurement of it should agree.
+ *  What varies is how much of it the camera can see: the span foreshortens as the athlete
+ *  rotates and as the bar tilts, and it collapses entirely on a frame where the two "hands"
+ *  are really one hand found twice. The most recent measurement can be any of those. The
+ *  median is the one that has to be a real reading, because half the set disagrees with it in
+ *  each direction.
+ *
+ *  Component-wise rather than by magnitude on purpose -- the carry needs a VECTOR, and the
+ *  median x and the median y each answer the question their own axis asks. */
+export function medianHalfSpan(
+  history: { x: number; y: number }[],
+): { x: number; y: number } | null {
+  if (history.length === 0) return null;
+  const mid = (values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+  return { x: mid(history.map((h) => h.x)), y: mid(history.map((h) => h.y)) };
+}
 
 export function movementAxisFromGrip(
   pairs: { left: { x: number; y: number }; right: { x: number; y: number } }[],
