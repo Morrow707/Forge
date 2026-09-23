@@ -6368,6 +6368,22 @@ export const uploadedFiles = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // WHEN FORGE ITSELF REMOVED THE FILE.
+    //
+    // This ledger is insert-only -- nothing has ever deleted a row from it -- while files get
+    // removed deliberately all the time: the retention purge, an account deletion, an athlete
+    // removing a clip, a video purged while its metrics are kept. Every one of those left a row
+    // behind with no file under it, and the admin reconciliation counted it as MISSING.
+    //
+    // So the card meant to answer "is the disk eating files" could not: 84 of the newest 100
+    // rows read as lost on 2026-09-23, which is roughly what months of ordinary purging looks
+    // like. A red number that is red in normal operation is worse than no number, because the
+    // day it means something nobody will believe it.
+    //
+    // Stamped by deleteUploadedFile, so a removal cannot be made without recording it. NULL
+    // means Forge never removed this file -- and a NULL row whose file is gone is the only kind
+    // of loss worth an alarm.
+    deletedAt: timestamp("deleted_at"),
   },
   (table) => ({
     uploadedByIdx: index("uploaded_files_uploaded_by_idx").on(table.uploadedBy),

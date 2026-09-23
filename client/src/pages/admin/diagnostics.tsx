@@ -327,9 +327,15 @@ type StorageStatus = {
     checked: number;
     present: number;
     missing: number;
-    missingFiles: { path: string; uploadedAt: string }[];
+    removedByForge: number;
+    unexplained: number;
+    unexplainedBeforeStamping: number;
+    stampingBeganAt: string;
+    missingFiles: { path: string; uploadedAt: string; removedByForgeAt: string | null }[];
+    unexplainedFiles: { path: string; uploadedAt: string }[];
     oldestPresentAt: string | null;
     newestMissingAt: string | null;
+    newestUnexplainedAt: string | null;
   } | null;
 };
 
@@ -368,7 +374,9 @@ function StorageTab() {
             Uploads disk
           </CardTitle>
           <CardDescription>
-            Free space, and the file ledger reconciled against what is actually on disk. A disk
+            Free space, and the file ledger reconciled against what is actually on disk. A removal
+            Forge made itself is separated from one nobody can account for -- only the second is
+            a loss. A disk
             reporting healthy while yesterday's uploads are gone is the case that needs both
             halves of this in one answer -- and is exactly what happened once.
           </CardDescription>
@@ -415,27 +423,58 @@ function StorageTab() {
                     label="Ledger rows checked"
                     value={`${data.ledger.present} present of ${data.ledger.checked}`}
                   />
+                  {/* THE ONE NUMBER THAT IS AN ALARM, AND IT IS NOT "missing".
+                      uploaded_files is insert-only, so every deliberate removal -- the
+                      retention purge, an account deletion, a retake, an athlete's Remove
+                      button -- used to read as a loss. That put 84 of 100 in red on a
+                      perfectly healthy disk, and a number that is red in normal operation is
+                      one nobody believes the day it means something. */}
                   <Row
-                    label="Missing from disk"
-                    value={String(data.ledger.missing)}
-                    warn={data.ledger.missing > 0}
+                    label="Unexplained losses"
+                    value={
+                      data.ledger.unexplained === 0
+                        ? "none"
+                        : `${data.ledger.unexplained} gone with no record of us removing them`
+                    }
+                    warn={data.ledger.unexplained > 0}
                   />
-                  {data.ledger.newestMissingAt && (
+                  <Row
+                    label="Removed by Forge"
+                    value={`${data.ledger.removedByForge} (purge, deletion, retake, or Remove)`}
+                  />
+                  {data.ledger.unexplainedBeforeStamping > 0 && (
                     <Row
-                      label="Most recent loss"
-                      value={format(new Date(data.ledger.newestMissingAt), "d MMM yyyy HH:mm")}
+                      label="Removed before we kept a record"
+                      value={`${data.ledger.unexplainedBeforeStamping} uploaded before ${format(
+                        new Date(data.ledger.stampingBeganAt),
+                        "d MMM yyyy",
+                      )} -- nothing can say who removed these`}
+                    />
+                  )}
+                  {data.ledger.newestUnexplainedAt && (
+                    <Row
+                      label="Most recent unexplained loss"
+                      value={format(new Date(data.ledger.newestUnexplainedAt), "d MMM yyyy HH:mm")}
                       warn
                     />
                   )}
-                  {data.ledger.missingFiles.length > 0 && (
+                  {data.ledger.unexplainedFiles.length > 0 && (
                     <div className="max-h-40 overflow-y-auto rounded-md bg-surface p-2">
-                      {data.ledger.missingFiles.map((f) => (
+                      {data.ledger.unexplainedFiles.map((f) => (
                         <p key={f.path} className="font-mono text-[10px] text-muted-foreground">
                           {f.path} · uploaded {format(new Date(f.uploadedAt), "d MMM HH:mm")}
                         </p>
                       ))}
                     </div>
                   )}
+                  <div className="pt-1">
+                    <DownloadButton
+                      url="/api/admin/storage-report.json?limit=2000"
+                      filename="forge-storage-report.json"
+                      shareTitle="Forge storage report"
+                      label="Download storage report"
+                    />
+                  </div>
                 </>
               )}
             </>

@@ -11,6 +11,10 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { recordSystemFailure } from "./system-events";
+// db is imported LAZILY, inside markLedgerRowDeleted. server/db.ts throws at import time
+// without DATABASE_URL, and this module is reached by the no-database unit suite -- `npm test`
+// needs no Postgres and must stay that way (see CLAUDE.md). A top-level import here broke
+// server/uploaded-file-deletion.test.ts, which tests path containment and never touches a row.
 
 // STORAGE_PATH (render.yaml) points this at the persistent disk's mount point
 // (outside the deployed source tree) in production; falls back to the old
@@ -246,15 +250,53 @@ export function uploadedFileDiskPath(url: string | null | undefined): string | n
   return resolved;
 }
 
+/** Marks the ledger row for a path as removed BY FORGE, so the admin reconciliation can tell a
+ *  deliberate delete from a file the disk lost -- see uploadedFiles.deletedAt.
+ *
+ *  Stamped HERE rather than at each call site on purpose. There are a dozen places that remove
+ *  a file (the retention purge, account deletion, a retake replacing a clip, an athlete's
+ *  Remove button, the admin video tools), and a stamp that has to be remembered at each of them
+ *  is a stamp that will be forgotten at the next one -- and a forgotten stamp reads as data
+ *  loss, which is the exact false alarm this column exists to end.
+ *
+ *  Best-effort and never awaited into the caller's result, for the same reason the unlink below
+ *  is best-effort: a bookkeeping write must not turn a successful delete into a failure. The
+ *  cost of missing one is one row in the "unexplained" bucket, not a lost file.
+ *
+ *  Only ever sets the stamp, never clears it, and only on a row that has none -- a path can be
+ *  re-used after a delete, and the FIRST removal is the one the timeline wants. */
+async function markLedgerRowDeleted(url: string): Promise<void> {
+  try {
+    const [{ db }, { uploadedFiles }, { eq, and, isNull }] = await Promise.all([
+      import("./db"),
+      import("@shared/schema"),
+      import("drizzle-orm"),
+    ]);
+    await db
+      .update(uploadedFiles)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(uploadedFiles.path, url), isNull(uploadedFiles.deletedAt)));
+  } catch (err) {
+    console.error("Could not mark an uploaded file as deleted in the ledger", err);
+  }
+}
+
 export async function deleteUploadedFile(url: string | null | undefined): Promise<boolean> {
   if (!url || !url.startsWith("/uploads/")) return true;
   const resolved = path.join(UPLOADS_ROOT, url.slice("/uploads/".length));
   if (!resolved.startsWith(UPLOADS_ROOT + path.sep)) return true;
   try {
     await fs.unlink(resolved);
+    await markLedgerRowDeleted(url);
     return true;
   } catch (err: any) {
-    if (err?.code === "ENOENT") return true;
+    if (err?.code === "ENOENT") {
+      // Already gone. Forge asked for it to be removed, so the removal is still Forge's --
+      // recording it is what stops a second pass reporting the same file as an unexplained
+      // loss forever.
+      await markLedgerRowDeleted(url);
+      return true;
+    }
     // The url is an ARGUMENT, never part of the format string. console.error treats its
     // first argument as a printf format, so a url carrying "%s" would swallow `err` and the
     // reason the delete failed would vanish out of the log -- from a path a caller supplies.

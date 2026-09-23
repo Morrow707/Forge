@@ -1967,9 +1967,17 @@ CREATE TABLE IF NOT EXISTS "uploaded_files" (
   "id" serial PRIMARY KEY,
   "path" text NOT NULL UNIQUE,
   "uploaded_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "created_at" timestamp NOT NULL DEFAULT now()
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "deleted_at" timestamp
 );
+ALTER TABLE "uploaded_files" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp;
 CREATE INDEX IF NOT EXISTS "uploaded_files_uploaded_by_idx" ON "uploaded_files" ("uploaded_by");
+-- Deliberately NOT backfilled. Every row already on this table predates the stamp, so a
+-- backfill would have to GUESS which of them Forge removed on purpose -- and the one thing
+-- this column exists to distinguish is exactly that guess. An unbackfilled row whose file is
+-- gone reads as "removed before Forge recorded removals", which is true, rather than as a
+-- loss. The reconciliation reports that bucket separately and it drains on its own as the
+-- ledger turns over.
 
 CREATE TABLE IF NOT EXISTS "problem_reports" (
   "id" serial PRIMARY KEY,

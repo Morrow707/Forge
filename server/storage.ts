@@ -3444,6 +3444,14 @@ function summariseWaivers(
   });
 }
 
+
+/** The day uploaded_files.deletedAt shipped, so a row older than this can be reported as
+ *  "removed before Forge recorded removals" rather than as a loss or as a deliberate delete.
+ *  A date rather than a lookup on purpose: deriving it from the data (say, the oldest stamped
+ *  row) would move every time the ledger turns over, and the whole point is a fixed line the
+ *  reader can reason about. */
+export const DELETION_STAMPING_BEGAN = "2026-09-23T00:00:00.000Z";
+
 export const storage = {
   // ---------- Users ----------
   // Memoised for the life of one request (server/request-cache.ts): the auth layer loads this
@@ -27595,24 +27603,44 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     checked: number;
     present: number;
     missing: number;
-    missingFiles: { path: string; uploadedAt: string }[];
+    removedByForge: number;
+    unexplained: number;
+    unexplainedBeforeStamping: number;
+    stampingBeganAt: string;
+    missingFiles: { path: string; uploadedAt: string; removedByForgeAt: string | null }[];
+    unexplainedFiles: { path: string; uploadedAt: string }[];
     oldestPresentAt: string | null;
     newestMissingAt: string | null;
+    newestUnexplainedAt: string | null;
   }> {
     const rows = await db
-      .select({ path: uploadedFiles.path, createdAt: uploadedFiles.createdAt })
+      .select({
+        path: uploadedFiles.path,
+        createdAt: uploadedFiles.createdAt,
+        deletedAt: uploadedFiles.deletedAt,
+      })
       .from(uploadedFiles)
       .orderBy(desc(uploadedFiles.createdAt))
       .limit(limit);
 
-    const missingFiles: { path: string; uploadedAt: string }[] = [];
+    const missingFiles: { path: string; uploadedAt: string; removedByForgeAt: string | null }[] = [];
+    const unexplainedFiles: { path: string; uploadedAt: string }[] = [];
     let present = 0;
+    let removedByForge = 0;
+    let unexplainedBeforeStamping = 0;
     let oldestPresentAt: string | null = null;
     for (const row of rows) {
       const size = await statUploadedFile(row.path);
       const at = row.createdAt.toISOString();
       if (size === null) {
-        missingFiles.push({ path: row.path, uploadedAt: at });
+        missingFiles.push({
+          path: row.path,
+          uploadedAt: at,
+          removedByForgeAt: row.deletedAt ? row.deletedAt.toISOString() : null,
+        });
+        if (row.deletedAt) removedByForge++;
+        else if (at < DELETION_STAMPING_BEGAN) unexplainedBeforeStamping++;
+        else unexplainedFiles.push({ path: row.path, uploadedAt: at });
       } else {
         present++;
         if (!oldestPresentAt || at < oldestPresentAt) oldestPresentAt = at;
@@ -27623,10 +27651,23 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       checked: rows.length,
       present,
       missing: missingFiles.length,
+      removedByForge,
+      // THE ONLY NUMBER WORTH AN ALARM. A file with no file and no record of Forge removing it,
+      // uploaded since Forge started recording its own removals.
+      unexplained: unexplainedFiles.length,
+      // Removed before the stamp existed, so nothing can say who removed them. Counted
+      // separately rather than folded into either side: calling them losses cries wolf (this
+      // read 84 of 100 on the day the column shipped, which is what months of ordinary purging
+      // looks like), and calling them deliberate claims a fact nobody has. It drains on its own
+      // as the ledger turns over.
+      unexplainedBeforeStamping,
+      stampingBeganAt: DELETION_STAMPING_BEGAN,
       // Capped in the response too -- an admin needs the shape of the loss, not a thousand paths.
       missingFiles: missingFiles.slice(0, 25),
+      unexplainedFiles: unexplainedFiles.slice(0, 25),
       oldestPresentAt,
       newestMissingAt: missingFiles[0]?.uploadedAt ?? null,
+      newestUnexplainedAt: unexplainedFiles[0]?.uploadedAt ?? null,
     };
   },
 

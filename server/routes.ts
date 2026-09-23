@@ -1568,6 +1568,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ...disk, ledger });
   });
 
+  /** The same reconciliation as a downloadable file, so a storage problem can be SENT rather
+   *  than described from a phone screenshot -- the shape the camera capture export already
+   *  takes, for the same reason. Reaches deeper than the card (the card samples the newest 100;
+   *  this walks up to 2000) because the question a file answers is "when did the losses start",
+   *  which needs history the card deliberately does not show.
+   *
+   *  Carries paths and timestamps and nothing else: no athlete id, no uploader, no name. A
+   *  filename here is a uuid, which resolves to a person only through a join this response
+   *  does not make -- the same boundary /api/admin/capture-export.json holds. */
+  app.get("/api/admin/storage-report.json", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "500"), 10) || 500, 1), 2000);
+    const [disk, ledger] = await Promise.all([
+      inspectUploadsStorage(),
+      storage.reconcileUploadedFiles(limit),
+    ]);
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Content-Disposition", 'attachment; filename="forge-storage-report.json"');
+    res.send(
+      JSON.stringify(
+        {
+          exportedAt: new Date().toISOString(),
+          whatThisIs:
+            "uploaded_files is an insert-only ledger of every gated upload. Each row's path was " +
+            "stat-ed on the disk. removedByForge means Forge recorded removing the file itself " +
+            "(retention purge, account deletion, a retake, an athlete's Remove button). " +
+            "unexplained means the file is gone with no record of Forge removing it, and it was " +
+            "uploaded after Forge started recording removals -- that bucket, and only that one, " +
+            "is data loss. unexplainedBeforeStamping is removals from before the record existed.",
+          disk,
+          ledger,
+        },
+        null,
+        1,
+      ),
+    );
+  });
+
   app.get("/api/admin/storage-check", requireRole("admin"), async (req, res) => {
     const raw = typeof req.query.path === "string" ? req.query.path : null;
     if (!raw) {
