@@ -365,10 +365,29 @@ describe("the Swift port carries the same numbers", () => {
     expect(swift).toMatch(
       /if bodySuspectThisFrame \{[\s\S]{0,40}?if trackingRequest != nil \{ return nil \}/,
     );
-    // ...and with no lock to protect, the detection is attempted, unseeded.
-    expect(swift).toContain("let seededRegion = bodySuspectThisFrame ? nil : regionOfInterest");
+    // ...and with no lock to protect, the detection is attempted, UNSEEDED. Asserted as the
+    // rule rather than as one spelling of it: a jumped wrist drags any body-derived region with
+    // it, so a detection seeded on such a frame searches the wrong part of the image. What must
+    // hold is that a suspect body yields nil, whatever the non-suspect branch grew into.
+    expect(swift).toMatch(/let seededRegion = bodySuspectThisFrame \? nil :/);
     // The old unconditional bail must not come back.
     expect(swift).not.toContain("if bodySuspectThisFrame { return nil }");
+  });
+
+  it("aims a fresh detection with the object's OWN last box before the body's wrists", () => {
+    // THE INDEPENDENCE THE ARCHITECTURE ASKS FOR AND DID NOT HAVE. On a bench press every input
+    // was the body tracker -- the tracked point is the wrist midpoint, scale is shoulder
+    // breadth, the object is judged by grip width, and the detector's search region was aimed
+    // by the wrists too. So the object tracker was not a second opinion, it was DOWNSTREAM of
+    // the same landmarks, and a jumped wrist moved the search and the verdict together with
+    // nothing left to catch it: "object tracker alone on 0" frames.
+    //
+    // A bar that was here last frame is near here this frame, and the body tracker has no part
+    // in saying so. The wrist region stays only as the fallback, before any lock has existed.
+    expect(swift).toContain("let lastKnownRegion = recentBoxes.last.map");
+    expect(swift).toMatch(/lastKnownRegion \?\? regionOfInterest/);
+    // And it is counted, because a guard that cannot be shown to have fired cannot be tuned.
+    expect(swift).toContain("telemetry.freshDetectionsSeededOnLastBox += 1");
   });
 
   it("searches the whole frame rather than skipping when there is no wrist to aim with", () => {

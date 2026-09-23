@@ -90,6 +90,8 @@ export type ObjectLockDiagnostics = {
   framesTracked: number;
   framesLockHeld: number;
   freshDetections: number;
+  /** Aimed by the object's own last box rather than by this frame's wrist. */
+  freshDetectionsSeededOnLastBox?: number;
   breaksLowConfidence: number;
   breaksImplausibleJump: number;
   breaksTrajectoryDisagreement: number;
@@ -235,7 +237,7 @@ export type TrackingDiagnostics = {
     // is a handful of instances from three photos, so the first numbers it produces need to be
     // attributable to it rather than blended anonymously into everything else -- that is exactly
     // what the replay harness needs to tell a good plate read from a bad one.
-    scaleSource?: "height" | "plate" | "box" | "both" | "shoulder_width" | null;
+    scaleSource?: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | null;
     // WHAT EACH SOURCE ACTUALLY MEASURED, REPORTED WHETHER IT WON OR NOT.
     //
     // Three takes in a row came back with a range of motion several times too short, and every

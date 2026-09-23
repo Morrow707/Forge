@@ -32,6 +32,7 @@ type ObjectLockLine = {
   framesTracked: number;
   framesLockHeld: number;
   freshDetections: number;
+  freshDetectionsSeededOnLastBox?: number;
   breaksLowConfidence: number;
   breaksImplausibleJump: number;
   breaksTrajectoryDisagreement: number;
@@ -518,6 +519,7 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
       label,
       value:
         `held ${lock.framesLockHeld}/${lock.framesTracked} frames, ${lock.freshDetections} fresh lock-on${lock.freshDetections === 1 ? "" : "s"}` +
+        `${lock.freshDetectionsSeededOnLastBox ? ` (${lock.freshDetectionsSeededOnLastBox} of them aimed by the bar's own last position rather than by the wrists)` : ""}` +
         `, ${breaks} break${breaks === 1 ? "" : "s"}` +
         (breaks > 0
           ? ` (${[

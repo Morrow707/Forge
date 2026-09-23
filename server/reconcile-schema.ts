@@ -1971,6 +1971,7 @@ CREATE TABLE IF NOT EXISTS "uploaded_files" (
   "deleted_at" timestamp
 );
 ALTER TABLE "uploaded_files" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "grip_width_in" real;
 CREATE INDEX IF NOT EXISTS "uploaded_files_uploaded_by_idx" ON "uploaded_files" ("uploaded_by");
 -- Deliberately NOT backfilled. Every row already on this table predates the stamp, so a
 -- backfill would have to GUESS which of them Forge removed on purpose -- and the one thing

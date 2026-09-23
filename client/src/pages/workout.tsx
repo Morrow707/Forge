@@ -4499,6 +4499,7 @@ function ExerciseLogContent({
                 equipment={item.equipment}
                 laterality={item.laterality}
                 heightIn={user?.heightIn}
+                gripWidthIn={user?.gripWidthIn}
                 targetReps={parseTargetReps(item.prescribedReps)}
                 loadKg={loadKg}
                 recordVideo={mergedTracking}

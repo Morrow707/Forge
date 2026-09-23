@@ -25,6 +25,7 @@ export type ProfileAthlete = {
   dateOfBirth?: string | null;
   gender?: string | null;
   heightIn?: number | null;
+  gripWidthIn?: number | null;
   bodyWeightLbs?: number | null;
   sport?: string | null;
   position?: string | null;
@@ -47,6 +48,7 @@ function toFormValue(athlete: ProfileAthlete | null): ProfileFieldsValue {
     age: athlete.age != null ? String(athlete.age) : "",
     gender: athlete.gender ?? "",
     heightIn: athlete.heightIn != null ? String(athlete.heightIn) : "",
+        gripWidthIn: athlete.gripWidthIn != null ? String(athlete.gripWidthIn) : "",
     bodyWeightLbs: athlete.bodyWeightLbs != null ? String(athlete.bodyWeightLbs) : "",
     sport: athlete.sport ?? "",
     position: athlete.position ?? "",
@@ -89,6 +91,7 @@ export function AthleteProfileDialog({
         age: value.age.trim() ? Number(value.age) : null,
         gender: value.gender.trim() || null,
         heightIn: value.heightIn.trim() ? Number(value.heightIn) : null,
+        gripWidthIn: value.gripWidthIn.trim() ? Number(value.gripWidthIn) : null,
         bodyWeightLbs: value.bodyWeightLbs.trim() ? Number(value.bodyWeightLbs) : null,
         sport: value.sport.trim() || null,
         position: value.position.trim() || null,

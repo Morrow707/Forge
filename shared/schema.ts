@@ -368,6 +368,21 @@ export const users = pgTable(
     timeZone: text("time_zone"),
     gender: genderEnum("gender"),
     heightIn: integer("height_in"),
+    // THE ONE DISTANCE THE ATHLETE CAN SIMPLY TELL US, AND THE FIRST RULER HERE THAT IS NEITHER
+    // A POPULATION AVERAGE NOR DEPENDENT ON WHERE THE CAMERA IS.
+    //
+    // Every other real-world scale the camera can derive fails somewhere. A plate needs the
+    // detector to find one. Height needs the whole body in frame, which a bench press filmed
+    // from the foot of the bench never gives. Shoulder breadth needs no framing and is a
+    // population average -- biacromial-to-height varies by build, so it carries a tenth of
+    // error before anything goes wrong, and on one athlete across five stored takes it implied
+    // shoulders anywhere from 34cm to 47cm.
+    //
+    // The distance between an athlete's hands on a barbell is fixed, visible on essentially
+    // every frame of a barbell lift from any camera position, and measurable with a tape in ten
+    // seconds. Optional forever: without it nothing changes, and the existing rulers answer as
+    // they do today. See gripWidthScaleFromFrames.
+    gripWidthIn: real("grip_width_in"),
     bodyWeightLbs: real("body_weight_lbs"),
     // Required at signup (see signupSchema) and editable anytime afterward
     // via ProfileFieldsForm -- an athlete switching sports updates this
@@ -4066,6 +4081,7 @@ export const claimProvisionalAthleteSchema = z.object({
   // Same "only required if the coach's intake didn't already capture one" pattern as sport/
   // position above -- see provisionalAthletes.heightIn/bodyWeightLbs.
   heightIn: z.number().int().min(1).max(120).optional(),
+  gripWidthIn: z.number().min(1).max(96).optional(),
   bodyWeightLbs: z.number().min(1).max(1500).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
@@ -7924,6 +7940,7 @@ export const updateProfileSchema = z.object({
   age: z.number().int().min(0).max(120).optional().nullable(),
   gender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional().nullable(),
   heightIn: z.number().int().min(0).max(120).optional().nullable(),
+  gripWidthIn: z.number().min(0).max(96).optional().nullable(),
   bodyWeightLbs: z.number().min(0).max(1500).optional().nullable(),
   sport: z.string().trim().max(60).optional().nullable(),
   position: z.string().trim().max(60).optional().nullable(),
@@ -8764,6 +8781,7 @@ const objectLockDiagnosticsSchema = z.object({
   framesTracked: z.number(),
   framesLockHeld: z.number(),
   freshDetections: z.number(),
+  freshDetectionsSeededOnLastBox: z.number().optional(),
   breaksLowConfidence: z.number(),
   breaksImplausibleJump: z.number(),
   breaksTrajectoryDisagreement: z.number(),
@@ -9000,7 +9018,7 @@ export const trackingDiagnosticsSchema = z.object({
     .object({
       scaleFactor: z.number().optional().nullable(),
       scaleSource: z
-        .enum(["height", "plate", "box", "both", "shoulder_width"])
+        .enum(["height", "plate", "box", "both", "shoulder_width", "grip_width"])
         .optional()
         .nullable(),
       scaleCandidates: z

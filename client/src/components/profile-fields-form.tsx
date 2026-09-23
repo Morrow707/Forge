@@ -14,6 +14,7 @@ export type ProfileFieldsValue = {
   age: string;
   gender: string;
   heightIn: string;
+  gripWidthIn: string;
   bodyWeightLbs: string;
   sport: string;
   position: string;
@@ -42,6 +43,7 @@ export const emptyProfileFields: ProfileFieldsValue = {
   age: "",
   gender: "",
   heightIn: "",
+  gripWidthIn: "",
   bodyWeightLbs: "",
   sport: "",
   position: "",
@@ -251,6 +253,28 @@ export function ProfileFieldsForm({
             onChange={(e) => onChange({ ...value, heightIn: e.target.value })}
             placeholder="e.g. 72"
           />
+        </div>
+        {/* Optional, and the copy has to say what it BUYS -- an unexplained measurement
+            request reads as nosiness, and nobody goes for a tape measure on a hunch. */}
+        <div className="space-y-1.5">
+          <Label htmlFor={`${idPrefix}-grip`}>Barbell grip width (inches, optional)</Label>
+          <Input
+            id={`${idPrefix}-grip`}
+            type="number"
+            inputMode="decimal"
+            min={0}
+            max={96}
+            step="0.5"
+            value={value.gripWidthIn}
+            onChange={(e) => onChange({ ...value, gripWidthIn: e.target.value })}
+            placeholder="e.g. 22"
+          />
+          <p className="text-xs text-muted-foreground">
+            Hand to hand on the bar, measured once with a tape. Camera numbers get their
+            real-world scale from your body, which the camera has to estimate; this is a distance
+            it can simply be told, so it makes distances like range of motion considerably more
+            accurate. Leave it blank and nothing changes.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-weight`}>Body weight (lbs)</Label>

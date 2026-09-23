@@ -719,7 +719,7 @@ const MIN_SHOULDER_BROADSIDE_RATIO = 2;
  * the old refusal that was right.
  */
 export type ScaleEstimate = {
-  source: "plate" | "height" | "shoulder_width";
+  source: "plate" | "grip_width" | "height" | "shoulder_width";
   scale: number;
   /** How wrong this source can be even when it is working correctly. */
   uncertaintyFraction: number;
@@ -872,8 +872,15 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
 
   const TRUST: Record<ScaleEstimate["source"], number> = {
     plate: 0,
-    height: 1,
-    shoulder_width: 2,
+    // A grip the athlete MEASURED sits above height, and the ordering is the point of the
+    // feature. Height is exact too, but a lying athlete's length points at the lens and a
+    // standing one's needs their whole body in frame; a stated grip is a known distance between
+    // two joints that are visible on essentially every frame of a barbell lift, at any framing.
+    // It is the first ruler in this pipeline that is neither a population average nor dependent
+    // on the camera being somewhere particular.
+    grip_width: 1,
+    height: 2,
+    shoulder_width: 3,
   };
   const ranked = [...usable].sort((a, b) => TRUST[a.source] - TRUST[b.source]);
 
@@ -933,6 +940,74 @@ export type ShoulderScaleReading = {
  * reliably visible, are angled enough that their apparent width is foreshortened by an unknown
  * amount, or imply a span no human has. A bad scale is worse than none.
  */
+/** THE ONE DISTANCE THE ATHLETE CAN JUST TELL US.
+ *
+ * Every other ruler here is inferred. The plate is a known object but the detector has to find
+ * one. Height is exact but needs a body the camera can see end to end, which a bench press
+ * filmed from the foot of the bench never provides. Shoulder breadth needs no framing at all
+ * and is a POPULATION AVERAGE -- biacromial-to-height varies by build, so it carries a tenth of
+ * error before anything goes wrong, and on one athlete across five stored takes it implied
+ * shoulders anywhere from 34cm to 47cm.
+ *
+ * A grip width is none of those. It is a fixed distance between two joints that are visible on
+ * essentially every frame of a barbell lift, at any camera position, and the athlete can put a
+ * tape measure across it in ten seconds. shoulderWidthScaleFromFrames' own comment says the
+ * shoulder ruler "stays until the plate can carry the measurement" -- this is the other thing
+ * that can carry it, and it needs no detector to cooperate.
+ *
+ * THE MAXIMUM SPAN, NOT THE MEDIAN, AND THAT IS THE WHOLE TRICK.
+ *
+ * A grip does not change during a set, so every honest reading of it is the same number. What
+ * varies is how much of it the camera can see: a bar angled to the lens foreshortens, and
+ * foreshortening can only ever make a segment look SHORTER than it is. So across several
+ * hundred frames the largest reading is the one closest to square-on, and it is the true span.
+ * A median would sit in the middle of the foreshortened readings and report a grip narrower
+ * than the athlete's, which inflates metres-per-pixel and every distance downstream.
+ *
+ * This is the same reasoning movementAxisFromGrip already applies with its own `widest`, and it
+ * is why this ruler does not need the athlete to film from anywhere in particular -- which is
+ * rule #1's whole point.
+ *
+ * A high percentile rather than the literal maximum: one frame where a wrist landmark flew off
+ * the athlete would otherwise set the ruler for the entire set.
+ */
+const GRIP_SPAN_PERCENTILE = 0.95;
+
+/** Measurement error on a tape across two hands, plus the fact that the athlete's wrists are
+ *  not exactly where they put the tape. Far below the shoulder ruler's tenth, and that gap is
+ *  the reason to prefer it. */
+const GRIP_WIDTH_TOLERANCE_FRACTION = 0.04;
+
+/** Enough frames that the 95th percentile is describing the set rather than a handful of reads. */
+const MIN_GRIP_SPAN_SAMPLES = 20;
+
+export function gripWidthScaleFromFrames(
+  frames: { worldLandmarks: Landmark[] }[],
+  gripWidthIn: number | null | undefined,
+): ScaleEstimate | null {
+  if (!gripWidthIn || gripWidthIn <= 0) return null;
+  const spans: number[] = [];
+  for (const f of frames) {
+    const l = f.worldLandmarks[POSE_LANDMARKS.LEFT_WRIST];
+    const r = f.worldLandmarks[POSE_LANDMARKS.RIGHT_WRIST];
+    if (!visible(l) || !visible(r)) continue;
+    // Across the image plane only. Vision's z is the least trustworthy axis it produces, and
+    // including it would add depth noise to a measurement whose entire virtue is that it does
+    // not depend on depth.
+    const span = Math.hypot(l.x - r.x, l.y - r.y);
+    if (span > 0) spans.push(span);
+  }
+  if (spans.length < MIN_GRIP_SPAN_SAMPLES) return null;
+  spans.sort((a, b) => a - b);
+  const trueSpanUnits = spans[Math.min(spans.length - 1, Math.floor(spans.length * GRIP_SPAN_PERCENTILE))];
+  if (!(trueSpanUnits > 0)) return null;
+  return {
+    source: "grip_width",
+    scale: (gripWidthIn * 0.0254) / trueSpanUnits,
+    uncertaintyFraction: GRIP_WIDTH_TOLERANCE_FRACTION,
+  };
+}
+
 export function shoulderWidthScaleFromFrames(
   frames: { worldLandmarks: Landmark[] }[],
   heightIn: number | null | undefined,

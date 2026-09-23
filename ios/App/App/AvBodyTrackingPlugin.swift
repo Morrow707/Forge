@@ -3414,6 +3414,10 @@ private struct AvObjectLockTelemetry {
     var framesTracked = 0
     var framesLockHeld = 0
     var freshDetections = 0
+    /// Fresh detections aimed by the object's OWN last box rather than by this frame's wrist --
+    /// the one signal in the object path the body tracker has no hand in. Counted because a
+    /// guard that cannot be shown to have fired is a guard nobody can tune.
+    var freshDetectionsSeededOnLastBox = 0
     var breaksLowConfidence = 0
     var breaksImplausibleJump = 0
     var breaksTrajectoryDisagreement = 0
@@ -3472,6 +3476,7 @@ private struct AvObjectLockTelemetry {
             "framesTracked": framesTracked,
             "framesLockHeld": framesLockHeld,
             "freshDetections": freshDetections,
+            "freshDetectionsSeededOnLastBox": freshDetectionsSeededOnLastBox,
             "breaksLowConfidence": breaksLowConfidence,
             "breaksImplausibleJump": breaksImplausibleJump,
             "breaksTrajectoryDisagreement": breaksTrajectoryDisagreement,
@@ -3792,6 +3797,20 @@ private final class AvCoreMlImplementDetector {
     // extractWorkingFrame's own caller already treats as "skip this frame's implement work
     // entirely" for the motion-diff tracker -- track() below applies that same skip specifically
     // to a FRESH detection (see its own comment on why an active track doesn't need this).
+    /// The last known box, grown by the same margin a wrist region uses. Generous on purpose:
+    /// a re-detection happens because the lock was LOST, so the implement has had time to move,
+    /// and a region too tight is how a search comes back empty forever. Twice the wrist margin,
+    /// which is still a small fraction of the frame and still rules out the rack across the gym.
+    static func expandedRegion(around box: CGRect) -> CGRect {
+        let margin = regionMarginFraction * 2
+        let x0 = max(0, box.minX - margin)
+        let x1 = min(1, box.maxX + margin)
+        let y0 = max(0, box.minY - margin)
+        let y1 = min(1, box.maxY + margin)
+        guard x1 > x0, y1 > y0 else { return box }
+        return CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+    }
+
     static func regionOfInterest(leftWrist: (x: Double, y: Double)?, rightWrist: (x: Double, y: Double)?) -> CGRect? {
         let xs = [leftWrist?.x, rightWrist?.x].compactMap { $0 }
         let ys = [leftWrist?.y, rightWrist?.y].compactMap { $0 }
@@ -4129,7 +4148,26 @@ private final class AvCoreMlImplementDetector {
         // a jumped wrist aiming the detector at the wrong place; neither is served by not
         // looking. A full-frame result still has to clear the distance and motion gates before
         // it can survive, so a rack plate found this way dies as soon as the body can speak.
-        let seededRegion = bodySuspectThisFrame ? nil : regionOfInterest
+        // THE OBJECT'S OWN LAST POSITION AIMS THE SEARCH, NOT THIS FRAME'S WRIST.
+        //
+        // This is the independence the camera architecture asks for and did not have. On a
+        // bench press EVERY input was the body tracker: the tracked point is the wrist
+        // midpoint, scale is shoulder breadth, the object is judged by grip width -- and the
+        // detector's own search region was aimed by the wrists too. So the object tracker was
+        // not a second opinion, it was DOWNSTREAM of the same landmarks, and a jumped wrist
+        // moved the search and the verdict together with nothing left to catch it. The
+        // telemetry says so plainly: "object tracker alone on 0" frames.
+        //
+        // A bar that was here last frame is near here this frame. That is a statement the body
+        // tracker has no part in making, and it is a better seed than a 52%-confidence wrist
+        // even when the wrist is behaving -- the bar is what we are looking for.
+        //
+        // The wrist region stays as the FALLBACK, for the frames before any lock has existed.
+        // Nothing is lost: a region only ever narrows the search, and freshDetection still
+        // clears every distance, size and motion gate afterwards.
+        let lastKnownRegion = recentBoxes.last.map { Self.expandedRegion(around: $0) }
+        let seededRegion = bodySuspectThisFrame ? nil : (lastKnownRegion ?? regionOfInterest)
+        if lastKnownRegion != nil { telemetry.freshDetectionsSeededOnLastBox += 1 }
 
         guard let best = freshDetection(
             pixelBuffer: pixelBuffer, orientation: orientation,

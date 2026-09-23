@@ -31,6 +31,7 @@ import {
   detectFormFaults,
   worldVerticalSign,
   shoulderWidthScaleFromFrames,
+  gripWidthScaleFromFrames,
   reconcileScaleEstimates,
   rejectImplausibleScales,
   plateReadIsPlausibleAgainstGrip,
@@ -525,6 +526,7 @@ export function AvBarTrackerDialog({
   equipment,
   laterality,
   heightIn,
+  gripWidthIn,
   targetReps,
   loadKg,
   recordVideo,
@@ -546,6 +548,8 @@ export function AvBarTrackerDialog({
   equipment?: string | null;
   laterality?: string | null;
   heightIn?: number | null;
+  /** A tape-measured grip, when the athlete has given one. See gripWidthScaleFromFrames. */
+  gripWidthIn?: number | null;
   targetReps?: number;
   loadKg?: number;
   recordVideo?: boolean;
@@ -1145,6 +1149,10 @@ export function AvBarTrackerDialog({
     // sources is the strongest evidence available here, and disagreement is the signal that
     // something is wrong, which is worth far more than a single confident-looking number.
     const shoulderScale = shoulderWidthScaleFromFrames(calibrationInput, heightIn, posture);
+    // A measured grip needs no detector, no full body in frame and no population average, so it
+    // is computed on every take where the athlete has given one -- the framing that defeats the
+    // other rulers does not reach it.
+    const gripScale = gripWidthScaleFromFrames(calibrationInput, gripWidthIn);
     const shoulderScaleValue = shoulderScale.scale;
 
     // Every candidate is checked against the athlete's own height before any of them is ranked --
@@ -1162,6 +1170,8 @@ export function AvBarTrackerDialog({
             },
           ]
         : []),
+      // THE ONE RULER THE ATHLETE SIMPLY TOLD US. See gripWidthScaleFromFrames.
+      ...(gripScale != null ? [gripScale] : []),
       ...(heightScaleFactor != null
         ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: 0.05 }]
         : []),
@@ -1189,7 +1199,7 @@ export function AvBarTrackerDialog({
     // new and its training data is thin, so a number built on one has to be identifiable as such
     // rather than indistinguishable from a height-derived one.
     // Names what actually decided the number, including whether anything corroborated it.
-    const scaleSource: "height" | "plate" | "box" | "both" | "shoulder_width" | null =
+    const scaleSource: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | null =
       scaleVerdict.agreedSources.length > 1
         ? "both"
         : (scaleVerdict.agreedSources[0] ?? null);
@@ -1204,6 +1214,9 @@ export function AvBarTrackerDialog({
               samples: plateScale.samples,
             },
           ]
+        : []),
+      ...(gripScale != null
+        ? [{ source: "grip_width", scale: gripScale.scale, measured: null, samples: null }]
         : []),
       ...(heightScaleFactor != null
         ? [{ source: "height", scale: heightScaleFactor, measured: null, samples: null }]
