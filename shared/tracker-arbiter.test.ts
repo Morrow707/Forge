@@ -394,9 +394,27 @@ describe("the Swift port carries the same numbers", () => {
     // away a good second-place detection of the real implement whenever a better-lit duplicate
     // exists elsewhere in the room, which for "plate" in a gym is most takes.
     const filterIdx = swift.indexOf("let plausible = ofThisClass.filter");
-    const maxIdx = swift.indexOf("guard let best = plausible.max");
+    // The statement form is not the invariant -- this was pinned to `guard let` and broke when
+    // the empty case stopped returning nil (see the fallback below). The ORDER is the invariant.
+    const maxIdx = swift.indexOf("plausible.max(by: { $0.confidence < $1.confidence })");
     expect(filterIdx).toBeGreaterThan(-1);
     expect(maxIdx).toBeGreaterThan(filterIdx);
+  });
+
+  it("filters before the pick on the low-confidence fallback too", () => {
+    // Added 2026-09-23 with the fallback itself. Relaxing the confidence floor when nothing
+    // clears it must not also relax the ORDER -- a fallback that picked the most confident
+    // candidate and then checked it would reintroduce exactly the bug the rule above exists to
+    // stop, in the one path that runs when evidence is already thin.
+    const start = swift.indexOf("NOTHING CLEARED THE BAR");
+    expect(start).toBeGreaterThan(-1);
+    const block = swift.slice(start, swift.indexOf("telemetry.lowConfidenceAccepts"));
+    const boxIdx = block.indexOf("candidateBoxIsUsable");
+    const wristIdx = block.indexOf("objectIsPlausible");
+    const pickIdx = block.lastIndexOf(".max(by:");
+    expect(boxIdx).toBeGreaterThan(-1);
+    expect(wristIdx).toBeGreaterThan(boxIdx);
+    expect(pickIdx).toBeGreaterThan(wristIdx);
   });
 });
 

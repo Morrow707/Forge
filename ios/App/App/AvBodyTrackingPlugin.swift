@@ -2843,9 +2843,20 @@ private final class AvFrameContext {
         guard #available(iOS 17.0, *) else { return nil }
         return VNDetectHumanBodyPose3DRequest()
     }()
-    // Placeholder, not a measured value -- see AvFrameRunState's body3DElapsedSeconds/
-    // body3DFrameCount, the numbers this needs correcting from once real on-device timing exists.
-    let body3DDetectionStride = 3
+    // NOW A MEASURED VALUE, AND IT WAS COSTING MORE THAN IT RETURNED.
+    //
+    // This said "placeholder, not a measured value ... once real on-device timing exists". That
+    // timing now exists, because the stage timers finally reach the report: on Scott's bench,
+    // 2026-09-23, the 3D pose pass was 12.0 of the 31.1 seconds of analysis -- 225 calls at
+    // 54ms each -- on a 22.4-second clip. Forty percent of the wait, for a depth signal that a
+    // bar lift filmed from the side does not use: depth is the axis that is NOT measurable from
+    // there (see docs/camera-tracking-notes.md).
+    //
+    // THINNED, NOT DELETED. Every third frame becomes every ninth: about 4 seconds instead of
+    // 12, and the signal survives for the modes that do read it. Deleting the request would
+    // save another 4 and take a capability with it, which is the trade rule #1 exists to refuse.
+    // One number to move back if a mode turns out to need the density.
+    let body3DDetectionStride = 9
     // Box jump's own object-detection signal. Every frame would be needless extra Vision work
     // for a signal that is checking a STATIONARY object, so a sparse sample across the whole
     // clip is exactly as informative as every frame, for a fraction of the cost.
@@ -3421,6 +3432,13 @@ private struct AvObjectLockTelemetry {
     /// off by the frame edge, BEFORE the most-confident pick. Separate from the wrist gate's
     /// count because they say different things about the room.
     var candidatesRejectedBySize = 0
+    // See freshDetection: what the class filter and the confidence floor threw away, and the
+    // strongest thing the model offered even if nothing was taken.
+    var candidatesSeenOfClass = 0
+    var candidatesOtherClass = 0
+    var candidatesRejectedByConfidence = 0
+    var bestCandidateConfidence: Float = 0
+    var lowConfidenceAccepts = 0
     /// Frames identical to the one before them -- a repeated decoder frame or a pose request
     /// returning cached landmarks. Reported as held, advanced nothing. Many of these on one take
     /// is a capture problem, not a tracking one, and it has to be visible as that.
@@ -3464,6 +3482,11 @@ private struct AvObjectLockTelemetry {
             "framesBodySuspect": framesBodySuspect,
             "breaksMotionDisagreement": breaksMotionDisagreement,
             "candidatesRejectedBySize": candidatesRejectedBySize,
+            "candidatesSeenOfClass": candidatesSeenOfClass,
+            "candidatesOtherClass": candidatesOtherClass,
+            "candidatesRejectedByConfidence": candidatesRejectedByConfidence,
+            "bestCandidateConfidence": bestCandidateConfidence,
+            "lowConfidenceAccepts": lowConfidenceAccepts,
             "framesFrozen": framesFrozen,
         ]
         if let d = maxAcceptedDistanceInYardsticks {
@@ -4149,9 +4172,22 @@ private final class AvCoreMlImplementDetector {
         guard (try? handler.perform([detectRequest])) != nil,
             let results = detectRequest.results as? [VNRecognizedObjectObservation]
         else { return nil }
-        let allOfThisClass = results
-            .filter { $0.labels.first?.identifier == targetLabel }
-            .filter { $0.confidence >= minDetectionConfidence }
+        // EVERY DROP GETS COUNTED, INCLUDING THE ONES BEFORE THE FIRST COUNTER.
+        //
+        // Scott's bench, 2026-09-23: 673 frames, ONE candidate, and the whole set measured off
+        // an unsupported wrist. The telemetry could not say whether the plate was out of shot or
+        // whether the confidence floor ate it, because everything below minDetectionConfidence
+        // was filtered out here, before any counter existed -- a guard that cannot be shown to
+        // have fired is a guard nobody can tune, which this file already says about the object
+        // lock and was still doing here.
+        let ofTargetLabel = results.filter { $0.labels.first?.identifier == targetLabel }
+        telemetry.candidatesSeenOfClass += ofTargetLabel.count
+        telemetry.candidatesOtherClass += results.count - ofTargetLabel.count
+        let allOfThisClass = ofTargetLabel.filter { $0.confidence >= minDetectionConfidence }
+        telemetry.candidatesRejectedByConfidence += ofTargetLabel.count - allOfThisClass.count
+        if let bestSeen = ofTargetLabel.max(by: { $0.confidence < $1.confidence }) {
+            telemetry.bestCandidateConfidence = max(telemetry.bestCandidateConfidence, bestSeen.confidence)
+        }
         // OVERWATCH: SIZE AND BOUNDS, ALSO BEFORE THE PICK. A speck the model labelled, or a box
         // the frame edge has cut, is not a candidate -- and if it were allowed to be the most
         // confident one it would win over the real implement. Threshold in grip widths; with no
@@ -4172,8 +4208,36 @@ private final class AvCoreMlImplementDetector {
         // athlete could actually be holding, and the most confident of THOSE wins.
         let plausible = ofThisClass.filter { objectIsPlausible($0.boundingBox, body: body) }
         telemetry.candidatesRejectedByWristGate += ofThisClass.count - plausible.count
-        guard let best = plausible.max(by: { $0.confidence < $1.confidence }) else { return nil }
-        return (best.boundingBox, best.confidence)
+        if let best = plausible.max(by: { $0.confidence < $1.confidence }) {
+            return (best.boundingBox, best.confidence)
+        }
+        // NOTHING CLEARED THE BAR, SO TAKE THE BEST THING THAT DID NOT. Rule #1 at the top of
+        // CLAUDE.md: a wrong number can be calibrated, a refusal cannot. Coming back empty here
+        // is how a whole set ends up measured off a 51%-confidence wrist with no second opinion,
+        // which is exactly what happened on 2026-09-23 -- and nothing anywhere said the detector
+        // had a candidate it chose not to use.
+        //
+        // The two gates that still bite are kept, because they are the ones with a geometric
+        // answer rather than a threshold: a box the frame edge has cut is not a whole object,
+        // and a speck is not an implement. Only the CONFIDENCE floor is relaxed, and only when
+        // relaxing it is the difference between a reading and none at all.
+        //
+        // The caller is told the confidence it really has. It is weak evidence, marked as weak,
+        // rather than no evidence at all.
+        if let fallback = ofTargetLabel
+            .filter({
+                AvTrackerArbiter.candidateBoxIsUsable(
+                    $0.boundingBox, label: targetLabel, yardstick: body.yardstick,
+                    frameWidth: body.frameWidth, frameHeight: body.frameHeight
+                )
+            })
+            .filter({ objectIsPlausible($0.boundingBox, body: body) })
+            .max(by: { $0.confidence < $1.confidence })
+        {
+            telemetry.lowConfidenceAccepts += 1
+            return (fallback.boundingBox, fallback.confidence)
+        }
+        return nil
     }
 
     private func seedTracking(on box: CGRect) {

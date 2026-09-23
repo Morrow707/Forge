@@ -697,7 +697,69 @@ export function rejectImplausibleAccelerationSpikes(points: TrackedPoint[]): Tra
 // step -- the same reasoning the arbiter's grip-width threshold follows.
 const MIN_VELOCITY_BASELINE_MS = 33;
 
-function computeSpeeds(points: TrackedPoint[], positions: number[]): number[] {
+// A VELOCITY IS A DISTANCE OVER A TIME, AND THE DISTANCE HAS TO BE THE BAR'S.
+//
+// Position is measured end to end; speed is measured step to step. That difference is invisible
+// until the tracked point WANDERS, and then it is the whole story: wandering inflates the path
+// length the speed is summed from and leaves the end-to-end displacement alone.
+//
+// Scott's bench, 2026-09-23, against his bar sensor. Range of motion came back 6% low -- fine.
+// Mean velocity came back 54% high and peak came back 103% high, on the same trace. The take
+// contradicted itself without any sensor being needed to see it: 0.70 m/s over a 0.79s
+// concentric is 55cm of travel, on a rep the same take measured at 36cm. The tracked point
+// walked 1616cm over the set; the bar does about 720.
+//
+// So the fix is not a better threshold -- no cutoff separates wander from motion when a quarter
+// of the samples are wander. It is to difference a SMOOTHED position, so a path that doubles
+// back on itself between samples cannot be counted as travel. On that trace it takes the walked
+// path from 1616cm to 841cm, converging on the 720cm the bar really covers, while the trace's
+// own vertical range barely moves (147cm to 132cm). It removes wander, not motion, and that
+// difference is the test -- any window that starts pulling the range down is erasing the lift.
+//
+// SMOOTHED FOR SPEED ONLY. The positions passed in are already Kalman-smoothed and are what
+// range of motion, rep segmentation and bar path are measured from, and all three are close to
+// the sensor today. This pass is local to the speed estimate so the things that work keep
+// working. Untuned against more than one paired set -- the next one moves it.
+export const VELOCITY_SMOOTHING_MS = 165;
+
+function smoothForSpeed(points: TrackedPoint[], positions: number[]): number[] {
+  const half = VELOCITY_SMOOTHING_MS / 2;
+  const out = new Array(positions.length);
+  for (let i = 0; i < positions.length; i++) {
+    let sum = 0;
+    let n = 0;
+    // By TIME, not by neighbour count, for the same reason the baseline below is a duration:
+    // one rule that is correct at 30, 60 and 120fps with no per-rate constant to keep in step.
+    for (let j = i; j >= 0 && points[i].t - points[j].t <= half; j--) {
+      sum += positions[j];
+      n += 1;
+    }
+    for (let j = i + 1; j < positions.length && points[j].t - points[i].t <= half; j++) {
+      sum += positions[j];
+      n += 1;
+    }
+    out[i] = n > 0 ? sum / n : positions[i];
+  }
+  return out;
+}
+
+function computeSpeeds(
+  points: TrackedPoint[],
+  rawPositions: number[],
+  // SMOOTHED FOR THE NUMBERS, RAW FOR THE DECISIONS, and the split is not cosmetic.
+  //
+  // The first cut of this smoothed unconditionally, and a stored capture's rep count moved from
+  // 5 to 6 -- because trimPhaseToMovement reads this same series to decide where a phase starts
+  // and stops, so a gentler speed curve moved the boundaries, which moved the durations, which
+  // let a phantom rep through the duration-ratio filter. The fixture says 5 and the fixture is
+  // a real take.
+  //
+  // So: anything that DECIDES something structural (where a phase begins, whether a rep is
+  // real) keeps the series it was tuned against, and only the velocities Forge reports are
+  // smoothed. A change that improves a number must not silently move a rep count.
+  smoothed = false,
+): number[] {
+  const positions = smoothed ? smoothForSpeed(points, rawPositions) : rawPositions;
   const speeds: number[] = new Array(points.length).fill(0);
   for (let i = 1; i < points.length - 1; i++) {
     let lo = i - 1;
@@ -1159,6 +1221,9 @@ export function summarizeTrackedSet(
     points.map((p) => p.confidence ?? 1),
   );
   const speedsMps = computeSpeeds(points, ySmoothed);
+  // The same trace differenced over a smoothed position -- see computeSpeeds. Read ONLY where a
+  // velocity is reported, never where one is used to decide something.
+  const speedsReportedMps = computeSpeeds(points, ySmoothed, true);
   // Same array robustPeakSpeed/plausibleMean already read for the physical-
   // ceiling filter, indexed identically to speedsMps/points -- lets both
   // also exclude a frame the implement tracker itself barely trusted, not
@@ -1202,7 +1267,7 @@ export function summarizeTrackedSet(
     // every range-of-motion and direction read downstream indexes off them, and range of motion
     // is the one number already measuring correctly.
     const moving = trimPhaseToMovement(speedsMps, phase.startIdx, phase.endIdx);
-    const slice = speedsMps.slice(moving.startIdx, moving.endIdx + 1);
+    const slice = speedsReportedMps.slice(moving.startIdx, moving.endIdx + 1);
     const confidenceSlice = confidences.slice(moving.startIdx, moving.endIdx + 1);
     const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
     const mean = plausibleMean(slice, confidenceSlice);
@@ -1211,7 +1276,7 @@ export function summarizeTrackedSet(
     // robustPeakSpeed rather than a raw max -- see its own comment above.
     // Measured over the moving window too: time-to-peak-velocity counted from a turning point
     // the athlete then stood at for two seconds is not time to peak velocity.
-    const { peak, peakIdx } = robustPeakSpeed(speedsMps, moving.startIdx, moving.endIdx, confidences);
+    const { peak, peakIdx } = robustPeakSpeed(speedsReportedMps, moving.startIdx, moving.endIdx, confidences);
     return {
       peak,
       mean,
@@ -1506,7 +1571,7 @@ export function summarizeTrackedSet(
       // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS's other two call sites above.
       velocityCurve.push({
         positionCm: Math.round((points[idx].y - points[phase.startIdx].y) * -1000) / 10,
-        velocityMps: Math.round(Math.min(speedsMps[idx], MAX_PLAUSIBLE_LIFT_VELOCITY_MPS) * 100) / 100,
+        velocityMps: Math.round(Math.min(speedsReportedMps[idx], MAX_PLAUSIBLE_LIFT_VELOCITY_MPS) * 100) / 100,
       });
     }
     // The phase right before this one always alternates direction by

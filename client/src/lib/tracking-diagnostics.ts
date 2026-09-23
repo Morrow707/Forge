@@ -89,6 +89,16 @@ export type ObjectLockDiagnostics = {
   // frames the camera repeated verbatim. Required so zero and "never reported" stay different.
   breaksMotionDisagreement: number;
   candidatesRejectedBySize: number;
+  // See freshDetection in AvBodyTrackingPlugin.swift. What the model offered, what the class
+  // filter and the confidence floor threw away, and how often nothing cleared the bar so the
+  // best weak candidate was taken instead. Added 2026-09-23 after a take where the only thing
+  // the telemetry could say was "1 candidate refused" across 673 frames.
+  candidatesSeenOfClass?: number;
+  candidatesOtherClass?: number;
+  candidatesRejectedByConfidence?: number;
+  bestCandidateConfidence?: number;
+  lowConfidenceAccepts?: number;
+
   framesFrozen: number;
   maxAcceptedDistanceInYardsticks?: number;
   yardstickSource?: string;
@@ -251,6 +261,18 @@ export type TrackingDiagnostics = {
     gripPairsUsed?: number;
     traceTravelAlongPx?: number;
     traceTravelAcrossPx?: number;
+    // HOW FAR THE TRACKED POINT WALKED, against how far it actually went.
+    //
+    // The pair that makes a wandering point visible without a bar sensor. Path is summed step to
+    // step, displacement is measured end to end, and only wandering separates them: on Scott's
+    // 2026-09-23 bench the point walked 1616cm on a set where the bar covers about 720. Velocity
+    // is summed from the path, range of motion from the displacement, which is exactly why that
+    // take's ROM was 6% low and its peak velocity 103% high.
+    tracePathCm?: number;
+    traceDisplacementCm?: number;
+    // The window the reported velocities were differenced over, so a take can be read back
+    // knowing which setting produced it. 0 means the smoothing was off.
+    velocitySmoothingMs?: number;
     traceTravelAlongCm?: number;
     traceTravelAcrossCm?: number;
     // Frames thrown out for sitting too far off the bar's own line -- see dropAcrossAxisOutliers.

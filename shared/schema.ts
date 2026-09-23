@@ -8764,6 +8764,12 @@ const objectLockDiagnosticsSchema = z.object({
   // and bounds rejections before the most-confident pick, and frozen (repeated) frames.
   breaksMotionDisagreement: z.number(),
   candidatesRejectedBySize: z.number(),
+  candidatesSeenOfClass: z.number().optional(),
+  candidatesOtherClass: z.number().optional(),
+  candidatesRejectedByConfidence: z.number().optional(),
+  bestCandidateConfidence: z.number().optional(),
+  lowConfidenceAccepts: z.number().optional(),
+
   framesFrozen: z.number(),
   maxAcceptedDistanceInYardsticks: z.number().optional(),
   yardstickSource: z.string().optional(),
@@ -9027,6 +9033,9 @@ export const trackingDiagnosticsSchema = z.object({
       gripPairsUsed: z.number().optional().nullable(),
       traceTravelAlongPx: z.number().optional().nullable(),
       traceTravelAcrossPx: z.number().optional().nullable(),
+      tracePathCm: z.number().optional().nullable(),
+      traceDisplacementCm: z.number().optional().nullable(),
+      velocitySmoothingMs: z.number().optional().nullable(),
       traceTravelAlongCm: z.number().optional().nullable(),
       traceTravelAcrossCm: z.number().optional().nullable(),
       tracePointsDroppedOffAxis: z.number().optional().nullable(),

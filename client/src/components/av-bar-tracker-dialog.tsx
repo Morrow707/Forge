@@ -79,6 +79,7 @@ import {
   type RepMetrics,
   type TrackedPoint,
   type VelocitySample,
+  VELOCITY_SMOOTHING_MS,
 } from "@/lib/bar-tracking";
 import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
 import {
@@ -1223,6 +1224,9 @@ export function AvBarTrackerDialog({
       traceTravelAlongPx?: number;
       traceTravelAcrossPx?: number;
       traceTravelAlongCm?: number;
+      tracePathCm?: number;
+      traceDisplacementCm?: number;
+      velocitySmoothingMs?: number;
       traceTravelAcrossCm?: number;
       tracePointsDroppedOffAxis?: number;
       referenceObject?: ReferenceObjectRead | null;
@@ -1613,6 +1617,19 @@ export function AvBarTrackerDialog({
       calibrationDiagnostics.gripPairsUsed = gripPairs.length;
       calibrationDiagnostics.traceTravelAlongCm = (maxAlong - minAlong) * 100;
       calibrationDiagnostics.traceTravelAcrossCm = (maxAcross - minAcross) * 100;
+      // WALKED vs WENT. Path is summed step to step; displacement is the span above. Only a
+      // wandering tracked point separates them, and that separation is what inflates velocity
+      // while leaving range of motion alone -- see computeSpeeds in bar-tracking.ts. Recorded so
+      // the ratio can be read straight off the report instead of derived from a raw trace.
+      let walked = 0;
+      for (let i = 1; i < trace.length; i++) {
+        const a = trace[i - 1];
+        const b = trace[i];
+        walked += Math.abs((b.x - a.x) * ax.x + (b.y - a.y) * ax.y);
+      }
+      calibrationDiagnostics.tracePathCm = walked * 100;
+      calibrationDiagnostics.traceDisplacementCm = (maxAlong - minAlong) * 100;
+      calibrationDiagnostics.velocitySmoothingMs = VELOCITY_SMOOTHING_MS;
       if (scaleFactor && scaleFactor > 0) {
         calibrationDiagnostics.traceTravelAlongPx = (maxAlong - minAlong) / scaleFactor;
         calibrationDiagnostics.traceTravelAcrossPx = (maxAcross - minAcross) / scaleFactor;

@@ -972,6 +972,35 @@ function computeFlags(r: TrackedSetRow): string[] {
     if (trackedReps != null && trackedReps < loggedReps) {
       flags.push(`Logged ${loggedReps} reps but tracking only found ${trackedReps}`);
     }
+    // A TAKE THAT CONTRADICTS ITSELF, CAUGHT WITHOUT A BAR SENSOR.
+    //
+    // Mean velocity times the concentric duration is a distance, and it has to be the range of
+    // motion. The same trace produced both, so when they disagree the trace is not describing
+    // one object moving: it is describing a point that wandered. Scott's bench, 2026-09-23 --
+    // 0.70 m/s over 0.79s is 55cm of travel on a rep measured at 36cm, and that same 1.54x is
+    // why the peak came back at twice the sensor's.
+    //
+    // Worth flagging even now that the velocities are differenced over a smoothed position
+    // (computeSpeeds in bar-tracking.ts), because that is a mitigation rather than a cure. This
+    // is the check that says whether it worked, on every take, for free. The 25% tolerance is
+    // loose on purpose: a real velocity profile is not a rectangle, so mean times duration is
+    // only ever approximately the distance, and a flag that fires on honest takes gets ignored.
+    const meanV = r.meanVelocityMps == null ? null : Number(r.meanVelocityMps);
+    const concS = r.concentricSeconds == null ? null : Number(r.concentricSeconds);
+    const romCm = r.romCm == null ? null : Number(r.romCm);
+    if (meanV && concS && romCm && romCm > 0) {
+      const impliedCm = meanV * concS * 100;
+      const ratio = impliedCm / romCm;
+      if (ratio > 1.25 || ratio < 0.75) {
+        flags.push(
+          `This take disagrees with itself: mean velocity ${meanV} m/s over a ${concS}s concentric `
+          + `is ${Math.round(impliedCm)}cm of travel, but its range of motion is ${Math.round(romCm)}cm `
+          + `(${ratio.toFixed(2)}x). Velocity is summed step to step and range of motion measured end `
+          + `to end, so a gap like this means the tracked point wandered -- check tracePathCm against `
+          + `traceDisplacementCm below.`,
+        );
+      }
+    }
     // THE LOAD ITSELF, BECAUSE EVERY WATT ON THE ROW IS MULTIPLIED BY IT.
     //
     // Scott filmed a 135 lb bench and the set was logged at 1 lb -- a typo, and a completely
