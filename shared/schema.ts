@@ -8964,6 +8964,9 @@ export const trackingDiagnosticsSchema = z.object({
       barPointFromLoneHandCarried: z.number().optional(),
       barPointFromBareLoneHand: z.number().optional(),
       barPointSideFlipped: z.number().optional(),
+      torsoStillThisTake: z.boolean().optional(),
+      torsoJumpRejections: z.number().optional(),
+      torsoSpreadGrips: z.number().nullable().optional(),
       largestGapSeconds: z.number().optional().nullable(),
     })
     .optional()

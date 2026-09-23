@@ -2753,6 +2753,142 @@ export function barPointFromSides(
 
 const SINGLE_SIDE_CONFIDENCE_DISCOUNT = 0.8;
 
+/** THE BODY AT REST IS A RULER NOBODY WAS READING.
+ *
+ * On a bench press the athlete's torso is pinned to the bench. Shoulders and hips do not
+ * travel for the whole set -- and yet every input the pipeline had on that lift came from the
+ * body tracker: the tracked point IS the wrist midpoint, scale is shoulder breadth, the object
+ * detector's search region is aimed by the wrists, and overwatch judges the object with grip
+ * width. So the body tracker was being asked for the one thing it is worst at (a fast-moving
+ * point, on the least reliable joints in the frame -- 52% average wrist confidence on the
+ * 2026-09-23 take) while the one thing it is genuinely excellent at went unused.
+ *
+ * It is excellent at being a FIXED REFERENCE. If the torso did not move, then a frame where
+ * the torso anchor HAS moved is a frame where the whole pose read jumped -- and the wrists on
+ * that frame jumped with it. That is a rejection test the wrists cannot influence, which is
+ * what the camera architecture requires of a check and what the object tracker on this lift
+ * could not provide, being downstream of those same wrists.
+ *
+ * Measured against a running MEDIAN rather than the previous frame: a jump must not become the
+ * reference that makes the next jump look stationary, which is how a run of bad frames teaches
+ * a stability check to accept them. Same reasoning as the arbiter's own span history.
+ *
+ * WHICH LIFTS THIS APPLIES TO IS MEASURED, NOT DECLARED.
+ *
+ * The first cut gated on posture -- lying, seated, supported -- which was too narrow by a mile.
+ * A standing overhead press holds the hips and legs just as still as a bench does; so do curls,
+ * lateral raises, shrugs, upright rows, pushdowns and a Pendlay row. Only the arms move. The
+ * property that matters is not how the athlete is arranged, it is whether the TORSO TRAVELS,
+ * and that splits the library somewhere a posture word cannot reach.
+ *
+ * So it is measured from the take itself: if the torso anchor barely moved across the set, the
+ * body was at rest and its stillness is usable as a reference. If it travelled -- a squat, a
+ * deadlift, a clean, a lunge, a jump, a pull-up -- the check switches itself OFF, because there
+ * the torso moving IS the lift and rejecting it would reject the movement.
+ *
+ * Self-configuring beats a list here for the reason CLAUDE.md gives about scans over lists: a
+ * list is written from the exercises somebody thought of, and this library has hundreds nobody
+ * will revisit. A measurement cannot be wrong about a movement it has never seen.
+ *
+ * Spread is the MEDIAN ABSOLUTE DEVIATION, not the range. A pose that jumps on a minority of
+ * frames is exactly the case this exists to catch, and a range would let those jumps inflate
+ * the spread until the take looked like a squat and the check turned itself off precisely when
+ * it was needed. The MAD ignores them, being a statement about the typical frame.
+ */
+export const TORSO_STILL_MAX_SPREAD_GRIPS = 0.25;
+
+/** Enough frames for a median to mean something, and the minimum before this claims a take was
+ *  at rest -- a handful of frames all agreeing proves nothing about a set. */
+export const TORSO_ANCHOR_HISTORY = 15;
+
+/** How far the anchor may sit from its own running median before the frame is treated as a
+ *  jumped pose read. In grip widths, never pixels or frame fractions: grip width is measured
+ *  every frame, needs no calibration, and scales with camera distance and zoom exactly as the
+ *  scene does, so one number is correct at every framing. The same rule every arbiter threshold
+ *  follows, for the same reason -- every earlier attempt used a frame fraction and needed
+ *  per-setup tuning it never got. */
+export const TORSO_ANCHOR_MAX_DRIFT_GRIPS = 0.35;
+
+/** Shoulders, plus hips when they are visible. Two segments rather than one because a single
+ *  shoulder pair rotates slightly as the athlete sets up and drives -- and on a standing press
+ *  the shoulders genuinely DO travel a little at lockout, while the hips do not. Averaging the
+ *  four points keeps the anchor on the part of the body that is actually still, without needing
+ *  to know which lift this is. */
+export function torsoAnchorFrom(
+  leftShoulder: { x: number; y: number } | null,
+  rightShoulder: { x: number; y: number } | null,
+  leftHip: { x: number; y: number } | null,
+  rightHip: { x: number; y: number } | null,
+): { x: number; y: number } | null {
+  const points = [leftShoulder, rightShoulder, leftHip, rightHip].filter(
+    (p): p is { x: number; y: number } => p != null,
+  );
+  if (points.length < 2) return null;
+  return {
+    x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+    y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+  };
+}
+
+/** True when this frame's anchor sits where the torso has been sitting. Measured against a
+ *  running MEDIAN, never the previous frame: a jump must not become the reference that makes
+ *  the next jump look stationary, which is how a run of bad frames teaches a stability check to
+ *  accept them. */
+export function torsoAnchorIsStable(
+  anchor: { x: number; y: number },
+  history: { x: number; y: number }[],
+  gripWidthUnits: number | null,
+): boolean {
+  if (history.length === 0) return true;
+  // Nothing to measure the drift against. Passing is the right answer -- a frame overwatch
+  // cannot judge PASSES, and the absence of a grip read is not evidence the body moved.
+  if (!gripWidthUnits || !(gripWidthUnits > 0)) return true;
+  const mid = (values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+  const refX = mid(history.map((h) => h.x));
+  const refY = mid(history.map((h) => h.y));
+  return (
+    Math.hypot(anchor.x - refX, anchor.y - refY) <= gripWidthUnits * TORSO_ANCHOR_MAX_DRIFT_GRIPS
+  );
+}
+
+/** The measured spread, in grip widths, alongside the verdict. TORSO_STILL_MAX_SPREAD_GRIPS is
+ *  an admitted guess like every threshold in this pipeline, and a guard whose measurement is
+ *  never recorded is one nobody can revise -- so the number that decided travels with the
+ *  decision, for a bench and a squat alike. */
+export function torsoRestSpreadGrips(
+  anchors: { x: number; y: number }[],
+  gripWidthUnits: number | null,
+): number | null {
+  if (anchors.length < TORSO_ANCHOR_HISTORY) return null;
+  if (!gripWidthUnits || !(gripWidthUnits > 0)) return null;
+  const mid = (values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+  const refX = mid(anchors.map((a) => a.x));
+  const refY = mid(anchors.map((a) => a.y));
+  return mid(anchors.map((a) => Math.hypot(a.x - refX, a.y - refY))) / gripWidthUnits;
+}
+
+export function torsoWasAtRest(
+  anchors: { x: number; y: number }[],
+  gripWidthUnits: number | null,
+): boolean {
+  if (anchors.length < TORSO_ANCHOR_HISTORY) return false;
+  if (!gripWidthUnits || !(gripWidthUnits > 0)) return false;
+  const mid = (values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+  const refX = mid(anchors.map((a) => a.x));
+  const refY = mid(anchors.map((a) => a.y));
+  const deviations = anchors.map((a) => Math.hypot(a.x - refX, a.y - refY));
+  return mid(deviations) <= gripWidthUnits * TORSO_STILL_MAX_SPREAD_GRIPS;
+}
+
 /** The half-span to carry a lone hand back by: the component-wise MEDIAN of what has been
  *  measured this set, not the most recent measurement.
  *

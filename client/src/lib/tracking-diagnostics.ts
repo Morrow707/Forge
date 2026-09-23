@@ -72,6 +72,12 @@ export type TraceDiagnostics = {
   barPointFromBareLoneHand?: number;
   /** Lone-hand frames where continuity overruled Vision's left/right label. */
   barPointSideFlipped?: number;
+  /** Whether this take's torso held still, and so whether its stillness was usable as a
+   *  reference at all -- see torsoWasAtRest. */
+  torsoStillThisTake?: boolean;
+  torsoJumpRejections?: number;
+  /** The measured spread that decided it, so the threshold can be revised from takes. */
+  torsoSpreadGrips?: number | null;
   largestGapSeconds: number | null;
 };
 

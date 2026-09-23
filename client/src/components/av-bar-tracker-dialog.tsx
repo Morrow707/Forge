@@ -66,6 +66,11 @@ import {
   interpolateOcclusionGap,
   barPointFromSides,
   medianHalfSpan,
+  torsoAnchorFrom,
+  torsoAnchorIsStable,
+  torsoWasAtRest,
+  torsoRestSpreadGrips,
+  TORSO_ANCHOR_HISTORY,
   computeArmDriveAsymmetry,
   computeRepTrustScores,
   implausibleRangeOfMotion,
@@ -1308,6 +1313,13 @@ export function AvBarTrackerDialog({
     // teleported because the sides swapped are different faults with different fixes.
     const combinedRejectionEvents: number[] = [];
     const halfSpanHistory: { x: number; y: number }[] = [];
+    // Per-frame torso anchors, and whether each sat where the torso had been sitting. Both are
+    // collected unconditionally; torsoWasAtRest below decides whether this take is one where
+    // they mean anything.
+    const torsoAnchors: ({ x: number; y: number } | null)[] = [];
+    const torsoAnchorStable: boolean[] = [];
+    let torsoAnchorHistory: { x: number; y: number }[] = [];
+    const torsoJumpFrameTimes = new Set<number>();
     let barPointSideFlipped = 0;
     let barPointFromBothHands = 0;
     let barPointFromLoneHandCarried = 0;
@@ -1419,6 +1431,41 @@ export function AvBarTrackerDialog({
 
       const sign = worldVerticalSign(worldLm);
       if (sign != null) verticalSign = sign;
+
+      // THE BODY AT REST, USED AS THE REFERENCE IT IS. See torsoWasAtRest in bar-tracking.ts.
+      //
+      // On a bench press -- and equally on a standing press, a curl, a shrug, a Pendlay row --
+      // the torso does not travel. Every input this lift had came from the body tracker anyway
+      // (the tracked point IS the wrist midpoint, scale is shoulder breadth, the object
+      // detector's search region is aimed by the wrists, overwatch judges the object with grip
+      // width), so nothing independent could catch a jumped wrist. A torso that has moved when
+      // the torso does not move is that independent signal, and the wrists cannot influence it.
+      //
+      // Collected on EVERY take. Whether it is used is decided afterwards, by whether this
+      // take's torso actually held still -- a squat's does not, and there rejecting torso
+      // movement would reject the lift.
+      const lm = (i: number) => {
+        const p = worldLm[i];
+        return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: p.x, y: p.y } : null;
+      };
+      const torsoAnchor = torsoAnchorFrom(
+        lm(POSE_LANDMARKS.LEFT_SHOULDER),
+        lm(POSE_LANDMARKS.RIGHT_SHOULDER),
+        lm(POSE_LANDMARKS.LEFT_HIP),
+        lm(POSE_LANDMARKS.RIGHT_HIP),
+      );
+      if (torsoAnchor) {
+        torsoAnchors.push(torsoAnchor);
+        const span = medianHalfSpan(halfSpanHistory);
+        const gripWidthUnits = span ? Math.hypot(span.x, span.y) * 2 : null;
+        torsoAnchorStable.push(torsoAnchorIsStable(torsoAnchor, torsoAnchorHistory, gripWidthUnits));
+        if (!torsoAnchorStable[torsoAnchorStable.length - 1]) torsoJumpFrameTimes.add(t);
+        torsoAnchorHistory = [...torsoAnchorHistory, torsoAnchor].slice(-TORSO_ANCHOR_HISTORY);
+      } else {
+        torsoAnchors.push(null);
+        // No anchor is not evidence the body moved. A frame overwatch cannot judge PASSES.
+        torsoAnchorStable.push(true);
+      }
       // No assessCameraAlignment on this path: worldLm has z pinned to 0 (see
       // visionJointsToWorldLandmarks), so that reader could only ever answer "ok" or
       // "unknown", and it answered "unknown" for every correct side view. The alignment
@@ -1559,6 +1606,37 @@ export function AvBarTrackerDialog({
       }
     }
 
+    // NOW DECIDE WHETHER THIS TAKE'S TORSO STILLNESS MEANS ANYTHING, AND ACT ON IT.
+    //
+    // Deliberately a second pass. Whether the athlete's torso travelled is a fact about the
+    // whole SET, not about a frame -- a squat's first thirty frames look as still as a bench's,
+    // and gating inside the loop would have to decide on evidence it does not have yet.
+    //
+    // A jumped torso means a jumped pose read, and the wrists on that frame jumped with it. So
+    // the bar points from those frames are dropped -- a SAMPLE, never the take (RULE #1), and
+    // the count is reported so the rejection can be seen rather than inferred.
+    const torsoAnchorsSeen = torsoAnchors.filter((a): a is { x: number; y: number } => a != null);
+    const torsoGripWidthUnits = (() => {
+      const span = medianHalfSpan(halfSpanHistory);
+      return span ? Math.hypot(span.x, span.y) * 2 : null;
+    })();
+    const torsoStillThisTake = torsoWasAtRest(torsoAnchorsSeen, torsoGripWidthUnits);
+    const torsoSpreadRaw = torsoRestSpreadGrips(torsoAnchorsSeen, torsoGripWidthUnits);
+    const torsoSpreadGrips = torsoSpreadRaw == null ? null : Math.round(torsoSpreadRaw * 1000) / 1000;
+    let torsoJumpRejections = 0;
+    if (torsoStillThisTake && torsoJumpFrameTimes.size > 0) {
+      const before = trace.length;
+      const kept = trace.filter((p) => !torsoJumpFrameTimes.has(p.t));
+      // NEVER LET THIS EMPTY A TAKE. If most of the set reads as a jumped torso then the
+      // stillness premise is what is wrong, not the frames -- the same reasoning
+      // dropAcrossAxisOutliers and rejectImplausibleScales both apply to their own guards.
+      if (kept.length >= before / 2) {
+        torsoJumpRejections = before - kept.length;
+        trace.length = 0;
+        trace.push(...kept);
+      }
+    }
+
     // See TrackingDiagnostics["trace"]. Reads the trace at call time rather than snapshotting it,
     // so a caller after dropAcrossAxisOutliers (which rewrites the array in place) gets the
     // trimmed count and a caller before it gets the raw one. Every save path below is handed one
@@ -1580,6 +1658,9 @@ export function AvBarTrackerDialog({
         combinedVelocityRejections: combinedRejectionEvents.length,
         barPointFromBothHands,
         barPointSideFlipped,
+        torsoStillThisTake,
+        torsoJumpRejections,
+        torsoSpreadGrips,
         barPointFromLoneHandCarried,
         barPointFromBareLoneHand,
         largestGapSeconds: largestGapSeconds == null ? null : Math.round(largestGapSeconds * 1000) / 1000,
