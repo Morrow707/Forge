@@ -46,7 +46,7 @@ export const MOVEMENTS: Movement[] = [
     name: "Bench press",
     mode: "Bar path",
     filming:
-      "SQUARE TO THE SIDE of the bench, camera level with the bar, landscape. Not from the foot of the bench, not from behind the head, not raised. Far enough back that the whole athlete -- head to planted feet -- is in frame for the whole set.",
+      "Any angle you can film from is an angle Forge will measure -- see the caveat for what each one costs. Square to the side, camera level with the bar, is the most accurate, because it is the only view where a lying athlete's own height can be used to set real-world scale. From the foot of the bench or behind the head, scale comes from shoulder breadth instead, which works from those angles and is looser.",
     measures: [
       "Bar speed through the press",
       "Range of motion from chest to lockout",
@@ -54,7 +54,7 @@ export const MOVEMENTS: Movement[] = [
       "Rep count and tempo",
     ],
     caveat:
-      "The side is the ONLY view that works here, and this is the one lift where that is true. Scale comes from the athlete's own height, and a lying body only shows its real length when it lies ACROSS the frame -- from the head or the foot of the bench it points straight at the lens, there is nothing in the picture about how long it is, and calibration fails on almost every frame. Every other movement Forge tracks has the athlete upright, where height reads from any angle. Bench is the exception, so the camera placement is not a preference on this one.",
+      "Bench is the only lift Forge tracks where the athlete is lying down, and that costs it a ruler. A lying body shows its true length only when it lies ACROSS the frame; filmed from the foot of the bench or behind the head it points at the lens, so height cannot be read and scale falls to shoulder breadth alone. Shoulder breadth is a population average against height and can be out by around a tenth on build alone, so distances -- range of motion above all -- are the numbers to treat with most suspicion from those angles. The set is still measured and still reported; it is a wider error bar, not a refusal.",
   },
   {
     slug: "pendlay-row",

@@ -457,7 +457,7 @@ const FILM_GUIDANCE_BY_NAME = new Map<string, ExerciseFilmGuidance>([
     oneRep: "One rep = arms straight with hands on the bench behind you, lower the hips toward the floor, press back up.",
   }],
   ["Bench Press", {
-    view: "Square to the SIDE of the bench, camera level with the bar. Not from the foot of the bench, not from behind the head, not raised. The side is the only view where the app can work out real-world scale for this lift.",
+    view: "Film from wherever you can -- every angle is measured. Square to the SIDE of the bench, camera level with the bar, is the most accurate: it is the only view where your own height can set real-world scale on a lift you do lying down. From the foot of the bench or behind the head it uses your shoulder breadth instead, which works but is looser, so distances carry a wider error bar.",
     inFrame: "The bench, both feet on the floor, both plates, the bar at lockout, and the bar touching the chest.",
     follows: "The bar (wrists on it).",
     oneRep: "One rep = bar locked out over the shoulders, lower to touch the chest, press back to lockout. The rep ends at lockout.",

@@ -38,22 +38,33 @@ describe("the two places that say where to put the camera", () => {
       expect(movement, `no movement for ${slug}`).toBeTruthy();
       expect(profile, `no camera profile for ${exerciseName}`).toBeTruthy();
 
-      // Strip each surface's own "not from X" warnings before looking for a placement -- both
-      // of them name the wrong views in order to rule them out, and a naive scan reads those
-      // as instructions.
-      const placement = (text: string) => text.replace(/\bnot\b[^.]*\./gi, " ");
-      expect(placement(profile!.view)).toMatch(/side/i);
-      expect(placement(movement!.filming)).toMatch(/side/i);
-      expect(placement(movement!.filming)).not.toMatch(/behind the head|foot of the bench/i);
+      // RULE #1 APPLIES TO WHAT WE SAY, NOT ONLY TO WHAT WE COMPUTE.
+      //
+      // The first version of this test asserted the library must not so much as MENTION the
+      // foot of the bench -- which quietly encoded "the side is the only view that works",
+      // the very thing rule #1 forbids. It does not work: the athlete films from where they
+      // can, and on a bench that is very often the foot. That angle loses the height ruler
+      // and falls back to shoulder breadth, which is looser -- a wider error bar, not a
+      // refusal, and the copy has to say the second thing rather than the first.
+      //
+      // So what the two surfaces must agree on is the RECOMMENDATION, and neither may tell
+      // an athlete their angle is unusable.
+      for (const text of [profile!.view, `${movement!.filming} ${movement!.caveat}`]) {
+        expect(text).toMatch(/side/i);
+        expect(text).not.toMatch(
+          /only view that works|cannot be measured from|will not work from|do not film from/i,
+        );
+      }
     });
   }
 
-  it("bench press says the side is the only view, on BOTH surfaces", () => {
-    // Bench is the one lift where this is not a preference: it is the only supine movement
-    // Forge tracks, and a lying body shows its true length only when it lies across the frame.
-    const movement = MOVEMENTS.find((m) => m.slug === "bench-press")!;
-    const profile = profileFor("Bench Press")!;
-    expect(profile.view).toMatch(/only view/i);
-    expect(`${movement.filming} ${movement.caveat}`).toMatch(/only view|ONLY view/i);
+  it("neither surface refuses an angle, on any movement", () => {
+    // Rule #1: the filming angle is never a reason to refuse anything. Copy that tells an
+    // athlete their angle is unusable is that refusal wearing different clothes -- they read
+    // it, film anyway, and now distrust a number that was going to be produced regardless.
+    const REFUSES = /only view that works|cannot be measured from|will not work from|do not film from|is not a preference/i;
+    for (const m of MOVEMENTS) {
+      expect(`${m.filming} ${m.caveat}`, `${m.slug} refuses an angle`).not.toMatch(REFUSES);
+    }
   });
 });
