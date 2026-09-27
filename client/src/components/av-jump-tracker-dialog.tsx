@@ -64,6 +64,9 @@ const EMPTY_JUMP_METRICS: JumpSetMetrics = {
   repBreakdown: [],
   pathTrace: [],
   formFaults: [],
+  // A refused take measured nothing, so it has no gravity ruler to offer -- null, never 0,
+  // which would read as "the scale is infinitely wrong" rather than "nothing was measured".
+  gravityVerdict: null,
 };
 
 export function AvJumpTrackerDialog({

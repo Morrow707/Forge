@@ -1,5 +1,6 @@
 // Type-only -- see bar-tracking.ts's own comment on why this import is safe (erased at
 // compile time, no runtime Capacitor dependency pulled into this pure module).
+import { gravityReadingFromJump, gravityVerdictForSet } from "./gravity-ruler";
 import type { CaptureDeviceInfo } from "./native-av-preview";
 import type { TrackingDiagnostics } from "./tracking-diagnostics";
 
@@ -52,6 +53,10 @@ const MAX_FLIGHT_SECONDS = 1.2;
 export type JumpRep = {
   repNumber: number;
   flightSeconds: number;
+  /** Net rise from takeoff to landing, centimetres. Zero on a flat jump, the box height on a
+   *  box jump. Kept because it is what decides whether this rep can serve as a gravity ruler --
+   *  see gravity-ruler.ts. */
+  netRiseCm: number;
   // Two independent estimates of the same thing, kept separate rather than
   // averaged: flight-time-derived height is the standard video-based jump
   // testing method (what apps like My Jump validate against force plates),
@@ -108,6 +113,14 @@ export type JumpSetMetrics = {
   // this module only has the ankle trace, not the full landmark history
   // fault detection needs.
   formFaults: FormFault[];
+  /** THE GRAVITY RULER: how wrong this take's real-world scale is, measured from nothing but
+   *  frames and 9.81. Null when no rep was flat enough or long enough to say -- see
+   *  gravity-ruler.ts. */
+  gravityVerdict: {
+    scaleErrorRatio: number;
+    uncertaintyFraction: number;
+    repsUsed: number;
+  } | null;
   // Filled in by the caller from pose-tracking.ts's computeLandingAsymmetry
   // -- same "this module only has the ankle trace" reasoning as formFaults
   // above. One entry per rep in repBreakdown (null for a rep without
@@ -223,6 +236,13 @@ export function summarizeJumpSet(
   // Vision genuinely couldn't find a confident box read -- boxClearanceCm on every rep stays
   // null in either case, never a fabricated number.
   boxTopWorldY?: number | null,
+  // APPENDED, NEVER INSERTED. These are positional parameters and an existing caller passes
+  // boxTopWorldY fourth; slotting a new one in front of it silently re-reads the box height as
+  // a frame interval, which is how the box-jump segmentation test just caught this.
+  //
+  // The capture's real frame interval in seconds. Height goes with the SQUARE of flight time,
+  // so this is what decides whether the gravity ruler is worth anything -- see gravity-ruler.ts.
+  frameIntervalSeconds?: number | null,
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
   const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
@@ -446,6 +466,7 @@ export function summarizeJumpSet(
             const jumpHeightCm = ((takeoffVelocityMps * takeoffVelocityMps) / (2 * GRAVITY_MPS2)) * 100;
 
             const peakHeightCm = Math.max(0, amplitudeSoFar * 100);
+            const netRiseCm = netRiseM * 100;
 
             // Below ~5cm is just normal in-place sway, not an intentional
             // broad jump -- reporting a noisy "distance" on a vertical-only
@@ -476,6 +497,7 @@ export function summarizeJumpSet(
             reps.push({
               repNumber: reps.length + 1,
               flightSeconds: Math.round(flightSeconds * 1000) / 1000,
+              netRiseCm: Math.round(netRiseCm * 10) / 10,
               jumpHeightCm: Math.round(jumpHeightCm * 10) / 10,
               peakHeightCm: Math.round(peakHeightCm * 10) / 10,
               horizontalDistanceCm,
@@ -533,6 +555,27 @@ export function summarizeJumpSet(
     : null;
   const reactiveStrengthIndex = bestReactiveStrengthIndex(reps);
 
+  // THE GRAVITY RULER. See gravity-ruler.ts.
+  //
+  // Both heights were already computed per rep and deliberately kept apart -- one from flight
+  // time, which carries no scale, one from displacement, which carries all of it. Their ratio is
+  // a direct measurement of how wrong this take's real-world scale is, needing no sensor, no
+  // tape and no reference object. It was sitting here unused.
+  //
+  // Flat reps only: g*t^2/8 rests on a symmetric parabola, and a box jump's landing height would
+  // feed the trace's own scale back into the supposedly scale-free half.
+  const gravityReadings = reps
+    .map((rep) =>
+      gravityReadingFromJump({
+        flightSeconds: rep.flightSeconds,
+        displacementHeightCm: rep.peakHeightCm,
+        netRiseCm: rep.netRiseCm,
+        frameIntervalSeconds: frameIntervalSeconds ?? 1 / 30,
+      }),
+    )
+    .filter((r): r is NonNullable<typeof r> => r != null);
+  const gravityVerdict = gravityVerdictForSet(gravityReadings);
+
   const boxClearances = reps.map((r) => r.boxClearanceCm).filter((c): c is number => c != null);
   const bestBoxClearanceCm = boxClearances.length ? Math.max(...boxClearances) : null;
 
@@ -557,5 +600,6 @@ export function summarizeJumpSet(
     pathTrace: buildPathTrace(rawPoints, { x: rawPoints[0].x, y: rawPoints[0].y }),
     formFaults: [],
     bestBoxClearanceCm,
+    gravityVerdict,
   };
 }
