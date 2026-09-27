@@ -22975,6 +22975,50 @@ ${catalog}`;
   // for data the survey never reads. `includeSkeleton` is separate and far more expensive again
   // -- one set's skeleton frames run to a couple of megabytes -- so it is opt-in, and the caller
   // is expected to clamp the row count hard when it asks.
+  /**
+   * RECENT CLIPS WORTH PULLING DETECTOR TRAINING FRAMES OUT OF.
+   *
+   * The object detector reads 0.02 confidence on the barbell class because it was trained on
+   * three labelled instances, and the plate class on twelve -- all of them photographs of an
+   * empty gym, barbells on racks and plates on plate trees. That is the wrong scene: the
+   * detector has to find a plate on a LOADED bar being pressed, at bench distance, from
+   * wherever the phone was put. Training on plate trees is how a rack upright came back boxed
+   * as a plate at 3.4x the athlete's hand span.
+   *
+   * Every filmed set is already the right scene. This lists them so frames can be pulled.
+   *
+   * Barbell modes only, because that is the class that cannot see. Newest first.
+   *
+   * NAMES NOBODY. Athlete ids are replaced by a per-response sequence at the route, the same
+   * treatment the tracking report and the capture export already give -- an admin analytics
+   * surface does not resolve to a person (CLAUDE.md, "Athlete data leaving the platform").
+   */
+  async getClipsForDetectorTraining(limit: number) {
+    return db
+      .select({
+        setId: workoutSetEntries.id,
+        athleteId: workoutLogs.athleteId,
+        date: workoutLogs.date,
+        exerciseName: exercises.name,
+        setNumber: workoutSetEntries.setNumber,
+        trackingLevel: programExercises.trackingLevel,
+        videoUrl: workoutSetEntries.formCheckVideoUrl,
+        uploadedAt: workoutSetEntries.videoUploadedAt,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      // LEFT joins on both, deliberately. workoutLogEntries.exerciseId is nullable and
+      // programExerciseId can be nulled by a later program edit -- inner-joining either does
+      // not produce a row with a missing name, it produces NO row, for a clip that really
+      // exists. Three silent drops have already been found in the sibling query.
+      .leftJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
+      .where(isNotNull(workoutSetEntries.formCheckVideoUrl))
+      .orderBy(desc(workoutSetEntries.videoUploadedAt))
+      .limit(limit);
+  },
+
   async getStoredCapturesForReplay(
     limit: number,
     opts: { includeTraces?: boolean; includeSkeleton?: boolean } = {},

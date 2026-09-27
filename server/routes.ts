@@ -1577,6 +1577,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
    *  Carries paths and timestamps and nothing else: no athlete id, no uploader, no name. A
    *  filename here is a uuid, which resolves to a person only through a join this response
    *  does not make -- the same boundary /api/admin/capture-export.json holds. */
+  /** Clips to pull detector training frames from -- see getClipsForDetectorTraining.
+   *
+   *  The extraction itself happens in the browser (there is no ffmpeg on the server, and the
+   *  frames are never stored anywhere regardless), so this hands back a signed video URL and
+   *  nothing that resolves to a person. The athlete code is generated fresh per response and
+   *  mapped nowhere, exactly as the tracking report and capture export do it. */
+  app.get("/api/admin/detector-training-clips", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "40"), 10) || 40, 1), 200);
+    const rows = await storage.getClipsForDetectorTraining(limit);
+    const codes = new Map<number, string>();
+    const codeFor = (athleteId: number) => {
+      if (!codes.has(athleteId)) codes.set(athleteId, `Athlete ${codes.size + 1}`);
+      return codes.get(athleteId)!;
+    };
+    res.json({
+      clips: rows.map((r, index) => ({
+        seq: index + 1,
+        athlete: codeFor(r.athleteId),
+        date: r.date,
+        // A clip whose exercise no longer resolves is still a clip of a real lift -- see the
+        // LEFT joins in the query. Dropping it here would repeat the bug those exist to avoid.
+        exerciseName: r.exerciseName ?? "(exercise no longer resolves)",
+        setNumber: r.setNumber,
+        trackingLevel: r.trackingLevel,
+        videoUrl: r.videoUrl,
+        uploadedAt: r.uploadedAt,
+      })),
+    });
+  });
+
   app.get("/api/admin/storage-report.json", requireRole("admin"), async (req, res) => {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "500"), 10) || 500, 1), 2000);
     const [disk, ledger] = await Promise.all([

@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { CameraAiHistoryContent } from "./camera-ai-history";
+import { DetectorTrainingFrames } from "@/components/detector-training-frames";
 
 /**
  * The camera AI's own page.
@@ -12,7 +13,10 @@ import { CameraAiHistoryContent } from "./camera-ai-history";
 export default function AdminCameraAi() {
   return (
     <AppShell title="Camera AI">
-      <CameraAiHistoryContent />
+      <div className="space-y-4">
+        <DetectorTrainingFrames />
+        <CameraAiHistoryContent />
+      </div>
     </AppShell>
   );
 }
