@@ -90,6 +90,20 @@ const visible = (p: Landmark | undefined): p is Landmark =>
  * purpose: this is the one path that can write a wrong number into an athlete's permanent record
  * and have every future take inherit it wearing the authority of a measurement.
  */
+/** The same spans, in the tracker's own units, for a take that has NO trustworthy scale.
+ *
+ *  This is the other direction: rather than learning a bone, it measures the bone the camera can
+ *  see right now so a length already known in metres can supply the scale. Sharing the geometry
+ *  matters more than it looks -- the maximum-over-frames rule has to be identical in both
+ *  directions or a bone learned one way is read back another, and the difference lands silently
+ *  in every distance the take reports. */
+export function measureLimbSpansInUnits(
+  frames: { worldLandmarks: Landmark[] }[],
+): Partial<Record<LimbKey, number>> {
+  // Scale of 1 leaves the spans in units. Same code path, by construction.
+  return measureLimbsInMetres(frames, 1);
+}
+
 export function measureLimbsInMetres(
   frames: { worldLandmarks: Landmark[] }[],
   scaleMetresPerUnit: number | null | undefined,

@@ -1,4 +1,5 @@
 import { repConsistencyFlag } from "@shared/rep-consistency";
+import { metricIsScaleFree } from "@shared/scale-free-metrics";
 // Formats storage.getRecentTrackedSetsForAdmin's rows into a plain-language report -- built for
 // the exact question that prompted it ("what is bar_path/full supposed to record for a bench
 // press, and how?"), not just a data dump. Each tracking mode gets a short, fixed "how this
@@ -265,28 +266,36 @@ function formatDataPoints(r: TrackedSetRow): ReportField[] {
   const push = (label: string, value: string | null) => {
     if (value != null) lines.push({ label, value });
   };
-  const pushScaleFree = (label: string, value: string | null) => {
-    if (value != null) lines.push({ label, value, scaleFree: true });
+  // THE CLASSIFICATION DRIVES THE TAG, rather than the tag being hand-applied beside it.
+  //
+  // pushScaleFree started as "write true on the three I know about", which is two sources of
+  // truth for one fact: shared/scale-free-metrics.ts says which metrics survive a wrong scale,
+  // and this said it again. Two statements of one fact drift, and the drift here would either
+  // strip the caveat off a number that needed it or leave it on one that did not. The metric KEY
+  // is passed and the module answers.
+  const pushMetric = (label: string, metric: string, value: string | null) => {
+    if (value == null) return;
+    lines.push(metricIsScaleFree(metric) ? { label, value, scaleFree: true } : { label, value });
   };
 
   // Time and ratio metrics are tagged as they are pushed rather than matched by label
   // afterwards -- a label is display text that somebody will reword, and the tag would silently
   // stop applying to a number that still deserved it.
-  pushScaleFree("Concentric duration", num(r.concentricSeconds, " s"));
-  pushScaleFree("Eccentric duration", num(r.eccentricSeconds, " s"));
-  pushScaleFree("Velocity loss across set", num(r.velocityLossPercent, "%"));
+  pushMetric("Concentric duration", "concentricSeconds", num(r.concentricSeconds, " s"));
+  pushMetric("Eccentric duration", "eccentricSeconds", num(r.eccentricSeconds, " s"));
+  pushMetric("Velocity loss across set", "velocityLossPercent", num(r.velocityLossPercent, "%"));
 
-  push("Peak concentric velocity", num(r.peakVelocityMps, " m/s"));
-  push("Mean concentric velocity", num(r.meanVelocityMps, " m/s"));
-  push("Mean eccentric velocity", num(r.eccentricMeanVelocityMps, " m/s"));
-  push("Bar path deviation", num(r.barPathDeviationCm, " cm"));
-  push("Range of motion", num(r.romCm, " cm"));
+  pushMetric("Peak concentric velocity", "peakVelocityMps", num(r.peakVelocityMps, " m/s"));
+  pushMetric("Mean concentric velocity", "meanVelocityMps", num(r.meanVelocityMps, " m/s"));
+  pushMetric("Mean eccentric velocity", "eccentricMeanVelocityMps", num(r.eccentricMeanVelocityMps, " m/s"));
+  pushMetric("Bar path deviation", "barPathDeviationCm", num(r.barPathDeviationCm, " cm"));
+  pushMetric("Range of motion", "romCm", num(r.romCm, " cm"));
   // See bar-tracking.ts's RepBreakdown.eai comment for what this is and how it was
   // reverse-engineered (OVR's own name, no public formula) -- peak velocity / time-to-peak,
   // averaged across the set the same way every other per-rep number here is.
-  push("EAI (avg)", num(r.meanEai, ""));
-  push("Peak power", num(r.peakPowerWatts, " W"));
-  push("Mean power", num(r.meanPowerWatts, " W"));
+  pushMetric("EAI (avg)", "meanEai", num(r.meanEai, ""));
+  pushMetric("Peak power", "peakPowerWatts", num(r.peakPowerWatts, " W"));
+  pushMetric("Mean power", "meanPowerWatts", num(r.meanPowerWatts, " W"));
   if (Array.isArray(r.formFaults) && r.formFaults.length) {
     push("Form faults", (r.formFaults as { label?: string; code?: string }[]).map((f) => f.label ?? f.code).join(", "));
   }

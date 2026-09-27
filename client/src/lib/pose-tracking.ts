@@ -719,7 +719,7 @@ const MIN_SHOULDER_BROADSIDE_RATIO = 2;
  * the old refusal that was right.
  */
 export type ScaleEstimate = {
-  source: "plate" | "grip_width" | "height" | "shoulder_width";
+  source: "plate" | "grip_width" | "body_model" | "height" | "shoulder_width";
   scale: number;
   /** How wrong this source can be even when it is working correctly. */
   uncertaintyFraction: number;
@@ -879,8 +879,16 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     // It is the first ruler in this pipeline that is neither a population average nor dependent
     // on the camera being somewhere particular.
     grip_width: 1,
-    height: 2,
-    shoulder_width: 3,
+    // THE ATHLETE'S OWN BONE, LEARNED FROM AN EARLIER TAKE THAT HAD A REAL RULER.
+    //
+    // Below a measured grip because it is one step removed -- the grip was measured with a
+    // tape, this was measured by a camera that had a tape-or-plate-grade ruler at the time. Above
+    // height and shoulder breadth because it is THIS athlete's actual bone rather than a
+    // population fraction of their stature, and because it needs no particular framing: a bench
+    // filmed from the foot of the bench still shows a forearm.
+    body_model: 2,
+    height: 3,
+    shoulder_width: 4,
   };
   const ranked = [...usable].sort((a, b) => TRUST[a.source] - TRUST[b.source]);
 

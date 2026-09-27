@@ -10,8 +10,13 @@ import {
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
 import { repConsistency } from "@shared/rep-consistency";
-import { RULERS_THAT_MAY_TEACH_A_LIMB } from "@shared/athlete-body-model";
-import { measureLimbsInMetres } from "@/lib/measure-limbs";
+import {
+  RULERS_THAT_MAY_TEACH_A_LIMB,
+  scaleFromKnownLimb,
+  type AthleteBodyModel,
+  type LimbKey,
+} from "@shared/athlete-body-model";
+import { measureLimbsInMetres, measureLimbSpansInUnits } from "@/lib/measure-limbs";
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
@@ -530,6 +535,7 @@ export function AvBarTrackerDialog({
   laterality,
   heightIn,
   gripWidthIn,
+  bodyModel,
   targetReps,
   loadKg,
   recordVideo,
@@ -553,6 +559,9 @@ export function AvBarTrackerDialog({
   heightIn?: number | null;
   /** A tape-measured grip, when the athlete has given one. See gripWidthScaleFromFrames. */
   gripWidthIn?: number | null;
+  /** What earlier takes with a real ruler learned about this athlete's own bones. See
+   *  shared/athlete-body-model.ts -- this is the ruler that needs no particular framing. */
+  bodyModel?: AthleteBodyModel | null;
   targetReps?: number;
   loadKg?: number;
   recordVideo?: boolean;
@@ -1156,6 +1165,33 @@ export function AvBarTrackerDialog({
     // is computed on every take where the athlete has given one -- the framing that defeats the
     // other rulers does not reach it.
     const gripScale = gripWidthScaleFromFrames(calibrationInput, gripWidthIn);
+
+    // THE ATHLETE'S OWN BONES, READ BACK AS A RULER. This is the payoff for learning them.
+    //
+    // A bone learned on an earlier take that had a plate, a gravity reading or a tape-measured
+    // grip is a known distance in metres. This take measures the same bone in units, and the two
+    // give a scale -- with no plate in shot, no full body in frame and no population average.
+    // That is the case a bench filmed from the foot of the bench has always been, and the reason
+    // it has had one uncorroborated ruler all week.
+    //
+    // The longest converged limb wins. A longer bone is a smaller fractional error for the same
+    // landmark noise, which is the same argument that makes a full-body height read better than
+    // a shoulder span.
+    const bodyModelScale = (() => {
+      if (!bodyModel) return null;
+      const spans = measureLimbSpansInUnits(calibrationInput);
+      let best: { scale: number; uncertaintyFraction: number } | null = null;
+      let bestMetres = 0;
+      for (const [key, spanUnits] of Object.entries(spans) as [LimbKey, number][]) {
+        const estimate = bodyModel[key];
+        const candidate = scaleFromKnownLimb(estimate, spanUnits);
+        if (candidate && estimate && estimate.metres > bestMetres) {
+          best = candidate;
+          bestMetres = estimate.metres;
+        }
+      }
+      return best ? { source: "body_model" as const, ...best } : null;
+    })();
     const shoulderScaleValue = shoulderScale.scale;
 
     // Every candidate is checked against the athlete's own height before any of them is ranked --
@@ -1175,6 +1211,7 @@ export function AvBarTrackerDialog({
         : []),
       // THE ONE RULER THE ATHLETE SIMPLY TOLD US. See gripWidthScaleFromFrames.
       ...(gripScale != null ? [gripScale] : []),
+      ...(bodyModelScale != null ? [bodyModelScale] : []),
       ...(heightScaleFactor != null
         ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: 0.05 }]
         : []),
@@ -1202,7 +1239,7 @@ export function AvBarTrackerDialog({
     // new and its training data is thin, so a number built on one has to be identifiable as such
     // rather than indistinguishable from a height-derived one.
     // Names what actually decided the number, including whether anything corroborated it.
-    const scaleSource: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | null =
+    const scaleSource: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | null =
       scaleVerdict.agreedSources.length > 1
         ? "both"
         : (scaleVerdict.agreedSources[0] ?? null);
@@ -1222,6 +1259,9 @@ export function AvBarTrackerDialog({
         : []),
       ...(gripScale != null
         ? [{ source: "grip_width", scale: gripScale.scale, measured: null, samples: null }]
+        : []),
+      ...(bodyModelScale != null
+        ? [{ source: "body_model", scale: bodyModelScale.scale, measured: null, samples: null }]
         : []),
       ...(heightScaleFactor != null
         ? [{ source: "height", scale: heightScaleFactor, measured: null, samples: null }]

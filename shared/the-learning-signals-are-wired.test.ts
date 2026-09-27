@@ -50,13 +50,12 @@ describe("the no-sensor learning signals actually reach a saved take", () => {
 
   it("the metrics that survive a wrong scale are marked where a reader sees them", () => {
     const report = read("server/tracking-report.ts");
-    expect(report).toContain("pushScaleFree(");
-    // Velocity loss is the one that matters most: the headline number of velocity-based
-    // training, exact today while absolute velocity is 45% out.
-    expect(report).toContain('pushScaleFree("Velocity loss across set"');
-    // And the ones measured in metres must NOT be marked.
-    expect(report).not.toContain('pushScaleFree("Range of motion"');
-    expect(report).not.toContain('pushScaleFree("Peak power"');
+    // Every metric goes through the same pusher and the classification decides -- so velocity
+    // loss (a ratio, exact today while absolute velocity is 45% out) and range of motion
+    // (metres) are written identically here and separated by the module, not by hand.
+    expect(report).toContain('pushMetric("Velocity loss across set", "velocityLossPercent"');
+    expect(report).toContain('pushMetric("Range of motion", "romCm"');
+    expect(report).toContain('pushMetric("Peak power", "peakPowerWatts"');
   });
 
   it("the athlete's bones are measured, carried, and folded into their record", () => {
@@ -87,5 +86,47 @@ describe("the no-sensor learning signals actually reach a saved take", () => {
     const storage = read("server/storage.ts");
     const fold = storage.slice(storage.indexOf("learnFromTake("));
     expect(fold.slice(0, 600)).toContain("catch");
+  });
+
+  /** THE HALF THIS TEST MISSED THE FIRST TIME, WHICH IS THE HALF THAT MATTERS.
+   *
+   *  It was written to catch modules with no callers, and then aimed only at the WRITE paths --
+   *  learnFromTake exists, the points query exists. Both passed while scaleFromKnownLimb and
+   *  fitLoadVelocityProfile had no callers at all, so bones were learned and never consulted and
+   *  points were collected and never fitted. A signal that is written and never read is the same
+   *  dead end as one that is never written; it just looks busier.
+   *
+   *  So every learned thing is pinned at the point of USE. */
+  it("the body model is READ BACK as a ruler, not just written", () => {
+    const dialog = read("client/src/components/av-bar-tracker-dialog.tsx");
+    expect(dialog).toContain("scaleFromKnownLimb(");
+    expect(dialog).toContain("measureLimbSpansInUnits(");
+    // ...and it has to actually reach the reconciliation, not sit in a variable.
+    expect(dialog).toContain("bodyModelScale != null ? [bodyModelScale]");
+    // ...ranked, or reconcileScaleEstimates cannot choose between it and anything else.
+    expect(read("client/src/lib/pose-tracking.ts")).toMatch(/body_model:\s*\d/);
+  });
+
+  it("the load-velocity profile is FITTED and a take COMPARED, not just collected", () => {
+    const routes = read("server/routes.ts");
+    expect(routes).toContain("fitLoadVelocityProfile(points)");
+    expect(routes).toContain("compareTakeToProfile(");
+  });
+
+  it("the scale-free classification DRIVES the report rather than sitting beside it", () => {
+    const report = read("server/tracking-report.ts");
+    // Two statements of one fact drift, and the drift would either strip the caveat off a number
+    // that needed it or leave it on one that did not.
+    expect(report).toContain("metricIsScaleFree(metric)");
+    // Written in exactly ONE place -- the pusher. A second occurrence is a metric being tagged
+    // by hand beside the module that already decides, which is the drift this exists to stop.
+    expect(report.match(/scaleFree: true/g)?.length).toBe(1);
+  });
+
+  it("measures a limb the same way in both directions", () => {
+    // A bone learned one way and read back another lands the difference silently in every
+    // distance the take reports.
+    const limbs = read("client/src/lib/measure-limbs.ts");
+    expect(limbs).toContain("return measureLimbsInMetres(frames, 1);");
   });
 });

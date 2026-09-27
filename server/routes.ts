@@ -38,6 +38,7 @@ import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { summariseCalibrationEvidence } from "./calibration-evidence";
+import { fitLoadVelocityProfile, compareTakeToProfile } from "@shared/load-velocity-profile";
 import { CAMERA_CONSTANTS } from "@shared/camera-constants-registry";
 import { buildCaraComplianceCsv, buildCaraCompliancePdf } from "./cara-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
@@ -1593,6 +1594,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
    *  rulers agree -- and both are already in every stored take, so this answers retroactively.
    *
    *  Group numbers only. No athlete, no set id, nothing that resolves to a person. */
+  /** THE PROFILE FITTED AND A TAKE COMPARED TO IT -- the read path for the load-velocity work.
+   *
+   *  Points come only from takes whose scale had an independent ruler (see
+   *  getLoadVelocityPointsForAthlete), which is what keeps this an instrument rather than a
+   *  mirror. The comparison REPORTS a disagreement and never rewrites a measurement: the camera
+   *  still says what it saw, with a caveat, which is what rule #1 asks of every check here. */
+  app.get("/api/athlete/load-velocity/:exerciseId", requireAuth, async (req, res) => {
+    // Number(), matching every other id param here -- registerNumericParamGuards has already
+    // refused a non-integer before the handler runs, and server/numeric-route-params.test.ts
+    // keeps the list and the readers agreeing.
+    const exerciseId = Number(req.params.exerciseId);
+    // The requester's own id into the query, so the scoping happens in SQL rather than in a
+    // check somebody can forget to write -- the pattern server/cross-tenant-scoping.test.ts
+    // enforces across every parameterised route. An exercise id is global; the SETS are not.
+    const user = req.user!;
+    const points = await storage.getLoadVelocityPointsForAthlete(user.id, exerciseId);
+    const profile = fitLoadVelocityProfile(points);
+    const loadKg = Number(req.query.loadKg);
+    const measured = Number(req.query.meanVelocityMps);
+    res.json({
+      profile,
+      points: points.length,
+      // Named so a reader knows WHY there is no line rather than assuming there is no data: a
+      // pile of sets at one load is the commonest case in a real program and fits nothing.
+      reason: profile
+        ? null
+        : points.length < 4
+          ? "Not enough sets with an independent ruler yet."
+          : "Every set is at about the same load, so there is no line to fit -- a profile needs a spread of loads.",
+      comparison:
+        Number.isFinite(loadKg) && Number.isFinite(measured)
+          ? compareTakeToProfile(profile, loadKg, measured)
+          : null,
+    });
+  });
+
   app.get("/api/admin/calibration-evidence", requireRole("admin"), async (req, res) => {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "500"), 10) || 500, 1), 2000);
     const rows = await storage.getRecentTrackedSetsForAdmin(limit);
