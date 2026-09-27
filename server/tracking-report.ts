@@ -1,3 +1,4 @@
+import { repConsistencyFlag } from "@shared/rep-consistency";
 // Formats storage.getRecentTrackedSetsForAdmin's rows into a plain-language report -- built for
 // the exact question that prompted it ("what is bar_path/full supposed to record for a bench
 // press, and how?"), not just a data dump. Each tracking mode gets a short, fixed "how this
@@ -110,6 +111,17 @@ type TrackingDiagnostics = {
       maxGapPx?: number | null;
     } | null;
   };
+  gravity?: {
+    scaleErrorRatio: number;
+    uncertaintyFraction: number;
+    repsUsed: number;
+  } | null;
+  repConsistency?: {
+    repsMeasured: number;
+    medianRomCm: number;
+    spreadFraction: number;
+    outlierReps: number[];
+  } | null;
   trace?: {
     points: number;
     repsFound?: number | null;
@@ -221,7 +233,19 @@ const METHODOLOGY: Record<string, string> = {
 // Structured label/value pair shared by both the plain-text report (joined into "  Label: value"
 // lines) and the JSON entries route the admin UI renders as cards -- one formatting pass feeds
 // both, so they can never drift out of sync with each other.
-export type ReportField = { label: string; value: string };
+export type ReportField = {
+  label: string;
+  value: string;
+  /** THIS NUMBER SURVIVES A WRONG SCALE -- see shared/scale-free-metrics.ts.
+   *
+   *  A metric built from TIME is measured in frames, and one that is a ratio of two distances
+   *  has the scale in both halves where it cancels. Those are as right today as they will ever
+   *  be, and the blanket accuracy caveat over every camera number was telling a reader not to
+   *  trust the only output that is currently true. Velocity loss is the one that matters: it is
+   *  the headline number of velocity-based training, and it is exact while absolute velocity is
+   *  45% out. */
+  scaleFree?: true;
+};
 
 function fmtTrust(t: SetTrustScore | null | undefined, label: string): ReportField | null {
   if (!t) return null;
@@ -241,19 +265,26 @@ function formatDataPoints(r: TrackedSetRow): ReportField[] {
   const push = (label: string, value: string | null) => {
     if (value != null) lines.push({ label, value });
   };
+  const pushScaleFree = (label: string, value: string | null) => {
+    if (value != null) lines.push({ label, value, scaleFree: true });
+  };
+
+  // Time and ratio metrics are tagged as they are pushed rather than matched by label
+  // afterwards -- a label is display text that somebody will reword, and the tag would silently
+  // stop applying to a number that still deserved it.
+  pushScaleFree("Concentric duration", num(r.concentricSeconds, " s"));
+  pushScaleFree("Eccentric duration", num(r.eccentricSeconds, " s"));
+  pushScaleFree("Velocity loss across set", num(r.velocityLossPercent, "%"));
 
   push("Peak concentric velocity", num(r.peakVelocityMps, " m/s"));
   push("Mean concentric velocity", num(r.meanVelocityMps, " m/s"));
   push("Mean eccentric velocity", num(r.eccentricMeanVelocityMps, " m/s"));
-  push("Concentric duration", num(r.concentricSeconds, " s"));
-  push("Eccentric duration", num(r.eccentricSeconds, " s"));
   push("Bar path deviation", num(r.barPathDeviationCm, " cm"));
   push("Range of motion", num(r.romCm, " cm"));
   // See bar-tracking.ts's RepBreakdown.eai comment for what this is and how it was
   // reverse-engineered (OVR's own name, no public formula) -- peak velocity / time-to-peak,
   // averaged across the set the same way every other per-rep number here is.
   push("EAI (avg)", num(r.meanEai, ""));
-  push("Velocity loss across set", num(r.velocityLossPercent, "%"));
   push("Peak power", num(r.peakPowerWatts, " W"));
   push("Mean power", num(r.meanPowerWatts, " W"));
   if (Array.isArray(r.formFaults) && r.formFaults.length) {
@@ -891,6 +922,32 @@ function computeFlags(r: TrackedSetRow): string[] {
   const flags: string[] = [];
   const d = r.trackingDiagnostics as TrackingDiagnostics | null | undefined;
   const mode = r.trackingLevel;
+
+  // THE GRAVITY RULER, WHICH NEEDED NO SENSOR TO SAY THIS.
+  //
+  // A flat jump's flight time gives a height that depends on nothing but frames and 9.81, so
+  // its ratio to the height the trace reported IS this take's scale error, measured. See
+  // gravity-ruler.ts. It is stated whether it is good news or bad: a take that comes back at
+  // 1.02 is a take we now know was right, and that is worth as much as catching a wrong one.
+  if (d?.gravity) {
+    const { scaleErrorRatio, uncertaintyFraction, repsUsed } = d.gravity;
+    const offBy = Math.abs(scaleErrorRatio - 1);
+    // Only call it wrong when it is outside its own measurement error -- claiming a 4% error
+    // from a reading good to 6% is reporting noise as a finding.
+    if (offBy > uncertaintyFraction) {
+      flags.push(
+        `Gravity says this take's scale is ${scaleErrorRatio}x, measured over ${repsUsed} flat ` +
+        `rep${repsUsed === 1 ? "" : "s"} from flight time alone (+-${Math.round(uncertaintyFraction * 100)}%). ` +
+        `Flight time needs no ruler, so every distance, velocity and watt in this take is off by ` +
+        `about that factor.`,
+      );
+    }
+  }
+
+  // A SET REPEATS ITSELF. An athlete's range of motion does not change between rep 3 and rep 4,
+  // so a rep that covered a different distance is the tracker disagreeing with itself.
+  const consistencyFlag = repConsistencyFlag(d?.repConsistency ?? null, r.reps == null ? null : Number(r.reps));
+  if (consistencyFlag) flags.push(consistencyFlag);
 
   // FIRST, BECAUSE IT EXPLAINS EVERY OTHER SILENCE BELOW.
   //

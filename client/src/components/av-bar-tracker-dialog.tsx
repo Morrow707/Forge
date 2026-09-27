@@ -9,6 +9,7 @@ import {
   markWarnedAboutQueueing,
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
+import { repConsistency } from "@shared/rep-consistency";
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
@@ -1960,6 +1961,13 @@ export function AvBarTrackerDialog({
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
           trace: traceDiagnostics(metrics.repBreakdown.length),
+          // A SET REPEATS ITSELF, AND THAT IS A LABEL -- see rep-consistency.ts. An athlete's
+          // range of motion does not change between rep 3 and rep 4, so the spread across reps
+          // measures the tracker's own noise, free, on every set. A rep at half the others is a
+          // segmentation error (two fused, or one split) rather than a short rep.
+          repConsistency: repConsistency(
+            metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
+          ),
         }),
         uploadPromise,
         forSetNumber,
@@ -2088,6 +2096,9 @@ export function AvBarTrackerDialog({
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
       calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
       trace: traceDiagnostics(metrics.repBreakdown.length),
+      repConsistency: repConsistency(
+        metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
+      ),
     });
 
     // readerStatus exists specifically to tell "the athlete's take was genuinely short" apart

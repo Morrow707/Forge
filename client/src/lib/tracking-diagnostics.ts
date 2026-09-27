@@ -352,6 +352,22 @@ export type TrackingDiagnostics = {
   // the way: frames rejected for moving impossibly fast between samples, and the longest stretch
   // with no usable reading at all.
   trace?: TraceDiagnostics | null;
+  /** THE GRAVITY RULER -- see gravity-ruler.ts. How wrong this take's real-world scale is,
+   *  measured from nothing but frames and 9.81. Only a flat jump can produce one. */
+  gravity?: {
+    scaleErrorRatio: number;
+    uncertaintyFraction: number;
+    repsUsed: number;
+  } | null;
+  /** HOW MUCH THE SET DISAGREED WITH ITSELF -- see rep-consistency.ts. An athlete's range of
+   *  motion does not change mid-set, so the spread is a measurement of the tracker's own noise
+   *  and an outlier rep is a segmentation error rather than a short rep. */
+  repConsistency?: {
+    repsMeasured: number;
+    medianRomCm: number;
+    spreadFraction: number;
+    outlierReps: number[];
+  } | null;
 };
 
 function round2(n: number): number {
@@ -528,6 +544,8 @@ export function buildTrackingDiagnostics(args: {
   // See TrackingDiagnostics["trace"]. Passed in rather than derived here because only the caller
   // has the finished trace and whatever the segmenter made of it.
   trace?: TrackingDiagnostics["trace"];
+  gravity?: TrackingDiagnostics["gravity"];
+  repConsistency?: TrackingDiagnostics["repConsistency"];
   // Straight off AvAnalysisResult -- see the objectLock field's own comment above.
   objectLock?: ObjectLockDiagnostics | null;
   objectLockSecondary?: ObjectLockDiagnostics | null;
@@ -535,6 +553,8 @@ export function buildTrackingDiagnostics(args: {
   return {
     outcome: args.outcome,
     trace: args.trace ?? null,
+    gravity: args.gravity ?? null,
+    repConsistency: args.repConsistency ?? null,
     scaleFree: args.scaleFree ?? null,
     message: args.message ?? null,
     recording: args.recording ?? null,

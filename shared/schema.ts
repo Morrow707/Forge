@@ -383,6 +383,17 @@ export const users = pgTable(
     // seconds. Optional forever: without it nothing changes, and the existing rulers answer as
     // they do today. See gripWidthScaleFromFrames.
     gripWidthIn: real("grip_width_in"),
+    // WHAT THE CAMERA HAS LEARNED ABOUT THIS ATHLETE'S OWN BODY, IN REAL METRES.
+    //
+    // An upper arm is the same length next week. So the first take with a ruler the body had no
+    // hand in -- a plate measured in frame, or the gravity ruler off a flat jump -- measures
+    // this athlete's limbs in metres, and they stay true forever. Every later take, at any
+    // angle, with no plate and no full body in shot, can scale from a limb it can see.
+    //
+    // This is the athlete-to-athlete learning: the more somebody films, the better their own
+    // skeleton is known and the less the pipeline has to guess. See shared/athlete-body-model.ts
+    // for the shape, the convergence rule, and why only an independent ruler may teach a bone.
+    bodyModel: json("body_model"),
     bodyWeightLbs: real("body_weight_lbs"),
     // Required at signup (see signupSchema) and editable anytime afterward
     // via ProfileFieldsForm -- an athlete switching sports updates this
@@ -8969,6 +8980,26 @@ export const trackingDiagnosticsSchema = z.object({
   // client/src/lib/tracking-diagnostics.ts. These are the numbers that separate "the bar was
   // never tracked" from "the bar was tracked and the reps would not separate", which a refused
   // take could not say about itself and which got guessed wrong on a real bench press.
+  // THE GRAVITY RULER and the SET'S SELF-CONSISTENCY. Both are truth sources that need no
+  // sensor -- see gravity-ruler.ts and rep-consistency.ts. Declared here because a zod object
+  // STRIPS what it does not declare, silently, with no error anywhere: it has happened twice.
+  gravity: z
+    .object({
+      scaleErrorRatio: z.number(),
+      uncertaintyFraction: z.number(),
+      repsUsed: z.number(),
+    })
+    .nullable()
+    .optional(),
+  repConsistency: z
+    .object({
+      repsMeasured: z.number(),
+      medianRomCm: z.number(),
+      spreadFraction: z.number(),
+      outlierReps: z.array(z.number()),
+    })
+    .nullable()
+    .optional(),
   trace: z
     .object({
       points: z.number(),

@@ -536,7 +536,28 @@ export function AvJumpTrackerDialog({
           ? visionBoxTopToWorldY(recordingStats.boxTopNormalizedY, nativeRawFrames[0].frameHeight) *
             scaleFactor
           : null;
-    const metrics = summarizeJumpSet(trace, heightIn, jumpHeightOutlierPercent ?? undefined, boxTopWorldY);
+    // The interval the trace was ACTUALLY sampled at, measured from its own timestamps rather
+    // than taken from the negotiated frame rate. Those differ whenever a stride is applied or
+    // frames are dropped, and the gravity ruler's uncertainty goes with the SQUARE of flight
+    // time -- so an optimistic interval would understate the error on exactly the takes where
+    // it matters most. See gravity-ruler.ts.
+    const frameIntervalSeconds = (() => {
+      const gaps: number[] = [];
+      for (let i = 1; i < trace.length; i++) {
+        const gap = (trace[i].t - trace[i - 1].t) / 1000;
+        if (gap > 0) gaps.push(gap);
+      }
+      if (gaps.length === 0) return null;
+      gaps.sort((a, b) => a - b);
+      return gaps[Math.floor(gaps.length / 2)];
+    })();
+    const metrics = summarizeJumpSet(
+      trace,
+      heightIn,
+      jumpHeightOutlierPercent ?? undefined,
+      boxTopWorldY,
+      frameIntervalSeconds,
+    );
     if (!metrics) {
       const diagnostics = buildTrackingDiagnostics({
         outcome: "empty_no_clean_read",
@@ -602,6 +623,12 @@ export function AvJumpTrackerDialog({
       rawFrames: nativeRawFrames,
       recording: recordingStats,
       calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames },
+      // THE GRAVITY RULER, SAVED RATHER THAN DISCARDED. summarizeJumpSet computes it and it was
+      // being dropped on the floor -- a measurement nothing records is a measurement nobody has.
+      // See gravity-ruler.ts: a flat jump's flight time gives a height that depends on nothing
+      // but frames and 9.81, so its ratio to the trace's own height is how wrong this take's
+      // scale is, with no sensor anywhere.
+      gravity: metrics.gravityVerdict,
     });
 
     // See av-bar-tracker-dialog.tsx's own comment on this same check -- readerStatus "failed"
