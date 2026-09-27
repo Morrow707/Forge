@@ -145,6 +145,7 @@ const AdminMyWorkout = lazy(withLoadTimeout(() => import("@/pages/admin/my-worko
 const AdminPlatformTrends = lazy(withLoadTimeout(() => import("@/pages/admin/platform-trends")));
 const AdminKnowledgeBase = lazy(withLoadTimeout(() => import("@/pages/admin/knowledge-base")));
 const AdminAiSpend = lazy(withLoadTimeout(() => import("@/pages/admin/ai-spend")));
+const AdminExerciseVideos = lazy(withLoadTimeout(() => import("@/pages/admin/exercise-videos")));
 const AdminBilling = lazy(withLoadTimeout(() => import("@/pages/admin/billing")));
 const AdminUsers = lazy(withLoadTimeout(() => import("@/pages/admin/users")));
 const AdminClasses = lazy(withLoadTimeout(() => import("@/pages/admin/classes")));
@@ -703,6 +704,9 @@ function Router() {
         </Route>
         <Route path="/admin/ai-spend">
           <ProtectedRoute role="admin" component={AdminAiSpend} />
+        </Route>
+        <Route path="/admin/exercise-videos">
+          <ProtectedRoute role="admin" component={AdminExerciseVideos} />
         </Route>
         {/* Dataset Extracts is a section of Cohort Explorer now, not its own screen -- an old
             link lands on the page that contains it. */}

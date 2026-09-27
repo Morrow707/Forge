@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_MAX_DURATION_SECONDS, DEMO_VIDEO_CHANNELS } from "./exercise-video-backfill";
 
 const routes = readFileSync(join(import.meta.dirname, "routes.ts"), "utf8");
+const repo = join(import.meta.dirname, "..");
+const read = (p: string) => readFileSync(join(repo, p), "utf8");
 
 /**
  * A MODULE WITH NO CALLERS IS NOT A FEATURE.
@@ -38,6 +40,26 @@ describe("the demo-video backfill is reachable", () => {
   it("says a missing key is a missing key, not a 500", () => {
     expect(routes).toContain("youTubeConfigured()");
     expect(routes).toContain("YOUTUBE_API_KEY is not set");
+  });
+});
+
+describe("the report has somewhere to be read", () => {
+  it("routes the page and puts it in the nav", () => {
+    // The routes shipped a build ahead of this page, and a report nobody can open is the same as
+    // no report -- Scott asked "where do i find the dry-run reports?" and the answer was nowhere.
+    const app = read("client/src/App.tsx");
+    expect(app).toContain("pages/admin/exercise-videos");
+    expect(app).toContain('path="/admin/exercise-videos"');
+    expect(read("client/src/components/app-shell.tsx")).toContain('href: "/admin/exercise-videos"');
+  });
+
+  it("asks the server for all three routes", () => {
+    const page = read("client/src/pages/admin/exercise-videos.tsx");
+    expect(page).toContain("/api/admin/exercise-videos/pending");
+    expect(page).toContain("exercise-videos/${which}");
+    // The per-channel median is the evidence for cutting a talky channel. A page that dropped it
+    // would leave that decision to somebody's impression, which is what the column replaced.
+    expect(page).toContain("medianWinningDurationSeconds");
   });
 });
 

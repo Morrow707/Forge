@@ -34,6 +34,7 @@ import {
   BookOpen,
   Library,
   DollarSign,
+  Youtube,
   Target,
   TrendingUp,
   FileText,
@@ -218,6 +219,7 @@ const adminNav: NavItem[] = [
   // very same KnowledgeBaseContent component, so this was a second door onto one room. The
   // route still resolves, so an existing link or bookmark keeps working.
   { href: "/admin/ai-spend", label: "AI Spend", icon: DollarSign, overflow: true },
+  { href: "/admin/exercise-videos", label: "Demo Videos", icon: Youtube, overflow: true },
   // No Dataset Extracts entry: it is a section of Cohort Explorer now. The two answered the
   // same question -- who is on the platform and what do their numbers look like -- once for a
   // chart and once for a document, and having them as separate destinations made that look like
