@@ -1,5 +1,6 @@
 import { repConsistencyFlag } from "@shared/rep-consistency";
 import { metricIsScaleFree } from "@shared/scale-free-metrics";
+import { validationNote } from "@shared/capture-mode-validation";
 // Formats storage.getRecentTrackedSetsForAdmin's rows into a plain-language report -- built for
 // the exact question that prompted it ("what is bar_path/full supposed to record for a bench
 // press, and how?"), not just a data dump. Each tracking mode gets a short, fixed "how this
@@ -957,6 +958,15 @@ function computeFlags(r: TrackedSetRow): string[] {
   // so a rep that covered a different distance is the tracker disagreeing with itself.
   const consistencyFlag = repConsistencyFlag(d?.repConsistency ?? null, r.reps == null ? null : Number(r.reps));
   if (consistencyFlag) flags.push(consistencyFlag);
+
+  // WHETHER THIS MODE HAS EVER BEEN CHECKED AGAINST ANYTHING.
+  //
+  // Every camera number carries the same accuracy caveat, which says the same thing about a back
+  // squat filmed against real lifts and a golf swing whose every threshold is a guess nobody has
+  // held against a real swing. A reader cannot tell those apart, and the difference is the whole
+  // question of how much weight to put on the row in front of them.
+  const validation = validationNote(r.trackingLevel);
+  if (validation && !validation.startsWith("This mode has been checked")) flags.push(validation);
 
   // FIRST, BECAUSE IT EXPLAINS EVERY OTHER SILENCE BELOW.
   //

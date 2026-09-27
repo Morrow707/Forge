@@ -87,6 +87,20 @@ export type CalibrationEvidence = {
    *  usable as a reference. The threshold it is compared against is a guess; this is the
    *  distribution that would revise it. */
   torsoSpreadGrips: Spread;
+  /** HAS THE LEARNING LOOP ACTUALLY FIRED YET.
+   *
+   *  The chain is: a flat jump gives gravity a scale -> gravity measures the athlete's bones ->
+   *  those bones scale a later take that has no plate and no full body in frame. Every link is
+   *  built and every link is idle until the first one runs, and "built" and "running" look
+   *  identical from a code review. These are the counts that tell them apart. */
+  loop: {
+    /** Takes that produced a gravity reading. The first link. */
+    gravityReadings: number;
+    /** Takes that measured limbs for the body model. The second. */
+    takesTeachingBones: number;
+    /** Takes whose scale actually CAME from the body model. The third, and the payoff. */
+    takesScaledByBodyModel: number;
+  };
 };
 
 export const SELF_CONTRADICTION_BAND_LOW = 0.75;
@@ -100,6 +114,9 @@ export function summariseCalibrationEvidence(rows: CalibrationEvidenceRow[]): Ca
   const outlier = new Map<string, number[]>();
   let corroborated = 0;
   let withAnyScale = 0;
+  let gravityReadings = 0;
+  let takesTeachingBones = 0;
+  let takesScaledByBodyModel = 0;
 
   for (const row of rows) {
     const d = row.trackingDiagnostics as TrackingDiagnostics | null | undefined;
@@ -115,6 +132,10 @@ export function summariseCalibrationEvidence(rows: CalibrationEvidenceRow[]): Ca
 
     const spread = num(d?.trace?.torsoSpreadGrips);
     if (spread != null) torso.push(spread);
+
+    if (d?.gravity) gravityReadings++;
+    if (d?.limbMeasurementsM && Object.keys(d.limbMeasurementsM).length > 0) takesTeachingBones++;
+    if (d?.calibration?.scaleSource === "body_model") takesScaledByBodyModel++;
 
     const source = d?.calibration?.scaleSource;
     if (source) {
@@ -159,5 +180,6 @@ export function summariseCalibrationEvidence(rows: CalibrationEvidenceRow[]): Ca
     corroboratedTakes: corroborated,
     takesWithAnyScale: withAnyScale,
     torsoSpreadGrips: spreadOf(torso),
+    loop: { gravityReadings, takesTeachingBones, takesScaledByBodyModel },
   };
 }

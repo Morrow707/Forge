@@ -14,6 +14,11 @@ type Evidence = {
   corroboratedTakes: number;
   takesWithAnyScale: number;
   torsoSpreadGrips: Spread;
+  loop: {
+    gravityReadings: number;
+    takesTeachingBones: number;
+    takesScaledByBodyModel: number;
+  };
 };
 
 function SpreadLine({ label, spread, ideal }: { label: string; spread: Spread; ideal?: string }) {
@@ -73,6 +78,35 @@ export function CalibrationEvidence() {
             <p className="text-muted-foreground">
               Over {data.evidence.takesConsidered} stored takes.
             </p>
+
+            {/* HAS THE LOOP FIRED. Built and running look identical from a code review, and
+                every link here is idle until the first one runs. */}
+            <div>
+              <h3 className="font-semibold">Has the learning loop fired yet?</h3>
+              <p className="pb-1 text-xs text-muted-foreground">
+                A flat jump gives gravity a scale &rarr; gravity measures your bones &rarr; those
+                bones scale a later take that has no plate and no full body in frame. Each number
+                below is one link. A zero means that link has never run, not that it is broken.
+              </p>
+              <div className="flex justify-between gap-4 py-1">
+                <span className="text-muted-foreground">1. Gravity readings (flat jumps)</span>
+                <span className="tabular-nums">{data.evidence.loop.gravityReadings}</span>
+              </div>
+              <div className="flex justify-between gap-4 py-1">
+                <span className="text-muted-foreground">2. Takes that measured bones</span>
+                <span className="tabular-nums">{data.evidence.loop.takesTeachingBones}</span>
+              </div>
+              <div className="flex justify-between gap-4 py-1">
+                <span className="text-muted-foreground">3. Takes scaled BY those bones</span>
+                <span className="tabular-nums">{data.evidence.loop.takesScaledByBodyModel}</span>
+              </div>
+              {data.evidence.loop.gravityReadings === 0 && (
+                <p className="pt-1 text-xs text-muted-foreground">
+                  Nothing has started it yet. One flat countermovement jump -- landing where you
+                  took off, not onto a box -- produces the first reading.
+                </p>
+              )}
+            </div>
 
             <div>
               <h3 className="font-semibold">Does a take agree with itself?</h3>
