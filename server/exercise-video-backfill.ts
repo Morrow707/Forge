@@ -51,16 +51,34 @@ import { channelCatalogue, newQuotaLedger, type QuotaLedger } from "./youtube-ca
  * whose matches run long is not doing the job and comes out of this list.
  */
 export const DEMO_VIDEO_CHANNELS = [
-  "westsidebarbell",
-  "athleanx",
   "CatalystAthletics",
-  "buffdudes",
   "ScottHermanFitness",
+  "athleanx",
   "musclestrengthcom",
-  "Onnit",
-  "DrivelineBaseball",
+  "buffdudes",
+  // Added 2026-09-27 to replace three that were cut (below). All three are picked for the same
+  // property that makes Catalyst Athletics supply 94 matches on its own: a SYSTEMATIC library
+  // where the title is the exercise name and little else. That is exactly what the precision
+  // floor rewards, and it is a better predictor of yield than how good the coaching is.
+  "jeffnippard",
+  "RenaissancePeriodization",
+  "bodybuildingcom",
   "BaseballRebellion",
 ];
+
+/**
+ * CUT, AND WHY -- so nobody re-adds them on the strength of the brand.
+ *
+ * - `westsidebarbell`: catalogue 0 on two consecutive runs. NOT a length or content problem;
+ *   the channel never loaded at all, so not one of its videos was ever measured against the cap.
+ *   The handle does not resolve and the search fallback did not find it either. Scott asked for
+ *   Westside by name, so this is a lookup failure to fix rather than a verdict on the channel --
+ *   re-add it as a UC... channel ID (resolveChannel takes one directly) and it will work.
+ * - `onnit`: resolved to an unrelated channel with 5 videos. Same fix: a channel ID, not a guess.
+ * - `DrivelineBaseball`: 1,721 videos loaded and ONE matched. This is the real content verdict --
+ *   podcasts and interviews rather than demonstrations. The same test Squat University failed.
+ */
+export const CHANNELS_CUT_ON_EVIDENCE = ["westsidebarbell", "onnit", "DrivelineBaseball"];
 
 /**
  * The length cap. Three minutes: long enough for a setup-plus-two-reps demonstration of a
@@ -77,6 +95,15 @@ export type BackfillProposal = BackfillTarget & { match: VideoMatch; url: string
 export type ChannelSummary = {
   channel: string;
   catalogueSize: number;
+  /** Why a channel contributed nothing, when it did.
+   *
+   * A bare 0 cost two runs and a wrong theory: westsidebarbell read as "their videos are too
+   * long", when in fact not one of its videos was ever fetched, so the length cap never saw
+   * them. Those are opposite problems with opposite fixes -- a channel ID versus a different
+   * channel -- and the report could not tell them apart. CLAUDE.md's rule about guards that
+   * cannot be shown to have fired applies just as well to a channel that cannot be shown to
+   * have loaded. */
+  status: "ok" | "handle_not_found" | "error";
   /** How many exercises this channel ended up supplying the WINNING video for. */
   matchesWon: number;
   medianWinningDurationSeconds: number | null;
@@ -155,20 +182,26 @@ export async function planExerciseVideoBackfill(options?: {
 
   const pool: VideoCandidate[] = [];
   const catalogueSizes = new Map<string, number>();
+  const statuses = new Map<string, ChannelSummary["status"]>();
   for (const handle of channels) {
     let result: Awaited<ReturnType<typeof channelCatalogue>> = null;
+    let status: ChannelSummary["status"] = "ok";
     try {
       result = await channelCatalogue(handle, quota, options?.maxVideosPerChannel);
-    } catch (err) {
-      // Quota exhaustion and a dead handle look the same from here; both mean this channel
-      // contributes nothing and the run continues with what it has.
+      if (!result) status = "handle_not_found";
+    } catch {
+      // An API error -- most often quota -- is reported as itself rather than as a dead handle.
+      // The run continues with what it has; one bad channel is not worth losing the rest.
+      status = "error";
       result = null;
     }
     if (!result) {
       catalogueSizes.set(handle, 0);
+      statuses.set(handle, status);
       continue;
     }
     catalogueSizes.set(result.channel, result.videos.length);
+    statuses.set(result.channel, "ok");
     pool.push(...result.videos);
   }
 
@@ -199,6 +232,7 @@ export async function planExerciseVideoBackfill(options?: {
     return {
       channel,
       catalogueSize,
+      status: statuses.get(channel) ?? "ok",
       matchesWon: won.length,
       medianWinningDurationSeconds: median(won.map((p) => p.match.durationSeconds)),
     };

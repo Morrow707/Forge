@@ -20,6 +20,7 @@ type Proposal = Target & {
 type ChannelSummary = {
   channel: string;
   catalogueSize: number;
+  status?: "ok" | "handle_not_found" | "error";
   matchesWon: number;
   medianWinningDurationSeconds: number | null;
 };
@@ -233,7 +234,23 @@ export default function AdminExerciseVideos() {
                   <tbody>
                     {report.channels.map((c) => (
                       <tr key={c.channel} className="border-t border-border">
-                        <td className="py-1 pr-3">{c.channel}</td>
+                        <td className="py-1 pr-3">
+                          {c.channel}
+                          {/* A bare 0 read as "their videos are too long" for two runs, when in
+                              fact the channel never loaded and the cap never saw a single video.
+                              Opposite problems, opposite fixes. */}
+                          {c.status === "handle_not_found" && (
+                            <span className="ml-2 text-xs text-destructive">
+                              handle did not resolve -- needs a UC... channel ID, not a verdict on
+                              the channel
+                            </span>
+                          )}
+                          {c.status === "error" && (
+                            <span className="ml-2 text-xs text-destructive">
+                              API error (most likely quota) -- nothing was read
+                            </span>
+                          )}
+                        </td>
                         <td className="py-1 pr-3 text-right tabular-nums">{c.catalogueSize}</td>
                         <td className="py-1 pr-3 text-right tabular-nums">{c.matchesWon}</td>
                         <td className="py-1 text-right tabular-nums">
@@ -243,12 +260,11 @@ export default function AdminExerciseVideos() {
                     ))}
                   </tbody>
                 </table>
-                {report.channels.some((c) => c.catalogueSize === 0) && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    A channel showing 0 either did not resolve (renamed handle) or the quota ran
-                    out mid-run. The rest of the run still completed with what it had.
-                  </p>
-                )}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  A channel with a catalogue but few matches is a content verdict -- it is not
+                  making short demonstrations. A catalogue of 0 is not: nothing was ever read, so
+                  the length cap never saw it.
+                </p>
               </CardContent>
             </Card>
 
