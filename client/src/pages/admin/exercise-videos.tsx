@@ -24,8 +24,11 @@ type ChannelSummary = {
   medianWinningDurationSeconds: number | null;
 };
 
+type KindTally = { considered: number; matched: number };
+
 type Report = {
   targetsConsidered: number;
+  byKind: { exercise: KindTally; skill: KindTally };
   proposals: Proposal[];
   unmatched: Target[];
   channels: ChannelSummary[];
@@ -202,8 +205,18 @@ export default function AdminExerciseVideos() {
                   {report.written == null ? "Dry run" : `Applied -- ${report.written} written`}
                 </CardTitle>
                 <CardDescription>
-                  {report.proposals.length} matched of {report.targetsConsidered} considered, cap{" "}
-                  {mmss(report.maxDurationSeconds)}. {report.quota.units} quota units over{" "}
+                  {/* Lifts and drills are counted apart on purpose: the sport drills are niche
+                      enough that no strength channel carries them, so folding them in buries how
+                      well the lift library -- the part any decision rests on -- is covered. */}
+                  <strong>
+                    Lifts: {report.byKind?.exercise.matched ?? 0} of{" "}
+                    {report.byKind?.exercise.considered ?? 0}
+                  </strong>
+                  . Skill drills: {report.byKind?.skill.matched ?? 0} of{" "}
+                  {report.byKind?.skill.considered ?? 0} -- these are niche enough that no
+                  strength channel carries them, and a search link is the expected outcome.
+                  <br />
+                  Cap {mmss(report.maxDurationSeconds)}. {report.quota.units} quota units over{" "}
                   {report.quota.calls} calls, out of 10,000 free a day.
                 </CardDescription>
               </CardHeader>

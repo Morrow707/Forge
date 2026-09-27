@@ -82,8 +82,18 @@ export type ChannelSummary = {
   medianWinningDurationSeconds: number | null;
 };
 
+/** Counted separately because the two have different ceilings.
+ *
+ * Scott, 2026-09-27, on the sport drills going unmatched: "thats fine, the skills are so niche."
+ * He is right, and that makes one combined number actively misleading -- a lacrosse face-off
+ * counter-move and a back squat are not the same kind of miss. No strength channel has the
+ * former and none reasonably would, so counting them together buries how well the LIFT library
+ * is actually covered, which is the only figure any decision here rests on. */
+export type KindTally = { considered: number; matched: number };
+
 export type BackfillReport = {
   targetsConsidered: number;
+  byKind: { exercise: KindTally; skill: KindTally };
   proposals: BackfillProposal[];
   unmatched: BackfillTarget[];
   channels: ChannelSummary[];
@@ -194,8 +204,14 @@ export async function planExerciseVideoBackfill(options?: {
     };
   });
 
+  const tally = (kind: BackfillTarget["kind"]): KindTally => ({
+    considered: targets.filter((t) => t.kind === kind).length,
+    matched: proposals.filter((p) => p.kind === kind).length,
+  });
+
   return {
     targetsConsidered: targets.length,
+    byKind: { exercise: tally("exercise"), skill: tally("skill") },
     proposals,
     unmatched,
     channels: summaries,
