@@ -1,5 +1,13 @@
 import express, { type Express, type Request } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
+import {
+  applyExerciseVideoBackfill,
+  DEFAULT_MAX_DURATION_SECONDS,
+  DEMO_VIDEO_CHANNELS,
+  planExerciseVideoBackfill,
+  targetsNeedingVideo,
+} from "./exercise-video-backfill";
+import { youTubeConfigured } from "./youtube-catalog";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { needsCoppaAttestation } from "@shared/coach-attestation";
 import {
@@ -2502,6 +2510,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Exercise not found" });
     }
     res.json(exercise);
+  });
+
+  /** THE DEMO-VIDEO BACKFILL. Dry run and apply, deliberately two routes.
+   *
+   * Every seeded videoUrl is a youtube.com/results search link, so nothing embeds and the pill
+   * leaves the app. `dry-run` reports what WOULD be written, including a per-channel median
+   * duration so a talky channel is dropped on evidence; `apply` writes it. Both are admin-only
+   * and both refuse when YOUTUBE_API_KEY is unset, with that said plainly rather than as a
+   * generic 500 -- the key lives in Render's environment and a missing one is an operator fact,
+   * not a bug.
+   *
+   * Placeholders only, re-checked per row at write time. See server/exercise-video-backfill.ts. */
+  const videoBackfillBody = z.object({
+    channels: z.array(z.string().trim().min(1).max(100)).min(1).max(30).optional(),
+    maxDurationSeconds: z.number().int().min(10).max(3600).optional(),
+    maxVideosPerChannel: z.number().int().min(50).max(5000).optional(),
+  });
+
+  for (const mode of ["dry-run", "apply"] as const) {
+    app.post(`/api/admin/exercise-videos/${mode}`, requireRole("admin"), async (req, res) => {
+      const parsed = videoBackfillBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      if (!youTubeConfigured()) {
+        return res.status(503).json({
+          message: "YOUTUBE_API_KEY is not set on this server, so no catalogue can be read.",
+        });
+      }
+      const run = mode === "apply" ? applyExerciseVideoBackfill : planExerciseVideoBackfill;
+      const report = await run(parsed.data);
+      res.json(report);
+    });
+  }
+
+  /** What is still on a search link, with no API call and no quota spent. Answers "is the
+   *  backfill worth running" and "did it work" without touching YouTube at all. */
+  app.get("/api/admin/exercise-videos/pending", requireRole("admin"), async (_req, res) => {
+    const targets = await targetsNeedingVideo();
+    res.json({
+      pending: targets.length,
+      configured: youTubeConfigured(),
+      channels: DEMO_VIDEO_CHANNELS,
+      maxDurationSeconds: DEFAULT_MAX_DURATION_SECONDS,
+      targets: targets.slice(0, 200),
+    });
   });
 
   // Admin and athlete twins of the coach route above. ExercisePickerDialog
