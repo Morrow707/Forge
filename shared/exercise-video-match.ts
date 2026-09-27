@@ -221,22 +221,60 @@ export function isSeededSearchPlaceholder(url: string | null | undefined): boole
  * is the honest outcome -- no video in the pool was actually of a barbell curl. Handing it the
  * runner-up would put it straight back where it started.
  */
+/**
+ * WHY AN EXERCISE ENDED UP WITH NOTHING.
+ *
+ * Scott, reading the third dry run: "no 'why it wasn't chosen'." Four channels read 3,900 videos
+ * between them and won zero matches, and the report had no way to say whether that was a title
+ * convention the floor rejects, videos over the cap, or simply nothing about those movements.
+ * Those want completely different responses -- relax a threshold, raise the cap, or drop the
+ * channel -- and without the reason each one is a guess, which is how "Westside's videos must be
+ * too long" happened when Westside had never been read at all.
+ *
+ * So every unmatched exercise carries its best NEAR MISS: the closest candidate and the rule
+ * that turned it away. A rejection that cannot be inspected is a threshold nobody can tune.
+ */
+export type NearMissReason = "below_precision" | "claimed_by_another" | "over_duration" | "none";
+
+export type NearMiss = {
+  reason: NearMissReason;
+  title?: string;
+  channel?: string;
+  precision?: number;
+  durationSeconds?: number;
+  /** For claimed_by_another: the exercise that took it. */
+  claimedBy?: string;
+};
+
 export function assignVideosToExercises(
   exerciseNames: string[],
   candidates: VideoCandidate[],
   maxDurationSeconds: number,
-): Map<string, VideoMatch> {
+): { chosen: Map<string, VideoMatch>; nearMisses: Map<string, NearMiss> } {
   // Title terms are computed once per video rather than once per (video, exercise) pair: the
   // library is ~800 names against several thousand videos, and the naive order is millions of
   // redundant string splits.
-  const usable = candidates
-    .filter((c) => c.embeddable && c.durationSeconds > 0 && c.durationSeconds <= maxDurationSeconds)
+  const embeddable = candidates.filter((c) => c.embeddable && c.durationSeconds > 0);
+  const usable = embeddable
+    .filter((c) => c.durationSeconds <= maxDurationSeconds)
+    .map((c) => ({ video: c, inTitle: titleTerms(c.title) }));
+  // Kept separately so "there WAS a video, it was just too long" can be reported as itself
+  // rather than as silence -- that is a cap to raise, not a channel to drop.
+  const tooLong = embeddable
+    .filter((c) => c.durationSeconds > maxDurationSeconds)
     .map((c) => ({ video: c, inTitle: titleTerms(c.title) }));
 
   const termsByName = new Map(exerciseNames.map((n) => [n, exerciseTerms(n)] as const));
 
   type Claim = { name: string; covered: number; precision: number };
   const claims: Array<{ video: VideoCandidate; best: Claim | null; ties: Claim[] }> = [];
+  const nearMisses = new Map<string, NearMiss>();
+
+  /** Keeps the CLOSEST near miss per exercise -- the most informative one to read. */
+  const noteMiss = (name: string, miss: NearMiss) => {
+    const existing = nearMisses.get(name);
+    if (!existing || (miss.precision ?? 0) > (existing.precision ?? 0)) nearMisses.set(name, miss);
+  };
 
   for (const { video, inTitle } of usable) {
     if (inTitle.size === 0) continue;
@@ -245,7 +283,16 @@ export function assignVideosToExercises(
       if (terms.length === 0) continue;
       if (!terms.every((t) => inTitle.has(t))) continue;
       const precision = terms.length / inTitle.size;
-      if (precision < MIN_TITLE_PRECISION) continue;
+      if (precision < MIN_TITLE_PRECISION) {
+        noteMiss(name, {
+          reason: "below_precision",
+          title: video.title,
+          channel: video.channel,
+          precision: Math.round(precision * 100) / 100,
+          durationSeconds: video.durationSeconds,
+        });
+        continue;
+      }
       fits.push({ name, covered: terms.length, precision });
     }
     if (fits.length === 0) continue;
@@ -254,7 +301,21 @@ export function assignVideosToExercises(
     // A genuine tie means two exercises describe this title equally well -- most often a naming
     // duplicate. Giving it to neither is safer than picking by array order, which is arbitrary.
     const tied = fits.filter((f) => f.covered === top.covered && f.precision === top.precision);
-    claims.push({ video, best: tied.length === 1 ? top : null, ties: tied });
+    const winner = tied.length === 1 ? top : null;
+    // Everyone who fitted and did not win learns who took it. This is the one rejection that
+    // reads as a bug when unexplained -- Barbell Curl losing a video it plainly matched.
+    for (const f of fits) {
+      if (winner && f.name === winner.name) continue;
+      noteMiss(f.name, {
+        reason: "claimed_by_another",
+        title: video.title,
+        channel: video.channel,
+        precision: Math.round(f.precision * 100) / 100,
+        durationSeconds: video.durationSeconds,
+        claimedBy: winner?.name,
+      });
+    }
+    claims.push({ video, best: winner, ties: tied });
   }
 
   const byExercise = new Map<string, VideoMatch[]>();
@@ -282,5 +343,34 @@ export function assignVideosToExercises(
     );
     chosen.set(name, list[0]);
   }
-  return chosen;
+
+  // Only for exercises still holding nothing, and only when no closer miss was recorded: a
+  // rejected-for-length video is weaker evidence than one rejected on meaning.
+  for (const [name, terms] of termsByName) {
+    if (chosen.has(name) || nearMisses.has(name) || terms.length === 0) continue;
+    let shortest: { video: VideoCandidate; precision: number } | null = null;
+    for (const { video, inTitle } of tooLong) {
+      if (inTitle.size === 0 || !terms.every((t) => inTitle.has(t))) continue;
+      if (!shortest || video.durationSeconds < shortest.video.durationSeconds) {
+        shortest = { video, precision: terms.length / inTitle.size };
+      }
+    }
+    if (shortest) {
+      nearMisses.set(name, {
+        reason: "over_duration",
+        title: shortest.video.title,
+        channel: shortest.video.channel,
+        precision: Math.round(shortest.precision * 100) / 100,
+        durationSeconds: shortest.video.durationSeconds,
+      });
+    }
+  }
+
+  // Nothing in the pool mentioned this movement at all. Said explicitly, because it is the only
+  // reason on this list that no threshold can fix -- it needs a different channel.
+  for (const [name] of termsByName) {
+    if (!chosen.has(name) && !nearMisses.has(name)) nearMisses.set(name, { reason: "none" });
+  }
+
+  return { chosen, nearMisses };
 }

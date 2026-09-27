@@ -37,6 +37,7 @@ import { exercises, skillExercises } from "@shared/schema";
 import {
   assignVideosToExercises,
   isSeededSearchPlaceholder,
+  type NearMiss,
   type VideoCandidate,
   type VideoMatch,
 } from "@shared/exercise-video-match";
@@ -90,6 +91,9 @@ export const DEFAULT_MAX_DURATION_SECONDS = 180;
 
 export type BackfillTarget = { kind: "exercise" | "skill"; id: number; name: string };
 
+/** An unmatched target carries the reason it is unmatched -- see NearMiss. */
+export type UnmatchedTarget = BackfillTarget & { nearMiss?: NearMiss };
+
 export type BackfillProposal = BackfillTarget & { match: VideoMatch; url: string };
 
 export type ChannelSummary = {
@@ -122,7 +126,7 @@ export type BackfillReport = {
   targetsConsidered: number;
   byKind: { exercise: KindTally; skill: KindTally };
   proposals: BackfillProposal[];
-  unmatched: BackfillTarget[];
+  unmatched: UnmatchedTarget[];
   channels: ChannelSummary[];
   quota: QuotaLedger;
   maxDurationSeconds: number;
@@ -213,17 +217,17 @@ export async function planExerciseVideoBackfill(options?: {
    * single pair is wrong -- the wrongness is that Forge also has a Barbell Wrist Curl and the
    * video is obviously its. Only a view of every name at once can see that, so the whole target
    * list goes in together. See assignVideosToExercises. */
-  const chosen = assignVideosToExercises(
+  const { chosen, nearMisses } = assignVideosToExercises(
     targets.map((t) => t.name),
     pool,
     maxDurationSeconds,
   );
 
   const proposals: BackfillProposal[] = [];
-  const unmatched: BackfillTarget[] = [];
+  const unmatched: UnmatchedTarget[] = [];
   for (const target of targets) {
     const match = chosen.get(target.name);
-    if (!match) unmatched.push(target);
+    if (!match) unmatched.push({ ...target, nearMiss: nearMisses.get(target.name) });
     else proposals.push({ ...target, match, url: watchUrlFor(match.videoId) });
   }
 

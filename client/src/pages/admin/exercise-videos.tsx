@@ -12,6 +12,17 @@ import { AlertTriangle, Loader2, Play } from "lucide-react";
 
 type Target = { kind: "exercise" | "skill"; id: number; name: string };
 
+type NearMiss = {
+  reason: "below_precision" | "claimed_by_another" | "over_duration" | "none";
+  title?: string;
+  channel?: string;
+  precision?: number;
+  durationSeconds?: number;
+  claimedBy?: string;
+};
+
+type Unmatched = Target & { nearMiss?: NearMiss };
+
 type Proposal = Target & {
   url: string;
   match: { videoId: string; title: string; channel: string; durationSeconds: number; precision: number };
@@ -31,7 +42,7 @@ type Report = {
   targetsConsidered: number;
   byKind: { exercise: KindTally; skill: KindTally };
   proposals: Proposal[];
-  unmatched: Target[];
+  unmatched: Unmatched[];
   channels: ChannelSummary[];
   quota: { units: number; calls: number };
   maxDurationSeconds: number;
@@ -307,25 +318,105 @@ export default function AdminExerciseVideos() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  No match -- {report.unmatched.length} keep their search link
-                </CardTitle>
-                <CardDescription>
-                  Deliberate. These stay on the search box rather than getting a loose match, and
-                  the pill still works. Adding a channel that covers them is the fix.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {report.unmatched.map((t) => t.name).join(", ") || "None."}
-                </p>
-              </CardContent>
-            </Card>
+            <NoMatchCard unmatched={report.unmatched} />
           </>
         )}
       </div>
     </AppShell>
+  );
+}
+
+
+/** WHY EACH ONE GOT NOTHING, GROUPED BY THE RULE THAT TURNED IT AWAY.
+ *
+ * This was a comma-separated wall of 264 names, which said only THAT they failed. Each reason
+ * below wants a different response -- relax the floor, raise the cap, add a channel, or nothing
+ * at all -- so a list that cannot distinguish them leaves every decision to guesswork. That is
+ * how "Westside's videos must be too long" happened for a channel that was never read.
+ *
+ * Lifts first and separately: a sport drill going unmatched is the expected outcome and not
+ * something to tune against.
+ */
+function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
+  const lifts = unmatched.filter((t) => t.kind === "exercise");
+  const groups: Array<{ key: NearMiss["reason"]; title: string; blurb: string }> = [
+    {
+      key: "below_precision",
+      title: "Title said too much beyond the exercise name",
+      blurb:
+        "A video WAS found for each of these and refused: its title carried words the exercise name cannot explain, which is the shape that produced Kettlebell Sumo Deadlift for Sumo Deadlift. Lowering the floor buys these back and buys the wrong ones back with them.",
+    },
+    {
+      key: "claimed_by_another",
+      title: "A better-fitting exercise took the video",
+      blurb:
+        "Working as intended: the video described the other movement more completely. Only worth reading if the exercise named alongside looks wrong.",
+    },
+    {
+      key: "over_duration",
+      title: "Only matches were longer than the cap",
+      blurb:
+        "These are the ones a higher cap would buy, and the only group where raising it helps. The length shown is the SHORTEST available.",
+    },
+    {
+      key: "none",
+      title: "Nothing in the pool mentions this movement",
+      blurb:
+        "No threshold reaches these. The only fix is a channel that covers them -- or accepting the search link, which for anything niche is the right answer.",
+    },
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">
+          No match -- {unmatched.length} keep their search link ({lifts.length} lifts)
+        </CardTitle>
+        <CardDescription>
+          The search pill still works on every one of these. Grouped by the rule that turned each
+          away, because each rule wants a different fix.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {groups.map((group) => {
+          const rows = lifts.filter((t) => (t.nearMiss?.reason ?? "none") === group.key);
+          if (rows.length === 0) return null;
+          return (
+            <div key={group.key} className="space-y-1">
+              <p className="text-sm font-semibold">
+                {group.title} -- {rows.length}
+              </p>
+              <p className="text-xs text-muted-foreground">{group.blurb}</p>
+              <div className="mt-1 space-y-0.5">
+                {rows.slice(0, 40).map((t) => (
+                  <div key={t.id} className="flex flex-wrap gap-x-2 text-xs">
+                    <span className="font-medium">{t.name}</span>
+                    {t.nearMiss?.title && (
+                      <>
+                        <span className="text-muted-foreground">&rarr;</span>
+                        <span className="text-muted-foreground">{t.nearMiss.title}</span>
+                        <span className="tabular-nums text-muted-foreground">
+                          {group.key === "over_duration"
+                            ? mmss(t.nearMiss.durationSeconds ?? 0)
+                            : `${Math.round((t.nearMiss.precision ?? 0) * 100)}%`}
+                        </span>
+                      </>
+                    )}
+                    {t.nearMiss?.claimedBy && (
+                      <span className="text-muted-foreground">taken by {t.nearMiss.claimedBy}</span>
+                    )}
+                  </div>
+                ))}
+                {rows.length > 40 && (
+                  <p className="text-xs text-muted-foreground">
+                    ...and {rows.length - 40} more of the same kind.
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }

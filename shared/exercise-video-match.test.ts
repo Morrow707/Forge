@@ -139,7 +139,7 @@ describe("isSeededSearchPlaceholder", () => {
  */
 describe("wrong matches the first dry run produced", () => {
   const lib = (candidates: VideoCandidate[], names: string[]) =>
-    assignVideosToExercises(names, candidates, 180);
+    assignVideosToExercises(names, candidates, 180).chosen;
 
   it("does not give a general exercise its more specific cousin's video", () => {
     const wristCurl = video({ title: "Barbell Wrist Curl | Olympic Weightlifting Exercise Library", videoId: "wrist" });
@@ -220,7 +220,7 @@ describe("wrong matches the first dry run produced", () => {
  */
 describe("wrong matches the second dry run produced", () => {
   const lib = (candidates: VideoCandidate[], names: string[]) =>
-    assignVideosToExercises(names, candidates, 180);
+    assignVideosToExercises(names, candidates, 180).chosen;
 
   it("refuses a competition lift dressed as a demo", () => {
     // 0:10 of somebody's 127kg single tells an athlete nothing about how to squat.
@@ -256,5 +256,53 @@ describe("wrong matches the second dry run produced", () => {
       ["Dumbbell Romanian Deadlift"],
     );
     expect(chosen.get("Dumbbell Romanian Deadlift")?.videoId).toBe("rdl");
+  });
+});
+
+describe("why an exercise got nothing", () => {
+  it("names the rule that turned each one away", () => {
+    const { nearMisses } = assignVideosToExercises(
+      [
+        "Sumo Deadlift",
+        "Barbell Curl",
+        "Incline Bench Press",
+        "Dumbbell Incline Bench Press",
+        "Zercher Squat",
+        "Face-Off Clamp",
+      ],
+      [
+        // Coverage passes, precision does not -- the kettlebell changes the movement.
+        video({ title: "How To: Kettlebell Sumo Deadlift", videoId: "kb" }),
+        video({ title: "Barbell Wrist Curl | Olympic Weightlifting Exercise Library", videoId: "wr" }),
+        // Two exercises BOTH clear the floor here (3 of 4 words, and 4 of 4), so the claim
+        // actually gets contested -- which is the only way claimed_by_another can fire. Since
+        // the floor went to 0.75 it mostly pre-empts this rule: "Barbell Curl" against a wrist
+        // curl title is now refused on precision before any claim is weighed, which is why that
+        // one is asserted as below_precision above rather than as a lost claim.
+        video({ title: "Dumbbell Incline Bench Press", videoId: "dbip" }),
+        // A clean match that is simply too long.
+        video({ title: "Zercher Squat", videoId: "long", durationSeconds: 900 }),
+      ],
+      180,
+    );
+    expect(nearMisses.get("Sumo Deadlift")?.reason).toBe("below_precision");
+    expect(nearMisses.get("Barbell Curl")?.reason).toBe("below_precision");
+    expect(nearMisses.get("Incline Bench Press")?.reason).toBe("claimed_by_another");
+    expect(nearMisses.get("Incline Bench Press")?.claimedBy).toBe("Dumbbell Incline Bench Press");
+    // The one group a higher cap would buy back, reported as itself rather than as silence.
+    expect(nearMisses.get("Zercher Squat")?.reason).toBe("over_duration");
+    expect(nearMisses.get("Zercher Squat")?.durationSeconds).toBe(900);
+    // No threshold reaches this one -- it needs a different channel, and says so.
+    expect(nearMisses.get("Face-Off Clamp")?.reason).toBe("none");
+  });
+
+  it("does not report a near miss for something that matched", () => {
+    const { chosen, nearMisses } = assignVideosToExercises(
+      ["Pendlay Row"],
+      [video({ title: "Pendlay Row | Olympic Weightlifting Exercise Library" })],
+      180,
+    );
+    expect(chosen.has("Pendlay Row")).toBe(true);
+    expect(nearMisses.has("Pendlay Row")).toBe(false);
   });
 });
