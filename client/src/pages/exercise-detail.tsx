@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { extractYouTubeId } from "@/components/exercise-video";
+import { ExerciseVideoPlayer } from "@/components/exercise-video-player";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import {
@@ -278,8 +278,6 @@ export function ExerciseDetailPage({
       </AppShell>
     );
   }
-
-  const videoId = form.videoUrl ? extractYouTubeId(form.videoUrl) : null;
   const showEditForm = isNew || editing;
 
   return (
@@ -293,28 +291,13 @@ export function ExerciseDetailPage({
       }
     >
       <div className="mx-auto max-w-3xl space-y-5">
-        {!isNew && videoId && (
-          <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
-            <iframe
-              className="h-full w-full"
-              src={`https://www.youtube.com/embed/${videoId}`}
-              title={`${exercise!.name} demo video`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        )}
-        {!isNew && !videoId && form.videoUrl && (
-          <a
-            href={form.videoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={externalLinkClick(form.videoUrl)}
-            className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border py-6 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-          >
-            <Youtube className="h-5 w-5" />
-            Watch video
-          </a>
+        {/* ONE PLAYER EVERYWHERE -- see exercise-video-player.tsx. This page, the skill
+            detail page and the workout card each had their own copy of "extract the id,
+            build an embed url, otherwise link out", which is three statements of one
+            behaviour and the shape this repo keeps getting bitten by. The shared one also
+            brings nocookie and click-to-load, which these copies did not have. */}
+        {!isNew && form.videoUrl && (
+          <ExerciseVideoPlayer url={form.videoUrl} name={exercise!.name} />
         )}
 
         {!isNew && exercise && (

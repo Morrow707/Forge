@@ -158,7 +158,13 @@ app.use(
         // The only external frame this app ever embeds -- YouTube exercise/
         // skill demo videos (exercise-video.tsx, exercise-detail.tsx,
         // skill-detail.tsx all build youtube.com/embed/... URLs directly).
-        frameSrc: ["https://www.youtube.com"],
+        // youtube-nocookie is the DEFAULT for the exercise/skill demo player
+        // (exercise-video-player.tsx): it sets no tracking cookies until the
+        // athlete presses play, which matters on a platform with
+        // thirteen-year-olds on it. www.youtube.com stays for the lesson
+        // reader and for the "Open on YouTube" fallback under a video whose
+        // owner disabled embedding.
+        frameSrc: ["https://www.youtube.com", "https://www.youtube-nocookie.com"],
         connectSrc: ["'self'"],
         workerSrc: ["'self'"],
         manifestSrc: ["'self'"],
