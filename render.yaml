@@ -14,7 +14,14 @@ services:
     # gets a second chance). Both scripts are idempotent/additive-only, so
     # re-running reconcile here is a safe no-op on every deploy after the
     # first.
-    buildCommand: npm install --include=dev && npm run build && npm run db:reconcile && npm run db:seed && npm run db:reconcile
+    # npm ci, not npm install: it installs straight from package-lock.json with no
+    # dependency resolution pass, which is both faster and deterministic -- the same
+    # commit can never build against two different trees. --include=dev is required
+    # because Render sets NODE_ENV=production and the build needs vite, esbuild and
+    # tsx. Build minutes are metered, every push to main spends a full build, and a
+    # workspace that runs out of them cancels deploys -- so the install step being
+    # the cheapest correct thing it can be is worth the one-word change.
+    buildCommand: npm ci --include=dev && npm run build && npm run db:reconcile && npm run db:seed && npm run db:reconcile
     startCommand: npm start
     healthCheckPath: /healthz
     # Coach/athlete-uploaded form-check and skill videos, plus coach-drawn
