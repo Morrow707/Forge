@@ -58,4 +58,34 @@ describe("the no-sensor learning signals actually reach a saved take", () => {
     expect(report).not.toContain('pushScaleFree("Range of motion"');
     expect(report).not.toContain('pushScaleFree("Peak power"');
   });
+
+  it("the athlete's bones are measured, carried, and folded into their record", () => {
+    // Measured only from a take whose ruler the body had no hand in...
+    expect(read("client/src/components/av-bar-tracker-dialog.tsx")).toContain(
+      "RULERS_THAT_MAY_TEACH_A_LIMB.includes(",
+    );
+    // ...carried in the diagnostics blob and DECLARED, or zod strips it silently...
+    expect(read("shared/schema.ts")).toContain("limbMeasurementsM: z.record(");
+    // ...and folded into users.bodyModel on save, behind the second gate.
+    const storage = read("server/storage.ts");
+    expect(storage).toContain("learnFromTake(");
+    expect(storage).toContain("bodyModel: next");
+  });
+
+  it("the load-velocity profile reads only takes with an independent ruler", () => {
+    // THE WHOLE SAFETY OF THE FEATURE. A profile built from camera numbers and used to judge
+    // camera numbers judges error against the average of the same error, and a systematic bias
+    // becomes invisible -- strictly worse than today's honest disagreement.
+    const storage = read("server/storage.ts");
+    expect(storage).toContain("getLoadVelocityPointsForAthlete");
+    expect(storage).toContain("scaleSourceIsAnchored(source)");
+  });
+
+  it("the body model is folded best-effort and can never fail a save", () => {
+    // A set that reached the server is worth more than a bookkeeping write -- the same contract
+    // the uploaded-file ledger stamp follows.
+    const storage = read("server/storage.ts");
+    const fold = storage.slice(storage.indexOf("learnFromTake("));
+    expect(fold.slice(0, 600)).toContain("catch");
+  });
 });

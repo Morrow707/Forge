@@ -343,6 +343,9 @@ import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import type { RosterGroup } from "@shared/roster-groups";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
+import { learnFromTake, type BodyModelWithHistory } from "./body-model-learning";
+import { scaleSourceIsAnchored, type AnchoredScaleSource } from "@shared/load-velocity-profile";
+import { LBS_PER_KG } from "@shared/weight-units";
 import { isGatedUploadPath } from "./media-url-signing";
 import {
   tierForAppleProductId,
@@ -21147,6 +21150,44 @@ ${catalog}`;
               };
             }),
           ).returning({ id: workoutSetEntries.id, setNumber: workoutSetEntries.setNumber });
+
+          // THE ATHLETE'S SKELETON LEARNS FROM ANY SET WHOSE RULER WAS INDEPENDENT OF IT.
+          //
+          // A take scaled from a plate, the gravity ruler or a tape-measured grip has this
+          // athlete's limbs in real metres, and a bone does not change -- so it serves every
+          // later take, at any angle, with no plate in shot. learnFromTake refuses any other
+          // scale source: learning a limb from a scale derived from a limb is circular, and the
+          // result would propagate wearing the authority of a measurement. The tracker dialog
+          // gates it too; this is the second gate, because this is the one path that writes into
+          // an athlete's permanent record.
+          //
+          // Best-effort and never able to fail the save. A set that reached the server is worth
+          // more than a bookkeeping write, which is the same contract deleteUploadedFile's own
+          // ledger stamp follows.
+          for (const s of entry.sets ?? []) {
+            const d = s.trackingDiagnostics as
+              | { limbMeasurementsM?: Record<string, number> | null; calibration?: { scaleSource?: string | null } }
+              | null
+              | undefined;
+            if (!d?.limbMeasurementsM) continue;
+            try {
+              const [current] = await tx
+                .select({ bodyModel: users.bodyModel })
+                .from(users)
+                .where(eq(users.id, athleteId));
+              const next = learnFromTake(
+                (current?.bodyModel ?? null) as BodyModelWithHistory | null,
+                d.limbMeasurementsM,
+                d.calibration?.scaleSource ?? null,
+              );
+              if (next) {
+                await tx.update(users).set({ bodyModel: next }).where(eq(users.id, athleteId));
+              }
+            } catch (err) {
+              console.error("Could not fold limb measurements into the body model", err);
+            }
+          }
+
           for (const row of insertedSets) {
             savedSetRowIds.push({
               programExerciseId: entryRow.programExerciseId,
@@ -22993,6 +23034,65 @@ ${catalog}`;
    * treatment the tracking report and the capture export already give -- an admin analytics
    * surface does not resolve to a person (CLAUDE.md, "Athlete data leaving the platform").
    */
+  /**
+   * AN ATHLETE'S LOAD-VELOCITY POINTS, FROM TAKES WITH AN INDEPENDENT RULER ONLY.
+   *
+   * No new table and no new write path: every point this needs is already in
+   * workout_set_entries, so this answers retroactively over everything already filmed. What it
+   * filters on is the thing that makes the profile an instrument rather than a mirror -- the
+   * take's scale must have come from a ruler the camera's body model had no hand in.
+   *
+   * A profile built from camera numbers and then used to judge camera numbers judges error
+   * against the average of the same error. Everything agrees with everything, the contradiction
+   * flags go quiet, and a systematic bias becomes INVISIBLE -- strictly worse than today, where
+   * the pipeline at least admits it disagrees with itself on most takes. See
+   * shared/load-velocity-profile.ts.
+   *
+   * Hand-logged load, never a camera number, for the reason the strength profile already gives:
+   * load is the one measurement in this app that is simply true.
+   */
+  async getLoadVelocityPointsForAthlete(athleteId: number, exerciseId: number, limit = 200) {
+    const rows = await db
+      .select({
+        date: workoutLogs.date,
+        weight: workoutSetEntries.weight,
+        weightUnit: workoutSetEntries.weightUnit,
+        meanVelocityMps: workoutSetEntries.meanVelocityMps,
+        trackingDiagnostics: workoutSetEntries.trackingDiagnostics,
+      })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .where(
+        and(
+          eq(workoutLogs.athleteId, athleteId),
+          eq(workoutLogEntries.exerciseId, exerciseId),
+          isNotNull(workoutSetEntries.meanVelocityMps),
+          isNotNull(workoutSetEntries.weight),
+        ),
+      )
+      .orderBy(desc(workoutLogs.date))
+      .limit(limit);
+
+    return rows.flatMap((r) => {
+      const source = (r.trackingDiagnostics as { calibration?: { scaleSource?: string | null } } | null)
+        ?.calibration?.scaleSource;
+      if (!scaleSourceIsAnchored(source)) return [];
+      const weight = Number(r.weight);
+      const velocity = Number(r.meanVelocityMps);
+      if (!Number.isFinite(weight) || !Number.isFinite(velocity) || weight <= 0) return [];
+      // Kilograms throughout: a mixed denominator would put two sides of one line on different
+      // scales, the same reason bodyweightAtLiftSql converts before it divides.
+      const loadKg = r.weightUnit === "kg" ? weight : weight / LBS_PER_KG;
+      return [{
+        loadKg,
+        meanVelocityMps: velocity,
+        source: source as AnchoredScaleSource,
+        date: r.date,
+      }];
+    });
+  },
+
   async getClipsForDetectorTraining(limit: number) {
     return db
       .select({

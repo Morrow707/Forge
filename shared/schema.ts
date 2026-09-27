@@ -8991,6 +8991,9 @@ export const trackingDiagnosticsSchema = z.object({
     })
     .nullable()
     .optional(),
+  // Values only -- the keys are limb names from shared/athlete-body-model.ts and a record is the
+  // honest shape, since a take measures whichever limbs it could see.
+  limbMeasurementsM: z.record(z.string(), z.number()).nullable().optional(),
   repConsistency: z
     .object({
       repsMeasured: z.number(),

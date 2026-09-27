@@ -359,6 +359,15 @@ export type TrackingDiagnostics = {
     uncertaintyFraction: number;
     repsUsed: number;
   } | null;
+  /** THE ATHLETE'S OWN BONES, IN METRES, from a take whose ruler the body had no hand in.
+   *
+   *  Travels in the diagnostics blob rather than as its own column because it is EVIDENCE about
+   *  this take, not a fact about the athlete -- the fact is what the server folds into
+   *  users.bodyModel after weighing it against every earlier reading. Present only when the
+   *  scale came from a plate, the gravity ruler or a measured grip; a limb learned from a
+   *  body-derived scale is circular and would then propagate wearing the authority of a
+   *  measurement. See client/src/lib/measure-limbs.ts. */
+  limbMeasurementsM?: Record<string, number> | null;
   /** HOW MUCH THE SET DISAGREED WITH ITSELF -- see rep-consistency.ts. An athlete's range of
    *  motion does not change mid-set, so the spread is a measurement of the tracker's own noise
    *  and an outlier rep is a segmentation error rather than a short rep. */
@@ -545,6 +554,7 @@ export function buildTrackingDiagnostics(args: {
   // has the finished trace and whatever the segmenter made of it.
   trace?: TrackingDiagnostics["trace"];
   gravity?: TrackingDiagnostics["gravity"];
+  limbMeasurementsM?: TrackingDiagnostics["limbMeasurementsM"];
   repConsistency?: TrackingDiagnostics["repConsistency"];
   // Straight off AvAnalysisResult -- see the objectLock field's own comment above.
   objectLock?: ObjectLockDiagnostics | null;
@@ -554,6 +564,7 @@ export function buildTrackingDiagnostics(args: {
     outcome: args.outcome,
     trace: args.trace ?? null,
     gravity: args.gravity ?? null,
+    limbMeasurementsM: args.limbMeasurementsM ?? null,
     repConsistency: args.repConsistency ?? null,
     scaleFree: args.scaleFree ?? null,
     message: args.message ?? null,

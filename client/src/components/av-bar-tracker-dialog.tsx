@@ -10,6 +10,8 @@ import {
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
 import { repConsistency } from "@shared/rep-consistency";
+import { RULERS_THAT_MAY_TEACH_A_LIMB } from "@shared/athlete-body-model";
+import { measureLimbsInMetres } from "@/lib/measure-limbs";
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
@@ -1205,6 +1207,8 @@ export function AvBarTrackerDialog({
         ? "both"
         : (scaleVerdict.agreedSources[0] ?? null);
 
+
+
     const scaleCandidates = [
       ...(plateScale != null
         ? [
@@ -1620,6 +1624,22 @@ export function AvBarTrackerDialog({
       }
     }
 
+// THE ATHLETE'S BONES, MEASURED ONLY WHEN THE RULER WAS INDEPENDENT OF THEM.
+    //
+    // A take scaled from a plate, the gravity ruler or a tape-measured grip has every limb in
+    // real metres, and a bone does not change -- so those numbers serve every later take, at any
+    // angle, with no plate in shot and the feet off the bottom of the frame. A take scaled from
+    // shoulder breadth or height teaches nothing: learning a limb from a scale derived from a
+    // limb is circular, and the result would propagate wearing the authority of a measurement.
+    //
+    // Gated here and AGAIN on the server. Two gates on purpose -- this is the one path that can
+    // write a wrong number into an athlete's permanent record.
+    const limbMeasurementsM = RULERS_THAT_MAY_TEACH_A_LIMB.includes(
+      scaleSource as (typeof RULERS_THAT_MAY_TEACH_A_LIMB)[number],
+    )
+      ? measureLimbsInMetres(frames, scaleFactor)
+      : null;
+
     // NOW DECIDE WHETHER THIS TAKE'S TORSO STILLNESS MEANS ANYTHING, AND ACT ON IT.
     //
     // Deliberately a second pass. Whether the athlete's torso travelled is a fact about the
@@ -1965,7 +1985,8 @@ export function AvBarTrackerDialog({
           // range of motion does not change between rep 3 and rep 4, so the spread across reps
           // measures the tracker's own noise, free, on every set. A rep at half the others is a
           // segmentation error (two fused, or one split) rather than a short rep.
-          repConsistency: repConsistency(
+          limbMeasurementsM,
+      repConsistency: repConsistency(
             metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
           ),
         }),
@@ -2096,6 +2117,7 @@ export function AvBarTrackerDialog({
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
       calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
       trace: traceDiagnostics(metrics.repBreakdown.length),
+      limbMeasurementsM,
       repConsistency: repConsistency(
         metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
       ),
