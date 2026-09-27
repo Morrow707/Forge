@@ -12,20 +12,36 @@ import { AlertTriangle, Loader2, Play } from "lucide-react";
 
 type Target = { kind: "exercise" | "skill"; id: number; name: string };
 
-type NearMiss = {
-  reason: "below_precision" | "claimed_by_another" | "over_duration" | "none";
+type RejectReason =
+  | "red-flag"
+  | "no-head"
+  | "head"
+  | "modifier"
+  | "equipment"
+  | "muscle-unexplained"
+  | "unknown-count"
+  | "duration";
+
+type Rejection = {
+  reason: RejectReason;
+  detail: string;
   title?: string;
   channel?: string;
-  precision?: number;
   durationSeconds?: number;
-  claimedBy?: string;
 };
 
-type Unmatched = Target & { nearMiss?: NearMiss };
+type Unmatched = Target & { rejection?: Rejection };
 
 type Proposal = Target & {
   url: string;
-  match: { videoId: string; title: string; channel: string; durationSeconds: number; precision: number };
+  match: {
+    videoId: string;
+    title: string;
+    channel: string;
+    durationSeconds: number;
+    tier: "A" | "B";
+    corroboration: "single" | "multi";
+  };
 };
 
 type ChannelSummary = {
@@ -46,6 +62,10 @@ type Report = {
   channels: ChannelSummary[];
   quota: { units: number; calls: number };
   maxDurationSeconds: number;
+  tierCounts: { A: number; B: number };
+  unknownWords: Array<{ word: string; count: number; examples: string[] }>;
+  duplicateSignatures: Array<[string, string]>;
+  boilerplateByChannel: Record<string, string[]>;
   written?: number;
 };
 
@@ -228,6 +248,13 @@ export default function AdminExerciseVideos() {
                   {report.byKind?.skill.considered ?? 0} -- these are niche enough that no
                   strength channel carries them, and a search link is the expected outcome.
                   <br />
+                  <br />
+                  <strong>Tier A {report.tierCounts?.A ?? 0}</strong> -- applied without review:
+                  nothing unrecognised in the title, equipment stated rather than assumed, under
+                  two minutes, from a channel you have watched.{" "}
+                  <strong>Tier B {report.tierCounts?.B ?? 0}</strong> -- a match nothing is wrong
+                  with that nobody has confirmed. Apply writes tier A only.
+                  <br />
                   Cap {mmss(report.maxDurationSeconds)}. {report.quota.units} quota units over{" "}
                   {report.quota.calls} calls, out of 10,000 free a day.
                 </CardDescription>
@@ -296,8 +323,11 @@ export default function AdminExerciseVideos() {
                       key={`${p.kind}-${p.id}`}
                       className="flex flex-wrap items-center gap-2 border-b border-border pb-1.5 text-sm last:border-0"
                     >
-                      <Badge variant="outline" className="shrink-0">
-                        {p.kind === "skill" ? "Drill" : "Lift"}
+                      <Badge
+                        variant={p.match.tier === "A" ? "default" : "outline"}
+                        className="shrink-0"
+                      >
+                        {p.match.tier === "A" ? "A" : "B -- review"}
                       </Badge>
                       <span className="font-medium">{p.name}</span>
                       <span className="text-muted-foreground">&rarr;</span>
@@ -317,6 +347,52 @@ export default function AdminExerciseVideos() {
                 )}
               </CardContent>
             </Card>
+
+            {(report.unknownWords?.length ?? 0) > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Words the library has never seen</CardTitle>
+                  <CardDescription>
+                    Each of these cost at least one match. Read them as a to-do list: a word that
+                    never changes a movement ("beginners", "gym") belongs in the filler table; a
+                    word that names a real variation ("scap", "anti", "tempo") belongs in the
+                    library as its own exercise, or in the modifier list. Both are code changes --
+                    the vocabulary stays in the repo under test rather than editable here.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-1">
+                  {report.unknownWords.slice(0, 30).map((w) => (
+                    <div key={w.word} className="flex flex-wrap items-baseline gap-2 text-xs">
+                      <span className="font-mono font-semibold">{w.word}</span>
+                      <span className="tabular-nums text-muted-foreground">x{w.count}</span>
+                      <span className="text-muted-foreground">{w.examples[0]}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {(report.duplicateSignatures?.length ?? 0) > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    Library names that mean the same thing -- {report.duplicateSignatures.length}
+                  </CardTitle>
+                  <CardDescription>
+                    These pairs parse identically, so no video can tell them apart. That is a
+                    library problem rather than a matching one: either they are duplicates worth
+                    merging, or one needs a word that says how it differs.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-0.5">
+                  {report.duplicateSignatures.slice(0, 25).map(([a, b]) => (
+                    <p key={`${a}|${b}`} className="text-xs">
+                      {a} <span className="text-muted-foreground">=</span> {b}
+                    </p>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             <NoMatchCard unmatched={report.unmatched} />
           </>
@@ -339,30 +415,54 @@ export default function AdminExerciseVideos() {
  */
 function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
   const lifts = unmatched.filter((t) => t.kind === "exercise");
-  const groups: Array<{ key: NearMiss["reason"]; title: string; blurb: string }> = [
+  const groups: Array<{ key: RejectReason; title: string; blurb: string }> = [
     {
-      key: "below_precision",
-      title: "Title said too much beyond the exercise name",
+      key: "head",
+      title: "Different movement",
       blurb:
-        "A video WAS found for each of these and refused: its title carried words the exercise name cannot explain, which is the shape that produced Kettlebell Sumo Deadlift for Sumo Deadlift. Lowering the floor buys these back and buys the wrong ones back with them.",
+        "The title's movement word is not this exercise's. \"Squat Box Jump\" is a jump, so Box Squat cannot have it. Nothing to tune -- these were never candidates.",
     },
     {
-      key: "claimed_by_another",
-      title: "A better-fitting exercise took the video",
+      key: "modifier",
+      title: "A word that changes the variation",
       blurb:
-        "Working as intended: the video described the other movement more completely. Only worth reading if the exercise named alongside looks wrong.",
+        "Same movement, different version: the title adds or drops a modifier. \"Barbell Wrist Curl\" against Barbell Curl. Correct refusals -- unless Forge is missing that variation as its own exercise.",
     },
     {
-      key: "over_duration",
-      title: "Only matches were longer than the cap",
+      key: "equipment",
+      title: "Different equipment",
       blurb:
-        "These are the ones a higher cap would buy, and the only group where raising it helps. The length shown is the SHORTEST available.",
+        "A kettlebell sumo deadlift is not a barbell one. Worth reading: our equipment column defaults to Barbell, so an exercise that never had it set can refuse a correct video here.",
     },
     {
-      key: "none",
-      title: "Nothing in the pool mentions this movement",
+      key: "muscle-unexplained",
+      title: "Names a muscle this exercise does not train",
       blurb:
-        "No threshold reaches these. The only fix is a channel that covers them -- or accepting the search link, which for anything niche is the right answer.",
+        "The title says a muscle that is not in this exercise's metadata -- usually a sign it is a different movement, occasionally a sign our metadata is thin.",
+    },
+    {
+      key: "unknown-count",
+      title: "A word the library has never seen",
+      blurb:
+        "The strictest rule and the most productive one. An unrecognised word in the name is either a variation we have no word for or one that changes the movement. The words themselves are listed below -- that list is what to fix.",
+    },
+    {
+      key: "red-flag",
+      title: "Not a demonstration",
+      blurb:
+        "A weight in the title, an emoji, shouting, a hashtag in the name, or a word like underrated or hack. \"Alyssa Back Squat 127 kg\" parses perfectly and is somebody's competition single.",
+    },
+    {
+      key: "duration",
+      title: "Would have matched, too long",
+      blurb:
+        "A clean match refused only for length. The one group a higher cap buys back, and the only place raising it helps.",
+    },
+    {
+      key: "no-head",
+      title: "No movement word at all",
+      blurb:
+        "Either the title names nothing we recognise, or this exercise's own name has no head word -- worth checking the name itself if a common lift lands here.",
     },
   ];
 
@@ -379,7 +479,7 @@ function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
       </CardHeader>
       <CardContent className="space-y-4">
         {groups.map((group) => {
-          const rows = lifts.filter((t) => (t.nearMiss?.reason ?? "none") === group.key);
+          const rows = lifts.filter((t) => t.rejection?.reason === group.key);
           if (rows.length === 0) return null;
           return (
             <div key={group.key} className="space-y-1">
@@ -391,19 +491,14 @@ function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
                 {rows.slice(0, 40).map((t) => (
                   <div key={t.id} className="flex flex-wrap gap-x-2 text-xs">
                     <span className="font-medium">{t.name}</span>
-                    {t.nearMiss?.title && (
+                    {t.rejection?.title && (
                       <>
                         <span className="text-muted-foreground">&rarr;</span>
-                        <span className="text-muted-foreground">{t.nearMiss.title}</span>
-                        <span className="tabular-nums text-muted-foreground">
-                          {group.key === "over_duration"
-                            ? mmss(t.nearMiss.durationSeconds ?? 0)
-                            : `${Math.round((t.nearMiss.precision ?? 0) * 100)}%`}
-                        </span>
+                        <span className="text-muted-foreground">{t.rejection.title}</span>
                       </>
                     )}
-                    {t.nearMiss?.claimedBy && (
-                      <span className="text-muted-foreground">taken by {t.nearMiss.claimedBy}</span>
+                    {t.rejection?.detail && (
+                      <span className="text-muted-foreground">({t.rejection.detail})</span>
                     )}
                   </div>
                 ))}

@@ -60,6 +60,27 @@ describe("the report has somewhere to be read", () => {
     // The per-channel median is the evidence for cutting a talky channel. A page that dropped it
     // would leave that decision to somebody's impression, which is what the column replaced.
     expect(page).toContain("medianWinningDurationSeconds");
+    // The tier split and the missing-vocabulary list are the v2 report. Without them the page
+    // would show matches with no way to tell the confirmed from the merely plausible.
+    expect(page).toContain("tierCounts");
+    expect(page).toContain("unknownWords");
+  });
+
+  it("runs the SIGNATURE matcher, and only that one", () => {
+    // The word-set matcher is deleted rather than parked beside this one. A second matcher with
+    // no callers is the failure CLAUDE.md records twice -- code that reads as working because it
+    // is still in the tree. This pins that there is exactly one.
+    const backfill = read("server/exercise-video-backfill.ts");
+    expect(backfill).toContain("runSignatureMatch");
+    expect(backfill).not.toContain("assignVideosToExercises");
+    expect(read("shared/exercise-video-match.ts")).not.toContain("export function bestVideoForExercise");
+  });
+
+  it("applies tier A only", () => {
+    // Tier B is a match nothing is wrong with that nobody has confirmed. Writing it without a
+    // person is the old behaviour wearing a new name.
+    const backfill = read("server/exercise-video-backfill.ts");
+    expect(backfill).toMatch(/tier !== "A"[\s\S]{0,40}continue/);
   });
 });
 

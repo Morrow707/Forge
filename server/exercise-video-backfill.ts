@@ -34,13 +34,10 @@
  */
 import { eq, isNull, or, sql } from "drizzle-orm";
 import { exercises, skillExercises } from "@shared/schema";
-import {
-  assignVideosToExercises,
-  isSeededSearchPlaceholder,
-  type NearMiss,
-  type VideoCandidate,
-  type VideoMatch,
-} from "@shared/exercise-video-match";
+import { isSeededSearchPlaceholder, type VideoCandidate } from "@shared/exercise-video-match";
+import type { LibraryExercise } from "@shared/exercise-vocabulary";
+import type { Tier } from "@shared/exercise-signature-match";
+import { runSignatureMatch, type SignatureRejection } from "./exercise-video-match-run";
 import { channelCatalogue, newQuotaLedger, type QuotaLedger } from "./youtube-catalog";
 
 /**
@@ -92,9 +89,19 @@ export const DEFAULT_MAX_DURATION_SECONDS = 180;
 export type BackfillTarget = { kind: "exercise" | "skill"; id: number; name: string };
 
 /** An unmatched target carries the reason it is unmatched -- see NearMiss. */
-export type UnmatchedTarget = BackfillTarget & { nearMiss?: NearMiss };
+export type UnmatchedTarget = BackfillTarget & { rejection?: SignatureRejection };
 
-export type BackfillProposal = BackfillTarget & { match: VideoMatch; url: string };
+export type BackfillProposal = BackfillTarget & {
+  url: string;
+  match: {
+    videoId: string;
+    title: string;
+    channel: string;
+    durationSeconds: number;
+    tier: Tier;
+    corroboration: "single" | "multi";
+  };
+};
 
 export type ChannelSummary = {
   channel: string;
@@ -130,9 +137,50 @@ export type BackfillReport = {
   channels: ChannelSummary[];
   quota: QuotaLedger;
   maxDurationSeconds: number;
+  /** Tier A is applied without a person; tier B waits for one. See exercise-signature-match. */
+  tierCounts: { A: number; B: number };
+  /** Unrecognised words that cost a match, most frequent first -- what the vocabulary is
+   *  missing, in the order worth fixing. */
+  unknownWords: Array<{ word: string; count: number; examples: string[] }>;
+  /** Two library names that parse identically. A library problem, not a matching one. */
+  duplicateSignatures: Array<[string, string]>;
+  /** What each channel's house style turned out to be, learned rather than listed. */
+  boilerplateByChannel: Record<string, string[]>;
   /** Set only by apply(); a dry run leaves it undefined so the two are never confused. */
   written?: number;
 };
+
+/**
+ * THE WHOLE LIFT LIBRARY, with the metadata the grammar needs.
+ *
+ * Every exercise, not only those still needing a video: "Barbell Wrist Curl" may already have
+ * one and it still has to exist as the reason Barbell Curl cannot take a wrist curl title. The
+ * grammar is a property of the library, never of the backlog.
+ */
+export async function libraryForMatching(): Promise<LibraryExercise[]> {
+  const { db } = await import("./db");
+  const rows = await db
+    .select({
+      id: exercises.id,
+      name: exercises.name,
+      equipment: exercises.equipment,
+      muscleGroup: exercises.muscleGroup,
+      secondaryMuscles: exercises.secondaryMuscles,
+      movementType: exercises.movementType,
+    })
+    .from(exercises);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    // NOTE: this column is NOT NULL and defaults to "Barbell", so "unspecified" and "barbell"
+    // are indistinguishable here. A barbell default is therefore an assumption, not a statement,
+    // which is why an equipment match that relied on one is tier B rather than auto-applied.
+    equipment: r.equipment,
+    muscleGroups: [r.muscleGroup, ...(r.secondaryMuscles ?? [])].filter(Boolean) as string[],
+    movementPattern: r.movementType,
+    kind: "exercise" as const,
+  }));
+}
 
 /** Everything still carrying a placeholder URL (or none at all), both libraries. */
 export async function targetsNeedingVideo(): Promise<BackfillTarget[]> {
@@ -210,25 +258,29 @@ export async function planExerciseVideoBackfill(options?: {
   }
 
   const targets = await targetsNeedingVideo();
+  const library = await libraryForMatching();
 
-  /* ASSIGNED ACROSS THE WHOLE LIBRARY AT ONCE, not one exercise at a time.
-   *
-   * Matching per exercise gave BARBELL CURL the "Barbell Wrist Curl" video, because nothing in a
-   * single pair is wrong -- the wrongness is that Forge also has a Barbell Wrist Curl and the
-   * video is obviously its. Only a view of every name at once can see that, so the whole target
-   * list goes in together. See assignVideosToExercises. */
-  const { chosen, nearMisses } = assignVideosToExercises(
-    targets.map((t) => t.name),
-    pool,
-    maxDurationSeconds,
-  );
+  /* SLOT-BY-SLOT MATCHING over the whole library at once (Fable's v2 spec, 2026-09-27). The word
+   * -set matcher it replaces could not tell a harmless extra title word from one that changes the
+   * movement, so it either took Kettlebell Sumo Deadlifts or -- at the strict end -- threw away
+   * three channels holding 3,900 videos. See shared/exercise-signature-match.ts. */
+  const run = runSignatureMatch(library, pool, maxDurationSeconds);
 
   const proposals: BackfillProposal[] = [];
   const unmatched: UnmatchedTarget[] = [];
   for (const target of targets) {
-    const match = chosen.get(target.name);
-    if (!match) unmatched.push({ ...target, nearMiss: nearMisses.get(target.name) });
-    else proposals.push({ ...target, match, url: watchUrlFor(match.videoId) });
+    const match = target.kind === "exercise" ? run.chosen.get(target.name) : undefined;
+    if (!match) {
+      unmatched.push({
+        ...target,
+        rejection:
+          target.kind === "skill"
+            ? { reason: "head", detail: "skill drills are not matched -- see the note above" }
+            : run.rejections.get(target.name),
+      });
+      continue;
+    }
+    proposals.push({ ...target, match, url: watchUrlFor(match.videoId) });
   }
 
   const summaries: ChannelSummary[] = [...catalogueSizes.entries()].map(([channel, catalogueSize]) => {
@@ -241,6 +293,11 @@ export async function planExerciseVideoBackfill(options?: {
       medianWinningDurationSeconds: median(won.map((p) => p.match.durationSeconds)),
     };
   });
+
+  const tierCounts = {
+    A: proposals.filter((p) => p.match.tier === "A").length,
+    B: proposals.filter((p) => p.match.tier === "B").length,
+  };
 
   const tally = (kind: BackfillTarget["kind"]): KindTally => ({
     considered: targets.filter((t) => t.kind === kind).length,
@@ -255,6 +312,10 @@ export async function planExerciseVideoBackfill(options?: {
     channels: summaries,
     quota,
     maxDurationSeconds,
+    tierCounts,
+    unknownWords: run.unknownWords,
+    duplicateSignatures: run.duplicateSignatures,
+    boilerplateByChannel: run.boilerplateByChannel,
   };
 }
 
@@ -274,6 +335,10 @@ export async function applyExerciseVideoBackfill(options?: {
   const report = await planExerciseVideoBackfill(options);
   let written = 0;
   for (const proposal of report.proposals) {
+    // ONLY TIER A IS APPLIED WITHOUT A PERSON. Tier B is a match nothing is wrong with and
+    // nobody has confirmed -- an unrecognised word, assumed equipment, over two minutes, or a
+    // channel nobody has watched. Applying those is the old behaviour under a new name.
+    if (proposal.match.tier !== "A") continue;
     const table = proposal.kind === "exercise" ? exercises : skillExercises;
     const [current] = await db
       .select({ videoUrl: table.videoUrl })

@@ -364,3 +364,12 @@ export const AUTO_APPLY_CHANNELS = [
   "Renaissance Periodization",
   "ScottHermanFitness",
 ] as const;
+
+
+/** Remove a channel's learned house style before the title is parsed. Longest n-grams first,
+ *  so "how to perform" goes before "how to" can take half of it. */
+export function stripBoilerplate(tokens: string[], learned: string[]): string[] {
+  let joined = ` ${tokens.join(" ")} `;
+  for (const gram of learned) joined = joined.split(` ${gram} `).join(" ");
+  return joined.trim().split(" ").filter(Boolean);
+}
