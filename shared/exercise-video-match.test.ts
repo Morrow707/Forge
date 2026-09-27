@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assignVideosToExercises,
   bestVideoForExercise,
   exerciseTerms,
   isSeededSearchPlaceholder,
@@ -125,5 +126,79 @@ describe("isSeededSearchPlaceholder", () => {
     expect(isSeededSearchPlaceholder("https://youtu.be/abc12345678")).toBe(false);
     expect(isSeededSearchPlaceholder("https://vimeo.com/12345")).toBe(false);
     expect(isSeededSearchPlaceholder("not a url at all")).toBe(false);
+  });
+});
+
+
+/**
+ * EVERY CASE HERE IS A WRONG MATCH THE FIRST REAL DRY RUN ACTUALLY PRODUCED, 2026-09-27.
+ *
+ * Read off the report rather than imagined, which is why they are worth keeping: each one passed
+ * coverage, and each one would have put a different movement on an athlete's screen with the
+ * confidence of a chosen video.
+ */
+describe("wrong matches the first dry run produced", () => {
+  const lib = (candidates: VideoCandidate[], names: string[]) =>
+    assignVideosToExercises(names, candidates, 180);
+
+  it("does not give a general exercise its more specific cousin's video", () => {
+    const wristCurl = video({ title: "Barbell Wrist Curl | Olympic Weightlifting Exercise Library", videoId: "wrist" });
+    const chosen = lib([wristCurl], ["Barbell Curl", "Barbell Wrist Curl"]);
+    expect(chosen.get("Barbell Wrist Curl")?.videoId).toBe("wrist");
+    // The whole point: Barbell Curl ends on its search link rather than showing a wrist curl.
+    expect(chosen.get("Barbell Curl")).toBeUndefined();
+  });
+
+  it("does not let a squat take a jump video", () => {
+    const chosen = lib(
+      [video({ title: "Squat Box Jump | Olympic Weightlifting Exercise Library", videoId: "jump" })],
+      ["Box Squat", "Squat Box Jump"],
+    );
+    expect(chosen.get("Box Squat")).toBeUndefined();
+  });
+
+  it("refuses an advert that happens to contain the exercise's words", () => {
+    // "Step-Up" is step + up, and "step up your game" contains both. Coverage alone said yes.
+    const chosen = lib(
+      [video({ title: "Ready to step up your game? Sign up for softball throwing lessons! #softball #training #throwing", videoId: "ad" })],
+      ["Step-Up"],
+    );
+    expect(chosen.get("Step-Up")).toBeUndefined();
+  });
+
+  it("still takes a clean match whose title adds only sales words", () => {
+    // The floor has to let this through, or it costs more than it saves.
+    const chosen = lib(
+      [video({ title: "How to Perform Dumbbell Triceps Kickback Exercise", videoId: "good", durationSeconds: 113 })],
+      ["Dumbbell Kickback"],
+    );
+    expect(chosen.get("Dumbbell Kickback")?.videoId).toBe("good");
+  });
+
+  it("keeps the Olympic library's own naming, which supplies most of the run", () => {
+    const chosen = lib(
+      [video({ title: "Jerk Balance | Olympic Weightlifting Exercise Library", videoId: "jerk" })],
+      ["Jerk Balance"],
+    );
+    expect(chosen.get("Jerk Balance")?.videoId).toBe("jerk");
+  });
+
+  it("gives a tie to neither, rather than to whichever was listed first", () => {
+    const chosen = lib(
+      [video({ title: "Hip Thrust | Olympic Weightlifting Exercise Library", videoId: "tie" })],
+      ["Hip Thrust", "Hip Thrusts"],
+    );
+    expect(chosen.size).toBe(0);
+  });
+
+  it("still picks the shortest when one exercise claims several videos", () => {
+    const chosen = lib(
+      [
+        video({ title: "Back Squat | Olympic Weightlifting Exercise Library", videoId: "long", durationSeconds: 170 }),
+        video({ title: "Back Squat | Olympic Weightlifting Exercise Library", videoId: "short", durationSeconds: 22 }),
+      ],
+      ["Back Squat"],
+    );
+    expect(chosen.get("Back Squat")?.videoId).toBe("short");
   });
 });

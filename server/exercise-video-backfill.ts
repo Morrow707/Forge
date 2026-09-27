@@ -35,7 +35,7 @@
 import { eq, isNull, or, sql } from "drizzle-orm";
 import { exercises, skillExercises } from "@shared/schema";
 import {
-  bestVideoForExercise,
+  assignVideosToExercises,
   isSeededSearchPlaceholder,
   type VideoCandidate,
   type VideoMatch,
@@ -163,10 +163,23 @@ export async function planExerciseVideoBackfill(options?: {
   }
 
   const targets = await targetsNeedingVideo();
+
+  /* ASSIGNED ACROSS THE WHOLE LIBRARY AT ONCE, not one exercise at a time.
+   *
+   * Matching per exercise gave BARBELL CURL the "Barbell Wrist Curl" video, because nothing in a
+   * single pair is wrong -- the wrongness is that Forge also has a Barbell Wrist Curl and the
+   * video is obviously its. Only a view of every name at once can see that, so the whole target
+   * list goes in together. See assignVideosToExercises. */
+  const chosen = assignVideosToExercises(
+    targets.map((t) => t.name),
+    pool,
+    maxDurationSeconds,
+  );
+
   const proposals: BackfillProposal[] = [];
   const unmatched: BackfillTarget[] = [];
   for (const target of targets) {
-    const match = bestVideoForExercise(target.name, pool, maxDurationSeconds);
+    const match = chosen.get(target.name);
     if (!match) unmatched.push(target);
     else proposals.push({ ...target, match, url: watchUrlFor(match.videoId) });
   }

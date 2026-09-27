@@ -101,6 +101,27 @@ export type VideoMatch = {
  * A NON-EMBEDDABLE VIDEO IS NOT A CANDIDATE. It would play nowhere inside Forge, so however well
  * it matches it is worse than leaving the search link alone.
  */
+/**
+ * HOW MUCH OF THE TITLE THE EXERCISE NAME HAD TO EXPLAIN.
+ *
+ * Found on the first real dry run, 2026-09-27. "Step-Up" reduces to step + up, and matched
+ * "Ready to step up your game? Sign up for softball throwing lessons!" -- every word of the
+ * exercise name WAS in that title, so the coverage rule was satisfied and the result was an
+ * advert for throwing lessons filed against a lower-body lift.
+ *
+ * Coverage alone cannot catch that: a short name made of common words is a substring of ordinary
+ * English. What separates the two cases is how much of the title is left over. "How to Perform
+ * Dumbbell Triceps Kickback Exercise" says almost nothing the name did not (0.5); the softball
+ * advert says nine things the name did not (0.22).
+ *
+ * 0.3, and it is a judgement call: "Jerk Balance | Olympic Weightlifting Exercise Library" sits
+ * at 0.4 and has to survive, because that library is the single best source of short clean demos
+ * in the whole run. A floor is also the SAFE direction to be wrong in -- too high loses a video
+ * and leaves a working search link, too low shows an athlete the wrong movement with the
+ * confidence of a chosen one.
+ */
+export const MIN_TITLE_PRECISION = 0.3;
+
 export function bestVideoForExercise(
   exerciseName: string,
   candidates: VideoCandidate[],
@@ -116,12 +137,14 @@ export function bestVideoForExercise(
     const inTitle = titleTerms(c.title);
     // EVERY word of the exercise name, or it is a different exercise -- see the file comment.
     if (!terms.every((t) => inTitle.has(t))) continue;
+    const precision = inTitle.size > 0 ? terms.length / inTitle.size : 0;
+    if (precision < MIN_TITLE_PRECISION) continue;
     matches.push({
       videoId: c.videoId,
       title: c.title,
       channel: c.channel,
       durationSeconds: c.durationSeconds,
-      precision: inTitle.size > 0 ? Math.round((terms.length / inTitle.size) * 100) / 100 : 0,
+      precision: Math.round(precision * 100) / 100,
     });
   }
   if (matches.length === 0) return null;
@@ -153,4 +176,91 @@ export function isSeededSearchPlaceholder(url: string | null | undefined): boole
   } catch {
     return false;
   }
+}
+
+
+/**
+ * A VIDEO BELONGS TO THE EXERCISE IT DESCRIBES BEST, NOT TO WHICHEVER ASKS FIRST.
+ *
+ * The first real dry run (2026-09-27) matched "Barbell Wrist Curl | Olympic Weightlifting
+ * Exercise Library" to the exercise BARBELL CURL. Every word of "Barbell Curl" is in that title,
+ * so coverage passed and precision passed -- and the athlete would have been shown a wrist curl
+ * for a bicep curl. The same shape produced "Plank" -> Star Side Plank, "Box Squat" -> Squat Box
+ * Jump, "Dumbbell Curl" -> Dumbbell Spider Curl, "Push-Up" -> Scap Push-Up.
+ *
+ * No per-exercise rule can catch it, because nothing is wrong with the pair in isolation. What
+ * is wrong is GLOBAL: Forge also has an exercise called Barbell Wrist Curl, and that video is
+ * plainly its. So the assignment is decided across the whole library at once -- each video is
+ * claimed by the exercise that explains the most of its title, and an exercise only keeps a
+ * video no better-fitting exercise wanted.
+ *
+ * MORE TERMS COVERED WINS, because a longer name is a more specific claim: "Barbell Wrist Curl"
+ * covers three words of that title and "Barbell Curl" two. Precision breaks ties.
+ *
+ * THE LOSER GETS NOTHING, NOT A SECOND-BEST. Barbell Curl ends the run on its search link, which
+ * is the honest outcome -- no video in the pool was actually of a barbell curl. Handing it the
+ * runner-up would put it straight back where it started.
+ */
+export function assignVideosToExercises(
+  exerciseNames: string[],
+  candidates: VideoCandidate[],
+  maxDurationSeconds: number,
+): Map<string, VideoMatch> {
+  // Title terms are computed once per video rather than once per (video, exercise) pair: the
+  // library is ~800 names against several thousand videos, and the naive order is millions of
+  // redundant string splits.
+  const usable = candidates
+    .filter((c) => c.embeddable && c.durationSeconds > 0 && c.durationSeconds <= maxDurationSeconds)
+    .map((c) => ({ video: c, inTitle: titleTerms(c.title) }));
+
+  const termsByName = new Map(exerciseNames.map((n) => [n, exerciseTerms(n)] as const));
+
+  type Claim = { name: string; covered: number; precision: number };
+  const claims: Array<{ video: VideoCandidate; best: Claim | null; ties: Claim[] }> = [];
+
+  for (const { video, inTitle } of usable) {
+    if (inTitle.size === 0) continue;
+    const fits: Claim[] = [];
+    for (const [name, terms] of termsByName) {
+      if (terms.length === 0) continue;
+      if (!terms.every((t) => inTitle.has(t))) continue;
+      const precision = terms.length / inTitle.size;
+      if (precision < MIN_TITLE_PRECISION) continue;
+      fits.push({ name, covered: terms.length, precision });
+    }
+    if (fits.length === 0) continue;
+    fits.sort((a, b) => b.covered - a.covered || b.precision - a.precision);
+    const top = fits[0];
+    // A genuine tie means two exercises describe this title equally well -- most often a naming
+    // duplicate. Giving it to neither is safer than picking by array order, which is arbitrary.
+    const tied = fits.filter((f) => f.covered === top.covered && f.precision === top.precision);
+    claims.push({ video, best: tied.length === 1 ? top : null, ties: tied });
+  }
+
+  const byExercise = new Map<string, VideoMatch[]>();
+  for (const claim of claims) {
+    if (!claim.best) continue;
+    const list = byExercise.get(claim.best.name) ?? [];
+    list.push({
+      videoId: claim.video.videoId,
+      title: claim.video.title,
+      channel: claim.video.channel,
+      durationSeconds: claim.video.durationSeconds,
+      precision: Math.round(claim.best.precision * 100) / 100,
+    });
+    byExercise.set(claim.best.name, list);
+  }
+
+  const chosen = new Map<string, VideoMatch>();
+  for (const [name, list] of byExercise) {
+    // Shortest wins, same rule as ever -- see bestVideoForExercise.
+    list.sort(
+      (a, b) =>
+        a.durationSeconds - b.durationSeconds ||
+        b.precision - a.precision ||
+        a.title.localeCompare(b.title),
+    );
+    chosen.set(name, list[0]);
+  }
+  return chosen;
 }

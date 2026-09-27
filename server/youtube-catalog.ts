@@ -76,7 +76,38 @@ export async function resolveChannel(
   if (/^UC[A-Za-z0-9_-]{22}$/.test(raw)) params.id = raw;
   else params.forHandle = raw;
   const data = await get("channels", params, ledger, 1);
-  const item = data.items?.[0];
+  let item = data.items?.[0];
+
+  /* A HANDLE THAT DOES NOT RESOLVE FALLS BACK TO ONE SEARCH.
+   *
+   * The first real run lost three channels to this: westsidebarbell and musclestrengthcom came
+   * back with nothing, and "onnit" resolved to some unrelated five-video channel. A handle is a
+   * string somebody typed from memory, and YouTube handles do not always match the name -- so a
+   * wrong guess silently removed a whole channel's catalogue from the pool and the only sign was
+   * a 0 in the report.
+   *
+   * search.list costs 100 units against the 1-unit calls this module is built around, which is
+   * exactly why it is a FALLBACK and never the main path: it fires only for a handle that
+   * already failed, so the worst case is a few hundred units on a run that otherwise spends
+   * ~250. Cheaper than a channel missing. */
+  if (!item && !params.id) {
+    const found: any = await get(
+      "search",
+      { part: "snippet", type: "channel", q: raw, maxResults: "1" },
+      ledger,
+      100,
+    );
+    const channelId = found.items?.[0]?.id?.channelId;
+    if (channelId) {
+      const again = await get(
+        "channels",
+        { part: "snippet,contentDetails", id: channelId },
+        ledger,
+        1,
+      );
+      item = again.items?.[0];
+    }
+  }
   if (!item) return null;
   const uploads = item.contentDetails?.relatedPlaylists?.uploads;
   if (!uploads) return null;
@@ -86,14 +117,22 @@ export async function resolveChannel(
 /**
  * Every video on a channel, with duration and embeddability, newest first.
  *
- * `maxVideos` is a floor under the quota, not a quality filter: a channel with 4,000 uploads
- * would cost 160 units to walk twice and most of those videos are years of content nobody is
- * matching against. Default 1,000 -- 40 units of listing, 40 of detail.
+ * `maxVideos` is a ceiling under the quota, not a quality filter.
+ *
+ * It was 1,000, and the first real run showed that binding on FIVE channels at once -- every one
+ * of them reported a catalogue of exactly 1000, which is the cap talking, not the channel. That
+ * matters more than it sounds: playlistItems returns NEWEST FIRST, so a 1,000 cap on Catalyst
+ * Athletics was reading this year's uploads and truncating the exercise library itself, which is
+ * older content and the single best source of short demos in the pool.
+ *
+ * 4,000 costs 80 listing calls and 80 detail calls per full channel -- 160 units, against a
+ * 10,000-a-day allowance that the whole first run spent 244 of. The cap is there to stop an
+ * unbounded walk, not to save units we are nowhere near using.
  */
 export async function channelCatalogue(
   handleOrId: string,
   ledger: QuotaLedger,
-  maxVideos = 1000,
+  maxVideos = 4000,
 ): Promise<{ channel: string; videos: VideoCandidate[] } | null> {
   const channel = await resolveChannel(handleOrId, ledger);
   if (!channel) return null;
