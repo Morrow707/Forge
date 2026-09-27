@@ -37,6 +37,8 @@ import { usdaFoodLookupEnabled } from "./food-lookup";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
+import { summariseCalibrationEvidence } from "./calibration-evidence";
+import { CAMERA_CONSTANTS } from "@shared/camera-constants-registry";
 import { buildCaraComplianceCsv, buildCaraCompliancePdf } from "./cara-export";
 import { buildMovementScreenSheetPdf } from "./movement-screen-export";
 import {
@@ -1583,6 +1585,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
    *  frames are never stored anywhere regardless), so this hands back a signed video URL and
    *  nothing that resolves to a person. The athlete code is generated fresh per response and
    *  mapped nowhere, exactly as the tracking report and capture export do it. */
+  /** WHAT THE FLEET SAYS ABOUT OUR OWN GUESSES -- see summariseCalibrationEvidence.
+   *
+   *  Every camera threshold is an admitted guess and the only way to revise one used to be
+   *  filming beside a bar sensor, which does not scale: nobody sensors every lift. Two signals
+   *  need no ground truth -- a take's arithmetic against itself, and whether independent scale
+   *  rulers agree -- and both are already in every stored take, so this answers retroactively.
+   *
+   *  Group numbers only. No athlete, no set id, nothing that resolves to a person. */
+  app.get("/api/admin/calibration-evidence", requireRole("admin"), async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "500"), 10) || 500, 1), 2000);
+    const rows = await storage.getRecentTrackedSetsForAdmin(limit);
+    res.json({
+      evidence: summariseCalibrationEvidence(rows as any),
+      constants: CAMERA_CONSTANTS,
+    });
+  });
+
   app.get("/api/admin/detector-training-clips", requireRole("admin"), async (req, res) => {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "40"), 10) || 40, 1), 200);
     const rows = await storage.getClipsForDetectorTraining(limit);
