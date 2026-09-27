@@ -34,6 +34,14 @@ const TITLE_FILLER = new Set([
   "workout", "training", "form", "technique", "tips", "tip", "demo", "demonstration", "part",
   "ep", "episode", "vs", "explained", "mistakes", "avoid", "stop", "why", "what", "must",
   "should", "every", "this", "that", "is", "are", "in", "on", "of", "at", "by", "from",
+  // CHANNEL BOILERPLATE. Catalyst Athletics suffixes "| Olympic Weightlifting Exercise Library"
+  // to essentially every upload, and it was wrecking the precision arithmetic across the single
+  // largest source in the pool: three dead words on every title dragged a perfect match like
+  // "Kettlebell Swing | Olympic Weightlifting Exercise Library" down to 0.4, indistinguishable
+  // from a genuinely noisy title. Removing them is what makes a strict floor usable at all.
+  "olympic", "weightlifting", "library", "catalyst", "athletics", "fitness", "shorts", "short",
+  "feel", "feels", "like", "know", "ever", "heard", "advice", "fix", "reason", "reasons",
+  "second", "seconds", "minute", "minutes", "kg", "lb", "lbs",
 ]);
 
 /** Trailing-plural only, and never after an s.
@@ -114,13 +122,25 @@ export type VideoMatch = {
  * Dumbbell Triceps Kickback Exercise" says almost nothing the name did not (0.5); the softball
  * advert says nine things the name did not (0.22).
  *
- * 0.3, and it is a judgement call: "Jerk Balance | Olympic Weightlifting Exercise Library" sits
- * at 0.4 and has to survive, because that library is the single best source of short clean demos
- * in the whole run. A floor is also the SAFE direction to be wrong in -- too high loses a video
- * and leaves a working search link, too low shows an athlete the wrong movement with the
- * confidence of a chosen one.
+ * RAISED TO 0.75 after the second real dry run, which is the strict reading: the title may say
+ * almost nothing the exercise name did not. That run matched 156 and roughly a quarter of them
+ * were wrong -- Back Squat to "Alyssa Back Squat 127 kg" (a competition lift, not a demo), Plank
+ * to "How it feels to PLANK", Deadlift to "$20 For A Massive Deadlift", Sumo Deadlift to a
+ * KETTLEBELL sumo deadlift, Push-Up to a Scap Push-Up. Every one of those carries an extra word
+ * that changes the movement or the intent, and no amount of coverage logic separates "Scap
+ * Push-Up" from "Push-Up" by meaning -- but all of them leave title words the name cannot
+ * explain, and that is measurable.
+ *
+ * The exchange is deliberate and it goes the safe way: this loses real matches (a clean "How To:
+ * Tricep Kickback (Dumbbell)" falls to 0.67 and is dropped) and the cost of each loss is a
+ * working search link. The cost of each thing it prevents is an athlete shown the wrong movement
+ * with the confidence of a chosen video. Fewer and right beats more and mixed.
+ *
+ * It only became usable once channel boilerplate was filtered -- see TITLE_FILLER. Before that,
+ * "Kettlebell Swing | Olympic Weightlifting Exercise Library" scored 0.4 and any strict floor
+ * would have emptied the best source in the pool.
  */
-export const MIN_TITLE_PRECISION = 0.3;
+export const MIN_TITLE_PRECISION = 0.75;
 
 export function bestVideoForExercise(
   exerciseName: string,

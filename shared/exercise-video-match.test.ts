@@ -166,13 +166,20 @@ describe("wrong matches the first dry run produced", () => {
     expect(chosen.get("Step-Up")).toBeUndefined();
   });
 
-  it("still takes a clean match whose title adds only sales words", () => {
-    // The floor has to let this through, or it costs more than it saves.
+  it("LOSES a good match rather than risk a bad one, and that is the deal", () => {
+    // "How to Perform Dumbbell Triceps Kickback Exercise" IS a dumbbell kickback, and the 0.75
+    // floor drops it because "triceps" is a word the exercise name cannot explain -- exactly the
+    // shape that also produced Kettlebell Sumo Deadlift and Scap Push-Up.
+    //
+    // Kept as a FAILING-TO-MATCH assertion rather than deleted, because it is the standing price
+    // of the floor and the first thing somebody will point at when they want it relaxed. The
+    // cost here is a working search link; the cost of relaxing it is a wrong movement shown with
+    // the confidence of a chosen video.
     const chosen = lib(
       [video({ title: "How to Perform Dumbbell Triceps Kickback Exercise", videoId: "good", durationSeconds: 113 })],
       ["Dumbbell Kickback"],
     );
-    expect(chosen.get("Dumbbell Kickback")?.videoId).toBe("good");
+    expect(chosen.get("Dumbbell Kickback")).toBeUndefined();
   });
 
   it("keeps the Olympic library's own naming, which supplies most of the run", () => {
@@ -200,5 +207,54 @@ describe("wrong matches the first dry run produced", () => {
       ["Back Squat"],
     );
     expect(chosen.get("Back Squat")?.videoId).toBe("short");
+  });
+});
+
+
+/**
+ * THE SECOND REAL DRY RUN, 2026-09-27. 156 matched and roughly a quarter were wrong.
+ *
+ * All of these passed coverage AND the old 0.3 floor. They are here as the standing argument for
+ * the strict floor, because the strict floor is what costs real matches and somebody will
+ * eventually want to relax it.
+ */
+describe("wrong matches the second dry run produced", () => {
+  const lib = (candidates: VideoCandidate[], names: string[]) =>
+    assignVideosToExercises(names, candidates, 180);
+
+  it("refuses a competition lift dressed as a demo", () => {
+    // 0:10 of somebody's 127kg single tells an athlete nothing about how to squat.
+    expect(lib([video({ title: "Alyssa Back Squat 127 kg" })], ["Back Squat"]).size).toBe(0);
+  });
+
+  it("refuses a joke video", () => {
+    expect(lib([video({ title: "How it feels to PLANK" })], ["Plank"]).size).toBe(0);
+  });
+
+  it("refuses a title whose extra word changes the equipment", () => {
+    expect(lib([video({ title: "How To: Kettlebell Sumo Deadlift" })], ["Sumo Deadlift"]).size).toBe(0);
+  });
+
+  it("refuses a title whose extra word changes the movement", () => {
+    expect(lib([video({ title: "Scap Push-Up | Olympic Weightlifting Exercise Library" })], ["Push-Up"]).size).toBe(0);
+    expect(lib([video({ title: "Barbell Wrist Curl | Olympic Weightlifting Exercise Library" })], ["Barbell Curl"]).size).toBe(0);
+  });
+
+  it("KEEPS the clean library titles, which is what the boilerplate filter is for", () => {
+    // Before channel boilerplate was filtered this scored 0.4 and any strict floor emptied the
+    // biggest source in the pool. This assertion is the reason that filter exists.
+    const chosen = lib(
+      [video({ title: "Kettlebell Swing | Olympic Weightlifting Exercise Library", videoId: "kb" })],
+      ["Kettlebell Swing"],
+    );
+    expect(chosen.get("Kettlebell Swing")?.videoId).toBe("kb");
+  });
+
+  it("keeps a plain how-to", () => {
+    const chosen = lib(
+      [video({ title: "How To: Dumbbell Romanian Deadlift", videoId: "rdl" })],
+      ["Dumbbell Romanian Deadlift"],
+    );
+    expect(chosen.get("Dumbbell Romanian Deadlift")?.videoId).toBe("rdl");
   });
 });
