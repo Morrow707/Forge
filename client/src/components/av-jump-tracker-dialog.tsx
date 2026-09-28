@@ -60,6 +60,11 @@ import { buildTrackingDiagnostics } from "@/lib/tracking-diagnostics";
  *  still count as the same box. An admitted guess; both reads are in the diagnostics. */
 const BOX_TOP_AGREEMENT_FRACTION = 0.25;
 
+// THINNED, NEVER OFF (CLAUDE.md Rule #2). A jump reads no hand, so hand pose runs once every
+// 24 raw frames; the 3D pose once a second, the same as the bar tracker, so its scale reading
+// exists on every take.
+const JUMP_SENSOR_STRIDES = { body3DStride: 120, handPoseStride: 24 } as const;
+
 const EMPTY_JUMP_METRICS: JumpSetMetrics = {
   bestJumpHeightCm: 0,
   bestHorizontalDistanceCm: null,
@@ -182,9 +187,7 @@ export function AvJumpTrackerDialog({
       const result = await stopRecordingAndAnalyze({
         onAnalysisProgress: (percent) => onAnalysisProgress?.(forSetNumber, percent),
         detectBox: usesBox === true,
-        body3D: false,
-        // A jump never reads a hand; hand pose was 7.2 of 16.5 seconds on the 2026-09-28 take.
-        handPose: false,
+        ...JUMP_SENSOR_STRIDES,
         // Always provided now (not just when recordVideo) -- see AvBarTrackerDialog's own
         // identical comment: recording has stopped and analysis is about to start regardless
         // of whether a video gets uploaded, and closing the dialog here (instead of leaving
@@ -846,7 +849,7 @@ export function AvJumpTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ detectBox: usesBox === true, body3D: false, handPose: false });
+                  startRecording({ detectBox: usesBox === true, ...JUMP_SENSOR_STRIDES });
                 }}
                 disabled={!supported || !heightIn}
               >

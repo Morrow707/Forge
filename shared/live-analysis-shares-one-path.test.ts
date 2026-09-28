@@ -29,7 +29,7 @@ describe("live analysis and file analysis are one implementation", () => {
     expect(calls.length).toBeGreaterThanOrEqual(2);
     // The live delegate has to be one of them.
     const delegate = source.slice(source.indexOf("didOutput sampleBuffer: CMSampleBuffer"));
-    expect(delegate.slice(0, 600)).toMatch(/processFrame\(/);
+    expect(delegate.slice(0, 1600)).toMatch(/processFrame\(/);
   });
 
   it("derives both strides from one helper", () => {

@@ -139,6 +139,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // result -- that dictionary is assembled inside runPoseAnalysis, outside the scope
     // analyzeRecording decided this in.
     private var lastLiveAttempted = false
+    // See AvLiveFrameScaler. Owned by the plugin, used only on liveAnalysisQueue.
+    private let liveFrameScaler = AvLiveFrameScaler(maxDimension: AvBodyTrackingPlugin.analysisDecodeMaxDimension)
     // HOW THE PHONE WAS HELD, from the accelerometer, sampled for the length of the recording.
     // Not a floor detector: Vision has none, and a floor line in the image would carry no
     // scale anyway. The tilt is the thing a floor would have told us, and the phone knows it
@@ -1345,8 +1347,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
                 coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
                 coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable,
-                body3D: call.getBool("body3D") ?? true,
-                handPose: call.getBool("handPose") ?? true
+                body3DStride: call.getInt("body3DStride") ?? 9,
+                handPoseStride: call.getInt("handPoseStride") ?? 1
             )
         }()
         if liveContext != nil {
@@ -1639,7 +1641,15 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // a frame that Vision then drops as late is still a frame the coach's video needs.
         uploadCopyWriter?.append(sampleBuffer)
         guard let run = liveRun, run.active else { return }
-        processFrame(sampleBuffer: sampleBuffer, ctx: run.ctx, state: run.state, progress: nil) { [weak self] data in
+        // SPEED UP, NEVER CUT (CLAUDE.md Rule #2). The file path decodes at 1280 on its longest
+        // side; the live path was handing Vision the full 1920x1080 and keeping 33-46% of its
+        // frames. Same budget on both feeders now: the frame is scaled once, on the GPU, before
+        // any sensor sees it. Only frames this run will actually process are scaled.
+        let scaled: CVPixelBuffer? =
+            run.state.frameIndex % run.ctx.sampleEveryNthFrame == 0
+                ? CMSampleBufferGetImageBuffer(sampleBuffer).flatMap { liveFrameScaler.scale($0) }
+                : nil
+        processFrame(sampleBuffer: sampleBuffer, ctx: run.ctx, state: run.state, progress: nil, pixelBufferOverride: scaled) { [weak self] data in
             // Tagged so the JS side can keep live frames apart from a later file read's frames:
             // it now listens from the moment recording starts (it used to subscribe only at
             // stop, which threw every live frame away before it could be used).
@@ -1773,8 +1783,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Box jump only (see this file's own comment on detectBoxTop below) -- every other AV
         // dialog omits this and pays nothing extra per frame.
         let detectBox = call.getBool("detectBox") ?? false
-        let body3D = call.getBool("body3D") ?? true
-        let handPose = call.getBool("handPose") ?? true
+        let body3DStride = call.getInt("body3DStride") ?? 9
+        let handPoseStride = call.getInt("handPoseStride") ?? 1
         // Gates the additive CoreML implement detector below -- one of
         // AvCoreMlImplementDetector.supportedTrackingModes (the object class the caller is
         // actually trying to track, e.g. "med_ball" from AvMedBallTrackerDialog or "barbell"/
@@ -1920,7 +1930,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
         queueForThisCall.async {
             self.runPoseAnalysis(
-                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, body3D: body3D, handPose: handPose,
+                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, body3DStride: body3DStride, handPoseStride: handPoseStride,
                 trackingMode: trackingMode, call: call, progress: progress, settle: settle
             )
         }
@@ -1949,7 +1959,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // call.resolve/call.reject directly -- see analyzeRecording's own comment on why (a
     // watchdog or a user-initiated cancel might already have settled this call first).
     private func runPoseAnalysis(
-        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, body3D: Bool, handPose: Bool, trackingMode: String?, call: CAPPluginCall,
+        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, body3DStride: Int, handPoseStride: Int, trackingMode: String?, call: CAPPluginCall,
         progress: AvAnalysisProgress,
         settle: @escaping (@escaping () -> Void) -> Void
     ) {
@@ -2053,8 +2063,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
             coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
             coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable,
-            body3D: body3D,
-            handPose: handPose
+            body3DStride: body3DStride,
+            handPoseStride: handPoseStride
         )
         let state = AvFrameRunState()
         let startTime = Date()
@@ -2255,12 +2265,15 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         ctx: AvFrameContext,
         state: AvFrameRunState,
         progress: AvAnalysisProgress?,
+        // The live path hands in a scaled copy of the frame (see AvLiveFrameScaler); the file
+        // path's reader already decoded at analysisDecodeMaxDimension and passes nil.
+        pixelBufferOverride: CVPixelBuffer? = nil,
         emit: @escaping ([String: Any]) -> Void
     ) {
         let thisFrameIndex = state.frameIndex
         state.frameIndex += 1
         guard thisFrameIndex % ctx.sampleEveryNthFrame == 0 else { return }
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        guard let pixelBuffer = pixelBufferOverride ?? CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         // Every frame of this loop runs Vision pose estimation, optionally Vision hand
         // pose, a CoreML object detection and a camera-drift estimate, and each of those
         // leaves autoreleased temporaries behind. Without a pool inside the loop they all
@@ -2383,9 +2396,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // that conflates it with the already-accepted pose-only cost.
         var handJoints: [[String: Any]] = []
         let handPoseStart = Date()
+        let runHandPose = thisFrameIndex % ctx.handPoseStride == 0
         do {
-            if ctx.handPose { try handler.perform([ctx.handPoseRequest]) }
-            if let handObservations = ctx.handPoseRequest.results as? [VNHumanHandPoseObservation] {
+            if runHandPose { try handler.perform([ctx.handPoseRequest]) }
+            if runHandPose, let handObservations = ctx.handPoseRequest.results as? [VNHumanHandPoseObservation] {
                 for (handIndex, observation) in handObservations.enumerated() {
                     // Chirality (.left/.right/.unknown) is available here but deliberately
                     // not read -- see vision-body-landmarks.ts's visionRefineGripSeed for
@@ -3139,7 +3153,12 @@ private final class AvFrameContext {
     // Grip-point corroboration signal -- see av-bar-tracker-dialog.tsx's own fuseSide comment on
     // why this only ever nudges an existing confidence value, never replaces the wrist seed.
     // maximumHandCount=2 matches hand-tracking.ts's own numHands:2 on the MediaPipe side.
-    let handPose: Bool
+    // RULE #2 (CLAUDE.md): A SENSOR IS THINNED, NEVER SWITCHED OFF. These used to be Bools
+    // (2026-09-28, builds 554-558) and both were set false for the bar and jump trackers to save
+    // seconds. They are strides now, in raw frames: 1 is every processed frame, 120 is once a
+    // second at 120fps. A stride keeps the capability and its reading in the diagnostics; a
+    // switch removed both.
+    let handPoseStride: Int
     let handPoseRequest: VNDetectHumanHandPoseRequest = {
         let request = VNDetectHumanHandPoseRequest()
         request.maximumHandCount = 2
@@ -3165,7 +3184,7 @@ private final class AvFrameContext {
     // 12, and the signal survives for the modes that do read it. Deleting the request would
     // save another 4 and take a capability with it, which is the trade rule #1 exists to refuse.
     // One number to move back if a mode turns out to need the density.
-    let body3DDetectionStride = 9
+    let body3DDetectionStride: Int
     // Box jump's own object-detection signal. Every frame would be needless extra Vision work
     // for a signal that is checking a STATIONARY object, so a sparse sample across the whole
     // clip is exactly as informative as every frame, for a fraction of the cost.
@@ -3186,20 +3205,15 @@ private final class AvFrameContext {
         coreMlImplementAvailable: Bool,
         coreMlSecondaryLabel: String?,
         coreMlSecondaryAvailable: Bool,
-        body3D: Bool = true,
-        handPose: Bool = true
+        body3DStride: Int = 9,
+        handPoseStride: Int = 1
     ) {
-        // Hand pose is a grip-confirmation nudge for the bar tracker and nothing else; on the
-        // 2026-09-28 jump it was 7.2 of 16.5 seconds of analysis for a mode that never reads a
-        // hand. Same rule as body3D: one option, both feeders.
-        self.handPose = handPose
-        // THE 3D PASS IS OPT-OUT PER TAKE, AND THE OPT-OUT APPLIES TO BOTH FEEDERS. On Scott's
-        // 2026-09-28 squat it was 5.6 of 33.6 seconds of analysis on a clip the bar tracker
-        // reads in 2D only (see av-bar-tracker-dialog: "Deliberately NOT body3DLm"). The modes
-        // that read depth (sprint, goniometer, overhead squat) leave it on. Set from the same
-        // call option on the live path and the file path, so the two stay one measurement.
+        // Same stride on the live path and the file path, so the two feeders stay one
+        // measurement. The 3D request always exists on iOS 17; only how often it runs varies.
+        self.handPoseStride = max(1, handPoseStride)
+        self.body3DDetectionStride = max(1, body3DStride)
         self.body3DRequest = {
-            guard body3D, #available(iOS 17.0, *) else { return nil }
+            guard #available(iOS 17.0, *) else { return nil }
             return VNDetectHumanBodyPose3DRequest()
         }()
         self.orientation = orientation
@@ -3768,6 +3782,8 @@ private struct AvObjectLockTelemetry {
     /// off by the frame edge, BEFORE the most-confident pick. Separate from the wrist gate's
     /// count because they say different things about the room.
     var candidatesRejectedBySize = 0
+    /// Unlocked frames on which the full detection was NOT run, by the re-search cadence.
+    var searchesSkippedForCadence = 0
     // See freshDetection: what the class filter and the confidence floor threw away, and the
     // strongest thing the model offered even if nothing was taken.
     var candidatesSeenOfClass = 0
@@ -3819,6 +3835,7 @@ private struct AvObjectLockTelemetry {
             "framesBodySuspect": framesBodySuspect,
             "breaksMotionDisagreement": breaksMotionDisagreement,
             "candidatesRejectedBySize": candidatesRejectedBySize,
+            "searchesSkippedForCadence": searchesSkippedForCadence,
             "candidatesSeenOfClass": candidatesSeenOfClass,
             "candidatesOtherClass": candidatesOtherClass,
             "candidatesRejectedByConfidence": candidatesRejectedByConfidence,
@@ -3831,6 +3848,60 @@ private struct AvObjectLockTelemetry {
         }
         if let s = yardstickSource { out["yardstickSource"] = s }
         return out
+    }
+}
+
+// THE LIVE FRAME, SCALED ONCE BEFORE ANY SENSOR SEES IT.
+//
+// The file path asks AVAssetReader for frames no longer than analysisDecodeMaxDimension on
+// their longest side. The live path cannot ask the capture output for that (it raises an
+// uncatchable Objective-C exception for sizes the source cannot deliver -- build 510 crashed on
+// Record), so it scales the delivered buffer itself, on the GPU, into a pooled BGRA buffer.
+// Every sensor downstream -- body pose, hand pose, 3D pose, the object detectors -- then does
+// the same work on the same pixel budget as the file path. Returns nil when the frame is
+// already within budget, meaning "use the original".
+private final class AvLiveFrameScaler {
+    private let maxDimension: CGFloat
+    private let context = CIContext(options: [.useSoftwareRenderer: false, .cacheIntermediates: false])
+    private var pool: CVPixelBufferPool?
+    private var poolWidth = 0
+    private var poolHeight = 0
+
+    init(maxDimension: CGFloat) {
+        self.maxDimension = maxDimension
+    }
+
+    func scale(_ source: CVPixelBuffer) -> CVPixelBuffer? {
+        let width = CVPixelBufferGetWidth(source)
+        let height = CVPixelBufferGetHeight(source)
+        let longest = CGFloat(max(width, height))
+        guard longest > maxDimension, longest > 0 else { return nil }
+        let factor = maxDimension / longest
+        let targetWidth = max(2, Int((CGFloat(width) * factor).rounded()) & ~1)
+        let targetHeight = max(2, Int((CGFloat(height) * factor).rounded()) & ~1)
+        if pool == nil || poolWidth != targetWidth || poolHeight != targetHeight {
+            pool = Self.makePool(width: targetWidth, height: targetHeight)
+            poolWidth = targetWidth
+            poolHeight = targetHeight
+        }
+        guard let pool = pool else { return nil }
+        var out: CVPixelBuffer?
+        guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &out) == kCVReturnSuccess, let target = out else { return nil }
+        let image = CIImage(cvPixelBuffer: source).transformed(by: CGAffineTransform(scaleX: factor, y: factor))
+        context.render(image, to: target)
+        return target
+    }
+
+    private static func makePool(width: Int, height: Int) -> CVPixelBufferPool? {
+        let attrs: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
+        ]
+        var pool: CVPixelBufferPool?
+        CVPixelBufferPoolCreate(nil, nil, attrs as CFDictionary, &pool)
+        return pool
     }
 }
 
@@ -3985,6 +4056,13 @@ private final class AvCoreMlImplementDetector {
     // DIFFERENT nearby object (the exact "a plate in the background looks like the med ball"
     // failure mode), not the same one legitimately moving fast.
     private var recentBoxes: [CGRect] = []
+    // SEARCHING EVERY FRAME WHEN NOTHING IS LOCKED WAS MOST OF A SQUAT'S ANALYSIS. On the
+    // 2026-09-28 squats the plate lock held on 47 of 824 frames and 0 of 773, so the full
+    // CoreML detection ran on nearly every frame and found the same rack. A search every third
+    // processed frame loses at most two frames of lock latency and costs a third as much. The
+    // counter starts high so the first frame after a break (or a reset) searches at once.
+    private var framesSinceUnlockedSearch = 1_000
+    private let unlockedSearchEveryNFrames = 3
     private let boxHistoryWindow = 4
 
     // Camera overlord: Vision's own free-flight parabola fit (VNDetectTrajectoriesRequest, iOS
@@ -4056,6 +4134,7 @@ private final class AvCoreMlImplementDetector {
         yardstickHistory.reset()
         motionWindow = []
         lastReportedConfidence = 0
+        framesSinceUnlockedSearch = 1_000
     }
 
     // Center-to-center normalized distance and area ratio between two boxes -- both in Vision's
@@ -4497,6 +4576,12 @@ private final class AvCoreMlImplementDetector {
         // The wrist region stays as the FALLBACK, for the frames before any lock has existed.
         // Nothing is lost: a region only ever narrows the search, and freshDetection still
         // clears every distance, size and motion gate afterwards.
+        framesSinceUnlockedSearch += 1
+        if framesSinceUnlockedSearch < unlockedSearchEveryNFrames {
+            telemetry.searchesSkippedForCadence += 1
+            return nil
+        }
+        framesSinceUnlockedSearch = 0
         let lastKnownRegion = recentBoxes.last.map { Self.expandedRegion(around: $0) }
         let seededRegion = bodySuspectThisFrame ? nil : (lastKnownRegion ?? regionOfInterest)
         if lastKnownRegion != nil { telemetry.freshDetectionsSeededOnLastBox += 1 }

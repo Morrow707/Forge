@@ -260,6 +260,8 @@ export type AvObjectLockTelemetry = {
   /** Candidate detections refused BEFORE the most-confident pick for being smaller than a
    * fraction of the grip width or cut off by the frame edge. */
   candidatesRejectedBySize: number;
+  /** Unlocked frames on which the full detection was skipped by the re-search cadence. */
+  searchesSkippedForCadence?: number;
   /** Frames byte-identical to the one before, or whose landmarks had not changed for several
    * frames. Reported as held, advanced nothing. Many on one take is a capture problem. */
   framesFrozen: number;
@@ -291,10 +293,10 @@ interface AvBodyTrackingPlugin {
     sampleEveryNthFrame?: number;
     detectBox?: boolean;
     trackingMode?: string;
-    // False skips the 3D body-pose pass on this take (both feeders). Bar and jump read 2D only.
-    body3D?: boolean;
-    // False skips hand pose (a grip nudge for the bar tracker; a jump never reads a hand).
-    handPose?: boolean;
+    // How often, in raw frames, the 3D body pose and hand pose run on this take (both feeders).
+    // Strides, never switches -- CLAUDE.md Rule #2. Default 9 and 1.
+    body3DStride?: number;
+    handPoseStride?: number;
   }): Promise<void>;
   /** `uploadPath` is the 720p copy the native side wrote WHILE recording (see the plugin's
    *  AvUploadCopyWriter). Absent on an older build or when the copy could not be made, in which
@@ -316,8 +318,8 @@ interface AvBodyTrackingPlugin {
     sampleEveryNthFrame?: number;
     detectBox?: boolean;
     trackingMode?: string;
-    body3D?: boolean;
-    handPose?: boolean;
+    body3DStride?: number;
+    handPoseStride?: number;
   }): Promise<AvAnalysisResult>;
   cancelAnalysis(): Promise<void>;
   getDiagnosticLog(): Promise<{ log: string[] }>;
@@ -418,8 +420,8 @@ export async function startAvRecording(options?: {
   sampleEveryNthFrame?: number;
   detectBox?: boolean;
   trackingMode?: string;
-  body3D?: boolean;
-  handPose?: boolean;
+  body3DStride?: number;
+  handPoseStride?: number;
 }): Promise<void> {
   await AvBodyTracking.startRecording(options);
 }
@@ -563,10 +565,10 @@ export async function analyzeAvRecording(
   sampleEveryNthFrame?: number,
   detectBox?: boolean,
   trackingMode?: string,
-  body3D?: boolean,
-  handPose?: boolean,
+  body3DStride?: number,
+  handPoseStride?: number,
 ): Promise<AvAnalysisResult> {
-  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox, trackingMode, body3D, handPose });
+  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox, trackingMode, body3DStride, handPoseStride });
 }
 
 // Real native cancellation of an in-progress analyzeAvRecording call -- see

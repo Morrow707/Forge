@@ -131,6 +131,7 @@ export type ObjectLockDiagnostics = {
   bestCandidateConfidence?: number;
   lowConfidenceAccepts?: number;
 
+  searchesSkippedForCadence?: number;
   framesFrozen: number;
   maxAcceptedDistanceInYardsticks?: number;
   yardstickSource?: string;

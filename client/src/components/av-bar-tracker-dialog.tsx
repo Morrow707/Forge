@@ -205,6 +205,14 @@ import type { Landmark } from "@mediapipe/tasks-vision";
 // diameter, which is exactly why it works from the side, the front, the foot of a bench or 45
 // degrees off it. Scale from the equipment does not care where the camera is standing. Scale
 // from a body does, and that is the entire source of the angle problem.
+// THINNED, NEVER OFF (CLAUDE.md Rule #2). Both sensors were switched off for this tracker on
+// 2026-09-28 to save 17 of 39 seconds of analysis, then the 3D pose was proposed as a scale
+// ruler the same evening. Strides in raw frames at 120fps: the 3D pose once a second (about
+// thirty reads per take, plenty for a scale estimate), hand pose every third processed frame
+// (a grip nudge, not a position). The time is recovered by scaling the live frame and by the
+// detector's re-search cadence instead.
+const BAR_SENSOR_STRIDES = { body3DStride: 120, handPoseStride: 12 } as const;
+
 const COREML_TRACKING_MODE_BY_EQUIPMENT: Record<string, string> = {
   Barbell: "plate",
   Dumbbell: "dumbbell",
@@ -916,17 +924,9 @@ export function AvBarTrackerDialog({
       const result = await stopRecordingAndAnalyze({
         onAnalysisProgress: (percent) => onAnalysisProgress?.(forSetNumber, percent),
         trackingMode: coreMlTrackingMode,
-        // 2D only on this path (see "Deliberately NOT body3DLm" below); the 3D pass was a sixth
-        // of the analysis time on the 2026-09-28 squat. Same flag at Record and at Stop, so the
-        // live feeder and the file feeder stay one measurement.
-        body3D: false,
-        // HAND POSE OFF HERE TOO. Build 556, 2026-09-28: the jump (hand pose off) kept enough
-        // live frames and finished in 4 seconds; the squat (hand pose on, 11 of 39 seconds of
-        // analysis) fell to 34% live coverage and re-read the clip for 30. Hand pose was only
-        // ever a 1.25x confidence nudge on a wrist Vision had already placed (gripConfirmed),
-        // never a position source, and visionRefineGripSeed simply finds no hand and applies
-        // no nudge. The wait was costing more than the nudge was worth.
-        handPose: false,
+        // Same strides at Record and at Stop, so the live feeder and the file feeder stay one
+        // measurement. See BAR_SENSOR_STRIDES.
+        ...BAR_SENSOR_STRIDES,
         // Always provided now (not just when recordVideo) -- recording has stopped and the slow
         // on-device analysis pass is about to start regardless of whether a video gets uploaded,
         // and closing the dialog here (rather than leaving the athlete staring at "Analyzing
@@ -2461,7 +2461,7 @@ export function AvBarTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ trackingMode: coreMlTrackingMode, body3D: false, handPose: false });
+                  startRecording({ trackingMode: coreMlTrackingMode, ...BAR_SENSOR_STRIDES });
                 }}
                 disabled={!supported || !heightIn}
               >
