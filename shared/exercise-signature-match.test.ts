@@ -90,6 +90,8 @@ const LIBRARY: LibraryExercise[] = [
   lib("Ankle CARs", "Bodyweight", ["Calves"]),
   lib("Hang Clean", "Barbell", ["Quads", "Back"]),
   lib("Power Clean", "Barbell", ["Quads", "Back"]),
+  lib("Decline Bench Press", "Barbell", ["Chest"]),
+  lib("Squat with Woodchopper", "Medicine Ball", ["Quads", "Abs"]),
 ];
 
 const VOCAB = buildVocabulary(LIBRARY);
@@ -185,6 +187,10 @@ describe("fixtures: must ACCEPT", () => {
     ["Couch Stretch", "How To: Couch Stretch #stretching", "hashtag after the first segment"],
     ["Pendlay Row", "Pendlay Row | Olympic Weightlifting Exercise Library", "the clean library case"],
     ["Kettlebell Swing", "Kettlebell Swing | Olympic Weightlifting Exercise Library", "the clean library case"],
+    ["Decline Bench Press", "How To: Barbell Decline Bench Press", "the title states the metadata equipment"],
+    ["Medicine Ball Slam", "Med Ball Slam | Exercise Guide", "med is medicine, folded across the alias"],
+    ["Back Squat", "Barbell Back Squat with Hunter Labrada | Exercise Guide", "a demonstrator's name after 'with' is dropped"],
+    ["Squat with Woodchopper", "Squat with Woodchopper | Exercise Guide", "a tail the library knows is kept"],
   ];
 
   it.each(rows)("%s <- %s (%s)", (exercise, title) => {
@@ -198,6 +204,9 @@ describe("fixtures: must REJECT", () => {
     ["Box Squat", "Squat Box Jump | Olympic Weightlifting Exercise Library", "head"],
     ["Barbell Curl", "Barbell Wrist Curl | Olympic Weightlifting Exercise Library", "modifier"],
     ["Sumo Deadlift", "How To: Kettlebell Sumo Deadlift", "equipment"],
+    ["Decline Bench Press", "How To: Dumbbell Decline Bench Press", "equipment"],
+    ["Back Squat", "Back Squat with Chains | Exercise Guide", "unknown-count"],
+    ["Medicine Ball Slam", "Catcher Med Ball Slam - Baseball Rebellion", "unknown-count"],
     ["Push-Up", "Scap Push-Up | Olympic Weightlifting Exercise Library", "unknown-count"],
     ["Landmine Rotation", "Anti-Rotation Landmine | Olympic Weightlifting Exercise Library", "unknown-count"],
     ["Block Pull", "Block Snatch Pull to Hold | Olympic Weightlifting Exercise Library", "unknown-count"],

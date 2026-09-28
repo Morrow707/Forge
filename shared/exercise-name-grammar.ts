@@ -78,6 +78,7 @@ export const ALIASES: Record<string, string> = {
   calf: "calves",
   glute: "glutes",
   forearm: "forearms",
+  med: "medicine",
 };
 
 /**
@@ -199,6 +200,11 @@ export function normalize(text: string, options: NormalizeOptions = {}): string[
     .toLowerCase()
     .replace(/&/g, " and ")
     .replace(/['‘’"“”]/g, "");
+
+  // Aliases are expanded on the raw text too, so a compound can fold across one: "Med Ball
+  // Slam" reads "medicine ball slam" and folds to the same token as the library's name. Before
+  // this the token-level expansion below ran after folding and "ball" was left on its own.
+  working = working.replace(/[a-z0-9]+/g, (word) => ALIASES[word] ?? word);
 
   // Fold the space form first, then the hyphen form; both land on the joined token.
   for (const pair of compounds) {
