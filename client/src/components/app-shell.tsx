@@ -485,7 +485,19 @@ export function AppShell({
             // A Free Agent has no team, so Team Board (a coach's roster-wide
             // chat) has nobody on the other end -- same "would just 403/be
             // empty" reasoning as the coached-athlete filter below.
-            ? athleteNav.filter((item) => item.href !== "/athlete/team-board")
+            //
+            // LEADERBOARD GOES WITH IT, for the same reason and on Scott's call (2026-09-28):
+            // "if the free agent can't use the leaderboard remove the tab, the strength tab has
+            // the muscle map which shows them how they compare." Every leaderboard query starts
+            // from a coach id (getLeaderboardForExercise(coachId, exerciseId)), so a Free Agent
+            // has no board by construction -- the tab could only ever draw an empty state
+            // telling them to join a team, which reads as broken rather than as not-for-you.
+            // The comparison they DO have is the strength profile's percentile, which is a
+            // better answer anyway: it names nobody.
+            ? athleteNav.filter(
+                (item) =>
+                  item.href !== "/athlete/team-board" && item.href !== "/athlete/leaderboard",
+              )
             : athleteNav.filter(
                 (item) =>
                   item.href !== "/athlete/programs" &&

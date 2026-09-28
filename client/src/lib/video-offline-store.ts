@@ -412,15 +412,21 @@ export async function uploadOrQueueVideo(
   filename: string,
   context: VideoRecordContext,
   onProgress?: (fraction: number) => void,
+  /** Where the clip goes. Defaults to the form-check endpoint, which is what eleven of the
+   *  fifteen tracker dialogs want. The four SKILL dialogs (sprint and mechanics, AV and not)
+   *  post to /api/athlete/skill-video, and before this parameter existed they could not use
+   *  this helper at all -- so they hand-rolled a bare FormData upload with no Wi-Fi gate and
+   *  no queue, and an athlete filming a sprint off Wi-Fi burned their cellular data. */
+  endpoint: string = "/api/athlete/form-video",
 ): Promise<{ status: "uploaded"; url: string } | { status: "queued" }> {
   if (!(await isOnWifi())) {
-    await persistVideoForUpload(blob, "/api/athlete/form-video", "video", filename, context);
+    await persistVideoForUpload(blob, endpoint, "video", filename, context);
     return { status: "queued" };
   }
   try {
     const formData = new FormData();
     formData.append("video", blob, filename);
-    const { url } = await uploadWithProgress("/api/athlete/form-video", formData, onProgress);
+    const { url } = await uploadWithProgress(endpoint, formData, onProgress);
     return { status: "uploaded", url };
   } catch (err) {
     // Same classification runVideoFlush uses below, for the same reason: an ApiError is not

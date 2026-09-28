@@ -113,3 +113,47 @@ describe("the tracker dialog hands over to the set card", () => {
     );
   });
 });
+
+/**
+ * A VIDEO FAILURE MUST NEVER TAKE THE CAPTURE'S NUMBERS WITH IT -- ASSERTED AS THE RULE.
+ *
+ * The scan above catches the onCapture shape. It did not catch the four SKILL dialogs, which
+ * save through a direct apiRequest to /api/athlete/skill-session-logs instead: their video
+ * upload sat bare inside the same try as that save, so an upload that threw ran the catch and
+ * the drill's numbers were never written at all. Found 2026-09-28, in all four at once.
+ *
+ * Same lesson as the scan above, one level up: a test aimed at one SPELLING of the bug misses
+ * the bug written another way. This asserts the rule instead -- if a save path uploads a video,
+ * that upload is inside its own try, so its failure can only cost the video.
+ */
+describe("a skill capture survives its video failing", () => {
+  const skillDialogs = readdirSync(COMPONENTS).filter(
+    (f) =>
+      f.endsWith("tracker-dialog.tsx") &&
+      readFileSync(join(COMPONENTS, f), "utf8").includes("/api/athlete/skill-session-logs"),
+  );
+
+  it("finds the skill dialogs to check", () => {
+    expect(skillDialogs.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it.each(skillDialogs)("%s uploads through the shared queue, never a bare FormData", (file) => {
+    const src = readFileSync(join(COMPONENTS, file), "utf8");
+    // uploadOrQueueVideo carries the Wi-Fi gate and the offline queue. A hand-rolled FormData
+    // post has neither, which is how filming a sprint off Wi-Fi burned an athlete's data.
+    expect(src).not.toContain('apiRequest("POST", "/api/athlete/skill-video"');
+    expect(src).toContain("uploadOrQueueVideo(");
+  });
+
+  it.each(skillDialogs)("%s keeps the upload in its own try", (file) => {
+    const src = readFileSync(join(COMPONENTS, file), "utf8");
+    const upload = src.indexOf("uploadOrQueueVideo(");
+    const log = src.indexOf("/api/athlete/skill-session-logs");
+    expect(upload).toBeGreaterThan(-1);
+    expect(log).toBeGreaterThan(upload);
+    // The catch that protects the upload has to sit BETWEEN it and the session-log save, or the
+    // upload is still sharing the save's try and the numbers are still hostage to it.
+    const between = src.slice(upload, log);
+    expect(between).toMatch(/catch\s*(\([^)]*\))?\s*\{/);
+  });
+});

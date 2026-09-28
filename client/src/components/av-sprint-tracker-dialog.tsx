@@ -43,6 +43,7 @@ import { sprintDefaultsFor } from "@shared/skill-camera-profile";
 import { AlertTriangle, Play, Square, RotateCcw, Check, Timer, Trophy, X, Flag, XCircle } from "lucide-react";
 import { SuggestedCorrective } from "@/components/suggested-corrective";
 import { videoFilenameForBlob } from "@/lib/video-recording";
+import { uploadOrQueueVideo } from "@/lib/video-offline-store";
 import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
 
 type Step = "warning" | "calibrate" | "capture" | "analyzing" | "manual" | "review";
@@ -471,6 +472,7 @@ export function AvSprintTrackerDialog({
     setSaving(true);
     try {
       let uploadedVideoUrl: string | null = null;
+      let queuedForWifi = false;
       if (saveClipForCoach && recordedBlobRef.current) {
         let videoToUpload: Blob = recordedBlobRef.current;
         if (framesRef.current.length > 0) {
@@ -494,10 +496,37 @@ export function AvSprintTrackerDialog({
             videoToUpload = recordedBlobRef.current;
           }
         }
-        const formData = new FormData();
-        formData.append("video", videoToUpload, videoFilenameForBlob(videoToUpload, "skill-clip"));
-        const uploadRes = await apiRequest("POST", "/api/athlete/skill-video", formData);
-        uploadedVideoUrl = (await uploadRes.json()).url;
+        /* THE VIDEO IS A SEPARATE CONCERN AND MUST NEVER TAKE THE NUMBERS WITH IT.
+         *
+         * This upload used to sit bare inside the same try as the session log below, so an
+         * upload that threw -- no signal, a server cold start, a cellular timeout -- ran the
+         * catch, toasted, and the capture was never written at all. Every measured number for
+         * that drill, lost because a different concern failed. CLAUDE.md's capture-diagnostics
+         * rule is exactly this: every exit from a save path hands the metrics up, and the
+         * failure IS the thing to salvage.
+         *
+         * refused-capture-survives.test.ts did not catch it because it scans for onCapture, and
+         * these four skill dialogs save through a direct apiRequest instead -- the same reason a
+         * hand-written list missed six dialogs before it was rerun as a scan.
+         *
+         * uploadOrQueueVideo also brings the Wi-Fi gate these four never had: filming a sprint
+         * off Wi-Fi used to burn the athlete's cellular data, which is the whole thing the
+         * Video Bank exists to prevent. */
+        try {
+          const outcome = await uploadOrQueueVideo(
+            videoToUpload,
+            videoFilenameForBlob(videoToUpload, "skill-clip"),
+            { label: drillName },
+            undefined,
+            "/api/athlete/skill-video",
+          );
+          if (outcome.status === "uploaded") uploadedVideoUrl = outcome.url;
+          else queuedForWifi = true;
+        } catch {
+          // Swallowed on purpose. The clip is already on disk if it could be queued, and a
+          // video that failed is worth less than the drill's numbers, which are about to save.
+          uploadedVideoUrl = null;
+        }
       }
       await apiRequest("POST", "/api/athlete/skill-session-logs", {
         skillAssignmentId,
@@ -521,6 +550,11 @@ export function AvSprintTrackerDialog({
         setNumber,
       });
       toast.success("Sprint saved");
+      // Said out loud, because a queued clip is otherwise indistinguishable from a lost one --
+      // the numbers saved either way, and the athlete has no other sign the video is coming.
+      if (queuedForWifi) {
+        toast.info("No Wi-Fi -- the clip is saved on your device and uploads once you reconnect.");
+      }
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
     } catch (err: any) {
