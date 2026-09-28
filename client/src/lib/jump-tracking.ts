@@ -216,6 +216,29 @@ export function bestReactiveStrengthIndex(
   return perRep.length ? Math.round(Math.max(...perRep) * 100) / 100 : null;
 }
 
+/**
+ * WHAT THE STATE MACHINE DECIDED, AND WHEN. Scott logged five box jumps on 2026-09-28 and the
+ * app reported two, and nothing in the stored capture could say what happened to the other
+ * three: every branch below that declines a candidate (a dismount, a settle point floating
+ * above the box, the recovery valve, a flight too long to be real) simply `continue`d. One
+ * entry per decision, in take time, so the next such set explains itself on the report.
+ */
+export type JumpSegmentationEvent = {
+  /** Same clock as TrackedPoint.t, milliseconds. */
+  t: number;
+  kind:
+    | "takeoff"
+    | "rep"
+    | "dismount_rejected"
+    | "floating_above_box"
+    | "recovery_valve"
+    | "flight_too_long"
+    | "baseline_reanchored";
+  /** A number that explains the decision: net rise in cm for a rep or dismount, the new
+   *  baseline's shift in cm for a re-anchor, seconds for a too-long flight. */
+  value?: number;
+};
+
 export function summarizeJumpSet(
   rawPoints: TrackedPoint[],
   heightIn?: number | null,
@@ -243,6 +266,10 @@ export function summarizeJumpSet(
   // The capture's real frame interval in seconds. Height goes with the SQUARE of flight time,
   // so this is what decides whether the gravity ruler is worth anything -- see gravity-ruler.ts.
   frameIntervalSeconds?: number | null,
+  /** Optional sink for the decisions above. Passed in rather than returned because this
+   *  function returns null when it finds no rep, and that is exactly the take whose decisions
+   *  matter most. */
+  events?: JumpSegmentationEvent[],
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
   const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
@@ -305,6 +332,7 @@ export function summarizeJumpSet(
         state = "airborne";
         takeoffIdx = baselineIdx; // last confirmed-grounded frame, not this one
         peakIdx = i;
+        events?.push({ t: rawPoints[takeoffIdx].t, kind: "takeoff" });
       }
       // A DOWNWARD move past the trigger isn't a takeoff either, but it can't just be
       // waited out: the drift-tracking branch above only re-anchors the baseline while the
@@ -321,7 +349,9 @@ export function summarizeJumpSet(
       if (ySmoothed[i] - baseline >= triggerM && i >= SETTLE_FRAMES - 1) {
         const window = ySmoothed.slice(i - SETTLE_FRAMES + 1, i + 1);
         if (Math.max(...window) - Math.min(...window) < settleToleranceM) {
-          baseline = window.reduce((a, b) => a + b, 0) / window.length;
+          const next = window.reduce((a, b) => a + b, 0) / window.length;
+          events?.push({ t: rawPoints[i].t, kind: "baseline_reanchored", value: Math.round((baseline - next) * 1000) / 10 });
+          baseline = next;
           baselineIdx = i;
         }
       }
@@ -343,6 +373,7 @@ export function summarizeJumpSet(
       // one" stance the rest of this function already takes -- it only recovers the STATE so
       // every jump after this point still gets a fair shot at being detected.
       if (rawPoints[i].t - rawPoints[takeoffIdx].t > MAX_FLIGHT_SECONDS * 1000 * 2) {
+        events?.push({ t: rawPoints[i].t, kind: "recovery_valve", value: (rawPoints[i].t - rawPoints[takeoffIdx].t) / 1000 });
         state = "grounded";
         baseline = ySmoothed[i];
         baselineIdx = i;
@@ -380,6 +411,9 @@ export function summarizeJumpSet(
         const floatingAboveBox =
           boxTopWorldY != null &&
           window.reduce((a, b) => a + b, 0) / window.length < boxTopWorldY - LANDING_ABOVE_BOX_TOLERANCE_M;
+        if (settled && floatingAboveBox) {
+          events?.push({ t: rawPoints[i].t, kind: "floating_above_box" });
+        }
         if (settled && !floatingAboveBox) {
           // First frame of the settled window -- the actual touchdown
           // moment, not the frame settling was confirmed on.
@@ -457,6 +491,7 @@ export function summarizeJumpSet(
             // when there's no box (a plain jump-down/step-down failure) or the false settle
             // happens to fall AT OR below the box top rather than above it.
             if (takeoffVelocityMps <= 0 || netRiseM < -NET_DESCENT_TOLERANCE_M) {
+              events?.push({ t: landingT, kind: "dismount_rejected", value: Math.round(netRiseM * 1000) / 10 });
               state = "grounded";
               baseline = window.reduce((a, b) => a + b, 0) / window.length;
               baselineIdx = i;
@@ -508,7 +543,10 @@ export function summarizeJumpSet(
               boxClearanceCm,
             });
 
+            events?.push({ t: landingT, kind: "rep", value: Math.round(netRiseM * 1000) / 10 });
             previousLandingT = landingT;
+          } else if (flightSeconds > MAX_FLIGHT_SECONDS) {
+            events?.push({ t: landingT, kind: "flight_too_long", value: Math.round(flightSeconds * 100) / 100 });
           }
 
           // The new stand height -- wherever that turned out to be (back on

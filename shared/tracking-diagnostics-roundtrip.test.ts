@@ -60,6 +60,11 @@ const FULL_PAYLOAD = {
     maxInterFrameGapSeconds: 0.04,
     boxTopNormalizedY: 0.443,
   },
+  jumpEvents: [
+    { t: 1200, kind: "takeoff" },
+    { t: 1640, kind: "rep", value: 51.2 },
+    { t: 4100, kind: "dismount_rejected", value: -49.8 },
+  ],
   bodyPose: { framesTotal: 763, framesWithBody: 763, avgWristConfidence: 0.52 },
   objectDetection: {
     framesWithLeftImplement: 691,

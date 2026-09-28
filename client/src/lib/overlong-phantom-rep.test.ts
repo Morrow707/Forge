@@ -15,9 +15,22 @@ import capture from "./__fixtures__/bench-unrack-capture.json";
 const stored = capture as StoredCapture[];
 
 describe("a phase far longer than the set's own reps is not a rep", () => {
-  it("lands on the ten reps the athlete logged and the sensor counted", () => {
+  // NINE, NOT TEN, AND TEN WAS THE WRONG ANSWER ARRIVED AT BY ACCIDENT.
+  //
+  // This pinned 10 to match the sensor. Read rep by rep, the ten were the UN-RACK at 2.1-4.0s
+  // (a 0.13s "concentric" seven seconds before the set) plus nine real reps -- and the tenth
+  // real rep is inside a 1.1-second hole in the trace at 18.4-19.5s where the tracker lost the
+  // bar entirely. Once the concentric window stopped starting on the un-rack's wobble (see
+  // trimPhaseToTravel), the un-rack fell to the duration filter it always should have, and the
+  // count became the honest nine. Counting a phantom to cover a dropout is exactly the kind of
+  // right-by-luck this file exists to remove. The dropout is a tracking problem, recorded as
+  // one; it is not this segmenter's to paper over.
+  it("lands on the nine reps the tracker actually saw, and no phantom", () => {
     const result = replayCapture(stored[0]);
-    expect(result.repCount).toBe(10);
+    expect(result.repCount).toBe(9);
+    const reps = result.metrics!.repBreakdown;
+    // Every rep sits inside the set, none before it: the un-rack is gone.
+    expect(Math.min(...reps.map((r) => r.startT))).toBeGreaterThan(10_000);
   });
 
   // The un-rack is the phase being removed, so it must not still be sitting in the breakdown
