@@ -134,6 +134,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // WHY THE LAST TAKE FELL BACK TO THE FILE READ. Every capture in the 2026-09-28 export ran
     // the file path and nothing on the report said why, so the gate could not be tuned. Set by
     // liveAnalysisResult, reported on the file path's result as liveFallbackReason.
+    // Whether the take asked for a live trace at all, read back where the file path builds its
+    // result -- that dictionary is assembled inside runPoseAnalysis, outside the scope
+    // analyzeRecording decided this in.
+    private var lastLiveAttempted = false
     private var lastLiveFallbackReason: String?
     private var lastLiveCoverage: Double?
     private var lastLiveDropRate: Double?
@@ -1749,6 +1753,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // analyzeRecording call, which is a trace of the wrong set -- worse than any wait.
             self.liveRun = nil
         }
+        lastLiveAttempted = liveAttempted
         if let liveResult = liveResult {
             logDiag("analyzeRecording resolved from the live trace -- no file read")
             call.resolve(liveResult)
@@ -2135,7 +2140,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     "sampleStride": sampleEveryNthFrame,
                     // WHY THIS TAKE IS ON THE FILE PATH. Twenty of twenty captures in the
                     // 2026-09-28 export were, and the report could not say why.
-                    "liveAttempted": liveAttempted,
+                    "liveAttempted": self.lastLiveAttempted,
                 ]
                 if let reason = self.lastLiveFallbackReason {
                     result["liveFallbackReason"] = reason
