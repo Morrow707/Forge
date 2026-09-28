@@ -304,6 +304,9 @@ export type TrackingDiagnostics = {
     // press, whatever the scale says; a trace that travelled 420px did, and the scale is the
     // problem. One number separates the two, and it was never on the page.
     axisSource?: "grip" | "trace_covariance";
+    /** What the device handed summarizeTrackedSet, so capture-replay.ts can hand it the same. */
+    movementAxis?: { x: number; y: number } | null;
+    positionScaleCorrection?: number | null;
     gripPairsUsed?: number;
     traceTravelAlongPx?: number;
     traceTravelAcrossPx?: number;

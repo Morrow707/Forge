@@ -129,7 +129,11 @@ export type RepBreakdown = {
   eccentricVelocityMps: number | null;
 };
 
-export type PathTracePoint = { t: number; x: number; y: number };
+/** `c` is the point's tracking confidence, two decimals. Added 2026-09-28 because the replay
+ *  harness read every stored point at confidence 1 and so could not reproduce the device's
+ *  numbers from the device's own trace (set 3: device peak 1.66, replay 1.93). A trace that
+ *  cannot be replayed cannot be calibrated offline. Optional: older traces have none. */
+export type PathTracePoint = { t: number; x: number; y: number; c?: number };
 
 export type RepMetrics = {
   // Nullable because a lift can have a rep whose peak velocity is genuinely not measurable
@@ -294,6 +298,7 @@ export function buildPathTrace(
       t: Math.round(p.t),
       x: Math.round((p.x - origin.x) * 1000) / 10,
       y: Math.round((p.y - origin.y) * 1000) / 10,
+      c: Math.round((p.confidence ?? 1) * 100) / 100,
     }));
 }
 
