@@ -109,6 +109,10 @@ export type PoseFrame = {
   frameIndex: number;
   timestamp: number;
   tracked: boolean;
+  // Which feeder emitted this frame. The hook listens from the moment recording starts, so a
+  // live take's frames and a later file read's frames arrive on the same listener; this is how
+  // it keeps them apart. Absent on an older native build, which only ever emits file frames.
+  source?: "live" | "file";
   joints: PoseJoint[];
   frameWidth: number;
   frameHeight: number;
@@ -150,6 +154,15 @@ export type AvAnalysisResult = {
   // only on the live path. Enough of them fails the take back to the file read, so a value here
   // is a count that was judged acceptable, not one that was ignored.
   liveDroppedFrames?: number;
+  // WHY A TAKE IS ON THE FILE PATH. Twenty of twenty captures in the 2026-09-28 export were,
+  // and nothing on the report said why, so the live gate could not be tuned. liveAttempted is
+  // whether a live run existed at all; the reason names the gate it failed ("not requested",
+  // a stride mismatch, or the coverage/drop numbers); coverage and drop rate are the numbers
+  // the gate saw, on both paths, so a near miss can be told from a far one.
+  liveAttempted?: boolean;
+  liveFallbackReason?: string;
+  liveCoverage?: number;
+  liveDropRate?: number;
   readerErrorMessage?: string;
   // Analysis-time device/pipeline conditions, read once at the end of the Vision loop -- see
   // AvBodyTrackingPlugin.swift's own comments on thermalStateDescription/
@@ -274,7 +287,10 @@ interface AvBodyTrackingPlugin {
     detectBox?: boolean;
     trackingMode?: string;
   }): Promise<void>;
-  stopRecording(): Promise<{ path: string }>;
+  /** `uploadPath` is the 720p copy the native side wrote WHILE recording (see the plugin's
+   *  AvUploadCopyWriter). Absent on an older build or when the copy could not be made, in which
+   *  case readAvRecordingForUpload re-encodes after the fact exactly as before. */
+  stopRecording(): Promise<{ path: string; uploadPath?: string; uploadBytes?: number }>;
   /** A smaller copy for upload -- see stopAvRecording. Resolves the ORIGINAL path with
    *  compressed:false when it could not run, so a caller never has to branch on failure. */
   compressForUpload(options: { path: string }): Promise<{ path: string; compressed: boolean; bytes?: number }>;
@@ -414,14 +430,39 @@ export async function startAvRecording(options?: {
  *  ... the camera should instantly close and go back to the workout screen."
  *
  *  The caller closes the camera on THIS resolving, then does the blob work behind it. */
-export async function stopAvRecordingToPath(): Promise<{ path: string }> {
-  const { path } = await AvBodyTracking.stopRecording();
-  return { path };
+export async function stopAvRecordingToPath(): Promise<{ path: string; uploadPath?: string }> {
+  const { path, uploadPath } = await AvBodyTracking.stopRecording();
+  return { path, uploadPath };
 }
 
-/** Turns a stopped recording's path into the Blob a coach watches. SLOW -- see the note above
- *  on what runs in here. Never call it before the camera has been dismissed. */
-export async function readAvRecordingForUpload(path: string): Promise<Blob> {
+/** Turns a stopped recording's path into the Blob a coach watches.
+ *
+ *  FAST when the native side handed back `uploadPath`: that is the 720p copy it encoded while
+ *  the athlete was still lifting, and all that is left is reading the bytes. SLOW without it --
+ *  see the note below on the after-the-fact re-encode, which is now only the fallback. Never
+ *  call it before the camera has been dismissed. */
+export async function readAvRecordingForUpload(path: string, uploadPath?: string): Promise<Blob> {
+  if (uploadPath) {
+    // RULE #1: NOTHING HERE REJECTS THE TAKE. A copy that cannot be read for any reason --
+    // empty, unreadable, a bridge error -- falls through to the export below, which is exactly
+    // the slow save that worked before. Scott, 2026-09-28: "if something happens and doesn't
+    // upload while I'm filming, it shouldn't just reject the video, it should still save the
+    // slow way, that obviously works."
+    try {
+      const url = Capacitor.convertFileSrc(uploadPath);
+      const response = await fetch(url);
+      const rawBlob = await response.blob();
+      if (rawBlob.size > 0) {
+        const blob = rawBlob.type === "video/mp4" ? rawBlob : new Blob([rawBlob], { type: "video/mp4" });
+        // Its bytes are in the Blob now. Best-effort, same as the export's temp file below.
+        void deleteAvRecording(uploadPath).catch(() => {});
+        return blob;
+      }
+    } catch {
+      // Fall through to the export.
+    }
+    void deleteAvRecording(uploadPath).catch(() => {});
+  }
   // WHAT GETS UPLOADED IS A SMALLER COPY. WHAT GETS ANALYSED IS THE ORIGINAL.
   //
   // The camera runs at 1920x1080/120fps because the tracker needs the frame rate, and that makes
@@ -435,12 +476,12 @@ export async function readAvRecordingForUpload(path: string): Promise<Blob> {
   // moment its bytes are in memory, so nothing new accumulates on the device.
   //
   // Any failure falls back to the original path, so the worst case is the upload it was before.
-  let uploadPath = path;
+  let exportPath = path;
   let compressedTemp: string | null = null;
   try {
     const compressed = await AvBodyTracking.compressForUpload({ path });
     if (compressed.compressed && compressed.path !== path) {
-      uploadPath = compressed.path;
+      exportPath = compressed.path;
       compressedTemp = compressed.path;
     }
   } catch {
@@ -451,7 +492,7 @@ export async function readAvRecordingForUpload(path: string): Promise<Blob> {
   // expect exactly that form (FileManager's removeItem(atPath:) and URL(fileURLWithPath:)
   // respectively). Prepending file:// here would double up the scheme Capacitor's own
   // internal URL already adds.
-  const url = Capacitor.convertFileSrc(uploadPath);
+  const url = Capacitor.convertFileSrc(exportPath);
   const response = await fetch(url);
   const rawBlob = await response.blob();
   // Same class of bug recordedVideoType() in video-recording.ts exists to fix on the OTHER
@@ -475,8 +516,8 @@ export async function readAvRecordingForUpload(path: string): Promise<Blob> {
 
 /** The old one-shot form, kept for callers that have no camera to dismiss. */
 export async function stopAvRecording(): Promise<{ blob: Blob; path: string }> {
-  const { path } = await stopAvRecordingToPath();
-  const blob = await readAvRecordingForUpload(path);
+  const { path, uploadPath } = await stopAvRecordingToPath();
+  const blob = await readAvRecordingForUpload(path, uploadPath);
   return { blob, path };
 }
 

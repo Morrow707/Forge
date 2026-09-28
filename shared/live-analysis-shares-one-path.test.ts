@@ -104,3 +104,58 @@ describe("live analysis and file analysis are one implementation", () => {
     expect(fn.slice(0, 4000)).toMatch(/call\.getBool\("liveAnalysis"\) \?\? false/);
   });
 });
+
+// THE SAVE STARTS WHILE THE ATHLETE IS STILL LIFTING.
+//
+// Every capture in the 2026-09-28 export ran the file path, nothing said why, and the coach's
+// 720p copy was a full second pass over the movie after every take. Scott: "why isn't it
+// processing and then saving? ... you've already said it's possible to start processing and
+// saving as the video is still recording." Three things make that true, and each is pinned
+// here because each is one deletion away from silently reverting.
+describe("processing and saving happen during the recording", () => {
+  const hook = readFileSync(join(process.cwd(), "client/src/lib/use-av-body-tracking.ts"), "utf8");
+  const preview = readFileSync(join(process.cwd(), "client/src/lib/native-av-preview.ts"), "utf8");
+
+  it("encodes the upload copy from the live frames, before Vision sees them", () => {
+    const delegate = source.slice(source.indexOf("didOutput sampleBuffer: CMSampleBuffer"));
+    const body = delegate.slice(0, delegate.indexOf("processFrame("));
+    // The append comes BEFORE the live-run guard: a coach's video is wanted on every take, a
+    // live trace only on some, and a frame Vision drops as late is still a frame the video needs.
+    expect(body).toMatch(/uploadCopyWriter\?\.append\(sampleBuffer\)[\s\S]*guard let run = liveRun/);
+    expect(source).toMatch(/private final class AvUploadCopyWriter/);
+    expect(source).toMatch(/expectsMediaDataInRealTime = true/);
+  });
+
+  it("hands the upload copy back with the movie path, and the client skips the re-encode", () => {
+    expect(source).toMatch(/result\["uploadPath"\] = copy\.url\.path/);
+    // The old export is the fallback, never the first choice.
+    const fn = preview.slice(preview.indexOf("export async function readAvRecordingForUpload"));
+    const before = fn.slice(0, fn.indexOf("compressForUpload"));
+    expect(before).toMatch(/if \(uploadPath\)/);
+    expect(before).toMatch(/return blob;/);
+    // RULE #1: a copy that cannot be read falls through to the export, never throws out of
+    // the save. The try wraps the read, and the export follows it in the same function.
+    expect(before).toMatch(/try \{[\s\S]*response\.blob\(\)[\s\S]*\} catch \{/);
+  });
+
+  it("listens for live frames from Record, not from Stop, and tells the two feeders apart", () => {
+    // The hook used to subscribe only in stopRecordingAndAnalyze, so every live frame was
+    // emitted into nothing and even an accepted live trace would have produced no data.
+    const start = hook.slice(hook.indexOf("function startRecording("));
+    expect(start.slice(0, start.indexOf("startAvRecording("))).toMatch(/onAvPoseFrame\(/);
+    expect(source).toMatch(/tagged\["source"\] = "live"/);
+    expect(source).toMatch(/tagged\["source"\] = "file"/);
+    expect(hook).toMatch(/recordingStats\.analysisPath === "live" \? liveFrames/);
+  });
+
+  it("says why a take fell back to the file read, every time", () => {
+    const fn = source.slice(source.indexOf("private func liveAnalysisResult"));
+    const body = fn.slice(0, fn.indexOf("let state = run.state"));
+    // Every nil return is preceded by a reason. Count them: the gates and the reasons match.
+    const nils = (body.match(/return nil/g) ?? []).length;
+    const reasons = (body.match(/lastLiveFallbackReason = /g) ?? []).length;
+    expect(reasons).toBe(nils);
+    expect(source).toMatch(/"liveAttempted": liveAttempted/);
+    expect(source).toMatch(/result\["liveFallbackReason"\] = reason/);
+  });
+});

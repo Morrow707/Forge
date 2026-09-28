@@ -31,12 +31,12 @@ describe("the camera closes the instant the recorder stops", () => {
   it("tells the caller the recording stopped before reading the blob", () => {
     const src = read("client/src/lib/use-av-body-tracking.ts");
     const stopped = src.indexOf("options?.onRecordingStopped?.()");
-    const read_ = src.indexOf("readAvRecordingForUpload(path)");
+    const read_ = src.indexOf("readAvRecordingForUpload(path, uploadPath)");
     expect(stopped).toBeGreaterThan(-1);
     expect(read_).toBeGreaterThan(-1);
     expect(stopped).toBeLessThan(read_);
     // And the blob read is not awaited there, or the analysis would queue behind the transcode.
-    expect(src).toContain("const blobPromise = readAvRecordingForUpload(path)");
+    expect(src).toContain("const blobPromise = readAvRecordingForUpload(path, uploadPath)");
   });
 
   it("closes both set-card dialogs from onRecordingStopped, not onBlobReady", () => {
