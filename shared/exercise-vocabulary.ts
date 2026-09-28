@@ -86,6 +86,8 @@ export type Vocabulary = {
 
 /** Name-final in at least this share of the names it appears in. */
 export const HEAD_SHARE = 0.8;
+/** A token that ends this many names is a head regardless of where else it appears. */
+export const HEAD_MIN_FINALS = 1;
 /** One equipment value must cover this much of a head's names to be its default. */
 export const DEFAULT_EQUIPMENT_SHARE = 0.7;
 export const DEFAULT_EQUIPMENT_MIN_NAMES = 3;
@@ -104,7 +106,14 @@ export function compoundsFromLibrary(names: string[]): string[] {
 
 export function buildVocabulary(library: LibraryExercise[]): Vocabulary {
   const lifts = library.filter((e) => e.kind === "exercise");
-  const compounds = compoundsFromLibrary(lifts.map((e) => e.name));
+  // Multi-word equipment ("Medicine Ball", "Battle Rope", "Assault Bike", "Ski Erg") folds to one
+  // token, or its two halves read as two different pieces of equipment and every title carrying
+  // the exercise's own name is refused as "names two pieces of equipment" (2026-09-28).
+  const equipmentPhrases = lifts
+    .map((e) => e.equipment?.trim().toLowerCase() ?? "")
+    .filter((eq) => /^[a-z]+ [a-z]+$/.test(eq))
+    .map((eq) => eq.replace(" ", "-"));
+  const compounds = compoundsFromLibrary([...lifts.map((e) => e.name), ...equipmentPhrases]);
 
   // First pass with no known-token set: singularisation cannot fold yet, which is fine because
   // this pass exists only to LEARN the token set.
@@ -121,15 +130,28 @@ export function buildVocabulary(library: LibraryExercise[]): Vocabulary {
   // positionally, which is what makes "Squat Box Jump" fail against Box Squat.
   const finalCount = new Map<string, number>();
   const anyCount = new Map<string, number>();
-  for (const { tokens } of tokenised) {
+  for (const { exercise, tokens } of tokenised) {
     if (tokens.length === 0) continue;
-    const last = tokens[tokens.length - 1];
+    // The final word is read with any parenthetical removed: "Calf Stretch (Wall)" ends in
+    // "stretch", and counting "wall" as a head made the name disagree with its own title,
+    // which reads the parenthetical as a modifier (2026-09-28).
+    const body = normalize(exercise.name.replace(/[(（][^)）]*[)）]/g, " "), { compounds, knownTokens });
+    const last = (body.length > 0 ? body : tokens)[body.length > 0 ? body.length - 1 : tokens.length - 1];
     finalCount.set(last, (finalCount.get(last) ?? 0) + 1);
     for (const token of new Set(tokens)) anyCount.set(token, (anyCount.get(token) ?? 0) + 1);
   }
+  // A word that ENDS at least two names is a movement word, whatever else it does elsewhere.
+  // The share test alone excluded "squat", "deadlift", "clean" and "swing" -- the biggest lifts
+  // in the library -- because each also sits inside other names ("Squat Jump", "Clean Pull"),
+  // and 82 exercises then had no head at all (found 2026-09-28: Back Squat and Deadlift were
+  // reported as "nothing in the pool mentions this movement" against a pool that held both by
+  // name). The share test still admits a one-off head ("Cat-Cow" ends its only name). Which
+  // head a TITLE has is positional (the last head-eligible token), so "jump" being a head does
+  // not make "Squat Box Jump" a squat.
   const heads = new Set<string>();
   for (const [token, total] of anyCount) {
-    if ((finalCount.get(token) ?? 0) / total >= HEAD_SHARE) heads.add(token);
+    const finals = finalCount.get(token) ?? 0;
+    if (finals >= HEAD_MIN_FINALS || finals / total >= HEAD_SHARE) heads.add(token);
   }
 
   const equipment: Record<string, string> = { ...EQUIPMENT_SYNONYMS };

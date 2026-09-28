@@ -76,6 +76,20 @@ const LIBRARY: LibraryExercise[] = [
   lib("Broad Jump", "Bodyweight", ["Quads"]),
   lib("Tuck Jump", "Bodyweight", ["Quads"]),
   lib("Depth Jump", "Bodyweight", ["Quads"]),
+  // The shapes the first real dry run (2026-09-28) refused, each self-matching now.
+  lib("Face Pull", "Cable", ["Shoulders", "Back"]),
+  lib("Medicine Ball Slam", "Medicine Ball", ["Abs"]),
+  lib("Battle Rope Slams", "Battle Rope", ["Shoulders"]),
+  lib("Machine Hack Squat", "Machine", ["Quads"]),
+  lib("Calf Stretch (Wall)", "Bodyweight", ["Calves"]),
+  lib("Dumbbell Bench Press", "Dumbbell", ["Chest"]),
+  lib("Dumbbell Shoulder Press", "Dumbbell", ["Shoulders"]),
+  lib("Glute Bridge", "Bodyweight", ["Glutes"]),
+  lib("Neck Bridge", "Bodyweight", ["Neck"]),
+  lib("Hip CARs", "Bodyweight", ["Hips"]),
+  lib("Ankle CARs", "Bodyweight", ["Calves"]),
+  lib("Hang Clean", "Barbell", ["Quads", "Back"]),
+  lib("Power Clean", "Barbell", ["Quads", "Back"]),
 ];
 
 const VOCAB = buildVocabulary(LIBRARY);
@@ -197,7 +211,10 @@ describe("fixtures: must REJECT", () => {
     ["Meadows Row", "The Meadows Row is Underrated!", "red-flag"],
     ["Belt Squat", "the BELT SQUAT is an S-TIER Exercise!", "red-flag"],
     ["Goblet Squat", "Try This Goblet Squat Variation #squatting #gobletsquat", "red-flag"],
-    ["Cable Kickback", "Joshua Manoi's Hack For Setting Up Cross Cable Kickbacks", "red-flag"],
+    // Was "red-flag" on "hack" until Machine Hack Squat joined the library: a word the library
+    // itself uses is never commentary, so this is refused on "hack" as an unmatched modifier
+    // instead. Still refused, and the report still names the word.
+    ["Cable Kickback", "Joshua Manoi's Hack For Setting Up Cross Cable Kickbacks", "modifier"],
     // Fable's table allowed "head or modifier, either is fine, must not accept". It refuses on
     // the two baseball words instead, which is the same verdict by a better route.
     ["Wall Ball", "Outfielders Fielding the Wall Ball - Baseball Rebellion", "unknown-count"],
@@ -219,6 +236,64 @@ describe("fixtures: must REJECT", () => {
     const verdict = verdictFor("Zercher Squat", "Zercher Squat", 900);
     expect(verdict.ok).toBe(false);
     if (!verdict.ok) expect(verdict.reason).toBe("duration");
+  });
+});
+
+/**
+ * The first real dry run (2026-09-28) put 278 exercises under "nothing in the pool mentions this
+ * movement" -- Back Squat, Deadlift, Face Pull and Kettlebell Swing among them -- with the videos
+ * sitting in the pool. Every cause was a rule, not coverage. Each row here is one of those causes
+ * against the exercise's OWN name as a title, which is the weakest claim a matcher can make and
+ * the one every one of these failed.
+ */
+describe("an exercise always matches a title that is its own name", () => {
+  const rows: Array<[string, string]> = [
+    ["Back Squat", "squat ends far more names than it appears in, so the share test excluded it"],
+    ["Deadlift", "same: the biggest lift in the library was not a head"],
+    ["Kettlebell Swing", "same, and the name is a single head after its equipment"],
+    ["Hang Clean", "same"],
+    ["Face Pull", "the name says no equipment and the title says no equipment: nothing to assume"],
+    ["Medicine Ball Slam", "two-word metadata equipment folds to one compound instead of two conflicting words"],
+    ["Battle Rope Slams", "same"],
+    ["Machine Hack Squat", "'hack' is a red-flag word AND a movement the library names"],
+    ["Calf Stretch (Wall)", "a parenthetical in the NAME is read exactly as one in a title"],
+    ["Hip CARs", "an acronym the library spells in capitals is not shouting"],
+    ["Glute Bridge", "a muscle word in the name is identity"],
+  ];
+  it.each(rows)("%s (%s)", (name) => {
+    const own = verdictFor(name, `${name} | Olympic Weightlifting Exercise Library`);
+    expect(own.ok ? "accepted" : `rejected: ${own.reason} -- ${own.detail}`).toBe("accepted");
+  });
+
+  it("derives squat, deadlift, clean and swing as heads however often they sit mid-name", () => {
+    for (const head of ["squat", "deadlift", "clean", "swing", "pull", "slam"]) {
+      expect(VOCAB.heads.has(head), head).toBe(true);
+    }
+    expect(VOCAB.heads.has("wall"), "a parenthetical never makes a head").toBe(false);
+  });
+
+  it("keeps the exercises the dry run's fixes could have merged apart", () => {
+    const cases: Array<[string, string, RejectReason]> = [
+      ["Dumbbell Bench Press", "Dumbbell Shoulder Press | Olympic Weightlifting Exercise Library", "equipment"],
+      ["Dumbbell Shoulder Press", "Dumbbell Bench Press | Olympic Weightlifting Exercise Library", "equipment"],
+      ["Glute Bridge", "Neck Bridge | Olympic Weightlifting Exercise Library", "modifier"],
+      ["Neck Bridge", "Glute Bridge | Olympic Weightlifting Exercise Library", "modifier"],
+      ["Hip CARs", "Ankle CARs | Olympic Weightlifting Exercise Library", "modifier"],
+      ["Hang Clean", "Power Clean | Olympic Weightlifting Exercise Library", "modifier"],
+      ["Face Pull", "Band Face Pull | Olympic Weightlifting Exercise Library", "equipment"],
+      ["Calf Stretch (Wall)", "Calf Stretch (Seated) | Olympic Weightlifting Exercise Library", "modifier"],
+    ];
+    for (const [exercise, title, reason] of cases) {
+      const verdict = verdictFor(exercise, title);
+      expect(verdict.ok, `${exercise} must not take ${title}`).toBe(false);
+      if (!verdict.ok) expect(verdict.reason, `${exercise} <- ${title}`).toBe(reason);
+    }
+  });
+
+  it("still refuses a title that shouts words the library does not use", () => {
+    const verdict = verdictFor("Back Squat", "BACK SQUAT DESTROYS YOUR LEGS");
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.reason).toBe("red-flag");
   });
 });
 
