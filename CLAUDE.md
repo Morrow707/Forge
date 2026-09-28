@@ -268,11 +268,11 @@ can install. Delete entries as a `beta` ships them.
   archive on an out-of-scope Swift variable; #168 fixed it). It carries #167: the 720p upload
   copy encoded during the recording, the sensor-fitted concentric window, and the jump-decision
   and live-fallback diagnostics.
-- **QUEUED ON `claude/modest-babbage-y53kyw`, NOT ON MAIN, held by Scott for the next
-  calibration upload** ("queue them so we can upload them with next camera calibration"): the
-  equipment's vote on bar position for barbell lifts (`client/src/lib/equipment-bar-point.ts`)
-  and the CoreMotion camera-tilt diagnostics. Merge and `beta` together with whatever the next
-  calibration change is. See docs/camera-tracking-notes.md, "two additions queued".
+- **Held by Scott then lifted the same afternoon** ("finish all those then upload everything"):
+  the equipment's vote on bar position, the CoreMotion camera tilt, the torso-stillness fix,
+  the plate size gate, the jump gravity correction, the best-effort jump (Rule #1), the
+  box-contact rule, the 409 catch-up after a lost response, the 403 queue rule, and the 3D pose
+  opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
 - **Nothing else on `main` is waiting on an upload.**
 
 Two things worth saying out loud when someone tests this:

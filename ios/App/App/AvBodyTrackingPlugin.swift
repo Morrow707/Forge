@@ -1344,7 +1344,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 coreMlTargetLabel: AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode),
                 coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
                 coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
-                coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable
+                coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable,
+                body3D: call.getBool("body3D") ?? true
             )
         }()
         if liveContext != nil {
@@ -1771,6 +1772,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Box jump only (see this file's own comment on detectBoxTop below) -- every other AV
         // dialog omits this and pays nothing extra per frame.
         let detectBox = call.getBool("detectBox") ?? false
+        let body3D = call.getBool("body3D") ?? true
         // Gates the additive CoreML implement detector below -- one of
         // AvCoreMlImplementDetector.supportedTrackingModes (the object class the caller is
         // actually trying to track, e.g. "med_ball" from AvMedBallTrackerDialog or "barbell"/
@@ -1916,7 +1918,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
         queueForThisCall.async {
             self.runPoseAnalysis(
-                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox,
+                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, body3D: body3D,
                 trackingMode: trackingMode, call: call, progress: progress, settle: settle
             )
         }
@@ -1945,7 +1947,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // call.resolve/call.reject directly -- see analyzeRecording's own comment on why (a
     // watchdog or a user-initiated cancel might already have settled this call first).
     private func runPoseAnalysis(
-        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, trackingMode: String?, call: CAPPluginCall,
+        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, body3D: Bool, trackingMode: String?, call: CAPPluginCall,
         progress: AvAnalysisProgress,
         settle: @escaping (@escaping () -> Void) -> Void
     ) {
@@ -2048,7 +2050,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             coreMlTargetLabel: AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode),
             coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
             coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
-            coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable
+            coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable,
+            body3D: body3D
         )
         let state = AvFrameRunState()
         let startTime = Date()
@@ -3144,10 +3147,7 @@ private final class AvFrameContext {
     // independent of the runtime #available guard around the constructor. nil here reads
     // downstream as "not available", the same omit-rather-than-fail convention every other
     // optional signal in this file uses.
-    let body3DRequest: VNRequest? = {
-        guard #available(iOS 17.0, *) else { return nil }
-        return VNDetectHumanBodyPose3DRequest()
-    }()
+    let body3DRequest: VNRequest?
     // NOW A MEASURED VALUE, AND IT WAS COSTING MORE THAN IT RETURNED.
     //
     // This said "placeholder, not a measured value ... once real on-device timing exists". That
@@ -3181,8 +3181,18 @@ private final class AvFrameContext {
         coreMlTargetLabel: String?,
         coreMlImplementAvailable: Bool,
         coreMlSecondaryLabel: String?,
-        coreMlSecondaryAvailable: Bool
+        coreMlSecondaryAvailable: Bool,
+        body3D: Bool = true
     ) {
+        // THE 3D PASS IS OPT-OUT PER TAKE, AND THE OPT-OUT APPLIES TO BOTH FEEDERS. On Scott's
+        // 2026-09-28 squat it was 5.6 of 33.6 seconds of analysis on a clip the bar tracker
+        // reads in 2D only (see av-bar-tracker-dialog: "Deliberately NOT body3DLm"). The modes
+        // that read depth (sprint, goniometer, overhead squat) leave it on. Set from the same
+        // call option on the live path and the file path, so the two stay one measurement.
+        self.body3DRequest = {
+            guard body3D, #available(iOS 17.0, *) else { return nil }
+            return VNDetectHumanBodyPose3DRequest()
+        }()
         self.orientation = orientation
         self.sampleEveryNthFrame = max(1, sampleEveryNthFrame)
         self.detectBox = detectBox
@@ -3328,6 +3338,12 @@ private enum AvTrackerArbiter {
     // speck the model labelled. A box that runs off the frame edge has a wrong size, which for
     // the class that sets real-world scale is a wrong number in every metric downstream.
     static let minCandidateSizeInYardsticks = 0.15
+    /// A plate is a 45cm disc and a grip is wider than that on every barbell lift, so a "plate"
+    /// wider than the grip and a quarter is not one. Scott's 2026-09-28 squat locked on
+    /// something 1.9 grips wide, measured it as a plate, and the scale it implied was thrown out
+    /// downstream -- after the lock had already been spent on it. Filtered before the pick, like
+    /// the size floor above, so the real plate can win.
+    static let maxPlateSizeInYardsticks = 1.25
     static let candidateEdgeTolerance = 0.005
 
     struct Yardstick {
@@ -3470,7 +3486,9 @@ private enum AvTrackerArbiter {
         }
         guard let yardstick, yardstick.px > 0, frameWidth > 0, frameHeight > 0 else { return true }
         let largestSidePx = max(Double(box.width) * frameWidth, Double(box.height) * frameHeight)
-        return largestSidePx >= yardstick.px * minCandidateSizeInYardsticks
+        if largestSidePx < yardstick.px * minCandidateSizeInYardsticks { return false }
+        if label == "plate", largestSidePx > yardstick.px * maxPlateSizeInYardsticks { return false }
+        return true
     }
 
     /// Distance between two normalized Vision points, in this frame's own pixels.

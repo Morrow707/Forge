@@ -88,6 +88,9 @@ export type TraceDiagnostics = {
   torsoJumpRejections?: number;
   /** The measured spread that decided it, so the threshold can be revised from takes. */
   torsoSpreadGrips?: number | null;
+  /** The longest run of frames the torso spent half a grip from its usual spot -- the number
+   *  that says a squat is a squat. See torsoLongestExcursionFrames. */
+  torsoLongestExcursionFrames?: number | null;
   largestGapSeconds: number | null;
 };
 
@@ -382,6 +385,7 @@ export type TrackingDiagnostics = {
     scaleErrorRatio: number;
     uncertaintyFraction: number;
     repsUsed: number;
+    applied?: boolean;
   } | null;
   /** THE ATHLETE'S OWN BONES, IN METRES, from a take whose ruler the body had no hand in.
    *

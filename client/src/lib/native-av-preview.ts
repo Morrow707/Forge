@@ -291,6 +291,8 @@ interface AvBodyTrackingPlugin {
     sampleEveryNthFrame?: number;
     detectBox?: boolean;
     trackingMode?: string;
+    // False skips the 3D body-pose pass on this take (both feeders). Bar and jump read 2D only.
+    body3D?: boolean;
   }): Promise<void>;
   /** `uploadPath` is the 720p copy the native side wrote WHILE recording (see the plugin's
    *  AvUploadCopyWriter). Absent on an older build or when the copy could not be made, in which
@@ -312,6 +314,7 @@ interface AvBodyTrackingPlugin {
     sampleEveryNthFrame?: number;
     detectBox?: boolean;
     trackingMode?: string;
+    body3D?: boolean;
   }): Promise<AvAnalysisResult>;
   cancelAnalysis(): Promise<void>;
   getDiagnosticLog(): Promise<{ log: string[] }>;
@@ -412,6 +415,7 @@ export async function startAvRecording(options?: {
   sampleEveryNthFrame?: number;
   detectBox?: boolean;
   trackingMode?: string;
+  body3D?: boolean;
 }): Promise<void> {
   await AvBodyTracking.startRecording(options);
 }
@@ -555,8 +559,9 @@ export async function analyzeAvRecording(
   sampleEveryNthFrame?: number,
   detectBox?: boolean,
   trackingMode?: string,
+  body3D?: boolean,
 ): Promise<AvAnalysisResult> {
-  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox, trackingMode });
+  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox, trackingMode, body3D });
 }
 
 // Real native cancellation of an in-progress analyzeAvRecording call -- see

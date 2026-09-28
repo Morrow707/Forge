@@ -79,6 +79,7 @@ import {
   torsoAnchorFrom,
   torsoAnchorIsStable,
   torsoWasAtRest,
+  torsoLongestExcursionFrames,
   torsoRestSpreadGrips,
   TORSO_ANCHOR_HISTORY,
   computeArmDriveAsymmetry,
@@ -914,6 +915,10 @@ export function AvBarTrackerDialog({
       const result = await stopRecordingAndAnalyze({
         onAnalysisProgress: (percent) => onAnalysisProgress?.(forSetNumber, percent),
         trackingMode: coreMlTrackingMode,
+        // 2D only on this path (see "Deliberately NOT body3DLm" below); the 3D pass was a sixth
+        // of the analysis time on the 2026-09-28 squat. Same flag at Record and at Stop, so the
+        // live feeder and the file feeder stay one measurement.
+        body3D: false,
         // Always provided now (not just when recordVideo) -- recording has stopped and the slow
         // on-device analysis pass is about to start regardless of whether a video gets uploaded,
         // and closing the dialog here (rather than leaving the athlete staring at "Analyzing
@@ -1733,7 +1738,8 @@ export function AvBarTrackerDialog({
       const span = medianHalfSpan(halfSpanHistory);
       return span ? Math.hypot(span.x, span.y) * 2 : null;
     })();
-    const torsoStillThisTake = torsoWasAtRest(torsoAnchorsSeen, torsoGripWidthUnits);
+    const torsoStillThisTake = torsoWasAtRest(torsoAnchorsSeen, torsoGripWidthUnits, movementType);
+    const torsoLongestExcursion = torsoLongestExcursionFrames(torsoAnchorsSeen, torsoGripWidthUnits);
     const torsoSpreadRaw = torsoRestSpreadGrips(torsoAnchorsSeen, torsoGripWidthUnits);
     const torsoSpreadGrips = torsoSpreadRaw == null ? null : Math.round(torsoSpreadRaw * 1000) / 1000;
     let torsoJumpRejections = 0;
@@ -1774,6 +1780,7 @@ export function AvBarTrackerDialog({
         torsoStillThisTake,
         torsoJumpRejections,
         torsoSpreadGrips,
+        torsoLongestExcursionFrames: torsoLongestExcursion,
         barPointFromLoneHandCarried,
         barPointFromBareLoneHand,
         barPointFromEquipment,
@@ -2418,7 +2425,7 @@ export function AvBarTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ trackingMode: coreMlTrackingMode });
+                  startRecording({ trackingMode: coreMlTrackingMode, body3D: false });
                 }}
                 disabled={!supported || !heightIn}
               >

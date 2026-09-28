@@ -8998,6 +8998,8 @@ export const trackingDiagnosticsSchema = z.object({
       scaleErrorRatio: z.number(),
       uncertaintyFraction: z.number(),
       repsUsed: z.number(),
+      // Whether the ratio was confident enough to correct the set's scaled numbers with.
+      applied: z.boolean().optional(),
     })
     .nullable()
     .optional(),
@@ -9039,6 +9041,7 @@ export const trackingDiagnosticsSchema = z.object({
       torsoStillThisTake: z.boolean().optional(),
       torsoJumpRejections: z.number().optional(),
       torsoSpreadGrips: z.number().nullable().optional(),
+      torsoLongestExcursionFrames: z.number().nullable().optional(),
       largestGapSeconds: z.number().optional().nullable(),
     })
     .optional()

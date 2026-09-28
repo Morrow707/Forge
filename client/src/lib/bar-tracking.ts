@@ -2946,12 +2946,60 @@ export function torsoRestSpreadGrips(
   return mid(anchors.map((a) => Math.hypot(a.x - refX, a.y - refY))) / gripWidthUnits;
 }
 
+/** A SUSTAINED excursion is a lift, not a glitch. The MAD above is a statement about the
+ *  typical frame, and on 2026-09-28 it was fooled by a back squat: the athlete stands for most
+ *  of the take (walk-out, the pause between reps, the re-rack), so the typical frame IS
+ *  standing and the spread read 0.093 grips. The check then threw out 94 frames as "jumped
+ *  pose" -- the bottom of every rep, exactly the frames a squat is about. A jumped landmark
+ *  lasts a frame or two; a torso that stays half a grip width away for half a second has
+ *  travelled there. Counted in consecutive anchors, in grip widths. */
+export const TORSO_EXCURSION_GRIPS = 0.5;
+export const TORSO_EXCURSION_MIN_FRAMES = 15;
+
+/** The longest run of consecutive anchors more than TORSO_EXCURSION_GRIPS from the take's
+ *  median position. Recorded with the verdict so the two thresholds can be revised from takes. */
+export function torsoLongestExcursionFrames(
+  anchors: { x: number; y: number }[],
+  gripWidthUnits: number | null,
+): number | null {
+  if (anchors.length === 0) return null;
+  if (!gripWidthUnits || !(gripWidthUnits > 0)) return null;
+  const mid = (values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+  const refX = mid(anchors.map((a) => a.x));
+  const refY = mid(anchors.map((a) => a.y));
+  let longest = 0;
+  let run = 0;
+  for (const a of anchors) {
+    if (Math.hypot(a.x - refX, a.y - refY) > gripWidthUnits * TORSO_EXCURSION_GRIPS) {
+      run++;
+      if (run > longest) longest = run;
+    } else {
+      run = 0;
+    }
+  }
+  return longest;
+}
+
+/** Movement types whose torso travels BY DEFINITION. The measurement below is the real rule
+ *  (a library of hundreds of exercises cannot be listed); this is the belt to its braces, for
+ *  the movements where a wrong "still" verdict deletes the lift. Matches the movementType
+ *  taxonomy in shared/schema.ts (case-insensitive, substring). */
+export const TORSO_TRAVELS_MOVEMENT_TYPES = ["squat", "hinge", "lunge", "olympic", "jump", "carry"];
+
 export function torsoWasAtRest(
   anchors: { x: number; y: number }[],
   gripWidthUnits: number | null,
+  movementType?: string | null,
 ): boolean {
   if (anchors.length < TORSO_ANCHOR_HISTORY) return false;
   if (!gripWidthUnits || !(gripWidthUnits > 0)) return false;
+  const type = (movementType ?? "").toLowerCase();
+  if (TORSO_TRAVELS_MOVEMENT_TYPES.some((t) => type.includes(t))) return false;
+  const excursion = torsoLongestExcursionFrames(anchors, gripWidthUnits);
+  if (excursion != null && excursion >= TORSO_EXCURSION_MIN_FRAMES) return false;
   const mid = (values: number[]) => {
     const sorted = [...values].sort((a, b) => a - b);
     return sorted[Math.floor(sorted.length / 2)];
