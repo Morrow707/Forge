@@ -95,6 +95,13 @@ export type JumpRep = {
   // direct comparison against the real, camera-detected box height -- the actual question a
   // box jump is asking ("did they clear it"), not the one a vertical jump asks.
   boxClearanceCm: number | null;
+  /** The height before the gravity ruler corrected the take's scale -- see applyGravityCorrection.
+   *  Present only when a correction was applied. */
+  uncorrectedJumpHeightCm?: number;
+  /** RULE #1: this rep was not a clean takeoff-and-landing the state machine could vouch for. It
+   *  is the best read the trace supports -- the highest the ankle rose above standing -- and it
+   *  is reported rather than withheld, with this flag so a reader knows what it is. */
+  bestEffort?: boolean;
 };
 
 export type JumpSetMetrics = {
@@ -120,7 +127,16 @@ export type JumpSetMetrics = {
     scaleErrorRatio: number;
     uncertaintyFraction: number;
     repsUsed: number;
+    /** True when the ratio was confident enough to CORRECT the take's scaled numbers with -- see
+     *  applyGravityCorrection. The reps then carry uncorrectedJumpHeightCm beside the corrected one. */
+    applied?: boolean;
   } | null;
+  /** True when no rep passed the state machine and the set is the best-effort read instead. */
+  bestEffort?: boolean;
+  /** A box jump's "ground contact" is the athlete stepping down and resetting, not a reactive
+   *  contact, so the set-level average and the RSI built on it are withheld as not applicable.
+   *  The per-rep contact times stay in repBreakdown; only the comparative numbers go. */
+  groundContactIsBoxReset?: boolean;
   // Filled in by the caller from pose-tracking.ts's computeLandingAsymmetry
   // -- same "this module only has the ankle trace" reasoning as formFaults
   // above. One entry per rep in repBreakdown (null for a rep without
@@ -233,7 +249,8 @@ export type JumpSegmentationEvent = {
     | "floating_above_box"
     | "recovery_valve"
     | "flight_too_long"
-    | "baseline_reanchored";
+    | "baseline_reanchored"
+    | "best_effort";
   /** A number that explains the decision: net rise in cm for a rep or dismount, the new
    *  baseline's shift in cm for a re-anchor, seconds for a too-long flight. */
   value?: number;
@@ -270,6 +287,10 @@ export function summarizeJumpSet(
    *  function returns null when it finds no rep, and that is exactly the take whose decisions
    *  matter most. */
   events?: JumpSegmentationEvent[],
+  options?: {
+    /** A box is in the scene -- see groundContactIsBoxReset. */
+    usesBox?: boolean;
+  },
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
   const minFlightAmplitudeCm = heightScaledAmplitudeCm(BASE_MIN_FLIGHT_AMPLITUDE_CM, heightIn);
@@ -560,7 +581,24 @@ export function summarizeJumpSet(
     }
   }
 
-  if (reps.length === 0) return null;
+  // RULE #1: NO REP FOUND IS NOT NO NUMBER. Scott, 2026-09-28, on a box jump that came back
+  // "Couldn't get a clean read": "Same rejected my jump which is the one thing I told you
+  // shouldn't happen." The state machine has four ways to decline a candidate and every one of
+  // them is now logged (jumpEvents), but a take it declined every candidate on still filmed a
+  // jump. The best-effort read below is what the trace supports without a clean takeoff and
+  // landing: the highest the ankle rose above standing, and the flight around that peak if the
+  // trace shows one. Reported with bestEffort set, never withheld.
+  let bestEffort = false;
+  if (reps.length === 0) {
+    const rep = bestEffortJump(rawPoints, ySmoothed, triggerM, SETTLE_FRAMES);
+    if (!rep) return null;
+    reps.push(rep);
+    repConfidences.push(
+      rawPoints.reduce((sum, p) => sum + (p.confidence ?? 1), 0) / rawPoints.length,
+    );
+    bestEffort = true;
+    events?.push({ t: rep.landingT, kind: "best_effort", value: rep.jumpHeightCm });
+  }
 
   // Flagging needs at least 3 reps -- with only 2, there's no way to tell
   // which one (if either) is the odd one out, so a big gap between them
@@ -582,17 +620,6 @@ export function summarizeJumpSet(
     }
   }
 
-  const bestJumpHeightCm = Math.max(...reps.map((r) => r.jumpHeightCm));
-  const distances = reps.map((r) => r.horizontalDistanceCm).filter((d): d is number => d != null);
-  const bestHorizontalDistanceCm = distances.length ? Math.max(...distances) : null;
-  const contactTimes = reps
-    .map((r) => r.groundContactSeconds)
-    .filter((c): c is number => c != null);
-  const avgGroundContactSeconds = contactTimes.length
-    ? Math.round((contactTimes.reduce((a, c) => a + c, 0) / contactTimes.length) * 1000) / 1000
-    : null;
-  const reactiveStrengthIndex = bestReactiveStrengthIndex(reps);
-
   // THE GRAVITY RULER. See gravity-ruler.ts.
   //
   // Both heights were already computed per rep and deliberately kept apart -- one from flight
@@ -612,7 +639,32 @@ export function summarizeJumpSet(
       }),
     )
     .filter((r): r is NonNullable<typeof r> => r != null);
-  const gravityVerdict = gravityVerdictForSet(gravityReadings);
+  const gravityVerdictRaw = gravityVerdictForSet(gravityReadings);
+  // AND NOW IT IS USED AS ONE. On Scott's 2026-09-28 box jump the height ruler said 50.8cm, the
+  // box ruler was thrown out as impossible, and the gravity ruler said the scale was 45% out --
+  // and the 50.8 was reported anyway. Flight time needs no ruler: it is what OVR and a force
+  // plate use. When the verdict is confident, every scaled number on the set is divided by the
+  // ratio and the heights are rebuilt from flight time and the corrected net rise. The original
+  // travels beside it (uncorrectedJumpHeightCm) so the correction can be checked against a
+  // sensor rather than trusted.
+  const applied = applyGravityCorrection(reps, gravityVerdictRaw);
+  const gravityVerdict = gravityVerdictRaw ? { ...gravityVerdictRaw, applied } : null;
+
+  const bestJumpHeightCm = Math.max(...reps.map((r) => r.jumpHeightCm));
+  const distances = reps.map((r) => r.horizontalDistanceCm).filter((d): d is number => d != null);
+  const bestHorizontalDistanceCm = distances.length ? Math.max(...distances) : null;
+  const contactTimes = reps
+    .map((r) => r.groundContactSeconds)
+    .filter((c): c is number => c != null);
+  // A box jump's contact is the step-down and the reset -- 2.7 seconds on the 2026-09-28 set --
+  // and an RSI built on it ranks athletes by how quickly they climbed off a box. Withheld at the
+  // set level as not applicable; the per-rep times stay on repBreakdown.
+  const groundContactIsBoxReset = options?.usesBox === true;
+  const avgGroundContactSeconds =
+    contactTimes.length && !groundContactIsBoxReset
+      ? Math.round((contactTimes.reduce((a, c) => a + c, 0) / contactTimes.length) * 1000) / 1000
+      : null;
+  const reactiveStrengthIndex = groundContactIsBoxReset ? null : bestReactiveStrengthIndex(reps);
 
   const boxClearances = reps.map((r) => r.boxClearanceCm).filter((c): c is number => c != null);
   const bestBoxClearanceCm = boxClearances.length ? Math.max(...boxClearances) : null;
@@ -639,5 +691,90 @@ export function summarizeJumpSet(
     formFaults: [],
     bestBoxClearanceCm,
     gravityVerdict,
+    bestEffort,
+    groundContactIsBoxReset,
+  };
+}
+
+/** How confident the gravity ruler has to be before it is allowed to correct anything, and how
+ *  far from 1.0 the ratio has to sit before a correction is worth making. Admitted guesses;
+ *  the uncorrected number is kept beside the corrected one so both can be revised. */
+export const GRAVITY_CORRECTION_MAX_UNCERTAINTY = 0.2;
+export const GRAVITY_CORRECTION_MIN_ERROR = 0.05;
+
+/** Divides every scaled number on the set by the gravity ruler's error ratio and rebuilds the
+ *  heights from flight time. Mutates the reps; returns whether it did anything. */
+export function applyGravityCorrection(
+  reps: JumpRep[],
+  verdict: { scaleErrorRatio: number; uncertaintyFraction: number; repsUsed: number } | null,
+): boolean {
+  if (!verdict) return false;
+  const ratio = verdict.scaleErrorRatio;
+  if (!(ratio > 0) || verdict.uncertaintyFraction > GRAVITY_CORRECTION_MAX_UNCERTAINTY) return false;
+  if (Math.abs(ratio - 1) <= GRAVITY_CORRECTION_MIN_ERROR) return false;
+  for (const rep of reps) {
+    rep.uncorrectedJumpHeightCm = rep.jumpHeightCm;
+    rep.netRiseCm = Math.round((rep.netRiseCm / ratio) * 10) / 10;
+    rep.peakHeightCm = Math.round((rep.peakHeightCm / ratio) * 10) / 10;
+    if (rep.horizontalDistanceCm != null) rep.horizontalDistanceCm = Math.round((rep.horizontalDistanceCm / ratio) * 10) / 10;
+    if (rep.boxClearanceCm != null) rep.boxClearanceCm = Math.round((rep.boxClearanceCm / ratio) * 10) / 10;
+    const t = rep.flightSeconds;
+    if (t > 0) {
+      const v0 = (rep.netRiseCm / 100 + (GRAVITY_MPS2 * t * t) / 2) / t;
+      rep.jumpHeightCm = Math.round(Math.max(0, (v0 * v0) / (2 * GRAVITY_MPS2)) * 1000) / 10;
+    }
+  }
+  return true;
+}
+
+/** The best read a trace supports when no clean rep was found. See the RULE #1 note at the
+ *  call site. Standing height is the median of the first settle window; the peak is the highest
+ *  the ankle rose above it; the flight is the run of samples around that peak that sit more
+ *  than the trigger above standing. Null only when there is no trace at all. */
+export function bestEffortJump(
+  rawPoints: TrackedPoint[],
+  ySmoothed: number[],
+  triggerM: number,
+  settleFrames: number,
+): JumpRep | null {
+  if (ySmoothed.length < 2 || rawPoints.length !== ySmoothed.length) return null;
+  const window = ySmoothed.slice(0, Math.max(1, Math.min(settleFrames, ySmoothed.length)));
+  const sorted = [...window].sort((a, b) => a - b);
+  const standing = sorted[Math.floor(sorted.length / 2)];
+  let peakIdx = 0;
+  for (let i = 1; i < ySmoothed.length; i++) if (ySmoothed[i] < ySmoothed[peakIdx]) peakIdx = i;
+  const peakHeightM = Math.max(0, standing - ySmoothed[peakIdx]);
+  let start = peakIdx;
+  while (start > 0 && standing - ySmoothed[start - 1] >= triggerM) start--;
+  let end = peakIdx;
+  while (end < ySmoothed.length - 1 && standing - ySmoothed[end + 1] >= triggerM) end++;
+  const takeoffIdx = Math.max(0, start - 1);
+  const landingIdx = Math.min(ySmoothed.length - 1, end + 1);
+  const takeoffT = rawPoints[takeoffIdx].t;
+  const landingT = rawPoints[landingIdx].t;
+  const flightSeconds = Math.max(0, (landingT - takeoffT) / 1000);
+  const after = ySmoothed.slice(landingIdx, Math.min(ySmoothed.length, landingIdx + settleFrames));
+  const afterSorted = [...after].sort((a, b) => a - b);
+  const landingY = afterSorted.length ? afterSorted[Math.floor(afterSorted.length / 2)] : standing;
+  const netRiseM = standing - landingY;
+  let jumpHeightCm = peakHeightM * 100;
+  if (flightSeconds > 0 && flightSeconds <= MAX_FLIGHT_SECONDS) {
+    const v0 = (netRiseM + (GRAVITY_MPS2 * flightSeconds * flightSeconds) / 2) / flightSeconds;
+    if (v0 > 0) jumpHeightCm = ((v0 * v0) / (2 * GRAVITY_MPS2)) * 100;
+  }
+  const horizontalCm = Math.abs(rawPoints[landingIdx].x - rawPoints[takeoffIdx].x) * 100;
+  return {
+    repNumber: 1,
+    flightSeconds: Math.round(flightSeconds * 1000) / 1000,
+    netRiseCm: Math.round(netRiseM * 1000) / 10,
+    jumpHeightCm: Math.round(jumpHeightCm * 10) / 10,
+    peakHeightCm: Math.round(peakHeightM * 1000) / 10,
+    horizontalDistanceCm: horizontalCm >= 5 ? Math.round(horizontalCm * 10) / 10 : null,
+    groundContactSeconds: null,
+    likelyTrackingGlitch: true,
+    takeoffT,
+    landingT,
+    boxClearanceCm: null,
+    bestEffort: true,
   };
 }

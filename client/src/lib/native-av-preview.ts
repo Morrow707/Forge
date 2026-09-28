@@ -160,6 +160,11 @@ export type AvAnalysisResult = {
   // a stride mismatch, or the coverage/drop numbers); coverage and drop rate are the numbers
   // the gate saw, on both paths, so a near miss can be told from a far one.
   liveAttempted?: boolean;
+  // How the phone was held during the take, merged in by the hook from stopRecording's answer
+  // -- the recorder knows it, the analysis pass does not. See tracking-diagnostics.ts.
+  cameraPitchDeg?: number;
+  cameraRollDeg?: number;
+  cameraTiltSamples?: number;
   liveFallbackReason?: string;
   liveCoverage?: number;
   liveDropRate?: number;
@@ -286,11 +291,20 @@ interface AvBodyTrackingPlugin {
     sampleEveryNthFrame?: number;
     detectBox?: boolean;
     trackingMode?: string;
+    // False skips the 3D body-pose pass on this take (both feeders). Bar and jump read 2D only.
+    body3D?: boolean;
   }): Promise<void>;
   /** `uploadPath` is the 720p copy the native side wrote WHILE recording (see the plugin's
    *  AvUploadCopyWriter). Absent on an older build or when the copy could not be made, in which
    *  case readAvRecordingForUpload re-encodes after the fact exactly as before. */
-  stopRecording(): Promise<{ path: string; uploadPath?: string; uploadBytes?: number }>;
+  stopRecording(): Promise<{
+    path: string;
+    uploadPath?: string;
+    uploadBytes?: number;
+    cameraPitchDeg?: number;
+    cameraRollDeg?: number;
+    cameraTiltSamples?: number;
+  }>;
   /** A smaller copy for upload -- see stopAvRecording. Resolves the ORIGINAL path with
    *  compressed:false when it could not run, so a caller never has to branch on failure. */
   compressForUpload(options: { path: string }): Promise<{ path: string; compressed: boolean; bytes?: number }>;
@@ -300,6 +314,7 @@ interface AvBodyTrackingPlugin {
     sampleEveryNthFrame?: number;
     detectBox?: boolean;
     trackingMode?: string;
+    body3D?: boolean;
   }): Promise<AvAnalysisResult>;
   cancelAnalysis(): Promise<void>;
   getDiagnosticLog(): Promise<{ log: string[] }>;
@@ -400,6 +415,7 @@ export async function startAvRecording(options?: {
   sampleEveryNthFrame?: number;
   detectBox?: boolean;
   trackingMode?: string;
+  body3D?: boolean;
 }): Promise<void> {
   await AvBodyTracking.startRecording(options);
 }
@@ -430,9 +446,11 @@ export async function startAvRecording(options?: {
  *  ... the camera should instantly close and go back to the workout screen."
  *
  *  The caller closes the camera on THIS resolving, then does the blob work behind it. */
-export async function stopAvRecordingToPath(): Promise<{ path: string; uploadPath?: string }> {
-  const { path, uploadPath } = await AvBodyTracking.stopRecording();
-  return { path, uploadPath };
+export type AvCameraTilt = { cameraPitchDeg?: number; cameraRollDeg?: number; cameraTiltSamples?: number };
+
+export async function stopAvRecordingToPath(): Promise<{ path: string; uploadPath?: string; tilt: AvCameraTilt }> {
+  const { path, uploadPath, cameraPitchDeg, cameraRollDeg, cameraTiltSamples } = await AvBodyTracking.stopRecording();
+  return { path, uploadPath, tilt: { cameraPitchDeg, cameraRollDeg, cameraTiltSamples } };
 }
 
 /** Turns a stopped recording's path into the Blob a coach watches.
@@ -541,8 +559,9 @@ export async function analyzeAvRecording(
   sampleEveryNthFrame?: number,
   detectBox?: boolean,
   trackingMode?: string,
+  body3D?: boolean,
 ): Promise<AvAnalysisResult> {
-  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox, trackingMode });
+  return AvBodyTracking.analyzeRecording({ path, sampleEveryNthFrame, detectBox, trackingMode, body3D });
 }
 
 // Real native cancellation of an in-progress analyzeAvRecording call -- see

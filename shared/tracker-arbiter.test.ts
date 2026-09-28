@@ -14,6 +14,7 @@ import {
   FALLBACK_LOCK_DISTANCE_FRAME_FRACTION,
   MIN_YARDSTICK_PX,
   MAX_PLATE_ASPECT_RATIO,
+  MAX_PLATE_SIZE_IN_YARDSTICKS,
 } from "./tracker-arbiter";
 
 // A 1080p frame, and a bench grip 0.55m wide filling a plausible slice of it. Working in a real
@@ -279,7 +280,7 @@ describe("a reference object has to be the right shape AND in the right place", 
       medianCenterXNorm: 0.5 + (4 * YARDSTICK_PX) / W,
       medianCenterYNorm: 0.5,
     });
-    expect(v.reasons).toEqual(["aspect_ratio", "too_far_from_athlete"]);
+    expect(v.reasons).toEqual(["aspect_ratio", "too_far_from_athlete", "too_large_for_a_plate"]);
   });
 
   it("does not refuse a read just because the body could not be measured", () => {
@@ -327,6 +328,7 @@ describe("the Swift port carries the same numbers", () => {
     ["minYardstickPx", MIN_YARDSTICK_PX],
     ["maxYardstickDeviationRatio", MAX_YARDSTICK_DEVIATION_RATIO],
     ["minYardstickSamplesForStability", MIN_YARDSTICK_SAMPLES_FOR_STABILITY],
+    ["maxPlateSizeInYardsticks", MAX_PLATE_SIZE_IN_YARDSTICKS],
   ])("%s matches", (swiftName, tsValue) => {
     expect(swiftConstant(swiftName as string)).toBe(tsValue);
   });

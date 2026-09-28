@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { apiRequest, ApiError, resolveApiUrl, getNativeToken, getJson } from "@/lib/queryClient";
+import { apiRequest, ApiError, NetworkError, resolveApiUrl, getNativeToken, getJson } from "@/lib/queryClient";
 import type { EffectiveBranding } from "@/lib/branding-style";
 import { cn } from "@/lib/utils";
 import { contrastForegroundHsl } from "@/lib/color";
@@ -1142,6 +1142,9 @@ export function WorkoutPage({
   // log exists (nothing to conflict with) and re-read from the server's answer on
   // every successful save, since each save advances it.
   const baseRevisionRef = useRef<number | null>(null);
+  // Whether a save's response was lost in transit since the last confirmed one -- see the 409
+  // catch-up in the save's catch block.
+  const lostResponsePossibleRef = useRef(false);
   // The server row id of every saved set on this day, keyed `${programExerciseId}:${setNumber}`.
   // Seeded from the day read and replaced from every synced save (a save reinserts the day, so
   // every id changes). A clip queued for later upload carries the id current at record time so
@@ -1396,6 +1399,7 @@ export function WorkoutPage({
     mutationFn: async ({
       payload,
       silent,
+      replay,
     }: {
       // Already built by the caller (queueSave, or a recovered offline
       // entry replayed as-is) rather than an itemsSnapshot -- see
@@ -1442,6 +1446,7 @@ export function WorkoutPage({
         );
         const startedAt = Date.now();
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
+        lostResponsePossibleRef.current = false;
         logDebug(
           "SAVE",
           `log POST ok (${payload.entries?.length ?? 0} exercises) in ${Date.now() - startedAt}ms`,
@@ -1460,6 +1465,50 @@ export function WorkoutPage({
           "SAVE",
           `log POST FAILED: ${err instanceof ApiError ? `${err.status} ${err.message}` : String(err)}`,
         );
+        // A TRANSPORT FAILURE MAY HAVE LANDED. `fetch` rejecting means the RESPONSE never
+        // arrived, not that the request did not: the server may have applied this save and
+        // advanced the revision. Remembered so the 409 that follows can be told apart from a
+        // genuine edit on another device.
+        if (err instanceof NetworkError) lostResponsePossibleRef.current = true;
+
+        // A 409 AFTER A LOST RESPONSE IS OUR OWN SAVE, AND THE PAGE CATCHES UP INSTEAD OF
+        // STALLING. Scott, 2026-09-28, build 553: the 57:09 save succeeded, the next one
+        // failed with "Load failed" but had landed, and EVERY save for the rest of the session
+        // was refused as stale -- queued, then replayed under the wrong account and dropped.
+        // Two camera sets never reached the server. Rule: on a 409, re-read the day; if the
+        // stored revision is exactly one ahead of ours and a response was lost, the day moved
+        // because of us, so adopt the revision and send this payload again. Anything else is
+        // somebody else's edit and falls through to the reload below.
+        if (
+          err instanceof ApiError
+          && err.status === 409
+          && !replay
+          && lostResponsePossibleRef.current
+          && baseRevisionRef.current != null
+        ) {
+          try {
+            const freshRes = await apiRequest(
+              "GET",
+              `${apiBase}/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`,
+            );
+            const fresh = (await freshRes.json()) as { log?: { revision?: number } | null };
+            const serverRevision = fresh.log?.revision;
+            if (typeof serverRevision === "number" && serverRevision === baseRevisionRef.current + 1) {
+              logDebug("SAVE", `409 after a lost response: adopting revision ${serverRevision} and resending`);
+              baseRevisionRef.current = serverRevision;
+              lostResponsePossibleRef.current = false;
+              const resent = await apiRequest("POST", `${apiBase}/log`, { ...payload, baseRevision: serverRevision });
+              logDebug("SAVE", `log POST ok after catch-up (${payload.entries?.length ?? 0} exercises)`);
+              return { synced: true as const, data: await resent.json(), silent };
+            }
+            logDebug(
+              "SAVE",
+              `409 not recoverable: server revision ${serverRevision ?? "unknown"}, ours ${baseRevisionRef.current}`,
+            );
+          } catch (recoverErr) {
+            logDebug("SAVE", `409 catch-up failed: ${String(recoverErr)}`);
+          }
+        }
         // A genuine rejection of the payload itself (bad data, forbidden,
         // not found) should surface as an error same as always -- retrying
         // it later won't change the outcome. Everything else -- a raw

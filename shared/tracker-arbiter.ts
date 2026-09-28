@@ -140,6 +140,12 @@ export const MIN_YARDSTICK_PX = 24;
  */
 export const MAX_PLATE_ASPECT_RATIO = 2.5;
 
+/** A plate is a 45cm disc and every barbell grip is wider than that, so a plate read wider
+ *  than a grip and a quarter is a rack, a bench end or two plates -- not the ruler. The Swift
+ *  side applies the same number before the candidate pick (maxPlateSizeInYardsticks); this
+ *  applies it to the take's median read. Ported: change one, change both. */
+export const MAX_PLATE_SIZE_IN_YARDSTICKS = 1.25;
+
 export type YardstickSource = "grip" | "shoulders";
 
 export type BodyYardstick = {
@@ -289,7 +295,9 @@ export type ReferenceObjectVerdict = {
   usable: boolean;
   /** Every reason it failed, not just the first -- a read can be both the wrong shape and in the
    * wrong place, and knowing it was both is what tells a bad detection from a bad camera angle. */
-  reasons: ("aspect_ratio" | "too_far_from_athlete")[];
+  reasons: ("aspect_ratio" | "too_far_from_athlete" | "too_large_for_a_plate")[];
+  /** The read's larger side in yardsticks, when a yardstick existed. */
+  sizeInYardsticks: number | null;
   aspectRatio: number | null;
   distanceInYardsticks: number | null;
 };
@@ -334,11 +342,20 @@ export function referenceObjectVerdict(opts: {
   });
   if (!distance.plausible) reasons.push("too_far_from_athlete");
 
+  const sizeInYardsticks =
+    yardstick && yardstick.px > 0
+      ? Math.max(shape.medianWidthPx, shape.medianHeightPx) / yardstick.px
+      : null;
+  if (sizeInYardsticks != null && sizeInYardsticks > MAX_PLATE_SIZE_IN_YARDSTICKS) {
+    reasons.push("too_large_for_a_plate");
+  }
+
   return {
     usable: reasons.length === 0,
     reasons,
     aspectRatio,
     distanceInYardsticks: distance.distanceInYardsticks,
+    sizeInYardsticks,
   };
 }
 

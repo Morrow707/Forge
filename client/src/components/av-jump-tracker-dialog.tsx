@@ -178,6 +178,7 @@ export function AvJumpTrackerDialog({
       const result = await stopRecordingAndAnalyze({
         onAnalysisProgress: (percent) => onAnalysisProgress?.(forSetNumber, percent),
         detectBox: usesBox === true,
+        body3D: false,
         // Always provided now (not just when recordVideo) -- see AvBarTrackerDialog's own
         // identical comment: recording has stopped and analysis is about to start regardless
         // of whether a video gets uploaded, and closing the dialog here (instead of leaving
@@ -559,7 +560,16 @@ export function AvJumpTrackerDialog({
       boxTopWorldY,
       frameIntervalSeconds,
       jumpEvents,
+      { usesBox: usesBox === true },
     );
+    if (metrics?.bestEffort) {
+      // RULE #1. The state machine found no clean rep; the number on screen is the best read the
+      // trace supports, and the athlete is told exactly that instead of nothing.
+      toast.warning(
+        `Couldn't find a clean takeoff and landing -- showing the best read from the video (${Math.round(metrics.bestJumpHeightCm)} cm). Check the clip before trusting it.`,
+        { duration: 8000 },
+      );
+    }
     if (!metrics) {
       const diagnostics = buildTrackingDiagnostics({
         outcome: "empty_no_clean_read",
@@ -812,7 +822,7 @@ export function AvJumpTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ detectBox: usesBox === true });
+                  startRecording({ detectBox: usesBox === true, body3D: false });
                 }}
                 disabled={!supported || !heightIn}
               >

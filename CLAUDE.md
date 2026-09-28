@@ -264,7 +264,16 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- **Nothing on `main` is waiting on an upload.**
+- Build **553** is the newest TestFlight build, cut from `48505970` on 2026-09-28 (552 failed to
+  archive on an out-of-scope Swift variable; #168 fixed it). It carries #167: the 720p upload
+  copy encoded during the recording, the sensor-fitted concentric window, and the jump-decision
+  and live-fallback diagnostics.
+- **Held by Scott then lifted the same afternoon** ("finish all those then upload everything"):
+  the equipment's vote on bar position, the CoreMotion camera tilt, the torso-stillness fix,
+  the plate size gate, the jump gravity correction, the best-effort jump (Rule #1), the
+  box-contact rule, the 409 catch-up after a lost response, the 403 queue rule, and the 3D pose
+  opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
+- **Nothing else on `main` is waiting on an upload.**
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

@@ -1091,3 +1091,108 @@ count is nine; the test now says so and why.
   it (`bar-tracking.ts`, `trimPhaseToTravel` and the `phaseStats` block).
 - The upload copy's presence is in the native diagnostic log ("upload copy: ... MB"), not the
   export: it is about the save, not the measurement.
+
+### Same day, two additions queued for the next calibration build
+
+Scott, after the OVR set: "For the barbell back squat let's track the bar too and the plates,
+will only help boost accuracy on faulty body detectors", and "can the floor be detected? Would
+that matter? Would it boost confidence?" Both held from shipping on his instruction: "queue them
+so we can upload them with next camera calibration."
+
+**The equipment votes on bar position -- `client/src/lib/equipment-bar-point.ts`, wired into
+the per-frame loop of `av-bar-tracker-dialog.tsx`.** A barbell lift already asked the detector
+for the plate (bar as the second class), but the boxes only ever set scale; the bar's position
+came from the wrists and the motion-diff tracker alone, so a frame where the body tracker lost
+a wrist produced no point. Now the bar box (preferred) or the plate box (fallback -- a plate on
+the bar sits at bar height) fills exactly those frames, and only those. It earns the vote by
+agreeing with the hands: the box-to-hands offset is learned on every frame that has both, and
+the box may substitute only after `MIN_EQUIPMENT_AGREEMENT_FRAMES` of them whose spread
+(median absolute deviation) is under `MAX_EQUIPMENT_OFFSET_SPREAD_GRIPS` of the athlete's grip
+width. A lock on a rack plate never agrees with the hands for long and never votes. The
+substituted point goes through the same `isPlausibleVelocity` gate as a hand-built one. On the
+09-28 squat the plate lock was on the wrong object (494px against a 263px grip), so this would
+not have fired there; the diagnostics say when it does:
+- `trace.barPointFromEquipment` / `barPointFromEquipmentRejected` -- frames filled, and offered
+  but refused by the speed gate.
+- `trace.equipmentVoteLabel`, `equipmentAgreementFrames`, `equipmentOffsetSpreadGrips` -- which
+  class earned the vote, on how many frames, and how far the agreement wandered. The spread is
+  the number to revise the 0.25-grip threshold from.
+Both thresholds are admitted guesses. Blending the equipment into frames the hands answered
+was considered and not done: it would change the number on every calibrated take to fix the
+frames on a few.
+
+**Camera tilt, not floor detection -- `startGravitySampling` in `AvBodyTrackingPlugin.swift`.**
+Vision has no floor detector and a floor line carries no scale, so it could not have fixed the
+19%. What the floor would have said -- how the phone was pointed -- the accelerometer says
+directly. CoreMotion's gravity vector is sampled five times a second for the length of the
+recording and the median lands in `recording.cameraPitchDeg` (positive when the lens tilts
+down toward the floor), `cameraRollDeg` (sideways lean) and `cameraTiltSamples`. Nothing is
+corrected yet. Every rep of the 09-28 squat said "camera was angled" and no number said how
+much; the next set will, and if the height ruler's error tracks the pitch, the correction is
+`cos(pitch)` on the vertical span and belongs in `pose-tracking.ts` beside the height ruler.
+
+## Build 553 on the phone, 2026-09-28 afternoon: what the second session found
+
+Scott filmed set 2 of the same 135lb x 5 squat and a box jump on build 553 (the concentric
+window fix), beside OVR. Sensor set 2: 0.91 m/s mean (0.87 / 0.93 / 0.94 / 0.91 / 0.94), 1.42
+peak, 29.3in range. Forge on screen: 0.74 avg, five reps found (the edge-filter fix worked).
+The capture never reached the server (see the save chain below), so the comparison is from the
+screen only. Everything here shipped together on the next `beta`, with the two items queued
+above (the equipment vote, the camera tilt).
+
+**Every save after the first was refused, and the day was then deleted from the queue --
+`workout.tsx` (the save's catch block) and `offline-queue.ts` (`runFlush`).** The debug
+console: 57:09 save ok; 57:16 save fails "Load failed" (a transport error -- the request had
+landed, the response had not); every save from then on gets 409 "updated somewhere else",
+because the page still claimed the revision from before the lost one. Each 409 was queued;
+Scott signed in as admin; the flush replayed the athlete's day under the admin session, got
+403, and DROPPED it with "open that day and re-enter it". Two camera sets exist on the phone's
+screen only. Fixes: (1) a 409 after a lost response re-reads the day, and when the stored
+revision is exactly one ahead, adopts it and re-sends -- the day moved because of us; anything
+else still reloads. (2) A 403 in the flush never deletes an entry; it waits for the account
+that owns it. The owner stamp is null on an entry queued before the session resolved, which is
+how it flushed under the wrong account at all.
+
+**"Finishing" took twenty seconds -- `liveAnalysisResult` and the file re-read.** The live
+trace was attempted on both takes and thrown out: coverage 0.37 and 0.46, drop rate 2.5 and
+2.2 (the camera hands Vision two and a half frames for every one it finishes). So the whole
+clip was re-read after Stop, which is the wait. On the 30s squat the file read was 33.6s, of
+which the 3D body pose was 5.6s and hand pose 8.5s. The 3D pass is now OFF for the bar and
+jump trackers (`body3D: false` at Record and at Stop, both feeders, same measurement), which
+takes a sixth off the file read and helps live coverage by about the same. NOT ENOUGH ON ITS
+OWN: the live path still hands Vision full 1920x1080 buffers where the file path decodes at
+1280, and that is the next thing to change (`captureOutput` -> a scaled pixel buffer before
+`processFrame`). The coverage numbers above are the target to beat: 0.9 keeps the trace.
+
+**"Couldn't get a clean read" on the box jump -- `summarizeJumpSet`, `bestEffortJump`.** Rule
+#1, and it fired anyway: the state machine declined every candidate (now logged in
+`jumpEvents`) and the dialog reported nothing. There is now no null return for a trace with
+samples in it: the best-effort read is the highest the ankle rose above standing, with the
+flight around that peak if the trace shows one, flagged `bestEffort` on the rep and the set and
+said so in the toast. `likelyTrackingGlitch` is set so it never becomes a PR.
+
+**The torso-stillness check was deleting the bottom of the squat -- `torsoWasAtRest`.** The
+export said the squat's torso was "still" (spread 0.093 grips) and 94 frames were rejected as
+jumped pose. A squat set is mostly standing, so the median frame IS standing and the MAD is
+small; the frames furthest from it are the bottom of every rep. Two rules now, either
+disqualifies: a run of `TORSO_EXCURSION_MIN_FRAMES` (15) consecutive anchors more than half a
+grip from the median is a lift, not a glitch; and a movement type that squats, hinges, lunges,
+jumps or carries never gets the check. `torsoLongestExcursionFrames` is in the trace
+diagnostics. This is a candidate for some of the "19% low" range, on top of the scale.
+
+**The plate lock was on something 1.9 grips wide -- `candidateBoxIsUsable`
+(`maxPlateSizeInYardsticks`) and `referenceObjectVerdict` (`MAX_PLATE_SIZE_IN_YARDSTICKS`).**
+A plate is a 45cm disc and every barbell grip is wider, so a "plate" wider than a grip and a
+quarter is filtered BEFORE the pick natively and refused as a scale ruler on the client. Both
+1.25, pinned by `tracker-arbiter.test.ts`.
+
+**The jump's own gravity ruler now corrects the jump -- `applyGravityCorrection`.** The box
+jump reported 50.8cm from the height ruler while its own flight-time check said the scale was
+45% out (uncertainty 0.125). When the verdict is under `GRAVITY_CORRECTION_MAX_UNCERTAINTY`
+(0.2) and more than 5% from 1.0, every scaled number on the set is divided by the ratio and the
+heights rebuilt from flight time; `uncorrectedJumpHeightCm` stays on the rep and
+`gravity.applied` in the diagnostics says it happened.
+
+**Box-jump contact is a reset -- `groundContactIsBoxReset`.** 2.7s of "ground contact" was
+the step-down. The set-level average and the RSI are withheld as not applicable on a box jump;
+per-rep times stay on `repBreakdown`.

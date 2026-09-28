@@ -367,7 +367,12 @@ async function runFlush() {
       // still do something about it.
       const status = err instanceof ApiError ? err.status : null;
       const code = err instanceof ApiError ? err.code : undefined;
-      const permanentlyRejected = isPermanentUploadRejection(status, code);
+      // A 403 IS NEVER A REASON TO DELETE SOMEBODY'S WORKOUT. Scott, 2026-09-28: an athlete's
+      // queued day replayed under the admin session, got 403, and was dropped with "open that
+      // day and re-enter it" -- two camera sets gone. Forbidden means the wrong session is
+      // signed in, which the owner stamp should have caught and did not (an entry queued
+      // before the owner resolved carries no stamp). Left queued for the right account.
+      const permanentlyRejected = status !== 403 && isPermanentUploadRejection(status, code);
       logDebug(
         "SAVE",
         `flush ${permanentlyRejected ? "DROPPED" : "retry"} (${entry.dayKey}): ${status ?? "no response"}`,

@@ -4,6 +4,7 @@ import CoreMedia
 import CoreVideo
 import CoreImage
 import CoreML
+import CoreMotion
 import Vision
 import UIKit
 import Capacitor
@@ -138,6 +139,15 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // result -- that dictionary is assembled inside runPoseAnalysis, outside the scope
     // analyzeRecording decided this in.
     private var lastLiveAttempted = false
+    // HOW THE PHONE WAS HELD, from the accelerometer, sampled for the length of the recording.
+    // Not a floor detector: Vision has none, and a floor line in the image would carry no
+    // scale anyway. The tilt is the thing a floor would have told us, and the phone knows it
+    // directly. Recorded into the take's diagnostics; nothing corrects for it yet. See
+    // docs/camera-tracking-notes.md, 2026-09-28.
+    private let motionManager = CMMotionManager()
+    private let motionQueue = OperationQueue()
+    private var gravitySamples: [CMAcceleration] = []
+    private let gravityLock = NSLock()
     private var lastLiveFallbackReason: String?
     private var lastLiveCoverage: Double?
     private var lastLiveDropRate: Double?
@@ -664,6 +674,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 // read-then-deleteRecording handshake is what normally removes it -- see
                 // deleteRecording's own comment on how fast 1080p at 120fps fills a device.
                 self.discardFinishedRecording = true
+                _ = self.stopGravitySampling()
             }
             if let session = self.session {
                 NotificationCenter.default.removeObserver(self, name: .AVCaptureSessionRuntimeError, object: session)
@@ -1296,6 +1307,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Registered before the write starts, not after -- purgeStaleRecordings runs off a
         // start() call this plugin doesn't control the timing of.
         Self.markPathActive(outputURL.path)
+        startGravitySampling()
 
         // LIVE ANALYSIS IS OPT-IN PER TAKE, AND SILENCE MEANS NO.
         //
@@ -1332,7 +1344,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 coreMlTargetLabel: AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode),
                 coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
                 coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
-                coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable
+                coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable,
+                body3D: call.getBool("body3D") ?? true
             )
         }()
         if liveContext != nil {
@@ -1417,7 +1430,44 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 }
             }
         }
+        pendingCameraTilt = stopGravitySampling()
         movieOutput.stopRecording()
+    }
+
+    /// Median gravity vector over the recording, as camera pitch and roll in degrees. Pitch is
+    /// positive when the lens tilts DOWN toward the floor (a phone propped on a bench looking
+    /// down at a lifter), negative when it looks up from the floor; roll is a sideways lean.
+    /// Both are zero for a phone held upright in portrait. Nil when CoreMotion gave nothing
+    /// (a simulator, or motion updates unavailable), which the diagnostics then simply omit.
+    private var pendingCameraTilt: (pitch: Double, roll: Double, samples: Int)?
+
+    private func startGravitySampling() {
+        gravityLock.lock()
+        gravitySamples.removeAll()
+        gravityLock.unlock()
+        guard motionManager.isDeviceMotionAvailable else { return }
+        motionManager.deviceMotionUpdateInterval = 0.2
+        motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] motion, _ in
+            guard let self = self, let motion = motion else { return }
+            self.gravityLock.lock()
+            if self.gravitySamples.count < 2_000 { self.gravitySamples.append(motion.gravity) }
+            self.gravityLock.unlock()
+        }
+    }
+
+    private func stopGravitySampling() -> (pitch: Double, roll: Double, samples: Int)? {
+        motionManager.stopDeviceMotionUpdates()
+        gravityLock.lock()
+        let samples = gravitySamples
+        gravitySamples.removeAll()
+        gravityLock.unlock()
+        guard !samples.isEmpty else { return nil }
+        // Device axes: y up the screen, z out of the screen toward the user. Upright portrait
+        // puts gravity at (0, -1, 0). Leaning the phone back so the lens looks down moves
+        // gravity toward -z, so pitch = -asin(z) is positive for a lens tilted down.
+        let pitches = samples.map { -asin(max(-1, min(1, $0.z))) * 180 / .pi }
+        let rolls = samples.map { atan2($0.x, -$0.y) * 180 / .pi }
+        return (Self.median(pitches), Self.median(rolls), samples.count)
     }
 
     public func fileOutput(
@@ -1477,6 +1527,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if let copy = copy {
                 result["uploadPath"] = copy.url.path
                 result["uploadBytes"] = copy.bytes
+            }
+            if let tilt = self.pendingCameraTilt {
+                self.pendingCameraTilt = nil
+                result["cameraPitchDeg"] = (tilt.pitch * 10).rounded() / 10
+                result["cameraRollDeg"] = (tilt.roll * 10).rounded() / 10
+                result["cameraTiltSamples"] = tilt.samples
+                self.logDiag(String(format: "camera tilt: pitch %.1f roll %.1f (%d samples)", tilt.pitch, tilt.roll, tilt.samples))
             }
             call.resolve(result)
         }
@@ -1715,6 +1772,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Box jump only (see this file's own comment on detectBoxTop below) -- every other AV
         // dialog omits this and pays nothing extra per frame.
         let detectBox = call.getBool("detectBox") ?? false
+        let body3D = call.getBool("body3D") ?? true
         // Gates the additive CoreML implement detector below -- one of
         // AvCoreMlImplementDetector.supportedTrackingModes (the object class the caller is
         // actually trying to track, e.g. "med_ball" from AvMedBallTrackerDialog or "barbell"/
@@ -1860,7 +1918,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
         queueForThisCall.async {
             self.runPoseAnalysis(
-                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox,
+                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, body3D: body3D,
                 trackingMode: trackingMode, call: call, progress: progress, settle: settle
             )
         }
@@ -1889,7 +1947,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // call.resolve/call.reject directly -- see analyzeRecording's own comment on why (a
     // watchdog or a user-initiated cancel might already have settled this call first).
     private func runPoseAnalysis(
-        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, trackingMode: String?, call: CAPPluginCall,
+        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, body3D: Bool, trackingMode: String?, call: CAPPluginCall,
         progress: AvAnalysisProgress,
         settle: @escaping (@escaping () -> Void) -> Void
     ) {
@@ -1992,7 +2050,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             coreMlTargetLabel: AvCoreMlImplementDetector.targetLabel(forTrackingMode: trackingMode),
             coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
             coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
-            coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable
+            coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable,
+            body3D: body3D
         )
         let state = AvFrameRunState()
         let startTime = Date()
@@ -3088,10 +3147,7 @@ private final class AvFrameContext {
     // independent of the runtime #available guard around the constructor. nil here reads
     // downstream as "not available", the same omit-rather-than-fail convention every other
     // optional signal in this file uses.
-    let body3DRequest: VNRequest? = {
-        guard #available(iOS 17.0, *) else { return nil }
-        return VNDetectHumanBodyPose3DRequest()
-    }()
+    let body3DRequest: VNRequest?
     // NOW A MEASURED VALUE, AND IT WAS COSTING MORE THAN IT RETURNED.
     //
     // This said "placeholder, not a measured value ... once real on-device timing exists". That
@@ -3125,8 +3181,18 @@ private final class AvFrameContext {
         coreMlTargetLabel: String?,
         coreMlImplementAvailable: Bool,
         coreMlSecondaryLabel: String?,
-        coreMlSecondaryAvailable: Bool
+        coreMlSecondaryAvailable: Bool,
+        body3D: Bool = true
     ) {
+        // THE 3D PASS IS OPT-OUT PER TAKE, AND THE OPT-OUT APPLIES TO BOTH FEEDERS. On Scott's
+        // 2026-09-28 squat it was 5.6 of 33.6 seconds of analysis on a clip the bar tracker
+        // reads in 2D only (see av-bar-tracker-dialog: "Deliberately NOT body3DLm"). The modes
+        // that read depth (sprint, goniometer, overhead squat) leave it on. Set from the same
+        // call option on the live path and the file path, so the two stay one measurement.
+        self.body3DRequest = {
+            guard body3D, #available(iOS 17.0, *) else { return nil }
+            return VNDetectHumanBodyPose3DRequest()
+        }()
         self.orientation = orientation
         self.sampleEveryNthFrame = max(1, sampleEveryNthFrame)
         self.detectBox = detectBox
@@ -3272,6 +3338,12 @@ private enum AvTrackerArbiter {
     // speck the model labelled. A box that runs off the frame edge has a wrong size, which for
     // the class that sets real-world scale is a wrong number in every metric downstream.
     static let minCandidateSizeInYardsticks = 0.15
+    /// A plate is a 45cm disc and a grip is wider than that on every barbell lift, so a "plate"
+    /// wider than the grip and a quarter is not one. Scott's 2026-09-28 squat locked on
+    /// something 1.9 grips wide, measured it as a plate, and the scale it implied was thrown out
+    /// downstream -- after the lock had already been spent on it. Filtered before the pick, like
+    /// the size floor above, so the real plate can win.
+    static let maxPlateSizeInYardsticks = 1.25
     static let candidateEdgeTolerance = 0.005
 
     struct Yardstick {
@@ -3414,7 +3486,9 @@ private enum AvTrackerArbiter {
         }
         guard let yardstick, yardstick.px > 0, frameWidth > 0, frameHeight > 0 else { return true }
         let largestSidePx = max(Double(box.width) * frameWidth, Double(box.height) * frameHeight)
-        return largestSidePx >= yardstick.px * minCandidateSizeInYardsticks
+        if largestSidePx < yardstick.px * minCandidateSizeInYardsticks { return false }
+        if label == "plate", largestSidePx > yardstick.px * maxPlateSizeInYardsticks { return false }
+        return true
     }
 
     /// Distance between two normalized Vision points, in this frame's own pixels.
