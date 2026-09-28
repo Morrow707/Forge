@@ -176,3 +176,35 @@ describe("a jump's box as a known-size reference", () => {
     expect(reconcileScaleEstimates(kept).scale!).toBeCloseTo(TRUE_SCALE, 6);
   });
 });
+
+describe("the two body rulers are averaged when they are all the take has", () => {
+  // Three OVR-paired back squats, 2026-09-28: height alone 6%, 13% and 19% low; shoulders alone
+  // 6-17% high; the mean within 5% on all three. See reconcileScaleEstimates.
+  it("blends height and shoulder breadth even when they disagree by 25%", () => {
+    const v = reconcileScaleEstimates([
+      { source: "height", scale: 0.00351, uncertaintyFraction: 0.05 },
+      { source: "shoulder_width", scale: 0.0044, uncertaintyFraction: 0.08 },
+    ]);
+    expect(v.blended).toBe(true);
+    expect(v.corroborated).toBe(false);
+    expect(v.agreedSources.sort()).toEqual(["height", "shoulder_width"]);
+    expect(v.scale).toBeCloseTo((0.00351 + 0.0044) / 2, 6);
+    expect(v.outliers).toEqual([]);
+  });
+
+  it("never blends when a real ruler is in the room", () => {
+    const v = reconcileScaleEstimates([
+      { source: "plate", scale: 0.0030, uncertaintyFraction: 0.05 },
+      { source: "height", scale: 0.00351, uncertaintyFraction: 0.05 },
+      { source: "shoulder_width", scale: 0.0044, uncertaintyFraction: 0.08 },
+    ]);
+    expect(v.blended).toBeFalsy();
+    expect(v.agreedSources).toContain("plate");
+  });
+
+  it("leaves a lone ruler alone", () => {
+    const v = reconcileScaleEstimates([{ source: "height", scale: 0.00351, uncertaintyFraction: 0.05 }]);
+    expect(v.blended).toBeFalsy();
+    expect(v.scale).toBe(0.00351);
+  });
+});
