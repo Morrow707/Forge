@@ -8896,6 +8896,12 @@ export const trackingDiagnosticsSchema = z.object({
       // Present only on the live path, and only ever a count that passed the acceptance gate
       // -- too many of these fails the take back to the file read instead.
       liveDroppedFrames: z.number().optional(),
+      // WHY A TAKE IS ON THE FILE PATH, and the numbers the live gate saw. Twenty of twenty
+      // captures in the 2026-09-28 export ran the file path and the report could not say why.
+      liveAttempted: z.boolean().optional(),
+      liveFallbackReason: z.string().optional(),
+      liveCoverage: z.number().optional(),
+      liveDropRate: z.number().optional(),
       // Analysis-time device/pipeline conditions -- see AvBodyTrackingPlugin.swift's own
       // comments on why each is worth reading. Optional for the same reason as
       // assetDurationSeconds above: persisted diagnostics from before these fields existed

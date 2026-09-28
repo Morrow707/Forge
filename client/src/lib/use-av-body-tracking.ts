@@ -261,8 +261,12 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   useEffect(() => {
     return () => {
       if (recordingPathRef.current) void deleteAvRecording(recordingPathRef.current);
+      liveUnsubscribeRef.current?.();
     };
   }, []);
+  // See startRecording: live frames collect here from Record until the take is decided.
+  const liveFramesRef = useRef<NativePoseFrame[]>([]);
+  const liveUnsubscribeRef = useRef<(() => void) | null>(null);
 
   // PHASE 5B: A CALLER THAT SAYS WHAT IT IS FILMING GETS ITS ANALYSIS DONE BY THE TIME IT
   // STOPS. One that does not behaves exactly as before -- the native side will not build a
@@ -273,6 +277,16 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     setError(null);
     setRecording(true);
     recordStartedAtRef.current = Date.now();
+    // LISTEN FROM THE FIRST FRAME, NOT FROM STOP. The live path emits its frames while the
+    // athlete lifts. This hook used to subscribe only in stopRecordingAndAnalyze, which meant
+    // every live frame was emitted into nothing -- so even a take the native side judged
+    // complete would have produced no trace on this side. Kept in a ref, chosen or discarded
+    // once analyzeAvRecording says which path produced the take.
+    liveFramesRef.current = [];
+    liveUnsubscribeRef.current?.();
+    liveUnsubscribeRef.current = onAvPoseFrame((frame) => {
+      if (frame.source === "live") liveFramesRef.current.push(frame);
+    });
     startAvRecording({
       liveAnalysis: options != null,
       sampleEveryNthFrame: ANALYSIS_SAMPLE_STRIDE,
@@ -289,11 +303,15 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   // already-started analysis).
   async function cancelRecording() {
     setRecording(false);
+    liveUnsubscribeRef.current?.();
+    liveUnsubscribeRef.current = null;
+    liveFramesRef.current = [];
     try {
       // ToPath, not the blob form: this recording is about to be deleted, and reading it meant
       // a full 720p re-encode of a clip nobody will ever watch.
-      const { path } = await stopAvRecordingToPath();
+      const { path, uploadPath } = await stopAvRecordingToPath();
       await deleteAvRecording(path);
+      if (uploadPath) await deleteAvRecording(uploadPath);
     } catch {
       // Nothing to clean up if stopping itself failed.
     }
@@ -388,9 +406,11 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     const captureDeviceInfo = extractCaptureDeviceInfo(diagLog);
 
     let path: string;
+    let uploadPath: string | undefined;
     try {
-      // FAST. Only finalises the movie file the recorder has been writing all along.
-      ({ path } = await stopAvRecordingToPath());
+      // FAST. Only finalises the movie file the recorder has been writing all along, and the
+      // 720p upload copy it has been encoding beside it.
+      ({ path, uploadPath } = await stopAvRecordingToPath());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save the recording");
       setAnalyzing(false);
@@ -408,7 +428,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     // same file -- one produces what a coach watches, the other what the metrics are made of --
     // and running them in series stacked two long waits that have no reason to be ordered. The
     // upload begins the moment its bytes exist, while analysis is still going.
-    const blobPromise = readAvRecordingForUpload(path).then((ready) => {
+    const blobPromise = readAvRecordingForUpload(path, uploadPath).then((ready) => {
       options?.onBlobReady?.(ready);
       return ready;
     });
@@ -417,8 +437,12 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     // two, which is now long enough to matter.
     blobPromise.catch(() => {});
 
-    const rawFrames: NativePoseFrame[] = [];
+    // The file read's frames, if there is a file read. Live frames have been collecting in
+    // liveFramesRef since Record was tapped; which set is the take is decided below from what
+    // analyzeAvRecording says, never from timing.
+    const fileFrames: NativePoseFrame[] = [];
     const unsubscribe = onAvPoseFrame((frame) => {
+      if (frame.source === "live") return;
       // BEFORE the tracked check, deliberately. Progress means "how far through the clip has
       // the analysis got", and a frame Vision found no body in is just as analyzed as one it
       // did -- gating this on `tracked` would make the bar crawl on exactly the takes that are
@@ -432,7 +456,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
         options.onAnalysisProgress(percent);
       }
       if (!frame.tracked) return;
-      rawFrames.push(frame);
+      fileFrames.push(frame);
       setAnalyzedFrames((n) => n + 1);
     });
     let recordingStats: AvAnalysisResult;
@@ -470,6 +494,22 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       return null;
     }
     unsubscribe();
+    liveUnsubscribeRef.current?.();
+    liveUnsubscribeRef.current = null;
+    // THE TAKE IS WHICHEVER FEEDER THE NATIVE SIDE SAYS PRODUCED IT. A live trace the gate
+    // accepted is complete by construction; a file read that ran means the live one was not,
+    // and its frames are dropped rather than mixed in.
+    const liveFrames = liveFramesRef.current;
+    liveFramesRef.current = [];
+    const rawFrames =
+      recordingStats.analysisPath === "live" ? liveFrames.filter((f) => f.tracked) : fileFrames;
+    if (recordingStats.analysisPath === "live") {
+      setAnalyzedFrames(rawFrames.length);
+      options?.onAnalysisProgress?.(99);
+      logDebug("CAM", `analysis came from the live trace: ${rawFrames.length} frames, no file read`);
+    } else if (recordingStats.liveFallbackReason) {
+      logDebug("CAM", `live trace not used (${recordingStats.liveFallbackReason}); file read: ${rawFrames.length} frames`);
+    }
     recordingPathRef.current = null;
     setAnalyzing(false);
     // Built here, once, for every caller -- see buildSkeletonReplayFrames' own comment for why

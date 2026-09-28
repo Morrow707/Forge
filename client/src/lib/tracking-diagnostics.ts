@@ -144,6 +144,12 @@ export type TrackingDiagnostics = {
     // recording's way.
     analysisPath?: string;
     liveDroppedFrames?: number;
+    // Why the take is on the file path, and the numbers the live gate saw -- see
+    // native-av-preview.ts's AvAnalysisResult.
+    liveAttempted?: boolean;
+    liveFallbackReason?: string;
+    liveCoverage?: number;
+    liveDropRate?: number;
     visionFailureCount?: number;
     thermalState?: string;
     lowPowerModeEnabled?: boolean;
@@ -533,6 +539,12 @@ export function buildTrackingDiagnostics(args: {
     // recording's way.
     analysisPath?: string;
     liveDroppedFrames?: number;
+    // Why the take is on the file path, and the numbers the live gate saw -- see
+    // native-av-preview.ts's AvAnalysisResult.
+    liveAttempted?: boolean;
+    liveFallbackReason?: string;
+    liveCoverage?: number;
+    liveDropRate?: number;
     visionFailureCount?: number;
     thermalState?: string;
     lowPowerModeEnabled?: boolean;

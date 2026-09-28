@@ -116,6 +116,27 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // Read and written ONLY on liveAnalysisQueue. Everything outside goes through async/sync on
     // that queue rather than touching it directly.
     private var liveRun: AvLiveAnalysisRun?
+    // THE COACH'S COPY IS WRITTEN WHILE THE ATHLETE LIFTS, NOT AFTER.
+    //
+    // compressForUpload re-encoded the finished 1080p120 movie to 720p after every take -- a
+    // full second pass over the file, on a phone that had just spent the take recording it.
+    // Scott, 2026-09-28: "why isn't it processing and then saving? ... you've already said it's
+    // possible to start processing and saving as the video is still recording." It is: the same
+    // data output that feeds live analysis hands every frame to this writer too, which encodes
+    // one frame in four at 720p as they arrive. When stopRecording resolves, the upload file
+    // already exists. Touched only on liveAnalysisQueue, like liveRun.
+    private var uploadCopyWriter: AvUploadCopyWriter?
+    // Set on main by the writer's finish, read by the recording delegate. Nil when the copy
+    // could not be made, in which case the JS side falls back to compressForUpload exactly as
+    // before -- the copy is an optimisation, never a step the save depends on.
+    private var pendingUploadCopy: (url: URL, bytes: Int)?
+    private var stopWaitGroup: DispatchGroup?
+    // WHY THE LAST TAKE FELL BACK TO THE FILE READ. Every capture in the 2026-09-28 export ran
+    // the file path and nothing on the report said why, so the gate could not be tuned. Set by
+    // liveAnalysisResult, reported on the file path's result as liveFallbackReason.
+    private var lastLiveFallbackReason: String?
+    private var lastLiveCoverage: Double?
+    private var lastLiveDropRate: Double?
     // Both feeders decode to the same budget, or they are two different measurements and a
     // calibration run describes whichever one happened to produce the take.
     private static let analysisDecodeMaxDimension: CGFloat = 1280
@@ -1320,9 +1341,19 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             cameraStabilizer.reset()
             overwatch.reset()
         }
+        // The upload copy needs the data output too, and runs whether or not live analysis was
+        // asked for: a coach's video is wanted on every take, a live trace only on some.
+        let copyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("forge-upload-\(UUID().uuidString).mp4")
+        let copyStride = max(1, Int((activeCaptureFrameRate / 30.0).rounded()))
+        let copyAvailable = videoDataOutput != nil
         Self.liveAnalysisQueue.async {
             self.liveRun = liveContext.map { AvLiveAnalysisRun(ctx: $0) }
+            self.uploadCopyWriter = copyAvailable
+                ? AvUploadCopyWriter(url: copyURL, stride: copyStride, log: { [weak self] in self?.logDiag($0) })
+                : nil
         }
+        if copyAvailable { Self.markPathActive(copyURL.path) }
 
         DispatchQueue.main.async {
             movieOutput.startRecording(to: outputURL, recordingDelegate: self)
@@ -1358,10 +1389,29 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Closes the live run, if there was one. Async, so the frames already queued ahead of
         // this on liveAnalysisQueue finish first -- marking it inactive from here would throw
         // away the tail of the take, which is the part with the last rep in it.
+        // The recording delegate waits on this group before resolving, so the JS side gets the
+        // movie path and the upload copy's path in one answer.
+        let group = DispatchGroup()
+        stopWaitGroup = group
+        pendingUploadCopy = nil
+        group.enter()
         Self.liveAnalysisQueue.async {
-            guard let run = self.liveRun else { return }
-            run.active = false
-            run.elapsedSeconds = Date().timeIntervalSince(run.startedAt)
+            if let run = self.liveRun {
+                run.active = false
+                run.elapsedSeconds = Date().timeIntervalSince(run.startedAt)
+            }
+            let writer = self.uploadCopyWriter
+            self.uploadCopyWriter = nil
+            guard let writer = writer else {
+                group.leave()
+                return
+            }
+            writer.finish { result in
+                DispatchQueue.main.async {
+                    self.pendingUploadCopy = result
+                    group.leave()
+                }
+            }
         }
         movieOutput.stopRecording()
     }
@@ -1379,6 +1429,16 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         guard let call = recordingCall else {
             if discardFinishedRecording {
                 discardFinishedRecording = false
+                // The upload copy goes with it: nothing will read either file now.
+                Self.liveAnalysisQueue.async {
+                    let writer = self.uploadCopyWriter
+                    self.uploadCopyWriter = nil
+                    writer?.finish { result in
+                        guard let result = result else { return }
+                        try? FileManager.default.removeItem(at: result.url)
+                        Self.markPathInactive(result.url.path)
+                    }
+                }
                 try? FileManager.default.removeItem(at: outputFileURL)
                 // Released from the in-use set too, the same way deleteRecording does it --
                 // a path left marked active would keep purgeStaleRecordings skipping it
@@ -1389,13 +1449,33 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             return
         }
         recordingCall = nil
-        if let error = error {
-            logDiag("recording finished with error: \(error.localizedDescription)")
-            call.reject("Recording failed: \(error.localizedDescription)")
-            return
+        let group = stopWaitGroup ?? DispatchGroup()
+        stopWaitGroup = nil
+        // The movie is final; the upload copy is usually a few frames behind it. Resolve when
+        // both are, on main, where pendingUploadCopy is written.
+        group.notify(queue: .main) {
+            let copy = self.pendingUploadCopy
+            self.pendingUploadCopy = nil
+            if let error = error {
+                self.logDiag("recording finished with error: \(error.localizedDescription)")
+                if let copy = copy {
+                    try? FileManager.default.removeItem(at: copy.url)
+                    Self.markPathInactive(copy.url.path)
+                }
+                call.reject("Recording failed: \(error.localizedDescription)")
+                return
+            }
+            self.logDiag(
+                "recording finished: \(outputFileURL.lastPathComponent)"
+                    + (copy.map { " upload copy \($0.url.lastPathComponent) \($0.bytes / 1_000_000)MB" } ?? " (no upload copy)")
+            )
+            var result: [String: Any] = ["path": outputFileURL.path]
+            if let copy = copy {
+                result["uploadPath"] = copy.url.path
+                result["uploadBytes"] = copy.bytes
+            }
+            call.resolve(result)
         }
-        logDiag("recording finished: \(outputFileURL.lastPathComponent)")
-        call.resolve(["path": outputFileURL.path])
     }
 
     // THE COACH'S COPY IS NOT THE TRACKER'S COPY, AND IT DOES NOT NEED TO BE.
@@ -1492,10 +1572,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     public func captureOutput(
         _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection
     ) {
-        // Already on liveAnalysisQueue, which is where liveRun may be touched.
+        // Already on liveAnalysisQueue, which is where liveRun and uploadCopyWriter may be touched.
+        // The copy first: appending a frame is microseconds, Vision is tens of milliseconds, and
+        // a frame that Vision then drops as late is still a frame the coach's video needs.
+        uploadCopyWriter?.append(sampleBuffer)
         guard let run = liveRun, run.active else { return }
         processFrame(sampleBuffer: sampleBuffer, ctx: run.ctx, state: run.state, progress: nil) { [weak self] data in
-            self?.notifyListeners("poseFrame", data: data)
+            // Tagged so the JS side can keep live frames apart from a later file read's frames:
+            // it now listens from the moment recording starts (it used to subscribe only at
+            // stop, which threw every live frame away before it could be used).
+            var tagged = data
+            tagged["source"] = "live"
+            self?.notifyListeners("poseFrame", data: tagged)
         }
     }
 
@@ -1516,24 +1604,32 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     /// one; the wait this feature exists to remove is worth less than a number nobody can trust.
     /// Must be called on liveAnalysisQueue.
     private func liveAnalysisResult(run: AvLiveAnalysisRun, expectedStride: Int) -> [String: Any]? {
-        guard !run.active else { return nil }
+        guard !run.active else {
+            lastLiveFallbackReason = "run still active at analysis time"
+            return nil
+        }
         // A DIFFERENT TAKE'S TRACE IS NOT THIS TAKE'S. A caller that recorded with one stride or
         // one tracking mode and then analyzed with another gets the file path, not a trace
         // measured to different rules.
         guard run.ctx.sampleEveryNthFrame == expectedStride else {
-            logDiag("live analysis unusable: stride \(run.ctx.sampleEveryNthFrame) != requested \(expectedStride)")
+            lastLiveFallbackReason = "stride \(run.ctx.sampleEveryNthFrame) != requested \(expectedStride)"
+            logDiag("live analysis unusable: \(lastLiveFallbackReason!)")
             return nil
         }
         let expectedFrames = run.elapsedSeconds * activeCaptureFrameRate / Double(run.ctx.sampleEveryNthFrame)
-        guard expectedFrames >= 1 else { return nil }
+        guard expectedFrames >= 1 else {
+            lastLiveFallbackReason = "no frames expected (elapsed \(String(format: "%.2f", run.elapsedSeconds))s)"
+            return nil
+        }
         let coverage = Double(run.state.processedCount) / expectedFrames
         let dropRate = Double(run.droppedFrames) / max(1.0, expectedFrames)
+        lastLiveCoverage = coverage
+        lastLiveDropRate = dropRate
         guard coverage >= 0.9, dropRate <= 0.05 else {
-            logDiag(
-                "live analysis unusable: coverage=\(String(format: "%.2f", coverage)) "
-                    + "dropRate=\(String(format: "%.3f", dropRate)) "
-                    + "processed=\(run.state.processedCount) expected=\(String(format: "%.0f", expectedFrames))"
-            )
+            let why = "coverage=\(String(format: "%.2f", coverage)) dropRate=\(String(format: "%.3f", dropRate)) "
+                + "processed=\(run.state.processedCount) expected=\(String(format: "%.0f", expectedFrames))"
+            lastLiveFallbackReason = why
+            logDiag("live analysis unusable: \(lastLiveFallbackReason!)")
             return nil
         }
         let state = run.state
@@ -1565,6 +1661,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             // See the file path's own note on these two.
             "captureFrameRate": activeCaptureFrameRate,
             "sampleStride": ctx.sampleEveryNthFrame,
+            "liveAttempted": true,
+            "liveCoverage": coverage,
+            "liveDropRate": dropRate,
         ]
         if ctx.coreMlDetectionEnabled {
             result["objectLock"] = coreMlImplementDetector.telemetry.dictionary
@@ -1635,8 +1734,16 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // worst, because liveAnalysisQueue is serial and every frame of the take has already
         // been fed to it by the time stopRecording resolved.
         var liveResult: [String: Any]?
+        var liveAttempted = false
+        lastLiveFallbackReason = nil
+        lastLiveCoverage = nil
+        lastLiveDropRate = nil
         Self.liveAnalysisQueue.sync {
-            guard let run = self.liveRun else { return }
+            guard let run = self.liveRun else {
+                self.lastLiveFallbackReason = "not requested"
+                return
+            }
+            liveAttempted = true
             liveResult = self.liveAnalysisResult(run: run, expectedStride: sampleEveryNthFrame)
             // Cleared either way. A run kept past its own take would be offered to the NEXT
             // analyzeRecording call, which is a trace of the wrong set -- worse than any wait.
@@ -1894,7 +2001,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             }
             guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
             processFrame(sampleBuffer: sampleBuffer, ctx: ctx, state: state, progress: progress) { [weak self] data in
-                self?.notifyListeners("poseFrame", data: data)
+                var tagged = data
+                tagged["source"] = "file"
+                self?.notifyListeners("poseFrame", data: tagged)
             }
         }
 
@@ -2024,7 +2133,19 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     // so nobody could tell a slow pass from a dense one.
                     "captureFrameRate": captureFrameRateAtAnalysis,
                     "sampleStride": sampleEveryNthFrame,
+                    // WHY THIS TAKE IS ON THE FILE PATH. Twenty of twenty captures in the
+                    // 2026-09-28 export were, and the report could not say why.
+                    "liveAttempted": liveAttempted,
                 ]
+                if let reason = self.lastLiveFallbackReason {
+                    result["liveFallbackReason"] = reason
+                }
+                if let coverage = self.lastLiveCoverage {
+                    result["liveCoverage"] = coverage
+                }
+                if let dropRate = self.lastLiveDropRate {
+                    result["liveDropRate"] = dropRate
+                }
                 if let error = reader.error {
                     result["readerErrorMessage"] = error.localizedDescription
                 }
@@ -2785,6 +2906,129 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 // consumed and discarded by analyzeRecording. Every one of those touches it on
 // liveAnalysisQueue and nowhere else, which is what lets it -- and the AvFrameRunState it owns
 // -- be plain mutable state with no locking.
+/// Encodes the coach's 720p copy from the live capture buffers as they arrive, so the upload
+/// file exists the moment recording stops. One frame in `stride` (about 30fps), H.264, scaled
+/// by the encoder from whatever size the data output delivers. Everything here runs on
+/// liveAnalysisQueue; `finish` calls back on an AVFoundation queue.
+///
+/// Best effort throughout: a frame the input is not ready for is skipped (counted), and any
+/// failure finishes with nil so the JS side falls back to compressForUpload. A slower upload
+/// is always better than no video.
+private final class AvUploadCopyWriter {
+    private let url: URL
+    private let stride: Int
+    private let log: (String) -> Void
+    private var writer: AVAssetWriter?
+    private var input: AVAssetWriterInput?
+    private var frameIndex = 0
+    private var appended = 0
+    private var skippedNotReady = 0
+    private var failed = false
+    private let startedAt = Date()
+
+    init(url: URL, stride: Int, log: @escaping (String) -> Void) {
+        self.url = url
+        self.stride = stride
+        self.log = log
+    }
+
+    func append(_ sampleBuffer: CMSampleBuffer) {
+        let index = frameIndex
+        frameIndex += 1
+        guard !failed, index % stride == 0 else { return }
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if writer == nil {
+            // Sized from the first frame: the data output's connection has already rotated the
+            // buffer, so a portrait take arrives 1080x1920 and the copy is 720x1280.
+            let srcW = CVPixelBufferGetWidth(pixelBuffer), srcH = CVPixelBufferGetHeight(pixelBuffer)
+            let longest = max(srcW, srcH)
+            let scale = longest > 1280 ? 1280.0 / Double(longest) : 1.0
+            let w = Int((Double(srcW) * scale / 2).rounded()) * 2
+            let h = Int((Double(srcH) * scale / 2).rounded()) * 2
+            do {
+                let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+                writer.shouldOptimizeForNetworkUse = true
+                let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+                    AVVideoCodecKey: AVVideoCodecType.h264,
+                    AVVideoWidthKey: w,
+                    AVVideoHeightKey: h,
+                    AVVideoScalingModeKey: AVVideoScalingModeResizeAspect,
+                    AVVideoCompressionPropertiesKey: [
+                        AVVideoAverageBitRateKey: 4_000_000,
+                        AVVideoExpectedSourceFrameRateKey: 30,
+                        AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+                    ],
+                ])
+                input.expectsMediaDataInRealTime = true
+                guard writer.canAdd(input) else {
+                    failed = true
+                    log("upload copy: cannot add video input, falling back to the export")
+                    return
+                }
+                writer.add(input)
+                guard writer.startWriting() else {
+                    failed = true
+                    log("upload copy: startWriting failed (\(writer.error?.localizedDescription ?? "?")), falling back")
+                    return
+                }
+                writer.startSession(atSourceTime: pts)
+                self.writer = writer
+                self.input = input
+                log("upload copy: writing \(w)x\(h) at 1 in \(stride) frames")
+            } catch {
+                failed = true
+                log("upload copy: \(error.localizedDescription), falling back to the export")
+                return
+            }
+        }
+        guard let input = input, input.isReadyForMoreMediaData else {
+            skippedNotReady += 1
+            return
+        }
+        if input.append(sampleBuffer) {
+            appended += 1
+        } else {
+            failed = true
+            log("upload copy: append failed (\(writer?.error?.localizedDescription ?? "?")), falling back")
+        }
+    }
+
+    /// Finalises the file. Calls back with nil when there is nothing usable, after removing
+    /// whatever was written.
+    func finish(_ completion: @escaping ((url: URL, bytes: Int)?) -> Void) {
+        let url = self.url
+        let appended = self.appended
+        let skipped = self.skippedNotReady
+        let seconds = Date().timeIntervalSince(startedAt)
+        let discard: () -> Void = {
+            try? FileManager.default.removeItem(at: url)
+            completion(nil)
+        }
+        guard !failed, let writer = writer, let input = input, appended > 0 else {
+            log("upload copy: nothing usable (appended=\(appended) failed=\(failed)), the export runs instead")
+            if writer?.status == .writing { writer?.cancelWriting() }
+            discard()
+            return
+        }
+        input.markAsFinished()
+        writer.finishWriting {
+            guard writer.status == .completed,
+                  let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int
+            else {
+                self.log("upload copy: finishWriting \(writer.status.rawValue) \(writer.error?.localizedDescription ?? ""), the export runs instead")
+                discard()
+                return
+            }
+            self.log(
+                "upload copy: \(appended) frames, \(skipped) skipped, \(bytes / 1_000_000)MB, "
+                    + "\(String(format: "%.1f", seconds))s of capture"
+            )
+            completion((url, bytes))
+        }
+    }
+}
+
 private final class AvLiveAnalysisRun {
     let ctx: AvFrameContext
     let state = AvFrameRunState()
