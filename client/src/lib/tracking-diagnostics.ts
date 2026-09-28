@@ -377,6 +377,9 @@ export type TrackingDiagnostics = {
   /** HOW MUCH THE SET DISAGREED WITH ITSELF -- see rep-consistency.ts. An athlete's range of
    *  motion does not change mid-set, so the spread is a measurement of the tracker's own noise
    *  and an outlier rep is a segmentation error rather than a short rep. */
+  /** WHAT THE JUMP STATE MACHINE DECIDED, in take order -- see jump-tracking.ts's
+   *  JumpSegmentationEvent. Five logged box jumps came back as two with nothing to say why. */
+  jumpEvents?: { t: number; kind: string; value?: number }[] | null;
   repConsistency?: {
     repsMeasured: number;
     medianRomCm: number;
@@ -568,6 +571,7 @@ export function buildTrackingDiagnostics(args: {
   gravity?: TrackingDiagnostics["gravity"];
   limbMeasurementsM?: TrackingDiagnostics["limbMeasurementsM"];
   repConsistency?: TrackingDiagnostics["repConsistency"];
+  jumpEvents?: TrackingDiagnostics["jumpEvents"];
   // Straight off AvAnalysisResult -- see the objectLock field's own comment above.
   objectLock?: ObjectLockDiagnostics | null;
   objectLockSecondary?: ObjectLockDiagnostics | null;
@@ -578,6 +582,7 @@ export function buildTrackingDiagnostics(args: {
     gravity: args.gravity ?? null,
     limbMeasurementsM: args.limbMeasurementsM ?? null,
     repConsistency: args.repConsistency ?? null,
+    jumpEvents: args.jumpEvents ?? null,
     scaleFree: args.scaleFree ?? null,
     message: args.message ?? null,
     recording: args.recording ?? null,

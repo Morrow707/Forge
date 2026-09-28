@@ -1030,6 +1030,67 @@ export function trimPhaseToMovement(
   return { startIdx: from, endIdx: to };
 }
 
+/**
+ * THE CONCENTRIC IS MEASURED THE WAY A BAR SENSOR MEASURES IT: FROM THE BOTTOM TO THE TOP.
+ *
+ * trimPhaseToMovement trims on SPEED -- the window starts at the first sample above a tenth
+ * of the phase's peak. Against a bar sensor (OVR, 135lb back squat, 2026-09-28) that read
+ * 0.34 m/s mean concentric against the sensor's 0.79, and the rep-by-rep curves say why: at
+ * the bottom of every rep the bar wobbled to 0.13-0.16 m/s for a few frames, dropped back to
+ * near zero for half a second, and THEN drove. The speed trim started the clock on the wobble,
+ * so the pause was counted as lifting. Anchoring on the peak instead and walking back to the
+ * last sample where the bar was still AT the bottom (within a couple of centimetres of the
+ * phase's own start height) puts the onset where the sensor puts it: the moment the bar left
+ * the bottom for good. The end is the mirror: the first sample after the peak where the bar
+ * has arrived within the same margin of the top.
+ *
+ * A sensor's "average velocity" is range of motion over that window. The caller computes it
+ * that way too (see phaseStats), so the same two numbers the sensor reports are the two this
+ * reports, and a scale error shows up in both the same way instead of hiding in one.
+ *
+ * The margin is ONE CENTIMETRE, fixed, and that number was fitted to two sensor sets at once.
+ * On the squat above the bar wobbled 1.7cm off the bottom, sank back to 1.0cm and then drove;
+ * the sensor's 0.9s window starts at that 1.0cm sample, and a margin of 1cm lands there while
+ * a share of range (1.8cm) lands at the drive and reads 0.7s. On a paused-nowhere bench (the
+ * fixture in overlong-phantom-rep.test.ts, sensor mean 0.75 m/s) the same centimetre trims one
+ * sample off each end of the phase and comes out at the sensor's number. Never collapses the
+ * window; a phase with no usable travel comes back untrimmed, as before.
+ */
+export const TRAVEL_ONSET_MARGIN_M = 0.01;
+
+export function trimPhaseToTravel(
+  positions: number[],
+  startIdx: number,
+  endIdx: number,
+  peakIdx: number,
+): { startIdx: number; endIdx: number } {
+  if (endIdx - startIdx < 2) return { startIdx, endIdx };
+  if (!(peakIdx > startIdx && peakIdx < endIdx)) return { startIdx, endIdx };
+  const startY = positions[startIdx];
+  const endY = positions[endIdx];
+  const rom = Math.abs(endY - startY);
+  if (!(rom > 0)) return { startIdx, endIdx };
+  const margin = TRAVEL_ONSET_MARGIN_M;
+  // Walk back from the peak to the last sample still at the bottom.
+  let from = startIdx;
+  for (let i = peakIdx - 1; i >= startIdx; i--) {
+    if (Math.abs(positions[i] - startY) <= margin) {
+      from = i;
+      break;
+    }
+  }
+  // Walk forward from the peak to the first sample that has reached the top.
+  let to = endIdx;
+  for (let i = peakIdx + 1; i <= endIdx; i++) {
+    if (Math.abs(positions[i] - endY) <= margin) {
+      to = i;
+      break;
+    }
+  }
+  if (to - from < 2) return { startIdx, endIdx };
+  return { startIdx: from, endIdx: to };
+}
+
 const GRAVITY_MPS2 = 9.81;
 
 // Reference height (5'9", a common adult-average baseline) the flat
@@ -1266,11 +1327,23 @@ export function summarizeTrackedSet(
     // the calibration run that separated them. startIdx/endIdx below stay untrimmed on purpose:
     // every range-of-motion and direction read downstream indexes off them, and range of motion
     // is the one number already measuring correctly.
-    const moving = trimPhaseToMovement(speedsMps, phase.startIdx, phase.endIdx);
+    // The peak is found over the whole phase first, because the travel window is anchored on it
+    // -- see trimPhaseToTravel. The speed-based trim only ever finds a window this one contains.
+    const wholePhasePeak = robustPeakSpeed(speedsReportedMps, phase.startIdx, phase.endIdx, confidences);
+    const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx);
+    const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
+    // RANGE OF MOTION OVER THE TIME THE BAR WAS TRAVELLING -- a bar sensor's definition of mean
+    // concentric velocity, and the one this is calibrated against. The sample mean of the
+    // smoothed speeds it replaced sat at 0.42x of the sensor on the same reps: a mean of
+    // instantaneous speeds over a window that includes the slow start is not distance over time.
+    // Capped at the same plausibility ceiling every other reported speed is.
+    const romM = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
     const slice = speedsReportedMps.slice(moving.startIdx, moving.endIdx + 1);
     const confidenceSlice = confidences.slice(moving.startIdx, moving.endIdx + 1);
-    const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
-    const mean = plausibleMean(slice, confidenceSlice);
+    const mean =
+      duration > 0 && romM > 0
+        ? Math.min(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, romM / duration)
+        : plausibleMean(slice, confidenceSlice);
     // peak/peakIdx (index within the whole trace, used to report how long
     // it took to reach peak velocity, a standard VBT metric) come from
     // robustPeakSpeed rather than a raw max -- see its own comment above.

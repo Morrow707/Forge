@@ -150,6 +150,13 @@ flag and a caveat instead, and let the number through.
   footage through it.
 - Only back squat, Pendlay row, bench press and box jump have been tested
   against real lifts. Everything else is unvalidated.
+- **Every calibration finding names the piece of code it belongs to.** Scott, 2026-09-28: "make
+  sure you're taking notes too, what code is supposed to do what, so if something screws up we
+  know exactly which piece it was." `docs/camera-tracking-notes.md` carries one dated section per
+  sensor comparison, and each symptom in it points at a function. The diagnostics export
+  (`/api/admin/tracking-report/captures/recent`, the last twenty captures) is the evidence those
+  sections are written from; when a fix needs a number the export does not carry, add the field
+  to the export in the same change, or the next comparison cannot be made.
 
 ## THE CAMERA ARCHITECTURE: three parts, answering to each other
 

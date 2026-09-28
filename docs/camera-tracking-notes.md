@@ -1025,3 +1025,69 @@ worthless until the trace itself is stable**: a correct metres-per-pixel applied
 produces correctly-scaled noise.
 
 That is the next piece of work, and it is a trace problem rather than a calibration one.
+
+## Back squat against OVR, 2026-09-28: three separate errors, each with its own piece of code
+
+Scott filmed a 135lb x 5 back squat beside an OVR bar sensor and exported the last twenty
+captures (`/api/admin/tracking-report/captures/recent`). Sensor: 0.79 m/s mean, 1.22 m/s peak,
+29.2in (74cm) range, five reps. Forge: 0.34 mean, 1.07 peak, 60cm, four reps. Those are THREE
+errors, not one, and the export separates them. Recorded here so the next person knows which
+file to open for which symptom.
+
+**Mean velocity (0.34 vs 0.79) -- `trimPhaseToTravel` in `client/src/lib/bar-tracking.ts`.**
+The concentric window used to start on speed: the first sample above a tenth of the phase's
+peak. Every rep's stored curve shows the same shape at the bottom -- the bar wobbles up 1.7cm at
+0.13-0.16 m/s, sinks back to 1cm, sits for half a second, then drives. The speed trim started
+the clock on the wobble and counted the sit as lifting (1.4s of "concentric" for a 0.9s lift).
+The window is now anchored on the peak and walks back to the last sample within 1cm of the
+bottom, forward to the first within 1cm of the top. On rep 1 that lands on the same 0.9s the
+sensor used. The centimetre was fitted to two sensor sets at once -- the squat above and the
+bench fixture in `overlong-phantom-rep.test.ts` (sensor 0.75) -- and a share of range (1.8cm)
+misses both. `concentric-window-matches-sensor.test.ts` walks that real rep through it.
+Mean is now RANGE OVER THAT WINDOW, a sensor's definition, instead of the sample mean of
+smoothed speeds; the two agree only when nothing in the window is slow.
+
+**Peak (1.07 vs 1.22) and range (60 vs 74cm) -- the SCALE, `client/src/lib/pose-tracking.ts`.**
+Both are 19% low, which is one number: the metres-per-pixel for this take. The scale came from
+the height ruler (shoulder-to-ankle span against a fraction of the athlete's height) and was
+correct on 2026-09-14 (73.6 vs 74.2cm, same athlete, same load) and 19% short today. The plate
+was rejected correctly (it measured 494px against a 263px grip -- the detector locked onto
+something 1.9 grips wide, not a plate). The shoulder-width ruler read 1.36x the height ruler;
+on 09-14 it read 1.25-1.42x and the height ruler was right, so a blend is not the answer either.
+What is different today is the camera geometry ("camera was angled" on every rep's trust note).
+NOT FIXED. The candidate fix is a ruler at the bar's own height that assumes nothing about the
+athlete: a plate the detector actually locks, or a measured shoulder width stored on the athlete
+once. Do not "calibrate" this with a constant from one set.
+
+**Rep count (4 vs 5) -- the edge filters in `summarizeTrackedSet`, same file.** The last
+concentric of a set is tested for being a re-rack: too short, too slow, or too LONG (over 2.5x
+the median moving duration). With the speed trim, a final rep followed by walking the bar into
+the hooks could stay "moving" through the walk (a walk is faster than a tenth of a squat's
+peak), read as one long phase and be dropped. The travel window ends when the bar reaches the
+top, so the walk is outside it. Unverified on the export (the trace is not stored), so if the
+next five-rep set still reports four, the rep-level `jumpEvents`-style log is the next thing to
+add for lifts.
+
+**Box jump (2 of 5) -- `summarizeJumpSet` in `client/src/lib/jump-tracking.ts`.** The state
+machine has four ways to decline a candidate jump (dismount, a settle point floating above the
+box, the recovery valve, a flight over 1.2s) and every one of them was a silent `continue`.
+Every decision is now logged into `trackingDiagnostics.jumpEvents` with its time and the number
+that decided it, on the no-rep path too. The next set answers this itself.
+
+**The bench fixture was right by accident.** `overlong-phantom-rep.test.ts` pinned ten reps to
+match the sensor. Rep by rep the ten were the un-rack (a 0.13s "concentric" at 2.1-4.0s, seven
+seconds before the set) plus nine real reps, with the tenth real rep inside a 1.1s hole in the
+trace at 18.4-19.5s where the tracker lost the bar. The travel window drops the un-rack; the
+count is nine; the test now says so and why.
+
+**What the diagnostics export now carries, and which code writes each field.**
+- `recording.liveAttempted / liveFallbackReason / liveCoverage / liveDropRate` --
+  `AvBodyTrackingPlugin.swift`, `liveAnalysisResult` and the file path's result. Why a take was
+  analysed after the fact instead of during it. All twenty captures in the 09-28 export were
+  "file"; none said why.
+- `recording.analysisPath` -- which feeder produced the trace ("live" or "file").
+- `jumpEvents[]` -- `jump-tracking.ts`, the state machine's decisions in take order.
+- `repBreakdown[].concentricSeconds / meanVelocityMps` -- now the travel window and range over
+  it (`bar-tracking.ts`, `trimPhaseToTravel` and the `phaseStats` block).
+- The upload copy's presence is in the native diagnostic log ("upload copy: ... MB"), not the
+  export: it is about the save, not the measurement.

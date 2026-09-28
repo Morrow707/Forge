@@ -9000,6 +9000,11 @@ export const trackingDiagnosticsSchema = z.object({
   // Values only -- the keys are limb names from shared/athlete-body-model.ts and a record is the
   // honest shape, since a take measures whichever limbs it could see.
   limbMeasurementsM: z.record(z.string(), z.number()).nullable().optional(),
+  // What the jump state machine decided, in take order -- see jump-tracking.ts.
+  jumpEvents: z
+    .array(z.object({ t: z.number(), kind: z.string(), value: z.number().optional() }))
+    .nullable()
+    .optional(),
   repConsistency: z
     .object({
       repsMeasured: z.number(),

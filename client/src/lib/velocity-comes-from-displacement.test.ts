@@ -31,7 +31,7 @@ describe("reported velocity is differenced over a smoothed position", () => {
   it("leaves the structural decisions on the unsmoothed series", () => {
     expect(bar).toContain("const speedsReportedMps = computeSpeeds(points, ySmoothed, true)");
     // The phase trimmer must still read the raw one.
-    expect(bar).toMatch(/trimPhaseToMovement\(speedsMps,/);
+    expect(bar).toMatch(/trimPhaseToTravel\(ySmoothed,/);
     // ...and the reported numbers must read the smoothed one.
     expect(bar).toMatch(/robustPeakSpeed\(speedsReportedMps,/);
     expect(bar).toMatch(/speedsReportedMps\.slice\(/);

@@ -28,7 +28,7 @@ import {
   type PoseFrame,
   type FormFaultThresholds,
 } from "@/lib/pose-tracking";
-import { summarizeJumpSet, type JumpSetMetrics } from "@/lib/jump-tracking";
+import { summarizeJumpSet, type JumpSetMetrics, type JumpSegmentationEvent } from "@/lib/jump-tracking";
 import type { CaptureDeviceInfo, PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { interpolateOcclusionGap, type TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
@@ -551,12 +551,14 @@ export function AvJumpTrackerDialog({
       gaps.sort((a, b) => a - b);
       return gaps[Math.floor(gaps.length / 2)];
     })();
+    const jumpEvents: JumpSegmentationEvent[] = [];
     const metrics = summarizeJumpSet(
       trace,
       heightIn,
       jumpHeightOutlierPercent ?? undefined,
       boxTopWorldY,
       frameIntervalSeconds,
+      jumpEvents,
     );
     if (!metrics) {
       const diagnostics = buildTrackingDiagnostics({
@@ -565,6 +567,7 @@ export function AvJumpTrackerDialog({
         rawFrames: nativeRawFrames,
         recording: recordingStats,
         calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames },
+        jumpEvents,
       });
       const emptyMetrics: JumpSetMetrics = { ...EMPTY_JUMP_METRICS, captureDeviceInfo, trackingDiagnostics: diagnostics };
       if (recordVideo && uploadPromise) {
@@ -629,6 +632,7 @@ export function AvJumpTrackerDialog({
       // but frames and 9.81, so its ratio to the trace's own height is how wrong this take's
       // scale is, with no sensor anywhere.
       gravity: metrics.gravityVerdict,
+      jumpEvents,
     });
 
     // See av-bar-tracker-dialog.tsx's own comment on this same check -- readerStatus "failed"
