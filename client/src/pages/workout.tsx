@@ -1899,13 +1899,15 @@ export function WorkoutPage({
   useEffect(() => {
     claimDayKeyForFlush(dayKey);
     function resolveOwnPendingLog() {
-      const entry = takePendingLog(dayKey);
-      if (entry)
-        queueRawSave({
-          payload: entry.payload as ReturnType<typeof buildLogPayload>,
-          silent: true,
-          replay: true,
-        });
+      // Async since the queued body moved to a file (pending-log-files.ts).
+      void takePendingLog(dayKey).then((entry) => {
+        if (entry)
+          queueRawSave({
+            payload: entry.payload as ReturnType<typeof buildLogPayload>,
+            silent: true,
+            replay: true,
+          });
+      });
     }
     resolveOwnPendingLog();
     window.addEventListener("online", resolveOwnPendingLog);

@@ -972,6 +972,19 @@ change is wrong.
   Three more stub `fetch` into rejecting and evaluate that same condition
   against the error that actually comes out. A regex is satisfied by a file
   containing the right words; the bug was about what `apiRequest` threw.
+- **A queued save's BODY lives in a file on the phone, never in localStorage.** Added
+  2026-09-28 after two tracked squat sets were lost: a merge to `main` redeployed Render while
+  Scott was testing, the saves queued, each carried ~6MB of skeleton frames, and the web view's
+  localStorage quota is about 5MB and cannot be raised. The queue trimmed the replay to fit and
+  the sets never reached the server. `client/src/lib/pending-log-files.ts` writes the body to
+  the app's Data directory through the Capacitor Filesystem (the same place the video queue
+  keeps its files, bounded by the phone's free space); only the index entry stays in
+  localStorage, so the synchronous callers keep working. On the web there is no Filesystem and
+  the inline path is what it always was. A file that cannot be written falls back to inline; an
+  index entry whose file is gone is dropped rather than retried forever; `takePendingLog` is
+  async because it has to read the file. `offline-queue-file-backed.test.ts` drives a 6MB body
+  through a 5MB store. Also: **never merge to `main` while Scott is testing a build** -- the
+  deploy restarts the server and that is what put the saves in the queue to begin with.
 - **The debug console logs every save outcome, and that stays.** `logDebug("SAVE", ...)`
   fires on the POST succeeding, on it failing with the status, on the
   classification, and on a queue. Whether a set reached the server was the first
