@@ -106,10 +106,9 @@ export function runSignatureMatch(
   for (const video of pool) {
     if (!video.embeddable || !(video.durationSeconds > 0)) continue;
     const prepared = prepareTitle(video.title, vocabulary);
-    prepared.firstSegment = stripBoilerplate(
-      prepared.firstSegment,
-      boilerplateByChannel[video.channel] ?? [],
-    );
+    const learned = boilerplateByChannel[video.channel] ?? [];
+    prepared.firstSegment = stripBoilerplate(prepared.firstSegment, learned);
+    prepared.laterTokens = stripBoilerplate(prepared.laterTokens, learned);
     const signature = titleSignature(prepared, vocabulary);
     if (!signature.head) continue;
     const list = byHead.get(signature.head) ?? [];
@@ -182,7 +181,13 @@ export function runSignatureMatch(
         title: candidate.video.title,
         channel: candidate.video.channel,
         durationSeconds: candidate.video.durationSeconds,
-        tier: tierFor(verdict, candidate.video.durationSeconds, candidate.video.channel, allowlist),
+        tier: tierFor(
+          verdict,
+          candidate.video.durationSeconds,
+          candidate.video.channel,
+          allowlist,
+          candidate.prepared.laterTokens.length,
+        ),
         corroboration: "single",
       });
     }

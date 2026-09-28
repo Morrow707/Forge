@@ -49,6 +49,11 @@ export type PreparedTitle = {
    *  a squat and then a jerk: a complex, not a back squat. It auto-applied on 2026-09-28 because
    *  only the first segment was ever read. */
   laterHeads: string[];
+  /** Every non-filler word in the later segments. After the channel's boilerplate is removed,
+   *  anything left is commentary -- "Planks for Abs - Mostly a Waste", "Overhead Press: Bad For
+   *  Your Neck?" -- and a title with commentary is never auto-applied (2026-09-28: both were
+   *  Tier A). */
+  laterTokens: string[];
 };
 
 const SEPARATORS = /[|–—:\[\]#+]|\s-\s|\/\//;
@@ -95,6 +100,7 @@ export function prepareTitle(title: string, vocab: Vocabulary): PreparedTitle {
   let rawFirstSegment = "";
   let firstSegment: string[] = [];
   const laterHeads: string[] = [];
+  const laterTokens: string[] = [];
   for (const rawPiece of pieces) {
     const piece = dropDemonstrator(rawPiece, vocab);
     const tokens = normalize(piece, opts).filter((t) => !FILLER.has(t));
@@ -105,6 +111,7 @@ export function prepareTitle(title: string, vocab: Vocabulary): PreparedTitle {
       continue;
     }
     for (const t of tokens) if (vocab.heads.has(t)) laterHeads.push(t);
+    laterTokens.push(...tokens);
   }
 
   return {
@@ -113,6 +120,7 @@ export function prepareTitle(title: string, vocab: Vocabulary): PreparedTitle {
     raw: title,
     rawFirstSegment,
     laterHeads,
+    laterTokens,
   };
 }
 
@@ -449,8 +457,13 @@ export function tierFor(
   durationSeconds: number,
   channel: string,
   allowlist: readonly string[],
+  /** Words left in the title's later segments once the channel's house style is removed. */
+  trailingWords = 0,
 ): Tier {
   if (verdict.unknown.length > 0) return "B";
+  // The name and then an opinion: "Planks for Abs - Mostly a Waste" auto-applied to Plank.
+  // A demo's title is the exercise name and the house style, nothing else.
+  if (trailingWords > 0) return "B";
   if (verdict.equipmentAssumed) return "B";
   if (durationSeconds > TIER_A_MAX_SECONDS) return "B";
   if (!allowlist.some((c) => c.toLowerCase() === channel.toLowerCase())) return "B";
@@ -464,6 +477,9 @@ export const AUTO_APPLY_CHANNELS = [
   "Catalyst Athletics",
   "Renaissance Periodization",
   "ScottHermanFitness",
+  // Scott reviewed its Tier B queue on 2026-09-28 (76 matches at a 0:15 median on its first
+  // run): "add functional bodybuilding to auto apply, the matches look good".
+  "Functional Bodybuilding",
 ] as const;
 
 
