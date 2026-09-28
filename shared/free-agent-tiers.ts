@@ -291,6 +291,33 @@ export const BUILT_FREE_AGENT_ADD_ONS: Set<FreeAgentAddOnId> = new Set([
   // before Stripe existed.
 ]);
 
+/**
+ * WITHHELD FROM SALE AND FROM VIEW, 2026-09-28. Scott: "remove the sports section from view,
+ * keep the code I want it for later, keep it for the admin for testing, but it has not been
+ * tested ... we won't be offering it at launch as it is not tested." And, on whether this is
+ * permanent: "For now."
+ *
+ * The three sport coaches work as code and nobody has held them against a real swing, a real
+ * at-bat or a real pitch. That is the same position the camera numbers are in, and the camera
+ * at least ships with a caveat attached; an AI coach giving a thirteen-year-old pitching advice
+ * has no equivalent way to say "do not trust this".
+ *
+ * THIS IS THE SAME MACHINERY AS WITHDRAWN_FREE_AGENT_TIERS, deliberately, and for the reason
+ * CLAUDE.md records: withdrawing something is one line in a list, not a redesign under time
+ * pressure, and the difference between "unsellable" and "broken for whoever already has it" is
+ * exactly this separation. Nothing is deleted. The chat, the drills, the checkout path and the
+ * Apple products all stay; they are simply not offered and not shown.
+ *
+ * AN ADMIN STILL REACHES THEM, because testing is the thing standing between here and offering
+ * them. That is the whole point of a withdrawal rather than a deletion.
+ */
+export const WITHDRAWN_ADD_ONS: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching"];
+
+/** May this add-on be shown or sold to an ordinary account today? */
+export function addOnIsOffered(id: FreeAgentAddOnId): boolean {
+  return !WITHDRAWN_ADD_ONS.includes(id);
+}
+
 export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = [
   "golf_swing",
   "hitting",

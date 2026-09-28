@@ -1,5 +1,6 @@
 import express, { type Express, type Request } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
+import { WITHDRAWN_ADD_ONS } from "@shared/free-agent-tiers";
 import {
   applyExerciseVideoBackfill,
   DEFAULT_MAX_DURATION_SECONDS,
@@ -1102,18 +1103,39 @@ export type SportCoachAccess = {
   reason: "comped" | "entitlements";
 };
 
-async function sportCoachAccessFor(user: { id: number; email: string }): Promise<SportCoachAccess> {
+async function sportCoachAccessFor(user: {
+  id: number;
+  email: string;
+  role?: string | null;
+}): Promise<SportCoachAccess> {
   const allOn = Object.fromEntries(FREE_AGENT_ADD_ON_ORDER.map((id) => [id, true])) as Record<
     FreeAgentAddOnId,
     boolean
   >;
-  if (testingUnlockAllPaywalls) return { addOns: allOn, reason: "comped" };
-  if (COMPED_FREE_AGENT_ENTITLEMENTS[user.email]) return { addOns: allOn, reason: "comped" };
+
+  /* WITHDRAWN ADD-ONS ARE CLOSED HERE, at the one place the question is answered, so no surface
+   * can be the one that forgot. An admin keeps them, because testing them is the thing standing
+   * between withdrawn and offered -- see WITHDRAWN_ADD_ONS.
+   *
+   * Applied AFTER the comped and entitlement short-circuits rather than before, so it also
+   * overrides beta and an active trial: those exist to unlock what Forge means to sell, and a
+   * feature nobody has tested is not that. */
+  const closeWithdrawn = (addOns: Record<FreeAgentAddOnId, boolean>) => {
+    if (user.role === "admin") return addOns;
+    const out = { ...addOns };
+    for (const id of WITHDRAWN_ADD_ONS) out[id] = false;
+    return out;
+  };
+
+  if (testingUnlockAllPaywalls) return { addOns: closeWithdrawn(allOn), reason: "comped" };
+  if (COMPED_FREE_AGENT_ENTITLEMENTS[user.email]) {
+    return { addOns: closeWithdrawn(allOn), reason: "comped" };
+  }
   const account = await storage.getFreeAgentBillingAccount(user.id);
   const entitlements = getFreeAgentEntitlements(
     account ?? { freeAgentTier: null, freeAgentAddOns: null, isBetaAccount: false, trialExpiresAt: null },
   );
-  return { addOns: entitlements.addOns, reason: "entitlements" };
+  return { addOns: closeWithdrawn(entitlements.addOns), reason: "entitlements" };
 }
 
 async function requireFreeAgentAddOn(req: any, res: any, next: any) {

@@ -19,7 +19,11 @@ import {
   type FreeAgentTierProduct,
 } from "@/lib/apple-iap";
 import type { FreeAgentTierId, FreeAgentAddOnId } from "@shared/free-agent-tiers";
-import { FREE_AGENT_ADD_ONS, FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
+import {
+  addOnIsOffered,
+  FREE_AGENT_ADD_ONS,
+  FREE_AGENT_ADD_ON_ORDER,
+} from "@shared/free-agent-tiers";
 import { Sparkles, Video, RotateCcw, CreditCard } from "lucide-react";
 import {
   FREE_AGENT_TIERS,
@@ -52,14 +56,21 @@ function SportCoachAddOns({ webCheckout }: { webCheckout: boolean }) {
     queryKey: ["/api/athlete/entitlements"],
     queryFn: () => getJson("/api/athlete/entitlements"),
   });
+  /* WITHDRAWN ADD-ONS ARE NOT DRAWN AT ALL -- not greyed, not "coming soon", not priced.
+   * A card saying "$7.99, coming soon" is still an offer, and this section's whole heading was
+   * an offer of three things nobody has tested. The heading goes with them: with the sport
+   * coaches withheld, "Sport coaches -- bought one at a time" describes an empty shelf. */
+  const offered = FREE_AGENT_ADD_ON_ORDER.filter(addOnIsOffered);
+  if (offered.length === 0) return null;
+
   return (
     <div className="mt-10">
-      <p className="label-xs mb-1">Sport coaches</p>
+      <p className="label-xs mb-1">Add-ons</p>
       <p className="mb-4 text-sm text-muted-foreground">
         Bought one at a time, on top of whatever plan you are on.
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {FREE_AGENT_ADD_ON_ORDER.map((id) => {
+        {offered.map((id) => {
           const addOn = FREE_AGENT_ADD_ONS[id];
           // Explicit true throughout -- undefined means "not answered yet".
           const unlocked = data?.addOns[id] === true;

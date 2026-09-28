@@ -170,7 +170,9 @@ const athleteNav: NavItem[] = [
   // Chat above (see requireFreeAgentAddOn in routes.ts), so this is its own
   // tab rather than folded in. Overflow since most Free Agents won't own any
   // of these yet -- same "nicety, not daily-use" call as Leaderboard below.
-  { href: "/athlete/coaches", label: "Sport Coaches", icon: Sparkles, overflow: true },
+  /* Sport Coaches is withheld from view, 2026-09-28 -- see WITHDRAWN_ADD_ONS. The page and its
+   * route still exist so an admin can test the three coaches; they are simply not offered to
+   * anybody, so there is nothing for an athlete to navigate to. */
   // Self-gates on both platform (isAppleIapSupported) and APPLE_IAP_LIVE --
   // safe to always show since a coached athlete never reaches this tab at
   // all (filtered out below, same as AI Chat/Sport Coaches), and a Free
