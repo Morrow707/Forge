@@ -60,6 +60,21 @@ const SEPARATORS = /[|–—:\[\]#]|\s-\s|\/\//;
  * A first piece that is ENTIRELY filler ("How To", "How to Perform") is dropped rather than
  * treated as the name, or every ScottHermanFitness video would parse as having no head.
  */
+/**
+ * "Barbell Back Squat with Hunter Labrada" is a back squat; the two words after "with" are the
+ * demonstrator, and they cost six matches on the first real dry run (2026-09-28) as words the
+ * library had never seen. A tail of two or three capitalised words after "with", NONE of which
+ * the library uses, is a person's name and is dropped. "Squat with Woodchopper" and "Pike with
+ * Knee Tuck" keep their tails, because the library knows those words.
+ */
+function dropDemonstrator(piece: string, vocab: Vocabulary): string {
+  const m = /^(.*\S)\s+with\s+((?:[A-Z][\w'.-]*\s*){2,3})$/.exec(piece.trim());
+  if (!m) return piece;
+  const tail = normalize(m[2], { compounds: vocab.compounds, knownTokens: vocab.knownTokens });
+  if (tail.length === 0 || tail.some((t) => vocab.knownTokens.has(t))) return piece;
+  return m[1];
+}
+
 export function prepareTitle(title: string, vocab: Vocabulary): PreparedTitle {
   const parenthetical: string[] = [];
   const withoutParens = title.replace(/[(（]([^)）]*)[)）]/g, (_, inner: string) => {
@@ -75,7 +90,8 @@ export function prepareTitle(title: string, vocab: Vocabulary): PreparedTitle {
   const opts = { compounds: vocab.compounds, knownTokens: vocab.knownTokens };
   let rawFirstSegment = "";
   let firstSegment: string[] = [];
-  for (const piece of pieces) {
+  for (const rawPiece of pieces) {
+    const piece = dropDemonstrator(rawPiece, vocab);
     const tokens = normalize(piece, opts).filter((t) => !FILLER.has(t));
     if (tokens.length === 0) continue;
     rawFirstSegment = piece;
@@ -307,6 +323,11 @@ export function compare(
   // as "barbell vs cable", and two-word equipment read as a conflict on the exercise's own name.
   const nameEquipment = exSig.equipmentSet;
   const titleEquipment = titleSig.equipmentSet;
+  const metadataEquipment = ex.equipment
+    ? normalize(ex.equipment, { compounds: vocab.compounds, knownTokens: vocab.knownTokens })
+        .map((t) => vocab.equipment[t])
+        .find(Boolean) ?? null
+    : null;
   let equipmentAssumed = false;
   if (!setsEqual(nameEquipment, titleEquipment)) {
     if (titleEquipment.size === 0 && nameEquipment.size === 1) {
@@ -329,6 +350,14 @@ export function compare(
           detail: `title is ${stated}, this exercise is ${exSig.equipment}`,
         };
       }
+    } else if (
+      // 4. The title says everything the name says plus the metadata equipment: "Barbell
+      //    Decline Bench Press" for Decline Bench Press (Barbell). Stating what the metadata
+      //    already holds is not a different exercise (2026-09-28).
+      [...nameEquipment].every((e) => titleEquipment.has(e)) &&
+      [...titleEquipment].every((e) => nameEquipment.has(e) || e === metadataEquipment)
+    ) {
+      // ok
     } else {
       return {
         ok: false,
