@@ -91,6 +91,9 @@ const LIBRARY: LibraryExercise[] = [
   lib("Hang Clean", "Barbell", ["Quads", "Back"]),
   lib("Power Clean", "Barbell", ["Quads", "Back"]),
   lib("Decline Bench Press", "Barbell", ["Chest"]),
+  lib("Push Jerk", "Barbell", ["Shoulders"]),
+  lib("Split Jerk", "Barbell", ["Shoulders"]),
+  lib("Push Press", "Barbell", ["Shoulders"]),
   lib("Squat with Woodchopper", "Medicine Ball", ["Quads", "Abs"]),
 ];
 
@@ -192,6 +195,8 @@ describe("fixtures: must ACCEPT", () => {
     ["Back Squat", "Barbell Back Squat with Hunter Labrada | Exercise Guide", "a demonstrator's name after 'with' is dropped"],
     ["Squat with Woodchopper", "Squat with Woodchopper | Exercise Guide", "a tail the library knows is kept"],
     ["Romanian Deadlift", "Romanian Deadlift Coach Breakdown", "a channel's house suffix inside the first segment is filler"],
+    ["Pendlay Row", "Pendlay Row | How to Row Correctly", "the same movement again later is commentary, not a combo"],
+    ["Goblet Squat", "Dual DB Goblet Squat", "dual says nothing a dumbbell exercise does not already say"],
   ];
 
   it.each(rows)("%s <- %s (%s)", (exercise, title) => {
@@ -208,6 +213,9 @@ describe("fixtures: must REJECT", () => {
     ["Decline Bench Press", "How To: Dumbbell Decline Bench Press", "equipment"],
     ["Back Squat", "Back Squat with Chains | Exercise Guide", "unknown-count"],
     ["Medicine Ball Slam", "Catcher Med Ball Slam - Baseball Rebellion", "unknown-count"],
+    // Auto-applied as Tier A on 2026-09-28. Only the first segment was ever read.
+    ["Back Squat", "Back Squat - Jerk Behind the Neck | Olympic Weightlifting Exercise Library", "combo"],
+    ["Front Squat", "Front Squat + Push Press Complex", "combo"],
     ["Push-Up", "Scap Push-Up | Olympic Weightlifting Exercise Library", "unknown-count"],
     ["Landmine Rotation", "Anti-Rotation Landmine | Olympic Weightlifting Exercise Library", "unknown-count"],
     ["Block Pull", "Block Snatch Pull to Hold | Olympic Weightlifting Exercise Library", "unknown-count"],
@@ -298,6 +306,14 @@ describe("an exercise always matches a title that is its own name", () => {
       expect(verdict.ok, `${exercise} must not take ${title}`).toBe(false);
       if (!verdict.ok) expect(verdict.reason, `${exercise} <- ${title}`).toBe(reason);
     }
+  });
+
+  it("assumes a named variation's equipment when the library only ever pairs it with one", () => {
+    // "Hack Squat" for Machine Hack Squat: every hack squat in the library is a machine, so the
+    // head's barbell default is the wrong ruler. Assumed, so it queues as Tier B.
+    const verdict = verdictFor("Machine Hack Squat", "Hack Squat | Exercise Guide");
+    expect(verdict.ok ? "accepted" : `rejected: ${verdict.reason} -- ${verdict.detail}`).toBe("accepted");
+    if (verdict.ok) expect(verdict.equipmentAssumed).toBe(true);
   });
 
   it("still refuses a title that shouts words the library does not use", () => {

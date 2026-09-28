@@ -45,9 +45,13 @@ export type PreparedTitle = {
   parentheticals: string[][];
   raw: string;
   rawFirstSegment: string;
+  /** Movement words in the segments AFTER the first. "Back Squat - Jerk Behind the Neck" names
+   *  a squat and then a jerk: a complex, not a back squat. It auto-applied on 2026-09-28 because
+   *  only the first segment was ever read. */
+  laterHeads: string[];
 };
 
-const SEPARATORS = /[|–—:\[\]#]|\s-\s|\/\//;
+const SEPARATORS = /[|–—:\[\]#+]|\s-\s|\/\//;
 
 /**
  * Split a title into the piece that names the movement and the rest.
@@ -90,13 +94,17 @@ export function prepareTitle(title: string, vocab: Vocabulary): PreparedTitle {
   const opts = { compounds: vocab.compounds, knownTokens: vocab.knownTokens };
   let rawFirstSegment = "";
   let firstSegment: string[] = [];
+  const laterHeads: string[] = [];
   for (const rawPiece of pieces) {
     const piece = dropDemonstrator(rawPiece, vocab);
     const tokens = normalize(piece, opts).filter((t) => !FILLER.has(t));
     if (tokens.length === 0) continue;
-    rawFirstSegment = piece;
-    firstSegment = tokens;
-    break;
+    if (firstSegment.length === 0) {
+      rawFirstSegment = piece;
+      firstSegment = tokens;
+      continue;
+    }
+    for (const t of tokens) if (vocab.heads.has(t)) laterHeads.push(t);
   }
 
   return {
@@ -104,6 +112,7 @@ export function prepareTitle(title: string, vocab: Vocabulary): PreparedTitle {
     parentheticals: parenthetical.map((p) => normalize(p, opts).filter((t) => !FILLER.has(t))),
     raw: title,
     rawFirstSegment,
+    laterHeads,
   };
 }
 
@@ -236,6 +245,7 @@ export function titleSignature(prepared: PreparedTitle, vocab: Vocabulary): Sign
 export type RejectReason =
   | "red-flag"
   | "no-head"
+  | "combo"
   | "head"
   | "modifier"
   | "equipment"
@@ -284,6 +294,16 @@ export function compare(
   if (!titleSig.head) {
     return { ok: false, reason: "no-head", detail: "no movement word in the title's first part" };
   }
+  // A later segment naming a DIFFERENT movement is a complex or a sequence, whatever the first
+  // segment says. The same movement again ("Pendlay Row | How to Row") is commentary and fine.
+  const other = prepared.laterHeads.find((h) => h !== titleSig.head);
+  if (other) {
+    return {
+      ok: false,
+      reason: "combo",
+      detail: `the title goes on to a ${other} -- a complex or a sequence, not this lift alone`,
+    };
+  }
   if (titleSig.head !== exSig.head) {
     return {
       ok: false,
@@ -331,7 +351,9 @@ export function compare(
   let equipmentAssumed = false;
   if (!setsEqual(nameEquipment, titleEquipment)) {
     if (titleEquipment.size === 0 && nameEquipment.size === 1) {
-      const assumed = vocab.defaultEquipment[titleSig.head]?.equipment;
+      const phrase = titleSig.tokens.filter((t) => !vocab.equipment[t]).join(" ");
+      const assumed =
+        vocab.phraseEquipment[phrase] ?? vocab.defaultEquipment[titleSig.head]?.equipment;
       const [named] = [...nameEquipment];
       if (assumed !== named) {
         return {

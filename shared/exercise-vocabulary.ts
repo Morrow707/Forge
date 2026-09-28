@@ -82,6 +82,10 @@ export type Vocabulary = {
   knownTokens: Set<string>;
   /** head -> the equipment it means when a title leaves equipment unsaid. */
   defaultEquipment: Record<string, { equipment: string; share: number; n: number }>;
+  /** "hack squat" -> machine: a NAMED variation whose every library entry shares one piece of
+   *  equipment. A head's default is learned over many names; a phrase's over the few that carry
+   *  it, so it only speaks when they all agree. Keyed by the name's tokens minus equipment. */
+  phraseEquipment: Record<string, string>;
 };
 
 /** Name-final in at least this share of the names it appears in. */
@@ -191,6 +195,26 @@ export function buildVocabulary(library: LibraryExercise[]): Vocabulary {
     counts.set(canonical, (counts.get(canonical) ?? 0) + 1);
     byHead.set(head, counts);
   }
+  // "Hack Squat" was refused for Machine Hack Squat because the head's default is barbell and
+  // "not the usual one for a squat" is true of squats in general and false of hack squats in
+  // particular (2026-09-28). A phrase with two or more words that the library only ever pairs
+  // with one piece of equipment is that equipment when a title leaves it unsaid.
+  const byPhrase = new Map<string, Set<string>>();
+  for (const { exercise, tokens } of tokenised) {
+    if (!exercise.equipment) continue;
+    const canonical = normalize(exercise.equipment, { compounds, knownTokens })
+      .map((t) => equipment[t])
+      .find(Boolean);
+    if (!canonical) continue;
+    const phrase = tokens.filter((t) => !equipment[t]).join(" ");
+    if (phrase.split(" ").length < 2) continue;
+    const set = byPhrase.get(phrase) ?? new Set<string>();
+    set.add(canonical);
+    byPhrase.set(phrase, set);
+  }
+  const phraseEquipment: Vocabulary["phraseEquipment"] = {};
+  for (const [phrase, set] of byPhrase) if (set.size === 1) phraseEquipment[phrase] = [...set][0];
+
   const defaultEquipment: Vocabulary["defaultEquipment"] = {};
   for (const [head, counts] of byHead) {
     const n = [...counts.values()].reduce((a, b) => a + b, 0);
@@ -200,5 +224,5 @@ export function buildVocabulary(library: LibraryExercise[]): Vocabulary {
     if (share >= DEFAULT_EQUIPMENT_SHARE) defaultEquipment[head] = { equipment: top, share, n };
   }
 
-  return { heads, equipment, muscles, modifiers, compounds, knownTokens, defaultEquipment };
+  return { heads, equipment, muscles, modifiers, compounds, knownTokens, defaultEquipment, phraseEquipment };
 }

@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { ReadFailed } from "@/components/read-failed";
 import { getJson, apiRequest } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, Play } from "lucide-react";
+import { AlertTriangle, Check, Copy, Loader2, Play } from "lucide-react";
 
 type Target = { kind: "exercise" | "skill"; id: number; name: string };
 
 type RejectReason =
   | "red-flag"
   | "no-head"
+  | "combo"
   | "head"
   | "modifier"
   | "equipment"
@@ -99,6 +100,158 @@ const mmss = (s: number | null) =>
  * re-checks per row that the URL is still a placeholder. A stored plan that wrote blind would
  * overwrite a URL an admin set in between, and that is indistinguishable from data loss.
  */
+/** Scott, 2026-09-28: "give me an easy copy and paste button on all fields too so i can stop
+ *  taking photos of everything." Every card copies itself as plain text, and the run header
+ *  copies the whole report. Text, not JSON: it is pasted into a chat, not a program. */
+function CopyButton({ text, label = "Copy" }: { text: () => string; label?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-7 gap-1 px-2 text-xs"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text());
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        } catch {
+          toast.error("Could not copy -- the browser refused clipboard access.");
+        }
+      }}
+    >
+      {done ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {done ? "Copied" : label}
+    </Button>
+  );
+}
+
+const REJECTION_GROUPS: Array<{ key: RejectReason; title: string; blurb: string }> = [
+  {
+    key: "head",
+    title: "Different movement",
+    blurb:
+      "The title's movement word is not this exercise's. \"Squat Box Jump\" is a jump, so Box Squat cannot have it. Nothing to tune -- these were never candidates.",
+  },
+  {
+    key: "combo",
+    title: "A complex or a sequence",
+    blurb:
+      "The title names this lift and then goes on to another. \"Back Squat - Jerk Behind the Neck\" is a complex, and it auto-applied to Back Squat before this rule existed.",
+  },
+  {
+    key: "modifier",
+    title: "A word that changes the variation",
+    blurb:
+      "Same movement, different version: the title adds or drops a modifier. \"Barbell Wrist Curl\" against Barbell Curl. Correct refusals -- unless Forge is missing that variation as its own exercise.",
+  },
+  {
+    key: "equipment",
+    title: "Different equipment",
+    blurb:
+      "A kettlebell sumo deadlift is not a barbell one. Worth reading: our equipment column defaults to Barbell, so an exercise that never had it set can refuse a correct video here.",
+  },
+  {
+    key: "muscle-unexplained",
+    title: "Names a muscle this exercise does not train",
+    blurb:
+      "The title says a muscle that is not in this exercise's metadata -- usually a sign it is a different movement, occasionally a sign our metadata is thin.",
+  },
+  {
+    key: "unknown-count",
+    title: "A word the library has never seen",
+    blurb:
+      "The strictest rule and the most productive one. An unrecognised word in the name is either a variation we have no word for or one that changes the movement. The words themselves are listed below -- that list is what to fix.",
+  },
+  {
+    key: "red-flag",
+    title: "Not a demonstration",
+    blurb:
+      "A weight in the title, an emoji, shouting, a hashtag in the name, or a word like underrated or hack. \"Alyssa Back Squat 127 kg\" parses perfectly and is somebody's competition single.",
+  },
+  {
+    key: "duration",
+    title: "Would have matched, too long",
+    blurb:
+      "A clean match refused only for length. The one group a higher cap buys back, and the only place raising it helps.",
+  },
+  {
+    key: "no-head",
+    title: "No movement word at all",
+    blurb:
+      "Either the title names nothing we recognise, or this exercise's own name has no head word -- worth checking the name itself if a common lift lands here.",
+  },
+];
+
+const rejectionLine = (t: Unmatched) =>
+  [t.name, t.rejection?.title ? `-> ${t.rejection.title}` : "", t.rejection?.detail ? `(${t.rejection.detail})` : ""]
+    .filter(Boolean)
+    .join(" ");
+
+function summaryText(report: Report): string {
+  const lines = [
+    report.written == null ? "DRY RUN" : `APPLIED -- ${report.written} written`,
+    `Lifts: ${report.byKind?.exercise.matched ?? 0} of ${report.byKind?.exercise.considered ?? 0}. Skill drills: ${report.byKind?.skill.matched ?? 0} of ${report.byKind?.skill.considered ?? 0}.`,
+    `Tier A ${report.tierCounts?.A ?? 0}, Tier B ${report.tierCounts?.B ?? 0}. Cap ${mmss(report.maxDurationSeconds)}. ${report.quota.units} quota units over ${report.quota.calls} calls.`,
+    "",
+    "CHANNEL | CATALOGUE | MATCHES WON | MEDIAN LENGTH",
+    ...report.channels.map(
+      (c) =>
+        `${c.channel} | ${c.catalogueSize}${c.truncated ? "+ (capped)" : ""}${c.status === "handle_not_found" ? " (handle did not resolve)" : ""}${c.status === "error" ? " (API error)" : ""} | ${c.matchesWon} | ${mmss(c.medianWinningDurationSeconds)}`,
+    ),
+  ];
+  return lines.join("\n");
+}
+
+function matchesText(report: Report): string {
+  return [
+    "MATCHES",
+    ...report.proposals.map(
+      (p) => `${p.match.tier} | ${p.name} -> ${p.match.title} | ${p.match.channel} | ${mmss(p.match.durationSeconds)} | ${p.url}`,
+    ),
+  ].join("\n");
+}
+
+function unknownWordsText(report: Report): string {
+  return [
+    "WORDS THE LIBRARY HAS NEVER SEEN",
+    ...(report.unknownWords ?? []).map((w) => `${w.word} x${w.count}  ${w.examples[0] ?? ""}`),
+  ].join("\n");
+}
+
+function duplicatesText(report: Report): string {
+  return [
+    "LIBRARY NAMES THAT MEAN THE SAME THING",
+    ...(report.duplicateSignatures ?? []).map(([a, b]) => `${a} = ${b}`),
+  ].join("\n");
+}
+
+function noMatchText(unmatched: Unmatched[]): string {
+  const lifts = unmatched.filter((t) => t.kind === "exercise");
+  const out = [`NO MATCH -- ${unmatched.length} keep their search link (${lifts.length} lifts)`];
+  for (const group of REJECTION_GROUPS) {
+    const rows = lifts.filter((t) => t.rejection?.reason === group.key);
+    if (rows.length === 0) continue;
+    out.push("", `${group.title} -- ${rows.length}`, ...rows.map(rejectionLine));
+  }
+  return out.join("\n");
+}
+
+function wholeReportText(report: Report): string {
+  return [
+    summaryText(report),
+    "",
+    matchesText(report),
+    "",
+    unknownWordsText(report),
+    "",
+    duplicatesText(report),
+    "",
+    noMatchText(report.unmatched),
+  ].join("\n");
+}
+
 export default function AdminExerciseVideos() {
   const [report, setReport] = useState<Report | null>(null);
   const [mode, setMode] = useState<"dry-run" | "apply" | null>(null);
@@ -234,8 +387,12 @@ export default function AdminExerciseVideos() {
           <>
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">
-                  {report.written == null ? "Dry run" : `Applied -- ${report.written} written`}
+                <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                  <span>{report.written == null ? "Dry run" : `Applied -- ${report.written} written`}</span>
+                  <span className="ml-auto flex gap-1">
+                    <CopyButton text={() => summaryText(report)} label="Copy summary" />
+                    <CopyButton text={() => wholeReportText(report)} label="Copy whole report" />
+                  </span>
                 </CardTitle>
                 <CardDescription>
                   {/* Lifts and drills are counted apart on purpose: the sport drills are niche
@@ -316,7 +473,10 @@ export default function AdminExerciseVideos() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Matches</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <span>Matches</span>
+                  <span className="ml-auto"><CopyButton text={() => matchesText(report)} /></span>
+                </CardTitle>
                 <CardDescription>
                   Open a few before applying. A wrong lift shown with the confidence of a chosen
                   video is worse than the search box it replaced.
@@ -359,7 +519,10 @@ export default function AdminExerciseVideos() {
             {(report.unknownWords?.length ?? 0) > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Words the library has never seen</CardTitle>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <span>Words the library has never seen</span>
+                    <span className="ml-auto"><CopyButton text={() => unknownWordsText(report)} /></span>
+                  </CardTitle>
                   <CardDescription>
                     Each of these cost at least one match. Read them as a to-do list: a word that
                     never changes a movement ("beginners", "gym") belongs in the filler table; a
@@ -383,8 +546,9 @@ export default function AdminExerciseVideos() {
             {(report.duplicateSignatures?.length ?? 0) > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">
-                    Library names that mean the same thing -- {report.duplicateSignatures.length}
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <span>Library names that mean the same thing -- {report.duplicateSignatures.length}</span>
+                    <span className="ml-auto"><CopyButton text={() => duplicatesText(report)} /></span>
                   </CardTitle>
                   <CardDescription>
                     These pairs parse identically, so no video can tell them apart. That is a
@@ -423,62 +587,14 @@ export default function AdminExerciseVideos() {
  */
 function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
   const lifts = unmatched.filter((t) => t.kind === "exercise");
-  const groups: Array<{ key: RejectReason; title: string; blurb: string }> = [
-    {
-      key: "head",
-      title: "Different movement",
-      blurb:
-        "The title's movement word is not this exercise's. \"Squat Box Jump\" is a jump, so Box Squat cannot have it. Nothing to tune -- these were never candidates.",
-    },
-    {
-      key: "modifier",
-      title: "A word that changes the variation",
-      blurb:
-        "Same movement, different version: the title adds or drops a modifier. \"Barbell Wrist Curl\" against Barbell Curl. Correct refusals -- unless Forge is missing that variation as its own exercise.",
-    },
-    {
-      key: "equipment",
-      title: "Different equipment",
-      blurb:
-        "A kettlebell sumo deadlift is not a barbell one. Worth reading: our equipment column defaults to Barbell, so an exercise that never had it set can refuse a correct video here.",
-    },
-    {
-      key: "muscle-unexplained",
-      title: "Names a muscle this exercise does not train",
-      blurb:
-        "The title says a muscle that is not in this exercise's metadata -- usually a sign it is a different movement, occasionally a sign our metadata is thin.",
-    },
-    {
-      key: "unknown-count",
-      title: "A word the library has never seen",
-      blurb:
-        "The strictest rule and the most productive one. An unrecognised word in the name is either a variation we have no word for or one that changes the movement. The words themselves are listed below -- that list is what to fix.",
-    },
-    {
-      key: "red-flag",
-      title: "Not a demonstration",
-      blurb:
-        "A weight in the title, an emoji, shouting, a hashtag in the name, or a word like underrated or hack. \"Alyssa Back Squat 127 kg\" parses perfectly and is somebody's competition single.",
-    },
-    {
-      key: "duration",
-      title: "Would have matched, too long",
-      blurb:
-        "A clean match refused only for length. The one group a higher cap buys back, and the only place raising it helps.",
-    },
-    {
-      key: "no-head",
-      title: "No movement word at all",
-      blurb:
-        "Either the title names nothing we recognise, or this exercise's own name has no head word -- worth checking the name itself if a common lift lands here.",
-    },
-  ];
+  const groups = REJECTION_GROUPS;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">
-          No match -- {unmatched.length} keep their search link ({lifts.length} lifts)
+        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+          <span>No match -- {unmatched.length} keep their search link ({lifts.length} lifts)</span>
+          <span className="ml-auto"><CopyButton text={() => noMatchText(unmatched)} label="Copy all groups" /></span>
         </CardTitle>
         <CardDescription>
           The search pill still works on every one of these. Grouped by the rule that turned each
@@ -491,8 +607,11 @@ function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
           if (rows.length === 0) return null;
           return (
             <div key={group.key} className="space-y-1">
-              <p className="text-sm font-semibold">
-                {group.title} -- {rows.length}
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <span>{group.title} -- {rows.length}</span>
+                <CopyButton
+                  text={() => [`${group.title} -- ${rows.length}`, ...rows.map(rejectionLine)].join("\n")}
+                />
               </p>
               <p className="text-xs text-muted-foreground">{group.blurb}</p>
               <div className="mt-1 space-y-0.5">

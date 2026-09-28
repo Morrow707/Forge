@@ -41,6 +41,8 @@ export const FILLER = new Set([
   // change a movement. "Coach Breakdown" is Renaissance Periodization's suffix on a demo,
   // "Presents" is a channel introducing one. None appears in any library name.
   "breakdown", "coach", "coaches", "presents", "workout", "workouts",
+  // "Dual DB Sumo Deadlift" is a dumbbell sumo deadlift: two dumbbells is what one is.
+  "dual",
 ]);
 
 /**
