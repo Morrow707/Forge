@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { applyGravityCorrection, bestEffortJump, summarizeJumpSet, type JumpRep } from "./jump-tracking";
-import type { TrackedPoint } from "./pose-tracking";
+import type { TrackedPoint } from "./bar-tracking";
 
 // RULE #1 FOR THE JUMP. Scott, 2026-09-28, after build 553 reported "Couldn't get a clean read"
 // on a box jump: "Same rejected my jump which is the one thing I told you shouldn't happen."
