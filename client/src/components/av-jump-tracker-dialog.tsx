@@ -583,7 +583,7 @@ export function AvJumpTrackerDialog({
       boxTopWorldY,
       frameIntervalSeconds,
       jumpEvents,
-      { usesBox: usesBox === true },
+      { usesBox: usesBox === true, boxHeightCm: boxHeightIn && boxHeightIn > 0 ? boxHeightIn * 2.54 : null },
     );
     if (metrics?.bestEffort) {
       // RULE #1. The state machine found no clean rep; the number on screen is the best read the
@@ -665,6 +665,7 @@ export function AvJumpTrackerDialog({
       // but frames and 9.81, so its ratio to the trace's own height is how wrong this take's
       // scale is, with no sensor anywhere.
       gravity: metrics.gravityVerdict,
+      boxRise: metrics.boxRiseVerdict ?? null,
       jumpEvents,
     });
 
