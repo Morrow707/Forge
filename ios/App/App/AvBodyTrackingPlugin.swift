@@ -1345,7 +1345,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
                 coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
                 coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable,
-                body3D: call.getBool("body3D") ?? true
+                body3D: call.getBool("body3D") ?? true,
+                handPose: call.getBool("handPose") ?? true
             )
         }()
         if liveContext != nil {
@@ -1773,6 +1774,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // dialog omits this and pays nothing extra per frame.
         let detectBox = call.getBool("detectBox") ?? false
         let body3D = call.getBool("body3D") ?? true
+        let handPose = call.getBool("handPose") ?? true
         // Gates the additive CoreML implement detector below -- one of
         // AvCoreMlImplementDetector.supportedTrackingModes (the object class the caller is
         // actually trying to track, e.g. "med_ball" from AvMedBallTrackerDialog or "barbell"/
@@ -1918,7 +1920,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 
         queueForThisCall.async {
             self.runPoseAnalysis(
-                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, body3D: body3D,
+                url: url, sampleEveryNthFrame: sampleEveryNthFrame, detectBox: detectBox, body3D: body3D, handPose: handPose,
                 trackingMode: trackingMode, call: call, progress: progress, settle: settle
             )
         }
@@ -1947,7 +1949,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // call.resolve/call.reject directly -- see analyzeRecording's own comment on why (a
     // watchdog or a user-initiated cancel might already have settled this call first).
     private func runPoseAnalysis(
-        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, body3D: Bool, trackingMode: String?, call: CAPPluginCall,
+        url: URL, sampleEveryNthFrame: Int, detectBox: Bool, body3D: Bool, handPose: Bool, trackingMode: String?, call: CAPPluginCall,
         progress: AvAnalysisProgress,
         settle: @escaping (@escaping () -> Void) -> Void
     ) {
@@ -2051,7 +2053,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             coreMlImplementAvailable: coreMlImplementDetector.isAvailable,
             coreMlSecondaryLabel: AvCoreMlImplementDetector.secondaryLabel(forTrackingMode: trackingMode),
             coreMlSecondaryAvailable: coreMlSecondaryDetector.isAvailable,
-            body3D: body3D
+            body3D: body3D,
+            handPose: handPose
         )
         let state = AvFrameRunState()
         let startTime = Date()
@@ -2381,7 +2384,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         var handJoints: [[String: Any]] = []
         let handPoseStart = Date()
         do {
-            try handler.perform([ctx.handPoseRequest])
+            if ctx.handPose { try handler.perform([ctx.handPoseRequest]) }
             if let handObservations = ctx.handPoseRequest.results as? [VNHumanHandPoseObservation] {
                 for (handIndex, observation) in handObservations.enumerated() {
                     // Chirality (.left/.right/.unknown) is available here but deliberately
@@ -3136,6 +3139,7 @@ private final class AvFrameContext {
     // Grip-point corroboration signal -- see av-bar-tracker-dialog.tsx's own fuseSide comment on
     // why this only ever nudges an existing confidence value, never replaces the wrist seed.
     // maximumHandCount=2 matches hand-tracking.ts's own numHands:2 on the MediaPipe side.
+    let handPose: Bool
     let handPoseRequest: VNDetectHumanHandPoseRequest = {
         let request = VNDetectHumanHandPoseRequest()
         request.maximumHandCount = 2
@@ -3182,8 +3186,13 @@ private final class AvFrameContext {
         coreMlImplementAvailable: Bool,
         coreMlSecondaryLabel: String?,
         coreMlSecondaryAvailable: Bool,
-        body3D: Bool = true
+        body3D: Bool = true,
+        handPose: Bool = true
     ) {
+        // Hand pose is a grip-confirmation nudge for the bar tracker and nothing else; on the
+        // 2026-09-28 jump it was 7.2 of 16.5 seconds of analysis for a mode that never reads a
+        // hand. Same rule as body3D: one option, both feeders.
+        self.handPose = handPose
         // THE 3D PASS IS OPT-OUT PER TAKE, AND THE OPT-OUT APPLIES TO BOTH FEEDERS. On Scott's
         // 2026-09-28 squat it was 5.6 of 33.6 seconds of analysis on a clip the bar tracker
         // reads in 2D only (see av-bar-tracker-dialog: "Deliberately NOT body3DLm"). The modes

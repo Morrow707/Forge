@@ -9146,6 +9146,11 @@ export const trackingDiagnosticsSchema = z.object({
       shoulderToAnkleFrames: z.number(),
       supineFullLengthFrames: z.number().optional(),
       unresolvedFrames: z.number(),
+      // Box jump: where the two box-top reads put the box above the floor (metres), and
+      // whether they agreed closely enough for the landing gate to use one.
+      boxTopFromHeightM: z.number().nullable().optional(),
+      boxTopFromDetectorM: z.number().nullable().optional(),
+      boxTopCorroborated: z.boolean().nullable().optional(),
     })
     .optional()
     .nullable(),

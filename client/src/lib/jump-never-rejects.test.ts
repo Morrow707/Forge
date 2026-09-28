@@ -90,3 +90,15 @@ describe("a box jump's contact time is a reset, not a reactive contact", () => {
     expect(withBox?.repBreakdown[1].groundContactSeconds).not.toBeNull();
   });
 });
+
+describe("the box-landing gate only runs on a box top both rulers agree on", () => {
+  // Build 554, set 2: the detector's box implied a 23-inch athlete, the typed height put the
+  // box top 187px above the floor, and every landing was refused as floating above it.
+  const dialog = readFileSync(join(process.cwd(), "client/src/components/av-jump-tracker-dialog.tsx"), "utf8");
+  it("passes summarizeJumpSet a box top only when corroborated, and records both reads", () => {
+    expect(dialog).toMatch(/const boxTopWorldY = boxTopCorroborated \? boxTopFromHeight : null;/);
+    expect(dialog).toMatch(/boxTopFromHeightM/);
+    expect(dialog).toMatch(/boxTopFromDetectorM/);
+    expect(dialog).toMatch(/\.\.\.boxTopDiagnostics/);
+  });
+});
