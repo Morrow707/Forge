@@ -55,6 +55,14 @@ export type StoredCapture = {
    * wrong than it already was. */
   trackingLevel?: string | null;
   barPathTrace: PathTracePoint[];
+  /** The export carries the take's diagnostics; the replay reads the two calibration inputs
+   *  the device used (movement axis, position scale correction) so it runs the same maths. */
+  trackingDiagnostics?: {
+    calibration?: {
+      movementAxis?: { x: number; y: number } | null;
+      positionScaleCorrection?: number | null;
+    } | null;
+  } | null;
 };
 
 /** Jump mode is its own pipeline end to end -- see jump-tracking.ts. Nothing it produces is
@@ -115,7 +123,10 @@ function toTrackedPoints(trace: PathTracePoint[]): TrackedPoint[] {
     x: p.x / TRACE_CM_PER_METRE,
     y: p.y / TRACE_CM_PER_METRE,
     z: 0,
-    confidence: 1,
+    // The device's own per-point confidence when the trace carries it (2026-09-28 on); 1 for
+    // older traces, which is what the harness always assumed and why it could not match the
+    // device on a take whose low-confidence samples the device had filtered.
+    confidence: p.c ?? 1,
   }));
 }
 
@@ -172,14 +183,16 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
   }
 
   const hint: FirstPhaseHint = firstMoveForExercise(capture.exerciseName);
+  const calibration = capture.trackingDiagnostics?.calibration ?? null;
   const metrics = summarizeTrackedSet(
     points,
     capture.loadKg ?? undefined,
     capture.heightIn ?? undefined,
     hint,
-    // No rejection events and no scale correction survive into a stored trace.
+    // No rejection events survive into a stored trace; the scale correction does, since
+    // 2026-09-28, in the calibration diagnostics.
     [],
-    1,
+    calibration?.positionScaleCorrection ?? 1,
     false,
     // THE LAST TWO ARGUMENTS DECIDE WHICH HALF OF A REP IS THE LIFT, and leaving them off is not
     // a small omission. Without them summarizeTrackedSet cannot know which way is up, so it falls
@@ -196,7 +209,9 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
     // A stored trace can supply the axis honestly: buildPathTrace writes world coordinates, so
     // its y IS the vertical, and the movement's own kind comes from the exercise name.
     romBucketForExercise(capture.exerciseName),
-    VERTICAL_AXIS,
+    // The axis the device measured from the grip when the export carries it; the vertical
+    // otherwise, which is the honest guess and what the harness always used.
+    calibration?.movementAxis ?? VERTICAL_AXIS,
   );
   const repCount = metrics?.repBreakdown.length ?? 0;
   const loggedReps = capture.loggedReps ?? null;

@@ -920,6 +920,13 @@ export function AvBarTrackerDialog({
         // of the analysis time on the 2026-09-28 squat. Same flag at Record and at Stop, so the
         // live feeder and the file feeder stay one measurement.
         body3D: false,
+        // HAND POSE OFF HERE TOO. Build 556, 2026-09-28: the jump (hand pose off) kept enough
+        // live frames and finished in 4 seconds; the squat (hand pose on, 11 of 39 seconds of
+        // analysis) fell to 34% live coverage and re-read the clip for 30. Hand pose was only
+        // ever a 1.25x confidence nudge on a wrist Vision had already placed (gripConfirmed),
+        // never a position source, and visionRefineGripSeed simply finds no hand and applies
+        // no nudge. The wait was costing more than the nudge was worth.
+        handPose: false,
         // Always provided now (not just when recordVideo) -- recording has stopped and the slow
         // on-device analysis pass is about to start regardless of whether a video gets uploaded,
         // and closing the dialog here (rather than leaving the athlete staring at "Analyzing
@@ -1291,6 +1298,8 @@ export function AvBarTrackerDialog({
       scaleCorroborated: boolean;
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number }[];
       axisSource?: "grip" | "trace_covariance";
+      movementAxis?: { x: number; y: number } | null;
+      positionScaleCorrection?: number | null;
       gripPairsUsed?: number;
       traceTravelAlongPx?: number;
       traceTravelAcrossPx?: number;
@@ -1919,6 +1928,10 @@ export function AvBarTrackerDialog({
       // against the plate diameter on the line above, which is the comparison that makes it
       // mean something.
       calibrationDiagnostics.axisSource = movementAxis ? "grip" : "trace_covariance";
+      calibrationDiagnostics.movementAxis = movementAxis
+        ? { x: Math.round(movementAxis.x * 10000) / 10000, y: Math.round(movementAxis.y * 10000) / 10000 }
+        : null;
+      calibrationDiagnostics.positionScaleCorrection = positionScaleCorrection ?? null;
       calibrationDiagnostics.gripPairsUsed = gripPairs.length;
       calibrationDiagnostics.traceTravelAlongCm = (maxAlong - minAlong) * 100;
       calibrationDiagnostics.traceTravelAcrossCm = (maxAcross - minAcross) * 100;
@@ -2448,7 +2461,7 @@ export function AvBarTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ trackingMode: coreMlTrackingMode, body3D: false });
+                  startRecording({ trackingMode: coreMlTrackingMode, body3D: false, handPose: false });
                 }}
                 disabled={!supported || !heightIn}
               >

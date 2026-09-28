@@ -8366,6 +8366,9 @@ export const barPathPointSchema = z.object({
   t: z.number(),
   x: z.number(),
   y: z.number(),
+  // Tracking confidence, so the replay harness can apply the same per-point filtering the
+  // device did -- see PathTracePoint in client/src/lib/bar-tracking.ts.
+  c: z.number().optional(),
 });
 
 // One iOS Vision joint, in the exact same shape @mediapipe/tasks-vision's own Landmark/
@@ -9136,6 +9139,11 @@ export const trackingDiagnosticsSchema = z.object({
         .optional()
         .nullable(),
       axisSource: z.enum(["grip", "trace_covariance"]).optional().nullable(),
+      // THE INPUTS A REPLAY NEEDS TO REPRODUCE THE DEVICE. The measured movement axis and the
+      // movement profile's position scale correction, both of which the device passed into
+      // summarizeTrackedSet and the harness had to guess.
+      movementAxis: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
+      positionScaleCorrection: z.number().nullable().optional(),
       gripPairsUsed: z.number().optional().nullable(),
       traceTravelAlongPx: z.number().optional().nullable(),
       traceTravelAcrossPx: z.number().optional().nullable(),

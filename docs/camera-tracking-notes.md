@@ -1293,3 +1293,18 @@ the video queue uses; not done here.
 
 **Live coverage with hand pose off: 0.68 on the jump** (was 0.46), still 0.33 on the squat with
 hand pose on. Scaling the live buffers remains the next native change.
+
+### Build 556, same evening: the replay harness could not reproduce the device
+
+Trying to fit the squat's peak overshoot and window margin offline, the harness ran set 3's
+own stored trace and got means of 1.07-1.16 and peaks of 1.9 where the device had reported
+0.83 and 1.66. Two causes, both closed: stored trace points carried no confidence (the device
+filters samples under `MIN_TRACKING_CONFIDENCE` in `robustPeakSpeed`; the harness read every
+point at 1), and the harness measured along the vertical where the device measured along the
+grip axis and applied the movement profile's position scale correction. `PathTracePoint.c`,
+`calibration.movementAxis` and `calibration.positionScaleCorrection` now travel with every
+capture and `capture-replay.ts` reads them. Traces from before this build stay unreplayable
+for calibration purposes; the fit waits for the first export after it. No constant was moved.
+
+Hand pose is off for the bar tracker too (see the comment at the Stop call): the jump with it
+off finished in 4 seconds on 556, the squat with it on took 30.
