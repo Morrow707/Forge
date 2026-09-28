@@ -325,6 +325,11 @@ export type TrackingDiagnostics = {
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
+    /** Box jump: the two box-top reads (metres above the floor) and whether they agreed. See
+     *  av-jump-tracker-dialog's boxTopCorroborated. */
+    boxTopFromHeightM?: number | null;
+    boxTopFromDetectorM?: number | null;
+    boxTopCorroborated?: boolean | null;
     unresolvedFrames: number;
     // WHAT THE REFERENCE-OBJECT DETECTOR ACTUALLY BOXED.
     //
