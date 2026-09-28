@@ -328,6 +328,7 @@ describe("tiers", () => {
 
   it("auto-applies only a watched channel, short, with nothing unrecognised", () => {
     expect(tierFor(accepted, 45, "Catalyst Athletics", AUTO_APPLY_CHANNELS)).toBe("A");
+    expect(tierFor(accepted, 45, "Functional Bodybuilding", AUTO_APPLY_CHANNELS)).toBe("A");
   });
 
   it("queues an unwatched channel for review however clean the match", () => {

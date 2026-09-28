@@ -464,6 +464,9 @@ export const AUTO_APPLY_CHANNELS = [
   "Catalyst Athletics",
   "Renaissance Periodization",
   "ScottHermanFitness",
+  // Scott reviewed its Tier B queue on 2026-09-28 (76 matches at a 0:15 median on its first
+  // run): "add functional bodybuilding to auto apply, the matches look good".
+  "Functional Bodybuilding",
 ] as const;
 
 
