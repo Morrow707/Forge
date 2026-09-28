@@ -9003,6 +9003,11 @@ export const trackingDiagnosticsSchema = z.object({
     })
     .nullable()
     .optional(),
+  // The box as a ruler -- see applyBoxRiseCorrection in jump-tracking.ts.
+  boxRise: z
+    .object({ scaleErrorRatio: z.number(), repsUsed: z.number(), applied: z.boolean() })
+    .nullable()
+    .optional(),
   // Values only -- the keys are limb names from shared/athlete-body-model.ts and a record is the
   // honest shape, since a take measures whichever limbs it could see.
   limbMeasurementsM: z.record(z.string(), z.number()).nullable().optional(),
@@ -9034,6 +9039,8 @@ export const trackingDiagnosticsSchema = z.object({
       barPointFromBareLoneHand: z.number().optional(),
       barPointFromEquipment: z.number().optional(),
       barPointFromEquipmentRejected: z.number().optional(),
+      barPointFromShoulders: z.number().optional(),
+      barWitness: z.enum(["shoulders", "hands"]).optional(),
       equipmentVoteLabel: z.enum(["barbell", "plate"]).nullable().optional(),
       equipmentAgreementFrames: z.number().optional(),
       equipmentOffsetSpreadGrips: z.number().nullable().optional(),
@@ -9165,6 +9172,8 @@ export const jumpBreakdownEntrySchema = z.object({
   repNumber: z.number(),
   flightSeconds: z.number(),
   jumpHeightCm: z.number(),
+  // Vertical takeoff velocity -- see jump-tracking.ts's JumpRep.takeoffVelocityMps.
+  takeoffVelocityMps: z.number().optional(),
   peakHeightCm: z.number(),
   horizontalDistanceCm: z.number().nullable(),
   // Time on the ground before this jump's takeoff, measured from the

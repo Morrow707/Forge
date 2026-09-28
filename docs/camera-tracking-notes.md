@@ -1243,3 +1243,53 @@ walk-out). Reps 2-5: means 0.83 / 0.81 / 0.87 / 0.81, peaks 1.66 / 1.65 / 1.66 /
   moved 1.27m at the take's scale. Watch for it on the next set.
 - The debug console now survives a force close (`client/src/lib/debug-console.ts`,
   localStorage, 400 lines, marked "app relaunched").
+
+### Build 555 beside OVR: the head-on squat, and the box as a ruler
+
+Squat (Scott's set 1 on 555, OVR set 4): sensor 0.84 mean, 1.24 peak, 29.6in. Forge 0.27 mean,
+0.71 peak, 9.1in (23cm), five reps. Camera pitch 5.3 degrees -- a different placement from the
+earlier 14.6, and the on-screen note said "filmed head-on or from behind".
+
+**The bar point was not on the bar -- `bar-on-back.ts`, wired into `av-bar-tracker-dialog.tsx`.**
+The stored trace moves about 20cm per rep (per-second y ranges -38 to -17cm) where set 3's
+moves 73. Every frame had a body and both wrists at 0.8 confidence, no torso rejections, no
+velocity rejections: the tracker was confident and wrong. On a back squat filmed from the
+front the wrists are BEHIND THE HEAD, Vision places them near the shoulders, and they barely
+move. The plate was edge-on (941 candidates, 404 refused by size, 537 by confidence, no lock),
+so the equipment vote had nothing to vote with. The shoulders never lost the bar, because the
+bar sits on them. On lifts named as bar-on-back (back squat, high/low bar, box, pause, tempo
+squat, good morning, split squat, lunge, step-up; never front, overhead, zercher, press,
+thruster, SSB, goblet, landmine) the combined bar point is now the shoulder midpoint, in the
+same world space, before the speed gate. The hands still supply grip width (overwatch's
+yardstick), tilt and the half-span. `trace.barWitness` says which ran and
+`barPointFromShoulders` how often. This is the body tracker doing its own job; the change is
+which joint is asked.
+
+**The box is a ruler -- `applyBoxRiseCorrection` in `jump-tracking.ts`.** Scott: "Be mindful, I
+am jumping to a 24 inch box." Jump set 3's box reps rose 73-77cm onto a 61cm box: the take's
+scale was 1.26x. Gravity cannot rule a box set (no flat rep), but the typed box height is a
+distance the ankle MUST rise by on every box rep, and the median rise over the box reps
+divided by it is the scale error. Applied when at least two reps rose past half the box and
+the ratio is more than 5% from 1.0; `boxRise` in the diagnostics carries ratio, reps and
+whether it applied. The four box reps corrected to 61cm; the two 4-6cm "reps" between them
+are the step-downs read as tiny hops (the yellow 14.6in and 18.6in chips), and are the next
+thing to name in the events.
+
+**Takeoff velocity is on the rep -- `JumpRep.takeoffVelocityMps`, chips in `workout.tsx`.**
+Scott: "I'm looking for velocity and velocity stops when I land." It was computed and thrown
+away after becoming a height. Re-derived after any scale correction.
+
+**The gate fix worked.** Set 3's events: takeoff / rep on every box rep, no `floating_above_box`
+(the detector's box top read 1.54m above the floor against the typed 0.61; `boxTopCorroborated`
+false, gate off). `flight_too_long` twice at 1.6-1.8s are the step-down-and-reset stretches.
+
+**Saves: every one landed first time** (3.5-4.2s for 4-5MB, no 409). The "ran out of offline
+storage" toast came from the page's UNMOUNT re-queue, which queued the whole 5MB day on
+navigating to /login although every save had synced; it then replayed under the admin session
+(403, kept now, not dropped). `dirtySinceSyncRef` in `workout.tsx`: the unmount queues only
+when something changed since a save reached the server. The 5MB localStorage ceiling for a
+genuinely offline tracked day is still real and the queue should move to the Filesystem store
+the video queue uses; not done here.
+
+**Live coverage with hand pose off: 0.68 on the jump** (was 0.46), still 0.33 on the squat with
+hand pose on. Scaling the live buffers remains the next native change.
