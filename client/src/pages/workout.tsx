@@ -3929,7 +3929,11 @@ function ExerciseLogContent({
                     })}
                   </div>
                 )}
-                {set.jumpBreakdown && set.jumpBreakdown.length > 1 && (
+                {/* One jump is still a jump: a set that found a single rep used to show the headline
+                    and no chip, which read as "measured nothing" (Scott, 2026-09-28, a hands-on-hips
+                    CMJ set). The chip carries the takeoff velocity and the doubt flag the headline
+                    cannot. */}
+                {set.jumpBreakdown && set.jumpBreakdown.length >= 1 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
                     <span className="font-semibold uppercase tracking-wide">Jump by jump</span>
                     {set.jumpBreakdown.map((j) => (
