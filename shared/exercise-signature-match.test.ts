@@ -331,6 +331,16 @@ describe("tiers", () => {
     expect(tierFor(accepted, 45, "Functional Bodybuilding", AUTO_APPLY_CHANNELS)).toBe("A");
   });
 
+  it("queues a title that goes on to commentary, however clean the first segment", () => {
+    // "Planks for Abs - Mostly a Waste" and "Overhead Press: Bad For Your Neck?" were Tier A.
+    expect(tierFor(accepted, 45, "Catalyst Athletics", AUTO_APPLY_CHANNELS, 3)).toBe("B");
+    const prepared = prepareTitle("Overhead Press: Bad For Your Neck?", VOCAB);
+    expect(prepared.laterTokens.length).toBeGreaterThan(0);
+    const clean = prepareTitle("Pendlay Row | Olympic Weightlifting Exercise Library", VOCAB);
+    // House style is stripped by the run per channel; here the raw later words are still filler.
+    expect(clean.laterTokens).toEqual([]);
+  });
+
   it("queues an unwatched channel for review however clean the match", () => {
     expect(tierFor(accepted, 45, "Buff Dudes", AUTO_APPLY_CHANNELS)).toBe("B");
   });
