@@ -100,7 +100,11 @@ export const RED_FLAG_WORDS = new Set([
 export type RedFlag = { flagged: true; detail: string } | { flagged: false };
 
 /** Checked on the RAW first segment, before normalisation strips the evidence. */
-export function redFlag(rawFirstSegment: string, rawTitle: string): RedFlag {
+export function redFlag(
+  rawFirstSegment: string,
+  rawTitle: string,
+  knownTokens: ReadonlySet<string> = new Set(),
+): RedFlag {
   const seg = rawFirstSegment.trim();
   if (!seg) return { flagged: false };
 
@@ -122,15 +126,23 @@ export function redFlag(rawFirstSegment: string, rawTitle: string): RedFlag {
     // Only in the FIRST segment: a trailing "#shorts" is boilerplate and is stripped elsewhere.
     return { flagged: true, detail: "a hashtag inside the exercise name itself" };
   }
-  const letters = seg.replace(/[^a-zA-Z]/g, "");
+  // Shouting is measured over the words the library does NOT use: "Hip CARs" is the exercise's
+  // own name (CARs is an acronym the library spells that way), not a shouted title (2026-09-28).
+  const shoutable = seg
+    .split(/\s+/)
+    .filter((w) => !knownTokens.has(w.toLowerCase().replace(/[^a-z0-9]/g, "")))
+    .join(" ");
+  const letters = shoutable.replace(/[^a-zA-Z]/g, "");
   if (letters.length >= 6) {
-    const caps = seg.replace(/[^A-Z]/g, "").length;
+    const caps = shoutable.replace(/[^A-Z]/g, "").length;
     if (caps / letters.length > 0.5) {
       return { flagged: true, detail: "shouting -- more than half the first segment is capitals" };
     }
   }
   for (const word of seg.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ")) {
-    if (RED_FLAG_WORDS.has(word)) {
+    // A word the library itself uses is never commentary: "hack" in "Machine Hack Squat" is a
+    // movement, and the flag refused the exercise's own name for it (2026-09-28).
+    if (RED_FLAG_WORDS.has(word) && !knownTokens.has(word)) {
       return { flagged: true, detail: `"${word}" -- commentary or a claim, not a demonstration` };
     }
   }

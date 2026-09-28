@@ -128,8 +128,9 @@ export function runSignatureMatch(
 
     const key = [
       exSig.head,
-      exSig.equipment,
+      [...exSig.equipmentSet].sort().join("+"),
       [...exSig.modifiers].sort().join("+"),
+      [...exSig.muscles].sort().join("+"),
     ].join("|");
     const twin = signatureKeys.get(key);
     if (twin) duplicateSignatures.push([twin, exercise.name]);

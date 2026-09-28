@@ -32,6 +32,9 @@ export type Signature = {
    *  a machine row, and the pair is itself the disagreement. Reported as an equipment verdict
    *  rather than as two unrecognised words. */
   equipmentConflict: boolean;
+  /** Every equipment word present, canonicalised. "Dumbbell Bench Press" is {dumbbell, bench};
+   *  the SET is the exercise's identity on that axis, and a title matches on the whole set. */
+  equipmentSet: Set<string>;
   tokens: string[];
 };
 
@@ -133,6 +136,7 @@ function signatureFromTokens(tokens: string[], vocab: Vocabulary): Signature {
   const unknown: string[] = [];
   let equipment: string | null = null;
   let equipmentConflict = false;
+  const equipmentSet = new Set<string>();
   let head: string | null = null;
 
   // The head is positional: the LAST head-eligible token. That is what makes "Squat Box Jump"
@@ -152,6 +156,7 @@ function signatureFromTokens(tokens: string[], vocab: Vocabulary): Signature {
     if (asEquipment) {
       if (equipment && equipment !== asEquipment) equipmentConflict = true;
       equipment = equipment ?? asEquipment;
+      equipmentSet.add(asEquipment);
       continue;
     }
     const asMuscle = vocab.muscles[token];
@@ -172,6 +177,7 @@ function signatureFromTokens(tokens: string[], vocab: Vocabulary): Signature {
     head,
     equipment,
     equipmentConflict,
+    equipmentSet,
     modifiers,
     muscles,
     unknown,
@@ -180,11 +186,10 @@ function signatureFromTokens(tokens: string[], vocab: Vocabulary): Signature {
 }
 
 export function exerciseSignature(ex: LibraryExercise, vocab: Vocabulary): Signature {
-  const tokens = normalize(ex.name, {
-    compounds: vocab.compounds,
-    knownTokens: vocab.knownTokens,
-  });
-  const signature = signatureFromTokens(tokens, vocab);
+  // The name is read exactly as a title is, so a parenthetical in the name ("Calf Stretch
+  // (Wall)") lands in the same place it would in the matching title. Reading the name raw
+  // put "wall" last and made it the head, which no title could ever agree with (2026-09-28).
+  const signature = titleSignature(prepareTitle(ex.name, vocab), vocab);
   if (!signature.equipment && ex.equipment) {
     const fromMetadata = normalize(ex.equipment, {
       compounds: vocab.compounds,
@@ -199,8 +204,15 @@ export function exerciseSignature(ex: LibraryExercise, vocab: Vocabulary): Signa
 
 export function titleSignature(prepared: PreparedTitle, vocab: Vocabulary): Signature {
   // A parenthetical holding only equipment belongs to the name: "Tricep Kickback (Dumbbell)".
+  // Likewise a parenthetical of library modifiers: "Calf Stretch (Wall)" is the exercise's own
+  // name. A parenthetical holding a head word is a different movement, so it stays an alias.
   const extra = prepared.parentheticals
-    .filter((p) => p.length <= 2 && p.every((t) => vocab.equipment[t]))
+    .filter(
+      (p) =>
+        p.length <= 2 &&
+        p.every((t) => vocab.equipment[t] || vocab.modifiers.has(t)) &&
+        !p.some((t) => vocab.heads.has(t)),
+    )
     .flat();
   return signatureFromTokens([...extra, ...prepared.firstSegment], vocab);
 }
@@ -250,7 +262,7 @@ export function compare(
   durationSeconds: number,
   maxDurationSeconds: number,
 ): Verdict {
-  const flag = redFlag(prepared.rawFirstSegment, prepared.raw);
+  const flag = redFlag(prepared.rawFirstSegment, prepared.raw, vocab.knownTokens);
   if (flag.flagged) return { ok: false, reason: "red-flag", detail: flag.detail };
 
   if (!titleSig.head) {
@@ -278,31 +290,69 @@ export function compare(
     };
   }
 
-  // A title that says nothing about equipment means the head's usual one -- "Back Squat" is a
-  // barbell back squat everywhere. Recorded when assumed, because an assumption is not evidence.
-  if (titleSig.equipmentConflict) {
-    return {
-      ok: false,
-      reason: "equipment",
-      detail: "the title names two different pieces of equipment, so it is neither",
-    };
-  }
-  const assumedEquipment = titleSig.equipment ?? vocab.defaultEquipment[titleSig.head]?.equipment;
-  const equipmentAssumed = !titleSig.equipment && Boolean(assumedEquipment);
-  if (exSig.equipment && assumedEquipment && assumedEquipment !== exSig.equipment) {
-    return {
-      ok: false,
-      reason: "equipment",
-      detail: `title is ${assumedEquipment}, this exercise is ${exSig.equipment}`,
-    };
+  // EQUIPMENT IS COMPARED AS A SET, AND THE NAME'S OWN WORDS ARE THE TRUTH.
+  //
+  // Three shapes, in order:
+  //   1. The title's equipment words equal the name's ("Dumbbell Bench Press" both sides, or
+  //      "Face Pull" both sides with none): the title IS the name. No assumption, tier A eligible.
+  //      This is also what keeps "Dumbbell Bench Press" and "Dumbbell Shoulder Press" apart --
+  //      "bench" is part of the identity, not a word to drop.
+  //   2. The title names none and the name names some ("Kickback" for "Dumbbell Kickback"): the
+  //      head's usual equipment is assumed, accepted only when it equals the name's single word,
+  //      and recorded as an assumption (tier B).
+  //   3. The title names equipment and the name does not ("Dumbbell Spider Curl" for Spider
+  //      Curl): the title's single word must equal the metadata equipment.
+  // Anything else is a different exercise. Before 2026-09-28 a silent title was filled with the
+  // head's default and compared to the metadata, which refused "Face Pull | ..." for Face Pull
+  // as "barbell vs cable", and two-word equipment read as a conflict on the exercise's own name.
+  const nameEquipment = exSig.equipmentSet;
+  const titleEquipment = titleSig.equipmentSet;
+  let equipmentAssumed = false;
+  if (!setsEqual(nameEquipment, titleEquipment)) {
+    if (titleEquipment.size === 0 && nameEquipment.size === 1) {
+      const assumed = vocab.defaultEquipment[titleSig.head]?.equipment;
+      const [named] = [...nameEquipment];
+      if (assumed !== named) {
+        return {
+          ok: false,
+          reason: "equipment",
+          detail: `title names no equipment; this exercise is ${named} and that is not the usual one for a ${titleSig.head}`,
+        };
+      }
+      equipmentAssumed = true;
+    } else if (nameEquipment.size === 0 && titleEquipment.size === 1) {
+      const [stated] = [...titleEquipment];
+      if (exSig.equipment && stated !== exSig.equipment) {
+        return {
+          ok: false,
+          reason: "equipment",
+          detail: `title is ${stated}, this exercise is ${exSig.equipment}`,
+        };
+      }
+    } else {
+      return {
+        ok: false,
+        reason: "equipment",
+        detail: `title equipment [${[...titleEquipment].join(", ") || "none"}] differs from the name's [${[...nameEquipment].join(", ") || "none"}]`,
+      };
+    }
   }
 
+  // A muscle word in the NAME is identity: "Glute Bridge" is not "Neck Bridge", and a title
+  // missing it is a different exercise. A muscle word only in the TITLE is explained when the
+  // name or the metadata carries it ("Triceps" on Dumbbell Kickback).
+  for (const muscle of exSig.muscles) {
+    if (!titleSig.muscles.has(muscle)) {
+      return { ok: false, reason: "modifier", detail: `title is missing ${muscle}` };
+    }
+  }
   const known = new Set(
-    [ex.muscleGroups, exSig.muscles.size ? [...exSig.muscles] : []]
+    [ex.muscleGroups, [...exSig.muscles]]
       .flat()
       .flatMap((g) => normalize(g, { compounds: vocab.compounds, knownTokens: vocab.knownTokens }))
-      .map((t) => vocab.muscles[t] ?? t),
+      .flatMap((t) => [t, vocab.muscles[t] ?? t]),
   );
+  for (const muscle of exSig.muscles) known.add(muscle);
   for (const muscle of titleSig.muscles) {
     if (!known.has(muscle)) {
       return {
