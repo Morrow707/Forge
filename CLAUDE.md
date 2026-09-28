@@ -158,6 +158,56 @@ flag and a caveat instead, and let the number through.
   sections are written from; when a fix needs a number the export does not carry, add the field
   to the export in the same change, or the next comparison cannot be made.
 
+## RULE #2: EVERY CAMERA SENSOR IS A PEER. NONE LEADS. OVERWATCH IS THE ONLY ARBITER. NONE IS EVER SWITCHED OFF.
+
+Scott, 2026-09-28, after the 3D body pose was turned off to save five seconds of analysis:
+
+> "We have 3 camera systems and they need to work in unison, when one fails the other is
+> there to pick it up. If we build the 3d model, then we will have 4 camera systems which is
+> fine, but all are working toward the same unison goal. Neither one takes over, neither one
+> is the leader, neither one is in control except for the ai overwatch, we built that because
+> the cameras will get fixated and lock on one frame and won't let go, the overwatch makes it
+> let go."
+
+What this means in code, each one a thing that has already gone wrong:
+
+- **A sensor is never turned off to save time.** The 3D body pose was disabled for the bar and
+  jump trackers on 2026-09-28 because "nothing on those paths reads it", against a comment on
+  that very request saying thin it, never delete it. Hours later it was proposed as a scale
+  ruler. The cost of a sensor is paid by THINNING (a sparse stride, a smaller frame), never by
+  removal. If a sensor is expensive, run it on every thirtieth frame; do not make it absent.
+- **Adding a sensor adds a PEER under overwatch, never a leader and never a fourth referee.** A
+  3D pose, a plate detector, a grip ruler, a box ruler: each is one more witness whose reading
+  is held against the others. It does not get to decide anything on its own, and it does not
+  get its own private checks (that is how the object tracker went wrong the first time).
+- **No sensor takes over by rule.** A name-based switch that hands the bar's position to one
+  witness ("on a back squat the shoulders ARE the bar", 2026-09-28) is a leader wearing a
+  rule's clothes. It fixed the head-on squat, and it is still the wrong shape: the choice of
+  which witness to believe on a frame belongs to overwatch, made from agreement, not to a
+  regex on the exercise name. That switch stays until overwatch can make the choice, and
+  making it so is open work, not a settled design.
+- **Overwatch exists to make a sensor let go.** A tracker that locks on a frame and will not
+  release is the failure every sensor here has shown. Overwatch's job is to notice, from the
+  OTHER sensors, and break the lock. It owns no sensor. It never becomes one.
+- **When one fails, another picks up.** That is the whole reason there are several. A frame
+  where the hands are hidden is a frame for the shoulders or the plate; a take where the plate
+  is a rack is a take for the body rulers; a take with no flat jump is a take for the box.
+  Nothing is allowed to be the single point of failure, which is the same thing as saying
+  nothing is allowed to be the leader.
+
+- **Analysis time is cut by SPEEDING UP, never by CUTTING.** Scott, same day: "We need to cut
+  analysis time not by cutting things, we need to cut analysis time by speeding it up, having
+  it start when I hit record, things like that." The levers are: start the work at Record (the
+  live path), hand Vision smaller frames (the file path already decodes at 1280; the live path
+  still hands it 1920x1080), run the expensive sensors on a stride, and keep the encode and
+  the upload running while the analysis does. Hand pose off for the bar tracker (2026-09-28,
+  build 557/558) was a cut, not a speed-up, and is to be reversed into a stride the same way
+  as the 3D pose.
+
+Before changing anything under `ios/`, `client/src/lib/*-tracking.ts` or a tracker dialog, say
+which sensor it touches and confirm the change removes nothing and appoints nothing. If it does
+either, it is wrong as written.
+
 ## THE CAMERA ARCHITECTURE: three parts, answering to each other
 
 **This is how the camera system works. Not one fix among several -- the shape
