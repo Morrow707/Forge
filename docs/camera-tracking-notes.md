@@ -1091,3 +1091,42 @@ count is nine; the test now says so and why.
   it (`bar-tracking.ts`, `trimPhaseToTravel` and the `phaseStats` block).
 - The upload copy's presence is in the native diagnostic log ("upload copy: ... MB"), not the
   export: it is about the save, not the measurement.
+
+### Same day, two additions queued for the next calibration build
+
+Scott, after the OVR set: "For the barbell back squat let's track the bar too and the plates,
+will only help boost accuracy on faulty body detectors", and "can the floor be detected? Would
+that matter? Would it boost confidence?" Both held from shipping on his instruction: "queue them
+so we can upload them with next camera calibration."
+
+**The equipment votes on bar position -- `client/src/lib/equipment-bar-point.ts`, wired into
+the per-frame loop of `av-bar-tracker-dialog.tsx`.** A barbell lift already asked the detector
+for the plate (bar as the second class), but the boxes only ever set scale; the bar's position
+came from the wrists and the motion-diff tracker alone, so a frame where the body tracker lost
+a wrist produced no point. Now the bar box (preferred) or the plate box (fallback -- a plate on
+the bar sits at bar height) fills exactly those frames, and only those. It earns the vote by
+agreeing with the hands: the box-to-hands offset is learned on every frame that has both, and
+the box may substitute only after `MIN_EQUIPMENT_AGREEMENT_FRAMES` of them whose spread
+(median absolute deviation) is under `MAX_EQUIPMENT_OFFSET_SPREAD_GRIPS` of the athlete's grip
+width. A lock on a rack plate never agrees with the hands for long and never votes. The
+substituted point goes through the same `isPlausibleVelocity` gate as a hand-built one. On the
+09-28 squat the plate lock was on the wrong object (494px against a 263px grip), so this would
+not have fired there; the diagnostics say when it does:
+- `trace.barPointFromEquipment` / `barPointFromEquipmentRejected` -- frames filled, and offered
+  but refused by the speed gate.
+- `trace.equipmentVoteLabel`, `equipmentAgreementFrames`, `equipmentOffsetSpreadGrips` -- which
+  class earned the vote, on how many frames, and how far the agreement wandered. The spread is
+  the number to revise the 0.25-grip threshold from.
+Both thresholds are admitted guesses. Blending the equipment into frames the hands answered
+was considered and not done: it would change the number on every calibrated take to fix the
+frames on a few.
+
+**Camera tilt, not floor detection -- `startGravitySampling` in `AvBodyTrackingPlugin.swift`.**
+Vision has no floor detector and a floor line carries no scale, so it could not have fixed the
+19%. What the floor would have said -- how the phone was pointed -- the accelerometer says
+directly. CoreMotion's gravity vector is sampled five times a second for the length of the
+recording and the median lands in `recording.cameraPitchDeg` (positive when the lens tilts
+down toward the floor), `cameraRollDeg` (sideways lean) and `cameraTiltSamples`. Nothing is
+corrected yet. Every rep of the 09-28 squat said "camera was angled" and no number said how
+much; the next set will, and if the height ruler's error tracks the pitch, the correction is
+`cos(pitch)` on the vertical span and belongs in `pose-tracking.ts` beside the height ruler.

@@ -34,6 +34,7 @@ import type {
   AvObjectLockTelemetry,
 } from "@/lib/native-av-preview";
 import { referenceObjectVerdict, MIN_YARDSTICK_PX } from "@shared/tracker-arbiter";
+import { EquipmentOffsetLearner, equipmentBoxForBarPath } from "@/lib/equipment-bar-point";
 import {
   POSE_LANDMARKS,
   detectFormFaults,
@@ -1382,6 +1383,12 @@ export function AvBarTrackerDialog({
     let barPointFromBothHands = 0;
     let barPointFromLoneHandCarried = 0;
     let barPointFromBareLoneHand = 0;
+    // THE EQUIPMENT'S OWN VOTE -- see equipment-bar-point.ts. Frames where the hands produced
+    // nothing usable and the detector's bar or plate box, having agreed with the hands for long
+    // enough, filled the gap.
+    let barPointFromEquipment = 0;
+    let barPointFromEquipmentRejected = 0;
+    const equipmentOffsets = new EquipmentOffsetLearner();
     let prevCombined: { x: number; y: number; t: number }[] = [];
     let verticalSign: 1 | -1 = 1;
     // Half the measured distance from the left grip to the right, carried forward so a frame with
@@ -1559,6 +1566,15 @@ export function AvBarTrackerDialog({
         ? { ...coreMlPointRaw, x: coreMlPointRaw.x * effectiveScale, y: coreMlPointRaw.y * effectiveScale, z: 0 }
         : null;
 
+      // The box that may speak for the bar's POSITION this frame (the bar first, a plate as the
+      // fallback), in the same scaled space as the hand points. Distinct from coreMlPoint above,
+      // which is the primary slot regardless of class and is only a corroboration nudge.
+      const equipmentBox = equipmentBoxForBarPath(f, coreMlTrackingMode, COREML_MIN_CONFIDENCE_TO_PENALIZE);
+      const equipmentPointRaw = equipmentBox ? visionCoreMlBoxToPoint(equipmentBox.box, f) : null;
+      const equipmentPoint = equipmentPointRaw
+        ? { x: equipmentPointRaw.x * effectiveScale, y: equipmentPointRaw.y * effectiveScale, confidence: equipmentPointRaw.confidence }
+        : null;
+
       const rejectionsBefore = rejectionEvents.length;
       const { fused: fusedLeft, nextPrev: nextPrevLeft } = fuseSide(worldLm, "left", leftImplement, prevFusedLeft, leftVelocitySamples, t, coreMlPoint, f);
       prevFusedLeft = nextPrevLeft;
@@ -1647,10 +1663,33 @@ export function AvBarTrackerDialog({
         combinedRejectionEvents.push(t);
         combined = null;
       }
+
+      // THE EQUIPMENT FILLS THE FRAMES THE HANDS MISSED, AND ONLY THOSE. See
+      // equipment-bar-point.ts. On a frame the hands answered, the box teaches the offset; on a
+      // frame they did not (no wrist, or a wrist the speed gate threw out), a box that has
+      // agreed with the hands long enough supplies the point instead -- through the same speed
+      // gate, so a jumped detection is dropped the way a jumped wrist is. Both counted.
+      let combinedFromEquipment = false;
+      if (equipmentBox && equipmentPoint) {
+        const gripSpan = medianHalfSpan(halfSpanHistory);
+        const gripWidthUnits = gripSpan ? Math.hypot(gripSpan.x, gripSpan.y) * 2 : null;
+        if (combined) {
+          equipmentOffsets.observe(equipmentPoint, combined, equipmentBox.label);
+        } else {
+          const substitute = equipmentOffsets.substitute(equipmentPoint, gripWidthUnits);
+          if (substitute && isPlausibleVelocity(prevCombined, { x: substitute.x, y: substitute.y, t })) {
+            combined = substitute;
+            combinedFromEquipment = true;
+          } else if (substitute) {
+            barPointFromEquipmentRejected++;
+          }
+        }
+      }
       if (combined) {
         prevCombined = [...prevCombined, { x: combined.x, y: combined.y, t }].slice(-PLAUSIBILITY_HISTORY);
       }
 
+      if (combinedFromEquipment) barPointFromEquipment++;
       if (combined) framesUsable++;
       else if (rejectedThisFrame) framesVelocityRejected++;
       else framesNoWristOrImplement++;
@@ -1737,6 +1776,14 @@ export function AvBarTrackerDialog({
         torsoSpreadGrips,
         barPointFromLoneHandCarried,
         barPointFromBareLoneHand,
+        barPointFromEquipment,
+        barPointFromEquipmentRejected,
+        equipmentVoteLabel: equipmentOffsets.label,
+        equipmentAgreementFrames: equipmentOffsets.agreementFrames,
+        equipmentOffsetSpreadGrips: (() => {
+          const spread = equipmentOffsets.offsetSpreadGrips(torsoGripWidthUnits);
+          return spread == null ? null : Math.round(spread * 1000) / 1000;
+        })(),
         largestGapSeconds: largestGapSeconds == null ? null : Math.round(largestGapSeconds * 1000) / 1000,
       };
     };

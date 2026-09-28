@@ -70,6 +70,16 @@ export type TraceDiagnostics = {
   barPointFromBothHands?: number;
   barPointFromLoneHandCarried?: number;
   barPointFromBareLoneHand?: number;
+  /** Frames the detector's bar or plate box filled after the hands produced nothing usable,
+   *  and the ones it offered that the speed gate refused -- see equipment-bar-point.ts. */
+  barPointFromEquipment?: number;
+  barPointFromEquipmentRejected?: number;
+  /** Which class earned the vote, how many frames it agreed with the hands on, and how far
+   *  that agreement wandered (median absolute deviation, in grip widths). The spread is what
+   *  decides whether the equipment may vote at all, so the threshold can be revised from it. */
+  equipmentVoteLabel?: "barbell" | "plate" | null;
+  equipmentAgreementFrames?: number;
+  equipmentOffsetSpreadGrips?: number | null;
   /** Lone-hand frames where continuity overruled Vision's left/right label. */
   barPointSideFlipped?: number;
   /** Whether this take's torso held still, and so whether its stillness was usable as a
@@ -150,6 +160,14 @@ export type TrackingDiagnostics = {
     liveFallbackReason?: string;
     liveCoverage?: number;
     liveDropRate?: number;
+    // HOW THE PHONE WAS HELD. Median gravity read from CoreMotion over the recording: pitch is
+    // positive when the lens tilts down toward the floor, roll is a sideways lean, both in
+    // degrees from a phone held upright in portrait. Recorded, not yet corrected for -- the
+    // 2026-09-28 squat's 19% scale error came with "camera was angled" on every rep and no
+    // number for how angled. See docs/camera-tracking-notes.md.
+    cameraPitchDeg?: number;
+    cameraRollDeg?: number;
+    cameraTiltSamples?: number;
     visionFailureCount?: number;
     thermalState?: string;
     lowPowerModeEnabled?: boolean;
@@ -548,6 +566,14 @@ export function buildTrackingDiagnostics(args: {
     liveFallbackReason?: string;
     liveCoverage?: number;
     liveDropRate?: number;
+    // HOW THE PHONE WAS HELD. Median gravity read from CoreMotion over the recording: pitch is
+    // positive when the lens tilts down toward the floor, roll is a sideways lean, both in
+    // degrees from a phone held upright in portrait. Recorded, not yet corrected for -- the
+    // 2026-09-28 squat's 19% scale error came with "camera was angled" on every rep and no
+    // number for how angled. See docs/camera-tracking-notes.md.
+    cameraPitchDeg?: number;
+    cameraRollDeg?: number;
+    cameraTiltSamples?: number;
     visionFailureCount?: number;
     thermalState?: string;
     lowPowerModeEnabled?: boolean;

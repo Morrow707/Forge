@@ -8,6 +8,7 @@ import {
   updateAvPreviewRect,
   startAvRecording,
   stopAvRecordingToPath,
+  type AvCameraTilt,
   readAvRecordingForUpload,
   deleteAvRecording,
   analyzeAvRecording,
@@ -407,10 +408,11 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
 
     let path: string;
     let uploadPath: string | undefined;
+    let tilt: AvCameraTilt = {};
     try {
       // FAST. Only finalises the movie file the recorder has been writing all along, and the
       // 720p upload copy it has been encoding beside it.
-      ({ path, uploadPath } = await stopAvRecordingToPath());
+      ({ path, uploadPath, tilt } = await stopAvRecordingToPath());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save the recording");
       setAnalyzing(false);
@@ -464,6 +466,8 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       recordingStats = await analyzeAvRecording(
         path, ANALYSIS_SAMPLE_STRIDE, options?.detectBox, options?.trackingMode
       );
+      // The recorder's own facts about the take, carried beside the analysis pass's.
+      if (tilt.cameraTiltSamples) recordingStats = { ...recordingStats, ...tilt };
     } catch (err) {
       unsubscribe();
       // AFTER the blob read, never before: deleting the original out from under an in-flight

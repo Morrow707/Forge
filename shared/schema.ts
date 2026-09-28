@@ -8902,6 +8902,10 @@ export const trackingDiagnosticsSchema = z.object({
       liveFallbackReason: z.string().optional(),
       liveCoverage: z.number().optional(),
       liveDropRate: z.number().optional(),
+      // How the phone was held, from CoreMotion -- see tracking-diagnostics.ts.
+      cameraPitchDeg: z.number().optional(),
+      cameraRollDeg: z.number().optional(),
+      cameraTiltSamples: z.number().optional(),
       // Analysis-time device/pipeline conditions -- see AvBodyTrackingPlugin.swift's own
       // comments on why each is worth reading. Optional for the same reason as
       // assetDurationSeconds above: persisted diagnostics from before these fields existed
@@ -9026,6 +9030,11 @@ export const trackingDiagnosticsSchema = z.object({
       barPointFromBothHands: z.number().optional(),
       barPointFromLoneHandCarried: z.number().optional(),
       barPointFromBareLoneHand: z.number().optional(),
+      barPointFromEquipment: z.number().optional(),
+      barPointFromEquipmentRejected: z.number().optional(),
+      equipmentVoteLabel: z.enum(["barbell", "plate"]).nullable().optional(),
+      equipmentAgreementFrames: z.number().optional(),
+      equipmentOffsetSpreadGrips: z.number().nullable().optional(),
       barPointSideFlipped: z.number().optional(),
       torsoStillThisTake: z.boolean().optional(),
       torsoJumpRejections: z.number().optional(),

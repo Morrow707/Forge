@@ -4,6 +4,7 @@ import CoreMedia
 import CoreVideo
 import CoreImage
 import CoreML
+import CoreMotion
 import Vision
 import UIKit
 import Capacitor
@@ -138,6 +139,15 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // result -- that dictionary is assembled inside runPoseAnalysis, outside the scope
     // analyzeRecording decided this in.
     private var lastLiveAttempted = false
+    // HOW THE PHONE WAS HELD, from the accelerometer, sampled for the length of the recording.
+    // Not a floor detector: Vision has none, and a floor line in the image would carry no
+    // scale anyway. The tilt is the thing a floor would have told us, and the phone knows it
+    // directly. Recorded into the take's diagnostics; nothing corrects for it yet. See
+    // docs/camera-tracking-notes.md, 2026-09-28.
+    private let motionManager = CMMotionManager()
+    private let motionQueue = OperationQueue()
+    private var gravitySamples: [CMAcceleration] = []
+    private let gravityLock = NSLock()
     private var lastLiveFallbackReason: String?
     private var lastLiveCoverage: Double?
     private var lastLiveDropRate: Double?
@@ -664,6 +674,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 // read-then-deleteRecording handshake is what normally removes it -- see
                 // deleteRecording's own comment on how fast 1080p at 120fps fills a device.
                 self.discardFinishedRecording = true
+                _ = self.stopGravitySampling()
             }
             if let session = self.session {
                 NotificationCenter.default.removeObserver(self, name: .AVCaptureSessionRuntimeError, object: session)
@@ -1296,6 +1307,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Registered before the write starts, not after -- purgeStaleRecordings runs off a
         // start() call this plugin doesn't control the timing of.
         Self.markPathActive(outputURL.path)
+        startGravitySampling()
 
         // LIVE ANALYSIS IS OPT-IN PER TAKE, AND SILENCE MEANS NO.
         //
@@ -1417,7 +1429,44 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 }
             }
         }
+        pendingCameraTilt = stopGravitySampling()
         movieOutput.stopRecording()
+    }
+
+    /// Median gravity vector over the recording, as camera pitch and roll in degrees. Pitch is
+    /// positive when the lens tilts DOWN toward the floor (a phone propped on a bench looking
+    /// down at a lifter), negative when it looks up from the floor; roll is a sideways lean.
+    /// Both are zero for a phone held upright in portrait. Nil when CoreMotion gave nothing
+    /// (a simulator, or motion updates unavailable), which the diagnostics then simply omit.
+    private var pendingCameraTilt: (pitch: Double, roll: Double, samples: Int)?
+
+    private func startGravitySampling() {
+        gravityLock.lock()
+        gravitySamples.removeAll()
+        gravityLock.unlock()
+        guard motionManager.isDeviceMotionAvailable else { return }
+        motionManager.deviceMotionUpdateInterval = 0.2
+        motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] motion, _ in
+            guard let self = self, let motion = motion else { return }
+            self.gravityLock.lock()
+            if self.gravitySamples.count < 2_000 { self.gravitySamples.append(motion.gravity) }
+            self.gravityLock.unlock()
+        }
+    }
+
+    private func stopGravitySampling() -> (pitch: Double, roll: Double, samples: Int)? {
+        motionManager.stopDeviceMotionUpdates()
+        gravityLock.lock()
+        let samples = gravitySamples
+        gravitySamples.removeAll()
+        gravityLock.unlock()
+        guard !samples.isEmpty else { return nil }
+        // Device axes: y up the screen, z out of the screen toward the user. Upright portrait
+        // puts gravity at (0, -1, 0). Leaning the phone back so the lens looks down moves
+        // gravity toward -z, so pitch = -asin(z) is positive for a lens tilted down.
+        let pitches = samples.map { -asin(max(-1, min(1, $0.z))) * 180 / .pi }
+        let rolls = samples.map { atan2($0.x, -$0.y) * 180 / .pi }
+        return (Self.median(pitches), Self.median(rolls), samples.count)
     }
 
     public func fileOutput(
@@ -1477,6 +1526,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if let copy = copy {
                 result["uploadPath"] = copy.url.path
                 result["uploadBytes"] = copy.bytes
+            }
+            if let tilt = self.pendingCameraTilt {
+                self.pendingCameraTilt = nil
+                result["cameraPitchDeg"] = (tilt.pitch * 10).rounded() / 10
+                result["cameraRollDeg"] = (tilt.roll * 10).rounded() / 10
+                result["cameraTiltSamples"] = tilt.samples
+                self.logDiag(String(format: "camera tilt: pitch %.1f roll %.1f (%d samples)", tilt.pitch, tilt.roll, tilt.samples))
             }
             call.resolve(result)
         }
