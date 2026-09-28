@@ -195,6 +195,15 @@ What this means in code, each one a thing that has already gone wrong:
   Nothing is allowed to be the single point of failure, which is the same thing as saying
   nothing is allowed to be the leader.
 
+- **Analysis time is cut by SPEEDING UP, never by CUTTING.** Scott, same day: "We need to cut
+  analysis time not by cutting things, we need to cut analysis time by speeding it up, having
+  it start when I hit record, things like that." The levers are: start the work at Record (the
+  live path), hand Vision smaller frames (the file path already decodes at 1280; the live path
+  still hands it 1920x1080), run the expensive sensors on a stride, and keep the encode and
+  the upload running while the analysis does. Hand pose off for the bar tracker (2026-09-28,
+  build 557/558) was a cut, not a speed-up, and is to be reversed into a stride the same way
+  as the 3D pose.
+
 Before changing anything under `ios/`, `client/src/lib/*-tracking.ts` or a tracker dialog, say
 which sensor it touches and confirm the change removes nothing and appoints nothing. If it does
 either, it is wrong as written.
