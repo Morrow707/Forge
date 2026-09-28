@@ -133,6 +133,9 @@ export type BackfillProposal = BackfillTarget & {
 export type ChannelSummary = {
   channel: string;
   catalogueSize: number;
+  /** The read stopped at the ceiling with more videos behind it: catalogueSize is a floor, and
+   *  the channel's oldest uploads -- where an exercise library usually lives -- were not seen. */
+  truncated: boolean;
   /** Why a channel contributed nothing, when it did.
    *
    * A bare 0 cost two runs and a wrong theory: westsidebarbell read as "their videos are too
@@ -261,6 +264,7 @@ export async function planExerciseVideoBackfill(options?: {
 
   const pool: VideoCandidate[] = [];
   const catalogueSizes = new Map<string, number>();
+  const truncatedChannels = new Set<string>();
   const statuses = new Map<string, ChannelSummary["status"]>();
   for (const handle of channels) {
     let result: Awaited<ReturnType<typeof channelCatalogue>> = null;
@@ -280,6 +284,7 @@ export async function planExerciseVideoBackfill(options?: {
       continue;
     }
     catalogueSizes.set(result.channel, result.videos.length);
+    if (result.truncated) truncatedChannels.add(result.channel);
     statuses.set(result.channel, "ok");
     pool.push(...result.videos);
   }
@@ -315,6 +320,7 @@ export async function planExerciseVideoBackfill(options?: {
     return {
       channel,
       catalogueSize,
+      truncated: truncatedChannels.has(channel),
       status: statuses.get(channel) ?? "ok",
       matchesWon: won.length,
       medianWinningDurationSeconds: median(won.map((p) => p.match.durationSeconds)),

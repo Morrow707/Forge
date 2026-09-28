@@ -47,6 +47,7 @@ type Proposal = Target & {
 type ChannelSummary = {
   channel: string;
   catalogueSize: number;
+  truncated?: boolean;
   status?: "ok" | "handle_not_found" | "error";
   matchesWon: number;
   medianWinningDurationSeconds: number | null;
@@ -289,7 +290,14 @@ export default function AdminExerciseVideos() {
                             </span>
                           )}
                         </td>
-                        <td className="py-1 pr-3 text-right tabular-nums">{c.catalogueSize}</td>
+                        <td className="py-1 pr-3 text-right tabular-nums">
+                          {c.catalogueSize}
+                          {c.truncated && (
+                            <span className="ml-1 text-xs text-destructive" title="The read stopped at the ceiling; the oldest uploads were not seen.">
+                              + (capped)
+                            </span>
+                          )}
+                        </td>
                         <td className="py-1 pr-3 text-right tabular-nums">{c.matchesWon}</td>
                         <td className="py-1 text-right tabular-nums">
                           {mmss(c.medianWinningDurationSeconds)}
