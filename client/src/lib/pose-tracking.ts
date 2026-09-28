@@ -731,6 +731,9 @@ export type ScaleVerdict = {
   agreedSources: ScaleEstimate["source"][];
   /** Sources that were computed and disagreed with the chosen cluster. */
   outliers: { source: ScaleEstimate["source"]; scale: number; ratioToChosen: number }[];
+  /** True when the chosen number is the AVERAGE of the height and shoulder rulers although they
+   *  disagreed -- see the body-pair rule in reconcileScaleEstimates. Not corroboration. */
+  blended?: boolean;
   /** True when two or more independent sources agreed -- the only case where anything here is
    *  corroborated rather than merely asserted. */
   corroborated: boolean;
@@ -905,6 +908,24 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     if (cluster.length > best.length) best = cluster;
   }
 
+  // THE TWO BODY RULERS ARE AVERAGED WHEN THEY ARE ALL THE TAKE HAS, WHETHER OR NOT THEY AGREE.
+  //
+  // Fitted on three OVR-paired back squats, 2026-09-28. Height alone read 6%, 13% and 19% low;
+  // shoulder breadth alone read 6% to 17% high; the mean of the two landed within 5% on all
+  // three. The old rule only averaged them inside a tolerance, so on two of the three it kept
+  // height alone -- the worse answer each time. Neither ruler is anchored (both are population
+  // fractions of a body), and two biased guesses pulling opposite ways is exactly the case an
+  // average helps. Never applied when a real ruler (plate, measured grip, learned bone) is in
+  // the room: those win the cluster as before. Reported as `blended`, not as corroboration.
+  const BODY_PAIR: ScaleEstimate["source"][] = ["height", "shoulder_width"];
+  const onlyBodyRulers = usable.every((e) => BODY_PAIR.includes(e.source));
+  const hasBoth = BODY_PAIR.every((s) => usable.some((e) => e.source === s));
+  let blended = false;
+  if (onlyBodyRulers && hasBoth && best.length === 1) {
+    best = usable.filter((e) => BODY_PAIR.includes(e.source));
+    blended = true;
+  }
+
   const scale = best.reduce((sum, e) => sum + e.scale, 0) / best.length;
   const agreedSources = best.map((e) => e.source);
   const outliers = usable
@@ -915,7 +936,7 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
       ratioToChosen: Math.round((e.scale / scale) * 100) / 100,
     }));
 
-  return { scale, agreedSources, outliers, corroborated: best.length > 1 };
+  return { scale, agreedSources, outliers, corroborated: best.length > 1 && !blended, blended };
 }
 
 export type ShoulderScaleReading = {

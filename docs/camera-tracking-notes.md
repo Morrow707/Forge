@@ -1308,3 +1308,38 @@ for calibration purposes; the fit waits for the first export after it. No consta
 
 Hand pose is off for the bar tracker too (see the comment at the Stop call): the jump with it
 off finished in 4 seconds on 556, the squat with it on took 30.
+
+### The squat fit, 2026-09-28 evening: what moved, what did not, and why
+
+Three OVR-paired back squats now exist with per-rep sensor numbers (morning set 1; 555 set 3;
+556 set 2 = OVR set 5, shoulders as witness). Scott: "The goal is to get to 0% difference and
+90+% confidence." What the fit found, so nobody re-derives it:
+
+**Scale -- `reconcileScaleEstimates`, the body-pair blend. MOVED.** Height alone read 6%, 13%
+and 19% low on the three sets; shoulder breadth alone 6-17% high; the mean of the two within 5%
+on all three. The old rule averaged them only inside an agreement tolerance, so on two of three
+it kept height alone. Now: when height and shoulder breadth are the ONLY rulers, they are
+averaged whatever their disagreement, reported as `blended`, never as corroborated. A plate, a
+measured grip or a learned bone still wins the cluster. Both rulers are population guesses;
+the way to 0% on range and mean is a real ruler (a tape-measured grip typed once), not a
+better blend.
+
+**Peak -- NOT MOVED, and the reason is the finding.** Eight clean reps: Forge reads 11% high with
+8% scatter. Extra smoothing lowers the mean ratio without touching the scatter (k=9 samples,
+half a second, to reach 1.0) and a plateau rule (mean of k consecutive samples) does the same
+-- so the overshoot is not the derivative and no constant fits it. The ratios CLIMB within each
+set: 1.01 / 1.04 / 1.06 / 1.24 and 1.06 / 1.11 / 1.16 / 1.25. The sensor's peaks fall about 15%
+from rep 2 to rep 5 (fatigue at RPE 8); Forge's stay flat. The means show the same. Raw secant
+speeds over the stored SHOULDER trace (set 5) peak 1.34 / 1.41 / 1.32 / 1.31 against the
+sensor's 1.51 / 1.47 / 1.42 / 1.27: flat in the trace itself, so it is Vision's joint
+positions, not our maths. Range per rep is flat on both sides, so it is not scale drift. Next
+test: sensor on the bar, Forge from the side, and a rep-by-rep look at the clip; candidates are
+bar tilt ("~9 degrees toward the right arm", so the sensor's end of the bar moves differently
+from the middle), or the shoulder joint sliding on the bar as the athlete tires.
+
+**Window -- right on the shoulder set.** Set 5 concentrics 0.80-0.83s against the sensor's
+implied 0.74-0.86s; the earlier 13% mean shortfall on the hands sets was the window, on the
+shoulders set it is scale. Not moved.
+
+**90% confidence** is a dataset problem: every trust threshold is an admitted guess and needs
+about twenty sensor-paired sets across angles to calibrate. A week of sessions, not a change.
