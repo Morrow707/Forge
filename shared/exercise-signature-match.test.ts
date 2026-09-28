@@ -191,6 +191,7 @@ describe("fixtures: must ACCEPT", () => {
     ["Medicine Ball Slam", "Med Ball Slam | Exercise Guide", "med is medicine, folded across the alias"],
     ["Back Squat", "Barbell Back Squat with Hunter Labrada | Exercise Guide", "a demonstrator's name after 'with' is dropped"],
     ["Squat with Woodchopper", "Squat with Woodchopper | Exercise Guide", "a tail the library knows is kept"],
+    ["Romanian Deadlift", "Romanian Deadlift Coach Breakdown", "a channel's house suffix inside the first segment is filler"],
   ];
 
   it.each(rows)("%s <- %s (%s)", (exercise, title) => {

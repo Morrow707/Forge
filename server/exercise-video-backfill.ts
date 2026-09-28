@@ -60,17 +60,23 @@ export const DEMO_VIDEO_CHANNELS = [
   // for the property the winners share: a systematic library where the title IS the exercise
   // name. None could be verified from the sandbox (YouTube is unreachable there), so the dry
   // run's catalogue column is the check: a catalogue of 0 is a handle to fix, not a verdict.
-  "elitefts", // short barbell / accessory demos titled by exercise
+  // Second run the same day (matches won / median): Functional Bodybuilding 53 / 0:16 -- the
+  // best channel after Catalyst on its first outing -- [P]rehab 6 / 0:26, Kettlebell Kings
+  // 6 / 0:14. Kept. All three are still Tier B until the review queue earns them auto-apply
+  // (AUTO_APPLY_CHANNELS in shared/exercise-signature-match.ts says what that takes).
   "ThePrehabGuys", // mobility and rehab: the CARs, stretches and holds nothing else carries
   "FunctionalBodybuilding", // Marcus Filly: dumbbell / kettlebell / tempo demos, name-titled
   "kettlebellkings", // kettlebell library, name-titled
-  "GarageStrength", // weightlifting and throws, plus sprint and jump drills for the skills
-  "TNationTV", // T Nation's exercise-demo clips
 ];
 
 /**
  * CUT, AND WHY -- so nobody re-adds them on the strength of the brand.
  *
+ * - `GarageStrength` (2026-09-28, second run): 4,000 videos loaded, ONE match at 0:37. Content
+ *   verdict -- athlete features and long-form coaching, not a demo library.
+ * - `elitefts` and `TNationTV` (same run): catalogues of 8 and 13. Those are not the channels;
+ *   the handles resolved to something else and the search fallback did not correct them. Like
+ *   Westside below: a lookup failure, fixable with a UC... channel ID, not a verdict.
  * - `athleanx`, `jeffnippard`, `musclestrengthcom`, `BaseballRebellion` (2026-09-28): full
  *   catalogues loaded (1,720 / 626 / 1,488 / 1,018 videos) and between them won ZERO matches on
  *   the first dry run after the matcher fix. That is the content verdict: commentary and long
@@ -86,6 +92,9 @@ export const DEMO_VIDEO_CHANNELS = [
  *   podcasts and interviews rather than demonstrations. The same test Squat University failed.
  */
 export const CHANNELS_CUT_ON_EVIDENCE = [
+  "GarageStrength",
+  "elitefts",
+  "TNationTV",
   "athleanx",
   "jeffnippard",
   "musclestrengthcom",

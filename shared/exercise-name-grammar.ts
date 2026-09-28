@@ -37,6 +37,10 @@ export const FILLER = new Set([
   "your", "you", "this", "on", "in", "at", "using", "variation", "variations", "basics", "basic",
   "beginner", "beginners", "explained", "execution", "tip", "tips", "is", "are", "it", "its",
   "my", "our", "one", "part", "ep", "episode", "series", "olympic", "weightlifting",
+  // Read off the 2026-09-28 "words the library has never seen" table: house words that never
+  // change a movement. "Coach Breakdown" is Renaissance Periodization's suffix on a demo,
+  // "Presents" is a channel introducing one. None appears in any library name.
+  "breakdown", "coach", "coaches", "presents", "workout", "workouts",
 ]);
 
 /**
