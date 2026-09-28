@@ -155,7 +155,7 @@ describe("processing and saving happen during the recording", () => {
     const nils = (body.match(/return nil/g) ?? []).length;
     const reasons = (body.match(/lastLiveFallbackReason = /g) ?? []).length;
     expect(reasons).toBe(nils);
-    expect(source).toMatch(/"liveAttempted": liveAttempted/);
+    expect(source).toMatch(/"liveAttempted": self\.lastLiveAttempted/);
     expect(source).toMatch(/result\["liveFallbackReason"\] = reason/);
   });
 });
