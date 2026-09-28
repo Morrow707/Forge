@@ -1196,3 +1196,100 @@ heights rebuilt from flight time; `uncorrectedJumpHeightCm` stays on the rep and
 **Box-jump contact is a reset -- `groundContactIsBoxReset`.** 2.7s of "ground contact" was
 the step-down. The set-level average and the RSI are withheld as not applicable on a box jump;
 per-rep times stay on `repBreakdown`.
+
+### Build 554 beside OVR, same afternoon: the range gap closed, the jump gate found
+
+Squat set 3, OVR: 0.95 mean (0.95 / 0.99 / 0.99 / 0.94 / 0.91), 1.47 peak (1.53 / 1.58 / 1.49 /
+1.43 / 1.32), 29.2in. Forge 554: 0.75 mean, 1.66 peak, 28.2in (71.7cm), five reps, the first
+flagged "tracking briefly lost" (a 2.07s hole; rep 1 runs 1.07s to 7.47s and includes the
+walk-out). Reps 2-5: means 0.83 / 0.81 / 0.87 / 0.81, peaks 1.66 / 1.65 / 1.66 / 1.63.
+
+- **Range is within 3.4% now** (was 19% low). `torsoJumpRejections` 0, `torsoStillThisTake`
+  false, `torsoLongestExcursionFrames` 92 -- the torso fix did it. BUT the scale was "both":
+  the height ruler alone (0.00325) would have read 64.6cm (13% low) and the shoulder ruler
+  alone (0.00397) 78.9cm (6% high); the average landed near the sensor. Two rulers 22% apart
+  agreeing by averaging is not a calibrated scale. Camera pitch was 14.6 degrees down on both
+  takes (`recording.cameraPitchDeg`, first time recorded); it does NOT explain the height
+  ruler's shortfall by simple foreshortening, because the bar travels in the same plane as the
+  athlete and the ratio cancels. Still open.
+- **Peak is now 13% HIGH** (1.66 vs 1.47) with range 3% low, so it is not scale: it is the
+  derivative. With the bottom of the rep no longer deleted the smoothed speed overshoots at the
+  drive. Sensor peaks fall across the set (1.58 -> 1.32); Forge's are flat. Next: compare
+  `robustPeakSpeed` and the 165ms smoothing against the sensor's rep-by-rep peaks
+  (`bar-tracking.ts`).
+- **Mean is 13% low on the clean reps** (0.83 vs 0.96): Forge's concentric window is 0.87-0.93s
+  for 70cm where the sensor's implied window is about 0.76s. The 1cm travel margin
+  (`TRAVEL_ONSET_MARGIN_M`) is wider than the sensor's; a share of a centimetre less is the next
+  thing to fit, on this take plus the 09-28 morning one.
+- **The plate size gate worked**: the lock at (0.82, 0.16) -- top-right, the rack -- measured
+  1.28 grips and was refused as `too_large_for_a_plate`; scale never touched it.
+- **"Finishing" of 31s is the file re-read**: analysis 39.4s for a 27.5s clip, live coverage
+  0.34 (worse than the morning's 0.37). Hand pose was 11.3s of the 39.4. body3D was 0 (off).
+  The jump's hand pose was 7.2 of 16.5s and a jump never reads a hand: hand pose is now
+  opt-out per take like body3D, and the jump turns it off on both feeders. The bar tracker
+  keeps it. The live path still hands Vision full-size buffers; scaling them is the next
+  change for live coverage.
+- **The jump gate that declined every landing -- `boxTopWorldY` in `av-jump-tracker-dialog.tsx`.**
+  Set 2's `jumpEvents`: takeoff, then `floating_above_box` on every settle, recovery valve,
+  again, `flight_too_long`, dismount. The box top the gate used was the TYPED height (24in)
+  at the take's scale, 187px above the floor; the detector's box implied a 23-inch athlete,
+  i.e. a rectangle three times the size. Nobody checked they agreed, and every real landing on
+  the box sat well above the typed line. The gate and the clearance now get a box top only
+  when the two reads agree within `BOX_TOP_AGREEMENT_FRACTION` (25%) of the box height; both
+  reads and the verdict are in `calibration.boxTopFromHeightM / boxTopFromDetectorM /
+  boxTopCorroborated`. The 3.5cm best-effort read that came back is Rule #1 working: a wrong
+  number that carried the events that found this.
+- `baseline_reanchored -127cm` at 3.07s on the jump is unexplained: the standing ankle height
+  moved 1.27m at the take's scale. Watch for it on the next set.
+- The debug console now survives a force close (`client/src/lib/debug-console.ts`,
+  localStorage, 400 lines, marked "app relaunched").
+
+### Build 555 beside OVR: the head-on squat, and the box as a ruler
+
+Squat (Scott's set 1 on 555, OVR set 4): sensor 0.84 mean, 1.24 peak, 29.6in. Forge 0.27 mean,
+0.71 peak, 9.1in (23cm), five reps. Camera pitch 5.3 degrees -- a different placement from the
+earlier 14.6, and the on-screen note said "filmed head-on or from behind".
+
+**The bar point was not on the bar -- `bar-on-back.ts`, wired into `av-bar-tracker-dialog.tsx`.**
+The stored trace moves about 20cm per rep (per-second y ranges -38 to -17cm) where set 3's
+moves 73. Every frame had a body and both wrists at 0.8 confidence, no torso rejections, no
+velocity rejections: the tracker was confident and wrong. On a back squat filmed from the
+front the wrists are BEHIND THE HEAD, Vision places them near the shoulders, and they barely
+move. The plate was edge-on (941 candidates, 404 refused by size, 537 by confidence, no lock),
+so the equipment vote had nothing to vote with. The shoulders never lost the bar, because the
+bar sits on them. On lifts named as bar-on-back (back squat, high/low bar, box, pause, tempo
+squat, good morning, split squat, lunge, step-up; never front, overhead, zercher, press,
+thruster, SSB, goblet, landmine) the combined bar point is now the shoulder midpoint, in the
+same world space, before the speed gate. The hands still supply grip width (overwatch's
+yardstick), tilt and the half-span. `trace.barWitness` says which ran and
+`barPointFromShoulders` how often. This is the body tracker doing its own job; the change is
+which joint is asked.
+
+**The box is a ruler -- `applyBoxRiseCorrection` in `jump-tracking.ts`.** Scott: "Be mindful, I
+am jumping to a 24 inch box." Jump set 3's box reps rose 73-77cm onto a 61cm box: the take's
+scale was 1.26x. Gravity cannot rule a box set (no flat rep), but the typed box height is a
+distance the ankle MUST rise by on every box rep, and the median rise over the box reps
+divided by it is the scale error. Applied when at least two reps rose past half the box and
+the ratio is more than 5% from 1.0; `boxRise` in the diagnostics carries ratio, reps and
+whether it applied. The four box reps corrected to 61cm; the two 4-6cm "reps" between them
+are the step-downs read as tiny hops (the yellow 14.6in and 18.6in chips), and are the next
+thing to name in the events.
+
+**Takeoff velocity is on the rep -- `JumpRep.takeoffVelocityMps`, chips in `workout.tsx`.**
+Scott: "I'm looking for velocity and velocity stops when I land." It was computed and thrown
+away after becoming a height. Re-derived after any scale correction.
+
+**The gate fix worked.** Set 3's events: takeoff / rep on every box rep, no `floating_above_box`
+(the detector's box top read 1.54m above the floor against the typed 0.61; `boxTopCorroborated`
+false, gate off). `flight_too_long` twice at 1.6-1.8s are the step-down-and-reset stretches.
+
+**Saves: every one landed first time** (3.5-4.2s for 4-5MB, no 409). The "ran out of offline
+storage" toast came from the page's UNMOUNT re-queue, which queued the whole 5MB day on
+navigating to /login although every save had synced; it then replayed under the admin session
+(403, kept now, not dropped). `dirtySinceSyncRef` in `workout.tsx`: the unmount queues only
+when something changed since a save reached the server. The 5MB localStorage ceiling for a
+genuinely offline tracked day is still real and the queue should move to the Filesystem store
+the video queue uses; not done here.
+
+**Live coverage with hand pose off: 0.68 on the jump** (was 0.46), still 0.33 on the squat with
+hand pose on. Scaling the live buffers remains the next native change.

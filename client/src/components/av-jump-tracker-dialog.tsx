@@ -56,6 +56,10 @@ import { buildTrackingDiagnostics } from "@/lib/tracking-diagnostics";
  * tracker dialog) -- what's left here is purely jump-specific: the calibration application,
  * summarizeJumpSet, and the save/upload flow. */
 
+/** How far apart (as a fraction of the box's typed height) the two box-top reads may sit and
+ *  still count as the same box. An admitted guess; both reads are in the diagnostics. */
+const BOX_TOP_AGREEMENT_FRACTION = 0.25;
+
 const EMPTY_JUMP_METRICS: JumpSetMetrics = {
   bestJumpHeightCm: 0,
   bestHorizontalDistanceCm: null,
@@ -179,6 +183,8 @@ export function AvJumpTrackerDialog({
         onAnalysisProgress: (percent) => onAnalysisProgress?.(forSetNumber, percent),
         detectBox: usesBox === true,
         body3D: false,
+        // A jump never reads a hand; hand pose was 7.2 of 16.5 seconds on the 2026-09-28 take.
+        handPose: false,
         // Always provided now (not just when recordVideo) -- see AvBarTrackerDialog's own
         // identical comment: recording has stopped and analysis is about to start regardless
         // of whether a video gets uploaded, and closing the dialog here (instead of leaving
@@ -528,15 +534,32 @@ export function AvJumpTrackerDialog({
       ys.sort((a, b) => a - b);
       return ys[Math.min(ys.length - 1, Math.floor(ys.length * 0.9))];
     })();
-    const boxTopWorldY =
-      boxHeightIn && boxHeightIn > 0 && floorWorldY != null
-        ? // Up is the negative direction in this trace, so a surface above the floor is the
-          // floor's y MINUS the box's height.
-          floorWorldY - boxHeightIn * 0.0254
-        : recordingStats.boxTopNormalizedY != null && nativeRawFrames[0]
-          ? visionBoxTopToWorldY(recordingStats.boxTopNormalizedY, nativeRawFrames[0].frameHeight) *
-            scaleFactor
-          : null;
+    // TWO BOX TOPS, AND THE GATE ONLY RUNS WHEN THEY AGREE. Scott's 2026-09-28 box jump (set
+    // 2, build 554): the box the detector found implied a 23-inch athlete, the typed height
+    // put the box top 187 pixels above the floor, and every landing settled well above THAT
+    // line -- so every landing was refused as "floating above the box" and the set came back
+    // as a 3.5cm best-effort read. A gate built on a box top nobody corroborated declines
+    // real reps; a frame overwatch cannot judge PASSES (CLAUDE.md). Both candidates are
+    // recorded; the gate and the clearance get a box top only when the typed height and the
+    // detector agree on where it is.
+    // Up is the negative direction in this trace, so a surface above the floor is the floor's
+    // y MINUS the box's height.
+    const boxTopFromHeight =
+      boxHeightIn && boxHeightIn > 0 && floorWorldY != null ? floorWorldY - boxHeightIn * 0.0254 : null;
+    const boxTopFromDetector =
+      recordingStats.boxTopNormalizedY != null && nativeRawFrames[0]
+        ? visionBoxTopToWorldY(recordingStats.boxTopNormalizedY, nativeRawFrames[0].frameHeight) * scaleFactor
+        : null;
+    const boxTopCorroborated =
+      boxTopFromHeight != null && boxTopFromDetector != null && floorWorldY != null
+        ? Math.abs(boxTopFromDetector - boxTopFromHeight) <= BOX_TOP_AGREEMENT_FRACTION * Math.abs(floorWorldY - boxTopFromHeight)
+        : null;
+    const boxTopWorldY = boxTopCorroborated ? boxTopFromHeight : null;
+    const boxTopDiagnostics = {
+      boxTopFromHeightM: boxTopFromHeight == null || floorWorldY == null ? null : Math.round((floorWorldY - boxTopFromHeight) * 1000) / 1000,
+      boxTopFromDetectorM: boxTopFromDetector == null || floorWorldY == null ? null : Math.round((floorWorldY - boxTopFromDetector) * 1000) / 1000,
+      boxTopCorroborated,
+    };
     // The interval the trace was ACTUALLY sampled at, measured from its own timestamps rather
     // than taken from the negotiated frame rate. Those differ whenever a stride is applied or
     // frames are dropped, and the gravity ruler's uncertainty goes with the SQUARE of flight
@@ -560,7 +583,7 @@ export function AvJumpTrackerDialog({
       boxTopWorldY,
       frameIntervalSeconds,
       jumpEvents,
-      { usesBox: usesBox === true },
+      { usesBox: usesBox === true, boxHeightCm: boxHeightIn && boxHeightIn > 0 ? boxHeightIn * 2.54 : null },
     );
     if (metrics?.bestEffort) {
       // RULE #1. The state machine found no clean rep; the number on screen is the best read the
@@ -576,7 +599,7 @@ export function AvJumpTrackerDialog({
         message: "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.",
         rawFrames: nativeRawFrames,
         recording: recordingStats,
-        calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames },
+        calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames, ...boxTopDiagnostics },
         jumpEvents,
       });
       const emptyMetrics: JumpSetMetrics = { ...EMPTY_JUMP_METRICS, captureDeviceInfo, trackingDiagnostics: diagnostics };
@@ -635,13 +658,14 @@ export function AvJumpTrackerDialog({
       outcome: "tracked",
       rawFrames: nativeRawFrames,
       recording: recordingStats,
-      calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames },
+      calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames, ...boxTopDiagnostics },
       // THE GRAVITY RULER, SAVED RATHER THAN DISCARDED. summarizeJumpSet computes it and it was
       // being dropped on the floor -- a measurement nothing records is a measurement nobody has.
       // See gravity-ruler.ts: a flat jump's flight time gives a height that depends on nothing
       // but frames and 9.81, so its ratio to the trace's own height is how wrong this take's
       // scale is, with no sensor anywhere.
       gravity: metrics.gravityVerdict,
+      boxRise: metrics.boxRiseVerdict ?? null,
       jumpEvents,
     });
 
@@ -822,7 +846,7 @@ export function AvJumpTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ detectBox: usesBox === true, body3D: false });
+                  startRecording({ detectBox: usesBox === true, body3D: false, handPose: false });
                 }}
                 disabled={!supported || !heightIn}
               >

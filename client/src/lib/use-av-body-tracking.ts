@@ -274,7 +274,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   // live trace it cannot build properly. The stride is this hook's own constant, the same one
   // stopRecordingAndAnalyze passes to analyzeAvRecording, because the native side refuses a
   // live trace measured to a different one.
-  function startRecording(options?: { detectBox?: boolean; trackingMode?: string; body3D?: boolean }) {
+  function startRecording(options?: { detectBox?: boolean; trackingMode?: string; body3D?: boolean; handPose?: boolean }) {
     setError(null);
     setRecording(true);
     recordStartedAtRef.current = Date.now();
@@ -294,6 +294,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       detectBox: options?.detectBox,
       trackingMode: options?.trackingMode,
       body3D: options?.body3D,
+      handPose: options?.handPose,
     }).catch((err) => {
       setError(err instanceof Error ? err.message : "Could not start recording");
       setRecording(false);
@@ -335,6 +336,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   async function stopRecordingAndAnalyze(options?: {
     detectBox?: boolean;
     body3D?: boolean;
+    handPose?: boolean;
     // "med_ball" turns on the additive CoreML implement detector (see
     // native-av-preview.ts's PoseCoreMlImplement) -- every other caller
     // omits this and analysis behaves exactly as before.
@@ -386,6 +388,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   async function doStopRecordingAndAnalyze(options?: {
     detectBox?: boolean;
     body3D?: boolean;
+    handPose?: boolean;
     trackingMode?: string;
     onBlobReady?: (blob: Blob) => void;
     onRecordingStopped?: () => void;
@@ -467,7 +470,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     let recordingStats: AvAnalysisResult;
     try {
       recordingStats = await analyzeAvRecording(
-        path, ANALYSIS_SAMPLE_STRIDE, options?.detectBox, options?.trackingMode, options?.body3D
+        path, ANALYSIS_SAMPLE_STRIDE, options?.detectBox, options?.trackingMode, options?.body3D, options?.handPose
       );
       // The recorder's own facts about the take, carried beside the analysis pass's.
       if (tilt.cameraTiltSamples) recordingStats = { ...recordingStats, ...tilt };

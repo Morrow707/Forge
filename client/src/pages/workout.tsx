@@ -360,6 +360,7 @@ type JumpBreakdownEntry = {
   repNumber: number;
   flightSeconds: number;
   jumpHeightCm: number;
+  takeoffVelocityMps?: number;
   peakHeightCm: number;
   horizontalDistanceCm: number | null;
   groundContactSeconds: number | null;
@@ -1145,6 +1146,11 @@ export function WorkoutPage({
   // Whether a save's response was lost in transit since the last confirmed one -- see the 409
   // catch-up in the save's catch block.
   const lostResponsePossibleRef = useRef(false);
+  // Whether anything changed since the last save that reached the server. The unmount handler
+  // used to re-queue the whole day unconditionally -- on 2026-09-28 that queued a 5MB day whose
+  // every save had already landed, tripped "ran out of offline storage", and then replayed the
+  // stale snapshot under the next account that signed in.
+  const dirtySinceSyncRef = useRef(false);
   // The server row id of every saved set on this day, keyed `${programExerciseId}:${setNumber}`.
   // Seeded from the day read and replaced from every synced save (a save reinserts the day, so
   // every id changes). A clip queued for later upload carries the id current at record time so
@@ -1566,6 +1572,7 @@ export function WorkoutPage({
       // Each save advances the stored revision, so the next payload has to claim the
       // new one or it would look stale to the server and be refused.
       if (synced && typeof data?.revision === "number") baseRevisionRef.current = data.revision;
+      if (synced) dirtySinceSyncRef.current = false;
       // Every synced save replaces every set row, so the ids a queued clip carries are stale
       // from this moment. Take the new ones and push them into the queue before the next flush
       // can run with the old ones; the tuple fallback would still land it, but the row id is
@@ -1916,6 +1923,7 @@ export function WorkoutPage({
   // was rather than forcing it false, so a background save can't silently
   // un-complete an already-finished workout.
   function scheduleAutosave(nextItems: ItemState[]) {
+    dirtySinceSyncRef.current = true;
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
       autosaveTimerRef.current = null;
@@ -2008,6 +2016,10 @@ export function WorkoutPage({
       // Same guard as flush() above, for the same reason: an unmount from a failed read would
       // otherwise queue an empty day and delete the athlete's workout on the next flush.
       if (!hydratedRef.current) return;
+      // Nothing changed since a save landed: there is nothing to rescue, and queueing a day the
+      // server already has only costs storage and a stale replay. A save still in flight or
+      // pending counts as dirty, because scheduleAutosave marked it and nothing has cleared it.
+      if (!dirtySinceSyncRef.current) return;
       const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
       const rejectedStatus = lastPermanentRejectionRef.current;
       if (rejectedStatus == null) {
@@ -3934,6 +3946,7 @@ function ExerciseLogContent({
                         }
                       >
                         {formatDistanceCm(j.jumpHeightCm, distanceUnit)}
+                        {j.takeoffVelocityMps != null ? ` · ${j.takeoffVelocityMps} m/s takeoff` : ""}
                         {j.groundContactSeconds != null ? ` · ${j.groundContactSeconds}s on the ground` : ""}
                       </span>
                     ))}

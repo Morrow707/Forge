@@ -264,7 +264,13 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **554** is the newest TestFlight build, cut from `32087376` on 2026-09-28 (#169). It
+- Build **556** is the newest TestFlight build, cut from `7870358c` on 2026-09-28 (#174): the
+  shoulders carry the bar on bar-on-back lifts, the box is a scale ruler, takeoff velocity on
+  every jump rep, the unmount re-queue only when dirty.
+- Build **555** was the previous build, cut from `711d65d1` on 2026-09-28 (#172): the
+  box-landing gate needs a corroborated box top, hand pose off for jumps, the debug console
+  survives a force close.
+- Build **554** was the previous build, cut from `32087376` on 2026-09-28 (#169). It
   carries the equipment's vote on bar position, the CoreMotion camera tilt, the torso-stillness
   fix, the plate size gate, the jump gravity correction, the best-effort jump (Rule #1), the
   box-contact rule, the 409 catch-up after a lost response, the 403 queue rule, and the 3D pose

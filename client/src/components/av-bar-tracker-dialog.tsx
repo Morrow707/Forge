@@ -35,6 +35,7 @@ import type {
 } from "@/lib/native-av-preview";
 import { referenceObjectVerdict, MIN_YARDSTICK_PX } from "@shared/tracker-arbiter";
 import { EquipmentOffsetLearner, equipmentBoxForBarPath } from "@/lib/equipment-bar-point";
+import { barRidesOnShoulders } from "@/lib/bar-on-back";
 import {
   POSE_LANDMARKS,
   detectFormFaults,
@@ -1394,6 +1395,10 @@ export function AvBarTrackerDialog({
     let barPointFromEquipment = 0;
     let barPointFromEquipmentRejected = 0;
     const equipmentOffsets = new EquipmentOffsetLearner();
+    // See bar-on-back.ts. On these lifts the shoulder midpoint IS the bar; the hands are
+    // behind the head and, filmed from the front, never see it.
+    const barOnBack = barRidesOnShoulders(exerciseName, equipment);
+    let barPointFromShoulders = 0;
     let prevCombined: { x: number; y: number; t: number }[] = [];
     let verticalSign: 1 | -1 = 1;
     // Half the measured distance from the left grip to the right, carried forward so a frame with
@@ -1626,6 +1631,22 @@ export function AvBarTrackerDialog({
         carryBy,
         lastTracePoint ? { x: lastTracePoint.x, y: verticalSign * lastTracePoint.y } : null,
       );
+      // THE SHOULDERS CARRY THE BAR ON A BACK SQUAT -- see bar-on-back.ts. Same space as the
+      // wrist points (worldLm), so the trace, the speed gate and every metric read it unchanged.
+      // The hands' point still feeds grip width, tilt and the half-span above; it just stops
+      // being the position. Confidence is the hands' when they agreed, else the frame's own.
+      if (barOnBack) {
+        const ls = lm(POSE_LANDMARKS.LEFT_SHOULDER);
+        const rs = lm(POSE_LANDMARKS.RIGHT_SHOULDER);
+        if (ls && rs) {
+          combined = {
+            x: (ls.x + rs.x) / 2,
+            y: (ls.y + rs.y) / 2,
+            confidence: combined?.confidence ?? MIN_TRACKING_CONFIDENCE,
+          };
+          barPointFromShoulders++;
+        }
+      }
       // WHICH BRANCH BUILT THIS POINT, COUNTED.
       //
       // The three branches mean three different things and the trace cannot be read without
@@ -1785,6 +1806,8 @@ export function AvBarTrackerDialog({
         barPointFromBareLoneHand,
         barPointFromEquipment,
         barPointFromEquipmentRejected,
+        barPointFromShoulders,
+        barWitness: (barOnBack ? "shoulders" : "hands") as "shoulders" | "hands",
         equipmentVoteLabel: equipmentOffsets.label,
         equipmentAgreementFrames: equipmentOffsets.agreementFrames,
         equipmentOffsetSpreadGrips: (() => {

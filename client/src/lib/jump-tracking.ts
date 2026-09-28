@@ -64,6 +64,11 @@ export type JumpRep = {
   // world-space ankle trace.
   jumpHeightCm: number;
   peakHeightCm: number;
+  /** THE NUMBER THE ATHLETE ASKED FOR. Scott, 2026-09-28: "I'm looking for velocity and velocity
+   *  stops when I land." Vertical velocity at takeoff, from flight time and the net rise onto
+   *  whatever was landed on -- the quantity jumpHeightCm is derived from, reported in its own
+   *  right. Re-derived whenever a scale correction moves the net rise. */
+  takeoffVelocityMps?: number;
   // Null when the camera axis shows negligible horizontal travel (a
   // vertical-only jump) -- not every jump is a broad jump.
   horizontalDistanceCm: number | null;
@@ -133,6 +138,9 @@ export type JumpSetMetrics = {
   } | null;
   /** True when no rep passed the state machine and the set is the best-effort read instead. */
   bestEffort?: boolean;
+  /** The box as a ruler -- see applyBoxRiseCorrection. Null when no box height was typed or
+   *  too few box reps; applied false when the scale already agreed within 5%. */
+  boxRiseVerdict?: { scaleErrorRatio: number; repsUsed: number; applied: boolean } | null;
   /** A box jump's "ground contact" is the athlete stepping down and resetting, not a reactive
    *  contact, so the set-level average and the RSI built on it are withheld as not applicable.
    *  The per-rep contact times stay in repBreakdown; only the comparative numbers go. */
@@ -290,6 +298,9 @@ export function summarizeJumpSet(
   options?: {
     /** A box is in the scene -- see groundContactIsBoxReset. */
     usesBox?: boolean;
+    /** The box's typed height. A known distance the ankle must rise by on every box rep, so
+     *  it is a scale ruler the way a plate is -- see applyBoxRiseCorrection. */
+    boxHeightCm?: number | null;
   },
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
@@ -555,6 +566,7 @@ export function summarizeJumpSet(
               flightSeconds: Math.round(flightSeconds * 1000) / 1000,
               netRiseCm: Math.round(netRiseCm * 10) / 10,
               jumpHeightCm: Math.round(jumpHeightCm * 10) / 10,
+              takeoffVelocityMps: Math.round(takeoffVelocityMps * 100) / 100,
               peakHeightCm: Math.round(peakHeightCm * 10) / 10,
               horizontalDistanceCm,
               groundContactSeconds,
@@ -649,6 +661,12 @@ export function summarizeJumpSet(
   // sensor rather than trusted.
   const applied = applyGravityCorrection(reps, gravityVerdictRaw);
   const gravityVerdict = gravityVerdictRaw ? { ...gravityVerdictRaw, applied } : null;
+  // THE BOX IS A RULER. Scott, 2026-09-28: "Be mindful, I am jumping to a 24 inch box." On a
+  // box rep the ankle's net rise from takeoff to landing IS the box height, a distance the
+  // athlete typed. Set 3 read 73-77cm of rise onto a 61cm box, so the take's scale was about a
+  // quarter high and the 32in height with it. The gravity ruler needs a flat jump and a box
+  // set has none; this needs a box and nothing else. Applied only when gravity did not.
+  const boxRiseVerdict = applied ? null : applyBoxRiseCorrection(reps, options?.usesBox ? options?.boxHeightCm ?? null : null);
 
   const bestJumpHeightCm = Math.max(...reps.map((r) => r.jumpHeightCm));
   const distances = reps.map((r) => r.horizontalDistanceCm).filter((d): d is number => d != null);
@@ -693,7 +711,39 @@ export function summarizeJumpSet(
     gravityVerdict,
     bestEffort,
     groundContactIsBoxReset,
+    boxRiseVerdict,
   };
+}
+
+/** A box rep is one whose net rise is at least this share of the typed box height. */
+export const BOX_RISE_MIN_SHARE = 0.5;
+export const BOX_RISE_MIN_REPS = 2;
+
+/** Divides every scaled number by (median net rise / box height) when the set has enough box
+ *  reps and the ratio is more than 5% from 1.0. Mutates the reps; returns the verdict. */
+export function applyBoxRiseCorrection(
+  reps: JumpRep[],
+  boxHeightCm: number | null,
+): { scaleErrorRatio: number; repsUsed: number; applied: boolean } | null {
+  if (!boxHeightCm || !(boxHeightCm > 0)) return null;
+  const rises = reps.map((r) => r.netRiseCm).filter((v) => v >= boxHeightCm * BOX_RISE_MIN_SHARE).sort((a, b) => a - b);
+  if (rises.length < BOX_RISE_MIN_REPS) return null;
+  const ratio = Math.round((rises[Math.floor(rises.length / 2)] / boxHeightCm) * 1000) / 1000;
+  if (Math.abs(ratio - 1) <= GRAVITY_CORRECTION_MIN_ERROR) return { scaleErrorRatio: ratio, repsUsed: rises.length, applied: false };
+  for (const rep of reps) {
+    rep.uncorrectedJumpHeightCm = rep.jumpHeightCm;
+    rep.netRiseCm = Math.round((rep.netRiseCm / ratio) * 10) / 10;
+    rep.peakHeightCm = Math.round((rep.peakHeightCm / ratio) * 10) / 10;
+    if (rep.horizontalDistanceCm != null) rep.horizontalDistanceCm = Math.round((rep.horizontalDistanceCm / ratio) * 10) / 10;
+    if (rep.boxClearanceCm != null) rep.boxClearanceCm = Math.round((rep.boxClearanceCm / ratio) * 10) / 10;
+    const t = rep.flightSeconds;
+    if (t > 0) {
+      const v0 = (rep.netRiseCm / 100 + (GRAVITY_MPS2 * t * t) / 2) / t;
+      rep.jumpHeightCm = Math.round(Math.max(0, (v0 * v0) / (2 * GRAVITY_MPS2)) * 1000) / 10;
+      rep.takeoffVelocityMps = Math.round(Math.max(0, v0) * 100) / 100;
+    }
+  }
+  return { scaleErrorRatio: ratio, repsUsed: rises.length, applied: true };
 }
 
 /** How confident the gravity ruler has to be before it is allowed to correct anything, and how
@@ -722,6 +772,7 @@ export function applyGravityCorrection(
     if (t > 0) {
       const v0 = (rep.netRiseCm / 100 + (GRAVITY_MPS2 * t * t) / 2) / t;
       rep.jumpHeightCm = Math.round(Math.max(0, (v0 * v0) / (2 * GRAVITY_MPS2)) * 1000) / 10;
+      rep.takeoffVelocityMps = Math.round(Math.max(0, v0) * 100) / 100;
     }
   }
   return true;
@@ -758,9 +809,13 @@ export function bestEffortJump(
   const landingY = afterSorted.length ? afterSorted[Math.floor(afterSorted.length / 2)] : standing;
   const netRiseM = standing - landingY;
   let jumpHeightCm = peakHeightM * 100;
+  let takeoffVelocityMps: number | undefined;
   if (flightSeconds > 0 && flightSeconds <= MAX_FLIGHT_SECONDS) {
     const v0 = (netRiseM + (GRAVITY_MPS2 * flightSeconds * flightSeconds) / 2) / flightSeconds;
-    if (v0 > 0) jumpHeightCm = ((v0 * v0) / (2 * GRAVITY_MPS2)) * 100;
+    if (v0 > 0) {
+      jumpHeightCm = ((v0 * v0) / (2 * GRAVITY_MPS2)) * 100;
+      takeoffVelocityMps = Math.round(v0 * 100) / 100;
+    }
   }
   const horizontalCm = Math.abs(rawPoints[landingIdx].x - rawPoints[takeoffIdx].x) * 100;
   return {
@@ -768,6 +823,7 @@ export function bestEffortJump(
     flightSeconds: Math.round(flightSeconds * 1000) / 1000,
     netRiseCm: Math.round(netRiseM * 1000) / 10,
     jumpHeightCm: Math.round(jumpHeightCm * 10) / 10,
+    takeoffVelocityMps,
     peakHeightCm: Math.round(peakHeightM * 1000) / 10,
     horizontalDistanceCm: horizontalCm >= 5 ? Math.round(horizontalCm * 10) / 10 : null,
     groundContactSeconds: null,

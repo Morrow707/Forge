@@ -74,6 +74,9 @@ export type TraceDiagnostics = {
    *  and the ones it offered that the speed gate refused -- see equipment-bar-point.ts. */
   barPointFromEquipment?: number;
   barPointFromEquipmentRejected?: number;
+  /** Bar-on-back lifts take their position from the shoulder midpoint -- see bar-on-back.ts. */
+  barPointFromShoulders?: number;
+  barWitness?: "shoulders" | "hands";
   /** Which class earned the vote, how many frames it agreed with the hands on, and how far
    *  that agreement wandered (median absolute deviation, in grip widths). The spread is what
    *  decides whether the equipment may vote at all, so the threshold can be revised from it. */
@@ -325,6 +328,11 @@ export type TrackingDiagnostics = {
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
+    /** Box jump: the two box-top reads (metres above the floor) and whether they agreed. See
+     *  av-jump-tracker-dialog's boxTopCorroborated. */
+    boxTopFromHeightM?: number | null;
+    boxTopFromDetectorM?: number | null;
+    boxTopCorroborated?: boolean | null;
     unresolvedFrames: number;
     // WHAT THE REFERENCE-OBJECT DETECTOR ACTUALLY BOXED.
     //
@@ -387,6 +395,9 @@ export type TrackingDiagnostics = {
     repsUsed: number;
     applied?: boolean;
   } | null;
+  /** THE BOX RULER: median net rise on box reps over the typed box height. See
+   *  applyBoxRiseCorrection in jump-tracking.ts. */
+  boxRise?: { scaleErrorRatio: number; repsUsed: number; applied: boolean } | null;
   /** THE ATHLETE'S OWN BONES, IN METRES, from a take whose ruler the body had no hand in.
    *
    *  Travels in the diagnostics blob rather than as its own column because it is EVIDENCE about
@@ -599,6 +610,7 @@ export function buildTrackingDiagnostics(args: {
   // has the finished trace and whatever the segmenter made of it.
   trace?: TrackingDiagnostics["trace"];
   gravity?: TrackingDiagnostics["gravity"];
+  boxRise?: TrackingDiagnostics["boxRise"];
   limbMeasurementsM?: TrackingDiagnostics["limbMeasurementsM"];
   repConsistency?: TrackingDiagnostics["repConsistency"];
   jumpEvents?: TrackingDiagnostics["jumpEvents"];
@@ -610,6 +622,7 @@ export function buildTrackingDiagnostics(args: {
     outcome: args.outcome,
     trace: args.trace ?? null,
     gravity: args.gravity ?? null,
+    boxRise: args.boxRise ?? null,
     limbMeasurementsM: args.limbMeasurementsM ?? null,
     repConsistency: args.repConsistency ?? null,
     jumpEvents: args.jumpEvents ?? null,
