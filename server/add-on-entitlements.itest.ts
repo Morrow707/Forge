@@ -9,7 +9,7 @@ import {
   TestClient,
   type TestServer,
 } from "./test-support/http-app";
-import { FREE_AGENT_ADD_ON_ORDER } from "@shared/free-agent-tiers";
+import { FREE_AGENT_ADD_ON_ORDER, WITHDRAWN_ADD_ONS } from "@shared/free-agent-tiers";
 
 /**
  * SPORT-COACH ADD-ONS AND COACHES CORNER, ASKED OVER HTTP.
@@ -61,11 +61,25 @@ afterAll(async () => {
   await server?.close();
 });
 
-describe("a Free Agent's sport coaches", () => {
-  it("gives a beta account all three, without anybody having bought one", async () => {
+describe("a Free Agent's add-ons", () => {
+  /* THE THREE SPORT COACHES ARE WITHHELD (WITHDRAWN_ADD_ONS, 2026-09-28) and these tests were
+   * written before that. They asserted the contract that a beta account gets EVERY add-on, which
+   * was right until the withdrawal and is now exactly what must not happen: the coaches work as
+   * code and nobody has held them against a real swing, a real at-bat or a real pitch.
+   *
+   * Rewritten to pin the withdrawal instead of deleted, because the interesting half is not "they
+   * are off" but WHICH doors the withdrawal closes -- beta, an active trial and a recorded
+   * PURCHASE all open every other entitlement in this system, and it has to beat all three. */
+  const offered = FREE_AGENT_ADD_ON_ORDER.filter((id) => !WITHDRAWN_ADD_ONS.includes(id));
+
+  it("still gives a beta account every add-on that is actually offered", () => {
+    expect(offered.length).toBeGreaterThan(0);
+  });
+
+  it("gives a beta account the offered add-ons, without anybody having bought one", async () => {
     const res = await asBetaAthlete.get("/api/athlete/entitlements");
     expect(res.status).toBe(200);
-    for (const id of FREE_AGENT_ADD_ON_ORDER) {
+    for (const id of offered) {
       expect(res.body.addOns[id]).toBe(true);
       // Access and ownership are separate answers on purpose: a surface that
       // cannot tell them apart either implies a purchase that never happened or
@@ -74,14 +88,21 @@ describe("a Free Agent's sport coaches", () => {
     }
   });
 
-  it("lets a beta account actually open one, not just see it unlocked", async () => {
-    // The gate, not the convenience endpoint. A 402 here would mean the page and
-    // the route disagree, which is the exact failure the old client-side
-    // re-derivation produced.
+  it("closes a withdrawn add-on even for a beta account", async () => {
+    // Beta unlocks everything Forge MEANS to sell. Something nobody has tested is not that, so
+    // the withdrawal is applied after the beta short-circuit rather than before it.
+    const res = await asBetaAthlete.get("/api/athlete/entitlements");
+    for (const id of WITHDRAWN_ADD_ONS) expect(res.body.addOns[id]).toBe(false);
+  });
+
+  it("refuses the chat route too, not just the flag", async () => {
+    // The gate, not the convenience endpoint. The page and the route disagreeing is the exact
+    // failure the old client-side re-derivation produced -- here it would mean a withheld coach
+    // hidden on screen and still reachable by anyone who typed the URL.
     const res = await asBetaAthlete.post("/api/athlete/coach/hitting/chat", {
       message: "how is my swing",
     });
-    expect(res.status).not.toBe(402);
+    expect(res.status).toBe(402);
   });
 
   it("gives a non-beta account with no add-ons none of them", async () => {
@@ -92,17 +113,19 @@ describe("a Free Agent's sport coaches", () => {
     expect(chat.status).toBe(402);
   });
 
-  it("gives a non-beta account exactly what it owns, once ownership is recorded", async () => {
-    // What the webhook branch writes, asserted through the read path that decides
-    // access -- so a purchase recorded in the column really does open the gate.
+  it("does not open a withdrawn add-on even for an account that OWNS it", async () => {
+    // The sharpest case, and the one no test covered before. Ownership is what the Stripe and
+    // Apple webhooks write, and it opens every other entitlement here -- so if the withdrawal
+    // did not beat it, anybody who bought a sport coach before today would still be talking to
+    // an untested one. Ownership is still REPORTED, because it is a fact about what they paid
+    // for and the refund conversation needs it; only access is closed.
     await db
       .update(users)
       .set({ freeAgentAddOns: ["golf_swing"] })
       .where(eq(users.id, payingAthlete.id));
     const res = await asPayingAthlete.get("/api/athlete/entitlements");
-    expect(res.body.addOns.golf_swing).toBe(true);
     expect(res.body.ownedAddOns.golf_swing).toBe(true);
-    expect(res.body.addOns.pitching).toBe(false);
+    expect(res.body.addOns.golf_swing).toBe(false);
   });
 });
 
