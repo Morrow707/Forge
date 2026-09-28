@@ -1,7 +1,11 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MAX_DURATION_SECONDS, DEMO_VIDEO_CHANNELS } from "./exercise-video-backfill";
+import {
+  CHANNELS_CUT_ON_EVIDENCE,
+  DEFAULT_MAX_DURATION_SECONDS,
+  DEMO_VIDEO_CHANNELS,
+} from "./exercise-video-backfill";
 
 const routes = readFileSync(join(import.meta.dirname, "routes.ts"), "utf8");
 const repo = join(import.meta.dirname, "..");
@@ -93,6 +97,12 @@ describe("the channel list", () => {
 
   it("caps demos at three minutes", () => {
     expect(DEFAULT_MAX_DURATION_SECONDS).toBe(180);
+  });
+
+  it("never carries a channel that was cut on evidence", () => {
+    // Zero wins over a full catalogue is a content verdict; the list of cut channels says why.
+    const live = new Set(DEMO_VIDEO_CHANNELS.map((c) => c.toLowerCase()));
+    for (const cut of CHANNELS_CUT_ON_EVIDENCE) expect(live.has(cut.toLowerCase()), cut).toBe(false);
   });
 
   it("has no duplicates, which would double a channel's quota cost", () => {

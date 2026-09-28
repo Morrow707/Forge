@@ -49,24 +49,33 @@ import { channelCatalogue, newQuotaLedger, type QuotaLedger } from "./youtube-ca
  * whose matches run long is not doing the job and comes out of this list.
  */
 export const DEMO_VIDEO_CHANNELS = [
+  // The four that earn their place on the 2026-09-28 dry run (matches won / median length):
+  // Catalyst 81 / 0:53, Renaissance Periodization 45 / 0:12, Bodybuilding.com 16 / 0:57,
+  // ScottHermanFitness 15 / 1:52.
   "CatalystAthletics",
-  "ScottHermanFitness",
-  "athleanx",
-  "musclestrengthcom",
-  "buffdudes",
-  // Added 2026-09-27 to replace three that were cut (below). All three are picked for the same
-  // property that makes Catalyst Athletics supply 94 matches on its own: a SYSTEMATIC library
-  // where the title is the exercise name and little else. That is exactly what the precision
-  // floor rewards, and it is a better predictor of yield than how good the coaching is.
-  "jeffnippard",
   "RenaissancePeriodization",
   "bodybuildingcom",
-  "BaseballRebellion",
+  "ScottHermanFitness",
+  // Added 2026-09-28 on Scott's call to swap the zero-win channels for others. Each is picked
+  // for the property the winners share: a systematic library where the title IS the exercise
+  // name. None could be verified from the sandbox (YouTube is unreachable there), so the dry
+  // run's catalogue column is the check: a catalogue of 0 is a handle to fix, not a verdict.
+  "elitefts", // short barbell / accessory demos titled by exercise
+  "ThePrehabGuys", // mobility and rehab: the CARs, stretches and holds nothing else carries
+  "FunctionalBodybuilding", // Marcus Filly: dumbbell / kettlebell / tempo demos, name-titled
+  "kettlebellkings", // kettlebell library, name-titled
+  "GarageStrength", // weightlifting and throws, plus sprint and jump drills for the skills
+  "TNationTV", // T Nation's exercise-demo clips
 ];
 
 /**
  * CUT, AND WHY -- so nobody re-adds them on the strength of the brand.
  *
+ * - `athleanx`, `jeffnippard`, `musclestrengthcom`, `BaseballRebellion` (2026-09-28): full
+ *   catalogues loaded (1,720 / 626 / 1,488 / 1,018 videos) and between them won ZERO matches on
+ *   the first dry run after the matcher fix. That is the content verdict: commentary and long
+ *   form rather than demonstrations. Scott: "get rid of those channels and try other ones."
+ * - `buffdudes` (same day): 5 wins at a 2:11 median. The Squat University test.
  * - `westsidebarbell`: catalogue 0 on two consecutive runs. NOT a length or content problem;
  *   the channel never loaded at all, so not one of its videos was ever measured against the cap.
  *   The handle does not resolve and the search fallback did not find it either. Scott asked for
@@ -76,7 +85,16 @@ export const DEMO_VIDEO_CHANNELS = [
  * - `DrivelineBaseball`: 1,721 videos loaded and ONE matched. This is the real content verdict --
  *   podcasts and interviews rather than demonstrations. The same test Squat University failed.
  */
-export const CHANNELS_CUT_ON_EVIDENCE = ["westsidebarbell", "onnit", "DrivelineBaseball"];
+export const CHANNELS_CUT_ON_EVIDENCE = [
+  "athleanx",
+  "jeffnippard",
+  "musclestrengthcom",
+  "BaseballRebellion",
+  "buffdudes",
+  "westsidebarbell",
+  "onnit",
+  "DrivelineBaseball",
+];
 
 /**
  * The length cap. Three minutes: long enough for a setup-plus-two-reps demonstration of a
