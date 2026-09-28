@@ -125,15 +125,23 @@ export async function resolveChannel(
  * Athletics was reading this year's uploads and truncating the exercise library itself, which is
  * older content and the single best source of short demos in the pool.
  *
- * 4,000 costs 80 listing calls and 80 detail calls per full channel -- 160 units, against a
- * 10,000-a-day allowance that the whole first run spent 244 of. The cap is there to stop an
- * unbounded walk, not to save units we are nowhere near using.
+ * Then 4,000 bound the same way on the 2026-09-28 run: Bodybuilding.com, Functional
+ * Bodybuilding and Garage Strength all read exactly 4000, and Bodybuilding.com's exercise
+ * database -- the reason it is on the list -- is its OLDEST content, so a newest-first read
+ * that stops at 4,000 never reached it and the channel won nine. Scott's question ("in 23k
+ * videos we can't find 700?") is what surfaced it: 23,620 was partly the cap talking.
+ *
+ * 20,000 costs 400 listing calls and 400 detail calls for a channel that size -- 800 units
+ * against 10,000 a day, and no channel on the list is anywhere near it. The result also says
+ * whether the ceiling was hit, so a capped channel can never again read as a counted one.
  */
+export const CATALOGUE_CEILING = 20_000;
+
 export async function channelCatalogue(
   handleOrId: string,
   ledger: QuotaLedger,
-  maxVideos = 4000,
-): Promise<{ channel: string; videos: VideoCandidate[] } | null> {
+  maxVideos = CATALOGUE_CEILING,
+): Promise<{ channel: string; videos: VideoCandidate[]; truncated: boolean } | null> {
   const channel = await resolveChannel(handleOrId, ledger);
   if (!channel) return null;
 
@@ -161,6 +169,7 @@ export async function channelCatalogue(
     pageToken = page.nextPageToken;
     if (!pageToken) break;
   }
+  const truncated = ids.length >= maxVideos && Boolean(pageToken);
 
   const videos: VideoCandidate[] = [];
   for (let i = 0; i < ids.length; i += 50) {
@@ -183,7 +192,7 @@ export async function channelCatalogue(
       });
     }
   }
-  return { channel: channel.title, videos };
+  return { channel: channel.title, videos, truncated };
 }
 
 export function newQuotaLedger(): QuotaLedger {
