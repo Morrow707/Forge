@@ -74,6 +74,7 @@ const REASON_RANK: Record<RejectReason, number> = {
   head: 1,
   "no-head": 0,
   "red-flag": 0,
+  combo: 0,
 };
 
 export function runSignatureMatch(
