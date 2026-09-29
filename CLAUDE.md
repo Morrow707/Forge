@@ -325,7 +325,10 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **572** is the newest TestFlight build, cut 2026-09-29 night from #186: the set 5
+- Build **573** is the newest TestFlight build, cut 2026-09-29 night from #187: the depth
+  ruler recorded (`body3DRuler.depthRulerScale`, `frameWidth`, `frameHeight`) and sets 5 and
+  6 as ground truth. See docs/camera-tracking-notes.md, "Build 572 beside OVR, set 6".
+- Build **572** was the previous build, cut 2026-09-29 night from #186: the set 5
   segmentation rules (`isImplausiblyFast`, `splitMergedPhases`, count-informed isolation) and
   a 400-held set never given up on. See docs/camera-tracking-notes.md, "Build 571 beside OVR,
   set 5".
