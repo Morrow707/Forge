@@ -17,6 +17,7 @@ import {
   type LimbKey,
 } from "@shared/athlete-body-model";
 import { measureLimbsInMetres, measureLimbSpansInUnits } from "@/lib/measure-limbs";
+import { body3DScaleFromFrames } from "@/lib/body-3d-ruler";
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
@@ -1191,9 +1192,13 @@ export function AvBarTrackerDialog({
     // The longest converged limb wins. A longer bone is a smaller fractional error for the same
     // landmark noise, which is the same argument that makes a full-body height read better than
     // a shoulder span.
+    // The bones' longest 2D projections, in the tracker's units -- read once and handed to both
+    // rulers that divide a known length by it (the learned limb model and the 3D skeleton), so the
+    // two cannot measure the same bone two different ways.
+    const limbSpansUnits = measureLimbSpansInUnits(calibrationInput);
     const bodyModelScale = (() => {
       if (!bodyModel) return null;
-      const spans = measureLimbSpansInUnits(calibrationInput);
+      const spans = limbSpansUnits;
       let best: { scale: number; uncertaintyFraction: number } | null = null;
       let bestMetres = 0;
       for (const [key, spanUnits] of Object.entries(spans) as [LimbKey, number][]) {
@@ -1207,6 +1212,9 @@ export function AvBarTrackerDialog({
       return best ? { source: "body_model" as const, ...best } : null;
     })();
     const shoulderScaleValue = shoulderScale.scale;
+    // THE 3D SKELETON, IN METRES, ON THIS TAKE -- see body-3d-ruler.ts. A peer under overwatch
+    // like every other candidate below; it decides nothing on its own.
+    const body3DScale = body3DScaleFromFrames(rawFrames, heightIn, limbSpansUnits);
 
     // Every candidate is checked against the athlete's own height before any of them is ranked --
     // see rejectImplausibleScales. A scale that puts a 5'10" lifter at sixteen inches tall is
@@ -1225,6 +1233,9 @@ export function AvBarTrackerDialog({
         : []),
       // THE ONE RULER THE ATHLETE SIMPLY TOLD US. See gripWidthScaleFromFrames.
       ...(gripScale != null ? [gripScale] : []),
+      ...(body3DScale.scale != null
+        ? [{ source: "body_3d" as const, scale: body3DScale.scale, uncertaintyFraction: body3DScale.uncertaintyFraction }]
+        : []),
       ...(bodyModelScale != null ? [bodyModelScale] : []),
       ...(heightScaleFactor != null
         ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: 0.05 }]
@@ -1253,7 +1264,7 @@ export function AvBarTrackerDialog({
     // new and its training data is thin, so a number built on one has to be identifiable as such
     // rather than indistinguishable from a height-derived one.
     // Names what actually decided the number, including whether anything corroborated it.
-    const scaleSource: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | null =
+    const scaleSource: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | null =
       scaleVerdict.agreedSources.length > 1
         ? "both"
         : (scaleVerdict.agreedSources[0] ?? null);
@@ -1273,6 +1284,19 @@ export function AvBarTrackerDialog({
         : []),
       ...(gripScale != null
         ? [{ source: "grip_width", scale: gripScale.scale, measured: null, samples: null }]
+        : []),
+      ...(body3DScale.scale != null
+        ? [
+            {
+              // `measured` is the bone length in metres after the height correction, `samples`
+              // the 3D frames it came from. The bone and the correction path are in the source
+              // name so the report can tell a depth-measured skeleton from a corrected one.
+              source: `body_3d:${body3DScale.limb ?? "?"}:${body3DScale.heightSource ?? "?"}`,
+              scale: body3DScale.scale,
+              measured: body3DScale.metres,
+              samples: body3DScale.framesUsed,
+            },
+          ]
         : []),
       ...(bodyModelScale != null
         ? [{ source: "body_model", scale: bodyModelScale.scale, measured: null, samples: null }]

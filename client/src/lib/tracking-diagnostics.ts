@@ -132,6 +132,7 @@ export type ObjectLockDiagnostics = {
   lowConfidenceAccepts?: number;
 
   searchesSkippedForCadence?: number;
+  fullFrameSearches?: number;
   framesFrozen: number;
   maxAcceptedDistanceInYardsticks?: number;
   yardstickSource?: string;
@@ -268,7 +269,7 @@ export type TrackingDiagnostics = {
     // is a handful of instances from three photos, so the first numbers it produces need to be
     // attributable to it rather than blended anonymously into everything else -- that is exactly
     // what the replay harness needs to tell a good plate read from a bad one.
-    scaleSource?: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | null;
+    scaleSource?: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | null;
     // WHAT EACH SOURCE ACTUALLY MEASURED, REPORTED WHETHER IT WON OR NOT.
     //
     // Three takes in a row came back with a range of motion several times too short, and every

@@ -1421,3 +1421,56 @@ sensor read ten reps, 0.70 mean, 1.01 peak, 14.4in (36.6cm). The stored trace is
 **Next filmed session:** three sets of five, one triple, one single, all with the sensor, any
 angle. The single and the triple are the cases the rep count cannot help with (two runs of
 one look identical), so they test the shape filters on their own.
+
+## Rulers the camera finds by itself, 2026-09-29 afternoon
+
+Scott: "I'm not measuring anything the camera should know. Everything should be remote." And:
+"The camera has a 3d scanner and should be able to measure real world accurately based off of
+the data I've uploaded, and the known height of the athlete." Then, on the plate: "the plate is
+in there but it's distorted, again camera system should register that. Plate doesn't magically
+change size at a different angle."
+
+**The 3D skeleton is a ruler now** (`client/src/lib/body-3d-ruler.ts`, source `body_3d`).
+Vision's 3D body pose reports every joint in metres relative to the hip, and a bone's length in
+that space is the same whichever way the athlete is turned. The ruler is that length over the
+same bone's longest 2D projection in the tracker's units (`measureLimbSpansInUnits`, the same
+measurement the learned limb model divides by, read once and shared). Two kinds of metre:
+`heightEstimation == .measured` (a depth sensor) is taken as is; `.reference` means Vision
+scaled the skeleton to a reference stature, which it reports in `bodyHeight`, and the client
+corrects every 3D length by (athlete's height on file / reference height). The native plugin
+emits `body3DHeightM` and `body3DHeightSource` on each 3D frame for this. No height on file:
+the reference skeleton is still offered, at 12% stated uncertainty (Rule #1). A correction
+outside 1.35x either way is refused as a correction, not as a ruler. Trust order in
+`reconcileScaleEstimates`: plate, measured grip, **body_3d**, learned bone, height, shoulders.
+It is one candidate among the others and decides nothing alone (Rule #2). Recorded in
+`scaleCandidates` as `body_3d:<bone>:<measured|reference_corrected|reference_uncorrected>`
+with the bone length in metres and the 3D frame count.
+
+**The plate at an angle.** Two facts, one fix, one open item:
+- `plateScaleFromFrames` already reads the LARGER box axis as the diameter, and an oblique
+  plate is an ellipse squashed sideways only, so the height it reads is the true 450mm at any
+  yaw. The shape gate (`MAX_PLATE_ASPECT_RATIO` 2.5) accepts a plate up to about 66 degrees
+  off square. The distance gate is in grip widths, and the grip and the plate's offset lie
+  along the same bar, so they foreshorten together and the ratio holds at any angle. None of
+  the gates was what refused the bench's plates.
+- What refused them was that the model was never shown them: 902 frames, about 300 searches,
+  FOUR plate candidates in the whole take (`candidatesSeenOfClass`). The search region was
+  drawn around the wrists (or the last box), and from the foot of the bench the plates sit
+  outside it. `AvCoreMlImplementDetector` now drops the region on every other unlocked search
+  (`fullFrameSearchEveryNSearches`, telemetry `fullFrameSearches`), so a plate anywhere in
+  shot is offered to the model; every candidate still clears the same gates afterwards.
+- OPEN: the plate model itself. Its training set is a handful of instances from three photos,
+  face-on. A squashed plate at 45 degrees may simply not score for it. If the next angled take
+  still shows single-digit candidates with the full-frame searches counted, the fix is training
+  data cut from Scott's own takes, not another gate.
+
+**Parked: the bar's own length as a ruler.** Men's and women's Olympic bars share the same
+1.31m between collars, which would make a ruler that needs no typing. Two reasons it is not
+built yet: the shipped detector's barbell class is the one that regressed (see the dialog's
+COREML notes), and unlike a plate the bar has no angle-invariant axis -- its projected length
+shrinks with yaw and nothing in one frame says by how much. The 3D skeleton answers that
+question (it gives the bar's direction from the two wrists, in metres), so the bar ruler is the
+step after this one, built on it.
+
+**Next: the box measures itself.** With the 3D skeleton the ankle height at rest on the floor
+and at rest on the box is a height difference in metres, no typing. Not in this change.

@@ -719,7 +719,7 @@ const MIN_SHOULDER_BROADSIDE_RATIO = 2;
  * the old refusal that was right.
  */
 export type ScaleEstimate = {
-  source: "plate" | "grip_width" | "body_model" | "height" | "shoulder_width";
+  source: "plate" | "grip_width" | "body_3d" | "body_model" | "height" | "shoulder_width";
   scale: number;
   /** How wrong this source can be even when it is working correctly. */
   uncertaintyFraction: number;
@@ -882,6 +882,13 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     // It is the first ruler in this pipeline that is neither a population average nor dependent
     // on the camera being somewhere particular.
     grip_width: 1,
+    // THE ATHLETE'S OWN BONES, IN METRES, ON THIS TAKE. Vision's 3D pose reports every joint
+    // in metres; the client corrects a reference-scaled skeleton by the athlete's known height
+    // and takes a depth-measured one as is (body-3d-ruler.ts). Below a measured grip because
+    // the skeleton's scale is a model estimate; above the learned bone because it is measured
+    // on THIS take rather than carried over, and above every population fraction because it is
+    // this athlete's actual bone and does not care where the phone stood.
+    body_3d: 2,
     // THE ATHLETE'S OWN BONE, LEARNED FROM AN EARLIER TAKE THAT HAD A REAL RULER.
     //
     // Below a measured grip because it is one step removed -- the grip was measured with a
@@ -889,9 +896,9 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     // height and shoulder breadth because it is THIS athlete's actual bone rather than a
     // population fraction of their stature, and because it needs no particular framing: a bench
     // filmed from the foot of the bench still shows a forearm.
-    body_model: 2,
-    height: 3,
-    shoulder_width: 4,
+    body_model: 3,
+    height: 4,
+    shoulder_width: 5,
   };
   const ranked = [...usable].sort((a, b) => TRUST[a.source] - TRUST[b.source]);
 

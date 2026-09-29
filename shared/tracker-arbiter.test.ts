@@ -371,7 +371,10 @@ describe("the Swift port carries the same numbers", () => {
     // rule rather than as one spelling of it: a jumped wrist drags any body-derived region with
     // it, so a detection seeded on such a frame searches the wrong part of the image. What must
     // hold is that a suspect body yields nil, whatever the non-suspect branch grew into.
-    expect(swift).toMatch(/let seededRegion = bodySuspectThisFrame \? nil :/);
+    // Since 2026-09-29 a whole-frame search shares that branch: every other unlocked search
+    // drops the region so a plate outside the wrist window is still shown to the model.
+    expect(swift).toMatch(/let seededRegion = \(bodySuspectThisFrame \|\| searchWholeFrame\) \? nil :/);
+    expect(swift).toMatch(/private let fullFrameSearchEveryNSearches = 2/);
     // The old unconditional bail must not come back.
     expect(swift).not.toContain("if bodySuspectThisFrame { return nil }");
   });

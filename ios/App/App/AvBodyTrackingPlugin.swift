@@ -2454,11 +2454,21 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // pose, this hasn't earned "every sampled frame" trust yet -- see
         // body3DDetectionStride's own comment).
         var body3DJoints: [[String: Any]] = []
+        // THE SKELETON'S OWN SCALE, SO THE CLIENT CAN TURN IT INTO A RULER. Vision's 3D pose
+        // reports every joint in metres, but on a phone with no depth sensor those metres are
+        // scaled to a REFERENCE stature, not the athlete's; `heightEstimation` says which. The
+        // client corrects a reference skeleton by the athlete's known height and takes a
+        // measured one (LiDAR) as is -- see body-3d-ruler.ts. Emitted only on frames that ran
+        // the 3D request, omit-when-nil like everything else here.
+        var body3DHeightM: Double? = nil
+        var body3DHeightSource: String? = nil
         if let body3DRequest = ctx.body3DRequest, thisFrameIndex % ctx.body3DDetectionStride == 0 {
             let body3DStart = Date()
             do {
                 try handler.perform([body3DRequest])
                 if #available(iOS 17.0, *), let observation = body3DRequest.results?.first as? VNHumanBodyPose3DObservation {
+                    body3DHeightM = Double(observation.bodyHeight)
+                    body3DHeightSource = observation.heightEstimation == .measured ? "measured" : "reference"
                     for (jointName, label) in Self.body3DPoseJoints {
                         // Unlike the 2D VNRecognizedPoint this plugin's other requests use,
                         // VNHumanBodyRecognizedPoint3D has no confidence property at all (its
@@ -2670,6 +2680,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // cameraDrift already use, not core per-frame state every consumer depends on.
         if !handJoints.isEmpty { eventData["handJoints"] = handJoints }
         if !body3DJoints.isEmpty { eventData["body3DJoints"] = body3DJoints }
+        if let body3DHeightM { eventData["body3DHeightM"] = body3DHeightM }
+        if let body3DHeightSource { eventData["body3DHeightSource"] = body3DHeightSource }
         DispatchQueue.main.async {
             emit(eventData)
         }
@@ -3796,6 +3808,7 @@ private struct AvObjectLockTelemetry {
     var candidatesRejectedBySize = 0
     /// Unlocked frames on which the full detection was NOT run, by the re-search cadence.
     var searchesSkippedForCadence = 0
+    var fullFrameSearches = 0
     // See freshDetection: what the class filter and the confidence floor threw away, and the
     // strongest thing the model offered even if nothing was taken.
     var candidatesSeenOfClass = 0
@@ -3848,6 +3861,7 @@ private struct AvObjectLockTelemetry {
             "breaksMotionDisagreement": breaksMotionDisagreement,
             "candidatesRejectedBySize": candidatesRejectedBySize,
             "searchesSkippedForCadence": searchesSkippedForCadence,
+            "fullFrameSearches": fullFrameSearches,
             "candidatesSeenOfClass": candidatesSeenOfClass,
             "candidatesOtherClass": candidatesOtherClass,
             "candidatesRejectedByConfidence": candidatesRejectedByConfidence,
@@ -4075,6 +4089,16 @@ private final class AvCoreMlImplementDetector {
     // counter starts high so the first frame after a break (or a reset) searches at once.
     private var framesSinceUnlockedSearch = 1_000
     private let unlockedSearchEveryNFrames = 3
+    // EVERY OTHER SEARCH LOOKS AT THE WHOLE FRAME. Scott's bench, 2026-09-29, filmed at an
+    // angle from the foot of the bench with two bumper plates in plain view: 902 frames, about
+    // 300 searches, FOUR plate candidates seen in the whole take. The search was aimed by the
+    // wrists (or the last box), and from that angle the plates sit well outside a region drawn
+    // around the hands. A region only ever narrows what the model is shown, so alternating it
+    // with a full-frame pass costs one extra classification every sixth frame and makes sure a
+    // plate anywhere in shot is at least offered to the model. Every candidate still clears the
+    // same size, edge and distance gates afterwards -- the region was never the referee.
+    private var unlockedSearchesSinceFullFrame = 0
+    private let fullFrameSearchEveryNSearches = 2
     private let boxHistoryWindow = 4
 
     // Camera overlord: Vision's own free-flight parabola fit (VNDetectTrajectoriesRequest, iOS
@@ -4595,8 +4619,14 @@ private final class AvCoreMlImplementDetector {
         }
         framesSinceUnlockedSearch = 0
         let lastKnownRegion = recentBoxes.last.map { Self.expandedRegion(around: $0) }
-        let seededRegion = bodySuspectThisFrame ? nil : (lastKnownRegion ?? regionOfInterest)
-        if lastKnownRegion != nil { telemetry.freshDetectionsSeededOnLastBox += 1 }
+        unlockedSearchesSinceFullFrame += 1
+        let searchWholeFrame = unlockedSearchesSinceFullFrame >= fullFrameSearchEveryNSearches
+        if searchWholeFrame {
+            unlockedSearchesSinceFullFrame = 0
+            telemetry.fullFrameSearches += 1
+        }
+        let seededRegion = (bodySuspectThisFrame || searchWholeFrame) ? nil : (lastKnownRegion ?? regionOfInterest)
+        if lastKnownRegion != nil && !searchWholeFrame { telemetry.freshDetectionsSeededOnLastBox += 1 }
 
         guard let best = freshDetection(
             pixelBuffer: pixelBuffer, orientation: orientation,
