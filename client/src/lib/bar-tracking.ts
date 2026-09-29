@@ -23,7 +23,23 @@ import type { TrackingDiagnostics } from "./tracking-diagnostics";
 // by it; a point with no confidence set (an interpolated occlusion-gap
 // filler, a trace built before this field existed) is treated as neutral
 // rather than untrustworthy -- see movingAverage's own comment.
-export type TrackedPoint = { t: number; x: number; y: number; z: number; confidence?: number };
+/** Which witness built a bar point -- see BAR_POINT_SOURCES. Carried into the stored trace as
+ *  `s` so the replay harness can tell a measured midpoint from an inferred one per rep. */
+export type BarPointSource = "b" | "l" | "f" | "h" | "e" | "s" | "i";
+/** b: both hands, measured. l: lone hand carried to the middle by the half-span. f: lone hand
+ *  carried, with the side settled by continuity against Vision's label. h: bare lone hand, no
+ *  half-span yet (the END of the bar). e: the equipment box filled the frame. s: the shoulders
+ *  (bar on back). i: interpolated across an occlusion gap. */
+export const BAR_POINT_SOURCES: Record<BarPointSource, string> = {
+  b: "both hands",
+  l: "lone hand, carried",
+  f: "lone hand, carried, side flipped",
+  h: "bare lone hand",
+  e: "equipment",
+  s: "shoulders",
+  i: "interpolated",
+};
+export type TrackedPoint = { t: number; x: number; y: number; z: number; confidence?: number; source?: BarPointSource };
 
 // One entry per rep that had enough clean per-side pose data to trust a
 // left/right comparison -- see pose-tracking.ts's computeLegDriveAsymmetry.
@@ -133,7 +149,11 @@ export type RepBreakdown = {
  *  harness read every stored point at confidence 1 and so could not reproduce the device's
  *  numbers from the device's own trace (set 3: device peak 1.66, replay 1.93). A trace that
  *  cannot be replayed cannot be calibrated offline. Optional: older traces have none. */
-export type PathTracePoint = { t: number; x: number; y: number; c?: number };
+/** `s`: which witness built the point (BarPointSource), since 2026-09-29. Older traces have
+ *  none. The per-rep spread on the 09-29 benches (device reps up to a third off the sensor
+ *  either way, set average within a twentieth) is suspected to be the lone-hand carry, and
+ *  nothing in the export could say which points were carried -- this is that number. */
+export type PathTracePoint = { t: number; x: number; y: number; c?: number; s?: BarPointSource };
 
 export type RepMetrics = {
   // Nullable because a lift can have a rep whose peak velocity is genuinely not measurable
@@ -299,6 +319,7 @@ export function buildPathTrace(
       x: Math.round((p.x - origin.x) * 1000) / 10,
       y: Math.round((p.y - origin.y) * 1000) / 10,
       c: Math.round((p.confidence ?? 1) * 100) / 100,
+      ...(p.source ? { s: p.source } : {}),
     }));
 }
 
@@ -3266,6 +3287,39 @@ export function medianHalfSpan(
     return sorted[Math.floor(sorted.length / 2)];
   };
   return { x: mid(history.map((h) => h.x)), y: mid(history.map((h) => h.y)) };
+}
+
+/** A both-hands measurement this many frames old or newer still describes the bar as it is
+ *  NOW: a bar does not change its tilt in a tenth of a second. Older than this, the set's
+ *  median is the safer carry. */
+export const RECENT_HALF_SPAN_FRAMES = 12;
+/** Fewer recent measurements than this and a single jumped frame could be the "recent" span;
+ *  three is the smallest count with a median. */
+export const MIN_RECENT_HALF_SPANS = 3;
+
+/** THE HALF-SPAN TO CARRY BY: RECENT WHEN THE BAR WAS JUST SEEN WHOLE, THE SET'S MEDIAN OTHERWISE.
+ *
+ *  medianHalfSpan (above) is the set's median and it is the right carry for a hand that has been
+ *  alone for a while: the last measurement before a long gap can be anything. But the common
+ *  case on the 09-29 benches was a hand blinking out for a few frames mid-rep (92 carried
+ *  frames in 914, in short runs), and there the set's median is the WRONG vector whenever the
+ *  bar's tilt right now differs from its typical tilt -- set 3 was tilted 26 degrees toward one
+ *  arm, so half a grip's along-axis component is 17cm true, and a carry by a median that
+ *  disagrees with the current tilt steps the trace by the difference at every transition, in
+ *  and out. Those steps are velocity, as far as the segmenter can tell.
+ *
+ *  So: when at least MIN_RECENT_HALF_SPANS measurements fall within RECENT_HALF_SPAN_FRAMES of
+ *  this frame, their median is the carry (recent, and still a median so one jumped frame cannot
+ *  be it); otherwise the set's. Continuity across the transition is what this buys, and the
+ *  set-median rule's own reason (a stale last reading) is untouched, because "recent" here is
+ *  a tenth of a second. Recorded per point as source `l`/`f` either way. */
+export function carryHalfSpan(
+  history: { x: number; y: number; frame: number }[],
+  frame: number,
+): { x: number; y: number } | null {
+  const recent = history.filter((h) => frame - h.frame <= RECENT_HALF_SPAN_FRAMES && h.frame <= frame);
+  if (recent.length >= MIN_RECENT_HALF_SPANS) return medianHalfSpan(recent);
+  return medianHalfSpan(history);
 }
 
 export function movementAxisFromGrip(

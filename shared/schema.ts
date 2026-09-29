@@ -8369,6 +8369,10 @@ export const barPathPointSchema = z.object({
   // Tracking confidence, so the replay harness can apply the same per-point filtering the
   // device did -- see PathTracePoint in client/src/lib/bar-tracking.ts.
   c: z.number().optional(),
+  // Which witness built the point (BarPointSource in bar-tracking.ts): both hands, a carried
+  // lone hand, the equipment, the shoulders. Declared so the insert keeps it -- see the
+  // roundtrip test on why a field the client sends has to be declared here.
+  s: z.string().max(1).optional(),
 });
 
 // One iOS Vision joint, in the exact same shape @mediapipe/tasks-vision's own Landmark/

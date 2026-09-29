@@ -100,6 +100,8 @@ import {
   type TrackedPoint,
   type VelocitySample,
   VELOCITY_SMOOTHING_MS,
+  carryHalfSpan,
+  type BarPointSource,
 } from "@/lib/bar-tracking";
 import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
 import {
@@ -1431,7 +1433,8 @@ export function AvBarTrackerDialog({
     // can say WHICH filter fired -- a side that read impossibly fast and a bar point that
     // teleported because the sides swapped are different faults with different fixes.
     const combinedRejectionEvents: number[] = [];
-    const halfSpanHistory: { x: number; y: number }[] = [];
+    const halfSpanHistory: { x: number; y: number; frame: number }[] = [];
+    let frameOrdinal = 0;
     // Per-frame torso anchors, and whether each sat where the torso had been sitting. Both are
     // collected unconditionally; torsoWasAtRest below decides whether this take is one where
     // they mean anything.
@@ -1674,10 +1677,12 @@ export function AvBarTrackerDialog({
       // traced where it sits, so the point keeps meaning the same thing from frame to frame.
       // The MEDIAN of every span measured this set, and the last accepted point to settle which
       // side a lone hand is -- see medianHalfSpan and barPointFromSides.
+      frameOrdinal++;
       if (fusedLeft && fusedRight) {
-        halfSpanHistory.push({ x: (fusedRight.x - fusedLeft.x) / 2, y: (fusedRight.y - fusedLeft.y) / 2 });
+        halfSpanHistory.push({ x: (fusedRight.x - fusedLeft.x) / 2, y: (fusedRight.y - fusedLeft.y) / 2, frame: frameOrdinal });
       }
-      const carryBy = medianHalfSpan(halfSpanHistory) ?? lastHalfSpan;
+      // Recent when the bar was just seen whole, the set's median otherwise -- see carryHalfSpan.
+      const carryBy = carryHalfSpan(halfSpanHistory, frameOrdinal) ?? lastHalfSpan;
       const lastTracePoint = trace.length > 0 ? trace[trace.length - 1] : null;
       let { point: combined, halfSpan, sideFlipped } = barPointFromSides(
         fusedLeft,
@@ -1714,6 +1719,11 @@ export function AvBarTrackerDialog({
       // speed gate or median filter reaches them. That shape is the point changing meaning, and
       // there was no counter anywhere that could say so.
       if (sideFlipped) barPointSideFlipped++;
+      let pointSource: BarPointSource | undefined;
+      if (barOnBack && combined) pointSource = "s";
+      else if (fusedLeft && fusedRight) pointSource = "b";
+      else if (combined && carryBy) pointSource = sideFlipped ? "f" : "l";
+      else if (combined) pointSource = "h";
       if (fusedLeft && fusedRight) barPointFromBothHands++;
       else if (combined && carryBy) barPointFromLoneHandCarried++;
       else if (combined) barPointFromBareLoneHand++;
@@ -1769,15 +1779,18 @@ export function AvBarTrackerDialog({
         prevCombined = [...prevCombined, { x: combined.x, y: combined.y, t }].slice(-PLAUSIBILITY_HISTORY);
       }
 
-      if (combinedFromEquipment) barPointFromEquipment++;
+      if (combinedFromEquipment) {
+        barPointFromEquipment++;
+        pointSource = "e";
+      }
       if (combined) framesUsable++;
       else if (rejectedThisFrame) framesVelocityRejected++;
       else framesNoWristOrImplement++;
       if (combined) {
-        const point: TrackedPoint = { t, x: combined.x, y: verticalSign * combined.y, z: 0, confidence: combined.confidence };
+        const point: TrackedPoint = { t, x: combined.x, y: verticalSign * combined.y, z: 0, confidence: combined.confidence, source: pointSource };
         const prevPoint = trace[trace.length - 1];
         if (prevPoint) {
-          for (const gapPoint of interpolateOcclusionGap(prevPoint, point, 300)) trace.push(gapPoint);
+          for (const gapPoint of interpolateOcclusionGap(prevPoint, point, 300)) trace.push({ ...gapPoint, source: "i" });
         }
         trace.push(point);
       }
