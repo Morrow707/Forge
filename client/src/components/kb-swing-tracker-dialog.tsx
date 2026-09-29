@@ -337,7 +337,7 @@ export function KbSwingTrackerDialog({
     }
 
     if (!wristMetrics) {
-      await saveEmptyAndWarn("Couldn't get a clean read -- make sure both hands and the kettlebell stay in frame throughout the set.");
+      await saveEmptyAndWarn("Couldn't get a clean read on this take. The clip is saved.");
       return;
     }
 

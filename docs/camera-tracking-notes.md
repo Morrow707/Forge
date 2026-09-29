@@ -1474,3 +1474,34 @@ step after this one, built on it.
 
 **Next: the box measures itself.** With the 3D skeleton the ankle height at rest on the floor
 and at rest on the box is a height difference in metres, no typing. Not in this change.
+
+## The camera audit, 2026-09-29 evening: every other tracker held to Rule #1
+
+Scott: "Audit the rest of the cameras to make sure they work the same way, remember nothing
+should reject video. Rule number 1." A sweep of all fifteen tracker dialogs found the bench
+banner's sentence in eleven spellings, each attached to an empty save. What changed, on the
+branch (held while 564 is tested):
+
+- **Every post-take message is neutral.** "make sure your feet leave the ground clearly in
+  frame", "try again with your whole body in frame", "make sure both hands and the kettlebell
+  stay in frame", "Numbers are withheld rather than guessed" and the rest are gone. The athlete
+  is told what happened and that the clip is saved, never where to stand.
+  `no-framing-advice-after-a-take.test.ts` scans every dialog's string literals for the
+  phrases and fails on the next one.
+- **The jump, kettlebell and med ball trackers get the same rulers as the bar.** Each had one
+  (standing height) and saved an empty set when it failed. `body-scale-fallback.ts` hands
+  every dialog the 3D skeleton and the shoulder breadth as candidates, reconciled with height
+  through `reconcileScaleEstimates`; the empty path is reached only when no body was seen at
+  all. `scaleSource`, `scaleCandidates` and `scaleCorroborated` are now written by those
+  dialogs too, so the report can say which ruler a jump or a swing used.
+- **The web bar dialog keeps a take that measured nothing.** `bar-tracker-dialog.tsx` used to
+  toast and send the athlete back to setup with no save; it saves an empty set to review now,
+  same as the native dialogs.
+- **A short mechanics capture is kept.** Both mechanics dialogs sent the athlete back to the
+  camera under six frames; they analyse what there is and say it was short.
+
+Still open from the audit: the med ball dialog empties the whole set when only the best rep's
+peak is null (keep the other reps); the mechanics dialog nulls speed and distance without a
+scale where the fallback rulers now apply (wire `bodyScaleFallbacks` there next); the
+kettlebell and swing dialogs have no scale-free fallback of the bar tracker's shape when even
+the fallbacks fail. None of those three prescribes an angle any more.

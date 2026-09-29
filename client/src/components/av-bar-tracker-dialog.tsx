@@ -1391,10 +1391,10 @@ export function AvBarTrackerDialog({
         // already what the generic messages below say.
         : (calibrationRefusalReasonForScale(posture) ??
           (!canUseHeight
-            ? "This is a hold or a stretch rather than a lift with reps, so there's no range of motion to measure and your height can't be used to set scale. Numbers are withheld rather than guessed."
+            ? "This is a hold or a stretch rather than a lift with reps, so there is no range of motion to measure. The clip is saved."
             : coreMlTrackingMode === "plate"
-              ? "Couldn't calibrate real-world scale for this take -- make sure a bumper plate is clearly visible on the bar at some point in frame (or your height is set and you're visible standing)."
-              : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame."));
+              ? "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved."
+              : "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved."));
     // 1 rather than null so the trace-building loop below reads the same either way. Every
     // position it produces is then in arbitrary units, which is exactly what the scale-free path
     // expects and what nothing else is allowed to read.
@@ -2017,7 +2017,7 @@ export function AvBarTrackerDialog({
       const TOO_FEW_POINTS = 6;
       const message =
         trace.length < TOO_FEW_POINTS
-          ? "Couldn't get a clean read -- make sure the bar stays in frame throughout the set."
+          ? "Couldn't get a clean read on this take. The clip is saved."
           : "Couldn't tell the reps apart in this one. The bar was tracked, but its path didn't " +
             "break into separate reps.";
 

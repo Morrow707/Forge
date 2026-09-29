@@ -323,7 +323,7 @@ export function AvSwingTrackerDialog({
     if (!metrics) {
       const diagnostics = buildTrackingDiagnostics({
         outcome: "empty_no_clean_read",
-        message: "Couldn't get a clean read -- make sure your whole swing stays in frame.",
+        message: "Couldn't get a clean read on this take. The clip is saved.",
         rawFrames: nativeRawFrames,
         recording: recordingStats,
         objectLock: recordingStats.objectLock ?? null,
@@ -336,8 +336,8 @@ export function AvSwingTrackerDialog({
           const result = await uploadPromise;
           toast.error(
             result.status === "queued"
-              ? "Couldn't get a clean read -- make sure your whole swing stays in frame. (No Wi-Fi -- video saved on your device, will upload once connected.)"
-              : "Couldn't get a clean read -- make sure your whole swing stays in frame. (Video saved for your coach.)",
+              ? "Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi -- video saved on your device, will upload once connected.)"
+              : "Couldn't get a clean read on this take. The clip is saved. (Video saved for your coach.)",
           );
           if (result.status === "queued") {
             if (!hasWarnedAboutQueueing()) {
@@ -373,7 +373,7 @@ export function AvSwingTrackerDialog({
           setSaving(false);
         }
       } else {
-        toast.error("Couldn't get a clean read -- make sure your whole swing stays in frame.");
+        toast.error("Couldn't get a clean read on this take. The clip is saved.");
       }
       return;
     }

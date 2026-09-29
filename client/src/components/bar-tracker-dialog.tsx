@@ -364,6 +364,35 @@ function applyWebDetectorCorroboration(
   return confidence;
 }
 
+// Empty sets for a take that measured nothing -- the web fallback dialog's copies of the
+// native dialogs' EMPTY_REP_METRICS / EMPTY_JUMP_METRICS. Saved rather than dropped (Rule #1).
+const EMPTY_WEB_REP_METRICS: RepMetrics = {
+  peakVelocityMps: null,
+  meanVelocityMps: null,
+  concentricSeconds: 0,
+  eccentricSeconds: 0,
+  barPathDeviationCm: null,
+  barPathTrace: [],
+  repBreakdown: [],
+  meanEai: null,
+  formFaults: [],
+  peakPowerWatts: null,
+  meanPowerWatts: null,
+  eccentricMeanVelocityMps: 0,
+  romCm: null,
+  velocityLossPercent: null,
+};
+const EMPTY_WEB_JUMP_METRICS: JumpSetMetrics = {
+  bestJumpHeightCm: 0,
+  bestHorizontalDistanceCm: null,
+  avgGroundContactSeconds: null,
+  reactiveStrengthIndex: null,
+  repBreakdown: [],
+  pathTrace: [],
+  formFaults: [],
+  gravityVerdict: null,
+};
+
 export function BarTrackerDialog({
   open,
   onOpenChange,
@@ -1885,12 +1914,15 @@ export function BarTrackerDialog({
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
 
     if (mode === "jump") {
-      const jumpMetrics = summarizeJumpSet(traceRef.current, heightIn, jumpHeightOutlierPercent ?? undefined);
-      if (!jumpMetrics) {
-        toast.error("Couldn't get a clean read — make sure your feet leave the ground clearly in frame.");
-        changeStep("setup");
-        return;
-      }
+      const jumpMetrics =
+        summarizeJumpSet(traceRef.current, heightIn, jumpHeightOutlierPercent ?? undefined) ??
+        // NOTHING TO MEASURE IS STILL A TAKE. This used to send the athlete back to setup with
+        // nothing saved (Rule #1). An empty set goes to review so the clip and the record are
+        // kept; the athlete is told what happened, not where to stand.
+        (() => {
+          toast.warning("Couldn't get a clean read on this take. The clip is saved.");
+          return { ...EMPTY_WEB_JUMP_METRICS };
+        })();
       // Landing mechanics (valgus, forward lean) still matter for a jump;
       // squat-depth judgment and bar-path drift don't -- see the "jump"
       // context branch in detectFormFaults.
@@ -1922,8 +1954,10 @@ export function BarTrackerDialog({
       positionScaleCorrection ?? 1,
     );
     if (!metrics) {
-      toast.error("Couldn't get a clean read — try again with your whole body in frame.");
-      changeStep("setup");
+      // Same rule as the jump branch above: an empty set is saved, never a refusal.
+      toast.warning("Couldn't get a clean read on this take. The clip is saved.");
+      setResult({ ...EMPTY_WEB_REP_METRICS });
+      changeStep("review");
       return;
     }
     // See fuseSideVelocity's own comment -- confidence-weighted blend of

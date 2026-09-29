@@ -370,10 +370,9 @@ export function MechanicsTrackerDialog({
     streamRef.current = null;
     videoTrackRef.current = null;
 
+    // A short capture is still a capture -- see av-mechanics-tracker-dialog.tsx (Rule #1).
     if (framesRef.current.length < 6) {
-      toast.error("That capture was too short to analyze -- try again with the full motion in frame.");
-      changeStep("capture");
-      return;
+      toast.info("That capture was short, so most numbers will be blank. What was tracked is kept.");
     }
 
     const effectiveThresholds = thresholds ?? DEFAULT_SKILL_FAULT_THRESHOLDS;
