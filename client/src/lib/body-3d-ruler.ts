@@ -33,9 +33,43 @@
  * A PEER, NOT A LEADER. This is one more candidate handed to reconcileScaleEstimates and held
  * against the plate, the grip, the learned bone, height and shoulder breadth. It decides
  * nothing on its own and switches nothing off.
+ *
+ * TWO METHODS, AND THE SECOND EXISTS BECAUSE THE FIRST WAS WRONG TWICE.
+ *
+ * "Longest projection" (above) was the first method, and on both of its real takes -- Scott's
+ * bench sets 2 and 3, 2026-09-29, phone at the foot of the bench, OVR sensor on the bar -- it
+ * scaled the set 1.8-1.9x too SMALL, while the shoulder ruler beside it was within a tenth. Not
+ * one bone: every bone. Set 3's 95th-percentile 2D spans put the upper arm at 176 units and the
+ * shin at 208 against a grip of 173, which at the sensor's scale is an 0.8m upper arm and a 1m
+ * shin. The "longest projection" of a bone across 900 frames is not its square-on view; on a
+ * take where a tenth of the frames carry a jumped landmark (framesBodySuspect was 82) it is one
+ * of those, and a percentile that high lands squarely in them. The legs are also NEARER the lens
+ * than the bar from the foot of a bench, so they project large per metre for a reason that has
+ * nothing to do with foreshortening. Both failures come from asking a percentile of 2D spans to
+ * stand in for the bone's orientation.
+ *
+ * "In plane" is the method the 3D skeleton was always for. The native plugin now emits every
+ * joint in the CAMERA's frame as well (cx, cy, cz -- the observation's cameraOriginMatrix
+ * inverted), so on each 3D frame a bone's visible length is known directly: hypot(dcx, dcy) in
+ * metres is the part of the bone that lies in the image plane, and the same bone's 2D span on
+ * the same frame is that length in units. Their ratio is the scale, per bone, per frame, with
+ * no maximum and no percentile to be captured by a bad frame -- a MEDIAN over every (frame,
+ * bone) sample, then across bones. A bone pointing at the lens is skipped (its in-plane part is
+ * too small a fraction of its length to divide by), and the frames a landmark jumped on are
+ * outvoted rather than chosen.
+ *
+ * The longest-projection method stays for a frame set with no camera-space joints (a native
+ * build older than the one that emits them), flagged as such and DEMOTED below the shoulder
+ * ruler in reconcileScaleEstimates: two takes say that is where it belongs until one says
+ * otherwise. Both methods record every bone. The median wrist depth is recorded too, because
+ * with the lens's field of view it is a third ruler (metres per unit at the bar's own depth =
+ * depth x 2 tan(fov/2) / frame width) and the next comparison can say whether it is any good.
  */
 import type { PoseFrame as NativePoseFrame } from "./native-av-preview";
 import type { LimbKey } from "@shared/athlete-body-model";
+import type { Landmark } from "@mediapipe/tasks-vision";
+import { POSE_LANDMARKS } from "./pose-tracking";
+import { visionJointsToWorldLandmarks } from "./vision-body-landmarks";
 
 export type Body3DScaleReading = {
   /** Metres per pixel-space unit, or null when the take carried no usable 3D pose. */
@@ -48,8 +82,16 @@ export type Body3DScaleReading = {
   /** That bone's length in metres, after any height correction. */
   metres: number | null;
   /** Every bone measured both ways, with the scale each implies, so a wrong number can be
-   *  traced to the bone that produced it. Recorded in the diagnostics. */
-  limbs: { limb: LimbKey; metres: number; spanUnits: number; scale: number }[];
+   *  traced to the bone that produced it. Recorded in the diagnostics. Under the in-plane
+   *  method `metres` is the median visible (in-plane) length, `spanUnits` the median 2D span on
+   *  the same frames and `samples` the (frame, side) pairs behind them; under the
+   *  longest-projection method they are the full 3D length and the 95th-percentile span. */
+  limbs: { limb: LimbKey; metres: number; spanUnits: number; scale: number; samples?: number }[];
+  /** Which of the two methods produced the number -- see the file comment. */
+  method: "in_plane" | "longest_projection" | null;
+  /** How far the wrists sat from the lens, metres, median over the 3D frames (after the
+   *  height correction). Null without camera-space joints. Recorded for the depth ruler. */
+  medianWristDepthM: number | null;
   /** How the 3D skeleton's scale was arrived at: measured by a depth sensor, scaled to a
    *  reference stature and then corrected by the athlete's height, or reference alone. */
   heightSource: "measured" | "reference_corrected" | "reference_uncorrected" | null;
@@ -79,6 +121,11 @@ export const MIN_BODY_3D_FRAMES = 5;
  *  Refused as a correction, not as a ruler: the uncorrected reading is still offered. */
 export const MAX_HEIGHT_CORRECTION_RATIO = 1.35;
 
+/** Under the in-plane method a bone whose visible part is less than this fraction of its length
+ *  is pointing at the lens: its 2D span is a few units of landmark noise and the ratio would be
+ *  noise over noise. Skipped for that frame, never for the take. */
+export const MIN_IN_PLANE_FRACTION = 0.5;
+
 /** The same bones the limb model measures, by the 3D joint names the native plugin emits. Both
  *  sides are read and averaged: in 3D neither side foreshortens, so a difference between them
  *  is estimate noise rather than angle, and the mean is the better number. */
@@ -90,6 +137,84 @@ const BONES: { key: LimbKey; pairs: [string, string][] }[] = [
   { key: "torso", pairs: [["leftShoulder", "leftHip"], ["rightShoulder", "rightHip"]] },
   { key: "shoulderWidth", pairs: [["leftShoulder", "rightShoulder"]] },
 ];
+
+/** The 2D landmark each 3D joint name maps to, so a bone's span can be read off the SAME frame's
+ *  2D pose in the tracker's own units. */
+const LANDMARK_FOR_JOINT: Record<string, number> = {
+  leftShoulder: POSE_LANDMARKS.LEFT_SHOULDER,
+  rightShoulder: POSE_LANDMARKS.RIGHT_SHOULDER,
+  leftElbow: POSE_LANDMARKS.LEFT_ELBOW,
+  rightElbow: POSE_LANDMARKS.RIGHT_ELBOW,
+  leftWrist: POSE_LANDMARKS.LEFT_WRIST,
+  rightWrist: POSE_LANDMARKS.RIGHT_WRIST,
+  leftHip: POSE_LANDMARKS.LEFT_HIP,
+  rightHip: POSE_LANDMARKS.RIGHT_HIP,
+  leftKnee: POSE_LANDMARKS.LEFT_KNEE,
+  rightKnee: POSE_LANDMARKS.RIGHT_KNEE,
+  leftAnkle: POSE_LANDMARKS.LEFT_ANKLE,
+  rightAnkle: POSE_LANDMARKS.RIGHT_ANKLE,
+};
+
+const hasCameraSpace = (j: { cx?: number; cy?: number; cz?: number } | undefined): j is { cx: number; cy: number; cz: number } =>
+  j != null && Number.isFinite(j.cx) && Number.isFinite(j.cy) && Number.isFinite(j.cz);
+
+const visible2D = (p: Landmark | undefined): p is Landmark =>
+  p != null && Number.isFinite(p.x) && Number.isFinite(p.y) && (p.visibility ?? 1) > 0.5;
+
+/** Does any frame carry the camera-space joints the in-plane method needs? */
+export function framesCarryCameraSpace(frames: NativePoseFrame[]): boolean {
+  return frames.some((f) => f.body3DJoints?.some((j) => hasCameraSpace(j)) ?? false);
+}
+
+/**
+ * The in-plane method -- see the file comment. One sample per (frame, bone, side): the bone's
+ * visible length in metres (camera-space x/y, already height-corrected by the caller) over its
+ * 2D span in units on the same frame. Per bone a median; the reading is the median across bones.
+ */
+function inPlaneSamples(
+  frames: NativePoseFrame[],
+  correction: number,
+): { perBone: Map<LimbKey, { scales: number[]; metres: number[]; spans: number[] }>; framesUsed: number; wristDepths: number[] } {
+  const perBone = new Map<LimbKey, { scales: number[]; metres: number[]; spans: number[] }>();
+  const wristDepths: number[] = [];
+  let framesUsed = 0;
+  for (const f of frames) {
+    const joints = f.body3DJoints;
+    if (!joints || joints.length === 0) continue;
+    const byName = new Map(joints.map((j) => [j.name, j] as const));
+    const landmarks = visionJointsToWorldLandmarks(f);
+    let usedThisFrame = false;
+    for (const bone of BONES) {
+      for (const [a, b] of bone.pairs) {
+        const pa = byName.get(a);
+        const pb = byName.get(b);
+        if (!hasCameraSpace(pa) || !hasCameraSpace(pb)) continue;
+        const full = Math.hypot(pa.cx - pb.cx, pa.cy - pb.cy, pa.cz - pb.cz);
+        const inPlane = Math.hypot(pa.cx - pb.cx, pa.cy - pb.cy);
+        if (!(full > 0) || inPlane / full < MIN_IN_PLANE_FRACTION) continue;
+        const la = landmarks[LANDMARK_FOR_JOINT[a]];
+        const lb = landmarks[LANDMARK_FOR_JOINT[b]];
+        if (!visible2D(la) || !visible2D(lb)) continue;
+        const span = Math.hypot(la.x - lb.x, la.y - lb.y);
+        if (!(span > 0)) continue;
+        const metres = inPlane * correction;
+        if (!perBone.has(bone.key)) perBone.set(bone.key, { scales: [], metres: [], spans: [] });
+        const row = perBone.get(bone.key)!;
+        row.scales.push(metres / span);
+        row.metres.push(metres);
+        row.spans.push(span);
+        usedThisFrame = true;
+      }
+    }
+    const lw = byName.get("leftWrist");
+    const rw = byName.get("rightWrist");
+    const depths: number[] = [];
+    for (const wrist of [lw, rw]) if (hasCameraSpace(wrist)) depths.push(Math.abs(wrist.cz) * correction);
+    if (depths.length > 0) wristDepths.push(depths.reduce((s, v) => s + v, 0) / depths.length);
+    if (usedThisFrame) framesUsed++;
+  }
+  return { perBone, framesUsed, wristDepths };
+}
 
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
@@ -152,6 +277,8 @@ export function body3DScaleFromFrames(
     limb: null,
     metres: null,
     limbs: [],
+    method: null,
+    medianWristDepthM: null,
     heightSource: null,
     referenceHeightM: null,
     rejectedBecause: null,
@@ -185,6 +312,46 @@ export function body3DScaleFromFrames(
     }
   }
 
+  // THE IN-PLANE METHOD, WHEN THE FRAMES CARRY CAMERA-SPACE JOINTS -- see the file comment.
+  if (framesCarryCameraSpace(frames)) {
+    const { perBone, framesUsed, wristDepths } = inPlaneSamples(frames, correction);
+    const limbs: Body3DScaleReading["limbs"] = [];
+    for (const bone of BONES) {
+      const row = perBone.get(bone.key);
+      if (!row || row.scales.length < MIN_BODY_3D_FRAMES) continue;
+      limbs.push({
+        limb: bone.key,
+        metres: Math.round(median(row.metres) * 10000) / 10000,
+        spanUnits: Math.round(median(row.spans) * 100) / 100,
+        scale: median(row.scales),
+        samples: row.scales.length,
+      });
+    }
+    const medianWristDepthM = wristDepths.length > 0 ? Math.round(median(wristDepths) * 1000) / 1000 : null;
+    if (limbs.length === 0 || framesUsed < MIN_BODY_3D_FRAMES) {
+      return { ...empty, method: "in_plane", medianWristDepthM, framesUsed, referenceHeightM, heightSource, rejectedBecause: "no_2d_span" };
+    }
+    const byScale = [...limbs].sort((a, b) => a.scale - b.scale);
+    const chosen = byScale[Math.floor(byScale.length / 2)];
+    return {
+      scale: chosen.scale,
+      uncertaintyFraction,
+      framesUsed,
+      limb: chosen.limb,
+      metres: chosen.metres,
+      limbs,
+      method: "in_plane",
+      medianWristDepthM,
+      heightSource,
+      referenceHeightM,
+      rejectedBecause,
+    };
+  }
+
+  // THE LONGEST-PROJECTION METHOD, for frames with no camera-space joints. Wrong by 1.8-1.9x on
+  // both of its real takes (see the file comment), so it reports the widest uncertainty this
+  // ruler has and the caller demotes it below the shoulder ruler.
+  //
   // THE MEDIAN ACROSS BONES, NOT THE LONGEST BONE. The first version took the longest bone,
   // and on its first real take (Scott's bench, 2026-09-29, phone at the foot of the bench) the
   // torso's 2D span came out at 272 units against a 119-unit shoulder span -- a hip landmark
@@ -200,17 +367,19 @@ export function body3DScaleFromFrames(
     limbs.push({ limb: bone.key, metres: Math.round(metres * 10000) / 10000, spanUnits: Math.round(span * 100) / 100, scale: metres / span });
   }
   if (limbs.length === 0) {
-    return { ...empty, framesUsed: bones.framesWithPose, referenceHeightM, rejectedBecause: "no_2d_span" };
+    return { ...empty, method: "longest_projection", framesUsed: bones.framesWithPose, referenceHeightM, rejectedBecause: "no_2d_span" };
   }
   const byScale = [...limbs].sort((a, b) => a.scale - b.scale);
   const chosen = byScale[Math.floor(byScale.length / 2)];
   return {
     scale: chosen.scale,
-    uncertaintyFraction,
+    uncertaintyFraction: Math.max(uncertaintyFraction, BODY_3D_UNCORRECTED_UNCERTAINTY),
     framesUsed: bones.framesWithPose,
     limb: chosen.limb,
     metres: chosen.metres,
     limbs,
+    method: "longest_projection",
+    medianWristDepthM: null,
     heightSource,
     referenceHeightM,
     rejectedBecause,

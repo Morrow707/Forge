@@ -2482,6 +2482,16 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 if #available(iOS 17.0, *), let observation = body3DRequest.results?.first as? VNHumanBodyPose3DObservation {
                     body3DHeightM = Double(observation.bodyHeight)
                     body3DHeightSource = observation.heightEstimation == .measured ? "measured" : "reference"
+                    // THE SAME SKELETON SEEN FROM THE LENS. Vision's joint positions are in a
+                    // scene space anchored on the root joint, and `cameraOriginMatrix` says
+                    // where the camera sits in that space -- so its inverse carries every joint
+                    // into the CAMERA's frame, where x and y lie in the image plane and z is
+                    // depth. That is what makes a bone's in-plane length comparable to its 2D
+                    // span on the same frame (body-3d-ruler.ts, the in-plane method): the
+                    // scene-space coordinates say how long a bone is, the camera-space ones say
+                    // how much of that length the image can see. Emitted BESIDE the scene
+                    // coordinates, never instead of them.
+                    let sceneToCamera = observation.cameraOriginMatrix.inverse
                     for (jointName, label) in Self.body3DPoseJoints {
                         // Unlike the 2D VNRecognizedPoint this plugin's other requests use,
                         // VNHumanBodyRecognizedPoint3D has no confidence property at all (its
@@ -2505,11 +2515,16 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                         // joint this plugin emits shares ONE coordinate space, and .position is
                         // the one that matches that convention.
                         let translation = point.position.columns.3
+                        let inCamera = (sceneToCamera * point.position).columns.3
                         body3DJoints.append([
                             "name": label,
                             "x": Double(translation.x),
                             "y": Double(translation.y),
                             "z": Double(translation.z),
+                            // Camera-space position, metres: image-plane x/y and depth z.
+                            "cx": Double(inCamera.x),
+                            "cy": Double(inCamera.y),
+                            "cz": Double(inCamera.z),
                             // No real per-joint confidence to report (see above) -- 1.0 for
                             // every joint that resolved, so the JS bridge's shared Landmark
                             // shape (visibility/confidence-gated like every other source) still

@@ -296,11 +296,17 @@ export type TrackingDiagnostics = {
     // THE 3D SKELETON RULER, BONE BY BONE -- see body-3d-ruler.ts. Its first real take scaled
     // a set 1.8x too small off one bone whose 2D read was wrong, and nothing said which bone.
     body3DRuler?: {
-      limbs: { limb: string; metres: number; spanUnits: number; scale: number }[];
+      limbs: { limb: string; metres: number; spanUnits: number; scale: number; samples?: number }[];
       heightSource: string | null;
       referenceHeightM: number | null;
       framesUsed: number;
       rejectedBecause: string | null;
+      // Which method produced the reading -- "in_plane" (camera-space joints, the one built after
+      // the longest-projection method read two OVR-paired benches 1.8-1.9x too small) or
+      // "longest_projection" (the fallback for frames without camera-space joints, demoted).
+      method?: string | null;
+      // Median wrist depth from the lens, metres, for the depth ruler the next comparison can fit.
+      medianWristDepthM?: number | null;
     } | null;
     // WHICH DIRECTION THE LIFT WAS MEASURED ALONG, AND HOW FAR THE TRACE ACTUALLY MOVED.
     //
@@ -337,8 +343,9 @@ export type TrackingDiagnostics = {
     traceTravelAcrossCm?: number;
     // Frames thrown out for sitting too far off the bar's own line -- see dropAcrossAxisOutliers.
     tracePointsDroppedOffAxis?: number;
-    // Candidates thrown out for implying an impossible athlete, with the height each implied.
-    scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number }[];
+    // Candidates thrown out for implying an impossible athlete, with the height each implied and,
+    // on a barbell take, the grip width each implied (the check that works on a lying athlete).
+    scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;

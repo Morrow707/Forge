@@ -723,6 +723,12 @@ export type ScaleEstimate = {
   scale: number;
   /** How wrong this source can be even when it is working correctly. */
   uncertaintyFraction: number;
+  /** Ranked after every undemoted source, whatever its name. Set by a caller whose reading came
+   *  from a method the comparisons have shown wrong -- the 3D ruler's longest-projection method,
+   *  1.8-1.9x too small on both of its real takes (body-3d-ruler.ts). The candidate is still
+   *  computed, still recorded and still joins an agreeing cluster; it just does not get to
+   *  anchor one over a ruler with a better record. Overwatch ranking, not a switch. */
+  demoted?: boolean;
 };
 
 export type ScaleVerdict = {
@@ -798,16 +804,35 @@ export function rejectImplausibleScales(
   estimates: ScaleEstimate[],
   bodySpanUnits: number | null,
   heightIn: number | null | undefined,
-): { kept: ScaleEstimate[]; rejected: { source: string; impliedHeightIn: number }[] } {
-  if (!bodySpanUnits || !heightIn || heightIn <= 0) return { kept: estimates, rejected: [] };
-  const trueHeightM = heightIn * 0.0254;
+  // THE HANDS ON THE BAR, AS A SECOND YARDSTICK. The body-height check above needs the body's
+  // length in frame, which a lying athlete never gives (a bench from the foot of the bench
+  // resolved it on 0 of 914 frames), so on exactly the takes with the most rulers in play it
+  // checks nothing. The grip is measured on essentially every frame of a barbell lift: a
+  // candidate that puts two hands on a bar closer together than a fist or further apart than an
+  // outstretched adult is measuring something else. Generous on purpose -- this catches a scale
+  // wrong by a factor, not one wrong by a tenth.
+  gripSpanUnits: number | null = null,
+): { kept: ScaleEstimate[]; rejected: { source: string; impliedHeightIn: number; impliedGripIn?: number }[] } {
+  const trueHeightM = heightIn && heightIn > 0 ? heightIn * 0.0254 : null;
+  const checkHeight = !!bodySpanUnits && trueHeightM != null;
+  const checkGrip = !!gripSpanUnits && gripSpanUnits > 0;
+  if (!checkHeight && !checkGrip) return { kept: estimates, rejected: [] };
   const kept: ScaleEstimate[] = [];
-  const rejected: { source: string; impliedHeightIn: number }[] = [];
+  const rejected: { source: string; impliedHeightIn: number; impliedGripIn?: number }[] = [];
   for (const e of estimates) {
-    const impliedM = bodySpanUnits * e.scale;
-    const ratio = impliedM / trueHeightM;
-    if (ratio < IMPLAUSIBLE_BODY_HEIGHT_LOW || ratio > IMPLAUSIBLE_BODY_HEIGHT_HIGH) {
-      rejected.push({ source: e.source, impliedHeightIn: Math.round((impliedM / 0.0254) * 10) / 10 });
+    const impliedM = checkHeight ? bodySpanUnits! * e.scale : null;
+    const heightRatio = impliedM != null && trueHeightM != null ? impliedM / trueHeightM : null;
+    const impliedGripM = checkGrip ? gripSpanUnits! * e.scale : null;
+    const badHeight =
+      heightRatio != null && (heightRatio < IMPLAUSIBLE_BODY_HEIGHT_LOW || heightRatio > IMPLAUSIBLE_BODY_HEIGHT_HIGH);
+    const badGrip =
+      impliedGripM != null && (impliedGripM < IMPLAUSIBLE_GRIP_LOW_M || impliedGripM > IMPLAUSIBLE_GRIP_HIGH_M);
+    if (badHeight || badGrip) {
+      rejected.push({
+        source: e.source,
+        impliedHeightIn: impliedM != null ? Math.round((impliedM / 0.0254) * 10) / 10 : 0,
+        ...(impliedGripM != null ? { impliedGripIn: Math.round((impliedGripM / 0.0254) * 10) / 10 } : {}),
+      });
     } else {
       kept.push(e);
     }
@@ -816,6 +841,12 @@ export function rejectImplausibleScales(
   // not all three scales at once, and a take with a questionable number beats a take with none.
   return kept.length > 0 ? { kept, rejected } : { kept: estimates, rejected: [] };
 }
+
+/** Wrist-to-wrist on a bar, metres. A close-grip bench sits near 0.35m and a wide one near 0.9m;
+ *  the bounds are outside anything a person does with two hands on one bar so that only a scale
+ *  wrong by a factor trips them. */
+export const IMPLAUSIBLE_GRIP_LOW_M = 0.2;
+export const IMPLAUSIBLE_GRIP_HIGH_M = 1.4;
 
 // A BUMPER PLATE AGAINST THE HANDS HOLDING THE BAR IT IS ON.
 //
@@ -900,7 +931,8 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     height: 4,
     shoulder_width: 5,
   };
-  const ranked = [...usable].sort((a, b) => TRUST[a.source] - TRUST[b.source]);
+  const rank = (e: ScaleEstimate) => TRUST[e.source] + (e.demoted ? 100 : 0);
+  const ranked = [...usable].sort((a, b) => rank(a) - rank(b));
 
   // The largest set that agrees with each other, preferring the one anchored on the most
   // trustworthy source when two clusters are the same size.

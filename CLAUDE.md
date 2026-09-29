@@ -325,7 +325,12 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **566** is the newest TestFlight build, cut 2026-09-29 evening from #183: the camera
+- Build **569** is the newest TestFlight build, cut 2026-09-29 night from #184: the 3D ruler's
+  in-plane method (camera-space joints from the plugin, `body3DRuler.method`), the
+  longest-projection fallback demoted below the shoulder ruler, the grip as a plausibility
+  yardstick, and the count-trim rule for the settle after the un-rack. See
+  docs/camera-tracking-notes.md, "Build 566 beside OVR".
+- Build **566** was the previous build, cut 2026-09-29 evening from #183: the camera
   audit (neutral copy on every tracker, fallback rulers for jump, kettlebell and med ball, no
   take thrown away), the 3D ruler taking the median across bones with every bone recorded
   (`calibration.body3DRuler`), the edge-under-movement-floor rack rule, the plate size cap at

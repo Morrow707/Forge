@@ -1692,10 +1692,90 @@ export function summarizeTrackedSet(
     }
   }
 
+  // WHEN EVERY GATE OVER-COUNTS, THE EXTRA REPS ARE AT THE ENDS, AND THE LEAST REP-LIKE GO FIRST.
+  //
+  // Bench press, 2026-09-29, set 3, 135lb x 10 beside the OVR sensor, build 566. Twelve reps at
+  // every candidate gate: the ten presses (12.1s to 23.0s, one a second) and before them two
+  // "reps" at 7.5-9.9s and 9.9-12.1s -- the bar settling over the chest after the un-rack. Every
+  // shape test above let them through and they are contiguous with the set, so the isolation
+  // rule cannot see them: concentrics of 14 and 17cm against a median of 19, 0.77s and 0.23s
+  // against 0.47, peaks at 0.6x the median. Their descents are the tell -- 15cm in 1.5s and
+  // 12cm in 1.2s, a quarter of the set's descent speed -- but a squat's first descent after a
+  // long pause at the top reads the same way on the clock (set 11945 in walkout-captures.json:
+  // 59cm over 3.4s, a real rep), so no timing rule separates them on its own.
+  //
+  // The athlete's own count does. expectedReps already chooses BETWEEN the trace's gates; when
+  // every gate lands above it, the surplus is at the ENDS of the set (a rack move can be nowhere
+  // else) and the question is only which end. Each edge rep is scored by how far it sits from
+  // the set's own medians -- its whole window (descent start to lockout), its amplitude and its
+  // descent's speed over the whole phase, as log ratios summed -- and the odder end goes, one at
+  // a time, until the count is the athlete's. Set 3's settles score 2.3 and 2.1; its real last
+  // rep 0.35; a real first squat rep after a pause about 1.3.
+  //
+  // Bounded three ways, because this is the one rule here that reads the athlete's number to
+  // REMOVE evidence rather than choose among readings. It never goes below the athlete's count,
+  // it never removes more than MAX_COUNT_TRIM_PER_EDGE from either end (a set that genuinely ran
+  // long keeps its reps), and it never removes a rep that scores under MIN_COUNT_TRIM_ODDNESS --
+  // a rep that looks like the others stays, whatever the athlete typed. Under-counting is still
+  // the worse failure.
+  const MAX_COUNT_TRIM_PER_EDGE = 2;
+  const MIN_COUNT_TRIM_ODDNESS = 1;
+  const countTrimmed = new Set<number>();
+  if (expectedReps != null && expectedReps > 0) {
+    const setRun = runs.find((r) => r.length === largestRun);
+    if (setRun && setRun.length > expectedReps && setRun.length >= 3) {
+      const pairedEccentric = (i: number) => (i > 0 && !isConcentric[i - 1] ? phaseStats[i - 1] : null);
+      const seconds = (a: number, b: number) => (points[b].t - points[a].t) / 1000;
+      const stats = (i: number) => {
+        const phase = phaseStats[i];
+        const ecc = pairedEccentric(i);
+        const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
+        const window = seconds(ecc ? ecc.startIdx : phase.startIdx, phase.endIdx);
+        const eccSeconds = ecc ? seconds(ecc.startIdx, ecc.endIdx) : 0;
+        const eccSpeed = ecc && eccSeconds > 0 ? Math.abs(ySmoothed[ecc.endIdx] - ySmoothed[ecc.startIdx]) / eccSeconds : null;
+        return { amplitude, window, eccSpeed };
+      };
+      const medianOf = (values: number[]) => {
+        const sorted = values.filter((v) => v > 0).sort((a, b) => a - b);
+        return sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : 0;
+      };
+      const all = setRun.map(stats);
+      const medAmp = medianOf(all.map((s) => s.amplitude));
+      const medWin = medianOf(all.map((s) => s.window));
+      const medEcc = medianOf(all.map((s) => s.eccSpeed ?? 0));
+      const oddness = (i: number) => {
+        const s = stats(i);
+        let score = 0;
+        if (medAmp > 0 && s.amplitude > 0) score += Math.abs(Math.log(s.amplitude / medAmp));
+        if (medWin > 0 && s.window > 0) score += Math.abs(Math.log(s.window / medWin));
+        if (medEcc > 0 && s.eccSpeed != null && s.eccSpeed > 0) score += Math.abs(Math.log(s.eccSpeed / medEcc));
+        return score;
+      };
+      let remaining = [...setRun];
+      let fromFront = 0;
+      let fromBack = 0;
+      while (remaining.length > expectedReps && remaining.length > 2) {
+        const front = fromFront < MAX_COUNT_TRIM_PER_EDGE ? oddness(remaining[0]) : -1;
+        const back = fromBack < MAX_COUNT_TRIM_PER_EDGE ? oddness(remaining[remaining.length - 1]) : -1;
+        const best = Math.max(front, back);
+        if (best < MIN_COUNT_TRIM_ODDNESS) break;
+        if (front >= back) {
+          countTrimmed.add(remaining[0]);
+          remaining = remaining.slice(1);
+          fromFront++;
+        } else {
+          countTrimmed.add(remaining[remaining.length - 1]);
+          remaining = remaining.slice(0, -1);
+          fromBack++;
+        }
+      }
+    }
+  }
+
   function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
     if (isPhantomByShape(phase)) return true;
     const i = phaseIndex.get(phase);
-    return i != null && isolatedRackMoves.has(i);
+    return i != null && (isolatedRackMoves.has(i) || countTrimmed.has(i));
   }
 
   // One entry per concentric phase, in chronological order -- rep 1, 2, 3...
