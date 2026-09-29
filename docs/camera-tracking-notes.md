@@ -1663,3 +1663,43 @@ client classified the 400 as permanent and did not queue it. The set is not in t
   still trying, not asked to re-enter. `a-400-does-not-delete-a-set.test.ts`. The rule: our own validator refusing
   our own client's payload is a bug in the validator until proven otherwise, and the payload is
   the only copy of the set.
+
+## Build 571 beside OVR, set 5: the rulers agreed, the count did not
+
+Set 5, bench, 135lb x 10, phone at the foot of the bench, 1920x1080 @ 120fps. Device: 8 reps,
+1.11 mean, 37.9cm. Sensor: 10, 0.77, 36.1cm (14.2in). Fixture `bench-dropout-2026-09-29.json`.
+
+**The scale is right, and two rulers said so.** `body_3d:forearm:reference_corrected:in_plane`
+at 0.00342 and `shoulder_width` at 0.00424 clustered (`scaleSource: both`, corroborated) --
+the first take on which the in-plane method ran, and the first on which any two rulers agreed
+on a bench. ROM 37.9 against 36.1 is 5%. `medianWristDepthM` 2.80m is recorded for the depth
+ruler. The plate class fired 13 times in 122 full-frame searches; still the model.
+
+**The count was the trace.** 270 of 629 bar points were a lone hand carried (43%), 79 side
+flips, and a frozen carried stretch at 19.7-21.0s. Three things followed, each fixed in
+`bar-tracking.ts`:
+
+- The un-rack was a 70cm wrist jump in 0.23s -- 3 m/s -- and passed every ratio test. A phase
+  whose travel over its moving time exceeds `MAX_PLAUSIBLE_LIFT_VELOCITY_MPS` is a phantom
+  (`isImplausiblyFast`). A phase, never a take; never on a scale-free trace.
+- Three pairs of real presses had a dip of 24-27cm between them, under the 28cm gate the count
+  had chosen, so each pair was one 1.4-2.2s "concentric" and the overlong test deleted it.
+  `splitMergedPhases`: a phase over 1.5x the median span with a reversal of at least half the
+  median amplitude inside it is three phases (up, the dip, up). The finer gate had split them
+  correctly and over-counted elsewhere, which is why a finer gate everywhere is not the fix.
+- Three "reps" of lying down and settling (1.1-4.5s) stood apart from the set behind the
+  un-rack phantom, and at 3 of 11 sat just over the quarter the isolation rule allows. With the
+  total across runs above the athlete's count, a run standing apart from the largest goes
+  first, smallest first (`isolatedRackMoves`, count-informed). At or under the count nothing
+  changes: two runs of five on a ten are still a grip adjustment.
+
+Replayed: 11 reps at 8.7-19.3s, 0.73 mean against 0.77, 31.3cm against 36.1. The eleventh is
+one press split by jitter (21.9 and 23.1cm reps against a 30cm median), and two real presses
+after 19.3s are gone with the frozen carried point. Both are the lone-hand carry; build 571's
+witness tags (`repSources` in the harness) are what say so per rep from here on.
+
+**From a tenth to a twentieth.** On this take the set mean is 5% off once the count is right;
+the ROM is 13% off because the jitter-split reps are short. What is left is the trace, not the
+maths: the carried lone hand is the whole residual, and the equipment (the bar or plate box)
+is the witness that should carry those frames -- `barPointFromEquipment` was 1 of 629 here
+because the plate lock held 135 frames. That is the plate model again.

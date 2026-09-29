@@ -1117,6 +1117,79 @@ export function trimPhaseToTravel(
   return { startIdx: from, endIdx: to };
 }
 
+/**
+ * A PHASE WITH HALF A REP'S REVERSAL INSIDE IT IS TWO PHASES, NOT ONE LONG ONE.
+ *
+ * Set 5 on build 571 (bench, OVR beside it, 270 of 629 bar points carried from a lone hand):
+ * the athlete's count chose a 28cm gate, and three pairs of real presses had a dip between them
+ * of 24-27cm -- under the gate, so each pair became one "concentric" 1.4-2.2 seconds long, and
+ * the overlong test deleted them as rack moves. Ten reps became eight (then 1.11 m/s against
+ * the sensor's 0.77, because what survived at the front was the un-rack). The finer gate on
+ * the ladder split them correctly but over-counted elsewhere, so the count picked the coarse
+ * one.
+ *
+ * The fix is not a finer gate everywhere (that is the over-count) and not a looser overlong
+ * test (a rack move really is long). It is to look INSIDE a long phase: if the bar went most
+ * of the way back down and then up again -- a reversal of at least MERGED_PHASE_MIN_DIP of the
+ * set's median amplitude -- that is a rep boundary the gate happened to be too coarse for, and
+ * the phase is three: up, the dip, up again. Only a phase at least MERGED_PHASE_MIN_SPAN_RATIO
+ * times the median span is examined, because a normal rep's lockout jitter is a few
+ * centimetres and never half a rep. Alternation is preserved by construction. A dip under the
+ * threshold is left alone and the phase keeps its fate under the tests below.
+ */
+export const MERGED_PHASE_MIN_DIP = 0.5;
+export const MERGED_PHASE_MIN_SPAN_RATIO = 1.5;
+
+export function splitMergedPhases(
+  phases: { startIdx: number; endIdx: number }[],
+  positions: number[],
+  times: number[],
+): { startIdx: number; endIdx: number }[] {
+  if (phases.length < 3) return phases;
+  const median = (values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+  const spans = phases.map((p) => times[p.endIdx] - times[p.startIdx]);
+  const amps = phases.map((p) => Math.abs(positions[p.endIdx] - positions[p.startIdx]));
+  const medSpan = median(spans);
+  const medAmp = median(amps);
+  if (!(medSpan > 0) || !(medAmp > 0)) return phases;
+  const out: { startIdx: number; endIdx: number }[] = [];
+  for (const phase of phases) {
+    const span = times[phase.endIdx] - times[phase.startIdx];
+    if (span <= medSpan * MERGED_PHASE_MIN_SPAN_RATIO) {
+      out.push(phase);
+      continue;
+    }
+    const dir = Math.sign(positions[phase.endIdx] - positions[phase.startIdx]) || 1;
+    let extremeIdx = phase.startIdx;
+    let extreme = dir * positions[phase.startIdx];
+    let dip = 0;
+    let dipTop = phase.startIdx;
+    let dipBottom = phase.startIdx;
+    for (let i = phase.startIdx + 1; i <= phase.endIdx; i++) {
+      const v = dir * positions[i];
+      if (v > extreme) {
+        extreme = v;
+        extremeIdx = i;
+      } else if (extreme - v > dip) {
+        dip = extreme - v;
+        dipTop = extremeIdx;
+        dipBottom = i;
+      }
+    }
+    if (dip >= medAmp * MERGED_PHASE_MIN_DIP && dipTop > phase.startIdx && dipBottom > dipTop && dipBottom < phase.endIdx) {
+      out.push({ startIdx: phase.startIdx, endIdx: dipTop });
+      out.push({ startIdx: dipTop, endIdx: dipBottom });
+      out.push({ startIdx: dipBottom, endIdx: phase.endIdx });
+    } else {
+      out.push(phase);
+    }
+  }
+  return out;
+}
+
 const GRAVITY_MPS2 = 9.81;
 
 // Reference height (5'9", a common adult-average baseline) the flat
@@ -1350,8 +1423,11 @@ export function summarizeTrackedSet(
     segmentPhasesRelative(ySmoothed, MIN_REP_AMPLITUDE_FLOOR_CM / 100) ??
     segmentPhases(ySmoothed, minAmplitudeM);
 
-  const summarizePhases = (phases: { startIdx: number; endIdx: number }[]): RepMetrics | null => {
-  if (phases.length === 0) return null;
+  const summarizePhases = (rawPhases: { startIdx: number; endIdx: number }[]): RepMetrics | null => {
+  if (rawPhases.length === 0) return null;
+  // Two reps the gate glued together are split back apart before anything judges them --
+  // see splitMergedPhases.
+  const phases = splitMergedPhases(rawPhases, ySmoothed, points.map((p) => p.t));
 
   const phaseStats = phases.map((phase) => {
     // Timing comes from the moving part of the phase; displacement still comes from the phase's
@@ -1650,7 +1726,21 @@ export function summarizeTrackedSet(
     return phase.duration > medianConcentricDuration * EDGE_PHANTOM_DURATION_RATIO;
   }
 
+  // NOTHING AN ATHLETE DOES MOVES A LOADED BAR AT THREE AND A HALF METRES A SECOND. Set 5 on
+  // build 571: a "rep" at 3.2-8.7s whose concentric was 70cm in 0.2s -- the wrists jumping as
+  // the athlete lay down and un-racked -- passed every ratio test (its amplitude sat under 2x
+  // the median, its concentric was not short enough to need a rejection event) and was reported
+  // as rep 3 at 2.6 m/s. MAX_PLAUSIBLE_LIFT_VELOCITY_MPS already clamps every REPORTED speed;
+  // a phase whose travel over its own moving time exceeds it is not a rep at all. A phase, not a
+  // take (Rule #1), and never on a scale-free trace, whose units are nominal.
+  function isImplausiblyFast(phase: (typeof phaseStats)[number]): boolean {
+    if (relativeSegmentation) return false;
+    const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
+    return phase.duration > 0 && amplitude / phase.duration > MAX_PLAUSIBLE_LIFT_VELOCITY_MPS;
+  }
+
   function isPhantomByShape(phase: (typeof phaseStats)[number]): boolean {
+    if (isImplausiblyFast(phase)) return true;
     if (isEdgeRackArtifact(phase)) return true;
     if (isOversizedPhantom(phase)) return true;
     if (isOverlongPhantom(phase)) return true;
@@ -1710,6 +1800,28 @@ export function summarizeTrackedSet(
   for (const run of runs) {
     if (run.length < largestRun && run.length <= largestRun * ISOLATED_RUN_MAX_FRACTION) {
       for (const i of run) isolatedRackMoves.add(i);
+    }
+  }
+  // AND WHEN THE ATHLETE'S COUNT SAYS THERE ARE TOO MANY, A SMALLER RUN GOES BEFORE ANY REP.
+  //
+  // The quarter above is a guess at where "a grip adjustment" ends and "a rack move" begins,
+  // and set 5 on build 571 sat on the wrong side of it: three "reps" of the athlete lying down
+  // and settling (1.1-4.5s), a 3.5 m/s wrist jump (the un-rack, a phantom), then the set --
+  // eleven phases. Three is 0.27 of eleven, so the junk stayed, and the count-trim below only
+  // ever looks at the set's own run. The athlete's number resolves it: with the total across
+  // runs above the count, a run standing apart from the largest is the least rep-like thing
+  // in the trace -- a phantom separates it from the set -- and it goes before any rep inside
+  // the set is questioned, smallest first, until the count fits or only the set is left. With
+  // the total at or under the count nothing changes: two runs of five on a set of ten are
+  // still a grip adjustment, kept.
+  if (expectedReps != null && expectedReps > 0) {
+    const live = () => runs.filter((r) => !r.some((i) => isolatedRackMoves.has(i)));
+    let total = live().reduce((sum, r) => sum + r.length, 0);
+    while (total > expectedReps) {
+      const candidates = live().filter((r) => r.length < largestRun).sort((a, b) => a.length - b.length);
+      if (candidates.length === 0) break;
+      for (const i of candidates[0]) isolatedRackMoves.add(i);
+      total -= candidates[0].length;
     }
   }
 
