@@ -1645,3 +1645,19 @@ floor cannot help a model that fires on 32 of some 900 frames with the plate fac
 The model's plate class is eleven instances from three photos. What it needs is labelled
 frames of Scott's own plates from his own gym, at the angles he films from, and a Create ML
 retrain; nothing in this repo can do that without the photos. Not built.
+
+### Build 569: the set that was counted right and never saved
+
+Set 4, bench, the first take this pipeline ever counted correctly (10 of 10, device 0.71 mean
+against the sensor's 0.77). The save answered `400 String must contain at most 40
+character(s)`: `scaleCandidates[].source` was capped at 40 in `trackingDiagnosticsSchema` and
+the 3D ruler's label had just grown to `body_3d:<bone>:<heightSource>:<method>` (up to 62). The
+client classified the 400 as permanent and did not queue it. The set is not in the export.
+
+- `shared/schema.ts`: the three `source` caps are 120. `shared/diagnostics-labels-fit-the-schema
+  .test.ts` parses the longest label every ruler can produce through the real schema.
+- `workout.tsx`: a 400 is queued like a 409. `offline-queue.ts`: a 400 on replay HOLDS the entry
+  (`heldSince`, `lastHeldAttemptAt`) -- retried every ten minutes for a week, then dropped with
+  the usual words. `a-400-does-not-delete-a-set.test.ts`. The rule: our own validator refusing
+  our own client's payload is a bug in the validator until proven otherwise, and the payload is
+  the only copy of the set.
