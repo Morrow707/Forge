@@ -325,7 +325,11 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **571** is the newest TestFlight build, cut 2026-09-29 night from #185: a 400 from the
+- Build **572** is the newest TestFlight build, cut 2026-09-29 night from #186: the set 5
+  segmentation rules (`isImplausiblyFast`, `splitMergedPhases`, count-informed isolation) and
+  a 400-held set never given up on. See docs/camera-tracking-notes.md, "Build 571 beside OVR,
+  set 5".
+- Build **571** was the previous build, cut 2026-09-29 night from #185: a 400 from the
   server holds a queued set for a week instead of deleting it, the lone-hand carry by the recent
   half-span (`carryHalfSpan`), and the per-point witness tag (`PathTracePoint.s`). The schema
   cap fix in the same PR is server-side and shipped on Render. See docs/camera-tracking-notes.md,
