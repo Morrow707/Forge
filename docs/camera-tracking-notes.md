@@ -1764,6 +1764,46 @@ pinned by `bench-set7-count.test.ts` (ten reps, the un-rack settle folded into r
   `trackingDiagnostics.cameraView` now, with the facing and the expected view beside it;
   `no-framing-advice-after-a-take.test.ts` refuses the toast. Rule #1, 2026-09-29 clause.
 
+## Build 574 beside OVR, set 8: the grip axis was 78 degrees wrong and nothing checked it
+
+Set 8 (logged over set 3), bench, 135lb x 10, wrists 2.61m from the lens. Device: 9 reps,
+2.03 m/s, 60cm. Sensor: 10, 0.76, 36cm (14.3in). Ground truth `OVR_BENCH_SET8_2026_09_29`;
+fixture `bench-set8-2026-09-29.json`, pinned by `bench-set8-axis-witness.test.ts`.
+
+- **The scale was fine.** In-plane 0.0031, depth 0.00345 (zeroed), shoulders 0.00364, blended
+  to 0.0034 against a sensor-implied 0.00364: 7% low. The depth ruler fired for the first time
+  on the device (set 7's reading was computed in the harness; the frame dimensions the ruler
+  needs were absent on that take and present on this one). Raw it read 0.85 of the sensor,
+  after 0.92, 0.92, 0.87: `DEPTH_RULER_BIAS` stays at 0.9, the mean of four.
+- **The axis was the whole error.** `movementAxisFromGrip` returned (0.978, 0.209), an axis 78
+  degrees from the image vertical, and `summarizeTrackedSet` rotated the trace onto it, so the
+  segmenter measured the hands' side jitter as the press: nine "reps" of 44 to 119cm. The same
+  trace segmented along the image vertical gives ten reps of 34cm at 0.87 m/s. The trace's own
+  covariance axis was no better (five reps at 2.15): a take whose grip pairs are wrong is a
+  take whose jitter is large, and the covariance follows the jitter.
+- **The fix is the Rule #2 shape**, `reconcileMovementAxis`: the grip axis is a witness held
+  against the image vertical, and further than `MAX_GRIP_AXIS_FROM_VERTICAL_DEG` (45) from it
+  the vertical governs (`axisSource: "vertical_over_grip"`, `gripAxisFromVerticalDeg` recorded
+  whichever won). A barbell lift filmed by an upright phone moves within a few tens of degrees
+  of the image vertical; a grip axis that says otherwise is the pair being wrong. The no-grip
+  fallback stays the covariance. The 45 is a guess with one take behind it; the field is there
+  to revise it.
+- **The harness was rotating stored traces twice.** `buildPathTrace` writes the points AFTER
+  `dominantAxisFrame` rotated them, so a stored trace is already in the movement frame, and
+  `capture-replay.ts` was applying the stored axis to it again. On the near-vertical axes of
+  sets 5 to 7 (8 to 17 degrees) the second rotation moved the numbers a little; on set 8 it
+  happened to undo the device's wrong rotation, and the harness reported ten good reps for a
+  take the phone scored at 2.03 m/s. Fixed (`STORED_TRACE_ALONG_AXIS`). Consequences, because
+  every segmentation rule since 09-28 was fitted through the double rotation:
+  `bench-dropout` now replays at ten (was eleven; the sensor said ten), set 7 at 37.4cm and
+  0.90 (was 38.3 and 0.93; sensor 36.6 and 0.77), the oblique take's shortest rep at 21.6cm
+  against a 44cm median (a real short press with a dip in it), and **the 564-era re-rack take
+  keeps its eleventh rep** on its true trace: `bench-rerack-is-not-a-rep` is `it.fails` until
+  the edge rule is right on it. That take's scale is 1.8x too small, so the centimetre floor
+  the rule leans on reads through the wrong ruler.
+- **Set 5 reappeared in the export as seq 1** because the whole log is re-POSTed on every
+  save; it is the 571 take, not a new one.
+
 ## Build 574: the depth ruler zeroed and in the room, the margin keyed by lift, body rulers blended
 
 Planned against the three sensor-paired benches of 2026-09-29 while 573 processed. Scott:

@@ -30,7 +30,11 @@ describe("the stored trace carries what a replay needs", () => {
   it("the replay reads them back instead of guessing", () => {
     const replay = readFileSync(join(process.cwd(), "client/src/lib/capture-replay.ts"), "utf8");
     expect(replay).toMatch(/confidence: p\.c \?\? 1/);
-    expect(replay).toMatch(/calibration\?\.movementAxis \?\? VERTICAL_AXIS/);
+    // The axis is read to decide the FRAME the trace is in, not re-applied: a stored trace was
+    // rotated onto its axis by the device already (summarizeTrackedSet rotates before
+    // buildPathTrace), so a trace that carries one replays along its own y. See the call site.
+    expect(replay).toMatch(/calibration\?\.movementAxis \? STORED_TRACE_ALONG_AXIS : VERTICAL_AXIS/);
+    expect(replay).not.toMatch(/calibration\?\.movementAxis \?\? VERTICAL_AXIS/);
     expect(replay).toMatch(/calibration\?\.positionScaleCorrection \?\? 1/);
   });
 });

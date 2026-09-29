@@ -9184,7 +9184,8 @@ export const trackingDiagnosticsSchema = z.object({
         })
         .optional()
         .nullable(),
-      axisSource: z.enum(["grip", "trace_covariance"]).optional().nullable(),
+      axisSource: z.enum(["grip", "trace_covariance", "vertical_over_grip"]).optional().nullable(),
+      gripAxisFromVerticalDeg: z.number().optional().nullable(),
       // THE INPUTS A REPLAY NEEDS TO REPRODUCE THE DEVICE. The measured movement axis and the
       // movement profile's position scale correction, both of which the device passed into
       // summarizeTrackedSet and the harness had to guess.

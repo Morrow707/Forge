@@ -12,6 +12,8 @@ describe("set 7 keeps its ten", () => {
     // into rep 1's window rather than becoming a rep of their own.
     const reps = result.metrics!.repBreakdown;
     expect(Math.min(...reps.map((r) => r.endT))).toBeGreaterThan(11_000);
-    for (const r of reps.slice(1)) expect(r.endT - r.startT).toBeLessThan(1_200);
+    // The last rep's window runs on into the re-rack settle (the boundary is the next reversal,
+    // and there is none), so it is the middle eight that are pinned to a press's length.
+    for (const r of reps.slice(1, -1)) expect(r.endT - r.startT).toBeLessThan(1_200);
   });
 });

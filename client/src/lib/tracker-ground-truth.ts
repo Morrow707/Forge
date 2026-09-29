@@ -523,3 +523,39 @@ export const OVR_BENCH_SET7_2026_09_29 = {
   },
   rulers: { inPlane3D: 0.0038, shoulderWidth: 0.00383, depthRuler: 0.003176, sensorImplied: 0.00365 },
 };
+
+export const OVR_BENCH_SET8_2026_09_29 = {
+  build: 574,
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "foot of the bench, wrists 2.61m from the lens; the grip axis read 78 degrees from vertical",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.07, romIn: 14.4, meanW: 452, peakW: 644, tpvS: 0.30, eai: 3.50 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.12, romIn: 14.4, meanW: 487, peakW: 677, tpvS: 0.30, eai: 3.68 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.14, romIn: 14.3, meanW: 483, peakW: 694, tpvS: 0.28, eai: 3.89 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.07, romIn: 13.9, meanW: 452, peakW: 644, tpvS: 0.28, eai: 3.61 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.09, romIn: 14.0, meanW: 466, peakW: 653, tpvS: 0.30, eai: 3.55 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.00, romIn: 14.2, meanW: 437, peakW: 603, tpvS: 0.31, eai: 3.18 },
+      { meanVelocityMps: 0.76, peakVelocityMps: 1.09, romIn: 14.3, meanW: 456, peakW: 652, tpvS: 0.28, eai: 3.66 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 0.99, romIn: 13.8, meanW: 433, peakW: 595, tpvS: 0.32, eai: 3.05 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 0.99, romIn: 13.4, meanW: 436, peakW: 595, tpvS: 0.24, eai: 4.07 },
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.09, romIn: 16.6, meanW: 460, peakW: 652, tpvS: 0.34, eai: 3.17 },
+    ],
+    reported: { meanVelocityMps: 0.76, peakVelocityMps: 1.06, romIn: 14.3, meanW: 456, peakW: 640, tpvS: 0.28, eai: 3.53 },
+  },
+  forgeOnDevice: {
+    repCount: 9,
+    meanVelocityMps: 2.03,
+    romCm: 60.2,
+    scaleSource: "both",
+    scale: 0.003396,
+    // The device rotated the trace onto a grip axis 78 degrees from vertical (see
+    // reconcileMovementAxis); the numbers above are what that produced. Segmented along the
+    // image vertical the same trace gives 10 reps, 33.9cm, 0.87 m/s.
+    axis: { x: 0.9779, y: 0.2091 },
+  },
+  // sensorImplied from the vertical-axis replay (33.9cm at 0.003396 against the sensor's 36.3cm).
+  rulers: { inPlane3D: 0.003099, shoulderWidth: 0.003638, depthRuler: 0.003106, sensorImplied: 0.003636 },
+};
