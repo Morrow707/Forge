@@ -8819,6 +8819,7 @@ const objectLockDiagnosticsSchema = z.object({
   lowConfidenceAccepts: z.number().optional(),
 
   searchesSkippedForCadence: z.number().optional(),
+  fullFrameSearches: z.number().optional(),
   framesFrozen: z.number(),
   maxAcceptedDistanceInYardsticks: z.number().optional(),
   yardstickSource: z.string().optional(),
@@ -9086,7 +9087,7 @@ export const trackingDiagnosticsSchema = z.object({
     .object({
       scaleFactor: z.number().optional().nullable(),
       scaleSource: z
-        .enum(["height", "plate", "box", "both", "shoulder_width", "grip_width", "body_model"])
+        .enum(["height", "plate", "box", "both", "shoulder_width", "grip_width", "body_model", "body_3d"])
         .optional()
         .nullable(),
       scaleCandidates: z

@@ -325,7 +325,12 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **561** is the newest TestFlight build, cut 2026-09-29 from the oblique bench against OVR:
+- Build **563** is the newest TestFlight build, cut 2026-09-29 afternoon: the 3D skeleton as a
+  scale ruler (`body-3d-ruler.ts`, `body_3d`, corrected by the athlete's height when Vision
+  scaled to a reference stature), and the plate detector shown the whole frame on every other
+  unlocked search (`fullFrameSearches`). See docs/camera-tracking-notes.md, "Rulers the camera
+  finds by itself".
+- Build **562** was the previous build, cut 2026-09-29 from the oblique bench against OVR:
   the 4:3 frame ranked above 120fps (shape before rate, `applyHighestFrameRate`), the athlete's
   rep count choosing among the segmenter's candidate gates (`expectedReps`), the isolated-run
   rack-move rule, and the scale-suspect banner gone from the athlete's screen (Rule #1).

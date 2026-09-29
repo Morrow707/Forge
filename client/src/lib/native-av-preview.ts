@@ -123,6 +123,11 @@ export type PoseFrame = {
   cameraDrift?: PoseCameraDrift;
   handJoints?: PoseHandJoint[];
   body3DJoints?: PoseBody3DJoint[];
+  // The 3D observation's own stature, metres, and whether Vision MEASURED it (a depth sensor)
+  // or scaled the skeleton to a REFERENCE stature. Present only on frames that ran the 3D
+  // request. See body-3d-ruler.ts for what the client does with the difference.
+  body3DHeightM?: number;
+  body3DHeightSource?: "measured" | "reference";
 };
 
 // Shared by the plugin interface's own analyzeRecording method below and analyzeAvRecording's
@@ -262,6 +267,7 @@ export type AvObjectLockTelemetry = {
   candidatesRejectedBySize: number;
   /** Unlocked frames on which the full detection was skipped by the re-search cadence. */
   searchesSkippedForCadence?: number;
+  fullFrameSearches?: number;
   /** Frames byte-identical to the one before, or whose landmarks had not changed for several
    * frames. Reported as held, advanced nothing. Many on one take is a capture problem. */
   framesFrozen: number;
