@@ -73,17 +73,22 @@ describe("the longest-projection 3D ruler is demoted, the in-plane one is a full
     expect(body3DCandidate({ ...reading("in_plane"), scale: null })).toBeNull();
   });
 
-  it("lets the shoulder ruler anchor over a demoted 3D reading that disagrees with it", () => {
-    // Set 3 as reconciled on build 566: body_3d won on rank alone. Demoted, it is the outlier.
+  it("never lets a demoted 3D reading decide alone: with only body rulers in the room the two are blended", () => {
+    // Set 3 as reconciled on build 566: body_3d won on rank alone at 1.9x small. Two body
+    // rulers with nothing anchored beside them are averaged now (reconcileScaleEstimates,
+    // BODY_RULERS), demoted or not -- the demotion still matters where a cluster forms.
     const demoted = body3DCandidate(reading("longest_projection"))!;
     const verdict = reconcileScaleEstimates([demoted, shoulder]);
-    expect(verdict.agreedSources).toEqual(["shoulder_width"]);
-    expect(verdict.outliers[0].source).toBe("body_3d");
+    expect(verdict.blended).toBe(true);
+    expect(verdict.scale).toBeCloseTo((demoted.scale + shoulder.scale) / 2, 8);
   });
 
-  it("still ranks an in-plane 3D reading above the shoulder ruler", () => {
+  it("ranks an in-plane 3D reading above the shoulder ruler when a third ruler lets a cluster form", () => {
     const peer = body3DCandidate(reading("in_plane"))!;
-    expect(reconcileScaleEstimates([peer, shoulder]).agreedSources).toEqual(["body_3d"]);
+    const agreeing: ScaleEstimate = { source: "height", scale: peer.scale * 1.02, uncertaintyFraction: 0.05 };
+    const verdict = reconcileScaleEstimates([peer, shoulder, agreeing]);
+    expect(verdict.agreedSources).toContain("body_3d");
+    expect(verdict.agreedSources).not.toContain("shoulder_width");
   });
 
   it("still joins an agreeing cluster when demoted: a peer, not a switch", () => {

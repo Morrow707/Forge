@@ -17,7 +17,7 @@ import {
   type LimbKey,
 } from "@shared/athlete-body-model";
 import { measureLimbsInMetres, measureLimbSpansInUnits } from "@/lib/measure-limbs";
-import { body3DScaleFromFrames, depthRulerScale, fovDegFromActiveFormat } from "@/lib/body-3d-ruler";
+import { DEPTH_RULER_BIAS, DEPTH_RULER_UNCERTAINTY, body3DScaleFromFrames, depthRulerScale, fovDegFromActiveFormat } from "@/lib/body-3d-ruler";
 import { body3DCandidate } from "@/lib/body-scale-fallback";
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
@@ -69,6 +69,7 @@ import {
   MIN_CALIBRATION_SAMPLES,
   type PoseFrame,
   type FormFaultThresholds,
+  type ScaleEstimate,
 } from "@/lib/pose-tracking";
 import {
   buildTrackingDiagnostics,
@@ -1238,6 +1239,12 @@ export function AvBarTrackerDialog({
       ),
     };
     const body3DEstimate = body3DCandidate(body3DScale);
+    // THE DEPTH RULER AS A CANDIDATE, zeroed by what two sensor-paired takes measured -- see
+    // DEPTH_RULER_BIAS. A peer among the body rulers; overwatch picks agreement.
+    const depthEstimate: ScaleEstimate | null =
+      body3DRulerDiagnostics.depthRulerScale != null
+        ? { source: "depth", scale: body3DRulerDiagnostics.depthRulerScale / DEPTH_RULER_BIAS, uncertaintyFraction: DEPTH_RULER_UNCERTAINTY }
+        : null;
 
     // Every candidate is checked against the athlete's own height before any of them is ranked --
     // see rejectImplausibleScales. A scale that puts a 5'10" lifter at sixteen inches tall is
@@ -1257,6 +1264,7 @@ export function AvBarTrackerDialog({
       // THE ONE RULER THE ATHLETE SIMPLY TOLD US. See gripWidthScaleFromFrames.
       ...(gripScale != null ? [gripScale] : []),
       ...(body3DEstimate ? [body3DEstimate] : []),
+      ...(depthEstimate ? [depthEstimate] : []),
       ...(bodyModelScale != null ? [bodyModelScale] : []),
       ...(heightScaleFactor != null
         ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: 0.05 }]
@@ -1288,7 +1296,7 @@ export function AvBarTrackerDialog({
     // new and its training data is thin, so a number built on one has to be identifiable as such
     // rather than indistinguishable from a height-derived one.
     // Names what actually decided the number, including whether anything corroborated it.
-    const scaleSource: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | null =
+    const scaleSource: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | "depth" | null =
       scaleVerdict.agreedSources.length > 1
         ? "both"
         : (scaleVerdict.agreedSources[0] ?? null);
@@ -1324,6 +1332,9 @@ export function AvBarTrackerDialog({
         : []),
       ...(bodyModelScale != null
         ? [{ source: "body_model", scale: bodyModelScale.scale, measured: null, samples: null }]
+        : []),
+      ...(depthEstimate != null
+        ? [{ source: "depth", scale: depthEstimate.scale, measured: body3DScale.medianWristDepthM, samples: body3DScale.framesUsed }]
         : []),
       ...(heightScaleFactor != null
         ? [{ source: "height", scale: heightScaleFactor, measured: null, samples: null }]
@@ -2208,13 +2219,14 @@ export function AvBarTrackerDialog({
     }
 
     // What this framing costs, stated as a fact about one axis rather than as a verdict on the
-    // take -- see cameraViewMismatch, which no longer claims a head-on or rear view cannot be
-    // measured. Informational, not a warning: nothing here says the numbers shown are wrong.
-    const viewProblem = cameraViewMismatch(
-      subjectFacing ?? "unknown",
-      expectedCameraView(exerciseName),
-    );
-    if (viewProblem) toast.info(viewProblem, { duration: 8000 });
+    // take -- see cameraViewMismatch. It goes into trackingDiagnostics.cameraView for the report
+    // and NOWHERE the athlete can see it: until build 574 this was a toast, and Rule #1's
+    // 2026-09-29 clause is that no take raises a banner about its angle, however gently worded.
+    const cameraViewDiagnostics = {
+      subjectFacing: subjectFacing ?? "unknown",
+      expectedView: expectedCameraView(exerciseName),
+      note: cameraViewMismatch(subjectFacing ?? "unknown", expectedCameraView(exerciseName)),
+    };
 
     // On an Olympic lift the bar deliberately does not travel a straight vertical line -- it
     // loops back around the knees and in under the athlete. Bar-path deviation measures distance
@@ -2332,6 +2344,7 @@ export function AvBarTrackerDialog({
       repConsistency: repConsistency(
         metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
       ),
+      cameraView: cameraViewDiagnostics,
     });
 
     // readerStatus exists specifically to tell "the athlete's take was genuinely short" apart

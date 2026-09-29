@@ -1731,3 +1731,63 @@ from both hands this time, 6 flips). The mean is 4% off and it is a cancellation
 its bias holds, the plate when the model can find one); the concentric window fitted to the
 sensor's per-rep windows; the equipment box carrying the frames the hands miss; and last, a
 per-athlete zero from a sensor-paired session, the way any instrument is zeroed.
+
+## Build 573 beside OVR, set 7: the count held, the rulers agreed, and the window is the residual
+
+Set 7, bench, 135lb x 10, wrists 2.67m from the lens, bar tilted 29 degrees in frame. Device:
+10 reps, 0.93 mean, 38.3cm, `scaleSource: both` at 0.003815. Sensor: 10, 0.77 mean, 36.6cm
+(14.4in). Ground truth `OVR_BENCH_SET7_2026_09_29`; fixture `bench-set7-2026-09-29.json`,
+pinned by `bench-set7-count.test.ts` (ten reps, the un-rack settle folded into rep 1's window).
+
+- **The count is right for the third set running.** The set 5 rules (`isImplausiblyFast`,
+  `splitMergedPhases`, count-informed isolation) have now held on sets 5, 6 and 7.
+- **The scale is 4.5% high, and both body rulers said the same thing.** In-plane 0.0038,
+  shoulders 0.00383, sensor-implied 0.00365. Their average (`both`) is what shipped. After
+  set 5 (in-plane 6% low, shoulders 16% high) and set 6 (26% low, 0.5% low) this is the first
+  take where the two agreed, and they agreed on a number 4.5% off, which is the shape of a
+  shared bias rather than two wanderers cancelling.
+- **The depth ruler read 13% low** (0.003176 against 0.00365), after 8% and 8% on sets 5 and
+  6. Not the constant it looked like at two distances. Three readings, 0.92 / 0.92 / 0.87:
+  `DEPTH_RULER_BIAS` is their mean, 0.9, and `depth-ruler.test.ts` pins the mean to the
+  constant so the next sensor-paired set moves it in one place. With the three rulers blended
+  (`BODY_RULERS`) set 7 replays to within 5% of the sensor; sets 5 and 6 within 3%.
+- **The velocity residual is the concentric window, not the scale.** With the scale 4.5%
+  high, mean velocity is 21% high (0.93 against 0.77): the device's windows ran 0.33-0.47s
+  against the sensor's 0.475 (range over mean). The trace is the reason: 230 of 720 points
+  carried by one hand (`PathTracePoint.s`) and 80 side flips, so the arrival at the top
+  flickers and the window closes early. A cleaner trace (the plate model, once Scott's photos
+  train it; the equipment box carrying the frames the hands miss) is the fix; a rule fitted
+  to the jitter is not, and two such rules were tried and discarded this build (a rise-time
+  window broke every fixture; an end-mirror in `trimPhaseToTravel` moved nothing).
+- **The head-on toast is gone from the athlete's screen.** `cameraViewMismatch`'s note
+  ("Filmed head-on or from behind ...") was still toasted after a take. It is
+  `trackingDiagnostics.cameraView` now, with the facing and the expected view beside it;
+  `no-framing-advice-after-a-take.test.ts` refuses the toast. Rule #1, 2026-09-29 clause.
+
+## Build 574: the depth ruler zeroed and in the room, the margin keyed by lift, body rulers blended
+
+Planned against the three sensor-paired benches of 2026-09-29 while 573 processed. Scott:
+"how do we bring it down to 1% or even 0%". The honest ceiling is a few percent: the sensor
+is quoted at a few percent itself, and two instruments differ by where each says a rep starts
+and ends. Three changes, each fitted on the evidence in hand and none proven past it:
+
+- **The depth ruler is a candidate** (`source: "depth"`, `DEPTH_RULER_BIAS` 0.9,
+  `DEPTH_RULER_UNCERTAINTY` 0.08), ranked below a plate and a measured grip, above every
+  proportion ruler. Zeroed by what sets 5 and 6 measured, so on those two takes it lands
+  within a percent by construction; `depth-ruler.test.ts` replays both through reconciliation
+  and gets within 3% and 5% of the sensor. The next sensor-paired set is its first real test.
+- **Body rulers blend when nothing anchored is present** (`BODY_RULERS` in
+  `reconcileScaleEstimates`): height, shoulders, the 3D skeleton and the depth ruler. Set 6
+  chose the in-plane ruler alone at 26% low over an exact shoulder ruler; two body guesses
+  pull opposite ways more often than not, as the squats and set 5 showed.
+- **The travel margin is keyed by lift** (`TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M`,
+  `travelOnsetMarginFor`): a press trims at 0.75cm, everything else keeps the squat's
+  centimetre. Against the sensor's per-rep windows (range over mean) on the three benches, a
+  centimetre ran 6%, 0% and 9% short and half a centimetre 4%, 12% and 2% long; on the squat
+  fixture 0.75cm moved the onset two samples into the sit. Scott: "Squat and bench are
+  technically different no? The camera knows that it's filming before so we could
+  differentiate." The concentric window is a 5% effect; the scale was the 25% one.
+
+**Not done, and why:** the concentric window could also be defined the sensor's way outright
+(range over the window from leaving the bottom to reaching the top); with three sets the
+per-movement margin reaches the same place with fewer moving parts. Zero is not on the table.

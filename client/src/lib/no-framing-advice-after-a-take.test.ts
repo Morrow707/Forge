@@ -29,6 +29,10 @@ const FORBIDDEN = [
   /clearly visible/i,
   /withheld rather than guessed/i,
   /full motion in frame/i,
+  // A toast about the angle, however gently worded, is still a banner about the angle. The
+  // mismatch note goes into trackingDiagnostics.cameraView and is never toasted.
+  /head-on or from behind/i,
+  /needs a (side|front) view/i,
 ];
 
 describe("no tracker dialog tells the athlete where to stand after a take", () => {
@@ -46,4 +50,11 @@ describe("no tracker dialog tells the athlete where to stand after a take", () =
       expect(offenders, offenders.join("\n")).toEqual([]);
     });
   }
+
+  it("the bar tracker never toasts the camera-view note (it is a diagnostics field)", () => {
+    const src = readFileSync(join(dir, "av-bar-tracker-dialog.tsx"), "utf8");
+    expect(src).not.toMatch(/toast\.\w+\(\s*viewProblem/);
+    expect(src).not.toMatch(/toast\.\w+\(\s*cameraViewMismatch/);
+    expect(src).toMatch(/cameraView:\s*cameraViewDiagnostics/);
+  });
 });

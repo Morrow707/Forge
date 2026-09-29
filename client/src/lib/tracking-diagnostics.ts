@@ -269,7 +269,7 @@ export type TrackingDiagnostics = {
     // is a handful of instances from three photos, so the first numbers it produces need to be
     // attributable to it rather than blended anonymously into everything else -- that is exactly
     // what the replay harness needs to tell a good plate read from a bad one.
-    scaleSource?: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | null;
+    scaleSource?: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | "depth" | null;
     // WHAT EACH SOURCE ACTUALLY MEASURED, REPORTED WHETHER IT WON OR NOT.
     //
     // Three takes in a row came back with a range of motion several times too short, and every
@@ -445,6 +445,19 @@ export type TrackingDiagnostics = {
     medianRomCm: number;
     spreadFraction: number;
     outlierReps: number[];
+  } | null;
+  /** WHERE THE PHONE WAS, STATED AS A FACT FOR THE REPORT AND NEVER SHOWN TO THE ATHLETE.
+   *
+   *  Rule #1's 2026-09-29 clause: no take raises a banner about its angle. Until build 574 the
+   *  bar tracker toasted "Filmed head-on or from behind ..." after every squat Scott filmed
+   *  from behind -- informational in wording, still a sentence about where the phone was, on
+   *  the athlete's screen, after the take. It lives here now: which way the athlete faced, which
+   *  view the profile describes for the lift, and the axis that framing costs, for the harness
+   *  and the admin report. `note` is null when the framing matches or nothing is known. */
+  cameraView?: {
+    subjectFacing: "side_on" | "facing_camera" | "oblique" | "unknown";
+    expectedView: "side" | "front" | "either" | null;
+    note: string | null;
   } | null;
 };
 
@@ -640,6 +653,7 @@ export function buildTrackingDiagnostics(args: {
   boxRise?: TrackingDiagnostics["boxRise"];
   limbMeasurementsM?: TrackingDiagnostics["limbMeasurementsM"];
   repConsistency?: TrackingDiagnostics["repConsistency"];
+  cameraView?: TrackingDiagnostics["cameraView"];
   jumpEvents?: TrackingDiagnostics["jumpEvents"];
   // Straight off AvAnalysisResult -- see the objectLock field's own comment above.
   objectLock?: ObjectLockDiagnostics | null;
@@ -652,6 +666,7 @@ export function buildTrackingDiagnostics(args: {
     boxRise: args.boxRise ?? null,
     limbMeasurementsM: args.limbMeasurementsM ?? null,
     repConsistency: args.repConsistency ?? null,
+    cameraView: args.cameraView ?? null,
     jumpEvents: args.jumpEvents ?? null,
     scaleFree: args.scaleFree ?? null,
     message: args.message ?? null,

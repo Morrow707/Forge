@@ -64,3 +64,20 @@ describe("the concentric window starts where the sensor starts it", () => {
     expect(endIdx).toBeLessThanOrEqual(pos.length - 1);
   });
 });
+
+import { travelOnsetMarginFor, TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M } from "./bar-tracking";
+
+// The margin knows the lift -- see TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M. The squat keeps the
+// centimetre this file fitted; a press takes three quarters, fitted on the three sensor-paired
+// benches of 2026-09-29.
+describe("the travel margin is keyed by movement", () => {
+  it("keeps the centimetre for a squat and anything unlisted", () => {
+    expect(travelOnsetMarginFor("squat")).toBe(TRAVEL_ONSET_MARGIN_M);
+    expect(travelOnsetMarginFor(null)).toBe(TRAVEL_ONSET_MARGIN_M);
+    expect(travelOnsetMarginFor("deadlift")).toBe(TRAVEL_ONSET_MARGIN_M);
+  });
+  it("trims a press by three quarters of a centimetre", () => {
+    expect(travelOnsetMarginFor("horizontal_press_or_row")).toBe(0.0075);
+    expect(TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M.horizontal_press_or_row).toBeLessThan(TRAVEL_ONSET_MARGIN_M);
+  });
+});
