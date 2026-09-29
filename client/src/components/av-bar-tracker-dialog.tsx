@@ -1215,6 +1215,13 @@ export function AvBarTrackerDialog({
     // THE 3D SKELETON, IN METRES, ON THIS TAKE -- see body-3d-ruler.ts. A peer under overwatch
     // like every other candidate below; it decides nothing on its own.
     const body3DScale = body3DScaleFromFrames(rawFrames, heightIn, limbSpansUnits);
+    const body3DRulerDiagnostics = {
+      limbs: body3DScale.limbs,
+      heightSource: body3DScale.heightSource,
+      referenceHeightM: body3DScale.referenceHeightM,
+      framesUsed: body3DScale.framesUsed,
+      rejectedBecause: body3DScale.rejectedBecause,
+    };
 
     // Every candidate is checked against the athlete's own height before any of them is ranked --
     // see rejectImplausibleScales. A scale that puts a 5'10" lifter at sixteen inches tall is
@@ -1324,6 +1331,13 @@ export function AvBarTrackerDialog({
       axisSource?: "grip" | "trace_covariance";
       movementAxis?: { x: number; y: number } | null;
       positionScaleCorrection?: number | null;
+      body3DRuler?: {
+        limbs: { limb: string; metres: number; spanUnits: number; scale: number }[];
+        heightSource: string | null;
+        referenceHeightM: number | null;
+        framesUsed: number;
+        rejectedBecause: string | null;
+      } | null;
       gripPairsUsed?: number;
       traceTravelAlongPx?: number;
       traceTravelAcrossPx?: number;
@@ -1956,6 +1970,7 @@ export function AvBarTrackerDialog({
         ? { x: Math.round(movementAxis.x * 10000) / 10000, y: Math.round(movementAxis.y * 10000) / 10000 }
         : null;
       calibrationDiagnostics.positionScaleCorrection = positionScaleCorrection ?? null;
+      calibrationDiagnostics.body3DRuler = body3DRulerDiagnostics;
       calibrationDiagnostics.gripPairsUsed = gripPairs.length;
       calibrationDiagnostics.traceTravelAlongCm = (maxAlong - minAlong) * 100;
       calibrationDiagnostics.traceTravelAcrossCm = (maxAcross - minAcross) * 100;

@@ -43,10 +43,13 @@ export type Body3DScaleReading = {
   uncertaintyFraction: number;
   /** Frames that carried a 3D pose with the limb that decided the number. */
   framesUsed: number;
-  /** Which bone set the scale (the longest one measured, for the same reason as the limb model). */
+  /** The bone whose implied scale is the median across the bones measured both ways. */
   limb: LimbKey | null;
   /** That bone's length in metres, after any height correction. */
   metres: number | null;
+  /** Every bone measured both ways, with the scale each implies, so a wrong number can be
+   *  traced to the bone that produced it. Recorded in the diagnostics. */
+  limbs: { limb: LimbKey; metres: number; spanUnits: number; scale: number }[];
   /** How the 3D skeleton's scale was arrived at: measured by a depth sensor, scaled to a
    *  reference stature and then corrected by the athlete's height, or reference alone. */
   heightSource: "measured" | "reference_corrected" | "reference_uncorrected" | null;
@@ -148,6 +151,7 @@ export function body3DScaleFromFrames(
     framesUsed: 0,
     limb: null,
     metres: null,
+    limbs: [],
     heightSource: null,
     referenceHeightM: null,
     rejectedBecause: null,
@@ -181,23 +185,32 @@ export function body3DScaleFromFrames(
     }
   }
 
-  // The longest bone that was measured both ways wins: a longer bone is a smaller fractional
-  // error for the same landmark noise.
-  let best: { limb: LimbKey; metres: number; scale: number } | null = null;
+  // THE MEDIAN ACROSS BONES, NOT THE LONGEST BONE. The first version took the longest bone,
+  // and on its first real take (Scott's bench, 2026-09-29, phone at the foot of the bench) the
+  // torso's 2D span came out at 272 units against a 119-unit shoulder span -- a hip landmark
+  // that was not on the hip -- and the whole set was scaled 1.8x too small off that one bone.
+  // Each bone measured both ways implies a scale; a bone whose 2D read is wrong is an outlier
+  // among the others, and the median does not follow it. Every bone is recorded.
+  const limbs: Body3DScaleReading["limbs"] = [];
   for (const bone of BONES) {
     const m = bones[bone.key];
     const span = spansUnits[bone.key];
     if (m == null || span == null || !(span > 0)) continue;
     const metres = m * correction;
-    if (!best || metres > best.metres) best = { limb: bone.key, metres, scale: metres / span };
+    limbs.push({ limb: bone.key, metres: Math.round(metres * 10000) / 10000, spanUnits: Math.round(span * 100) / 100, scale: metres / span });
   }
-  if (!best) return { ...empty, framesUsed: bones.framesWithPose, referenceHeightM, rejectedBecause: "no_2d_span" };
+  if (limbs.length === 0) {
+    return { ...empty, framesUsed: bones.framesWithPose, referenceHeightM, rejectedBecause: "no_2d_span" };
+  }
+  const byScale = [...limbs].sort((a, b) => a.scale - b.scale);
+  const chosen = byScale[Math.floor(byScale.length / 2)];
   return {
-    scale: best.scale,
+    scale: chosen.scale,
     uncertaintyFraction,
     framesUsed: bones.framesWithPose,
-    limb: best.limb,
-    metres: Math.round(best.metres * 10000) / 10000,
+    limb: chosen.limb,
+    metres: chosen.metres,
+    limbs,
     heightSource,
     referenceHeightM,
     rejectedBecause,

@@ -293,6 +293,15 @@ export type TrackingDiagnostics = {
     // True only when two independent sources agreed. A lone source can be right, but nothing
     // corroborated it, and the difference matters when a number looks wrong later.
     scaleCorroborated?: boolean;
+    // THE 3D SKELETON RULER, BONE BY BONE -- see body-3d-ruler.ts. Its first real take scaled
+    // a set 1.8x too small off one bone whose 2D read was wrong, and nothing said which bone.
+    body3DRuler?: {
+      limbs: { limb: string; metres: number; spanUnits: number; scale: number }[];
+      heightSource: string | null;
+      referenceHeightM: number | null;
+      framesUsed: number;
+      rejectedBecause: string | null;
+    } | null;
     // WHICH DIRECTION THE LIFT WAS MEASURED ALONG, AND HOW FAR THE TRACE ACTUALLY MOVED.
     //
     // A scale can be perfect and the take still come back with a range of motion several times

@@ -419,6 +419,7 @@ export function AvMedballTrackerDialog({
         ...bodyFallbacks.diagnostics,
       ],
       scaleCorroborated: scaleVerdict.corroborated,
+      body3DRuler: bodyFallbacks.body3DRuler,
     };
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {

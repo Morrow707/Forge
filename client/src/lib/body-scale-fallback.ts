@@ -27,6 +27,14 @@ export type BodyScaleFallbacks = {
   shoulders: ShoulderScaleReading;
   /** Diagnostics rows in the shape `scaleCandidates` already carries. */
   diagnostics: { source: string; scale: number; measured: number | null; samples: number | null }[];
+  /** The 3D ruler bone by bone, in the shape `calibration.body3DRuler` carries. */
+  body3DRuler: {
+    limbs: Body3DScaleReading["limbs"];
+    heightSource: string | null;
+    referenceHeightM: number | null;
+    framesUsed: number;
+    rejectedBecause: string | null;
+  };
 };
 
 export function bodyScaleFallbacks(
@@ -60,5 +68,12 @@ export function bodyScaleFallbacks(
       ? [{ source: "shoulder_width", scale: shoulders.scale, measured: shoulders.medianSpanUnits, samples: shoulders.framesUsed }]
       : []),
   ];
-  return { candidates, body3D, shoulders, diagnostics };
+  const body3DRuler = {
+    limbs: body3D.limbs,
+    heightSource: body3D.heightSource,
+    referenceHeightM: body3D.referenceHeightM,
+    framesUsed: body3D.framesUsed,
+    rejectedBecause: body3D.rejectedBecause,
+  };
+  return { candidates, body3D, shoulders, diagnostics, body3DRuler };
 }

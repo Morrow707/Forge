@@ -392,6 +392,7 @@ export function AvJumpTrackerDialog({
         ratioToChosen: o.ratioToChosen,
       })),
       scaleCorroborated: jumpVerdict.corroborated,
+      body3DRuler: bodyFallbacks.body3DRuler,
       scalesRejectedAsImplausible: jumpScalesRejected.map((r) => ({
         source: r.source === "plate" ? "box" : r.source,
         impliedHeightIn: r.impliedHeightIn,
