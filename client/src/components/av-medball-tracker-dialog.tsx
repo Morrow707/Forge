@@ -19,6 +19,7 @@ import {
   visionRefineGripSeed,
   type ImplementPoint,
 } from "@/lib/vision-body-landmarks";
+import { bodyScaleFallbacks } from "@/lib/body-scale-fallback";
 import type {
   PoseFrame as NativePoseFrame,
   CaptureDeviceInfo,
@@ -35,6 +36,7 @@ import {
   type SetTrustScore,
   type BlendedSpeedResult,
   type PoseFrame,
+  reconcileScaleEstimates,
 } from "@/lib/pose-tracking";
 import { analyzeMechanics, type MechanicsFrame } from "@/lib/mechanics-tracking";
 import { MIN_TRACKING_CONFIDENCE } from "@/lib/bar-tracking";
@@ -397,11 +399,32 @@ export function AvMedballTrackerDialog({
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
-    const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
+    // ONE RULER WAS A REFUSAL WAITING TO HAPPEN. This dialog calibrated from standing height
+    // alone and saved an empty set when that read failed. The 3D skeleton and the shoulder
+    // breadth (body-scale-fallback.ts) are candidates now, reconciled with height the same
+    // way the bar tracker does it; the empty path below is reached only when no body was seen
+    // at all.
+    const heightScale = calibrateFromFrames(calibrationInput, heightIn);
+    const bodyFallbacks = bodyScaleFallbacks(rawFrames, calibrationInput, heightIn, undefined);
+    const scaleVerdict = reconcileScaleEstimates([
+      ...(heightScale != null ? [{ source: "height" as const, scale: heightScale, uncertaintyFraction: 0.05 }] : []),
+      ...bodyFallbacks.candidates,
+    ]);
+    const scaleFactor = scaleVerdict.scale ?? heightScale ?? bodyFallbacks.candidates[0]?.scale ?? null;
+    const scaleDiagnostics = {
+      scaleSource: (scaleVerdict.agreedSources.length > 1 ? "both" : (scaleVerdict.agreedSources[0] ?? null)) as
+        | "height" | "both" | "shoulder_width" | "body_3d" | null,
+      scaleCandidates: [
+        ...(heightScale != null ? [{ source: "height", scale: heightScale, measured: null, samples: null }] : []),
+        ...bodyFallbacks.diagnostics,
+      ],
+      scaleCorroborated: scaleVerdict.corroborated,
+      body3DRuler: bodyFallbacks.body3DRuler,
+    };
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {
       const message =
-        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";
+        "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved.";
       await saveEmptyAndWarn(
         blob,
         message,
@@ -414,7 +437,7 @@ export function AvMedballTrackerDialog({
           recording: recordingStats,
           objectLock: recordingStats.objectLock ?? null,
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
-          calibration: { scaleFactor: null, ...calibrationFrames },
+          calibration: { scaleFactor: null, ...scaleDiagnostics, ...calibrationFrames },
         }),
         uploadPromise,
       );
@@ -537,7 +560,7 @@ export function AvMedballTrackerDialog({
     const trust = bestRep?.trust ?? null;
 
     if (peakSpeedMps == null) {
-      const message = "Couldn't get a clean read -- make sure your whole throwing motion, ball included, stays in frame.";
+      const message = "Couldn't get a clean read on this take. The clip is saved.";
       await saveEmptyAndWarn(
         blob,
         message,
@@ -550,7 +573,7 @@ export function AvMedballTrackerDialog({
           recording: recordingStats,
           objectLock: recordingStats.objectLock ?? null,
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
-          calibration: { scaleFactor, ...calibrationFrames },
+          calibration: { scaleFactor, ...scaleDiagnostics, ...calibrationFrames },
         }),
         uploadPromise,
       );
@@ -570,7 +593,7 @@ export function AvMedballTrackerDialog({
         recording: recordingStats,
         objectLock: recordingStats.objectLock ?? null,
         objectLockSecondary: recordingStats.objectLockSecondary ?? null,
-        calibration: { scaleFactor, ...calibrationFrames },
+        calibration: { scaleFactor, ...scaleDiagnostics, ...calibrationFrames },
       }),
     };
 

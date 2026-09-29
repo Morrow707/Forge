@@ -63,8 +63,7 @@ describe("the 3D skeleton as a ruler", () => {
     // Vision assumed 1.80m; the athlete is 75in = 1.905m. Every bone grows by 1.0583.
     const r = body3DScaleFromFrames(frames(6), 75, SPANS);
     expect(r.heightSource).toBe("reference_corrected");
-    expect(r.limb).toBe("torso");
-    expect(r.metres).toBeCloseTo(0.5 * (1.905 / 1.8), 3);
+    expect(r.limbs.length).toBe(6);
     expect(r.scale).toBeCloseTo((0.5 * (1.905 / 1.8)) / 500, 8);
     expect(r.uncertaintyFraction).toBe(BODY_3D_CORRECTED_UNCERTAINTY);
   });
@@ -105,6 +104,14 @@ describe("the 3D skeleton as a ruler", () => {
     const a = body3DScaleFromFrames(frames(6), 75, SPANS);
     const b = body3DScaleFromFrames(rotated, 75, SPANS);
     expect(b.scale).toBeCloseTo(a.scale!, 8);
+  });
+
+  it("does not follow one bone whose 2D read is wrong: the median across bones rules", () => {
+    // The real failure: a hip landmark off the hip made the torso's 2D span 2.3x too long, and
+    // the longest-bone rule scaled a whole set 1.8x too small off it.
+    const r = body3DScaleFromFrames(frames(6), 75, { ...SPANS, torso: 1150 });
+    expect(r.scale).toBeCloseTo((0.45 * (1.905 / 1.8)) / 450, 8);
+    expect(r.limbs.find((l) => l.limb === "torso")!.scale).toBeLessThan(r.scale! / 2);
   });
 
   it("says why when it cannot rule", () => {

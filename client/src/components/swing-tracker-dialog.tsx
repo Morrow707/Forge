@@ -276,7 +276,7 @@ export function SwingTrackerDialog({
         : null;
 
     if (!metrics) {
-      const message = "Couldn't get a clean read -- make sure your whole swing stays in frame.";
+      const message = "Couldn't get a clean read on this take. The clip is saved.";
       if (blob) {
         setSaving(true);
         try {

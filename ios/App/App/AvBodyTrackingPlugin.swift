@@ -1121,10 +1121,23 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // plate rack and the window that were missing. The 4:3 preference above was written to
         // be preferred-never-required, and the high-rate preference has to rank UNDER it: a 4:3
         // frame at 60 beats a 16:9 one at 120. 120 is still taken whenever 4:3 offers it.
-        let fastChoice = bestFormat(fourThreeFast)
+        // RATE BEFORE SHAPE, REVISED THE SAME DAY. Scott, after one set on the 4:3-at-60 build:
+        // "keeping the fps higher is better ... Isn't the camera more accurate at 120fps? We
+        // should go back. We need to speed up the processing and saving speed without limiting
+        // what the camera can do." So 120 ranks first again, and the shape is kept wherever the
+        // phone can give both: a 4:3 format at 120 that reads the sensor BINNED (softer, the
+        // one thing isAcceptableHighRate refused) is taken ahead of the 16:9 crop at 120 --
+        // thinning the readout, not cutting the picture -- and only a phone with no 4:3 at 120
+        // at all falls to the 16:9 crop, then to 4:3 at 60.
+        func isHighRateWithFocus(_ format: AVCaptureDevice.Format) -> Bool {
+            if format.autoFocusSystem == .none { return false }
+            let topsOutAbove = format.videoSupportedFrameRateRanges.contains { $0.maxFrameRate > maxAcceptableFrameRate }
+            return !topsOutAbove && canRun(format, at: preferredFrameRate)
+        }
+        let fourThreeFastBinned = fourThree.filter { isHighRateWithFocus($0) && !isAcceptableHighRate($0) }
+        let fastChoice = bestFormat(fourThreeFast) ?? bestFormat(fourThreeFastBinned) ?? bestFormat(exactFast)
         let fourThreeAtSixty = bestFormat(fourThree)
-        let fastSixteenNine = fourThreeAtSixty == nil ? bestFormat(exactFast) : nil
-        guard let chosen = fastChoice ?? fourThreeAtSixty ?? fastSixteenNine ?? bestFormat(exact)
+        guard let chosen = fastChoice ?? fourThreeAtSixty ?? bestFormat(exact)
             ?? largest(underBudget) ?? largest(anySixty)
         else {
             logDiag("WARNING: no format supports \(Int(targetFrameRate))fps -- leaving device default")
@@ -1132,7 +1145,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
         // The rate we actually got, not the one we wanted -- every downstream number is sampled
         // at this interval, and the diagnostics have to say which it was.
-        let highRate = fastChoice != nil || fastSixteenNine != nil
+        let highRate = fastChoice != nil
         let chosenRate = highRate ? preferredFrameRate : targetFrameRate
         activeCaptureFrameRate = chosenRate
         // One exact duration for both min and max pins the rate rather than leaving the device
@@ -1163,7 +1176,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             let widestAnyRate = device.formats.map(\.videoFieldOfView).max() ?? chosen.videoFieldOfView
             logDiag(
                 "activeFormat set: \(d.width)x\(d.height) @ \(Int(chosenRate))fps"
-                    + "\(highRate ? " (high-rate, unbinned, AF-capable)" : " (capped)"), "
+                    + "\(highRate ? (chosen.isVideoBinned ? " (high-rate, BINNED, AF-capable)" : " (high-rate, unbinned, AF-capable)") : " (capped)"), "
                     + "aspect \(String(format: "%.2f", Double(d.width) / Double(max(d.height, 1))))"
                     + "\(isFourThree(chosen) ? " (4:3, matches Camera app)" : " (16:9 fallback)") "
                     + "fov \(String(format: "%.1f", chosen.videoFieldOfView))deg "
@@ -3390,7 +3403,10 @@ private enum AvTrackerArbiter {
     /// something 1.9 grips wide, measured it as a plate, and the scale it implied was thrown out
     /// downstream -- after the lock had already been spent on it. Filtered before the pick, like
     /// the size floor above, so the real plate can win.
-    static let maxPlateSizeInYardsticks = 1.25
+    // 2.0 since 2026-09-29: a plate close to the lens reads far larger than a foreshortened
+    // grip, and 1.25 rejected every real plate on a bench filmed from the foot. See the TS
+    // constant's comment; the pin test holds them equal.
+    static let maxPlateSizeInYardsticks = 2.0
     static let candidateEdgeTolerance = 0.005
 
     struct Yardstick {

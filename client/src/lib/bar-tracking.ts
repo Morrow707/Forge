@@ -1544,6 +1544,18 @@ export function summarizeTrackedSet(
     if (concentric.length < 3) return false;
     if (phase !== firstConcentric && phase !== lastConcentric) return false;
     const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
+    // THE LIFT KNOWS HOW FAR IT MOVES. Scott, 2026-09-29, on an eleventh "rep" that was the
+    // re-rack: "doesn't the camera know a bench press will move a certain amount of inches per
+    // rep? So moving 3 wouldn't count as a rep?" It does: MIN_ROM_FRACTION_OF_HEIGHT is the
+    // floor below which a reading is not a short rep of this movement but something else, and
+    // repAmplitudeGateCm states it for this athlete. The segmenter deliberately does not gate
+    // on it (an arched bench can be short, and a wrong scale shrinks every rep together), but
+    // an EDGE phase under it is a rack move: the set's own reps sit above the floor and the
+    // one at the end that does not is the bar going back into the hooks. Set 2 that day: ten
+    // presses at 14 to 24cm and a last "rep" at 12.4cm, 1.9x slower than the median, which
+    // the ratio tests above let through. Never applied to a scale-free trace, whose units
+    // are nominal.
+    if (!relativeSegmentation && amplitude * 100 < minRepAmplitudeCm) return true;
     if (
       medianConcentricAmplitude > 0 &&
       amplitude < medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO

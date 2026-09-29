@@ -434,7 +434,7 @@ export function MedballTrackerDialog({
     const trust = bestRep?.trust ?? null;
 
     if (peakSpeedMps == null) {
-      await saveEmptyAndWarn("Couldn't get a clean read -- make sure your whole throwing motion, ball included, stays in frame.");
+      await saveEmptyAndWarn("Couldn't get a clean read on this take. The clip is saved.");
       return;
     }
 

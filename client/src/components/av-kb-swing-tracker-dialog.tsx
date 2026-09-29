@@ -18,6 +18,7 @@ import {
   visionImplementToPoint,
   type ImplementPoint,
 } from "@/lib/vision-body-landmarks";
+import { bodyScaleFallbacks } from "@/lib/body-scale-fallback";
 import type {
   PoseFrame as NativePoseFrame,
   CaptureDeviceInfo,
@@ -32,6 +33,7 @@ import {
   percentile,
   blendSpeedEstimates,
   type PoseFrame,
+  reconcileScaleEstimates,
 } from "@/lib/pose-tracking";
 import { summarizeKbSwingSet, MAX_PLAUSIBLE_KB_SWING_SPEED_MPS, type KbSwingSetMetrics } from "@/lib/kb-swing-tracking";
 import { MIN_TRACKING_CONFIDENCE, type TrackedPoint } from "@/lib/bar-tracking";
@@ -315,11 +317,32 @@ export function AvKbSwingTrackerDialog({
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
     const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
-    const scaleFactor = calibrateFromFrames(calibrationInput, heightIn);
+    // ONE RULER WAS A REFUSAL WAITING TO HAPPEN. This dialog calibrated from standing height
+    // alone and saved an empty set when that read failed. The 3D skeleton and the shoulder
+    // breadth (body-scale-fallback.ts) are candidates now, reconciled with height the same
+    // way the bar tracker does it; the empty path below is reached only when no body was seen
+    // at all.
+    const heightScale = calibrateFromFrames(calibrationInput, heightIn);
+    const bodyFallbacks = bodyScaleFallbacks(rawFrames, calibrationInput, heightIn, "standing");
+    const scaleVerdict = reconcileScaleEstimates([
+      ...(heightScale != null ? [{ source: "height" as const, scale: heightScale, uncertaintyFraction: 0.05 }] : []),
+      ...bodyFallbacks.candidates,
+    ]);
+    const scaleFactor = scaleVerdict.scale ?? heightScale ?? bodyFallbacks.candidates[0]?.scale ?? null;
+    const scaleDiagnostics = {
+      scaleSource: (scaleVerdict.agreedSources.length > 1 ? "both" : (scaleVerdict.agreedSources[0] ?? null)) as
+        | "height" | "both" | "shoulder_width" | "body_3d" | null,
+      scaleCandidates: [
+        ...(heightScale != null ? [{ source: "height", scale: heightScale, measured: null, samples: null }] : []),
+        ...bodyFallbacks.diagnostics,
+      ],
+      scaleCorroborated: scaleVerdict.corroborated,
+      body3DRuler: bodyFallbacks.body3DRuler,
+    };
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     if (scaleFactor == null) {
       const message =
-        "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.";
+        "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved.";
       await saveEmptyAndWarn(
         blob,
         message,
@@ -331,7 +354,7 @@ export function AvKbSwingTrackerDialog({
           recording: recordingStats,
           objectLock: recordingStats.objectLock ?? null,
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
-          calibration: { scaleFactor: null, ...calibrationFrames },
+          calibration: { scaleFactor: null, ...scaleDiagnostics, ...calibrationFrames },
         }),
         uploadPromise,
       );
@@ -385,7 +408,7 @@ export function AvKbSwingTrackerDialog({
 
     const wristMetrics = summarizeKbSwingSet(trace, heightIn, movementProfile);
     if (!wristMetrics) {
-      const message = "Couldn't get a clean read -- make sure both hands and the kettlebell stay in frame throughout the set.";
+      const message = "Couldn't get a clean read on this take. The clip is saved.";
       await saveEmptyAndWarn(
         blob,
         message,
@@ -397,7 +420,7 @@ export function AvKbSwingTrackerDialog({
           recording: recordingStats,
           objectLock: recordingStats.objectLock ?? null,
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
-          calibration: { scaleFactor, ...calibrationFrames },
+          calibration: { scaleFactor, ...scaleDiagnostics, ...calibrationFrames },
         }),
         uploadPromise,
       );
@@ -453,7 +476,7 @@ export function AvKbSwingTrackerDialog({
         recording: recordingStats,
         objectLock: recordingStats.objectLock ?? null,
         objectLockSecondary: recordingStats.objectLockSecondary ?? null,
-        calibration: { scaleFactor, ...calibrationFrames },
+        calibration: { scaleFactor, ...scaleDiagnostics, ...calibrationFrames },
       }),
     };
 

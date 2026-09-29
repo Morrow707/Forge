@@ -274,8 +274,10 @@ describe("a reference object has to be the right shape AND in the right place", 
   it("reports BOTH reasons when a read fails both ways", () => {
     // Wrong shape and wrong place call for different fixes -- retrain the model, or move the
     // camera -- so collapsing them to the first one found would throw away the diagnosis.
+    // 900px across a 384px grip is 2.3 grips: past the cap even now that a close plate seen
+    // in perspective is allowed up to two (MAX_PLATE_SIZE_IN_YARDSTICKS, 2026-09-29).
     const v = check({
-      medianWidthPx: 600,
+      medianWidthPx: 900,
       medianHeightPx: 190,
       medianCenterXNorm: 0.5 + (4 * YARDSTICK_PX) / W,
       medianCenterYNorm: 0.5,

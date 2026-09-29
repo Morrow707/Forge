@@ -1474,3 +1474,79 @@ step after this one, built on it.
 
 **Next: the box measures itself.** With the 3D skeleton the ankle height at rest on the floor
 and at rest on the box is a height difference in metres, no typing. Not in this change.
+
+## The camera audit, 2026-09-29 evening: every other tracker held to Rule #1
+
+Scott: "Audit the rest of the cameras to make sure they work the same way, remember nothing
+should reject video. Rule number 1." A sweep of all fifteen tracker dialogs found the bench
+banner's sentence in eleven spellings, each attached to an empty save. What changed, on the
+branch (held while 564 is tested):
+
+- **Every post-take message is neutral.** "make sure your feet leave the ground clearly in
+  frame", "try again with your whole body in frame", "make sure both hands and the kettlebell
+  stay in frame", "Numbers are withheld rather than guessed" and the rest are gone. The athlete
+  is told what happened and that the clip is saved, never where to stand.
+  `no-framing-advice-after-a-take.test.ts` scans every dialog's string literals for the
+  phrases and fails on the next one.
+- **The jump, kettlebell and med ball trackers get the same rulers as the bar.** Each had one
+  (standing height) and saved an empty set when it failed. `body-scale-fallback.ts` hands
+  every dialog the 3D skeleton and the shoulder breadth as candidates, reconciled with height
+  through `reconcileScaleEstimates`; the empty path is reached only when no body was seen at
+  all. `scaleSource`, `scaleCandidates` and `scaleCorroborated` are now written by those
+  dialogs too, so the report can say which ruler a jump or a swing used.
+- **The web bar dialog keeps a take that measured nothing.** `bar-tracker-dialog.tsx` used to
+  toast and send the athlete back to setup with no save; it saves an empty set to review now,
+  same as the native dialogs.
+- **A short mechanics capture is kept.** Both mechanics dialogs sent the athlete back to the
+  camera under six frames; they analyse what there is and say it was short.
+
+Still open from the audit: the med ball dialog empties the whole set when only the best rep's
+peak is null (keep the other reps); the mechanics dialog nulls speed and distance without a
+scale where the fallback rulers now apply (wire `bodyScaleFallbacks` there next); the
+kettlebell and swing dialogs have no scale-free fallback of the bar tracker's shape when even
+the fallbacks fail. None of those three prescribes an angle any more.
+
+## Build 564 beside OVR, 2026-09-29 evening: the 3D ruler's first take, the re-rack, the plate
+
+Set 2, 135lb x 10, phone at the foot of the bench. Sensor: 10 reps, 0.70 mean, 1.01 peak,
+14.1in (35.8cm). Device: 11 reps, 0.35 mean, 0.59 peak, 19.3cm. Export seq 1; fixture
+`bench-rerack-2026-09-29.json`. Three findings, each with its code:
+
+- **The 3D ruler scaled the set 1.8x too small, off one bone** (`body3DScaleFromFrames`).
+  `scaleCandidates`: `body_3d:torso:reference_corrected` 0.00207 m/unit (torso 0.563m over a
+  272-unit 2D span) against `shoulder_width` 0.00368 (119 units). The shoulder ruler was
+  within 5% of the sensor this time; the 3D ruler outranked it and lost the cluster. The 2D
+  torso span was the fault: 272 units on a supine athlete whose shoulders span 119 is a hip
+  landmark that was not on the hip, and the longest-bone rule took exactly that bone. The
+  ruler now takes the MEDIAN scale across every bone measured both ways and records each
+  (`calibration.body3DRuler`), so the next take says which bone disagreed. The correction
+  itself (reference stature to the athlete's height) is not implicated; the torso came out at
+  0.56m, which is a real torso.
+- **The eleventh rep was the re-rack** (`isEdgeRackArtifact`): 20.1 to 21.6s, 12.4cm, 1.9x
+  slower than the median rep -- under the 2.5x duration ratio and above the 0.5 amplitude
+  ratio, so both shape tests passed it. Scott: "doesn't the camera know a bench press will
+  move a certain amount of inches per rep?" It does, in `MIN_ROM_FRACTION_OF_HEIGHT` (bench
+  0.08 of stature, 15.2cm for him). An EDGE phase under that floor is a rack move now. The
+  segmenter itself still does not gate on the floor (an arched bench can be short and a wrong
+  scale shrinks every rep together), and a scale-free trace never sees it. Replays to ten.
+- **The plate was found 495 times and refused every time by the size cap**
+  (`maxPlateSizeInYardsticks`, `MAX_PLATE_SIZE_IN_YARDSTICKS`). The full-frame search from
+  build 563 did its job: `candidatesSeenOfClass` 4 became 495, best confidence 0.48. Eighteen
+  cleared the confidence floor and all eighteen died at `candidatesRejectedBySize`. From the
+  foot of the bench the near plate is much closer to the lens than the hands and reads far
+  larger than the grip: perspective, not a rack. The cap moves from 1.25 grips to 2.0, the
+  upper edge of the client's own plate-to-grip window, so the two gates agree; the distance
+  gate still refuses the rack across the room. Both sides, pin test holds them equal.
+
+**The frame.** 564 ran 1920x1440 at 60fps, 4:3, fov 72.0 of 74.6. Scott: "keeping the fps
+higher is better ... Isn't the camera more accurate at 120fps? We should go back." Rate ranks
+first again in `applyHighestFrameRate`: clean 4:3 at 120, then a BINNED 4:3 at 120 (a softer
+readout is thinning, not cutting; `isAcceptableHighRate` used to refuse it outright), then the
+16:9 crop at 120, then 4:3 at 60. Which of those this phone lands on is in the next console
+line; "BINNED" is printed when it is that one.
+
+**Not yet explained:** even with the scale corrected, per-rep peaks on this take ran 0.09 to
+0.59 at a scale where the sensor's 1.01 would read about 0.55 -- so several reps' peaks are
+still a third of the others'. Per-rep peak is the noisiest number the pipeline produces on a
+lone-hand trace (`barPointFromLoneHandCarried` 121 of 556 here); the next take with the plate
+locked is the one that separates ruler error from tracker error.

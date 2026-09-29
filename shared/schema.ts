@@ -9111,6 +9111,18 @@ export const trackingDiagnosticsSchema = z.object({
         .max(8)
         .optional(),
       scaleCorroborated: z.boolean().optional(),
+      body3DRuler: z
+        .object({
+          limbs: z
+            .array(z.object({ limb: z.string().max(40), metres: z.number(), spanUnits: z.number(), scale: z.number() }))
+            .max(8),
+          heightSource: z.string().max(40).nullable(),
+          referenceHeightM: z.number().nullable(),
+          framesUsed: z.number(),
+          rejectedBecause: z.string().max(40).nullable(),
+        })
+        .optional()
+        .nullable(),
       // What the reference-object detector actually boxed -- see referenceObject in
       // client/src/lib/tracking-diagnostics.ts. A plate is a disc and should box near square on
       // the bar; shape and position are what say whether it found one at all.

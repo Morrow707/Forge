@@ -174,10 +174,12 @@ export function AvMechanicsTrackerDialog({
     rawFrames: { t: number; worldLandmarks: Landmark[] }[],
     nativeRawFrames: NativePoseFrame[],
   ) {
+    // A SHORT CAPTURE IS STILL A CAPTURE. This used to toast and send the athlete back to the
+    // camera with nothing saved -- a refusal (Rule #1). The analysis runs on whatever frames
+    // there are; every number it cannot compute comes back null, which the review already
+    // draws as "not measured". The athlete is told it was short, not what to do about it.
     if (rawFrames.length < MIN_TRACKED_FRAMES) {
-      toast.error("That capture was too short to analyze -- try again with the full motion in frame.");
-      changeStep("capture");
-      return;
+      toast.info("That capture was short, so most numbers will be blank. What was tracked is kept.");
     }
 
     const scaleFactor = calibrateFromFrames(rawFrames, heightIn);

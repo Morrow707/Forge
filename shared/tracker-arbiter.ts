@@ -141,10 +141,18 @@ export const MIN_YARDSTICK_PX = 24;
 export const MAX_PLATE_ASPECT_RATIO = 2.5;
 
 /** A plate is a 45cm disc and every barbell grip is wider than that, so a plate read wider
- *  than a grip and a quarter is a rack, a bench end or two plates -- not the ruler. The Swift
- *  side applies the same number before the candidate pick (maxPlateSizeInYardsticks); this
- *  applies it to the take's median read. Ported: change one, change both. */
-export const MAX_PLATE_SIZE_IN_YARDSTICKS = 1.25;
+ *  than TWO grips is a rack, a bench end or two plates -- not the ruler. The Swift side
+ *  applies the same number before the candidate pick (maxPlateSizeInYardsticks); this applies
+ *  it to the take's median read. Ported: change one, change both.
+ *
+ *  Was 1.25, fitted on one rack plate 1.9 grips wide. Scott's bench, 2026-09-29, phone at the
+ *  foot of the bench about 45 degrees off: the full-frame search found the plate 495 times and
+ *  every candidate that cleared confidence was rejected here (candidatesRejectedBySize 18,
+ *  freshDetections 0). From that angle the near plate is much closer to the lens than the
+ *  hands and reads far larger than the grip -- perspective, not a rack. 2.0 is the upper edge
+ *  of the client's own plate-to-grip window (PLATE_TO_GRIP_RATIO_HIGH), so the two gates now
+ *  agree, and the distance gate still refuses the rack across the room. */
+export const MAX_PLATE_SIZE_IN_YARDSTICKS = 2.0;
 
 export type YardstickSource = "grip" | "shoulders";
 

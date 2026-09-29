@@ -1215,6 +1215,13 @@ export function AvBarTrackerDialog({
     // THE 3D SKELETON, IN METRES, ON THIS TAKE -- see body-3d-ruler.ts. A peer under overwatch
     // like every other candidate below; it decides nothing on its own.
     const body3DScale = body3DScaleFromFrames(rawFrames, heightIn, limbSpansUnits);
+    const body3DRulerDiagnostics = {
+      limbs: body3DScale.limbs,
+      heightSource: body3DScale.heightSource,
+      referenceHeightM: body3DScale.referenceHeightM,
+      framesUsed: body3DScale.framesUsed,
+      rejectedBecause: body3DScale.rejectedBecause,
+    };
 
     // Every candidate is checked against the athlete's own height before any of them is ranked --
     // see rejectImplausibleScales. A scale that puts a 5'10" lifter at sixteen inches tall is
@@ -1324,6 +1331,13 @@ export function AvBarTrackerDialog({
       axisSource?: "grip" | "trace_covariance";
       movementAxis?: { x: number; y: number } | null;
       positionScaleCorrection?: number | null;
+      body3DRuler?: {
+        limbs: { limb: string; metres: number; spanUnits: number; scale: number }[];
+        heightSource: string | null;
+        referenceHeightM: number | null;
+        framesUsed: number;
+        rejectedBecause: string | null;
+      } | null;
       gripPairsUsed?: number;
       traceTravelAlongPx?: number;
       traceTravelAcrossPx?: number;
@@ -1391,10 +1405,10 @@ export function AvBarTrackerDialog({
         // already what the generic messages below say.
         : (calibrationRefusalReasonForScale(posture) ??
           (!canUseHeight
-            ? "This is a hold or a stretch rather than a lift with reps, so there's no range of motion to measure and your height can't be used to set scale. Numbers are withheld rather than guessed."
+            ? "This is a hold or a stretch rather than a lift with reps, so there is no range of motion to measure. The clip is saved."
             : coreMlTrackingMode === "plate"
-              ? "Couldn't calibrate real-world scale for this take -- make sure a bumper plate is clearly visible on the bar at some point in frame (or your height is set and you're visible standing)."
-              : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame."));
+              ? "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved."
+              : "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved."));
     // 1 rather than null so the trace-building loop below reads the same either way. Every
     // position it produces is then in arbitrary units, which is exactly what the scale-free path
     // expects and what nothing else is allowed to read.
@@ -1956,6 +1970,7 @@ export function AvBarTrackerDialog({
         ? { x: Math.round(movementAxis.x * 10000) / 10000, y: Math.round(movementAxis.y * 10000) / 10000 }
         : null;
       calibrationDiagnostics.positionScaleCorrection = positionScaleCorrection ?? null;
+      calibrationDiagnostics.body3DRuler = body3DRulerDiagnostics;
       calibrationDiagnostics.gripPairsUsed = gripPairs.length;
       calibrationDiagnostics.traceTravelAlongCm = (maxAlong - minAlong) * 100;
       calibrationDiagnostics.traceTravelAcrossCm = (maxAcross - minAcross) * 100;
@@ -2017,7 +2032,7 @@ export function AvBarTrackerDialog({
       const TOO_FEW_POINTS = 6;
       const message =
         trace.length < TOO_FEW_POINTS
-          ? "Couldn't get a clean read -- make sure the bar stays in frame throughout the set."
+          ? "Couldn't get a clean read on this take. The clip is saved."
           : "Couldn't tell the reps apart in this one. The bar was tracked, but its path didn't " +
             "break into separate reps.";
 

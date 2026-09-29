@@ -13,6 +13,7 @@ import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
 import { visionJointsToWorldLandmarks, visionBoxTopToWorldY } from "@/lib/vision-body-landmarks";
+import { bodyScaleFallbacks } from "@/lib/body-scale-fallback";
 import {
   deriveJumpPoint,
   detectFormFaults,
@@ -290,6 +291,9 @@ export function AvJumpTrackerDialog({
     forSetNumber: number,
   ) {
     const bodyScale = calibrateFromFrames(rawFrames, heightIn);
+    // THE RULERS THAT DO NOT NEED THE WHOLE BODY IN FRAME -- see body-scale-fallback.ts. A jump
+    // used to have one ruler (height) and refused the take when it failed (Rule #1).
+    const bodyFallbacks = bodyScaleFallbacks(nativeRawFrames, rawFrames, heightIn);
     const calibrationFrames = calibrationMethodBreakdown(rawFrames);
 
     // THE BOX IS THE ONE THING IN A JUMP TAKE WHOSE SIZE WE ACTUALLY KNOW.
@@ -342,6 +346,7 @@ export function AvJumpTrackerDialog({
       ...(bodyScale != null
         ? [{ source: "height" as const, scale: bodyScale, uncertaintyFraction: 0.05 }]
         : []),
+      ...bodyFallbacks.candidates,
     ];
     const { kept: jumpScalesKept, rejected: jumpScalesRejected } = rejectImplausibleScales(
       jumpScaleCandidates,
@@ -349,7 +354,7 @@ export function AvJumpTrackerDialog({
       heightIn,
     );
     const jumpVerdict = reconcileScaleEstimates(jumpScalesKept);
-    const scaleFactor = jumpVerdict.scale ?? bodyScale;
+    const scaleFactor = jumpVerdict.scale ?? bodyScale ?? bodyFallbacks.candidates[0]?.scale ?? null;
 
     // What each source said, and what was thrown out. Same two lines the barbell report carries,
     // for the same reason: a jump that comes back wrong should say which half was wrong instead
@@ -371,6 +376,7 @@ export function AvJumpTrackerDialog({
         | "box"
         | "both"
         | "shoulder_width"
+        | "body_3d"
         | null,
       scaleCandidates: jumpScaleCandidates.map((c) => ({
         // The box arrives under the "plate" name because that is the slot the schema has for a
@@ -386,6 +392,7 @@ export function AvJumpTrackerDialog({
         ratioToChosen: o.ratioToChosen,
       })),
       scaleCorroborated: jumpVerdict.corroborated,
+      body3DRuler: bodyFallbacks.body3DRuler,
       scalesRejectedAsImplausible: jumpScalesRejected.map((r) => ({
         source: r.source === "plate" ? "box" : r.source,
         impliedHeightIn: r.impliedHeightIn,
@@ -396,7 +403,7 @@ export function AvJumpTrackerDialog({
       const diagnostics = buildTrackingDiagnostics({
         outcome: "empty_calibration_failed",
         message:
-          "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.",
+          "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved.",
         rawFrames: nativeRawFrames,
         recording: recordingStats,
         calibration: { scaleFactor: null, ...calibrationFrames },
@@ -412,8 +419,8 @@ export function AvJumpTrackerDialog({
           const result = await uploadPromise;
           toast.error(
             result.status === "queued"
-              ? "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame. (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)"
-              : "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame. (Video saved for your coach.)",
+              ? "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved. (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)"
+              : "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved. (Video saved for your coach.)",
           );
           if (result.status === "queued") {
             if (!hasWarnedAboutQueueing()) {
@@ -450,7 +457,7 @@ export function AvJumpTrackerDialog({
         }
       } else {
         toast.error(
-          "Couldn't calibrate real-world scale for this take -- make sure your height is set in your profile and you're clearly visible standing at some point in frame.",
+          "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved.",
         );
       }
       return;
@@ -599,7 +606,7 @@ export function AvJumpTrackerDialog({
     if (!metrics) {
       const diagnostics = buildTrackingDiagnostics({
         outcome: "empty_no_clean_read",
-        message: "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.",
+        message: "Couldn't get a clean read on this take. The clip is saved.",
         rawFrames: nativeRawFrames,
         recording: recordingStats,
         calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames, ...boxTopDiagnostics },
@@ -611,8 +618,8 @@ export function AvJumpTrackerDialog({
           const result = await uploadPromise;
           toast.error(
             result.status === "queued"
-              ? "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame. (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)"
-              : "Couldn't get a clean read -- make sure your feet leave the ground clearly in frame. (Video saved for your coach.)",
+              ? "Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)"
+              : "Couldn't get a clean read on this take. The clip is saved. (Video saved for your coach.)",
           );
           if (result.status === "queued") {
             if (!hasWarnedAboutQueueing()) {
@@ -636,7 +643,7 @@ export function AvJumpTrackerDialog({
           setSaving(false);
         }
       } else {
-        toast.error("Couldn't get a clean read -- make sure your feet leave the ground clearly in frame.");
+        toast.error("Couldn't get a clean read on this take. The clip is saved.");
       }
       return;
     }
