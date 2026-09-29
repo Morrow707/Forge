@@ -17,7 +17,7 @@ import {
   type LimbKey,
 } from "@shared/athlete-body-model";
 import { measureLimbsInMetres, measureLimbSpansInUnits } from "@/lib/measure-limbs";
-import { body3DScaleFromFrames } from "@/lib/body-3d-ruler";
+import { body3DScaleFromFrames, depthRulerScale, fovDegFromActiveFormat } from "@/lib/body-3d-ruler";
 import { body3DCandidate } from "@/lib/body-scale-fallback";
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
@@ -30,10 +30,11 @@ import {
   visionRefineGripSeed,
   type ImplementPoint,
 } from "@/lib/vision-body-landmarks";
-import type {
-  PoseFrame as NativePoseFrame,
-  CaptureDeviceInfo,
-  AvObjectLockTelemetry,
+import {
+  extractCaptureDeviceInfo,
+  type PoseFrame as NativePoseFrame,
+  type CaptureDeviceInfo,
+  type AvObjectLockTelemetry,
 } from "@/lib/native-av-preview";
 import { referenceObjectVerdict, MIN_YARDSTICK_PX } from "@shared/tracker-arbiter";
 import { EquipmentOffsetLearner, equipmentBoxForBarPath } from "@/lib/equipment-bar-point";
@@ -1226,6 +1227,15 @@ export function AvBarTrackerDialog({
       rejectedBecause: body3DScale.rejectedBecause,
       method: body3DScale.method,
       medianWristDepthM: body3DScale.medianWristDepthM,
+      // The depth ruler, recorded beside the bones -- see depthRulerScale. The field of view is
+      // the plugin's own "activeFormat set:" line; the long axis is the frame's larger side.
+      frameWidth: bodyRef.frameWidth || null,
+      frameHeight: bodyRef.frameHeight || null,
+      depthRulerScale: depthRulerScale(
+        body3DScale.medianWristDepthM,
+        fovDegFromActiveFormat(extractCaptureDeviceInfo(diagLog).activeFormat),
+        Math.max(bodyRef.frameWidth, bodyRef.frameHeight),
+      ),
     };
     const body3DEstimate = body3DCandidate(body3DScale);
 
@@ -1346,6 +1356,9 @@ export function AvBarTrackerDialog({
         rejectedBecause: string | null;
         method?: string | null;
         medianWristDepthM?: number | null;
+        frameWidth?: number | null;
+        frameHeight?: number | null;
+        depthRulerScale?: number | null;
       } | null;
       gripPairsUsed?: number;
       traceTravelAlongPx?: number;

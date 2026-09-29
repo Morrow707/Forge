@@ -161,6 +161,37 @@ const hasCameraSpace = (j: { cx?: number; cy?: number; cz?: number } | undefined
 const visible2D = (p: Landmark | undefined): p is Landmark =>
   p != null && Number.isFinite(p.x) && Number.isFinite(p.y) && (p.visibility ?? 1) > 0.5;
 
+/**
+ * THE DEPTH RULER: metres per unit at the wrists' own distance from the lens.
+ *
+ * A pinhole camera's scale at depth Z is Z x 2 tan(fov/2) / (the frame's length in units along
+ * the axis the field of view is stated for). The wrists' depth comes from the camera-space 3D
+ * joints (height-corrected like every other 3D length), the field of view from the active
+ * format the plugin logs, and the frame length from the pose frames. It needs no bone
+ * proportion and no population fraction, which is what the two body rulers cannot say.
+ *
+ * Sets 5 and 6, 2026-09-29, at 2.80m and 3.18m: computed against the 1280-unit long axis this
+ * read 0.00334 and 0.00379 against sensor-implied truths of 0.00365 and 0.00410 -- 8% low on
+ * both, at two distances, while the in-plane ruler was 6% and 26% low and the shoulder ruler
+ * 16% and 0% high. A constant bias is what calibration removes; a wandering one is not. It is
+ * RECORDED here, as `depthRuler` in the diagnostics, and not yet a candidate: two takes say
+ * "promising", not "ruler". The next sensor-paired take decides.
+ */
+export function depthRulerScale(
+  wristDepthM: number | null | undefined,
+  fovDeg: number | null | undefined,
+  longAxisUnits: number | null | undefined,
+): number | null {
+  if (!wristDepthM || !(wristDepthM > 0) || !fovDeg || !(fovDeg > 0) || !longAxisUnits || !(longAxisUnits > 0)) return null;
+  return (wristDepthM * 2 * Math.tan((fovDeg * Math.PI) / 360)) / longAxisUnits;
+}
+
+/** The field of view the plugin wrote into its "activeFormat set:" line, or null. */
+export function fovDegFromActiveFormat(activeFormat: string | null | undefined): number | null {
+  const m = activeFormat?.match(/fov ([0-9.]+)deg/);
+  return m ? Number(m[1]) : null;
+}
+
 /** Does any frame carry the camera-space joints the in-plane method needs? */
 export function framesCarryCameraSpace(frames: NativePoseFrame[]): boolean {
   return frames.some((f) => f.body3DJoints?.some((j) => hasCameraSpace(j)) ?? false);

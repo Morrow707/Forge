@@ -1703,3 +1703,31 @@ the ROM is 13% off because the jitter-split reps are short. What is left is the 
 maths: the carried lone hand is the whole residual, and the equipment (the bar or plate box)
 is the witness that should carry those frames -- `barPointFromEquipment` was 1 of 629 here
 because the plate lock held 135 frames. That is the plate model again.
+
+## Build 572 beside OVR, set 6: within 5% for the wrong reason, and what 3% takes
+
+Set 6 (logged as set 1 of a fresh day), bench, 135lb x 10, wrists 3.18m from the lens. Device:
+10 reps, 0.81 mean, 26cm. Sensor: 10, 0.84, 35cm (13.8in). Ground truth
+`OVR_BENCH_SET6_2026_09_29`. The count is right (the set 5 rules held: 564 of 646 bar points
+from both hands this time, 6 flips). The mean is 4% off and it is a cancellation:
+
+- **The scale is 26% low.** `body_3d:femur:in_plane` at 0.00303 won alone; the shoulder ruler
+  at 0.00408 was called the outlier (1.34x) and would have given 35cm exactly. Set 5 was the
+  other way round (in-plane 6% low, shoulders 16% high, their average 5% high). Neither body
+  ruler is a 5% instrument: one is Vision's canonical skeleton scaled to a stated height, the
+  other a population fraction of it, and each wanders by 10-25% per take.
+- **The concentric window is 24% short.** Device 0.32s over the set (0.27-0.43 per rep); the
+  sensor's ROM over its mean is 0.42s. ROM low and time short in the same ratio gave a mean
+  within 4%. Set 5's window was right (0.49s against 0.47); set 3's 10% short. Fittable, now
+  that three sensor-paired sets carry per-rep numbers, and not yet fitted.
+- **The depth ruler read 8% low on BOTH sets 5 and 6**, at 2.80m and 3.18m: wrist depth from
+  the camera-space 3D joints x 2 tan(fov/2) / the frame's long axis in units
+  (`depthRulerScale`, `body3DRuler.depthRulerScale`, with `frameWidth`/`frameHeight` recorded so
+  the harness can recompute it). A constant bias at two distances is the shape of a ruler that
+  can be zeroed; the in-plane and shoulder rulers' errors are not constant. Recorded, not yet a
+  candidate: the next sensor-paired take says whether 8% holds.
+
+**From 5% to 3%, then 1%, in order:** a ruler that is not a body proportion (the depth ruler if
+its bias holds, the plate when the model can find one); the concentric window fitted to the
+sensor's per-rep windows; the equipment box carrying the frames the hands miss; and last, a
+per-athlete zero from a sensor-paired session, the way any instrument is zeroed.

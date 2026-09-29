@@ -421,3 +421,73 @@ export const OVR_BENCH_OBLIQUE_2026_09_29 = {
     cameraPitchDeg: 9,
   },
 } as const;
+
+/**
+ * BUILDS 571 AND 572, 2026-09-29, SETS 5 AND 6: the first two takes on which the scale was
+ * within a tenth by two different rulers -- and the reason neither is trusted alone yet.
+ *
+ * Set 5 (571): the in-plane 3D ruler (0.00342) and the shoulder ruler (0.00424) clustered and
+ * were averaged (0.00383); ROM 37.9cm against 36.1. Set 6 (572): in-plane 0.00303 won alone,
+ * ROM 26cm against 35 -- the shoulder ruler (0.00408) would have been exact. Mean velocity
+ * read 0.81 against 0.84 anyway, because the concentric window was 0.32s against the sensor's
+ * 0.42 and the two errors cancelled. The sensor-implied truth (its ROM over the trace's along-
+ * axis travel) is 0.00365 and 0.00410; the depth ruler (depthRulerScale) read 8% low on both.
+ */
+export const OVR_BENCH_SET5_2026_09_29 = {
+  build: 571,
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "foot of the bench, pitched 12.6 degrees down, wrists 2.80m from the lens",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.09, romIn: 14.6, meanW: 475, peakW: 652, tpvS: 0.28, eai: 3.66 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.11, romIn: 13.9, meanW: 452, peakW: 669, tpvS: 0.33, eai: 3.34 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.11, romIn: 14.0, meanW: 466, peakW: 669, tpvS: 0.31, eai: 3.53 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.14, romIn: 14.0, meanW: 483, peakW: 694, tpvS: 0.28, eai: 4.01 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.14, romIn: 14.7, meanW: 489, peakW: 694, tpvS: 0.27, eai: 4.13 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.07, romIn: 14.0, meanW: 475, peakW: 644, tpvS: 0.28, eai: 3.61 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.06, romIn: 14.1, meanW: 468, peakW: 636, tpvS: 0.28, eai: 3.56 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.00, romIn: 14.1, meanW: 451, peakW: 603, tpvS: 0.33, eai: 3.01 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 0.92, romIn: 14.5, meanW: 430, peakW: 554, tpvS: 0.24, eai: 3.79 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.05, romIn: 16.4, meanW: 450, peakW: 628, tpvS: 0.31, eai: 3.32 },
+    ],
+    reported: { meanVelocityMps: 0.77, peakVelocityMps: 1.07, romIn: 14.4, meanW: 463, peakW: 644, tpvS: 0.28, eai: 3.59 },
+  },
+  forgeOnDevice: { repCount: 8, meanVelocityMps: 1.11, romCm: 37.9, scaleSource: "both", scale: 0.003827 },
+  forgeReplayed: { repCount: 11, meanVelocityMps: 0.73, romCm: 31.3 },
+  rulers: { inPlane3D: 0.003417, shoulderWidth: 0.004236, depthRuler: 0.00334, sensorImplied: 0.00365 },
+};
+
+export const OVR_BENCH_SET6_2026_09_29 = {
+  build: 572,
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "foot of the bench, pitched 13.8 degrees down, wrists 3.18m from the lens",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.14, romIn: 13.5, meanW: 490, peakW: 694, tpvS: 0.24, eai: 4.75 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.29, romIn: 13.6, meanW: 534, peakW: 776, tpvS: 0.25, eai: 5.13 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.21, romIn: 13.9, meanW: 536, peakW: 727, tpvS: 0.22, eai: 5.38 },
+      { meanVelocityMps: 0.91, peakVelocityMps: 1.28, romIn: 13.6, meanW: 547, peakW: 768, tpvS: 0.25, eai: 5.07 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.18, romIn: 13.5, meanW: 508, peakW: 710, tpvS: 0.25, eai: 4.69 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.12, romIn: 13.5, meanW: 476, peakW: 677, tpvS: 0.28, eai: 3.80 },
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.20, romIn: 12.7, meanW: 501, peakW: 719, tpvS: 0.24, eai: 4.92 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.14, romIn: 13.1, meanW: 494, peakW: 694, tpvS: 0.24, eai: 4.75 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.12, romIn: 13.2, meanW: 486, peakW: 678, tpvS: 0.24, eai: 4.63 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.14, romIn: 17.7, meanW: 515, peakW: 694, tpvS: 0.31, eai: 3.67 },
+    ],
+    reported: { meanVelocityMps: 0.84, peakVelocityMps: 1.18, romIn: 13.8, meanW: 508, peakW: 713, tpvS: 0.25, eai: 4.68 },
+  },
+  forgeOnDevice: {
+    repCount: 10,
+    meanVelocityMps: 0.81,
+    romCm: 26,
+    scaleSource: "body_3d",
+    scale: 0.003035,
+    concentricSeconds: [0.37, 0.33, 0.37, 0.37, 0.33, 0.43, 0.27, 0.4, 0.37, 0.3],
+    repMeans: [0.79, 0.74, 0.85, 0.7, 0.78, 0.65, 0.95, 0.67, 0.75, 1.22],
+  },
+  rulers: { inPlane3D: 0.003035, shoulderWidth: 0.004081, depthRuler: 0.00379, sensorImplied: 0.0041 },
+};

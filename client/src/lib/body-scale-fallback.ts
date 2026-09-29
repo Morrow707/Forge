@@ -36,6 +36,8 @@ export type BodyScaleFallbacks = {
     rejectedBecause: string | null;
     method: Body3DScaleReading["method"];
     medianWristDepthM: number | null;
+    frameWidth: number | null;
+    frameHeight: number | null;
   };
 };
 
@@ -89,6 +91,8 @@ export function bodyScaleFallbacks(
     rejectedBecause: body3D.rejectedBecause,
     method: body3D.method,
     medianWristDepthM: body3D.medianWristDepthM,
+    frameWidth: nativeFrames.find((f) => f.frameWidth > 0)?.frameWidth ?? null,
+    frameHeight: nativeFrames.find((f) => f.frameHeight > 0)?.frameHeight ?? null,
   };
   return { candidates, body3D, shoulders, diagnostics, body3DRuler };
 }
