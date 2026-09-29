@@ -307,6 +307,12 @@ export type TrackingDiagnostics = {
       method?: string | null;
       // Median wrist depth from the lens, metres, for the depth ruler the next comparison can fit.
       medianWristDepthM?: number | null;
+      // The pose frame's upright dimensions in the tracker's units, so the depth ruler can be
+      // computed from the export (depthRulerScale in body-3d-ruler.ts).
+      frameWidth?: number | null;
+      frameHeight?: number | null;
+      // The depth ruler's own reading, metres per unit, recorded and not yet a candidate.
+      depthRulerScale?: number | null;
     } | null;
     // WHICH DIRECTION THE LIFT WAS MEASURED ALONG, AND HOW FAR THE TRACE ACTUALLY MOVED.
     //

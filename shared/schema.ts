@@ -9139,6 +9139,9 @@ export const trackingDiagnosticsSchema = z.object({
           rejectedBecause: z.string().max(40).nullable(),
           method: z.string().max(40).nullable().optional(),
           medianWristDepthM: z.number().nullable().optional(),
+          frameWidth: z.number().nullable().optional(),
+          frameHeight: z.number().nullable().optional(),
+          depthRulerScale: z.number().nullable().optional(),
         })
         .optional()
         .nullable(),
