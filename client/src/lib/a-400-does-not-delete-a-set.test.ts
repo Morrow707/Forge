@@ -19,6 +19,7 @@ class MemoryStorage {
 
 const apiRequest = vi.fn();
 const toastError = vi.fn();
+const toastWarning = vi.fn();
 class ApiError extends Error {
   status: number;
   code?: string;
@@ -30,7 +31,7 @@ vi.mock("@/lib/queryClient", () => ({
   queryClient: { invalidateQueries: vi.fn() },
   ApiError,
 }));
-vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a), warning: vi.fn(), success: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a), warning: (...a: unknown[]) => toastWarning(...a), success: vi.fn() } }));
 vi.mock("@capacitor/network", () => ({ Network: { addListener: vi.fn() } }));
 vi.mock("@capacitor/app", () => ({ App: { addListener: vi.fn() } }));
 vi.mock("@/lib/pending-log-files", () => ({
@@ -47,6 +48,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-09-29T19:00:00Z"));
   apiRequest.mockReset();
   toastError.mockReset();
+  toastWarning.mockReset();
   vi.stubGlobal("localStorage", new MemoryStorage());
   vi.stubGlobal("crypto", { randomUUID: () => `id-${Math.random().toString(36).slice(2)}` });
   vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
@@ -86,15 +88,33 @@ describe("a 400 holds the set instead of deleting it", () => {
     expect(q.getPendingLogs()).toHaveLength(0);
   });
 
-  it("gives up after a week, and says so once", async () => {
+  it("never gives up: after a week it is still queued, retried daily, and the athlete is told once, not asked", async () => {
     const q = await import("@/lib/offline-queue");
     q.queueLog(DAY, URL, { entries: [{ reps: 10 }] });
     apiRequest.mockRejectedValue(new ApiError(400, "nope"));
     await q.flushPendingLogs();
-    vi.advanceTimersByTime(q.HELD_MAX_AGE_MS + 60_000);
+    vi.advanceTimersByTime(q.HELD_NOTICE_AFTER_MS + 60_000);
     await q.flushPendingLogs();
-    expect(q.getPendingLogs()).toHaveLength(0);
-    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(q.getPendingLogs()).toHaveLength(1);
+    expect(toastError).not.toHaveBeenCalled();
+    expect(toastWarning).toHaveBeenCalledTimes(1);
+    expect(String(toastWarning.mock.calls[0][0])).not.toMatch(/re-enter/);
+    // Daily now, not every ten minutes.
+    const sent = apiRequest.mock.calls.length;
+    vi.advanceTimersByTime(q.HELD_RETRY_INTERVAL_MS);
+    await q.flushPendingLogs();
+    expect(apiRequest.mock.calls.length).toBe(sent);
+    vi.advanceTimersByTime(q.HELD_RETRY_INTERVAL_AFTER_A_WEEK_MS);
+    await q.flushPendingLogs();
+    expect(apiRequest.mock.calls.length).toBe(sent + 1);
+    expect(toastWarning).toHaveBeenCalledTimes(1);
+  });
+
+  it("slows to hourly after a day", async () => {
+    const q = await import("@/lib/offline-queue");
+    expect(q.heldRetryIntervalMs(60_000)).toBe(q.HELD_RETRY_INTERVAL_MS);
+    expect(q.heldRetryIntervalMs(2 * 86_400_000)).toBe(q.HELD_RETRY_INTERVAL_AFTER_A_DAY_MS);
+    expect(q.heldRetryIntervalMs(8 * 86_400_000)).toBe(q.HELD_RETRY_INTERVAL_AFTER_A_WEEK_MS);
   });
 
   it("still drops a 404 or 422 the way it always did", async () => {

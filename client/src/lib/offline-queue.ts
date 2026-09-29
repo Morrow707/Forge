@@ -65,6 +65,7 @@ export type PendingLog = {
    *  `heldSince` bounds how long, `lastHeldAttemptAt` how often. */
   heldSince?: string;
   lastHeldAttemptAt?: string;
+  heldNoticeShown?: boolean;
   // Bumped on every failed sync attempt (network failure or a server
   // rejection alike) -- see flushPendingLogs' own comment for why this
   // exists and why it's never a reason to drop the entry outright.
@@ -405,9 +406,20 @@ const STALE_FAILURE_THRESHOLD = 5;
 // immediately and the in-flight run is already doing its work.
 let flushInFlight = false;
 
-/** How often a HELD (400) entry is re-sent, and for how long before it is given up on. */
+/** How often a HELD (400) entry is re-sent. Never given up on -- Scott, 2026-09-29: "It
+ *  shouldn't be on the athlete to remember that for our server error." The clock slows so a
+ *  payload the server keeps refusing does not cost a data plan: every ten minutes on the first
+ *  day, hourly for the first week, daily after that, for as long as the app is installed. The
+ *  athlete is told once, after a week, that it is still trying -- told, not asked to re-enter. */
 export const HELD_RETRY_INTERVAL_MS = 10 * 60_000;
-export const HELD_MAX_AGE_MS = 7 * 86_400_000;
+export const HELD_RETRY_INTERVAL_AFTER_A_DAY_MS = 60 * 60_000;
+export const HELD_RETRY_INTERVAL_AFTER_A_WEEK_MS = 24 * 60 * 60_000;
+export const HELD_NOTICE_AFTER_MS = 7 * 86_400_000;
+export function heldRetryIntervalMs(heldMs: number): number {
+  if (heldMs > 7 * 86_400_000) return HELD_RETRY_INTERVAL_AFTER_A_WEEK_MS;
+  if (heldMs > 86_400_000) return HELD_RETRY_INTERVAL_AFTER_A_DAY_MS;
+  return HELD_RETRY_INTERVAL_MS;
+}
 
 export async function flushPendingLogs() {
   if (flushInFlight) return;
@@ -443,22 +455,19 @@ async function runFlush() {
       // put a microtask between them (the "runs one flush at a time" test).
       // A HELD entry (a 400, below) is retried on a slow clock, not every twenty seconds: a
       // 4MB tracked day re-POSTed at every flush is a battery and a data plan, and the thing
-      // that will make it land is a server fix, which takes minutes, not seconds.
+      // that will make it land is a server fix, which takes minutes, not seconds. It is never
+      // dropped -- see heldRetryIntervalMs.
       if (entry.heldSince) {
         const heldMs = Date.now() - Date.parse(entry.heldSince);
         const sinceAttemptMs = entry.lastHeldAttemptAt ? Date.now() - Date.parse(entry.lastHeldAttemptAt) : Infinity;
-        if (heldMs > HELD_MAX_AGE_MS) {
-          logDebug("SAVE", `flush DROPPED (${entry.dayKey}): held ${Math.round(heldMs / 86_400_000)} days, giving up`);
-          if (entry.payloadFile) void deletePendingLogFile(entry.payloadFile);
-          writeQueue(readQueue().filter((p) => p.id !== entry.id));
-          clearDayFailure(entry.dayKey);
-          toast.error(
-            "A workout you logged was rejected by the server for a week and can't be synced -- open that day and re-enter it.",
+        if (heldMs > HELD_NOTICE_AFTER_MS && !entry.heldNoticeShown) {
+          writeQueue(readQueue().map((p) => (p.id === entry.id ? { ...p, heldNoticeShown: true } : p)));
+          toast.warning(
+            "A workout you logged a week ago is still waiting on the server to accept it. It's safe on this phone and will keep trying -- nothing for you to do.",
             { duration: 20000 },
           );
-          continue;
         }
-        if (sinceAttemptMs < HELD_RETRY_INTERVAL_MS) continue;
+        if (sinceAttemptMs < heldRetryIntervalMs(heldMs)) continue;
       }
       const payload = entry.payloadFile ? await loadPayload(entry) : entry.payload;
       if (payload == null) {
@@ -500,7 +509,7 @@ async function runFlush() {
       // the same words as any other rejection.
       if (status === 400) {
         const now = new Date().toISOString();
-        logDebug("SAVE", `flush HELD (${entry.dayKey}): 400 -- kept, retried every ${HELD_RETRY_INTERVAL_MS / 60_000} minutes for ${HELD_MAX_AGE_MS / 86_400_000} days`);
+        logDebug("SAVE", `flush HELD (${entry.dayKey}): 400 -- kept on this phone, retried on a slowing clock, never dropped`);
         writeQueue(
           readQueue().map((p) =>
             p.id === entry.id ? { ...p, heldSince: p.heldSince ?? now, lastHeldAttemptAt: now } : p,
