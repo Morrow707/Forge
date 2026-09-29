@@ -314,7 +314,13 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **558** is the newest TestFlight build, cut 2026-09-28 evening (#177): the height and
+- Build **559** is the newest TestFlight build, cut 2026-09-29 from the Rule #2 reversal and the
+  file-backed save queue: the 3D pose and hand pose back on for every tracker as STRIDES
+  (`AvFrameContext(body3DStride:handPoseStride:)`, never off), live frames scaled to 1280 before
+  Vision (`AvLiveFrameScaler`), the detector re-searching every third frame while unlocked, and
+  a queued save's body written to a file on the phone so the 5MB localStorage quota can never
+  trim it again (`pending-log-files.ts`).
+- Build **558** was the previous build, cut 2026-09-28 evening (#177): the height and
   shoulder rulers are averaged when they are the only rulers (fitted on three OVR sets), hand
   pose off for the bar tracker, replayable traces (`PathTracePoint.c`, movement axis, scale
   correction), one-rep jump chips. 557 was cancelled before upload on Scott's instruction.
