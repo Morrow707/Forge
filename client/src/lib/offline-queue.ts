@@ -5,6 +5,13 @@ import { toast } from "sonner";
 // Pure, and kept that way so it can be unit-tested with no DOM -- see its own comment.
 import { dropHeavyFields } from "@/lib/log-payload-trim";
 import { belongsToCurrentUser, getQueueOwner } from "@/lib/queue-owner";
+import {
+  deletePendingLogFile,
+  pendingLogFilePath,
+  pendingLogFilesSupported,
+  readPendingLogFile,
+  writePendingLogFile,
+} from "@/lib/pending-log-files";
 import { Network } from "@capacitor/network";
 import { App } from "@capacitor/app";
 
@@ -49,7 +56,10 @@ export type PendingLog = {
   // against the SAME endpoint the save actually needed instead of always
   // hitting the athlete one regardless of who queued it.
   url: string;
+  /** The save body, inline. Null when it lives in `payloadFile` instead -- see
+   *  pending-log-files.ts. Read it through loadPayload, never directly. */
   payload: unknown;
+  payloadFile?: string;
   queuedAt: string;
   // Bumped on every failed sync attempt (network failure or a server
   // rejection alike) -- see flushPendingLogs' own comment for why this
@@ -179,6 +189,21 @@ export function hasPendingLog(dayKey: string): boolean {
  *      that point it genuinely has not, and silence is the failure mode this
  *      whole change exists to remove.
  * Returns the stored entry, or null when even step 4 was reached. */
+// File writes still in flight, by entry id, so a flush that runs a moment after a queue
+// cannot read a half-written file.
+const pendingWrites = new Map<string, Promise<boolean>>();
+
+/** The entry's save body, wherever it lives. Null only when a file-backed body is unreadable. */
+export async function loadPayload(entry: PendingLog): Promise<unknown | null> {
+  if (!entry.payloadFile) return entry.payload;
+  await pendingWrites.get(entry.id);
+  return readPendingLogFile(entry.payloadFile);
+}
+
+function forgetFiles(entries: PendingLog[]) {
+  for (const e of entries) if (e.payloadFile) void deletePendingLogFile(e.payloadFile);
+}
+
 export function queueLog(dayKey: string, url: string, payload: unknown): PendingLog | null {
   const entry: PendingLog = {
     id: crypto.randomUUID(),
@@ -188,7 +213,52 @@ export function queueLog(dayKey: string, url: string, payload: unknown): Pending
     queuedAt: new Date().toISOString(),
     ownerId: getQueueOwner(),
   };
-  const others = readQueue().filter((p) => p.dayKey !== dayKey);
+  const before = readQueue();
+  const replaced = before.filter((p) => p.dayKey === dayKey);
+  const others = before.filter((p) => p.dayKey !== dayKey);
+
+  // THE BODY GOES TO A FILE ON THE PHONE. The index entry is a few hundred bytes and always
+  // fits; the 6MB of skeleton frames go where the video queue already keeps its files. The
+  // write is asynchronous; loadPayload waits for it. If the write fails the entry is
+  // re-queued through the inline path below, which is exactly what it was before.
+  if (pendingLogFilesSupported()) {
+    const fileEntry: PendingLog = { ...entry, payload: null, payloadFile: pendingLogFilePath(entry.id) };
+    if (trySetQueue([...others, fileEntry])) {
+      forgetFiles(replaced);
+      const write = writePendingLogFile(entry.id, payload)
+        .then(() => true)
+        .catch(() => false);
+      pendingWrites.set(entry.id, write);
+      void write.then((ok) => {
+        pendingWrites.delete(entry.id);
+        if (ok) return;
+        logDebug("SAVE", "queued body could not be written to a file; keeping it inline");
+        writeQueue(readQueue().filter((p) => p.id !== entry.id));
+        queueLogInline(dayKey, url, payload);
+      });
+      return fileEntry;
+    }
+  }
+  forgetFiles(replaced);
+  return queueLogInline(dayKey, url, payload, entry, others);
+}
+
+function queueLogInline(
+  dayKey: string,
+  url: string,
+  payload: unknown,
+  prepared?: PendingLog,
+  othersPrepared?: PendingLog[],
+): PendingLog | null {
+  const entry: PendingLog = prepared ?? {
+    id: crypto.randomUUID(),
+    dayKey,
+    url,
+    payload,
+    queuedAt: new Date().toISOString(),
+    ownerId: getQueueOwner(),
+  };
+  const others = othersPrepared ?? readQueue().filter((p) => p.dayKey !== dayKey);
 
   if (trySetQueue([...others, entry])) return entry;
 
@@ -289,12 +359,20 @@ export function releaseDayKeyForFlush(dayKey: string): void {
 /** Removes and returns the queued entry for a day, if any -- lets the page
  * that claimed that day (see claimDayKeyForFlush) resolve it through its
  * own serialized save queue instead of leaving it to the generic flush. */
-export function takePendingLog(dayKey: string): PendingLog | null {
+export async function takePendingLog(dayKey: string): Promise<PendingLog | null> {
   const queue = readQueue();
   const entry = queue.find((p) => p.dayKey === dayKey);
   if (!entry) return null;
   writeQueue(queue.filter((p) => p.id !== entry.id));
-  return entry;
+  const payload = await loadPayload(entry);
+  if (entry.payloadFile) void deletePendingLogFile(entry.payloadFile);
+  // A file-backed body that cannot be read is a queued day with nothing in it. There is
+  // nothing to replay; say so rather than POST an empty day over a real one.
+  if (payload == null) {
+    logDebug("SAVE", `queued day ${dayKey} had no readable body; dropped`);
+    return null;
+  }
+  return { ...entry, payload, payloadFile: undefined };
 }
 
 /** Forget anything still queued for this day, because a save for it just reached the server.
@@ -306,7 +384,10 @@ export function takePendingLog(dayKey: string): PendingLog | null {
 export function clearPendingLog(dayKey: string) {
   const queue = readQueue();
   const remaining = queue.filter((p) => p.dayKey !== dayKey);
-  if (remaining.length !== queue.length) writeQueue(remaining);
+  if (remaining.length !== queue.length) {
+    forgetFiles(queue.filter((p) => p.dayKey === dayKey));
+    writeQueue(remaining);
+  }
 }
 
 const STALE_FAILURE_THRESHOLD = 5;
@@ -349,8 +430,20 @@ async function runFlush() {
     // claimDayKeyForFlush's own comment.
     if (claimedDayKeys.has(entry.dayKey)) continue;
     try {
-      await apiRequest("POST", entry.url, entry.payload);
+      // An inline body is read synchronously on purpose: the first flush after a reconnect
+      // has to reach apiRequest before the second one is scheduled, and an await here would
+      // put a microtask between them (the "runs one flush at a time" test).
+      const payload = entry.payloadFile ? await loadPayload(entry) : entry.payload;
+      if (payload == null) {
+        // The body file is gone (a reinstall, a cleared data directory). The index entry is
+        // all that is left and it describes nothing; keeping it would retry forever.
+        logDebug("SAVE", `flush DROPPED (${entry.dayKey}): queued body unreadable`);
+        writeQueue(readQueue().filter((p) => p.id !== entry.id));
+        continue;
+      }
+      await apiRequest("POST", entry.url, payload);
       logDebug("SAVE", `flush ok (${entry.dayKey})`);
+      if (entry.payloadFile) void deletePendingLogFile(entry.payloadFile);
       writeQueue(readQueue().filter((p) => p.id !== entry.id));
       clearDayFailure(entry.dayKey);
       syncedAny = true;
@@ -378,6 +471,7 @@ async function runFlush() {
         `flush ${permanentlyRejected ? "DROPPED" : "retry"} (${entry.dayKey}): ${status ?? "no response"}`,
       );
       if (permanentlyRejected) {
+        if (entry.payloadFile) void deletePendingLogFile(entry.payloadFile);
         writeQueue(readQueue().filter((p) => p.id !== entry.id));
         clearDayFailure(entry.dayKey);
         // 409 is its own thing and deserves its own words. It does not mean the payload

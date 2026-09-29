@@ -39,6 +39,14 @@ vi.mock("sonner", () => ({
   toast: { error: (...a: unknown[]) => toastError(...a), warning: (...a: unknown[]) => toastWarning(...a), success: vi.fn() },
 }));
 vi.mock("@capacitor/network", () => ({ Network: { addListener: vi.fn() } }));
+// These tests cover the inline (web) path; the file-backed path has its own test file.
+vi.mock("@/lib/pending-log-files", () => ({
+  pendingLogFilesSupported: () => false,
+  pendingLogFilePath: (id: string) => `pending-logs/${id}.json`,
+  writePendingLogFile: vi.fn(),
+  readPendingLogFile: vi.fn(),
+  deletePendingLogFile: vi.fn(),
+}));
 vi.mock("@capacitor/app", () => ({ App: { addListener: vi.fn() } }));
 
 let storageStub: MemoryStorage;
@@ -161,7 +169,7 @@ describe("the athlete finds out when a day will not sync", () => {
 
     for (let i = 0; i < 4; i++) {
       await m.flushPendingLogs();
-      const taken = m.takePendingLog(DAY);
+      const taken = await m.takePendingLog(DAY);
       expect(taken).not.toBeNull();
       m.queueLog(DAY, URL, taken!.payload);
     }

@@ -8818,6 +8818,7 @@ const objectLockDiagnosticsSchema = z.object({
   bestCandidateConfidence: z.number().optional(),
   lowConfidenceAccepts: z.number().optional(),
 
+  searchesSkippedForCadence: z.number().optional(),
   framesFrozen: z.number(),
   maxAcceptedDistanceInYardsticks: z.number().optional(),
   yardstickSource: z.string().optional(),
