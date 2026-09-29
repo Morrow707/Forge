@@ -18,6 +18,7 @@ import {
 } from "@shared/athlete-body-model";
 import { measureLimbsInMetres, measureLimbSpansInUnits } from "@/lib/measure-limbs";
 import { body3DScaleFromFrames } from "@/lib/body-3d-ruler";
+import { body3DCandidate } from "@/lib/body-scale-fallback";
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
@@ -1221,7 +1222,10 @@ export function AvBarTrackerDialog({
       referenceHeightM: body3DScale.referenceHeightM,
       framesUsed: body3DScale.framesUsed,
       rejectedBecause: body3DScale.rejectedBecause,
+      method: body3DScale.method,
+      medianWristDepthM: body3DScale.medianWristDepthM,
     };
+    const body3DEstimate = body3DCandidate(body3DScale);
 
     // Every candidate is checked against the athlete's own height before any of them is ranked --
     // see rejectImplausibleScales. A scale that puts a 5'10" lifter at sixteen inches tall is
@@ -1240,9 +1244,7 @@ export function AvBarTrackerDialog({
         : []),
       // THE ONE RULER THE ATHLETE SIMPLY TOLD US. See gripWidthScaleFromFrames.
       ...(gripScale != null ? [gripScale] : []),
-      ...(body3DScale.scale != null
-        ? [{ source: "body_3d" as const, scale: body3DScale.scale, uncertaintyFraction: body3DScale.uncertaintyFraction }]
-        : []),
+      ...(body3DEstimate ? [body3DEstimate] : []),
       ...(bodyModelScale != null ? [bodyModelScale] : []),
       ...(heightScaleFactor != null
         ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: 0.05 }]
@@ -1261,6 +1263,9 @@ export function AvBarTrackerDialog({
       scaleCandidatesRaw,
       bodySpanUnits,
       heightIn,
+      // The grip as the second yardstick: the height check has nothing to read on a lying
+      // athlete (0 of 914 frames on the 09-29 bench), and the grip is measured on every frame.
+      gripWidthPx,
     );
     const scaleVerdict = reconcileScaleEstimates(plausibleScales);
 
@@ -1298,7 +1303,7 @@ export function AvBarTrackerDialog({
               // `measured` is the bone length in metres after the height correction, `samples`
               // the 3D frames it came from. The bone and the correction path are in the source
               // name so the report can tell a depth-measured skeleton from a corrected one.
-              source: `body_3d:${body3DScale.limb ?? "?"}:${body3DScale.heightSource ?? "?"}`,
+              source: `body_3d:${body3DScale.limb ?? "?"}:${body3DScale.heightSource ?? "?"}:${body3DScale.method ?? "?"}`,
               scale: body3DScale.scale,
               measured: body3DScale.metres,
               samples: body3DScale.framesUsed,
@@ -1327,16 +1332,18 @@ export function AvBarTrackerDialog({
       scaleCandidates: typeof scaleCandidates;
       scaleOutliers: { source: string; ratioToChosen: number }[];
       scaleCorroborated: boolean;
-      scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number }[];
+      scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
       axisSource?: "grip" | "trace_covariance";
       movementAxis?: { x: number; y: number } | null;
       positionScaleCorrection?: number | null;
       body3DRuler?: {
-        limbs: { limb: string; metres: number; spanUnits: number; scale: number }[];
+        limbs: { limb: string; metres: number; spanUnits: number; scale: number; samples?: number }[];
         heightSource: string | null;
         referenceHeightM: number | null;
         framesUsed: number;
         rejectedBecause: string | null;
+        method?: string | null;
+        medianWristDepthM?: number | null;
       } | null;
       gripPairsUsed?: number;
       traceTravelAlongPx?: number;

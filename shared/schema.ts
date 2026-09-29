@@ -9114,12 +9114,22 @@ export const trackingDiagnosticsSchema = z.object({
       body3DRuler: z
         .object({
           limbs: z
-            .array(z.object({ limb: z.string().max(40), metres: z.number(), spanUnits: z.number(), scale: z.number() }))
+            .array(
+              z.object({
+                limb: z.string().max(40),
+                metres: z.number(),
+                spanUnits: z.number(),
+                scale: z.number(),
+                samples: z.number().optional(),
+              }),
+            )
             .max(8),
           heightSource: z.string().max(40).nullable(),
           referenceHeightM: z.number().nullable(),
           framesUsed: z.number(),
           rejectedBecause: z.string().max(40).nullable(),
+          method: z.string().max(40).nullable().optional(),
+          medianWristDepthM: z.number().nullable().optional(),
         })
         .optional()
         .nullable(),
@@ -9168,7 +9178,7 @@ export const trackingDiagnosticsSchema = z.object({
       traceTravelAcrossCm: z.number().optional().nullable(),
       tracePointsDroppedOffAxis: z.number().optional().nullable(),
       scalesRejectedAsImplausible: z
-        .array(z.object({ source: z.string().max(40), impliedHeightIn: z.number() }))
+        .array(z.object({ source: z.string().max(40), impliedHeightIn: z.number(), impliedGripIn: z.number().optional() }))
         .max(8)
         .optional(),
       noseToAnkleFrames: z.number(),

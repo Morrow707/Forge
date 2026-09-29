@@ -103,7 +103,20 @@ export type PoseHandJoint = { hand: number; name: string; x: number; y: number; 
 // pixel-scale/Y-flip, unlike every 2D joint here. Omitted (not an empty array), same
 // omit-when-nil convention as handJoints, on any frame that didn't get a gated perform() call
 // (see AvBodyTrackingPlugin.swift's own body3DDetectionStride) or found no confident 3D pose.
-export type PoseBody3DJoint = { name: string; x: number; y: number; z: number; confidence: number };
+// x/y/z: metres in Vision's scene space, anchored on the root joint. cx/cy/cz: the same joint
+// carried into the CAMERA's frame through the observation's cameraOriginMatrix (image-plane x
+// and y, depth z), so a bone's visible length can be told from its foreshortened one -- see
+// body-3d-ruler.ts. Absent on a native build older than the one that added them.
+export type PoseBody3DJoint = {
+  name: string;
+  x: number;
+  y: number;
+  z: number;
+  confidence: number;
+  cx?: number;
+  cy?: number;
+  cz?: number;
+};
 
 export type PoseFrame = {
   frameIndex: number;

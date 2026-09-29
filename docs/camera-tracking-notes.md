@@ -1550,3 +1550,71 @@ line; "BINNED" is printed when it is that one.
 still a third of the others'. Per-rep peak is the noisiest number the pipeline produces on a
 lone-hand trace (`barPointFromLoneHandCarried` 121 of 556 here); the next take with the plate
 locked is the one that separates ruler error from tracker error.
+
+## Build 566 beside OVR, 2026-09-29 night: the 3D ruler wrong the same way twice, and the settle after the un-rack
+
+Set 3, bench, 135lb x 10, phone at the foot of the bench, 1920x1080 @ 120fps (this lens has
+no 4:3 format at 120, clean or binned; the log says so). Device: 12 reps, 0.48 mean, 19.3cm.
+Sensor: 10 reps, 0.70 mean, 36.3cm (14.3in). Export `forge-captures-recent.json`, capture 1;
+fixture `bench-settle-2026-09-29.json`.
+
+**The scale, `body-3d-ruler.ts`.** Chosen source `body_3d` at 0.00246 m/unit (the shin,
+reference-corrected); the shoulder ruler said 0.00413 and was called the outlier at 1.68x. The
+sensor's ROM puts the truth near 0.0046. Replayed at the shoulder ruler's scale the set reads
+32.4cm and 0.66 mean against 36.3 and 0.70 -- within a tenth, and the same story on sets 1 and
+2 (shoulder within 10% on all three benches). So the 3D ruler was 1.9x small on set 3 after
+being 1.8x small on set 2, and the fix on set 2 (median across bones) did not touch it, because
+on set 3 EVERY bone read the same way: upper arm 176 units, forearm 159, femur 188, shin 209,
+torso 273, shoulders 134, against a grip of 173 units. At the sensor's scale that is an 0.8m
+upper arm and a 1m shin. The 95th-percentile "longest projection" is not the bone's square-on
+view on this take -- with 82 body-suspect frames in 914 it is one of the jumped ones -- and the
+legs are nearer the lens than the bar from the foot of a bench besides. The method is wrong,
+not a bone.
+
+- The plugin now emits every 3D joint in the CAMERA's frame as well (`cx`, `cy`, `cz`: the
+  observation's `cameraOriginMatrix` inverted), beside the scene coordinates. A bone's visible
+  length is then known per frame -- hypot of the camera-space x and y -- and divided by the same
+  bone's 2D span on the same frame gives a scale sample with no maximum and no percentile to be
+  captured by a bad frame. Median over (frame, bone, side), then across bones. A bone pointing
+  at the lens (in-plane part under `MIN_IN_PLANE_FRACTION`) is skipped for that frame.
+  `calibration.body3DRuler.method` says `in_plane` when this ran.
+- Frames with no camera-space joints fall back to the longest-projection method, flagged
+  `longest_projection`, at the widest uncertainty and DEMOTED below the shoulder ruler in
+  `reconcileScaleEstimates` (`ScaleEstimate.demoted`). Still computed, still recorded, still
+  joins an agreeing cluster; it no longer anchors one.
+- `rejectImplausibleScales` gets the grip as a second yardstick (`gripWidthPx`, measured on 818
+  frames here) because the body-height check had nothing to read: a lying athlete resolved a
+  body length on 0 of 914 frames, so the check that saved the squats was silent on exactly the
+  take that needed it. A candidate implying a grip under 0.2m or over 1.4m goes, with the grip
+  it implied in `scalesRejectedAsImplausible`. Deliberately loose: set 3's bad candidate implies
+  a 0.42m grip and survives it; the demotion is what handles that one.
+- `body3DRuler.medianWristDepthM` is recorded (camera-space z of the wrists). With the lens's
+  field of view (74.6 degrees, in `captureDeviceInfo.activeFormat`) that is a third ruler --
+  metres per unit at the bar's own depth = depth x 2 tan(fov/2) / frame width -- and the next
+  comparison can say whether it is any good before it becomes a candidate.
+- The plate candidate (0.00141, "height" 319px) was rightly refused: a 45cm plate at 319px is a
+  1.5m athlete. The box was the rack upright or the bench end, not the plate; the detector's
+  training data (three photos) is still the open item.
+
+**The count, `bar-tracking.ts`, the count-trim rule.** Twelve at every candidate gate: the ten
+presses (12.1s to 23.0s, one a second) and before them 7.5-9.9s and 9.9-12.1s, the bar settling
+over the chest after the un-rack. Concentrics of 14 and 17cm against a median of 19, 0.77s and
+0.23s against 0.47, peaks at 0.6x the median: not short, not slow, not overlong, and contiguous
+with the set so `isolatedRackMoves` cannot see them. Their descents are the tell (15cm in 1.5s,
+12cm in 1.2s, a quarter of the set's descent speed), and a rule on that was written and
+withdrawn in the same hour: set 11945 in `walkout-captures.json` is a real back squat whose
+first descent is 59cm over 3.4s after a pause at the top, and it reads identically on the
+clock. So the athlete's count decides how many, and the set's own medians decide which: when
+every gate lands above `expectedReps`, the edge rep that sits furthest from the set's medians
+(whole window, amplitude, descent speed, as summed log ratios) goes, one at a time, until the
+count is the athlete's. Set 3's settles score 2.3 and 2.1, its real last rep 0.35, a real first
+squat rep after a pause about 1.3. Bounded: never below the athlete's count, never more than two
+from either end, never a rep scoring under 1.0. Replayed: 10 reps, 12.1s to 23.0s.
+
+**Per rep at the shoulder ruler's scale**, reps 2-10 device vs sensor mean: 0.87/0.79,
+0.79/0.74, 0.79/0.73, 0.47/0.68, 0.84/0.70, 0.55/0.71, 0.72/0.67, 0.86/0.71, 0.77/0.56 --
+average 0.74 against 0.70, individual reps up to a third off either way. That spread is the
+lone-hand bar point (92 carried, 16 side flips) and is the next thing after the scale.
+
+**Still open from this take:** the lens has no 4:3 120fps format, so 16:9 at 120 is what a
+rate-first chain gets on this phone; the per-rep spread above; the plate model.

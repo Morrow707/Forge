@@ -34,8 +34,22 @@ export type BodyScaleFallbacks = {
     referenceHeightM: number | null;
     framesUsed: number;
     rejectedBecause: string | null;
+    method: Body3DScaleReading["method"];
+    medianWristDepthM: number | null;
   };
 };
+
+/** The 3D ruler as a scale candidate: demoted when it had to fall back to the longest-projection
+ *  method (see body-3d-ruler.ts on why), a full peer under the in-plane one. */
+export function body3DCandidate(body3D: Body3DScaleReading): ScaleEstimate | null {
+  if (body3D.scale == null) return null;
+  return {
+    source: "body_3d",
+    scale: body3D.scale,
+    uncertaintyFraction: body3D.uncertaintyFraction,
+    ...(body3D.method === "longest_projection" ? { demoted: true } : {}),
+  };
+}
 
 export function bodyScaleFallbacks(
   nativeFrames: NativePoseFrame[],
@@ -45,10 +59,9 @@ export function bodyScaleFallbacks(
 ): BodyScaleFallbacks {
   const body3D = body3DScaleFromFrames(nativeFrames, heightIn, measureLimbSpansInUnits(calibrationInput));
   const shoulders = shoulderWidthScaleFromFrames(calibrationInput, heightIn, posture);
+  const body3DEstimate = body3DCandidate(body3D);
   const candidates: ScaleEstimate[] = [
-    ...(body3D.scale != null
-      ? [{ source: "body_3d" as const, scale: body3D.scale, uncertaintyFraction: body3D.uncertaintyFraction }]
-      : []),
+    ...(body3DEstimate ? [body3DEstimate] : []),
     ...(shoulders.scale != null
       ? [{ source: "shoulder_width" as const, scale: shoulders.scale, uncertaintyFraction: shoulders.uncertaintyFraction }]
       : []),
@@ -57,7 +70,7 @@ export function bodyScaleFallbacks(
     ...(body3D.scale != null
       ? [
           {
-            source: `body_3d:${body3D.limb ?? "?"}:${body3D.heightSource ?? "?"}`,
+            source: `body_3d:${body3D.limb ?? "?"}:${body3D.heightSource ?? "?"}:${body3D.method ?? "?"}`,
             scale: body3D.scale,
             measured: body3D.metres,
             samples: body3D.framesUsed,
@@ -74,6 +87,8 @@ export function bodyScaleFallbacks(
     referenceHeightM: body3D.referenceHeightM,
     framesUsed: body3D.framesUsed,
     rejectedBecause: body3D.rejectedBecause,
+    method: body3D.method,
+    medianWristDepthM: body3D.medianWristDepthM,
   };
   return { candidates, body3D, shoulders, diagnostics, body3DRuler };
 }

@@ -50,6 +50,45 @@ function frames(
 // take is at 0.001 m/unit if the skeleton is right.
 const SPANS = { femur: 450, shin: 420, torso: 500, upperArm: 300, forearm: 260, shoulderWidth: 380 };
 
+// THE IN-PLANE METHOD'S INPUT: the same skeleton with camera-space joints and a 2D pose on the
+// same frame. The camera looks down -z; the skeleton is rotated `yaw` radians about the vertical
+// so its left-right bones foreshorten in the image while its vertical bones do not, and the 2D
+// pose is that rotated skeleton projected at UNITS_PER_METRE and shifted into a 1280x720 frame.
+// A frame's `jitter` moves one 2D wrist by that many units -- the jumped landmark the median has
+// to outvote.
+const UNITS_PER_METRE = 1000;
+function cameraFrames(
+  n: number,
+  opts: { source?: "measured" | "reference"; heightM?: number; yaw?: number; depthM?: number; jitterOn?: number[]; jitterUnits?: number } = {},
+): NativePoseFrame[] {
+  const yaw = opts.yaw ?? 0;
+  const depth = opts.depthM ?? 3;
+  return Array.from({ length: n }, (_, i) => {
+    const joints3D = skeleton().map((j) => {
+      const cx = j.x * Math.cos(yaw) - j.z * Math.sin(yaw);
+      const cz = -(depth + j.x * Math.sin(yaw) + j.z * Math.cos(yaw));
+      return { ...j, cx, cy: j.y, cz };
+    });
+    const joints2D = joints3D.map((j) => {
+      let x = 640 + j.cx * UNITS_PER_METRE;
+      const y = 360 - j.cy * UNITS_PER_METRE;
+      if (opts.jitterOn?.includes(i) && j.name === "leftWrist") x += opts.jitterUnits ?? 500;
+      return { name: j.name, x: x / 1280, y: 1 - y / 720, confidence: 1 };
+    });
+    return {
+      frameIndex: i,
+      timestamp: i / 30,
+      tracked: true,
+      joints: joints2D,
+      frameWidth: 1280,
+      frameHeight: 720,
+      body3DJoints: joints3D,
+      body3DHeightM: opts.heightM ?? 1.8,
+      body3DHeightSource: opts.source ?? "reference",
+    } as unknown as NativePoseFrame;
+  });
+}
+
 describe("the 3D skeleton as a ruler", () => {
   it("measures each bone in metres from the 3D joints, as a median over frames", () => {
     const bones = body3DBoneLengthsM(frames(6));
@@ -65,14 +104,21 @@ describe("the 3D skeleton as a ruler", () => {
     expect(r.heightSource).toBe("reference_corrected");
     expect(r.limbs.length).toBe(6);
     expect(r.scale).toBeCloseTo((0.5 * (1.905 / 1.8)) / 500, 8);
-    expect(r.uncertaintyFraction).toBe(BODY_3D_CORRECTED_UNCERTAINTY);
+    // Longest-projection frames (no camera-space joints): the widest uncertainty this ruler
+    // has, whatever the correction path -- see the file comment on why.
+    expect(r.method).toBe("longest_projection");
+    expect(r.uncertaintyFraction).toBe(BODY_3D_UNCORRECTED_UNCERTAINTY);
+    expect(BODY_3D_UNCORRECTED_UNCERTAINTY).toBeGreaterThan(BODY_3D_CORRECTED_UNCERTAINTY);
   });
 
   it("takes a depth-measured skeleton as it is, whatever height is on file", () => {
     const r = body3DScaleFromFrames(frames(6, { source: "measured" }), 75, SPANS);
     expect(r.heightSource).toBe("measured");
     expect(r.scale).toBeCloseTo(0.5 / 500, 8);
-    expect(r.uncertaintyFraction).toBe(BODY_3D_MEASURED_UNCERTAINTY);
+    expect(r.uncertaintyFraction).toBe(BODY_3D_UNCORRECTED_UNCERTAINTY);
+    const inPlane = body3DScaleFromFrames(cameraFrames(6, { source: "measured" }), 75, {});
+    expect(inPlane.method).toBe("in_plane");
+    expect(inPlane.uncertaintyFraction).toBe(BODY_3D_MEASURED_UNCERTAINTY);
   });
 
   it("still offers a number with no height on file, at a wider stated uncertainty (Rule #1)", () => {
@@ -112,6 +158,53 @@ describe("the 3D skeleton as a ruler", () => {
     const r = body3DScaleFromFrames(frames(6), 75, { ...SPANS, torso: 1150 });
     expect(r.scale).toBeCloseTo((0.45 * (1.905 / 1.8)) / 450, 8);
     expect(r.limbs.find((l) => l.limb === "torso")!.scale).toBeLessThan(r.scale! / 2);
+  });
+
+  describe("the in-plane method, on frames that carry camera-space joints", () => {
+    it("reads the scale off each bone's visible length over its 2D span on the same frame", () => {
+      const r = body3DScaleFromFrames(cameraFrames(6, { source: "measured" }), 75, {});
+      expect(r.method).toBe("in_plane");
+      expect(r.scale).toBeCloseTo(1 / UNITS_PER_METRE, 8);
+      expect(r.limbs.length).toBe(6);
+      for (const limb of r.limbs) expect(limb.scale).toBeCloseTo(1 / UNITS_PER_METRE, 8);
+      expect(r.medianWristDepthM).toBeCloseTo(3, 2);
+    });
+
+    it("ignores the longest-projection spans entirely: they are the method that was wrong", () => {
+      const r = body3DScaleFromFrames(cameraFrames(6, { source: "measured" }), 75, { ...SPANS, torso: 1150 });
+      expect(r.scale).toBeCloseTo(1 / UNITS_PER_METRE, 8);
+    });
+
+    it("is unchanged when the athlete is turned: a foreshortened bone's in-plane length shrinks with its span", () => {
+      const r = body3DScaleFromFrames(cameraFrames(6, { source: "measured", yaw: Math.PI / 3 }), 75, {});
+      expect(r.scale).toBeCloseTo(1 / UNITS_PER_METRE, 6);
+    });
+
+    it("skips a bone pointing at the lens rather than dividing noise by noise", () => {
+      // At 80 degrees the shoulder line is nearly along the view axis: under MIN_IN_PLANE_FRACTION.
+      const r = body3DScaleFromFrames(cameraFrames(6, { source: "measured", yaw: (80 * Math.PI) / 180 }), 75, {});
+      expect(r.limbs.find((l) => l.limb === "shoulderWidth")).toBeUndefined();
+      expect(r.limbs.find((l) => l.limb === "femur")!.scale).toBeCloseTo(1 / UNITS_PER_METRE, 8);
+    });
+
+    it("outvotes a jumped landmark instead of choosing it: the median, not the longest", () => {
+      // Two frames of twenty carry a wrist 500 units off the wrist. Under the longest-projection
+      // rule that IS the forearm's span; under the median it is two samples among twenty.
+      const r = body3DScaleFromFrames(
+        cameraFrames(20, { source: "measured", jitterOn: [3, 11], jitterUnits: 500 }),
+        75,
+        {},
+      );
+      expect(r.limbs.find((l) => l.limb === "forearm")!.scale).toBeCloseTo(1 / UNITS_PER_METRE, 8);
+      expect(r.scale).toBeCloseTo(1 / UNITS_PER_METRE, 8);
+    });
+
+    it("applies the height correction to a reference skeleton's in-plane lengths too", () => {
+      const r = body3DScaleFromFrames(cameraFrames(6), 75, {});
+      expect(r.heightSource).toBe("reference_corrected");
+      expect(r.scale).toBeCloseTo((1.905 / 1.8) / UNITS_PER_METRE, 8);
+      expect(r.uncertaintyFraction).toBe(BODY_3D_CORRECTED_UNCERTAINTY);
+    });
   });
 
   it("says why when it cannot rule", () => {
