@@ -1251,6 +1251,10 @@ export function summarizeTrackedSet(
   // movementAxisFromGrip. Null keeps the covariance-derived axis, so every existing caller is
   // unchanged until it passes one.
   movementAxis: { x: number; y: number } | null = null,
+  // How many reps the athlete said this set was -- the prescription on the set, or what they
+  // logged. Chooses BETWEEN the gates the trace itself proposes (see segmentPhasesRelative); it
+  // never invents a rep or removes one on its own. Null keeps the old ladder order.
+  expectedReps: number | null = null,
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
   const minRepAmplitudeCm = repAmplitudeGateCm(romKind, heightIn);
@@ -1321,9 +1325,11 @@ export function summarizeTrackedSet(
   // rep of anything. Passing the movement gate here would put the absolute threshold back in
   // charge and bring its failure -- an arched bench whose real reps sit under it, merged into
   // their neighbours -- back with it.
-  const phases =
+  const defaultPhases =
     segmentPhasesRelative(ySmoothed, MIN_REP_AMPLITUDE_FLOOR_CM / 100) ??
     segmentPhases(ySmoothed, minAmplitudeM);
+
+  const summarizePhases = (phases: { startIdx: number; endIdx: number }[]): RepMetrics | null => {
   if (phases.length === 0) return null;
 
   const phaseStats = phases.map((phase) => {
@@ -1611,7 +1617,7 @@ export function summarizeTrackedSet(
     return phase.duration > medianConcentricDuration * EDGE_PHANTOM_DURATION_RATIO;
   }
 
-  function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
+  function isPhantomByShape(phase: (typeof phaseStats)[number]): boolean {
     if (isEdgeRackArtifact(phase)) return true;
     if (isOversizedPhantom(phase)) return true;
     if (isOverlongPhantom(phase)) return true;
@@ -1628,6 +1634,56 @@ export function summarizeTrackedSet(
     const avgConfidence =
       phaseConfidences.length > 0 ? phaseConfidences.reduce((a, c) => a + c, 0) / phaseConfidences.length : 1;
     return avgConfidence < MIN_TRACKING_CONFIDENCE;
+  }
+
+  // A SET IS ONE RUN OF REPS. WHAT STANDS APART FROM IT IS THE RACK.
+  //
+  // Bench press, 2026-09-29, 135lb x 10 beside an OVR sensor, wrists tracked from the walk-in.
+  // At the gate that found the ten presses, three more "reps" survived every shape test above:
+  // lying down onto the bench (50cm, fast, 1.0-1.5s), the un-rack (21cm, 3.5-5.4s) and the
+  // re-rack (52cm, fast, 25.2-27.2s). Not short, not slow, not twice the median -- a rack move
+  // can be any size and any speed. Only the first and last were even eligible for the edge
+  // tests, and once the first is gone the un-rack behind it is not an edge.
+  //
+  // What every one of them has, and no real rep does, is ISOLATION: a phase the shape tests
+  // threw out sits between it and the set. Real reps follow each other with nothing but their
+  // own eccentric between them, so the surviving concentrics of a set form one run, and a rack
+  // move is a run of one or two standing on its own. The largest run is the set. A run that is
+  // a quarter of it or smaller is a rack move and goes.
+  //
+  // A quarter, and not "anything but the largest": a grip adjustment mid-set that clears the
+  // gate splits a ten-rep set into two runs of five, and dropping either would throw away half
+  // the reps to remove nothing. Two equal runs are both kept. A single-rep set with an un-rack
+  // beside it is two runs of one, kept too, and left to the edge tests above.
+  const ISOLATED_RUN_MAX_FRACTION = 0.25;
+  const phaseIndex = new Map<(typeof phaseStats)[number], number>();
+  phaseStats.forEach((phase, i) => phaseIndex.set(phase, i));
+  const runs: number[][] = [];
+  {
+    let run: number[] = [];
+    phaseStats.forEach((phase, i) => {
+      if (!isConcentric[i]) return;
+      if (isPhantomByShape(phase)) {
+        if (run.length > 0) runs.push(run);
+        run = [];
+        return;
+      }
+      run.push(i);
+    });
+    if (run.length > 0) runs.push(run);
+  }
+  const largestRun = runs.reduce((m, r) => Math.max(m, r.length), 0);
+  const isolatedRackMoves = new Set<number>();
+  for (const run of runs) {
+    if (run.length < largestRun && run.length <= largestRun * ISOLATED_RUN_MAX_FRACTION) {
+      for (const i of run) isolatedRackMoves.add(i);
+    }
+  }
+
+  function isPhantomPhase(phase: (typeof phaseStats)[number]): boolean {
+    if (isPhantomByShape(phase)) return true;
+    const i = phaseIndex.get(phase);
+    return i != null && isolatedRackMoves.has(i);
   }
 
   // One entry per concentric phase, in chronological order -- rep 1, 2, 3...
@@ -1828,6 +1884,32 @@ export function summarizeTrackedSet(
     })(),
     velocityLossPercent: velocityLossAcross(repBreakdown),
   };
+  };
+
+  // THE ATHLETE'S REP COUNT CHOOSES AMONG THE GATES THE TRACE PROPOSED -- see
+  // LARGE_REVERSAL_FRACTIONS_WITH_EXPECTED_REPS for the bench take that needs it. Each candidate
+  // gate is run through the WHOLE extraction (direction, phantom filters, rack artifacts) and
+  // the one whose final rep count lands nearest the athlete's number wins, ties to the
+  // strictest. The count is compared after the filters on purpose: a gate's raw phase count is
+  // not its rep count once a walk-in and a re-rack have been split off.
+  if (expectedReps != null && expectedReps > 0) {
+    let best: { metrics: RepMetrics | null; error: number } | null = null;
+    for (const gate of relativeGateCandidates(ySmoothed, MIN_REP_AMPLITUDE_FLOOR_CM / 100)) {
+      const metrics = summarizePhases(segmentPhases(ySmoothed, gate));
+      const error = metrics ? Math.abs(metrics.repBreakdown.length - expectedReps) : Infinity;
+      // The replay harness reads this to show which gate the athlete's count chose; nothing in
+      // the app sets it.
+      (globalThis as { __forgeSegDebug?: (info: unknown) => void }).__forgeSegDebug?.({
+        gate,
+        reps: metrics?.repBreakdown.length ?? null,
+        windows: metrics?.repBreakdown.map((r) => [r.startT, r.endT, r.romCm]) ?? null,
+      });
+      if (!best || error < best.error) best = { metrics, error };
+      if (error === 0) break;
+    }
+    if (best && best.metrics) return best.metrics;
+  }
+  return summarizePhases(defaultPhases);
 }
 
 // One reading of a second, independently-tracked position source --
@@ -2103,7 +2185,7 @@ export function computeRepTrustScores(
 
     if (alignmentReason === "angled") {
       score -= 15;
-      notes.push("Camera was angled rather than square to the lift");
+      notes.push("Filmed from an angle; measured along the bar's own axis");
     } else if (alignmentReason === "unknown") {
       score -= 10;
       notes.push("Camera framing couldn't be confirmed");
@@ -2423,6 +2505,26 @@ const MIN_REVERSALS_FOR_RELATIVE_GATE = 3;
 // rep at less than half the height of the tallest is still comfortably above the bar.
 const LARGE_REVERSAL_FRACTIONS_OF_MAX = [0.5, 0.35, 0.25];
 
+// THE SETUP CAN BE THE LARGEST THING IN THE TAKE, AND THEN THE LADDER PICKS IT.
+//
+// Bench press, 2026-09-29, 135lb x 10 beside an OVR sensor, filmed at an angle from the foot
+// of the bench: the wrists were tracked from the moment the athlete walked in, so the take's
+// biggest reversals were lying down (153cm), the un-rack (120, 112, 192cm) and the re-rack (67,
+// 80cm). Four of those cleared the 0.5 cut, which is at least MIN_REVERSALS_FOR_RELATIVE_GATE,
+// so "typical" came out at 136cm, the gate at 54cm, and every real press -- 26 to 49cm, twenty
+// three of them -- fell under it. Three "reps" were reported, with a 116cm range of motion that
+// was really the athlete standing up, and the sensor beside it had ten at 37cm.
+//
+// The ladder cannot tell a set of three large movements from a set of three reps: both are a
+// small population of big reversals. The one thing that can is the number the athlete already
+// gave -- the reps on the set. So when it is known, every cut on the ladder (plus a looser one,
+// so a take whose reps sit far below its setup still has a candidate) is tried and the gate
+// whose rep count lands nearest it wins, ties to the stricter gate. The athlete's number only
+// ever chooses among gates the trace itself proposed; it cannot make the segmenter find a rep
+// that is not there, and the count it produces is still reported against it (see the
+// "Tracked N reps on a set prescribed at M" notice in av-bar-tracker-dialog.tsx).
+const LARGE_REVERSAL_FRACTIONS_WITH_EXPECTED_REPS = [0.5, 0.35, 0.25, 0.2, 0.15];
+
 /**
  * Segments reps WITHOUT a real-world scale, by deriving the amplitude gate from the trace
  * itself. `positions` may be in any consistent unit, including raw pixel-space.
@@ -2467,19 +2569,55 @@ export function segmentPhasesRelative(
   // The median of the LARGE population, not of everything -- see
   // LARGE_REVERSAL_FRACTION_OF_MAX for the measurement that forced this.
   const biggest = Math.max(...amplitudes);
+  const gateForPool = (pool: number[]): number | null => {
+    const sorted = [...pool].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const typical = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+    if (!(typical > 0)) return null;
+    const gate = typical * RELATIVE_REP_AMPLITUDE_FRACTION;
+    return floor != null && floor > gate ? floor : gate;
+  };
+
   // Strictest first. Falls through to the whole list only when even the loosest cut left too
   // little to take a median of, which means the take had no population worth separating.
-  const pool = (
-    LARGE_REVERSAL_FRACTIONS_OF_MAX.map((f) =>
-      amplitudes.filter((a) => a >= biggest * f),
-    ).find((c) => c.length >= MIN_REVERSALS_FOR_RELATIVE_GATE) ?? amplitudes
-  ).sort((a, b) => a - b);
-  const mid = Math.floor(pool.length / 2);
-  const typical = pool.length % 2 === 0 ? (pool[mid - 1] + pool[mid]) / 2 : pool[mid];
-  if (!(typical > 0)) return null;
+  const pool =
+    LARGE_REVERSAL_FRACTIONS_OF_MAX.map((f) => amplitudes.filter((a) => a >= biggest * f)).find(
+      (c) => c.length >= MIN_REVERSALS_FOR_RELATIVE_GATE,
+    ) ?? amplitudes;
+  const gate = gateForPool(pool);
+  if (gate == null) return null;
+  return segmentPhases(positions, gate);
+}
 
-  const gate = typical * RELATIVE_REP_AMPLITUDE_FRACTION;
-  return segmentPhases(positions, floor != null && floor > gate ? floor : gate);
+/**
+ * Every gate the ladder can propose for this trace, strictest first and de-duplicated -- the
+ * same cuts segmentPhasesRelative walks, plus the two looser ones in
+ * LARGE_REVERSAL_FRACTIONS_WITH_EXPECTED_REPS. summarizeTrackedSet runs the whole rep
+ * extraction at each and lets the athlete's own rep count choose (see its expectedReps).
+ * Empty when the take has too few reversals to propose anything.
+ */
+export function relativeGateCandidates(positions: number[], floor?: number): number[] {
+  if (positions.length < 2) return [];
+  const span = Math.max(...positions) - Math.min(...positions);
+  if (!(span > 0)) return [];
+  const exploratory = segmentPhases(positions, span * 0.02);
+  const amplitudes = exploratory
+    .map((p) => Math.abs(positions[p.endIdx] - positions[p.startIdx]))
+    .filter((a) => a > 0);
+  if (amplitudes.length < MIN_REVERSALS_FOR_RELATIVE_GATE) return [];
+  const biggest = Math.max(...amplitudes);
+  const gates: number[] = [];
+  for (const f of LARGE_REVERSAL_FRACTIONS_WITH_EXPECTED_REPS) {
+    const pool = amplitudes.filter((a) => a >= biggest * f).sort((a, b) => a - b);
+    if (pool.length < MIN_REVERSALS_FOR_RELATIVE_GATE) continue;
+    const mid = Math.floor(pool.length / 2);
+    const typical = pool.length % 2 === 0 ? (pool[mid - 1] + pool[mid]) / 2 : pool[mid];
+    if (!(typical > 0)) continue;
+    const raw = typical * RELATIVE_REP_AMPLITUDE_FRACTION;
+    const gate = floor != null && floor > raw ? floor : raw;
+    if (!gates.some((g) => Math.abs(g - gate) < 1e-9)) gates.push(gate);
+  }
+  return gates;
 }
 
 // A trace with no real-world scale still has to pass through filters that assume one.
