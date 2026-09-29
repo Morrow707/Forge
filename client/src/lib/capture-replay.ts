@@ -136,6 +136,8 @@ const TRACE_CM_PER_METRE = 100;
  * are segmented badly enough that they split about evenly either way, which is itself the tell
  * that their numbers are noise. */
 const VERTICAL_AXIS = { x: 0, y: -1 };
+/** Identity for a trace the device already rotated -- see the call site. */
+const STORED_TRACE_ALONG_AXIS = { x: 0, y: 1 };
 
 function toTrackedPoints(trace: PathTracePoint[]): TrackedPoint[] {
   return trace.map((p) => ({
@@ -230,9 +232,16 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
     // A stored trace can supply the axis honestly: buildPathTrace writes world coordinates, so
     // its y IS the vertical, and the movement's own kind comes from the exercise name.
     romBucketForExercise(capture.exerciseName),
-    // The axis the device measured from the grip when the export carries it; the vertical
-    // otherwise, which is the honest guess and what the harness always used.
-    calibration?.movementAxis ?? VERTICAL_AXIS,
+    // A STORED TRACE IS ALREADY IN THE MOVEMENT FRAME. summarizeTrackedSet rotates the points
+    // onto the movement axis before buildPathTrace writes them (y is travel along the axis, x is
+    // drift across it), so the axis the device measured has ALREADY been applied to what the
+    // export carries. Passing it here again rotated the trace twice; on the near-vertical axes
+    // of sets 5-7 that was within rounding, on set 8 (axis 78 degrees from vertical) it happened
+    // to undo the device's own wrong rotation and the harness reported ten good reps for a take
+    // the phone had scored at 2.03 m/s. A replay has to reproduce the device, so a trace that
+    // carries its axis is replayed along its own y. An older export with no axis is from before
+    // the rotation existed and keeps the harness's vertical guess.
+    calibration?.movementAxis ? STORED_TRACE_ALONG_AXIS : VERTICAL_AXIS,
     // The reps the athlete logged, as the device has them from the set's prescription: the
     // segmenter chooses between its own candidate gates by it (segmentPhasesRelative).
     capture.loggedReps ?? null,

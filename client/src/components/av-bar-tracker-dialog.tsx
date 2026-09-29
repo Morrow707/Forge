@@ -93,6 +93,8 @@ import {
   implausibleBarPathDeviation,
   traceSpanAlongLift,
   movementAxisFromGrip,
+  reconcileMovementAxis,
+  type MovementAxisSource,
   dropAcrossAxisOutliers,
   toScaleFreeMetrics,
   normalizeTraceScale,
@@ -1356,7 +1358,8 @@ export function AvBarTrackerDialog({
       scaleOutliers: { source: string; ratioToChosen: number }[];
       scaleCorroborated: boolean;
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
-      axisSource?: "grip" | "trace_covariance";
+      axisSource?: MovementAxisSource;
+      gripAxisFromVerticalDeg?: number | null;
       movementAxis?: { x: number; y: number } | null;
       positionScaleCorrection?: number | null;
       body3DRuler?: {
@@ -1975,7 +1978,10 @@ export function AvBarTrackerDialog({
     // and the travel is how far the tracked point actually went along it -- in raw pixels,
     // before scale. Together they are the other half of every range-of-motion number this
     // pipeline produces, and neither was visible until now.
-    const movementAxis = movementAxisFromGrip(gripPairs);
+    // Held against the image vertical before anything is rotated onto it -- see
+    // reconcileMovementAxis for the take that made this necessary.
+    const axisWitness = reconcileMovementAxis(movementAxisFromGrip(gripPairs));
+    const movementAxis = axisWitness.axis;
 
     // Frames where the tracked point was not on the bar, thrown out before anything is measured
     // -- see dropAcrossAxisOutliers. The across-axis travel this take reported (150cm on a bar
@@ -2009,7 +2015,8 @@ export function AvBarTrackerDialog({
       // in centimetres now, with the pixel equivalent alongside it so it can still be held up
       // against the plate diameter on the line above, which is the comparison that makes it
       // mean something.
-      calibrationDiagnostics.axisSource = movementAxis ? "grip" : "trace_covariance";
+      calibrationDiagnostics.axisSource = axisWitness.source;
+      calibrationDiagnostics.gripAxisFromVerticalDeg = axisWitness.gripAxisFromVerticalDeg;
       calibrationDiagnostics.movementAxis = movementAxis
         ? { x: Math.round(movementAxis.x * 10000) / 10000, y: Math.round(movementAxis.y * 10000) / 10000 }
         : null;

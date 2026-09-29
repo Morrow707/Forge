@@ -3489,6 +3489,53 @@ export function movementAxisFromGrip(
   return { x: ax, y: ay };
 }
 
+/** THE GRIP AXIS IS A WITNESS, NOT A VERDICT. Rule #2: it is held against the image vertical.
+ *
+ *  Set 8 beside OVR (build 574, 2026-09-29): movementAxisFromGrip returned (0.978, 0.209), an
+ *  axis 78 degrees from the image vertical, on a bench filmed with the phone upright at the foot
+ *  of the bench. The trace was then rotated onto it, so the segmenter measured the hands' side
+ *  jitter as the press: nine "reps" of 44-119cm at 2.03 m/s against the sensor's ten of 36cm at
+ *  0.76. The same trace segmented along the image vertical gives ten reps of 34cm at 0.87 -- the
+ *  count and the range of motion within a few percent, on the take the grip axis made nonsense
+ *  of. Nothing checked the grip's answer before the whole take was rotated onto it.
+ *
+ *  A barbell lift filmed by an upright phone moves within a few tens of degrees of the image
+ *  vertical: the lift is vertical in the world and the camera's roll is small (the CoreMotion
+ *  tilt is recorded and has read under 15 degrees on every sensor-paired take). So a grip axis
+ *  further than MAX_GRIP_AXIS_FROM_VERTICAL_DEG from vertical is not "the lift went sideways", it
+ *  is the pair being wrong -- one wrist read as the other, a hand and a rack hook, two detections
+ *  stacked -- and the image vertical is the better witness for that frame of the argument. The
+ *  trace's own covariance axis is deliberately NOT the fallback here: on the same take it found
+ *  five reps at 2.15 m/s, because a trace whose grip pairs are wrong is a trace whose jitter is
+ *  large, and the covariance follows the jitter. The no-grip fallback (a one-handed movement, or
+ *  a take where the pair never held) stays what it was: the covariance, through dominantAxisFrame.
+ *
+ *  Every outcome is recorded (`axisSource`, `gripAxisFromVerticalDeg`) so the next sensor-paired
+ *  set can say whether 45 degrees is the right line. */
+export const MAX_GRIP_AXIS_FROM_VERTICAL_DEG = 45;
+export const IMAGE_VERTICAL_AXIS = { x: 0, y: 1 } as const;
+
+export type MovementAxisSource = "grip" | "trace_covariance" | "vertical_over_grip";
+
+export function reconcileMovementAxis(gripAxis: { x: number; y: number } | null): {
+  axis: { x: number; y: number } | null;
+  source: MovementAxisSource;
+  gripAxisFromVerticalDeg: number | null;
+} {
+  if (!gripAxis) return { axis: null, source: "trace_covariance", gripAxisFromVerticalDeg: null };
+  const norm = Math.hypot(gripAxis.x, gripAxis.y);
+  if (!(norm > 0)) return { axis: null, source: "trace_covariance", gripAxisFromVerticalDeg: null };
+  // The angle between two LINES, so 0..90: an axis pointing down is the same line as one
+  // pointing up (movementAxisFromGrip pins the sign, but the reconciliation should not depend on
+  // that).
+  const deg = (Math.acos(Math.min(1, Math.abs(gripAxis.y) / norm)) * 180) / Math.PI;
+  const rounded = Math.round(deg * 10) / 10;
+  if (deg > MAX_GRIP_AXIS_FROM_VERTICAL_DEG) {
+    return { axis: { ...IMAGE_VERTICAL_AXIS }, source: "vertical_over_grip", gripAxisFromVerticalDeg: rounded };
+  }
+  return { axis: gripAxis, source: "grip", gripAxisFromVerticalDeg: rounded };
+}
+
 /** The trace re-expressed in the movement's own frame: `along` the axis it travelled, `across`
  *  the perpendicular to it.
  *
