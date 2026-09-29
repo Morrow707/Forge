@@ -1657,7 +1657,9 @@ client classified the 400 as permanent and did not queue it. The set is not in t
 - `shared/schema.ts`: the three `source` caps are 120. `shared/diagnostics-labels-fit-the-schema
   .test.ts` parses the longest label every ruler can produce through the real schema.
 - `workout.tsx`: a 400 is queued like a 409. `offline-queue.ts`: a 400 on replay HOLDS the entry
-  (`heldSince`, `lastHeldAttemptAt`) -- retried every ten minutes for a week, then dropped with
-  the usual words. `a-400-does-not-delete-a-set.test.ts`. The rule: our own validator refusing
+  (`heldSince`, `lastHeldAttemptAt`) -- retried every ten minutes on the first day, hourly for
+  a week, daily after that, and NEVER dropped (Scott: "It shouldn't be on the athlete to
+  remember that for our server error"); after a week the athlete is told once that it is
+  still trying, not asked to re-enter. `a-400-does-not-delete-a-set.test.ts`. The rule: our own validator refusing
   our own client's payload is a bug in the validator until proven otherwise, and the payload is
   the only copy of the set.
