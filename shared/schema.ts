@@ -9034,6 +9034,16 @@ export const trackingDiagnosticsSchema = z.object({
     })
     .nullable()
     .optional(),
+  // Where the phone was, for the report only -- see TrackingDiagnostics.cameraView. Rule #1:
+  // the athlete never sees a sentence about their angle after a take.
+  cameraView: z
+    .object({
+      subjectFacing: z.enum(["side_on", "facing_camera", "oblique", "unknown"]),
+      expectedView: z.enum(["side", "front", "either"]).nullable(),
+      note: z.string().max(400).nullable(),
+    })
+    .nullable()
+    .optional(),
   trace: z
     .object({
       points: z.number(),

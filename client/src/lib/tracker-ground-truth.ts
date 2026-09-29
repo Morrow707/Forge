@@ -491,3 +491,35 @@ export const OVR_BENCH_SET6_2026_09_29 = {
   },
   rulers: { inPlane3D: 0.003035, shoulderWidth: 0.004081, depthRuler: 0.00379, sensorImplied: 0.0041 },
 };
+
+export const OVR_BENCH_SET7_2026_09_29 = {
+  build: 573,
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "foot of the bench, wrists 2.67m from the lens, bar tilted 29 degrees",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.10, romIn: 13.8, meanW: 450, peakW: 661, tpvS: 0.28, eai: 3.70 },
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.25, romIn: 14.3, meanW: 503, peakW: 752, tpvS: 0.27, eai: 4.63 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.14, romIn: 14.2, meanW: 471, peakW: 694, tpvS: 0.28, eai: 4.01 },
+      { meanVelocityMps: 0.76, peakVelocityMps: 1.12, romIn: 13.7, meanW: 454, peakW: 677, tpvS: 0.28, eai: 3.79 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.11, romIn: 14.1, meanW: 477, peakW: 669, tpvS: 0.28, eai: 3.87 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.11, romIn: 14.3, meanW: 449, peakW: 669, tpvS: 0.32, eai: 3.43 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.10, romIn: 14.1, meanW: 468, peakW: 661, tpvS: 0.28, eai: 3.70 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.11, romIn: 14.5, meanW: 482, peakW: 669, tpvS: 0.30, eai: 3.64 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.07, romIn: 14.6, meanW: 467, peakW: 644, tpvS: 0.30, eai: 3.50 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 0.98, romIn: 16.9, meanW: 421, peakW: 586, tpvS: 0.36, eai: 2.64 },
+    ],
+    reported: { meanVelocityMps: 0.77, peakVelocityMps: 1.11, romIn: 14.4, meanW: 464, peakW: 668, tpvS: 0.28, eai: 3.69 },
+  },
+  forgeOnDevice: {
+    repCount: 10,
+    meanVelocityMps: 0.93,
+    romCm: 38.3,
+    scaleSource: "both",
+    scale: 0.003815,
+    concentricSeconds: [0.37, 0.33, 0.37, 0.47, 0.47, 0.37, 0.47, 0.47, 0.47, 1.03],
+  },
+  rulers: { inPlane3D: 0.0038, shoulderWidth: 0.00383, depthRuler: 0.003176, sensorImplied: 0.00365 },
+};

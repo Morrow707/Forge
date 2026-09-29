@@ -2219,13 +2219,14 @@ export function AvBarTrackerDialog({
     }
 
     // What this framing costs, stated as a fact about one axis rather than as a verdict on the
-    // take -- see cameraViewMismatch, which no longer claims a head-on or rear view cannot be
-    // measured. Informational, not a warning: nothing here says the numbers shown are wrong.
-    const viewProblem = cameraViewMismatch(
-      subjectFacing ?? "unknown",
-      expectedCameraView(exerciseName),
-    );
-    if (viewProblem) toast.info(viewProblem, { duration: 8000 });
+    // take -- see cameraViewMismatch. It goes into trackingDiagnostics.cameraView for the report
+    // and NOWHERE the athlete can see it: until build 574 this was a toast, and Rule #1's
+    // 2026-09-29 clause is that no take raises a banner about its angle, however gently worded.
+    const cameraViewDiagnostics = {
+      subjectFacing: subjectFacing ?? "unknown",
+      expectedView: expectedCameraView(exerciseName),
+      note: cameraViewMismatch(subjectFacing ?? "unknown", expectedCameraView(exerciseName)),
+    };
 
     // On an Olympic lift the bar deliberately does not travel a straight vertical line -- it
     // loops back around the knees and in under the athlete. Bar-path deviation measures distance
@@ -2343,6 +2344,7 @@ export function AvBarTrackerDialog({
       repConsistency: repConsistency(
         metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
       ),
+      cameraView: cameraViewDiagnostics,
     });
 
     // readerStatus exists specifically to tell "the athlete's take was genuinely short" apart

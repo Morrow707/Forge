@@ -325,10 +325,12 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **574** is the newest TestFlight build, cut 2026-09-29 night: the depth ruler as a
-  zeroed candidate (`source: "depth"`, `DEPTH_RULER_BIAS`), body rulers blended when nothing
-  anchored is present, and the travel margin keyed by lift (a press at 0.75cm). See
-  docs/camera-tracking-notes.md, "Build 574".
+- Build **574** is HELD on `claude/modest-babbage-y53kyw` (Scott, 2026-09-29: "Don't upload
+  until after next test"), not yet on `main` or uploaded: the depth ruler as a zeroed candidate
+  (`source: "depth"`, `DEPTH_RULER_BIAS` 0.9 from sets 5, 6 and 7), body rulers blended when
+  nothing anchored is present, the travel margin keyed by lift (a press at 0.75cm), set 7 as
+  ground truth, and the head-on toast moved into `trackingDiagnostics.cameraView`. See
+  docs/camera-tracking-notes.md, "Build 573 beside OVR, set 7" and "Build 574".
 - Build **573** was the previous build, cut 2026-09-29 night from #187: the depth
   ruler recorded (`body3DRuler.depthRulerScale`, `frameWidth`, `frameHeight`) and sets 5 and
   6 as ground truth. See docs/camera-tracking-notes.md, "Build 572 beside OVR, set 6".
