@@ -61,6 +61,10 @@ export type PendingLog = {
   payload: unknown;
   payloadFile?: string;
   queuedAt: string;
+  /** Set when the server answered 400: the entry is HELD rather than dropped -- see the flush.
+   *  `heldSince` bounds how long, `lastHeldAttemptAt` how often. */
+  heldSince?: string;
+  lastHeldAttemptAt?: string;
   // Bumped on every failed sync attempt (network failure or a server
   // rejection alike) -- see flushPendingLogs' own comment for why this
   // exists and why it's never a reason to drop the entry outright.
@@ -401,6 +405,10 @@ const STALE_FAILURE_THRESHOLD = 5;
 // immediately and the in-flight run is already doing its work.
 let flushInFlight = false;
 
+/** How often a HELD (400) entry is re-sent, and for how long before it is given up on. */
+export const HELD_RETRY_INTERVAL_MS = 10 * 60_000;
+export const HELD_MAX_AGE_MS = 7 * 86_400_000;
+
 export async function flushPendingLogs() {
   if (flushInFlight) return;
   flushInFlight = true;
@@ -433,6 +441,25 @@ async function runFlush() {
       // An inline body is read synchronously on purpose: the first flush after a reconnect
       // has to reach apiRequest before the second one is scheduled, and an await here would
       // put a microtask between them (the "runs one flush at a time" test).
+      // A HELD entry (a 400, below) is retried on a slow clock, not every twenty seconds: a
+      // 4MB tracked day re-POSTed at every flush is a battery and a data plan, and the thing
+      // that will make it land is a server fix, which takes minutes, not seconds.
+      if (entry.heldSince) {
+        const heldMs = Date.now() - Date.parse(entry.heldSince);
+        const sinceAttemptMs = entry.lastHeldAttemptAt ? Date.now() - Date.parse(entry.lastHeldAttemptAt) : Infinity;
+        if (heldMs > HELD_MAX_AGE_MS) {
+          logDebug("SAVE", `flush DROPPED (${entry.dayKey}): held ${Math.round(heldMs / 86_400_000)} days, giving up`);
+          if (entry.payloadFile) void deletePendingLogFile(entry.payloadFile);
+          writeQueue(readQueue().filter((p) => p.id !== entry.id));
+          clearDayFailure(entry.dayKey);
+          toast.error(
+            "A workout you logged was rejected by the server for a week and can't be synced -- open that day and re-enter it.",
+            { duration: 20000 },
+          );
+          continue;
+        }
+        if (sinceAttemptMs < HELD_RETRY_INTERVAL_MS) continue;
+      }
       const payload = entry.payloadFile ? await loadPayload(entry) : entry.payload;
       if (payload == null) {
         // The body file is gone (a reinstall, a cleared data directory). The index entry is
@@ -465,6 +492,22 @@ async function runFlush() {
       // day and re-enter it" -- two camera sets gone. Forbidden means the wrong session is
       // signed in, which the owner stamp should have caught and did not (an entry queued
       // before the owner resolved carries no stamp). Left queued for the right account.
+      // A 400 IS HELD, NOT DROPPED. Build 569's first bench set (2026-09-29) was refused by a
+      // 40-character cap on a diagnostics label the client had just made longer: the server's
+      // own validator, wrong about the server's own client, and the fix was one line on the
+      // server. Deleting the set here would have made that fix rescue nothing. Kept for
+      // HELD_MAX_AGE_MS, retried every HELD_RETRY_INTERVAL_MS (above), then given up on with
+      // the same words as any other rejection.
+      if (status === 400) {
+        const now = new Date().toISOString();
+        logDebug("SAVE", `flush HELD (${entry.dayKey}): 400 -- kept, retried every ${HELD_RETRY_INTERVAL_MS / 60_000} minutes for ${HELD_MAX_AGE_MS / 86_400_000} days`);
+        writeQueue(
+          readQueue().map((p) =>
+            p.id === entry.id ? { ...p, heldSince: p.heldSince ?? now, lastHeldAttemptAt: now } : p,
+          ),
+        );
+        continue;
+      }
       const permanentlyRejected = status !== 403 && isPermanentUploadRejection(status, code);
       logDebug(
         "SAVE",

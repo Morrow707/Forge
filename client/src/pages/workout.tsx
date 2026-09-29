@@ -1542,8 +1542,18 @@ export function WorkoutPage({
         // about: a retryable failure wearing a permanent failure's clothes, and the cost is a
         // logged set. 401 was already excluded for the same reason -- a stalled session looks
         // identical to a real logout from here.
+        // A 400 IS OUR OWN VALIDATOR SAYING NO, AND OUR OWN VALIDATOR CAN BE FIXED.
+        //
+        // Build 569, 2026-09-29, the first bench set the camera ever counted right: the 3D
+        // ruler's diagnostics label ran to 62 characters, the schema capped it at 40, the
+        // server said 400, this classifier said permanent, and ten reps plus 4MB of traces
+        // were gone before Scott had read the debug console. A 400 from a schema is a bug in
+        // the SCHEMA more often than in the set; the payload is the device's own record and
+        // nothing else has it. It is queued and HELD (see flushPendingLogs), retried on a slow
+        // clock for a week so a server fix rescues it, and only then given up on.
         const isPermanentRejection =
           err instanceof ApiError
+          && err.status !== 400
           && err.status !== 401
           && err.status !== 409
           && err.status < 500;

@@ -8369,6 +8369,10 @@ export const barPathPointSchema = z.object({
   // Tracking confidence, so the replay harness can apply the same per-point filtering the
   // device did -- see PathTracePoint in client/src/lib/bar-tracking.ts.
   c: z.number().optional(),
+  // Which witness built the point (BarPointSource in bar-tracking.ts): both hands, a carried
+  // lone hand, the equipment, the shoulders. Declared so the insert keeps it -- see the
+  // roundtrip test on why a field the client sends has to be declared here.
+  s: z.string().max(1).optional(),
 });
 
 // One iOS Vision joint, in the exact same shape @mediapipe/tasks-vision's own Landmark/
@@ -9093,7 +9097,12 @@ export const trackingDiagnosticsSchema = z.object({
       scaleCandidates: z
         .array(
           z.object({
-            source: z.string().max(40),
+            // 120, not 40: the 3D ruler names its bone, its correction path and its method in
+            // one label ("body_3d:shoulderWidth:reference_corrected:longest_projection" is 62
+            // characters) and build 569's first bench set was REFUSED by this cap -- a 400 the
+            // client filed as permanent, so the set was lost. A diagnostics label must never
+            // be the reason a set does not save; the cap here is against abuse, not vocabulary.
+            source: z.string().max(120),
             scale: z.number(),
             measured: z.number().optional().nullable(),
             samples: z.number().optional().nullable(),
@@ -9104,7 +9113,7 @@ export const trackingDiagnosticsSchema = z.object({
       scaleOutliers: z
         .array(
           z.object({
-            source: z.string().max(40),
+            source: z.string().max(120),
             ratioToChosen: z.number(),
           }),
         )
@@ -9178,7 +9187,7 @@ export const trackingDiagnosticsSchema = z.object({
       traceTravelAcrossCm: z.number().optional().nullable(),
       tracePointsDroppedOffAxis: z.number().optional().nullable(),
       scalesRejectedAsImplausible: z
-        .array(z.object({ source: z.string().max(40), impliedHeightIn: z.number(), impliedGripIn: z.number().optional() }))
+        .array(z.object({ source: z.string().max(120), impliedHeightIn: z.number(), impliedGripIn: z.number().optional() }))
         .max(8)
         .optional(),
       noseToAnkleFrames: z.number(),

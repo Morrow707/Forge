@@ -1618,3 +1618,46 @@ lone-hand bar point (92 carried, 16 side flips) and is the next thing after the 
 
 **Still open from this take:** the lens has no 4:3 120fps format, so 16:9 at 120 is what a
 rate-first chain gets on this phone; the per-rep spread above; the plate model.
+
+### Queued after 569: the lone-hand carry and what the plate needs
+
+**The lone-hand carry, `barPointFromSides` / `carryHalfSpan`.** Set 3's per-rep means ran up
+to a third off the sensor either way with the set average within a twentieth, and 92 of its 914
+bar points were a lone hand carried to the middle by the SET's median half-span, in short runs
+mid-rep. The bar was tilted 26 degrees toward one arm, so half a grip's along-axis component is
+17cm true; whenever the tilt at that moment differed from the set's typical tilt, the trace
+stepped by the difference at the transition in and out, and a step is velocity as far as the
+segmenter can tell. `carryHalfSpan` carries by the median of the measurements within the last
+`RECENT_HALF_SPAN_FRAMES` (12) when at least `MIN_RECENT_HALF_SPANS` (3) exist -- a bar does
+not change its tilt in a tenth of a second -- and by the set's median otherwise, which keeps
+the stale-last-reading fix intact. Unverified against the sensor until the next take; what
+makes it verifiable is the other half: every stored trace point now carries `s`, which witness
+built it (`BarPointSource`: both hands, carried, carried-and-flipped, bare hand, equipment,
+shoulders, interpolated), and `replayCapture` reports `repSources` per rep -- the inferred
+fraction and the side flips -- so the per-rep spread can finally be read beside the number
+that is suspected of causing it. The `s` tag is declared in `barPathPointSchema`.
+
+**The plate detector.** Set 3's telemetry: 178 full-frame searches, 32 plate-class candidates
+seen in the whole take, 28 under the 0.4 floor, best 0.48, one low-confidence accept (the rack
+upright, 134x319px, rightly refused by the implied-height check). The low-confidence fallback
+with the body as referee already exists in the plugin (`lowConfidenceAccepts`); lowering a
+floor cannot help a model that fires on 32 of some 900 frames with the plate face-on in shot.
+The model's plate class is eleven instances from three photos. What it needs is labelled
+frames of Scott's own plates from his own gym, at the angles he films from, and a Create ML
+retrain; nothing in this repo can do that without the photos. Not built.
+
+### Build 569: the set that was counted right and never saved
+
+Set 4, bench, the first take this pipeline ever counted correctly (10 of 10, device 0.71 mean
+against the sensor's 0.77). The save answered `400 String must contain at most 40
+character(s)`: `scaleCandidates[].source` was capped at 40 in `trackingDiagnosticsSchema` and
+the 3D ruler's label had just grown to `body_3d:<bone>:<heightSource>:<method>` (up to 62). The
+client classified the 400 as permanent and did not queue it. The set is not in the export.
+
+- `shared/schema.ts`: the three `source` caps are 120. `shared/diagnostics-labels-fit-the-schema
+  .test.ts` parses the longest label every ruler can produce through the real schema.
+- `workout.tsx`: a 400 is queued like a 409. `offline-queue.ts`: a 400 on replay HOLDS the entry
+  (`heldSince`, `lastHeldAttemptAt`) -- retried every ten minutes for a week, then dropped with
+  the usual words. `a-400-does-not-delete-a-set.test.ts`. The rule: our own validator refusing
+  our own client's payload is a bug in the validator until proven otherwise, and the payload is
+  the only copy of the set.

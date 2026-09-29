@@ -84,7 +84,27 @@ export type ReplayResult = {
   /** Positive when the analysis found more reps than the athlete logged. */
   repCountError: number | null;
   romProblem: string | null;
+  /** Per rep, the fraction of its trace points NOT measured from both hands (carried lone hand,
+   *  bare hand, equipment, interpolation), and how many were side-flipped -- from the `s` tag
+   *  the device writes on every point since 2026-09-29. Null for an older trace with no tags.
+   *  This is the number the per-rep spread against the sensor is to be read beside. */
+  repSources: { repNumber: number; inferredFraction: number; sideFlips: number; points: number }[] | null;
 };
+
+function repSourcesFor(trace: PathTracePoint[], reps: { repNumber: number; startT: number; endT: number }[]) {
+  if (!trace.some((p) => p.s != null)) return null;
+  return reps.map((r) => {
+    const inRep = trace.filter((p) => p.t >= r.startT && p.t <= r.endT);
+    const inferred = inRep.filter((p) => p.s != null && p.s !== "b" && p.s !== "s").length;
+    const sideFlips = inRep.filter((p) => p.s === "f").length;
+    return {
+      repNumber: r.repNumber,
+      inferredFraction: inRep.length > 0 ? Math.round((inferred / inRep.length) * 100) / 100 : 0,
+      sideFlips,
+      points: inRep.length,
+    };
+  });
+}
 
 /** A stored trace carries no confidence per point (it is the smoothed output, not the raw
  * reading), so replay assumes full confidence. That makes the replay slightly more permissive
@@ -176,6 +196,7 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
       repCount: jumpReps,
       loggedReps: jumpLogged,
       repCountError: jumpLogged != null ? jumpReps - jumpLogged : null,
+      repSources: null,
       // Both plausibility gates are anthropometric limits on a BAR's travel. A jump has its own
       // outlier check inside summarizeJumpSet, so there is nothing honest to say here.
       romProblem: null,
@@ -226,6 +247,7 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
     repCount,
     loggedReps,
     repCountError: loggedReps != null ? repCount - loggedReps : null,
+    repSources: metrics ? repSourcesFor(capture.barPathTrace, metrics.repBreakdown) : null,
     // Either way of showing the same wrong scale. Reported under one field because the caller's
     // question is "can this take's numbers be trusted", not "which check objected".
     romProblem: metrics
