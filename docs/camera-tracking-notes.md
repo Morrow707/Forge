@@ -1731,3 +1731,31 @@ from both hands this time, 6 flips). The mean is 4% off and it is a cancellation
 its bias holds, the plate when the model can find one); the concentric window fitted to the
 sensor's per-rep windows; the equipment box carrying the frames the hands miss; and last, a
 per-athlete zero from a sensor-paired session, the way any instrument is zeroed.
+
+## Build 574: the depth ruler zeroed and in the room, the margin keyed by lift, body rulers blended
+
+Planned against the three sensor-paired benches of 2026-09-29 while 573 processed. Scott:
+"how do we bring it down to 1% or even 0%". The honest ceiling is a few percent: the sensor
+is quoted at a few percent itself, and two instruments differ by where each says a rep starts
+and ends. Three changes, each fitted on the evidence in hand and none proven past it:
+
+- **The depth ruler is a candidate** (`source: "depth"`, `DEPTH_RULER_BIAS` 0.92,
+  `DEPTH_RULER_UNCERTAINTY` 0.08), ranked below a plate and a measured grip, above every
+  proportion ruler. Zeroed by what sets 5 and 6 measured, so on those two takes it lands
+  within a percent by construction; `depth-ruler.test.ts` replays both through reconciliation
+  and gets within 3% and 5% of the sensor. The next sensor-paired set is its first real test.
+- **Body rulers blend when nothing anchored is present** (`BODY_RULERS` in
+  `reconcileScaleEstimates`): height, shoulders, the 3D skeleton and the depth ruler. Set 6
+  chose the in-plane ruler alone at 26% low over an exact shoulder ruler; two body guesses
+  pull opposite ways more often than not, as the squats and set 5 showed.
+- **The travel margin is keyed by lift** (`TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M`,
+  `travelOnsetMarginFor`): a press trims at 0.75cm, everything else keeps the squat's
+  centimetre. Against the sensor's per-rep windows (range over mean) on the three benches, a
+  centimetre ran 6%, 0% and 9% short and half a centimetre 4%, 12% and 2% long; on the squat
+  fixture 0.75cm moved the onset two samples into the sit. Scott: "Squat and bench are
+  technically different no? The camera knows that it's filming before so we could
+  differentiate." The concentric window is a 5% effect; the scale was the 25% one.
+
+**Not done, and why:** the concentric window could also be defined the sensor's way outright
+(range over the window from leaving the bottom to reaching the top); with three sets the
+per-movement margin reaches the same place with fewer moving parts. Zero is not on the table.

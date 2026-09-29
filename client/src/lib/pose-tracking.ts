@@ -719,7 +719,7 @@ const MIN_SHOULDER_BROADSIDE_RATIO = 2;
  * the old refusal that was right.
  */
 export type ScaleEstimate = {
-  source: "plate" | "grip_width" | "body_3d" | "body_model" | "height" | "shoulder_width";
+  source: "plate" | "grip_width" | "depth" | "body_3d" | "body_model" | "height" | "shoulder_width";
   scale: number;
   /** How wrong this source can be even when it is working correctly. */
   uncertaintyFraction: number;
@@ -913,13 +913,19 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     // It is the first ruler in this pipeline that is neither a population average nor dependent
     // on the camera being somewhere particular.
     grip_width: 1,
+    // THE WRISTS' DISTANCE FROM THE LENS, TIMES THE LENS'S FIELD OF VIEW. No bone proportion
+    // and no population fraction in it -- see depthRulerScale in body-3d-ruler.ts. Read 8% low
+    // on both sensor-paired takes it has been held against, at two distances, which is the
+    // shape of an instrument that can be zeroed (DEPTH_RULER_BIAS) rather than one that
+    // wanders. Below a measured grip and a plate; above every ruler built on a proportion.
+    depth: 2,
     // THE ATHLETE'S OWN BONES, IN METRES, ON THIS TAKE. Vision's 3D pose reports every joint
     // in metres; the client corrects a reference-scaled skeleton by the athlete's known height
     // and takes a depth-measured one as is (body-3d-ruler.ts). Below a measured grip because
     // the skeleton's scale is a model estimate; above the learned bone because it is measured
     // on THIS take rather than carried over, and above every population fraction because it is
     // this athlete's actual bone and does not care where the phone stood.
-    body_3d: 2,
+    body_3d: 3,
     // THE ATHLETE'S OWN BONE, LEARNED FROM AN EARLIER TAKE THAT HAD A REAL RULER.
     //
     // Below a measured grip because it is one step removed -- the grip was measured with a
@@ -927,9 +933,9 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     // height and shoulder breadth because it is THIS athlete's actual bone rather than a
     // population fraction of their stature, and because it needs no particular framing: a bench
     // filmed from the foot of the bench still shows a forearm.
-    body_model: 3,
-    height: 4,
-    shoulder_width: 5,
+    body_model: 4,
+    height: 5,
+    shoulder_width: 6,
   };
   const rank = (e: ScaleEstimate) => TRUST[e.source] + (e.demoted ? 100 : 0);
   const ranked = [...usable].sort((a, b) => rank(a) - rank(b));
@@ -956,12 +962,19 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
   // fractions of a body), and two biased guesses pulling opposite ways is exactly the case an
   // average helps. Never applied when a real ruler (plate, measured grip, learned bone) is in
   // the room: those win the cluster as before. Reported as `blended`, not as corroboration.
-  const BODY_PAIR: ScaleEstimate["source"][] = ["height", "shoulder_width"];
-  const onlyBodyRulers = usable.every((e) => BODY_PAIR.includes(e.source));
-  const hasBoth = BODY_PAIR.every((s) => usable.some((e) => e.source === s));
+  //
+  // EXTENDED 2026-09-29 TO EVERY RULER BUILT ON THE BODY, not just the pair. Set 6 on build
+  // 572: the in-plane 3D ruler alone won at 26% low while the shoulder ruler beside it was
+  // exact, because the two sat outside each other's tolerance and rank decided. Set 5 the day
+  // before had them the other way round, and their average was within 5%. Two body rulers that
+  // disagree are two guesses that pull opposite ways more often than not; with nothing anchored
+  // in the room the average is the better answer, exactly as it was for height and shoulders.
+  const BODY_RULERS: ScaleEstimate["source"][] = ["height", "shoulder_width", "body_3d", "depth"];
+  const onlyBodyRulers = usable.every((e) => BODY_RULERS.includes(e.source));
+  const bodyRulerCount = usable.filter((e) => BODY_RULERS.includes(e.source)).length;
   let blended = false;
-  if (onlyBodyRulers && hasBoth && best.length === 1) {
-    best = usable.filter((e) => BODY_PAIR.includes(e.source));
+  if (onlyBodyRulers && bodyRulerCount >= 2 && best.length === 1) {
+    best = usable.filter((e) => BODY_RULERS.includes(e.source));
     blended = true;
   }
 

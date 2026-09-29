@@ -9091,7 +9091,7 @@ export const trackingDiagnosticsSchema = z.object({
     .object({
       scaleFactor: z.number().optional().nullable(),
       scaleSource: z
-        .enum(["height", "plate", "box", "both", "shoulder_width", "grip_width", "body_model", "body_3d"])
+        .enum(["height", "plate", "box", "both", "shoulder_width", "grip_width", "body_model", "body_3d", "depth"])
         .optional()
         .nullable(),
       scaleCandidates: z

@@ -177,6 +177,15 @@ const visible2D = (p: Landmark | undefined): p is Landmark =>
  * RECORDED here, as `depthRuler` in the diagnostics, and not yet a candidate: two takes say
  * "promising", not "ruler". The next sensor-paired take decides.
  */
+/** What the depth ruler read against the sensor-implied scale on sets 5 and 6, 2026-09-29
+ *  (0.00334/0.00365 and 0.00379/0.00410): the zero it is corrected by when offered as a
+ *  candidate. Fitted on those two takes and tested on nothing else yet -- the next
+ *  sensor-paired set is the test, and this number moves with the evidence, never by hand. */
+export const DEPTH_RULER_BIAS = 0.92;
+/** How wrong the zeroed depth ruler may be even when working: two takes agree to a percent, and
+ *  a percent is not an uncertainty. Held at the corrected 3D ruler's figure until more takes. */
+export const DEPTH_RULER_UNCERTAINTY = 0.08;
+
 export function depthRulerScale(
   wristDepthM: number | null | undefined,
   fovDeg: number | null | undefined,

@@ -27,3 +27,48 @@ describe("the depth ruler", () => {
     }
   });
 });
+
+import { reconcileScaleEstimates, type ScaleEstimate } from "./pose-tracking";
+import { DEPTH_RULER_BIAS } from "./body-3d-ruler";
+
+// The two sensor-paired takes, replayed through reconciliation with the zeroed depth ruler in
+// the room. Set 6 had chosen the in-plane ruler alone at 26% low; set 5 had averaged in-plane
+// and shoulders to 5% high. With the depth ruler zeroed, both land within 3% of the sensor.
+describe("the zeroed depth ruler in reconciliation", () => {
+  const take = (inPlane: number, shoulders: number, depth: number): ScaleEstimate[] => [
+    { source: "body_3d", scale: inPlane, uncertaintyFraction: 0.08 },
+    { source: "shoulder_width", scale: shoulders, uncertaintyFraction: 0.1 },
+    { source: "depth", scale: depth / DEPTH_RULER_BIAS, uncertaintyFraction: 0.08 },
+  ];
+
+  it("set 6: clusters with the exact shoulder ruler instead of the in-plane ruler winning alone", () => {
+    const v = reconcileScaleEstimates(take(OVR_BENCH_SET6_2026_09_29.rulers.inPlane3D, OVR_BENCH_SET6_2026_09_29.rulers.shoulderWidth, OVR_BENCH_SET6_2026_09_29.rulers.depthRuler));
+    expect(v.scale! / OVR_BENCH_SET6_2026_09_29.rulers.sensorImplied).toBeGreaterThan(0.97);
+    expect(v.scale! / OVR_BENCH_SET6_2026_09_29.rulers.sensorImplied).toBeLessThan(1.03);
+  });
+
+  it("set 5: within 3% of the sensor", () => {
+    const v = reconcileScaleEstimates(take(OVR_BENCH_SET5_2026_09_29.rulers.inPlane3D, OVR_BENCH_SET5_2026_09_29.rulers.shoulderWidth, OVR_BENCH_SET5_2026_09_29.rulers.depthRuler));
+    expect(v.scale! / OVR_BENCH_SET5_2026_09_29.rulers.sensorImplied).toBeGreaterThan(0.95);
+    expect(v.scale! / OVR_BENCH_SET5_2026_09_29.rulers.sensorImplied).toBeLessThan(1.05);
+  });
+
+  it("two body rulers that disagree with no anchored ruler present are blended, not ranked", () => {
+    const v = reconcileScaleEstimates([
+      { source: "body_3d", scale: 0.003, uncertaintyFraction: 0.08 },
+      { source: "shoulder_width", scale: 0.0041, uncertaintyFraction: 0.1 },
+    ]);
+    expect(v.blended).toBe(true);
+    expect(v.scale).toBeCloseTo(0.00355, 5);
+  });
+
+  it("a plate in the room still wins the cluster; body rulers are not blended over it", () => {
+    const v = reconcileScaleEstimates([
+      { source: "plate", scale: 0.0041, uncertaintyFraction: 0.05 },
+      { source: "body_3d", scale: 0.003, uncertaintyFraction: 0.08 },
+      { source: "shoulder_width", scale: 0.0034, uncertaintyFraction: 0.1 },
+    ]);
+    expect(v.blended).toBeFalsy();
+    expect(v.agreedSources).toContain("plate");
+  });
+});

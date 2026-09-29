@@ -1084,11 +1084,31 @@ export function trimPhaseToMovement(
  */
 export const TRAVEL_ONSET_MARGIN_M = 0.01;
 
+/**
+ * AND THE MARGIN KNOWS WHICH LIFT IT IS TRIMMING. Scott, 2026-09-29: "Squat and bench are
+ * technically different no? The camera knows that it's filming before so we could
+ * differentiate." It does, and they are: a squat's bottom has the wobble and the sit the
+ * centimetre above was fitted to skip; a touch-and-go bench has neither, and its lockout is
+ * tight. Against the sensor's own per-rep windows (its range over its mean) on the three
+ * bench sets of 2026-09-29, a centimetre trimmed the window 6%, 0% and 9% short, half a
+ * centimetre ran 4%, 12% and 2% long, and three quarters sits between; on the squat, three
+ * quarters of a centimetre moved the onset two samples into the sit. Same table shape as
+ * MIN_ROM_FRACTION_OF_HEIGHT: keyed by the movement the exercise already declares, the
+ * centimetre for anything not listed.
+ */
+export const TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M: Record<string, number> = {
+  horizontal_press_or_row: 0.0075,
+};
+export function travelOnsetMarginFor(romKind: string | null | undefined): number {
+  return (romKind && TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M[romKind]) || TRAVEL_ONSET_MARGIN_M;
+}
+
 export function trimPhaseToTravel(
   positions: number[],
   startIdx: number,
   endIdx: number,
   peakIdx: number,
+  margin: number = TRAVEL_ONSET_MARGIN_M,
 ): { startIdx: number; endIdx: number } {
   if (endIdx - startIdx < 2) return { startIdx, endIdx };
   if (!(peakIdx > startIdx && peakIdx < endIdx)) return { startIdx, endIdx };
@@ -1096,7 +1116,6 @@ export function trimPhaseToTravel(
   const endY = positions[endIdx];
   const rom = Math.abs(endY - startY);
   if (!(rom > 0)) return { startIdx, endIdx };
-  const margin = TRAVEL_ONSET_MARGIN_M;
   // Walk back from the peak to the last sample still at the bottom.
   let from = startIdx;
   for (let i = peakIdx - 1; i >= startIdx; i--) {
@@ -1438,7 +1457,7 @@ export function summarizeTrackedSet(
     // The peak is found over the whole phase first, because the travel window is anchored on it
     // -- see trimPhaseToTravel. The speed-based trim only ever finds a window this one contains.
     const wholePhasePeak = robustPeakSpeed(speedsReportedMps, phase.startIdx, phase.endIdx, confidences);
-    const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx);
+    const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx, travelOnsetMarginFor(romKind));
     const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
     // RANGE OF MOTION OVER THE TIME THE BAR WAS TRAVELLING -- a bar sensor's definition of mean
     // concentric velocity, and the one this is calibrated against. The sample mean of the
