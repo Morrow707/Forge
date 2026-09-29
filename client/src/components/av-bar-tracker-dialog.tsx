@@ -1975,6 +1975,9 @@ export function AvBarTrackerDialog({
       // inferred. Null on a one-handed movement or a take where the pair never held, which puts
       // it back on the trace's own principal component.
       movementAxis,
+      // The set's prescribed reps choose between the segmenter's own candidate gates -- the
+      // bench take whose un-rack and re-rack outweighed its presses (segmentPhasesRelative).
+      targetReps ?? null,
     );
     if (!metrics) {
       // "MAKE SURE THE BAR STAYS IN FRAME" WAS A GUESS, AND ON A REAL TAKE IT WAS WRONG.
@@ -1992,8 +1995,7 @@ export function AvBarTrackerDialog({
         trace.length < TOO_FEW_POINTS
           ? "Couldn't get a clean read -- make sure the bar stays in frame throughout the set."
           : "Couldn't tell the reps apart in this one. The bar was tracked, but its path didn't " +
-            "break into separate reps -- filming square to the side, level with the bar, gives " +
-            "the clearest read.";
+            "break into separate reps.";
 
       // And a take this well tracked should not come back empty. The scale-free summary one
       // branch up already recovers rep count, tempo and velocity loss from a trace with no usable
@@ -2094,9 +2096,16 @@ export function AvBarTrackerDialog({
     // So the scaled metrics are kept and the warning is attached, rather than the other way
     // round. What was a refusal is now an annotation. The diagnostics still record the outcome
     // so the tracking report can find these takes.
+    // NOTHING ON SCREEN. Scott, 2026-09-29, on the banner this used to raise ("Range of motion
+    // came out as 116cm ... Filming square to the side, camera level with the bar, gives the
+    // most reliable read"): fix it, and never have it pop up again -- the athlete films from
+    // any angle. The take that raised it was not a scale fault at all: the segmenter had gated
+    // the real presses out and measured the athlete standing up, so the banner blamed the
+    // camera angle for a rep-splitting bug. The finding is kept, in the diagnostics only, where
+    // the tracking report reads it; the athlete sees the same accuracy caveat every camera
+    // number carries, and no instruction about where to stand. See CLAUDE.md, Rule #1.
     if (romProblem) {
-      const message = `${romProblem} The numbers below are saved anyway, so they can be checked -- but treat them as suspect. Filming square to the side, camera level with the bar, gives the most reliable read.`;
-      toast.warning(message, { duration: 12000 });
+      const message = `${romProblem} Recorded for the tracking report; nothing was withheld.`;
       await saveTrackedAndWarn(
         blob,
         metrics,

@@ -21,8 +21,9 @@ const plugin = readFileSync(
 describe("the capture format", () => {
   it("prefers the sensor's own 4:3 shape", () => {
     expect(plugin).toMatch(/targetAspect: Double = 4\.0 \/ 3\.0/);
-    // Ranked ahead of the 16:9 choice, not merely available.
-    expect(plugin).toMatch(/bestFormat\(fourThree\) \?\? bestFormat\(exact\)/);
+    // Ranked ahead of the 16:9 choice, not merely available -- and ahead of the 16:9 choice at
+    // ANY rate. See "shape before rate" below.
+    expect(plugin).toMatch(/fastChoice \?\? fourThreeAtSixty \?\? fastSixteenNine \?\? bestFormat\(exact\)/);
   });
 
   it("does not trade resolution away to get there", () => {
@@ -40,11 +41,20 @@ describe("the capture format", () => {
     );
   });
 
-  it("asks for 120fps in FRONT of that chain, never in place of it", () => {
-    // Same shape as the 4:3 preference: preferred, never required. A device with no clean
-    // high-rate format has to fall through to exactly the 60fps selection it used before.
-    expect(plugin).toMatch(/let fastChoice = bestFormat\(fourThreeFast\) \?\? bestFormat\(exactFast\)/);
-    expect(plugin).toMatch(/fastChoice \?\?\s*bestFormat\(fourThree\)/);
+  it("ranks SHAPE before RATE: a 4:3 frame at 60 beats a 16:9 one at 120", () => {
+    // Scott, 2026-09-29, two previews side by side: "Fix the ratio on the camera. Ours is
+    // obviously the more zoomed in one." The phone publishes no clean 120fps format at 4:3,
+    // and `bestFormat(fourThreeFast) ?? bestFormat(exactFast)` walked straight past every 4:3
+    // format to a 16:9 one at 120 -- "16:9 fallback" on every take since 120 was asked for,
+    // a third less picture down each side in portrait. The 4:3 preference was written to be
+    // preferred-never-required; the high-rate preference has to rank under it.
+    expect(plugin).toMatch(/let fastChoice = bestFormat\(fourThreeFast\)\s*\n/);
+    expect(plugin).toContain("let fourThreeAtSixty = bestFormat(fourThree)");
+    // 16:9 at 120 is reached only when there is no 4:3 at all.
+    expect(plugin).toContain("let fastSixteenNine = fourThreeAtSixty == nil ? bestFormat(exactFast) : nil");
+    // Still preferred, never required: a device with no clean high-rate format falls through
+    // to exactly the 60fps selection it used before.
+    expect(plugin).toMatch(/fastChoice \?\? fourThreeAtSixty \?\? fastSixteenNine/);
     // The fast candidates are the SAME shape filters with eligibility on top, so asking for
     // 120 can only pick between formats that were already acceptable.
     expect(plugin).toContain("let fourThreeFast = fourThree.filter(isAcceptableHighRate)");
@@ -82,7 +92,8 @@ describe("the capture format", () => {
   });
 
   it("reports the rate it actually got, not the one it wanted", () => {
-    expect(plugin).toContain("let chosenRate = fastChoice != nil ? preferredFrameRate : targetFrameRate");
+    expect(plugin).toContain("let highRate = fastChoice != nil || fastSixteenNine != nil");
+    expect(plugin).toContain("let chosenRate = highRate ? preferredFrameRate : targetFrameRate");
     expect(plugin).toContain("CMTimeScale(chosenRate)");
   });
 

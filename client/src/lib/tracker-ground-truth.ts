@@ -356,3 +356,68 @@ export function summarizeError(entries: GroundTruthEntry[] = GROUND_TRUTH) {
     };
   });
 }
+
+/**
+ * BENCH AT AN ANGLE, 2026-09-29, BUILD 560: the take the segmenter got wrong for a new reason.
+ *
+ * Same lifter, same bench, same 135lb x 10, filmed at roughly 45 degrees from the foot of the
+ * bench with the phone on a rack post (cameraPitchDeg 9). The wrists were tracked from the
+ * walk-in, so the take's largest reversals were lying down, the un-rack and the re-rack, and
+ * the relative gate's ladder took THOSE as the typical rep. Three "reps" at a 116cm range of
+ * motion, a scale_suspect banner blaming the camera angle, and the sensor beside it reading
+ * ten at 14.4in. See bench-oblique-rack-moves.test.ts for the replay and bar-tracking.ts
+ * (expectedReps, isolatedRackMoves) for the two rules it produced.
+ */
+export const OVR_BENCH_OBLIQUE_2026_09_29 = {
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "about 45 degrees off the foot of the bench, phone on a rack post, pitched 9 degrees down",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.71, peakVelocityMps: 1.07, romIn: 14.6, meanW: 426, peakW: 644, tpvS: 0.31, eai: 3.40 },
+      { meanVelocityMps: 0.71, peakVelocityMps: 1.12, romIn: 13.9, meanW: 429, peakW: 678, tpvS: 0.30, eai: 3.68 },
+      { meanVelocityMps: 0.69, peakVelocityMps: 1.02, romIn: 13.5, meanW: 416, peakW: 611, tpvS: 0.28, eai: 3.43 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.06, romIn: 14.6, meanW: 434, peakW: 636, tpvS: 0.32, eai: 3.27 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 0.99, romIn: 14.1, meanW: 420, peakW: 595, tpvS: 0.33, eai: 2.97 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 1.05, romIn: 13.9, meanW: 422, peakW: 628, tpvS: 0.32, eai: 3.22 },
+      { meanVelocityMps: 0.71, peakVelocityMps: 0.99, romIn: 14.6, meanW: 427, peakW: 595, tpvS: 0.36, eai: 2.75 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 0.94, romIn: 13.8, meanW: 418, peakW: 561, tpvS: 0.31, eai: 2.97 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 0.95, romIn: 14.6, meanW: 421, peakW: 570, tpvS: 0.32, eai: 2.93 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 0.99, romIn: 16.4, meanW: 421, peakW: 595, tpvS: 0.32, eai: 3.05 },
+    ],
+    reported: { meanVelocityMps: 0.70, peakVelocityMps: 1.01, romIn: 14.4, meanW: 423, peakW: 611, tpvS: 0.31, eai: 3.16 },
+  },
+  /** What the device reported on the day, build 560. */
+  forgeOnDevice: {
+    repCount: 3,
+    romCm: 116.3,
+    meanVelocityMps: 0.87,
+    peakVelocityMps: 1.95,
+    barPathDeviationCm: 55.7,
+    outcome: "scale_suspect",
+  },
+  /** The same stored trace replayed after the two segmentation rules (see the header). */
+  forgeReplayed: {
+    repCount: 10,
+    romCm: 32.9,
+    meanVelocityMps: 0.58,
+    peakVelocityMps: 1.63,
+    /** Per-rep range of motion ran 22 to 52cm against the sensor's 34 to 42: the tracker, not
+     *  the ruler -- 252 frames carried a lone hand and the bar point flipped sides 92 times. */
+    perRepRomCmSpread: [22.5, 52.3],
+  },
+  diagnostics: {
+    scaleSource: "shoulder_width",
+    scaleFactorMPerUnit: 0.004428638415860077,
+    shoulderMeasuredPx: 98.9,
+    gripWidthPx: 168.4,
+    framesWithBody: 670,
+    barPointFromLoneHandCarried: 252,
+    barPointSideFlipped: 92,
+    framesWithCoreMlImplement: 0,
+    bestPlateCandidateConfidence: 0.34,
+    liveCoverage: 0.47,
+    cameraPitchDeg: 9,
+  },
+} as const;

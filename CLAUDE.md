@@ -42,6 +42,17 @@ flag and a caveat instead, and let the number through.
 - **This does not weaken the plausibility gates.** A single frame that implies an impossible
   velocity is still dropped -- that is filtering a sample, not refusing a take. The rule is about
   the SET: a set that was filmed gets a row, a number and an explanation, always.
+- **NO SURFACE EVER TELLS THE ATHLETE WHERE TO STAND, AND NO TAKE RAISES A BANNER ABOUT ITS
+  ANGLE.** Scott, 2026-09-29, on "Range of motion came out as 116cm ... Filming square to the
+  side, camera level with the bar, gives the most reliable read": "fix that error message, and
+  make a note in Claude.md to never have it pop up again. The athlete is able to film from any
+  angle." The take that raised it was a rep-splitting bug (the segmenter took the un-rack as a
+  rep, see docs/camera-tracking-notes.md "Bench at an angle, 2026-09-29"), and the banner blamed
+  the camera angle for it. A plausibility finding goes into `trackingDiagnostics` for the report
+  and nowhere else; the athlete sees the accuracy caveat every camera number already carries,
+  and never a sentence about where the phone was. Trust-score notes state the angle as a fact
+  ("Filmed from an angle"), never as a fault. `exercise-camera-profile.ts` may still DESCRIBE a
+  view before recording; nothing after a take may prescribe one.
 
 - BATCH TestFlight uploads; do not upload per change. After pushing a change to
   `main` that actually affects the iOS app, run `verify_build`
@@ -314,7 +325,11 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **559** is the newest TestFlight build, cut 2026-09-29 from the Rule #2 reversal and the
+- Build **561** is the newest TestFlight build, cut 2026-09-29 from the oblique bench against OVR:
+  the 4:3 frame ranked above 120fps (shape before rate, `applyHighestFrameRate`), the athlete's
+  rep count choosing among the segmenter's candidate gates (`expectedReps`), the isolated-run
+  rack-move rule, and the scale-suspect banner gone from the athlete's screen (Rule #1).
+- Build **560** was the previous build, cut 2026-09-29 from the Rule #2 reversal and the
   file-backed save queue: the 3D pose and hand pose back on for every tracker as STRIDES
   (`AvFrameContext(body3DStride:handPoseStride:)`, never off), live frames scaled to 1280 before
   Vision (`AvLiveFrameScaler`), the detector re-searching every third frame while unlocked, and

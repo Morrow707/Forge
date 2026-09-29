@@ -212,6 +212,9 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
     // The axis the device measured from the grip when the export carries it; the vertical
     // otherwise, which is the honest guess and what the harness always used.
     calibration?.movementAxis ?? VERTICAL_AXIS,
+    // The reps the athlete logged, as the device has them from the set's prescription: the
+    // segmenter chooses between its own candidate gates by it (segmentPhasesRelative).
+    capture.loggedReps ?? null,
   );
   const repCount = metrics?.repBreakdown.length ?? 0;
   const loggedReps = capture.loggedReps ?? null;

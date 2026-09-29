@@ -1343,3 +1343,81 @@ shoulders set it is scale. Not moved.
 
 **90% confidence** is a dataset problem: every trust threshold is an admitted guess and needs
 about twenty sensor-paired sets across angles to calibrate. A week of sessions, not a change.
+
+## Bench at an angle, 2026-09-29: three reps out of ten, and it was never the scale
+
+Build 560, 135lb x 10, OVR beside it, phone on a rack post about 45 degrees off the foot of
+the bench. The device reported THREE reps, a 116cm range of motion, a 0.87 mean and a 1.95
+peak, and raised the scale-suspect banner telling Scott to film square to the side. The
+sensor read ten reps, 0.70 mean, 1.01 peak, 14.4in (36.6cm). The stored trace is
+`client/src/lib/__fixtures__/bench-oblique-2026-09-29.json` and the sensor rows are
+`OVR_BENCH_OBLIQUE_2026_09_29` in `tracker-ground-truth.ts`.
+
+**What went wrong, by piece of code:**
+
+- **`segmentPhasesRelative` picked the setup as the typical rep.** The wrists were tracked
+  from the walk-in, so the take's largest reversals were lying down onto the bench (153cm),
+  the un-rack (120, 112, 192cm) and the re-rack (67, 80cm). Four of those cleared the 0.5 cut
+  of `LARGE_REVERSAL_FRACTIONS_OF_MAX`, which is at least `MIN_REVERSALS_FOR_RELATIVE_GATE`,
+  so "typical" came out at 136cm and the gate at 54cm. Twenty-three real presses at 26 to
+  49cm fell under it. The three "reps" reported were lying down, a merge of the whole set,
+  and standing up. The 116cm range of motion was the athlete's torso, not the bar.
+- **`implausibleRangeOfMotion` then blamed the scale, and the banner blamed the angle.** The
+  scale was within 10% (below). A rep-splitting fault produced a number the plausibility
+  check could only read as a scale fault, and the copy on it told the athlete where to stand.
+  That copy is gone (Rule #1 in CLAUDE.md now says so); the outcome still lands in the
+  diagnostics as `scale_suspect` for this report.
+
+**What changed, both in `bar-tracking.ts`:**
+
+- **The athlete's rep count chooses among the gates the trace proposes.** `summarizeTrackedSet`
+  takes `expectedReps` (the set's prescribed reps from the dialog, `loggedReps` in the replay
+  harness). `relativeGateCandidates` lists every cut on the ladder plus a 0.2 and a 0.15 cut,
+  the WHOLE extraction runs at each, and the gate whose final rep count lands nearest the
+  athlete's number wins, ties to the strictest. The count is compared after the phantom
+  filters, because a gate's raw phase count is not its rep count once the walk-in is split
+  off. The athlete's number cannot invent a rep; it picks between answers the trace already
+  gave. On this take the 0.2 cut (gate 20.8cm) found the ten presses at 9.7 to 21.0s.
+- **A run of reps standing apart from the set is a rack move** (`isolatedRackMoves`). At that
+  gate three phases survived every shape test: lying down (50cm, fast), the un-rack (21cm) and
+  the re-rack (52cm, fast). Not short, not slow, not twice the median, and only two of them at
+  an edge. What they share is isolation: a phase the shape tests threw out sits between each
+  of them and the set. The surviving concentrics are grouped into runs; the largest run is
+  the set; a run a quarter of its size or smaller goes. Two equal runs (a grip adjustment
+  mid-set) are both kept.
+
+**Replayed after the change** (`bench-oblique-rack-moves.test.ts` pins it):
+
+| | sensor | device, build 560 | replayed |
+|---|---|---|---|
+| reps | 10 | 3 | 10 |
+| range of motion | 36.6cm | 116.3 | 32.9 (per rep 22 to 52) |
+| mean velocity | 0.70 | 0.87 | 0.58 |
+| peak velocity | 1.01 | 1.95 | 1.63 (per rep 0.15 to 1.63) |
+
+**What is still wrong, and whose it is:**
+
+- **The per-rep spread is the tracker's, not the ruler's.** Range of motion per rep ran 22 to
+  52cm against the sensor's 34 to 42, and per-rep peaks ran 0.15 to 1.63 against 0.94 to 1.12.
+  The set median (32.9cm, 0.58 m/s) is within 10 to 17% of the sensor, so the shoulder-width
+  scale (`shoulderWidthScaleFromFrames`, 98.9px, 0.00443 m/px) is roughly right at this angle.
+  The noise is in the bar point: 252 of 548 usable frames carried a lone hand
+  (`barPointFromLoneHandCarried`) and the point flipped sides 92 times
+  (`barPointSideFlipped`). No constant was moved on the strength of this take; a scale fit
+  from a trace this noisy would fit the noise.
+- **The plate detector saw nothing.** `framesWithCoreMlImplement` 0, best candidate confidence
+  0.34 against the gate, on a take where two bumper plates are in plain view. That is the
+  ruler this lift wants (the shoulder one carries a tenth of uncertainty by construction) and
+  it never voted. Open.
+- **The 16:9 frame.** `activeFormat` read "16:9 fallback" because the format choice ranked
+  120fps above the 4:3 shape; fixed in the same change (shape before rate,
+  `applyHighestFrameRate`), so the next take has a third more picture down each side.
+- **The two 09-28 bench sets** (seq 8 and 9 in the same export) replay to ten reps each now,
+  but set 2's ten include fragments under 11cm; that trace has a 1.1s hole and the same lone-
+  hand problem. Not fitted.
+- **Peak velocity on the squats** is unchanged from the 09-28 evening fit: 11% high with the
+  within-set drift, still Vision's positions, still open.
+
+**Next filmed session:** three sets of five, one triple, one single, all with the sensor, any
+angle. The single and the triple are the cases the rep count cannot help with (two runs of
+one look identical), so they test the shape filters on their own.

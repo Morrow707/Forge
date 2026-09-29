@@ -1112,8 +1112,19 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // through to the 60 selection below, byte for byte what every build before this did.
         let fourThreeFast = fourThree.filter(isAcceptableHighRate)
         let exactFast = exact.filter(isAcceptableHighRate)
-        let fastChoice = bestFormat(fourThreeFast) ?? bestFormat(exactFast)
-        guard let chosen = fastChoice ?? bestFormat(fourThree) ?? bestFormat(exact)
+        // SHAPE BEFORE RATE. Scott, 2026-09-29, holding the two previews side by side: "Fix the
+        // ratio on the camera. Ours is obviously the more zoomed in one." It was: the phone
+        // publishes no clean 120fps format at 4:3, so `fourThreeFast ?? exactFast` walked past
+        // every 4:3 format to a 16:9 one at 120, and the log said "16:9 fallback" on every take
+        // since 120 was asked for. In portrait a 16:9 readout is only 9/16 as wide as it is
+        // tall where 4:3 is 3/4 -- a third less picture down each side, which is exactly the
+        // plate rack and the window that were missing. The 4:3 preference above was written to
+        // be preferred-never-required, and the high-rate preference has to rank UNDER it: a 4:3
+        // frame at 60 beats a 16:9 one at 120. 120 is still taken whenever 4:3 offers it.
+        let fastChoice = bestFormat(fourThreeFast)
+        let fourThreeAtSixty = bestFormat(fourThree)
+        let fastSixteenNine = fourThreeAtSixty == nil ? bestFormat(exactFast) : nil
+        guard let chosen = fastChoice ?? fourThreeAtSixty ?? fastSixteenNine ?? bestFormat(exact)
             ?? largest(underBudget) ?? largest(anySixty)
         else {
             logDiag("WARNING: no format supports \(Int(targetFrameRate))fps -- leaving device default")
@@ -1121,7 +1132,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
         // The rate we actually got, not the one we wanted -- every downstream number is sampled
         // at this interval, and the diagnostics have to say which it was.
-        let chosenRate = fastChoice != nil ? preferredFrameRate : targetFrameRate
+        let highRate = fastChoice != nil || fastSixteenNine != nil
+        let chosenRate = highRate ? preferredFrameRate : targetFrameRate
         activeCaptureFrameRate = chosenRate
         // One exact duration for both min and max pins the rate rather than leaving the device
         // free to drop frames under load, which would put a variable, unrecorded sample interval
@@ -1151,7 +1163,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             let widestAnyRate = device.formats.map(\.videoFieldOfView).max() ?? chosen.videoFieldOfView
             logDiag(
                 "activeFormat set: \(d.width)x\(d.height) @ \(Int(chosenRate))fps"
-                    + "\(fastChoice != nil ? " (high-rate, unbinned, AF-capable)" : " (capped)"), "
+                    + "\(highRate ? " (high-rate, unbinned, AF-capable)" : " (capped)"), "
                     + "aspect \(String(format: "%.2f", Double(d.width) / Double(max(d.height, 1))))"
                     + "\(isFourThree(chosen) ? " (4:3, matches Camera app)" : " (16:9 fallback)") "
                     + "fov \(String(format: "%.1f", chosen.videoFieldOfView))deg "
