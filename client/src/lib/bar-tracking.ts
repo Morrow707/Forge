@@ -3489,51 +3489,65 @@ export function movementAxisFromGrip(
   return { x: ax, y: ay };
 }
 
-/** THE GRIP AXIS IS A WITNESS, NOT A VERDICT. Rule #2: it is held against the image vertical.
+/** THE BAR TRAVELS ALONG GRAVITY. THE GRIP LINE'S PERPENDICULAR NEVER WAS THE TRAVEL DIRECTION.
  *
- *  Set 8 beside OVR (build 574, 2026-09-29): movementAxisFromGrip returned (0.978, 0.209), an
- *  axis 78 degrees from the image vertical, on a bench filmed with the phone upright at the foot
- *  of the bench. The trace was then rotated onto it, so the segmenter measured the hands' side
- *  jitter as the press: nine "reps" of 44-119cm at 2.03 m/s against the sensor's ten of 36cm at
- *  0.76. The same trace segmented along the image vertical gives ten reps of 34cm at 0.87 -- the
- *  count and the range of motion within a few percent, on the take the grip axis made nonsense
- *  of. Nothing checked the grip's answer before the whole take was rotated onto it.
+ *  movementAxisFromGrip assumes a level bar: perpendicular to the line between the wrists is
+ *  "up". Under perspective that assumption fails on every take that is not square-on. Set 9
+ *  beside OVR (build 575, 2026-09-30, four frames of the clip in hand): the phone upright, the
+ *  bar going straight up and down in the image, and the wrist-to-wrist line tilted 28 degrees
+ *  because the near plate sits lower and larger in frame than the far one. The grip axis
+ *  rotated the trace 28 degrees off the lift and the set came back 7 reps at 1.04 m/s against
+ *  the sensor's 10 at 0.80; along the image vertical the same trace gives 10. Set 8 (build 574)
+ *  was the same failure at 78 degrees. On the eight sensor-paired benches the grip axis sat 8 to
+ *  78 degrees from vertical while CoreMotion put the phone's roll under 5 degrees on every one.
  *
- *  A barbell lift filmed by an upright phone moves within a few tens of degrees of the image
- *  vertical: the lift is vertical in the world and the camera's roll is small (the CoreMotion
- *  tilt is recorded and has read under 15 degrees on every sensor-paired take). So a grip axis
- *  further than MAX_GRIP_AXIS_FROM_VERTICAL_DEG from vertical is not "the lift went sideways", it
- *  is the pair being wrong -- one wrist read as the other, a hand and a rack hook, two detections
- *  stacked -- and the image vertical is the better witness for that frame of the argument. The
- *  trace's own covariance axis is deliberately NOT the fallback here: on the same take it found
- *  five reps at 2.15 m/s, because a trace whose grip pairs are wrong is a trace whose jitter is
- *  large, and the covariance follows the jitter. The no-grip fallback (a one-handed movement, or
- *  a take where the pair never held) stays what it was: the covariance, through dominantAxisFrame.
+ *  So the axis is GRAVITY, and the phone measures gravity (CMMotionManager, recorded per take as
+ *  cameraRollDeg / cameraPitchDeg). That is a sensor the pose tracker has no hand in, which is
+ *  what makes it a witness rather than a leader under Rule #2: the grip's own axis is still
+ *  measured and recorded beside it (gripAxisFromVerticalDeg) so the two can be held against each
+ *  other on the report, and the grip governs only where gravity cannot be read.
  *
- *  Every outcome is recorded (`axisSource`, `gripAxisFromVerticalDeg`) so the next sensor-paired
- *  set can say whether 45 degrees is the right line. */
+ *  Roll under MAX_ROLL_FOR_IMAGE_VERTICAL_DEG: the image vertical IS gravity to within the
+ *  cosine of the roll (under 1% of range of motion at 8 degrees), so it is used as-is and the
+ *  sign convention of CoreMotion's roll in the image frame never has to be trusted. Roll beyond
+ *  that, or no roll at all (an older export, the web path): the grip witness stands, checked
+ *  against the vertical as before (MAX_GRIP_AXIS_FROM_VERTICAL_DEG). No grip either: the
+ *  trace's own covariance, through dominantAxisFrame, as it always was.
+ *
+ *  Every outcome is recorded (`axisSource`, `gripAxisFromVerticalDeg`), so the next sensor-paired
+ *  set can say whether either limit is the right line. */
 export const MAX_GRIP_AXIS_FROM_VERTICAL_DEG = 45;
+export const MAX_ROLL_FOR_IMAGE_VERTICAL_DEG = 15;
 export const IMAGE_VERTICAL_AXIS = { x: 0, y: 1 } as const;
 
-export type MovementAxisSource = "grip" | "trace_covariance" | "vertical_over_grip";
+export type MovementAxisSource = "gravity" | "grip" | "trace_covariance" | "vertical_over_grip";
 
-export function reconcileMovementAxis(gripAxis: { x: number; y: number } | null): {
+export function reconcileMovementAxis(
+  gripAxis: { x: number; y: number } | null,
+  cameraRollDeg: number | null | undefined = null,
+): {
   axis: { x: number; y: number } | null;
   source: MovementAxisSource;
   gripAxisFromVerticalDeg: number | null;
 } {
-  if (!gripAxis) return { axis: null, source: "trace_covariance", gripAxisFromVerticalDeg: null };
-  const norm = Math.hypot(gripAxis.x, gripAxis.y);
-  if (!(norm > 0)) return { axis: null, source: "trace_covariance", gripAxisFromVerticalDeg: null };
-  // The angle between two LINES, so 0..90: an axis pointing down is the same line as one
-  // pointing up (movementAxisFromGrip pins the sign, but the reconciliation should not depend on
-  // that).
-  const deg = (Math.acos(Math.min(1, Math.abs(gripAxis.y) / norm)) * 180) / Math.PI;
-  const rounded = Math.round(deg * 10) / 10;
-  if (deg > MAX_GRIP_AXIS_FROM_VERTICAL_DEG) {
-    return { axis: { ...IMAGE_VERTICAL_AXIS }, source: "vertical_over_grip", gripAxisFromVerticalDeg: rounded };
+  let gripDeg: number | null = null;
+  if (gripAxis) {
+    const norm = Math.hypot(gripAxis.x, gripAxis.y);
+    if (norm > 0) {
+      // The angle between two LINES, so 0..90: an axis pointing down is the same line as one
+      // pointing up.
+      const deg = (Math.acos(Math.min(1, Math.abs(gripAxis.y) / norm)) * 180) / Math.PI;
+      gripDeg = Math.round(deg * 10) / 10;
+    }
   }
-  return { axis: gripAxis, source: "grip", gripAxisFromVerticalDeg: rounded };
+  if (cameraRollDeg != null && Number.isFinite(cameraRollDeg) && Math.abs(cameraRollDeg) <= MAX_ROLL_FOR_IMAGE_VERTICAL_DEG) {
+    return { axis: { ...IMAGE_VERTICAL_AXIS }, source: "gravity", gripAxisFromVerticalDeg: gripDeg };
+  }
+  if (gripDeg == null || !gripAxis) return { axis: null, source: "trace_covariance", gripAxisFromVerticalDeg: null };
+  if (gripDeg > MAX_GRIP_AXIS_FROM_VERTICAL_DEG) {
+    return { axis: { ...IMAGE_VERTICAL_AXIS }, source: "vertical_over_grip", gripAxisFromVerticalDeg: gripDeg };
+  }
+  return { axis: gripAxis, source: "grip", gripAxisFromVerticalDeg: gripDeg };
 }
 
 /** The trace re-expressed in the movement's own frame: `along` the axis it travelled, `across`

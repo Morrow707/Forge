@@ -1764,6 +1764,37 @@ pinned by `bench-set7-count.test.ts` (ten reps, the un-rack settle folded into r
   `trackingDiagnostics.cameraView` now, with the facing and the expected view beside it;
   `no-framing-advice-after-a-take.test.ts` refuses the toast. Rule #1, 2026-09-29 clause.
 
+## Build 575 beside OVR, set 9: the bar travels along gravity, and the grip line never said so
+
+Set 9 (Sep 30, set 1), bench, 135lb x 10, wrists 2.48m from the lens, oblique from the foot of
+the bench. Device: 7 reps, 1.04 m/s, 43cm. Sensor: 10, 0.80, 36cm (14.1in). Ground truth
+`OVR_BENCH_SET9_2026_09_30`; fixture `bench-set9-2026-09-30.json`, pinned by
+`bench-set9-gravity-axis.test.ts`. Four frames of the clip were in hand for this one.
+
+- **The grip axis was 28 degrees from vertical and passed the 45-degree check**, so the take
+  was rotated 28 degrees off the lift and lost three reps. The frames show why: the phone is
+  upright and the bar goes straight up and down in the image, but the wrist-to-wrist line is
+  tilted because the near plate sits lower and larger than the far one. Perspective. The
+  perpendicular to the grip is the travel direction only for a level bar seen square-on,
+  which is the one framing Rule #1 says never to require.
+- **Gravity is the axis** (`reconcileMovementAxis`, `axisSource: "gravity"`). CoreMotion
+  records the phone's roll on every take (`cameraRollDeg`: -3.1, -2.7, -3.0, -4.2 on the
+  sensor-paired benches), and under `MAX_ROLL_FOR_IMAGE_VERTICAL_DEG` (15) the image vertical
+  is gravity to within a percent. The grip's axis is still measured and recorded beside it
+  (`gripAxisFromVerticalDeg`), and governs only when the roll cannot be read or exceeds the
+  limit. Every bench fixture segmented both ways: the vertical finds the sensor's ten on sets
+  5, 7, 8, 9, the oblique take, the settle take and the 564 re-rack take (which the grip axis
+  gave eleven); set 6 reads eleven under the vertical against ten under the grip, one press
+  split. Seven of eight, and the eighth is a segmentation edge, not an axis error.
+- **What is left on this take is the trace.** 78 frames with no wrist, 139 carried by one
+  hand, 48 side flips, 76 interpolated, and both-hands points wandering 100 units sideways
+  mid-set. Along gravity the count is right and the mean is 1.03 against 0.80: the same
+  concentric-window residual, larger here because the trace is worse. Only one 3D bone had
+  enough samples to be a ruler (shoulderWidth) and the shoulder ruler itself was absent.
+- **The depth ruler read 0.96 of the sensor-implied scale**, after 0.92, 0.92, 0.87, 0.85 --
+  but the sensor-implied scale on this take is soft (the replay's ROM is inflated by jitter),
+  so `DEPTH_RULER_BIAS` stays at 0.9 and set 9 is not in the bias test.
+
 ## Build 574 beside OVR, set 8: the grip axis was 78 degrees wrong and nothing checked it
 
 Set 8 (logged over set 3), bench, 135lb x 10, wrists 2.61m from the lens. Device: 9 reps,

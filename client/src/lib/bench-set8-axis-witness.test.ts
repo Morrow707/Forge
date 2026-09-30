@@ -46,18 +46,30 @@ function segment(axis: { x: number; y: number } | null) {
 }
 
 describe("the grip axis is a witness held against the image vertical", () => {
-  it("the stored axis really was 78 degrees from vertical, and is refused", () => {
-    const w = reconcileMovementAxis(storedAxis);
+  it("the stored axis really was 78 degrees from vertical, and is refused even with no roll to read", () => {
+    const w = reconcileMovementAxis(storedAxis, null);
     expect(w.gripAxisFromVerticalDeg).toBeGreaterThan(MAX_GRIP_AXIS_FROM_VERTICAL_DEG);
     expect(w.source).toBe("vertical_over_grip");
     expect(w.axis).toEqual({ x: 0, y: 1 });
   });
 
-  it("a grip axis near vertical is kept, sign either way, and no grip keeps the covariance", () => {
-    expect(reconcileMovementAxis({ x: -0.1458, y: 0.9893 }).source).toBe("grip");
-    expect(reconcileMovementAxis({ x: 0.2846, y: -0.9587 }).source).toBe("grip");
-    expect(reconcileMovementAxis({ x: -0.1458, y: 0.9893 }).gripAxisFromVerticalDeg).toBeCloseTo(8.4, 0);
-    expect(reconcileMovementAxis(null)).toEqual({ axis: null, source: "trace_covariance", gripAxisFromVerticalDeg: null });
+  it("with the phone's roll read and small, gravity is the axis and the grip is only recorded", () => {
+    const w = reconcileMovementAxis(storedAxis, -2.7);
+    expect(w.source).toBe("gravity");
+    expect(w.axis).toEqual({ x: 0, y: 1 });
+    expect(w.gripAxisFromVerticalDeg).toBeGreaterThan(70);
+    // Set 9: 28 degrees from vertical under a 4-degree roll. Gravity, not the grip.
+    expect(reconcileMovementAxis({ x: -0.4703, y: 0.8825 }, -4.2).source).toBe("gravity");
+    expect(reconcileMovementAxis(null, 3).source).toBe("gravity");
+  });
+
+  it("without a roll, a grip axis near vertical is kept, sign either way, and no grip keeps the covariance", () => {
+    expect(reconcileMovementAxis({ x: -0.1458, y: 0.9893 }, null).source).toBe("grip");
+    expect(reconcileMovementAxis({ x: 0.2846, y: -0.9587 }, null).source).toBe("grip");
+    expect(reconcileMovementAxis({ x: -0.1458, y: 0.9893 }, null).gripAxisFromVerticalDeg).toBeCloseTo(8.4, 0);
+    expect(reconcileMovementAxis(null, null)).toEqual({ axis: null, source: "trace_covariance", gripAxisFromVerticalDeg: null });
+    // A phone rolled past the limit hands the question back to the grip.
+    expect(reconcileMovementAxis({ x: -0.1458, y: 0.9893 }, 40).source).toBe("grip");
   });
 
   it("reproduces the device's wrong answer under the grip axis, so the fault is the axis", () => {
@@ -67,7 +79,7 @@ describe("the grip axis is a witness held against the image vertical", () => {
   });
 
   it("finds the sensor's ten at its range of motion under the reconciled axis", () => {
-    const m = segment(reconcileMovementAxis(storedAxis).axis)!;
+    const m = segment(reconcileMovementAxis(storedAxis, -2.7).axis)!;
     const sensorRomCm = OVR_BENCH_SET8_2026_09_29.sensor.reported.romIn * 2.54;
     expect(m.repBreakdown.length).toBe(10);
     expect(m.romCm! / sensorRomCm).toBeGreaterThan(0.9);

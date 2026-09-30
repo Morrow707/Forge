@@ -559,3 +559,41 @@ export const OVR_BENCH_SET8_2026_09_29 = {
   // sensorImplied from the vertical-axis replay (33.9cm at 0.003396 against the sensor's 36.3cm).
   rulers: { inPlane3D: 0.003099, shoulderWidth: 0.003638, depthRuler: 0.003106, sensorImplied: 0.003636 },
 };
+
+export const OVR_BENCH_SET9_2026_09_30 = {
+  build: 575,
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "foot of the bench, oblique, wrists 2.48m from the lens; bar tilted 28 degrees in frame by perspective, phone roll -4.2",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.17, romIn: 13.5, meanW: 478, peakW: 702, tpvS: 0.28, eai: 4.09 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.22, romIn: 13.9, meanW: 491, peakW: 735, tpvS: 0.28, eai: 4.25 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.17, romIn: 13.3, meanW: 479, peakW: 702, tpvS: 0.30, eai: 3.82 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.14, romIn: 13.8, meanW: 486, peakW: 694, tpvS: 0.30, eai: 3.77 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.18, romIn: 13.8, meanW: 498, peakW: 710, tpvS: 0.26, eai: 4.53 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.12, romIn: 13.7, meanW: 482, peakW: 685, tpvS: 0.26, eai: 4.37 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.11, romIn: 13.6, meanW: 471, peakW: 669, tpvS: 0.28, eai: 3.87 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.12, romIn: 14.4, meanW: 479, peakW: 677, tpvS: 0.28, eai: 3.79 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.10, romIn: 14.9, meanW: 476, peakW: 661, tpvS: 0.34, eai: 3.21 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.17, romIn: 16.7, meanW: 495, peakW: 702, tpvS: 0.30, eai: 3.82 },
+    ],
+    reported: { meanVelocityMps: 0.80, peakVelocityMps: 1.14, romIn: 14.1, meanW: 483, peakW: 693, tpvS: 0.28, eai: 3.95 },
+  },
+  forgeOnDevice: {
+    repCount: 7,
+    meanVelocityMps: 1.04,
+    romCm: 43.4,
+    scaleSource: "both",
+    scale: 0.003378,
+    axis: { x: -0.4703, y: 0.8825 },
+    cameraRollDeg: -4.2,
+    cameraPitchDeg: 18,
+    // Along gravity the same trace: 10 reps, 42.8cm, 1.03 m/s. The hands were lost on 78
+    // frames and carried on 139; the trace, not the axis, is what is left on this take.
+  },
+  // sensorImplied from the gravity-axis replay (42.8cm at 0.003378 against the sensor's 35.8cm);
+  // the trace's jitter inflates the replay's range of motion, so this one is soft.
+  rulers: { inPlane3D: 0.003482, shoulderWidth: null, depthRuler: 0.002946, sensorImplied: 0.002826 },
+};

@@ -325,7 +325,11 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **575** is the newest TestFlight build, cut 2026-09-29 night from set 8: the grip axis
+- Build **576** is the newest TestFlight build, cut 2026-09-30 from set 9: the movement axis is
+  gravity (`reconcileMovementAxis` reads CoreMotion's `cameraRollDeg`; `axisSource: "gravity"`),
+  the grip's axis recorded beside it, and set 9 as ground truth. See
+  docs/camera-tracking-notes.md, "Build 575 beside OVR, set 9".
+- Build **575** was the previous build, cut 2026-09-29 night from set 8: the grip axis
   held against the image vertical (`reconcileMovementAxis`, `axisSource: "vertical_over_grip"`,
   `gripAxisFromVerticalDeg`), the replay harness no longer rotating a stored trace twice
   (`STORED_TRACE_ALONG_AXIS`), and set 8 as ground truth. See docs/camera-tracking-notes.md,

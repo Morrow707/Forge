@@ -328,7 +328,9 @@ export type TrackingDiagnostics = {
     // problem. One number separates the two, and it was never on the page.
     // "vertical_over_grip": the grip's axis was further than MAX_GRIP_AXIS_FROM_VERTICAL_DEG from
     // the image vertical and the vertical was used instead -- see reconcileMovementAxis.
-    axisSource?: "grip" | "trace_covariance" | "vertical_over_grip";
+    // "gravity": the image vertical, because CoreMotion put the phone's roll under
+    // MAX_ROLL_FOR_IMAGE_VERTICAL_DEG -- the normal case since build 576. See reconcileMovementAxis.
+    axisSource?: "gravity" | "grip" | "trace_covariance" | "vertical_over_grip";
     // How far the grip's own answer sat from the image vertical, whichever won. Degrees, 0..90.
     gripAxisFromVerticalDeg?: number | null;
     /** What the device handed summarizeTrackedSet, so capture-replay.ts can hand it the same. */
