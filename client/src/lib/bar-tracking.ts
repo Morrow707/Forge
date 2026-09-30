@@ -161,6 +161,10 @@ export type RepMetrics = {
   // so both this and barPathDeviationCm are read off an assumption that does not hold -- see
   // barPathAssumptionInvalid. Zero would be a different lie: charts plot it, coaches read it.
   peakVelocityMps: number | null;
+  /** How many reps had their instantaneous peak floored to the rep's mean or capped at
+   *  MAX_PEAK_TO_MEAN_RATIO times it -- see the phaseStats peak bound. Diagnostics only. */
+  repPeaksFlooredToMean?: number;
+  repPeaksCappedToMeanRatio?: number;
   // True when this lift's bar deliberately does not travel a straight vertical line, so the two
   // numbers derived from that assumption -- barPathDeviationCm and peakVelocityMps -- are
   // withheld at the set level and the per-rep equivalents must not be charted either. The
@@ -854,6 +858,10 @@ export const MAX_PLAUSIBLE_LIFT_VELOCITY_MPS = 3;
 // rep's reported bar-path drift or velocity instead of being excluded.
 export const MIN_TRACKING_CONFIDENCE = 0.5;
 
+/** The most a rep's peak velocity may exceed its mean -- see the phaseStats peak bound. The
+ *  bar sensor's ratio on a bench is 1.35-1.5; a squat's is higher; two is a spike. */
+export const MAX_PEAK_TO_MEAN_RATIO = 2.0;
+
 function robustPeakSpeed(
   speedsMps: number[],
   startIdx: number,
@@ -1476,7 +1484,19 @@ export function summarizeTrackedSet(
     // robustPeakSpeed rather than a raw max -- see its own comment above.
     // Measured over the moving window too: time-to-peak-velocity counted from a turning point
     // the athlete then stood at for two seconds is not time to peak velocity.
-    const { peak, peakIdx } = robustPeakSpeed(speedsReportedMps, moving.startIdx, moving.endIdx, confidences);
+    const { peak: rawPeak, peakIdx } = robustPeakSpeed(speedsReportedMps, moving.startIdx, moving.endIdx, confidences);
+    // A REP'S PEAK IS BOUNDED BY ITS OWN MEAN. Set 10 beside OVR (build 576, 2026-09-30): rep 2
+    // read a peak of 0.15 m/s against a mean of 0.52 -- impossible, a peak is never below the
+    // average of the window it is read over -- because a hand dropout froze the trace mid-rep
+    // and the 95th-percentile of near-zero instantaneous speeds was near zero, while the mean
+    // (range over time) was unaffected. Rep 10 read the other way, 0.98 against 0.40. The
+    // sensor's own peak/mean ratio sits between 1.35 and 1.5 on every bench rep it has
+    // reported (sets 5-10, 60 reps); a ratio past MAX_PEAK_TO_MEAN_RATIO is a spike, not a
+    // lift. Floored and capped rather than dropped (Rule #1: the rep keeps its number), and
+    // both counted so the report can say how often the instantaneous read was unusable.
+    const peakFloored = rawPeak < mean;
+    const peakCapped = rawPeak > mean * MAX_PEAK_TO_MEAN_RATIO;
+    const peak = peakFloored ? mean : peakCapped ? mean * MAX_PEAK_TO_MEAN_RATIO : rawPeak;
     return {
       peak,
       mean,
@@ -1485,6 +1505,8 @@ export function summarizeTrackedSet(
       endIdx: phase.endIdx,
       movingStartIdx: moving.startIdx,
       peakIdx,
+      peakFloored,
+      peakCapped,
     };
   });
 
@@ -2077,7 +2099,17 @@ export function summarizeTrackedSet(
   const barPathTrace = buildPathTrace(points, { x: points[0].x, y: points[0].y });
 
   return {
-    peakVelocityMps: Math.round((Math.max(...setConcentric.map((c) => c.peak), 0)) * 100) / 100,
+    // THE SET'S PEAK IS THE AVERAGE OF THE REPS' PEAKS, which is what the sensor's own per-set
+    // row reports (its "Peak" row on set 10 is 1.09 over reps of 1.03-1.17: the average, not
+    // the max). It was the max, so one jumpy rep set the whole set's number -- 1.34 against the
+    // sensor's 1.09 on a take whose other nine numbers were within 3%. Same convention romCm
+    // and meanEai already follow.
+    peakVelocityMps:
+      Math.round(
+        (setConcentric.reduce((a, c) => a + c.peak, 0) / (setConcentric.length || 1)) * 100,
+      ) / 100,
+    repPeaksFlooredToMean: setConcentric.filter((c) => c.peakFloored).length,
+    repPeaksCappedToMeanRatio: setConcentric.filter((c) => c.peakCapped).length,
     meanVelocityMps:
       Math.round(
         (setConcentric.reduce((a, c) => a + c.mean, 0) / (setConcentric.length || 1)) * 100,
@@ -2099,9 +2131,12 @@ export function summarizeTrackedSet(
     barPathTrace,
     repBreakdown,
     formFaults: [],
+    // Average of the reps' peaks too, for the same reason as peakVelocityMps above.
     peakPowerWatts:
       loadKg && loadKg > 0
-        ? Math.round(loadKg * GRAVITY_MPS2 * Math.max(...setConcentric.map((c) => c.peak), 0))
+        ? Math.round(
+            loadKg * GRAVITY_MPS2 * (setConcentric.reduce((a, c) => a + c.peak, 0) / (setConcentric.length || 1)),
+          )
         : null,
     meanPowerWatts:
       loadKg && loadKg > 0

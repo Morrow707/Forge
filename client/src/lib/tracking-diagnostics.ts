@@ -64,6 +64,10 @@ export type TraceDiagnostics = {
   framesNoWristOrImplement?: number;
   framesVelocityRejected?: number;
   velocityRejections: number;
+  /** Reps whose instantaneous peak was unusable and bounded by the rep's own mean -- see
+   *  MAX_PEAK_TO_MEAN_RATIO in bar-tracking.ts. */
+  repPeaksFlooredToMean?: number;
+  repPeaksCappedToMeanRatio?: number;
   /** The gate on the COMBINED bar point, separate from the per-side one above. */
   combinedVelocityRejections?: number;
   /** Which branch of barPointFromSides built each point -- see its call site. */

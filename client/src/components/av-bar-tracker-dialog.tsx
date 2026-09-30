@@ -1880,7 +1880,10 @@ export function AvBarTrackerDialog({
     // trimmed count and a caller before it gets the raw one. Every save path below is handed one
     // of these -- the REFUSED paths need it more than the successful one does, and those were
     // the ones reporting nothing at all about why.
-    const traceDiagnostics = (repsFound: number | null) => {
+    const traceDiagnostics = (
+      repsFound: number | null,
+      peakBounds?: { repPeaksFlooredToMean?: number; repPeaksCappedToMeanRatio?: number },
+    ) => {
       let largestGapSeconds: number | null = null;
       for (let i = 1; i < trace.length; i++) {
         const gap = (trace[i].t - trace[i - 1].t) / 1000;
@@ -1889,6 +1892,8 @@ export function AvBarTrackerDialog({
       return {
         points: trace.length,
         repsFound,
+        repPeaksFlooredToMean: peakBounds?.repPeaksFlooredToMean,
+        repPeaksCappedToMeanRatio: peakBounds?.repPeaksCappedToMeanRatio,
         framesUsable,
         framesNoWristOrImplement,
         framesVelocityRejected,
@@ -2213,7 +2218,7 @@ export function AvBarTrackerDialog({
           objectLock: recordingStats.objectLock ?? null,
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
           calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
-          trace: traceDiagnostics(metrics.repBreakdown.length),
+          trace: traceDiagnostics(metrics.repBreakdown.length, metrics),
           // A SET REPEATS ITSELF, AND THAT IS A LABEL -- see rep-consistency.ts. An athlete's
           // range of motion does not change between rep 3 and rep 4, so the spread across reps
           // measures the tracker's own noise, free, on every set. A rep at half the others is a
@@ -2350,7 +2355,7 @@ export function AvBarTrackerDialog({
           objectLock: recordingStats.objectLock ?? null,
           objectLockSecondary: recordingStats.objectLockSecondary ?? null,
       calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
-      trace: traceDiagnostics(metrics.repBreakdown.length),
+      trace: traceDiagnostics(metrics.repBreakdown.length, metrics),
       limbMeasurementsM,
       repConsistency: repConsistency(
         metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),

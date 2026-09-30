@@ -9097,6 +9097,8 @@ export const trackingDiagnosticsSchema = z.object({
       framesNoWristOrImplement: z.number().optional(),
       framesVelocityRejected: z.number().optional(),
       velocityRejections: z.number(),
+      repPeaksFlooredToMean: z.number().optional(),
+      repPeaksCappedToMeanRatio: z.number().optional(),
       combinedVelocityRejections: z.number().optional(),
       barPointFromBothHands: z.number().optional(),
       barPointFromLoneHandCarried: z.number().optional(),
