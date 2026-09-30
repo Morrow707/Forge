@@ -1764,6 +1764,41 @@ pinned by `bench-set7-count.test.ts` (ten reps, the un-rack settle folded into r
   `trackingDiagnostics.cameraView` now, with the facing and the expected view beside it;
   `no-framing-advice-after-a-take.test.ts` refuses the toast. Rule #1, 2026-09-29 clause.
 
+## Build 577 beside OVR, set 11: two rulers from one sensor were two votes
+
+Set 11 (Sep 30, set 3), bench, 135lb x 10, same framing as sets 9 and 10, both hands seen on
+628 of 764 frames. Device: 11 reps, 0.49 m/s, 21.5cm median rep. Sensor: 10, 0.73, 35.8cm.
+Ground truth `OVR_BENCH_SET11_2026_09_30`. A Pendlay row in the same export was filmed from
+behind with one arm visible (410 of 660 points carried) and is not a scale comparison; its
+count of nine matched the sensor's nine.
+
+- **The scale was 27% low, and the vote was the fault.** Three rulers: the in-plane 3D ruler
+  0.00294, the depth ruler 0.00275, the shoulder ruler 0.00391. The first two agreed and
+  outvoted the third; the third was right (set 10 minutes earlier, and the grip in pixels
+  between the two takes, both say 0.0039). The in-plane and depth rulers are both read off
+  Vision's 3D body pose. When it scales the skeleton wrong they go wrong together, and they
+  were counted as two independent witnesses. Rule #2: two readings from one sensor are one
+  vote. `reconcileScaleEstimates` now collapses the pair into one witness before clustering
+  (both sources still reported).
+- **The blend is weighted by evidence.** Across seven sensor-paired benches the shoulder
+  ruler read 1.16, 1.00, 1.05, 1.00, 1.07, 1.00 of the sensor; the in-plane ruler 0.94, 0.74,
+  1.04, 0.85, 1.23, 0.98, 0.75; the zeroed depth ruler 1.02, 1.03, 0.97, 0.95, 1.16, 0.64,
+  0.78 (its wrist depth shortened from 2.8m to 1.7m over one afternoon at one framing). So
+  `BODY_3D_CORRECTED_UNCERTAINTY` and `DEPTH_RULER_UNCERTAINTY` are 0.2 now, not 0.08, and a
+  blend is an inverse-variance mean rather than a plain one. No ruler is appointed by name;
+  the weights follow the constants, and the constants follow the sensor.
+- **Replayed through the weighted blend**, ratio to the sensor: set 5 1.12, set 6 0.97, set 7
+  1.04, set 8 0.98, set 10 1.02, set 11 0.95. Set 5 is the price: its shoulder ruler read
+  1.16 and now carries the weight; it was 1.07 under the plain mean. `depth-ruler.test.ts`
+  pins all of it, set 5's 1.12 included.
+- **The grip ruler is the way out of body proportions altogether.** `users.gripWidthIn` has
+  existed since the grip ruler was written and nothing has ever been entered in it. The
+  sensor-paired benches put Scott's wrist-to-wrist span at 0.70-0.73m: 28 inches. With that
+  on the profile every bench gets a ruler that owes nothing to the pose scale and is visible
+  on every frame, ranked under only a plate. A per-exercise grip is open work.
+- **The eleventh rep is the un-rack** (6.1-10.4s, 11.7cm). The count-trim rule did not take
+  it; open.
+
 ## Build 577: a rep's peak is bounded by its mean, and the set's peak is the reps' average
 
 From set 10's one number still out (peak 1.34 against the sensor's 1.09 with everything

@@ -25,7 +25,10 @@ describe("reconcileScaleEstimates", () => {
 
   it("averages two sources that agree, and marks the result corroborated", () => {
     const verdict = reconcileScaleEstimates([plate(0.0100), height(0.0102)]);
-    expect(verdict.scale).toBeCloseTo(0.0101, 6);
+    // Between the two, nearer the plate: the blend is weighted by each ruler's uncertainty
+    // (build 578), and a plate is the tighter instrument.
+    expect(verdict.scale!).toBeGreaterThan(0.0100);
+    expect(verdict.scale!).toBeLessThan(0.0102);
     expect(verdict.corroborated).toBe(true);
     expect(verdict.agreedSources).toHaveLength(2);
     expect(verdict.outliers).toHaveLength(0);
@@ -55,7 +58,8 @@ describe("reconcileScaleEstimates", () => {
   it("prefers the larger agreeing group over the more trusted lone source", () => {
     const verdict = reconcileScaleEstimates([plate(0.02), height(0.0100), shoulder(0.0101)]);
     expect(verdict.agreedSources).toHaveLength(2);
-    expect(verdict.scale).toBeCloseTo(0.01005, 5);
+    expect(verdict.scale!).toBeGreaterThan(0.0100);
+    expect(verdict.scale!).toBeLessThan(0.0101);
     expect(verdict.outliers[0].source).toBe("plate");
   });
 
@@ -188,7 +192,9 @@ describe("the two body rulers are averaged when they are all the take has", () =
     expect(v.blended).toBe(true);
     expect(v.corroborated).toBe(false);
     expect(v.agreedSources.sort()).toEqual(["height", "shoulder_width"]);
-    expect(v.scale).toBeCloseTo((0.00351 + 0.0044) / 2, 6);
+    // Weighted by uncertainty since build 578: between the two, nearer the tighter height ruler.
+    expect(v.scale!).toBeGreaterThan(0.00351);
+    expect(v.scale!).toBeLessThan((0.00351 + 0.0044) / 2);
     expect(v.outliers).toEqual([]);
   });
 

@@ -938,7 +938,29 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     shoulder_width: 6,
   };
   const rank = (e: ScaleEstimate) => TRUST[e.source] + (e.demoted ? 100 : 0);
-  const ranked = [...usable].sort((a, b) => rank(a) - rank(b));
+
+  // TWO READINGS FROM ONE SENSOR ARE ONE VOTE. Rule #2.
+  //
+  // The in-plane 3D ruler (body_3d) and the depth ruler (depth) are both read off Vision's 3D
+  // body pose: one is a bone's length in that skeleton, the other the wrists' distance from the
+  // lens in it. When the pose scales the skeleton wrong they go wrong TOGETHER, and until build
+  // 578 they then counted as two independent witnesses agreeing against the 2D shoulder ruler.
+  // Bench set 11 and the Pendlay row beside OVR, 2026-09-30: the pair agreed at 27% and 20%
+  // low, outvoted the shoulder ruler, and the shoulder ruler was the one within a few percent
+  // of the sensor both times. So the pair is collapsed into one witness before the vote (its
+  // geometric mean, the wider of the two uncertainties), and both original sources are still
+  // reported in agreedSources/outliers so the record shows what each read.
+  const pose3d = usable.filter((e) => (e.source === "body_3d" || e.source === "depth") && !e.demoted);
+  const collapsed: ScaleEstimate | null =
+    pose3d.length === 2
+      ? {
+          source: "body_3d",
+          scale: Math.sqrt(pose3d[0].scale * pose3d[1].scale),
+          uncertaintyFraction: Math.max(pose3d[0].uncertaintyFraction, pose3d[1].uncertaintyFraction),
+        }
+      : null;
+  const voters = collapsed ? [...usable.filter((e) => !pose3d.includes(e)), collapsed] : usable;
+  const ranked = [...voters].sort((a, b) => rank(a) - rank(b));
 
   // The largest set that agrees with each other, preferring the one anchored on the most
   // trustworthy source when two clusters are the same size.
@@ -970,16 +992,24 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
   // disagree are two guesses that pull opposite ways more often than not; with nothing anchored
   // in the room the average is the better answer, exactly as it was for height and shoulders.
   const BODY_RULERS: ScaleEstimate["source"][] = ["height", "shoulder_width", "body_3d", "depth"];
-  const onlyBodyRulers = usable.every((e) => BODY_RULERS.includes(e.source));
-  const bodyRulerCount = usable.filter((e) => BODY_RULERS.includes(e.source)).length;
+  const onlyBodyRulers = voters.every((e) => BODY_RULERS.includes(e.source));
+  const bodyRulerCount = voters.filter((e) => BODY_RULERS.includes(e.source)).length;
   let blended = false;
   if (onlyBodyRulers && bodyRulerCount >= 2 && best.length === 1) {
-    best = usable.filter((e) => BODY_RULERS.includes(e.source));
+    best = voters.filter((e) => BODY_RULERS.includes(e.source));
     blended = true;
   }
 
-  const scale = best.reduce((sum, e) => sum + e.scale, 0) / best.length;
-  const agreedSources = best.map((e) => e.source);
+  // WEIGHTED BY WHAT EACH RULER HAS BEEN SHOWN TO BE WORTH, not a plain mean. Inverse-variance:
+  // a ruler that has wandered 25% across the sensor-paired benches carries a tenth of the weight
+  // of one that has held to 8%. The uncertainties are the evidence (see each source's constant:
+  // BIACROMIAL_TOLERANCE_FRACTION, BODY_3D_CORRECTED_UNCERTAINTY, DEPTH_RULER_UNCERTAINTY), so
+  // no ruler is appointed by name and the weights move when the evidence does. A plain mean of
+  // set 11's rulers was 13% low; this is 5%.
+  const weightOf = (e: ScaleEstimate) => 1 / Math.max(0.01, e.uncertaintyFraction) ** 2;
+  const scale = best.reduce((sum, e) => sum + e.scale * weightOf(e), 0) / best.reduce((sum, e) => sum + weightOf(e), 0);
+  // The collapsed 3D-pose witness stands for both of its sources in the record.
+  const agreedSources = best.flatMap((e) => (e === collapsed ? pose3d.map((p) => p.source) : [e.source]));
   const outliers = usable
     .filter((e) => !agreedSources.includes(e.source))
     .map((e) => ({
