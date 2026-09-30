@@ -106,11 +106,17 @@ export type Body3DScaleReading = {
 export const BODY_3D_MEASURED_UNCERTAINTY = 0.05;
 /** A reference skeleton corrected by the athlete's stated height: the model's own proportion
  *  error plus whatever the height on file is off by. */
-export const BODY_3D_CORRECTED_UNCERTAINTY = 0.08;
+// Was 0.08. Across seven sensor-paired benches the in-plane, height-corrected ruler read 0.94,
+// 0.74, 1.04, 0.85, 1.23, 0.98 and 0.75 of the sensor: a 20% instrument, weighted as one in
+// reconcileScaleEstimates. The shoulder ruler beside it read 1.16, 1.00, 1.05, 1.00, 1.07 and
+// 1.00 (BIACROMIAL_TOLERANCE_FRACTION), which is why the weights have to come from evidence.
+export const BODY_3D_CORRECTED_UNCERTAINTY = 0.2;
 /** A reference skeleton with nothing to correct it: the athlete's real stature could be a tenth
  *  away from Vision's reference either way, which is the same class of error the shoulder ruler
  *  carries. Kept as a candidate anyway (Rule #1) and ranked by its stated uncertainty. */
-export const BODY_3D_UNCORRECTED_UNCERTAINTY = 0.12;
+// Wider than the corrected ruler's 0.2 by the same margin it was before: a skeleton nobody
+// scaled to the athlete is worse than one that was.
+export const BODY_3D_UNCORRECTED_UNCERTAINTY = 0.3;
 
 /** Fewer 3D frames than this and a median is not a median. A bar take runs the 3D request every
  *  120th raw frame, so a 20-second set at 120fps gives about twenty; five is a two-second take. */
@@ -185,7 +191,11 @@ const visible2D = (p: Landmark | undefined): p is Landmark =>
 export const DEPTH_RULER_BIAS = 0.9;
 /** How wrong the zeroed depth ruler may be even when working: two takes agree to a percent, and
  *  a percent is not an uncertainty. Held at the corrected 3D ruler's figure until more takes. */
-export const DEPTH_RULER_UNCERTAINTY = 0.08;
+// Was 0.08 after two takes at 0.92. Seven sensor-paired benches later its zeroed reading has
+// been 1.02, 1.03, 0.97, 0.95, 1.16, 0.64 and about 0.78 of the sensor: a 20% instrument, and
+// weighted as one in reconcileScaleEstimates. The wrist depth it reads shortened over one
+// afternoon from 2.8m to 1.7m at the same framing, so the drift is in Vision's 3D pose.
+export const DEPTH_RULER_UNCERTAINTY = 0.2;
 
 export function depthRulerScale(
   wristDepthM: number | null | undefined,

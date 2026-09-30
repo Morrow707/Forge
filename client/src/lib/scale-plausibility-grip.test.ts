@@ -80,7 +80,10 @@ describe("the longest-projection 3D ruler is demoted, the in-plane one is a full
     const demoted = body3DCandidate(reading("longest_projection"))!;
     const verdict = reconcileScaleEstimates([demoted, shoulder]);
     expect(verdict.blended).toBe(true);
-    expect(verdict.scale).toBeCloseTo((demoted.scale + shoulder.scale) / 2, 8);
+    // Inverse-variance weighted since build 578, not a plain mean.
+    const w = (e: { uncertaintyFraction: number }) => 1 / Math.max(0.01, e.uncertaintyFraction) ** 2;
+    const expected = (demoted.scale * w(demoted) + shoulder.scale * w(shoulder)) / (w(demoted) + w(shoulder));
+    expect(verdict.scale).toBeCloseTo(expected, 8);
   });
 
   it("ranks an in-plane 3D reading above the shoulder ruler when a third ruler lets a cluster form", () => {

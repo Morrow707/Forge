@@ -325,7 +325,11 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **577** is the newest TestFlight build, cut 2026-09-30 from set 10: a rep's peak bounded
+- Build **578** is the newest TestFlight build, cut 2026-09-30 from set 11: the two 3D-pose
+  rulers are one vote in `reconcileScaleEstimates`, the blend is inverse-variance weighted, and
+  the 3D-pose uncertainties are set from seven sensor-paired benches (0.2). See
+  docs/camera-tracking-notes.md, "Build 577 beside OVR, set 11".
+- Build **577** was the previous build, cut 2026-09-30 from set 10: a rep's peak bounded
   by its own mean (`MAX_PEAK_TO_MEAN_RATIO`), the set's peak as the reps' average (the sensor's
   definition), both counted in `trace.repPeaksFlooredToMean` / `repPeaksCappedToMeanRatio`.
   See docs/camera-tracking-notes.md, "Build 577".

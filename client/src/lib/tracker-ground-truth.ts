@@ -642,3 +642,43 @@ export const OVR_BENCH_SET10_2026_09_30 = {
   // and the first time the ruler has been wrong by more than its zero.
   rulers: { inPlane3D: 0.003424, shoulderWidth: 0.003761, depthRuler: 0.002029, sensorImplied: 0.0035 },
 };
+
+export const OVR_BENCH_SET11_2026_09_30 = {
+  build: 577,
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "foot of the bench, oblique, same framing as sets 9 and 10; phone roll -3.8",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.06, romIn: 13.7, meanW: 447, peakW: 636, tpvS: 0.31, eai: 3.36 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.24, romIn: 14.4, meanW: 499, peakW: 744, tpvS: 0.28, eai: 4.30 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.10, romIn: 13.6, meanW: 468, peakW: 661, tpvS: 0.28, eai: 3.70 },
+      { meanVelocityMps: 0.76, peakVelocityMps: 1.07, romIn: 13.8, meanW: 458, peakW: 644, tpvS: 0.31, eai: 3.40 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.09, romIn: 14.1, meanW: 442, peakW: 652, tpvS: 0.33, eai: 3.26 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 0.96, romIn: 13.6, meanW: 434, peakW: 578, tpvS: 0.22, eai: 4.28 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.02, romIn: 14.0, meanW: 446, peakW: 611, tpvS: 0.32, eai: 3.14 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.02, romIn: 13.3, meanW: 440, peakW: 611, tpvS: 0.28, eai: 3.53 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 0.99, romIn: 14.5, meanW: 437, peakW: 595, tpvS: 0.33, eai: 2.97 },
+      { meanVelocityMps: 0.56, peakVelocityMps: 0.87, romIn: 16.5, meanW: 346, peakW: 520, tpvS: 0.23, eai: 3.70 },
+    ],
+    reported: { meanVelocityMps: 0.73, peakVelocityMps: 1.04, romIn: 14.1, meanW: 441, peakW: 625, tpvS: 0.28, eai: 3.56 },
+  },
+  forgeOnDevice: {
+    repCount: 11,
+    meanVelocityMps: 0.49,
+    peakVelocityMps: 0.63,
+    romCm: 22.2,
+    medianRomCm: 21.5,
+    scaleSource: "both",
+    scale: 0.002843,
+    axisSource: "gravity",
+    gripWidthPx: 181.9,
+    // The two 3D-pose rulers agreed at 0.00294 and 0.00275 and outvoted the shoulder ruler at
+    // 0.00391; the shoulder ruler was right. Rep 1 (6.1-10.4s, 11.7cm) is the un-rack.
+  },
+  // sensorImplied from the grip: set 10 at 199px implied 0.0035, so 182px at the same framing
+  // implies 0.0038-0.0039; the device's median rep at that scale is 29cm against the sensor's
+  // 35.8, the rest being the un-rack in the rep list and lone-hand windows. Soft to 5%.
+  rulers: { inPlane3D: 0.002941, shoulderWidth: 0.003912, depthRuler: 0.002471, sensorImplied: 0.0039 },
+};
