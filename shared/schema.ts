@@ -382,6 +382,9 @@ export const users = pgTable(
     // every frame of a barbell lift from any camera position, and measurable with a tape in ten
     // seconds. Optional forever: without it nothing changes, and the existing rulers answer as
     // they do today. See gripWidthScaleFromFrames.
+    // RETIRED 2026-09-30, never read or written since. The athlete is not asked for a body
+    // measurement the camera should take itself (CLAUDE.md, "The camera measures the athlete").
+    // The column stays until a migration drops it; nothing reads it.
     gripWidthIn: real("grip_width_in"),
     // WHAT THE CAMERA HAS LEARNED ABOUT THIS ATHLETE'S OWN BODY, IN REAL METRES.
     //
@@ -4092,7 +4095,6 @@ export const claimProvisionalAthleteSchema = z.object({
   // Same "only required if the coach's intake didn't already capture one" pattern as sport/
   // position above -- see provisionalAthletes.heightIn/bodyWeightLbs.
   heightIn: z.number().int().min(1).max(120).optional(),
-  gripWidthIn: z.number().min(1).max(96).optional(),
   bodyWeightLbs: z.number().min(1).max(1500).optional(),
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
@@ -7996,7 +7998,6 @@ export const updateProfileSchema = z.object({
   age: z.number().int().min(0).max(120).optional().nullable(),
   gender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional().nullable(),
   heightIn: z.number().int().min(0).max(120).optional().nullable(),
-  gripWidthIn: z.number().min(0).max(96).optional().nullable(),
   bodyWeightLbs: z.number().min(0).max(1500).optional().nullable(),
   sport: z.string().trim().max(60).optional().nullable(),
   position: z.string().trim().max(60).optional().nullable(),

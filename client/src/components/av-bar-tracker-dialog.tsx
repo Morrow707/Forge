@@ -44,7 +44,6 @@ import {
   detectFormFaults,
   worldVerticalSign,
   shoulderWidthScaleFromFrames,
-  gripWidthScaleFromFrames,
   reconcileScaleEstimates,
   rejectImplausibleScales,
   plateReadIsPlausibleAgainstGrip,
@@ -553,7 +552,6 @@ export function AvBarTrackerDialog({
   equipment,
   laterality,
   heightIn,
-  gripWidthIn,
   bodyModel,
   targetReps,
   loadKg,
@@ -577,7 +575,6 @@ export function AvBarTrackerDialog({
   laterality?: string | null;
   heightIn?: number | null;
   /** A tape-measured grip, when the athlete has given one. See gripWidthScaleFromFrames. */
-  gripWidthIn?: number | null;
   /** What earlier takes with a real ruler learned about this athlete's own bones. See
    *  shared/athlete-body-model.ts -- this is the ruler that needs no particular framing. */
   bodyModel?: AthleteBodyModel | null;
@@ -1190,7 +1187,12 @@ export function AvBarTrackerDialog({
     // A measured grip needs no detector, no full body in frame and no population average, so it
     // is computed on every take where the athlete has given one -- the framing that defeats the
     // other rulers does not reach it.
-    const gripScale = gripWidthScaleFromFrames(calibrationInput, gripWidthIn);
+    // NO TYPED GRIP. Scott, 2026-09-30: "Every bench will be different. Different arms,
+    // different lengths, different widths, we need to measure regardless." The athlete's
+    // profile no longer carries a grip width and nothing here is told one; a grip ruler, when
+    // it exists, is one the camera measured (see CLAUDE.md, "The camera measures the athlete").
+    // (gripWidthScaleFromFrames stays in pose-tracking.ts for the day a grip is measured by the
+    // camera; nothing calls it with a typed number any more.)
 
     // THE ATHLETE'S OWN BONES, READ BACK AS A RULER. This is the payoff for learning them.
     //
@@ -1268,7 +1270,6 @@ export function AvBarTrackerDialog({
           ]
         : []),
       // THE ONE RULER THE ATHLETE SIMPLY TOLD US. See gripWidthScaleFromFrames.
-      ...(gripScale != null ? [gripScale] : []),
       ...(body3DEstimate ? [body3DEstimate] : []),
       ...(depthEstimate ? [depthEstimate] : []),
       ...(bodyModelScale != null ? [bodyModelScale] : []),
@@ -1319,9 +1320,6 @@ export function AvBarTrackerDialog({
               samples: plateScale.samples,
             },
           ]
-        : []),
-      ...(gripScale != null
-        ? [{ source: "grip_width", scale: gripScale.scale, measured: null, samples: null }]
         : []),
       ...(body3DScale.scale != null
         ? [

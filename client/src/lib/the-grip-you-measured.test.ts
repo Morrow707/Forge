@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { gripWidthScaleFromFrames, reconcileScaleEstimates } from "./pose-tracking";
+
+// SINCE 2026-09-30 NOTHING FEEDS THIS A TYPED NUMBER. The profile's grip-width field is gone
+// (CLAUDE.md, "The camera measures the athlete"); the function stays for a grip the camera
+// measures itself, and these tests pin the arithmetic it will need on that day.
 import { POSE_LANDMARKS } from "./pose-tracking";
 
 /** A frame with the wrists a given span apart, everything else absent. */

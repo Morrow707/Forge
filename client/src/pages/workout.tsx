@@ -4577,7 +4577,6 @@ function ExerciseLogContent({
                 equipment={item.equipment}
                 laterality={item.laterality}
                 heightIn={user?.heightIn}
-                gripWidthIn={user?.gripWidthIn}
                 bodyModel={(user as { bodyModel?: any })?.bodyModel ?? null}
                 targetReps={parseTargetReps(item.prescribedReps)}
                 loadKg={loadKg}
