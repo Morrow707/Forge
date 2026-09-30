@@ -65,6 +65,7 @@ type Report = {
   quota: { units: number; calls: number };
   maxDurationSeconds: number;
   tierCounts: { A: number; B: number };
+  searchFill?: { searched: number; filled: number; stillEmpty: number; remaining: number };
   unknownWords: Array<{ word: string; count: number; examples: string[] }>;
   duplicateSignatures: Array<[string, string]>;
   boilerplateByChannel: Record<string, string[]>;
@@ -256,6 +257,7 @@ export default function AdminExerciseVideos() {
   const [report, setReport] = useState<Report | null>(null);
   const [mode, setMode] = useState<"dry-run" | "apply" | null>(null);
   const [cap, setCap] = useState("");
+  const [searchUnmatched, setSearchUnmatched] = useState(false);
 
   const pending = useQuery<Pending>({
     queryKey: ["/api/admin/exercise-videos/pending"],
@@ -266,7 +268,10 @@ export default function AdminExerciseVideos() {
     mutationFn: async (which: "dry-run" | "apply") => {
       setMode(which);
       const seconds = Number(cap);
-      const body = Number.isFinite(seconds) && seconds >= 10 ? { maxDurationSeconds: seconds } : {};
+      const body: Record<string, unknown> =
+        Number.isFinite(seconds) && seconds >= 10 ? { maxDurationSeconds: seconds } : {};
+      // Opt-in, because it is the only expensive path here -- see the checkbox's own copy.
+      if (searchUnmatched) body.searchUnmatched = true;
       const res = await apiRequest("POST", `/api/admin/exercise-videos/${which}`, body);
       return (await res.json()) as Report;
     },
@@ -363,6 +368,22 @@ export default function AdminExerciseVideos() {
                 onChange={(e) => setCap(e.target.value)}
               />
             </div>
+            <label className="flex max-w-md items-start gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={searchUnmatched}
+                onChange={(e) => setSearchUnmatched(e.target.checked)}
+              />
+              <span>
+                <strong className="text-foreground">Search YouTube for the ones no channel has.</strong>{" "}
+                The long tail -- stretches, mobility, odd equipment -- is missing because no
+                channel in the pool films it at all, not because it was refused. This searches for
+                each one and takes the most watched result that still passes every rule. Costs 100
+                quota units per exercise against 10,000 a day, so a run covers about 90 and says
+                how many are left; run it again tomorrow to continue. Every result is Tier B.
+              </span>
+            </label>
             <Button onClick={() => run.mutate("dry-run")} disabled={busy}>
               {busy && mode === "dry-run" ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -412,6 +433,18 @@ export default function AdminExerciseVideos() {
                   two minutes, from a channel you have watched.{" "}
                   <strong>Tier B {report.tierCounts?.B ?? 0}</strong> -- a match nothing is wrong
                   with that nobody has confirmed. Apply writes tier A only.
+                  <br />
+                  {report.searchFill && (
+                    <>
+                      <br />
+                      <strong>Searched {report.searchFill.searched}</strong> exercises no channel
+                      had: {report.searchFill.filled} filled, {report.searchFill.stillEmpty} found
+                      nothing that passed,{" "}
+                      {report.searchFill.remaining > 0
+                        ? `${report.searchFill.remaining} still waiting -- run again to continue.`
+                        : "none left waiting."}
+                    </>
+                  )}
                   <br />
                   Cap {mmss(report.maxDurationSeconds)}. {report.quota.units} quota units over{" "}
                   {report.quota.calls} calls, out of 10,000 free a day.

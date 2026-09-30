@@ -32,6 +32,7 @@ import {
   type Tier,
 } from "@shared/exercise-signature-match";
 import type { VideoCandidate } from "@shared/exercise-video-match";
+import type { SearchedVideo } from "./youtube-catalog";
 
 export type SignatureMatch = {
   videoId: string;
@@ -39,6 +40,10 @@ export type SignatureMatch = {
   channel: string;
   durationSeconds: number;
   tier: Tier;
+  /** Found by searching YouTube rather than in a channel catalogue -- see searchForUnmatched.
+   *  Ranked by views, never chosen BY views: it passed the same gates as everything else. */
+  fromSearch?: boolean;
+  viewCount?: number;
   /** Two or more allowlisted channels agreeing. Changes nothing about the choice; it is the
    *  cheapest signal available for which matches are safest, so it is shown. */
   corroboration: "single" | "multi";
@@ -223,4 +228,115 @@ export function runSignatureMatch(
     .slice(0, 60);
 
   return { chosen, rejections, unknownWords, duplicateSignatures, vocabulary, boilerplateByChannel };
+}
+
+/**
+ * FILLING THE LONG TAIL BY SEARCH, FOR THE EXERCISES NO CHANNEL HAS.
+ *
+ * Runs AFTER the channel pass and only over what it left empty. Scott, 2026-09-30, on the 174
+ * lifts with nothing: "we need to expand for those random videos ... find the most popular or
+ * most liked videos for those random ones ... We need every exercise to have one."
+ *
+ * EVERY GATE STILL APPLIES. The searched candidates go through the same compare() -- head,
+ * modifiers, equipment, muscles, unrecognised words, red flags, the duration cap. A stretch
+ * found by search has to be a demonstration of that stretch on exactly the terms a Catalyst
+ * video does. Scott: "Same parameters no emojis no whatever else we said above."
+ *
+ * POPULARITY RANKS, IT DOES NOT ADMIT. Among the candidates that already passed, the most
+ * watched wins. That is the one place this differs from the channel pass, where shortest wins:
+ * inside a curated library the short clip is the demo, but across open YouTube view count is
+ * the only signal available for "the one people actually use", and the pool is 25 rather than
+ * 5,000 so shortest would just pick the briefest of a random handful.
+ *
+ * EVERY SEARCHED MATCH IS TIER B. The uploader is somebody nobody has watched, which is exactly
+ * what the allowlist is for -- tierFor already returns B for an unlisted channel, and this
+ * relies on that rather than restating it.
+ *
+ * QUOTA IS THE HARD LIMIT. One search is 100 units against a 10,000/day allowance, so a full
+ * 174-exercise pass is roughly 17,500 units -- two days. maxSearches caps a run and the result
+ * says how many are still waiting, so a pass can be resumed tomorrow instead of failing halfway.
+ */
+export type SearchFillResult = {
+  filled: Map<string, SignatureMatch>;
+  searched: number;
+  /** Still unmatched and not yet searched, because the run hit its cap. */
+  remaining: string[];
+  /** Searched, and still nothing that passed every gate. */
+  stillEmpty: string[];
+};
+
+export async function searchForUnmatched(
+  library: LibraryExercise[],
+  unmatchedNames: string[],
+  vocabulary: Vocabulary,
+  maxDurationSeconds: number,
+  maxSearches: number,
+  search: (query: string) => Promise<SearchedVideo[]>,
+  allowlist: readonly string[] = AUTO_APPLY_CHANNELS,
+): Promise<SearchFillResult> {
+  const byName = new Map(library.map((e) => [e.name, e]));
+  const filled = new Map<string, SignatureMatch>();
+  const stillEmpty: string[] = [];
+  let searched = 0;
+
+  for (const name of unmatchedNames) {
+    if (searched >= maxSearches) break;
+    const exercise = byName.get(name);
+    if (!exercise) continue;
+    const exSig = exerciseSignature(exercise, vocabulary);
+    if (!exSig.head) continue;
+
+    searched += 1;
+    let candidates: SearchedVideo[] = [];
+    try {
+      candidates = await search(name);
+    } catch {
+      // Quota exhaustion and a transient API error look the same here. Either way this
+      // exercise keeps its search link and the run continues -- one failed lookup is not
+      // worth losing the ones already found.
+      candidates = [];
+    }
+
+    const passing: SignatureMatch[] = [];
+    for (const video of candidates) {
+      if (!video.embeddable || !(video.durationSeconds > 0)) continue;
+      const prepared = prepareTitle(video.title, vocabulary);
+      const signature = titleSignature(prepared, vocabulary);
+      if (!signature.head) continue;
+      const verdict = compare(
+        exercise,
+        exSig,
+        prepared,
+        signature,
+        vocabulary,
+        video.durationSeconds,
+        maxDurationSeconds,
+      );
+      if (!verdict.ok) continue;
+      passing.push({
+        videoId: video.videoId,
+        title: video.title,
+        channel: video.channel,
+        durationSeconds: video.durationSeconds,
+        tier: tierFor(verdict, video.durationSeconds, video.channel, allowlist, prepared.laterTokens.length),
+        corroboration: "single",
+        fromSearch: true,
+        viewCount: video.viewCount,
+      });
+    }
+
+    if (passing.length === 0) {
+      stillEmpty.push(name);
+      continue;
+    }
+    passing.sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0));
+    filled.set(name, passing[0]);
+  }
+
+  return {
+    filled,
+    searched,
+    remaining: unmatchedNames.slice(searched),
+    stillEmpty,
+  };
 }

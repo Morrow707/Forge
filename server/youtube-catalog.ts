@@ -202,3 +202,91 @@ export function newQuotaLedger(): QuotaLedger {
 export function youTubeConfigured(): boolean {
   return Boolean(process.env.YOUTUBE_API_KEY?.trim());
 }
+
+/**
+ * THE ONE PLACE search.list EARNS ITS 100 UNITS.
+ *
+ * Everything above is built to avoid search: a channel catalogue is ~1 unit per 50 videos, and
+ * searching per exercise would have cost 40,000 units for the library. That reasoning holds for
+ * the movements a strength channel actually films.
+ *
+ * It does NOT hold for the long tail. Lizard Stretch, Doorway Chest Stretch, Wrist Flexor
+ * Stretch, Foam Roll Quads -- these were never refused for quality. No channel in the pool has
+ * a video of them AT ALL, so no amount of catalogue pulling or threshold tuning reaches them.
+ * Scott, 2026-09-30: "we need to expand for those random videos ... find the most popular or
+ * most liked videos for those random ones ... We need every exercise to have one."
+ *
+ * So: searched ONLY for an exercise the channel pass left empty, one search per exercise, and
+ * the caller caps how many run so a pass cannot exceed the day's quota. 100 units buys up to 25
+ * candidates; the statistics call that ranks them is 1 unit per 50 and is shared across them.
+ *
+ * POPULARITY IS A TIE-BREAK, NOT A GATE. It ranks what has already passed every quality rule --
+ * the duration cap, embeddability, the red flags and the full signature match. A video does not
+ * become a demonstration of the right movement by being popular.
+ */
+export type SearchedVideo = VideoCandidate & { viewCount: number; likeCount: number };
+
+/** What one searched exercise costs: the search itself plus its share of the details call. */
+export const SEARCH_UNITS_PER_EXERCISE = 101;
+
+export async function searchVideosFor(
+  query: string,
+  ledger: QuotaLedger,
+  maxResults = 25,
+): Promise<SearchedVideo[]> {
+  const found: any = await get(
+    "search",
+    {
+      part: "snippet",
+      type: "video",
+      q: query,
+      maxResults: String(Math.min(50, maxResults)),
+      // Embeddable and syndicated at the SEARCH stage, so the 100 units are not spent
+      // returning videos that could never play inside Forge. status.embeddable is still
+      // checked below -- this narrows, it does not decide.
+      videoEmbeddable: "true",
+      videoSyndicated: "true",
+      // Relevance, not viewCount: ordering by views at this stage returns the most-watched
+      // videos that merely MENTION the words, which for "Couch Stretch" is a sofa review.
+      // Popularity ranks the matches afterwards, once the signature test has thinned them.
+      order: "relevance",
+    },
+    ledger,
+    100,
+  );
+
+  const ids: string[] = [];
+  const titles = new Map<string, string>();
+  const channels = new Map<string, string>();
+  for (const item of found.items ?? []) {
+    const id = item.id?.videoId;
+    if (!id) continue;
+    ids.push(id);
+    titles.set(id, item.snippet?.title ?? "");
+    channels.set(id, item.snippet?.channelTitle ?? "YouTube");
+  }
+  if (ids.length === 0) return [];
+
+  const details: any = await get(
+    "videos",
+    { part: "contentDetails,status,statistics", id: ids.join(",") },
+    ledger,
+    1,
+  );
+
+  const out: SearchedVideo[] = [];
+  for (const item of details.items ?? []) {
+    out.push({
+      videoId: item.id,
+      title: titles.get(item.id) ?? "",
+      channel: channels.get(item.id) ?? "YouTube",
+      durationSeconds: parseIsoDuration(item.contentDetails?.duration ?? ""),
+      embeddable: item.status?.embeddable !== false,
+      // Absent on a video whose owner hides counts -- treated as zero rather than dropped,
+      // so a hidden count costs a video its ranking and not its candidacy.
+      viewCount: Number(item.statistics?.viewCount ?? 0),
+      likeCount: Number(item.statistics?.likeCount ?? 0),
+    });
+  }
+  return out;
+}

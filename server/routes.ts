@@ -2548,6 +2548,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     channels: z.array(z.string().trim().min(1).max(100)).min(1).max(30).optional(),
     maxDurationSeconds: z.number().int().min(10).max(3600).optional(),
     maxVideosPerChannel: z.number().int().min(50).max(5000).optional(),
+    /* Searching YouTube for what the channels do not have. Off unless asked for: one search is
+     * 100 quota units against 10,000 a day, where the whole channel pass costs under 1,000.
+     * Capped so a run cannot silently spend the day's allowance -- the response says how many
+     * exercises are still waiting so a pass can be continued tomorrow. */
+    searchUnmatched: z.boolean().optional(),
+    maxSearches: z.number().int().min(1).max(95).optional(),
   });
 
   for (const mode of ["dry-run", "apply"] as const) {

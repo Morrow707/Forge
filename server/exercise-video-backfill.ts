@@ -37,8 +37,13 @@ import { exercises, skillExercises } from "@shared/schema";
 import { isSeededSearchPlaceholder, type VideoCandidate } from "@shared/exercise-video-match";
 import type { LibraryExercise } from "@shared/exercise-vocabulary";
 import type { Tier } from "@shared/exercise-signature-match";
-import { runSignatureMatch, type SignatureRejection } from "./exercise-video-match-run";
-import { channelCatalogue, newQuotaLedger, type QuotaLedger } from "./youtube-catalog";
+import {
+  runSignatureMatch,
+  searchForUnmatched,
+  type SignatureRejection,
+} from "./exercise-video-match-run";
+import {
+  searchVideosFor, channelCatalogue, newQuotaLedger, type QuotaLedger } from "./youtube-catalog";
 
 /**
  * The channels, chosen for SHORT demonstration clips.
@@ -111,6 +116,10 @@ export const CHANNELS_CUT_ON_EVIDENCE = [
  * can change it -- it is a parameter on every entry point here, not a constant baked into the
  * matcher.
  */
+/** One search is 100 units of a 10,000/day allowance, so a full pass over ~174 unmatched lifts
+ *  is about two days. 90 keeps a single run inside one day with room for the channel pass. */
+export const DEFAULT_MAX_SEARCHES = 90;
+
 export const DEFAULT_MAX_DURATION_SECONDS = 180;
 
 export type BackfillTarget = { kind: "exercise" | "skill"; id: number; name: string };
@@ -169,6 +178,14 @@ export type BackfillReport = {
   maxDurationSeconds: number;
   /** Tier A is applied without a person; tier B waits for one. See exercise-signature-match. */
   tierCounts: { A: number; B: number };
+  /** Present only when the search pass ran. */
+  searchFill?: {
+    searched: number;
+    filled: number;
+    stillEmpty: number;
+    /** Not searched because the run hit its cap -- run again to continue. */
+    remaining: number;
+  };
   /** Unrecognised words that cost a match, most frequent first -- what the vocabulary is
    *  missing, in the order worth fixing. */
   unknownWords: Array<{ word: string; count: number; examples: string[] }>;
@@ -257,6 +274,10 @@ export async function planExerciseVideoBackfill(options?: {
   channels?: string[];
   maxDurationSeconds?: number;
   maxVideosPerChannel?: number;
+  /** Search YouTube for the exercises the channel pass left empty. Expensive -- see the
+   *  comment on searchForUnmatched: 100 units a search against 10,000 a day. */
+  searchUnmatched?: boolean;
+  maxSearches?: number;
 }): Promise<BackfillReport> {
   const channels = options?.channels ?? DEMO_VIDEO_CHANNELS;
   const maxDurationSeconds = options?.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
@@ -298,10 +319,34 @@ export async function planExerciseVideoBackfill(options?: {
    * three channels holding 3,900 videos. See shared/exercise-signature-match.ts. */
   const run = runSignatureMatch(library, pool, maxDurationSeconds);
 
+  /* THE LONG TAIL, FILLED BY SEARCH. The channel pass leaves ~170 lifts empty and almost none
+   * of them were refused for quality -- no channel in the pool has a Lizard Stretch or a Wrist
+   * Flexor Stretch AT ALL, so no threshold reaches them. Scott, 2026-09-30: "find the most
+   * popular or most liked videos for those random ones ... We need every exercise to have one."
+   *
+   * Off unless asked for, because it is the expensive path: 100 units a search against 10,000
+   * a day, where the whole channel pass costs under 1,000. Every gate still applies and every
+   * result is Tier B -- see searchForUnmatched. */
+  const searchFill = options?.searchUnmatched
+    ? await searchForUnmatched(
+        library,
+        targets
+          .filter((t) => t.kind === "exercise" && !run.chosen.has(t.name))
+          .map((t) => t.name),
+        run.vocabulary,
+        maxDurationSeconds,
+        options.maxSearches ?? DEFAULT_MAX_SEARCHES,
+        (query) => searchVideosFor(query, quota),
+      )
+    : null;
+
   const proposals: BackfillProposal[] = [];
   const unmatched: UnmatchedTarget[] = [];
   for (const target of targets) {
-    const match = target.kind === "exercise" ? run.chosen.get(target.name) : undefined;
+    const match =
+      target.kind === "exercise"
+        ? (run.chosen.get(target.name) ?? searchFill?.filled.get(target.name))
+        : undefined;
     if (!match) {
       unmatched.push({
         ...target,
@@ -346,6 +391,14 @@ export async function planExerciseVideoBackfill(options?: {
     quota,
     maxDurationSeconds,
     tierCounts,
+    searchFill: searchFill
+      ? {
+          searched: searchFill.searched,
+          filled: searchFill.filled.size,
+          stillEmpty: searchFill.stillEmpty.length,
+          remaining: searchFill.remaining.length,
+        }
+      : undefined,
     unknownWords: run.unknownWords,
     duplicateSignatures: run.duplicateSignatures,
     boilerplateByChannel: run.boilerplateByChannel,
@@ -363,6 +416,10 @@ export async function applyExerciseVideoBackfill(options?: {
   channels?: string[];
   maxDurationSeconds?: number;
   maxVideosPerChannel?: number;
+  /** Search YouTube for the exercises the channel pass left empty. Expensive -- see the
+   *  comment on searchForUnmatched: 100 units a search against 10,000 a day. */
+  searchUnmatched?: boolean;
+  maxSearches?: number;
 }): Promise<BackfillReport> {
   const { db } = await import("./db");
   const report = await planExerciseVideoBackfill(options);
