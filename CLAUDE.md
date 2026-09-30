@@ -325,6 +325,9 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
+- **Set 10 on build 576 landed on the OVR sensor** (10 reps, 0.80 against 0.78 m/s, range of
+  motion within 3%): docs/camera-tracking-notes.md, "Build 576 beside OVR, set 10". Ground
+  truth and fixture only; nothing waiting on an upload from it.
 - Build **576** is the newest TestFlight build, cut 2026-09-30 from set 9: the movement axis is
   gravity (`reconcileMovementAxis` reads CoreMotion's `cameraRollDeg`; `axisSource: "gravity"`),
   the grip's axis recorded beside it, and set 9 as ground truth. See

@@ -597,3 +597,48 @@ export const OVR_BENCH_SET9_2026_09_30 = {
   // the trace's jitter inflates the replay's range of motion, so this one is soft.
   rulers: { inPlane3D: 0.003482, shoulderWidth: null, depthRuler: 0.002946, sensorImplied: 0.002826 },
 };
+
+export const OVR_BENCH_SET10_2026_09_30 = {
+  build: 576,
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "foot of the bench, oblique; phone roll -3.9, pitch 14.2; the first take segmented along gravity",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.07, romIn: 14.1, meanW: 469, peakW: 644, tpvS: 0.30, eai: 3.50 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.11, romIn: 13.6, meanW: 470, peakW: 669, tpvS: 0.28, eai: 3.75 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.10, romIn: 14.0, meanW: 484, peakW: 661, tpvS: 0.28, eai: 3.82 },
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.17, romIn: 15.1, meanW: 502, peakW: 702, tpvS: 0.30, eai: 3.82 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.12, romIn: 15.3, meanW: 480, peakW: 678, tpvS: 0.31, eai: 3.58 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.12, romIn: 14.9, meanW: 475, peakW: 677, tpvS: 0.32, eai: 3.48 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.10, romIn: 15.0, meanW: 487, peakW: 661, tpvS: 0.28, eai: 3.70 },
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.07, romIn: 15.1, meanW: 463, peakW: 644, tpvS: 0.30, eai: 3.49 },
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.05, romIn: 15.0, meanW: 463, peakW: 628, tpvS: 0.28, eai: 3.52 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.03, romIn: 16.6, meanW: 434, peakW: 619, tpvS: 0.21, eai: 4.76 },
+    ],
+    reported: { meanVelocityMps: 0.78, peakVelocityMps: 1.09, romIn: 14.8, meanW: 472, peakW: 658, tpvS: 0.28, eai: 3.74 },
+  },
+  forgeOnDevice: {
+    repCount: 10,
+    meanVelocityMps: 0.80,
+    peakVelocityMps: 1.34,
+    romCm: 38.9,
+    medianRomCm: 38.6,
+    scaleSource: "both",
+    scale: 0.003593,
+    axisSource: "gravity",
+    gripAxisFromVerticalDeg: 9.5,
+    cameraRollDeg: -3.9,
+    concentricSeconds: [0.43, 0.6, 0.43, 0.43, 0.47, 0.47, 0.53, 0.57, 0.5, 1.2],
+    repMeans: [0.91, 0.52, 0.86, 1.0, 0.91, 0.9, 0.8, 0.79, 0.91, 0.4],
+    repPeaks: [1.05, 0.15, 1.26, 0.79, 1.26, 1.1, 1.13, 1.34, 0.93, 0.98],
+    meanPowerW: 481,
+    peakPowerW: 807,
+  },
+  // sensorImplied from the device's median rep (38.6cm at 0.003593 against the sensor's 37.6cm).
+  // The depth ruler read a wrist depth of 1.7m on this take against 2.5-3.2m on every other
+  // bench at the same framing, and reconciliation dropped it as the outlier: right answer,
+  // and the first time the ruler has been wrong by more than its zero.
+  rulers: { inPlane3D: 0.003424, shoulderWidth: 0.003761, depthRuler: 0.002029, sensorImplied: 0.0035 },
+};

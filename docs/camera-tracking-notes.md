@@ -1764,6 +1764,41 @@ pinned by `bench-set7-count.test.ts` (ten reps, the un-rack settle folded into r
   `trackingDiagnostics.cameraView` now, with the facing and the expected view beside it;
   `no-framing-advice-after-a-take.test.ts` refuses the toast. Rule #1, 2026-09-29 clause.
 
+## Build 576 beside OVR, set 10: on the sensor
+
+Set 10 (Sep 30, set 2), bench, 135lb x 10, same oblique framing as set 9, phone roll -3.9.
+The first take segmented along gravity (`axisSource: "gravity"`, the grip's own axis 9.5
+degrees off it). Ground truth `OVR_BENCH_SET10_2026_09_30`; fixture
+`bench-set10-2026-09-30.json`, pinned by `bench-set10-on-the-sensor.test.ts`.
+
+| | Device | Sensor |
+|---|---|---|
+| Reps | 10 | 10 |
+| Mean velocity | 0.80 m/s | 0.78 |
+| Range of motion (median rep) | 38.6cm | 37.6cm (14.8in) |
+| Mean power | 481W | 472W |
+| Peak velocity | 1.34 m/s | 1.09 |
+
+- **Count, mean velocity, range of motion and mean power all within 3%.** Eight sensor-paired
+  benches to get here, and the last three errors were all the same thing: the axis. The scale
+  (`both`: in-plane upper arm 0.00342 and shoulders 0.00376, blended to 0.00359 against a
+  sensor-implied 0.0035) is 3% high, which is where the 3% on the range of motion comes from.
+- **Peak velocity is 23% high**, the one number still out. The per-rep peaks (1.05, 0.15,
+  1.26, 0.79 ...) scatter far more than the sensor's (1.03-1.17), and a peak of 0.15 on a rep
+  whose mean is 0.52 is impossible: a peak is read off a smoothed trace in a window that can
+  miss the rep's fastest sample when a hand drops out (178 frames with no wrist on this take,
+  largest gap 2.0s). The set's peak is the max of those, so one jumpy rep sets it. Next.
+- **The depth ruler was wrong by more than its zero for the first time**: a wrist depth of
+  1.7m against 2.5-3.2m on every other bench at this framing, a ruler 42% low. Reconciliation
+  called it the outlier and dropped it, which is the right answer and the reason the blend is
+  there. Its five readings are now 0.92, 0.92, 0.87, 0.85, 0.58: not a constant, and
+  `DEPTH_RULER_BIAS` stays a zero for the good takes rather than a trust in the ruler.
+- **The harness reproduces the device's ten presses rep for rep** and adds the un-rack settle
+  as an eleventh phase, because the device dropped that phase on the velocity-rejection
+  events of the un-rack second and a stored trace does not carry them (`capture-replay.ts`).
+  The test filters to the presses; carrying the rejection timestamps in the export is the
+  fix, and it is a diagnostics field away.
+
 ## Build 575 beside OVR, set 9: the bar travels along gravity, and the grip line never said so
 
 Set 9 (Sep 30, set 1), bench, 135lb x 10, wrists 2.48m from the lens, oblique from the foot of
