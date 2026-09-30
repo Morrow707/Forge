@@ -682,3 +682,54 @@ export const OVR_BENCH_SET11_2026_09_30 = {
   // 35.8, the rest being the un-rack in the rep list and lone-hand windows. Soft to 5%.
   rulers: { inPlane3D: 0.002941, shoulderWidth: 0.003912, depthRuler: 0.002471, sensorImplied: 0.0039 },
 };
+
+export const OVR_BENCH_SET12_2026_09_30 = {
+  build: 578,
+  loadLb: 135,
+  repsPerSet: 10,
+  camera: "foot of the bench, oblique, same framing as sets 9-11; phone roll -3.4",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.12, romIn: 13.4, meanW: 446, peakW: 677, tpvS: 0.30, eai: 3.68 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.10, romIn: 13.6, meanW: 443, peakW: 661, tpvS: 0.30, eai: 3.59 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.07, romIn: 13.7, meanW: 431, peakW: 644, tpvS: 0.33, eai: 3.22 },
+      { meanVelocityMps: 0.71, peakVelocityMps: 1.05, romIn: 13.3, meanW: 423, peakW: 628, tpvS: 0.28, eai: 3.52 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.03, romIn: 13.4, meanW: 436, peakW: 619, tpvS: 0.30, eai: 3.37 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.06, romIn: 13.6, meanW: 444, peakW: 636, tpvS: 0.30, eai: 3.46 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 1.05, romIn: 13.6, meanW: 420, peakW: 628, tpvS: 0.33, eai: 3.14 },
+      { meanVelocityMps: 0.69, peakVelocityMps: 0.99, romIn: 13.7, meanW: 416, peakW: 595, tpvS: 0.34, eai: 2.89 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 1.00, romIn: 13.8, meanW: 417, peakW: 603, tpvS: 0.32, eai: 3.10 },
+      { meanVelocityMps: 0.37, peakVelocityMps: 0.85, romIn: 17.4, meanW: 220, peakW: 512, tpvS: 0.25, eai: 3.38 },
+    ],
+    reported: { meanVelocityMps: 0.68, peakVelocityMps: 1.03, romIn: 13.9, meanW: 409, peakW: 620, tpvS: 0.30, eai: 3.33 },
+  },
+  forgeOnDevice: {
+    repCount: 10,
+    meanVelocityMps: 0.71,
+    peakVelocityMps: 1.01,
+    romCm: 36.7,
+    medianRomCm: 40.3,
+    scaleSource: "both",
+    scale: 0.004007,
+    axisSource: "gravity",
+    gripWidthPx: 196,
+    concentricSeconds: 0.59,
+    meanPowerW: 426,
+    // The first take through the weighted blend on the device. Count, mean, peak and mean
+    // power within 5%; the median rep 14% long because the shoulder ruler read 1.23 this
+    // time and now carries the weight, and the concentric window ran 0.59s against the
+    // sensor's 0.52 (range over mean), which cancelled it in the mean. Rep 5 (26cm, 0.33) is
+    // a hand dropout mid-rep (202 carried points on this take).
+  },
+  // sensorImplied from the device's median rep (40.3cm at 0.004007 against the sensor's 35.3cm).
+  rulers: { inPlane3D: 0.003052, shoulderWidth: 0.004308, depthRuler: 0.002574, sensorImplied: 0.00351 },
+};
+
+/** The two Pendlay rows of 2026-09-30, filmed from BEHIND with one arm visible. Count
+ *  comparisons only: every body ruler is the wrong way round from there (the athlete bent
+ *  over, so the height ruler reads 0.70 of the sensor; one shoulder; one wrist). */
+export const OVR_ROW_SETS_2026_09_30 = {
+  set1: { build: 577, sensorReps: 9, deviceReps: 9, sensorMeanMps: 1.07, deviceMeanMps: 1.22, sensorRomIn: 21.5, deviceMedianRomCm: 43.4, scale: 0.002596, rulers: { inPlane3D: 0.002696, depthRuler: 0.002486, height: 0.002605, shoulderWidth: 0.003574, plate: 0.001285 } },
+  set2: { build: 578, sensorReps: 11, deviceReps: 11, sensorMeanMps: 1.04, deviceMeanMps: 0.84, sensorRomIn: 20.3, deviceMedianRomCm: 40.6, scale: 0.003257, rulers: { inPlane3D: 0.003515, depthRuler: 0.003591, height: 0.002887, shoulderWidth: 0.004662, plate: 0.001526 } },
+};
