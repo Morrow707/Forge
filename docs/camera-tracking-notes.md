@@ -1764,6 +1764,25 @@ pinned by `bench-set7-count.test.ts` (ten reps, the un-rack settle folded into r
   `trackingDiagnostics.cameraView` now, with the facing and the expected view beside it;
   `no-framing-advice-after-a-take.test.ts` refuses the toast. Rule #1, 2026-09-29 clause.
 
+## Build 577: a rep's peak is bounded by its mean, and the set's peak is the reps' average
+
+From set 10's one number still out (peak 1.34 against the sensor's 1.09 with everything
+else within 3%). Two changes in `summarizeTrackedSet`:
+
+- **Per rep, the peak is floored at the rep's mean and capped at `MAX_PEAK_TO_MEAN_RATIO`
+  (2.0) times it.** A peak below the mean of its own window is impossible; set 10's rep 2 read
+  0.15 against 0.52 because a hand dropout froze the trace and the 95th percentile of
+  near-zero instantaneous speeds was near zero. The sensor's own peak/mean ratio is 1.35-1.5
+  on all sixty bench reps it has reported; past two is a spike. Bounded, never dropped (Rule
+  #1), and counted (`trace.repPeaksFlooredToMean`, `trace.repPeaksCappedToMeanRatio`).
+- **The set's peak is the average of the reps' peaks**, which is the sensor's own definition
+  (its per-set "Peak" row is the average of the rep rows on every screenshot). It was the max,
+  so one jumpy rep set the number. Peak power follows.
+
+Replayed: set 10 1.00 against 1.09 (two reps floored, two capped: the trace, not the rule);
+set 7 1.12 against 1.11; set 5 0.96 against 1.10. `bench-set10-on-the-sensor.test.ts` pins
+the bound and the average.
+
 ## Build 576 beside OVR, set 10: on the sensor
 
 Set 10 (Sep 30, set 2), bench, 135lb x 10, same oblique framing as set 9, phone roll -3.9.

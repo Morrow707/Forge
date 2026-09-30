@@ -325,6 +325,10 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
+- Build **577** is the newest TestFlight build, cut 2026-09-30 from set 10: a rep's peak bounded
+  by its own mean (`MAX_PEAK_TO_MEAN_RATIO`), the set's peak as the reps' average (the sensor's
+  definition), both counted in `trace.repPeaksFlooredToMean` / `repPeaksCappedToMeanRatio`.
+  See docs/camera-tracking-notes.md, "Build 577".
 - **Set 10 on build 576 landed on the OVR sensor** (10 reps, 0.80 against 0.78 m/s, range of
   motion within 3%): docs/camera-tracking-notes.md, "Build 576 beside OVR, set 10". Ground
   truth and fixture only; nothing waiting on an upload from it.
