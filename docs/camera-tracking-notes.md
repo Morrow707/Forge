@@ -1764,6 +1764,36 @@ pinned by `bench-set7-count.test.ts` (ten reps, the un-rack settle folded into r
   `trackingDiagnostics.cameraView` now, with the facing and the expected view beside it;
   `no-framing-advice-after-a-take.test.ts` refuses the toast. Rule #1, 2026-09-29 clause.
 
+## Build 578 beside OVR, set 12 and the two rows
+
+Bench set 12 (Sep 30, set 4), the first take through the weighted blend on the phone. Ground
+truth `OVR_BENCH_SET12_2026_09_30`.
+
+| | Device | Sensor |
+|---|---|---|
+| Reps | 10 | 10 |
+| Mean velocity | 0.71 m/s | 0.68 |
+| Peak velocity (average of reps) | 1.01 | 1.03 |
+| Mean power | 426W | 409W |
+| Range of motion (median rep) | 40.3cm | 35.3cm |
+
+- **Count, mean, peak and power within 5%; range of motion 14% high.** The shoulder ruler
+  read 1.23 of the sensor on this take (its worst of eight) and carried the weight, so the
+  scale came out 0.0040 against an implied 0.0035. The mean still landed because the
+  concentric window ran long (0.59s against the sensor's 0.52), which is the cancellation
+  the set 6 notes describe. Two right-looking numbers built on two wrong ones; the
+  diagnostics show it, the athlete's screen does not.
+- **The shoulder ruler's ratios across the eight sensor-paired benches** are now 1.16, 1.00,
+  1.05, 1.00, 1.07, 1.00, 1.00, 1.23. Its 0.1 uncertainty is honest as a spread but it is
+  the only ruler with weight, and one bad read moves the take. The way past this is not a
+  fourth body ruler; it is the plate.
+- **The two Pendlay rows** (`OVR_ROW_SETS_2026_09_30`) were filmed from behind with one arm
+  visible and are count comparisons only: 9 against 9, 11 against 11. Both scaled 17-21%
+  low. The plate detector saw the plate on both and read a scale 0.47 of the sensor, refused
+  correctly as the outlier. From behind, the plate is the one thing square to the lens and
+  the body rulers are all foreshortened (the height ruler on a bent-over athlete read 0.70).
+  The row is the plate detector's clearest case.
+
 ## Build 577 beside OVR, set 11: two rulers from one sensor were two votes
 
 Set 11 (Sep 30, set 3), bench, 135lb x 10, same framing as sets 9 and 10, both hands seen on
