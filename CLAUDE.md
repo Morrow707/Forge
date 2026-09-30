@@ -219,6 +219,33 @@ Before changing anything under `ios/`, `client/src/lib/*-tracking.ts` or a track
 which sensor it touches and confirm the change removes nothing and appoints nothing. If it does
 either, it is wrong as written.
 
+## THE CAMERA MEASURES THE ATHLETE. THE ATHLETE NEVER TYPES A BODY MEASUREMENT FOR IT.
+
+Added 2026-09-30, when the typed grip width was removed from the profile. Scott: "Get rid of
+the wrist width ... Every bench will be different. Different arms different lengths different
+widths, we need to measure regardless." And: "we want to stay anonymous, sort of, that makes
+it harder."
+
+- **No profile field exists for the camera's benefit.** Height and body weight were on the
+  profile before the camera and are training facts; a grip width, a limb length, a shoulder
+  breadth, anything the camera would use as a ruler, is measured by the camera or not at all.
+  `users.gripWidthIn` is retired (column kept until a migration drops it; nothing reads it),
+  the form field, the two dialogs' mapping, the signup and profile validators and the tracker
+  prop are gone. `gripWidthScaleFromFrames` stays for a grip the CAMERA measures.
+- **Why not just ask:** a bench grip differs from a row grip differs from next week's bench,
+  so one typed number is wrong for most of the sets it would scale (the row filmed 2026-09-30
+  had a 0.64m span against the bench's 0.72m). And every measurement stored against an account
+  is one more thing Forge holds about a person; the anonymity stance argues for fewer, not
+  more. A ruler the camera takes on the take describes the take and is stored with it, as
+  diagnostics, not against the athlete.
+- **What replaces it** is the scale work already under way: the plate detector (a known
+  object, the right ruler), the body rulers weighted by evidence (`reconcileScaleEstimates`),
+  and a per-take grip span learned from a take that had a real ruler (`measure-limbs.ts`,
+  `users.bodyModel`, which is learned by the camera and is the shape this rule allows).
+- **Do not re-add a "just type it" field for any body dimension**, however much a calibration
+  session would benefit from one. The sensor comparisons are done with the OVR beside the
+  bar, not with a tape on the athlete.
+
 ## THE CAMERA ARCHITECTURE: three parts, answering to each other
 
 **This is how the camera system works. Not one fix among several -- the shape
@@ -325,6 +352,8 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
+- **Queued on `main`, not yet uploaded:** the typed grip width removed from the profile and
+  the tracker (see "The camera measures the athlete"). Goes with the next `beta`.
 - Build **578** is the newest TestFlight build, cut 2026-09-30 from set 11: the two 3D-pose
   rulers are one vote in `reconcileScaleEstimates`, the blend is inverse-variance weighted, and
   the 3D-pose uncertainties are set from seven sensor-paired benches (0.2). See
