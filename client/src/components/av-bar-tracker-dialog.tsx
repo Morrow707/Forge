@@ -1032,6 +1032,10 @@ export function AvBarTrackerDialog({
       // narrowing rather than anywhere interesting.
       objectLock?: AvObjectLockTelemetry;
       objectLockSecondary?: AvObjectLockTelemetry;
+      // The phone's roll over the take, from CoreMotion -- the movement axis is gravity, and
+      // this is how the analysis knows the image vertical is gravity. See reconcileMovementAxis.
+      cameraRollDeg?: number;
+      cameraPitchDeg?: number;
     },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
     forSetNumber: number,
@@ -1980,7 +1984,7 @@ export function AvBarTrackerDialog({
     // pipeline produces, and neither was visible until now.
     // Held against the image vertical before anything is rotated onto it -- see
     // reconcileMovementAxis for the take that made this necessary.
-    const axisWitness = reconcileMovementAxis(movementAxisFromGrip(gripPairs));
+    const axisWitness = reconcileMovementAxis(movementAxisFromGrip(gripPairs), recordingStats.cameraRollDeg ?? null);
     const movementAxis = axisWitness.axis;
 
     // Frames where the tracked point was not on the bar, thrown out before anything is measured
