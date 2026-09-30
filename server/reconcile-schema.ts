@@ -3530,6 +3530,30 @@ BEGIN
     INSERT INTO "applied_backfills" ("key") VALUES ('erase_unused_phone_numbers_2026_09_15');
   END IF;
 END $$;
+
+-- 2026-09-28: what a person decided about one proposed demo video.
+--
+-- Tier B is a match nothing is wrong with that nobody has confirmed, and it is where the
+-- library's remaining coverage lives. Insert-only, latest wins: a decision is what somebody
+-- thought at a moment, not a setting, and keeping the superseded row keeps the training signal
+-- -- an unknown word recurring in ACCEPTED titles is filler, the same word recurring in
+-- REJECTED titles is a variation the library has no name for. See shared/schema.ts.
+CREATE TABLE IF NOT EXISTS "exercise_video_reviews" (
+  "id" serial PRIMARY KEY,
+  "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "video_id" text NOT NULL,
+  "channel" text NOT NULL,
+  "title" text NOT NULL,
+  "duration_seconds" integer,
+  "decision" text NOT NULL,
+  "unknown_tokens" json,
+  "reviewed_by" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "reviewed_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "exercise_video_reviews_pair_idx"
+  ON "exercise_video_reviews" ("exercise_id", "video_id");
+CREATE INDEX IF NOT EXISTS "exercise_video_reviews_channel_idx"
+  ON "exercise_video_reviews" ("channel");
 `;
 
 async function main() {

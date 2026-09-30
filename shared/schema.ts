@@ -6428,6 +6428,51 @@ export const uploadedFiles = pgTable(
 // it, and the file itself is untouched either way -- dismissing a clip keeps the upload, it
 // only stops asking about it. The intended target (assignment/day/date/exercise/set) is kept
 // so the manual picker can start on the right day.
+/**
+ * WHAT A PERSON DECIDED ABOUT ONE PROPOSED DEMO VIDEO.
+ *
+ * The matcher sorts matches into two tiers: Tier A is certain enough to apply unattended, Tier B
+ * is a match nothing is WRONG with that nobody has confirmed -- an unrecognised word, an assumed
+ * piece of equipment, a channel nobody has watched. Tier B is where the recall lives, and the
+ * only thing that turns it into coverage is somebody looking.
+ *
+ * INSERT-ONLY, LATEST WINS. A decision records what a person thought at a moment, not a current
+ * setting: changing your mind writes a second row rather than editing the first. That makes the
+ * table a training signal as well as a gate -- an unknown word that keeps appearing in ACCEPTED
+ * titles belongs in the filler list, and one that keeps appearing in REJECTED titles is a
+ * modifier the library has no name for. Deleting the loser would delete half that evidence.
+ *
+ * A REJECTION IS PERMANENT FOR THAT PAIR. The point of rejecting is never to be shown it again;
+ * a run that re-proposed a video somebody turned down would make the queue unfinishable.
+ */
+export const exerciseVideoReviews = pgTable(
+  "exercise_video_reviews",
+  {
+    id: serial("id").primaryKey(),
+    exerciseId: integer("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    videoId: text("video_id").notNull(),
+    channel: text("channel").notNull(),
+    title: text("title").notNull(),
+    durationSeconds: integer("duration_seconds"),
+    /** accept | reject. A skip is deliberately NOT stored -- see the queue route. */
+    decision: text("decision").notNull(),
+    /** The words the matcher could not place in this title -- what the vocabulary suggestions
+     *  are computed from. */
+    unknownTokens: json("unknown_tokens").$type<string[]>(),
+    reviewedBy: integer("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pairIdx: index("exercise_video_reviews_pair_idx").on(table.exerciseId, table.videoId),
+    channelIdx: index("exercise_video_reviews_channel_idx").on(table.channel),
+  }),
+);
+
+export const exerciseVideoReviewDecisions = ["accept", "reject"] as const;
+export type ExerciseVideoReviewDecision = (typeof exerciseVideoReviewDecisions)[number];
+
 export const unattachedVideoUploads = pgTable(
   "unattached_video_uploads",
   {
