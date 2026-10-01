@@ -292,7 +292,9 @@ export function NotificationSettingsDialog({
                 <span className="text-xs text-muted-foreground">
                   Pre-fills sleep, resting heart rate, and heart rate variability on
                   your daily check-in from your watch or tracker -- always editable
-                  before you submit.
+                  before you submit. The AI coach reads your check-in when it adjusts
+                  your training, so a synced value can reach the AI provider as part
+                  of that request. Never sold, never used for ads.
                 </span>
               </span>
             </label>
