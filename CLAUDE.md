@@ -352,7 +352,16 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **582** is the newest TestFlight build, cut 2026-10-01 (581 was a verify_build run): the jump's countermovement read
+- Build **584** is the newest TestFlight build, cut 2026-10-01 from `d2e8b361`: the password rule
+  (`shared/password-rules.ts`: six characters, a number and a special character, held by ONE
+  `passwordField` across all six schemas that set a password) and the live red-to-green checklist
+  on every screen where one is chosen. Login keeps `min(1)` on purpose -- every existing account
+  fails the new rule, so enforcing it at sign-in would lock out the platform in one deploy.
+- Build **583** was cut 2026-10-01 from `c43da72b`: the dashes gone from the signup screens, the
+  Free Agent welcome dialog, the Invite Athletes card and all three emails, and the welcome email
+  no longer promising a Free Agent the AI program builder (two tiers up at $9.99). Both are also
+  server-side and already live on Render.
+- Build **582** was the previous build, cut 2026-10-01 (581 was a verify_build run): the jump's countermovement read
   off the hip (`measureCountermovement`, `JumpRep.countermovement`: dip depth, eccentric and
   concentric durations and velocities, the window a hip-mounted OVR reads), and the tracker that
   films a set following the exercise (`resolve-tracking-mode.ts`: a generic "full" on a
