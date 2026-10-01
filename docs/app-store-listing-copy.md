@@ -41,13 +41,19 @@ here risks contradicting copy that is working. Place this directly after
 whatever paragraph introduces camera tracking or AI form check.
 
 > **A note on camera tracking.** Forge films your sets and stores them for
-> review, skeleton replay and coach annotation — that all works today. The
-> numbers the app calculates from that video — bar speed, range of motion,
-> power, jump height and bar path — are **not accurate yet**. We are actively
-> calibrating them against instrumented reference equipment, and until that work
-> is finished those readings should not be used to make training decisions.
-> Everything else — programming, logging, the AI coach, analytics built on your
-> logged sets — is unaffected.
+> review, skeleton replay and coach annotation, and that all works today. The
+> numbers the app calculates from that video (bar speed, range of motion,
+> power, jump height and bar path) are **not accurate yet**. We are actively
+> calibrating them against a bar sensor, and until that work is finished those
+> readings should not be used to make training decisions. Four movements have
+> been checked against a sensor so far: back squat, bench press, Pendlay row
+> and box jump. Every other movement is unvalidated and the app says so wherever
+> a camera number appears. Everything else (programming, logging, the AI coach,
+> analytics built on your logged sets) is unaffected.
+
+The four movements above are `MOVEMENTS` in `shared/movement-library.ts`; when
+that list grows, this paragraph and the listing change with it. Never name a
+movement here that is not in that list.
 
 ## 3. In-app purchase — "AI Coach + Video" ($19.99)
 
