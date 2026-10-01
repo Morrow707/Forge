@@ -889,3 +889,37 @@ export const OVR_SQUAT_SET3_2026_10_01 = {
     reported: { meanVelocityMps: 0.85, peakVelocityMps: 1.28, romIn: 27.9, meanW: 511, peakW: 771, tpvS: 0.56, eai: 2.25 },
   },
 };
+
+// Med ball throw beside OVR, 2026-10-01: the sensor on a box with its tether pulled out
+// HORIZONTALLY to a finger, 12lb ball, logged on the sensor as "Push Press" 12lb x 12. Scott:
+// "rep 1 and rep 7 were setup reps, me just trapping the cord." The ten throws are below. The
+// sensor reads the component of the hand's motion along the tether (the room's horizontal), so
+// the camera's matching number is medBallRepBreakdown[].peakHorizontalSpeedMps (build 580) and
+// the sensor's range of motion is the tether's horizontal travel, which has no camera number.
+// Filmed on build 580; the camera side waits on the export.
+export const OVR_MED_BALL_THROW_2026_10_01 = {
+  build: 580,
+  ballLb: 12,
+  throws: 10,
+  sensor: {
+    ignoredReps: [
+      { rep: 1, meanVelocityMps: 0.65, peakVelocityMps: 1.75, romIn: 34.0 },
+      { rep: 7, meanVelocityMps: 0.25, peakVelocityMps: 0.72, romIn: 10.1 },
+    ],
+    reps: [
+      { meanVelocityMps: 2.29, peakVelocityMps: 5.59, romIn: 48.8, meanW: 122, peakW: 298, tpvS: 0.34 },
+      { meanVelocityMps: 2.36, peakVelocityMps: 6.55, romIn: 51.1, meanW: 126, peakW: 349, tpvS: 0.34 },
+      { meanVelocityMps: 2.27, peakVelocityMps: 6.86, romIn: 53.7, meanW: 121, peakW: 365, tpvS: 0.43 },
+      { meanVelocityMps: 2.10, peakVelocityMps: 7.02, romIn: 52.5, meanW: 111, peakW: 374, tpvS: 0.43 },
+      { meanVelocityMps: 3.82, peakVelocityMps: 7.07, romIn: 50.1, meanW: 203, peakW: 377, tpvS: 0.18 },
+      { meanVelocityMps: 2.84, peakVelocityMps: 6.28, romIn: 51.1, meanW: 151, peakW: 335, tpvS: 0.27 },
+      { meanVelocityMps: 2.19, peakVelocityMps: 6.63, romIn: 56.5, meanW: 116, peakW: 354, tpvS: 0.46 },
+      { meanVelocityMps: 3.51, peakVelocityMps: 7.15, romIn: 53.4, meanW: 187, peakW: 381, tpvS: 0.18 },
+      { meanVelocityMps: 2.00, peakVelocityMps: 6.47, romIn: 52.9, meanW: 106, peakW: 345, tpvS: 0.47 },
+      { meanVelocityMps: 1.86, peakVelocityMps: 6.47, romIn: 54.5, meanW: 99, peakW: 345, tpvS: 0.54 },
+    ],
+    // The set row on the sensor still averages the two setup reps in.
+    reportedIncludingSetup: { meanVelocityMps: 2.17, peakVelocityMps: 5.71, romIn: 47.3, meanW: 115, peakW: 304, tpvS: 0.41 },
+    // Across the ten throws: peak 6.6 m/s (5.59-7.15), mean 2.5, horizontal travel 52in.
+  },
+};

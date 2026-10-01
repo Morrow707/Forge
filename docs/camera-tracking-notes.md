@@ -1890,6 +1890,15 @@ camera side waits on the export.
 A Render deploy from PR #199 landed while this session was being filmed and the app showed
 "Can't reach Forge" on a comment POST. The sets queued. Do not merge while Scott is testing.
 
+## Med ball throw beside OVR, 2026-10-01: the sensor side
+
+Ten throws of a 12lb ball, the sensor on a box with the tether horizontal to a finger
+(`OVR_MED_BALL_THROW_2026_10_01`; the sensor's reps 1 and 7 were cord setup, ignored). Peak 5.59
+to 7.15 m/s, 6.6 across the set; mean 1.9 to 3.8; tether travel 49 to 57in. The camera's
+matching number is `peakHorizontalSpeedMps` per rep (build 580), held against the sensor's
+peak; the sensor's mean spans the tether's whole travel, which the camera's throw window does
+not define yet. The camera side is written when the export arrives.
+
 ## Queued: the loading dip and the drive, read off the hip (jump)
 
 Added 2026-10-01. Scott: "Will the camera differentiate between the loading drop portion, and
