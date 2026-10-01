@@ -28,6 +28,8 @@ import { PRIVACY_POLICY_DRAFT, EULA_DRAFT, nextParentalNotice, nextPrivacyPolicy
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments, HEALTHCARE_NOTICE_MARKER } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
+import { DEMO_ACCOUNT_EMAILS } from "./device-trust-policy";
+import { coreAgreementText } from "./seed-data/signup-agreement";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
 import { REQUIRED_DOCUMENTS, documentAudienceFor } from "@shared/required-documents";
 import { AI_TERMS_OF_USE } from "./seed-data/ai-terms-of-use-draft";
@@ -96,6 +98,17 @@ function deriveMaterials(equipment: string, name: string) {
 // flow a real user would.
 function demoPassword(publishedPassword: string): string {
   return process.env.NODE_ENV === "production" ? crypto.randomUUID() : publishedPassword;
+}
+
+async function keepDemoAccountsOnCurrentTerms(): Promise<void> {
+  const live = await storage.getLegalAgreement();
+  for (const email of DEMO_ACCOUNT_EMAILS) {
+    const user = await storage.getUserByEmail(email);
+    if (!user) continue;
+    if (coreAgreementText(user.agreedToTermsText ?? "") === coreAgreementText(live)) continue;
+    await db.update(users).set({ agreedToTermsText: live, agreedToTermsAt: new Date() }).where(eq(users.id, user.id));
+    console.log(`Demo account ${email} kept on the current Terms of Use.`);
+  }
 }
 
 async function main() {
@@ -6236,6 +6249,16 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // a minor cannot answer at all, so their guardian is emailed once. See
   // server/terms-change-notice.ts for why the mark lives on the athlete's row. Best effort and
   // never allowed to fail the deploy -- a seed that dies here leaves the rest of it unrun.
+  // THE REVIEW DEMO ACCOUNTS NEVER MEET THE TERMS DIALOG. Every real account re-accepts a
+  // changed Terms of Use once (CLAUDE.md, "A changed Terms of Use is accepted again"), and that
+  // is correct for a person. The three seeded demo accounts are what an App Store reviewer
+  // signs in with, and a reviewer whose first screen is a non-dismissable legal dialog files
+  // the app as broken. Their snapshot is kept on the live text here, after the agreement above
+  // has been applied, so the gate they would otherwise meet is already satisfied. Only these
+  // three (DEMO_ACCOUNT_EMAILS, the same list the device-verification exemption uses); no real
+  // account is ever accepted on anyone's behalf.
+  await keepDemoAccountsOnCurrentTerms();
+
   if (agreement !== null && existingAgreement !== UNCONFIGURED_FALLBACK) {
     try {
       const sent = await notifyGuardiansOfTermsChange();
