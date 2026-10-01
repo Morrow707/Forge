@@ -352,32 +352,15 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- **UPLOADS ARE ON HOLD. Scott, 2026-10-01: "queue everything but dont upload, fable is working
-  on something."** Keep committing and pushing to `main` as normal; do not run the `beta` lane,
-  and do not run `verify_build` either while another session may be using the macOS runner --
-  the workflow's concurrency group is per-lane, so a second `verify_build` CANCELS the first,
-  and cancelling another session's pre-flight is a worse outcome than waiting. The hold lasts
-  until Scott lifts it, which is how every hold in this file works.
-- **Queued on `main`, not yet uploaded:** height typed as feet and inches
-  (`shared/height-units.ts`, `HeightInput` on signup, the provisional-athlete claim and the
-  profile form; `users.heightIn` is unchanged total inches, no migration). Goes with the first
-  `beta` after the hold lifts.
-- **Queued on `main`, not yet uploaded** (#202, #203, store-launch items): Health Connect on
-  Android (same plugin and types as HealthKit; unused permissions removed at manifest merge),
-  Google Play Billing end to end (`GooglePlayBillingPlugin.java`, `google-play-billing.ts`
-  client and server, `subscriptions.google_play_purchase_token`; the Android Upgrade screen
-  sells nothing and says so until `GOOGLE_PLAY_BILLING_LIVE`), `ACCEPT_UNDER_13_SIGNUPS=false`
-  as the under-13 self-signup switch, App Review notes in docs/app-store-listing-copy.md. The
-  Play Console steps are in docs/app-store-launch-notes.md. Untested on an Android device.
-- **The schools FAQ shipped** (#204, `shared/high-schools-faq.ts`, FAQPage schema on
-  /for-high-schools). Scott read the ten answers 2026-10-01 ("the answers are fine"). Web only;
-  nothing waiting on an upload from it. Of the three items parked 2026-09-20, the Smart App
-  Banner now needs only the App Store id and the heading font is still a decision.
-- **Queued on `main`, not yet uploaded** (#201, store-launch items): the AI Training Chat
-  screen's not-medical-advice line, the paywall never-steer scan, Android RECORD_AUDIO and
+- Build **585** is the newest TestFlight build, cut 2026-10-01 from `e9705daa` when Scott
+  lifted the hold ("Hold is lifted, upload everything"). It clears the queue: height typed as
+  feet and inches (`shared/height-units.ts`), the store-launch items from #201 (the AI Training
+  Chat's not-medical-advice line, the paywall never-steer scan, Android RECORD_AUDIO and
   POST_NOTIFICATIONS, the Apple Health switch's AI sentence, the Smart App Banner injected from
-  `VITE_APP_STORE_ID`. Launch checklist: https://claude.ai/artifact/QAkD4pcu9E4zo9jKfsNTZB
-- Build **584** is the newest TestFlight build, cut 2026-10-01 from `d2e8b361`: the password rule
+  `VITE_APP_STORE_ID`), #202 (Health Connect on Android, the Android app sells nothing until
+  `GOOGLE_PLAY_BILLING_LIVE`, `ACCEPT_UNDER_13_SIGNUPS`), and #203 (Google Play Billing end to
+  end). Launch checklist: https://claude.ai/artifact/QAkD4pcu9E4zo9jKfsNTZB
+- Build **584** was the previous build, cut 2026-10-01 from `d2e8b361`: the password rule
   (`shared/password-rules.ts`: six characters, a number and a special character, held by ONE
   `passwordField` across all six schemas that set a password) and the live red-to-green checklist
   on every screen where one is chosen. Login keeps `min(1)` on purpose -- every existing account
