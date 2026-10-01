@@ -183,3 +183,51 @@ calibration lands.
 `docs/app-store-launch-notes.md` records that the camera-accuracy disclosure has
 to be pasted into App Store Connect by hand. That is still true and still
 pending; none of the above does it.
+
+---
+
+## 5. App Review notes (draft, 2026-10-01)
+
+Pasted into App Store Connect's "Notes" field for the reviewer, with the demo logins. The first
+sentence answers guideline 4.2 before it is asked; the rest answers the questions a reviewer at
+a desk will hit. Keep it under the field's limit (4000 characters) and keep every claim one the
+build can show.
+
+> Forge is a strength and conditioning platform for coaches and their athletes. The iOS app is
+> not a wrapped website: it runs a native camera pipeline (AVFoundation and Vision body pose,
+> an on-device CoreML implement detector, and CoreMotion) to measure a set in real time, syncs
+> HealthKit recovery data into the athlete's daily check-in, uses Face ID for app lock, delivers
+> push notifications, and keeps every logged set and video in an on-device queue that uploads
+> when the network returns.
+>
+> DEMO ACCOUNTS (device verification is disabled for these three):
+> Coach: coach@forge.app / <password>
+> Athlete: athlete@forge.app / <password>
+> Free Agent: freeagent@forge.app / <password>
+>
+> THE CAMERA needs a real person lifting a real bar in frame. It will not produce a measurement
+> from a desk. A 60-second demo video of a tracked set is at <link>. Every number the camera
+> produces is shown with an accuracy notice; this is stated on the pricing surfaces and in the
+> listing because the measurements are still being calibrated against a bar sensor.
+>
+> IN-APP PURCHASE: the Free Agent tiers and add-ons are StoreKit auto-renewable subscriptions
+> (Restore Purchases is on the Upgrade screen). Coaches and their rostered athletes do not buy
+> anything in the app; a school is billed outside it for its roster, and nothing in the app
+> links to that.
+>
+> ACCOUNTS: every athlete under 18 is created inert and does nothing until a parent or guardian
+> claims a linked account from an email. The three demo accounts are adults. Account deletion is
+> in Settings. A new device signs in only after the account's email approves it; if you create
+> your own account with a real address you will receive that email.
+>
+> HEALTHKIT is read only (sleep, resting heart rate, HRV, VO2 max, respiratory rate, weight,
+> workouts) to pre-fill the athlete's own check-in, never written, never shared for advertising.
+> The AI coach may read the check-in when it adjusts the athlete's training; the Privacy Policy
+> and the Health switch both say so.
+>
+> The AI Training Chat says on screen that it is training guidance, not medical advice.
+
+Before pasting: fill the passwords and the video link, confirm the three demo accounts have
+accepted the current Terms (or the reviewer's first screen is the re-acceptance dialog), and
+confirm that `tier1_under13` self-signup is closed (`ACCEPT_UNDER_13_SIGNUPS=false`) or counsel
+has answered open question 5.

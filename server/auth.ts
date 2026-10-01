@@ -1,4 +1,5 @@
 import passport from "passport";
+import { under13SelfSignupClosed, UNDER_13_SIGNUP_CLOSED_MESSAGE } from "./age-policy";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -663,6 +664,11 @@ export function setupAuth(app: Express) {
       // a guardian turns it on, and research consent is never self-given.
       // See shared/privacy-tiers.ts on what still needs legal review.
       const tier = derivePrivacyTier(dateOfBirth);
+      // See server/age-policy.ts: closed by ACCEPT_UNDER_13_SIGNUPS=false while counsel answers
+      // whether an emailed claim link is verifiable consent for an under-13. Off by default.
+      if (role === "athlete" && tier === "tier1_under13" && under13SelfSignupClosed()) {
+        return res.status(403).json({ message: UNDER_13_SIGNUP_CLOSED_MESSAGE });
+      }
 
       // A minor athlete's profile needs an active guardian account before
       // anything new can be assigned to them (see
