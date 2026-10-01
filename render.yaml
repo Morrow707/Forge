@@ -238,6 +238,11 @@ services:
       # a real domain verified in Resend first (see server/email.ts's own
       # sandbox-address warning), which is a manual, account-specific step
       # no blueprint default can stand in for.
+      # The production domain, once forgeperformancesystems.com points at this service. Every
+      # emailed link (device approval, guardian claim, password reset) is built on it; without
+      # it RENDER_EXTERNAL_URL keeps naming the onrender address. See server/public-origin.ts.
+      - key: PUBLIC_ORIGIN
+        value: https://forgeperformancesystems.com
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL

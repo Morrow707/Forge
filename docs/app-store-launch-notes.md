@@ -149,3 +149,25 @@ Android Upgrade screen says plans are not sold in the app yet and shows no purch
 Not tested on a device yet: the plugin compiles against Billing Library 7.1.1 and the server
 half is unit-tested against Google's documented response shapes. The first real test is a
 license tester buying `freeagent_basic` on an internal-testing build.
+
+## The production domain (added 2026-10-01)
+
+`forgeperformancesystems.com`, same app, pointed at Render. The code reads it from
+`shared/public-origin.ts` (native API base, iOS web-credentials entitlement, Android Health
+Connect privacy URL, SEO origin) and from `PUBLIC_ORIGIN` on Render for emailed links. What
+only Scott can do, in this order:
+
+1. **Render -> the web service -> Settings -> Custom Domains**: add `forgeperformancesystems.com`
+   and `www.forgeperformancesystems.com`; Render shows the DNS records.
+2. **DNS at the registrar**: the A/ALIAS and CNAME records Render shows. Wait for Render to say
+   the certificate is issued.
+3. **Render env**: `PUBLIC_ORIGIN=https://forgeperformancesystems.com` (in the blueprint now;
+   confirm it is set on the live service).
+4. **Resend**: verify the domain so `RESEND_FROM_EMAIL` can be an address on it; until then
+   emails still send from the sandbox address.
+5. **Apple Developer -> the App ID -> Associated Domains** needs nothing: the entitlement lists
+   the domain, and Apple fetches `/.well-known/apple-app-site-association` from it once the
+   domain answers. The onrender host stays listed so saved passwords still match.
+6. **Only then ship the native build** that carries this change: the app's API base is the new
+   domain, so a phone on that build with the domain not yet answering cannot reach the server.
+7. Store listing URLs (support, privacy, EULA) use the domain.

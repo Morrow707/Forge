@@ -112,6 +112,7 @@ import {
 import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
 import { GOOGLE_PLAY_BILLING_LIVE, verifyGooglePlayPurchase } from "./google-play-billing";
 import { publicSignupOpen, inviteCodeAccepted } from "./signup-availability";
+import { publicOrigin as sharedPublicOrigin } from "./public-origin";
 import { verifyMediaUrl } from "./media-url-signing";
 import { summarizeCspReport } from "./csp-report";
 import { shouldTouchLastSeen } from "./session-tracking";
@@ -1365,10 +1366,9 @@ function toMetricSummary(r: any): ResearchMetricSummary {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  /** Absolute origin for links that leave the app in an email. RENDER_EXTERNAL_URL first, for
-   * the same host-header-poisoning reason auth.ts gives on its own copy of this line. */
-  const publicOrigin = (req: Request): string =>
-    process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+  // Absolute origin for links that leave the app in an email: server/public-origin.ts, the one
+  // helper auth.ts also uses (PUBLIC_ORIGIN, then RENDER_EXTERNAL_URL, then the request).
+  const publicOrigin = (req: Request): string => sharedPublicOrigin(req);
 
   // One guard for every id-shaped route param, before anything else is
   // registered -- see server/numeric-route-params.ts for why it lives in one

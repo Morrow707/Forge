@@ -10,6 +10,7 @@
 	<string>production</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
+		<string>webcredentials:forgeperformancesystems.com</string>
 		<string>webcredentials:forge-ebhd.onrender.com</string>
 	</array>
 </dict>
