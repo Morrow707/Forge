@@ -1862,6 +1862,34 @@ box. The camera's takeoff velocity is computed per rep (build 556) but is not in
 it to `jumpEvents` or the rep breakdown before the next paired jump, or this comparison cannot
 be made either.
 
+## Build 580 beside OVR at the hip: the box jump's takeoff velocity is 20% high
+
+2026-10-01, the sensor on a finger with hands on hips, five box jumps to 24in (the sensor's own
+rep 1 was Scott grabbing the cord; ignored). `OVR_BOX_JUMP_HIP_2026_10_01`.
+
+| rep | sensor peak m/s | camera takeoff m/s | sensor ROM in | camera height in |
+|---|---|---|---|---|
+| 1 | 2.75 | 3.47 | 27.0 | 27.1 |
+| 2 | 3.00 | 3.46 | 27.0 | 26.9 |
+| 3 | 3.19 | 3.47 | 27.2 | 29.0 |
+| 4 | 2.82 | 3.55 | 27.4 | 28.2 |
+| 5 | 2.84 | 3.51 | 28.5 | 29.4 |
+
+The camera's takeoff velocity is high by 10-26%, about 20% on the set, and flat across reps
+where the sensor varies by 15%. On a box jump `takeoffVelocityMps` is rebuilt from flight time
+and the net rise onto the box (`applyBoxRiseCorrection`), so it inherits the scale through the
+net rise, and the ankle lands on the box with the knee bent. The sensor's range of motion
+(dip bottom to apex) lands beside the camera's jump height, which is a coincidence of two
+different quantities, not agreement: once the countermovement is on the phone the camera's
+matching number is `concentricRiseCm + jumpHeightCm`, and it will read higher than the sensor
+if the height is right. A flat jump with the sensor at the hip is the take that settles both.
+
+Squat set 3 the same morning: sensor 0.85 / 1.28 / 27.9in (`OVR_SQUAT_SET3_2026_10_01`); the
+camera side waits on the export.
+
+A Render deploy from PR #199 landed while this session was being filmed and the app showed
+"Can't reach Forge" on a comment POST. The sets queued. Do not merge while Scott is testing.
+
 ## Queued: the loading dip and the drive, read off the hip (jump)
 
 Added 2026-10-01. Scott: "Will the camera differentiate between the loading drop portion, and

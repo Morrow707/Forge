@@ -829,3 +829,63 @@ export const OVR_JUMP_SQUAT_2026_10_01 = {
   },
   forgeOnDevice: { repCount: 5, jumpHeightCm: 72.3, repJumpHeightsCm: [63.7, 69.3, 64, 63.2, 63.7], boxRiseScaleErrorRatio: 1.045, scale: 0.003126 },
 };
+
+// Box jump beside OVR, 2026-10-01, the sensor on a finger with hands on hips (the first jump
+// with the sensor at the hip; the laces set above is OVR_JUMP_SQUAT_2026_10_01). OVR "set 2"
+// logged 6 reps; Scott: "OVR counted my first rep as me grabbing the cord and setting up for
+// box jump. Ignore rep 1." Reps 2-6 below are the five jumps. Filmed on build 580, before the
+// countermovement landed (queued), so the camera has takeoff velocity and height per rep and
+// no dip or drive window yet; those come with the next paired jump.
+//
+// The camera's takeoff velocity reads 3.46-3.55 against the sensor's 2.75-3.19 peak at the hip:
+// about 20% high on every rep. On a box jump the camera's takeoff velocity is rebuilt from the
+// flight time and the net rise ONTO THE BOX (applyBoxRiseCorrection), so it inherits the
+// take's scale through the net rise, and the ankle lands on the box with the knee bent, which
+// shortens the measured rise and lengthens nothing. A flat jump with the sensor at the hip is
+// the take that separates those; the per-rep camera numbers are from the phone's screen.
+export const OVR_BOX_JUMP_HIP_2026_10_01 = {
+  build: 580,
+  boxHeightIn: 24,
+  repsPerSet: 5,
+  sensor: {
+    ignoredRep1: { meanVelocityMps: 1.01, peakVelocityMps: 1.84, romIn: 33.2, tpvS: 0.42 },
+    reps: [
+      { meanVelocityMps: 1.52, peakVelocityMps: 2.75, romIn: 27.0, tpvS: 0.16 },
+      { meanVelocityMps: 1.44, peakVelocityMps: 3.00, romIn: 27.0, tpvS: 0.18 },
+      { meanVelocityMps: 1.45, peakVelocityMps: 3.19, romIn: 27.2, tpvS: 0.21 },
+      { meanVelocityMps: 1.52, peakVelocityMps: 2.82, romIn: 27.4, tpvS: 0.18 },
+      { meanVelocityMps: 1.50, peakVelocityMps: 2.84, romIn: 28.5, tpvS: 0.21 },
+    ],
+    // The set row on the sensor still averages the ignored rep in.
+    reportedIncludingRep1: { meanVelocityMps: 1.40, peakVelocityMps: 2.74, romIn: 28.3, tpvS: 0.22 },
+  },
+  forgeOnDevice: {
+    repCount: 5,
+    jumpHeightIn: 29.4,
+    reps: [
+      { jumpHeightIn: 27.1, takeoffVelocityMps: 3.47 },
+      { jumpHeightIn: 26.9, takeoffVelocityMps: 3.46, groundSeconds: 2.735 },
+      { jumpHeightIn: 29.0, takeoffVelocityMps: 3.47, groundSeconds: 2.569 },
+      { jumpHeightIn: 28.2, takeoffVelocityMps: 3.55, groundSeconds: 2.769 },
+      { jumpHeightIn: 29.4, takeoffVelocityMps: 3.51, groundSeconds: 2.802 },
+    ],
+  },
+};
+
+// Back squat set 3 beside OVR, 2026-10-01, same session as sets 1 and 2 (OVR_SQUAT_SET1/SET2).
+// Camera numbers to be filled from the export; the sensor side is the screen.
+export const OVR_SQUAT_SET3_2026_10_01 = {
+  build: 580,
+  loadLb: 135,
+  repsPerSet: 5,
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.35, romIn: 27.3, meanW: 503, peakW: 809, tpvS: 0.56, eai: 2.31 },
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.35, romIn: 27.8, meanW: 529, peakW: 809, tpvS: 0.53, eai: 2.54 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.35, romIn: 28.6, meanW: 533, peakW: 810, tpvS: 0.54, eai: 2.46 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.25, romIn: 27.4, meanW: 509, peakW: 752, tpvS: 0.56, eai: 2.20 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.12, romIn: 28.8, meanW: 483, peakW: 677, tpvS: 0.64, eai: 1.74 },
+    ],
+    reported: { meanVelocityMps: 0.85, peakVelocityMps: 1.28, romIn: 27.9, meanW: 511, peakW: 771, tpvS: 0.56, eai: 2.25 },
+  },
+};
