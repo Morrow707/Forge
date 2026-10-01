@@ -733,3 +733,37 @@ export const OVR_ROW_SETS_2026_09_30 = {
   set1: { build: 577, sensorReps: 9, deviceReps: 9, sensorMeanMps: 1.07, deviceMeanMps: 1.22, sensorRomIn: 21.5, deviceMedianRomCm: 43.4, scale: 0.002596, rulers: { inPlane3D: 0.002696, depthRuler: 0.002486, height: 0.002605, shoulderWidth: 0.003574, plate: 0.001285 } },
   set2: { build: 578, sensorReps: 11, deviceReps: 11, sensorMeanMps: 1.04, deviceMeanMps: 0.84, sensorRomIn: 20.3, deviceMedianRomCm: 40.6, scale: 0.003257, rulers: { inPlane3D: 0.003515, depthRuler: 0.003591, height: 0.002887, shoulderWidth: 0.004662, plate: 0.001526 } },
 };
+
+export const OVR_SQUAT_SET1_2026_10_01 = {
+  build: 578,
+  loadLb: 135,
+  repsPerSet: 5,
+  camera: "front of the rack, head-on, phone upright (roll 0.4, pitch 5.7); the shoulders carried the bar (602 shoulder points)",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 1.01, peakVelocityMps: 1.72, romIn: 28.1, meanW: 603, peakW: 1033, tpvS: 0.50, eai: 3.42 },
+      { meanVelocityMps: 1.03, peakVelocityMps: 1.61, romIn: 27.4, meanW: 619, peakW: 966, tpvS: 0.48, eai: 3.31 },
+      { meanVelocityMps: 1.05, peakVelocityMps: 1.71, romIn: 29.1, meanW: 632, peakW: 1024, tpvS: 0.49, eai: 3.44 },
+      { meanVelocityMps: 0.99, peakVelocityMps: 1.51, romIn: 28.4, meanW: 594, peakW: 909, tpvS: 0.53, eai: 2.85 },
+      { meanVelocityMps: 0.93, peakVelocityMps: 1.45, romIn: 30.7, meanW: 560, peakW: 867, tpvS: 0.65, eai: 2.19 },
+    ],
+    reported: { meanVelocityMps: 1.00, peakVelocityMps: 1.60, romIn: 28.7, meanW: 601, peakW: 959, tpvS: 0.53, eai: 3.04 },
+  },
+  forgeOnDevice: {
+    repCount: 5,
+    meanVelocityMps: 0.65,
+    peakVelocityMps: 1.27,
+    romCm: 69.9,
+    medianRomCm: 69.6,
+    scaleSource: "both",
+    scale: 0.0036,
+    axisSource: "gravity",
+    concentricSeconds: [1.0, 1.2, 1.23, 1.03, 1.1],
+    // The range of motion within 4% and the count exact; the concentric window 1.1s against
+    // the sensor's 0.73 because the centimetre travel margin counted a dead-flat 0.6s sit in
+    // the hole as lifting. The drive window (trimPhaseToDrive, build 579) replays this take at
+    // 0.75s and 0.95-0.98 m/s.
+  },
+  rulers: { inPlane3D: 0.004162, shoulderWidth: 0.004448, depthRuler: 0.004186, height: 0.003353, sensorImplied: 0.00377 },
+};
