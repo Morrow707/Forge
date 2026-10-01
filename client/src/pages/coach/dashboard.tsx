@@ -511,7 +511,7 @@ function TeamInviteCard({
       <CardHeader className="shrink-0 p-3 md:p-4">
         <CardTitle className="text-base md:text-lg">Invite Athletes</CardTitle>
         <CardDescription className="hidden sm:block">
-          Each team has its own code -- athletes who use it join that team automatically.
+          Each team has its own code. Athletes who use it join that team automatically.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">

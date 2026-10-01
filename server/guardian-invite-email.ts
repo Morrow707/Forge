@@ -22,8 +22,8 @@ export function buildGuardianInviteEmail(
         <h1 style="font-size:20px;margin:0 0 4px;">You've been listed as ${safeName}'s guardian</h1>
         <p style="color:#555;margin:0 0 20px;">
           ${safeName} signed up for Forge, a training app their coach or program uses. As their
-          parent/guardian, you can set up your own free account to see their training activity --
-          use the link below. It expires in 7 days.
+          parent/guardian, you can set up your own free account to see their training activity.
+          Use the link below. It expires in 7 days.
         </p>
         <a
           href="${safeLink}"

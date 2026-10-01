@@ -190,7 +190,7 @@ export default function SignupPage() {
     }
     if (role === "coach" && !joiningStaff && !expectedAthletesValid) {
       setFormError(
-        `Tell us roughly how many athletes you'll have -- a whole number between ${MIN_EXPECTED_ATHLETES} and ${MAX_EXPECTED_ATHLETES}. You can change it any time.`,
+        `Tell us roughly how many athletes you'll have: a whole number between ${MIN_EXPECTED_ATHLETES} and ${MAX_EXPECTED_ATHLETES}. You can change it any time.`,
       );
       return;
     }
@@ -334,8 +334,8 @@ export default function SignupPage() {
                 />
                 {role === "athlete" && (
                   <p className="text-xs text-muted-foreground">
-                    Under 18? We'll ask for a parent or guardian's email next -- they set up their
-                    own linked account before you can start training.
+                    Under 18? We'll ask for a parent or guardian's email next, and they set up
+                    their own linked account before you can start training.
                   </p>
                 )}
               </div>
@@ -390,7 +390,7 @@ export default function SignupPage() {
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Just a starting point -- you can change it any time, and nothing is charged
+                    Just a starting point. You can change it any time, and nothing is charged
                     while Forge is in beta.
                   </p>
                 </div>
@@ -408,7 +408,7 @@ export default function SignupPage() {
                     placeholder="parent@example.com"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Required under 18 -- we'll email them to set up a linked account before a coach
+                    Required under 18, so we'll email them to set up a linked account before a coach
                     can assign you anything.
                   </p>
                 </div>
@@ -473,7 +473,7 @@ export default function SignupPage() {
                     />
                   </div>
                   <p className="col-span-2 text-xs text-muted-foreground">
-                    Required for camera tracking -- your height is how the app converts what it
+                    Required for camera tracking. Your height is how the app converts what it
                     sees into real distances and speeds.
                   </p>
                 </div>
@@ -616,7 +616,7 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
         <div className="space-y-4 text-sm">
           <p className="text-muted-foreground">
             You signed up without a coach's invite code, so you're training as a{" "}
-            <strong className="text-foreground">Free Agent</strong> -- that just means no coach
+            <strong className="text-foreground">Free Agent</strong>, which just means no coach
             is on your account yet. You can join one anytime from your dashboard and nothing
             you build here goes away when you do.
           </p>
@@ -637,8 +637,8 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
               On a paid plan
             </p>
             <p className="text-muted-foreground">
-              The full AI coach -- conversational AI program building, an AI form-check review of
-              your lifts, and the AI chat coach -- is available as a paid upgrade. You can see the
+              The full AI coach is available as a paid upgrade: conversational AI program
+              building, an AI form-check review of your lifts, and the AI chat coach. You can see the
               plans any time under Upgrade in the app. Nothing is charged while Forge is in beta.
             </p>
           </div>
