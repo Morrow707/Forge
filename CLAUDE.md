@@ -352,6 +352,10 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
+- **Queued, not yet uploaded:** the tracker that films a set follows the exercise
+  (`resolve-tracking-mode.ts`): a generic "full" on a med-ball-named exercise now runs the
+  med-ball tracker, which the 2026-10-01 sensor-paired throw did not. First comparison needs
+  this on the phone.
 - **Queued on `main`, not yet uploaded (Scott: "Queue it. Upload with next calibration
   batch"):** the jump's countermovement read off the hip (`measureCountermovement`,
   `JumpRep.countermovement`: dip depth, eccentric and concentric durations and velocities), so

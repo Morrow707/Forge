@@ -1890,6 +1890,29 @@ camera side waits on the export.
 A Render deploy from PR #199 landed while this session was being filmed and the app showed
 "Can't reach Forge" on a comment POST. The sets queued. Do not merge while Scott is testing.
 
+## Queued: the tracker that films a set follows the exercise (the med ball that met the bar tracker)
+
+2026-10-01. The ten-throw med ball set above came back from the camera as FOUR bar-path reps
+(0.66, 2.57, 1.46, 2.14 m/s), a 51cm "range of motion" and `scale_suspect`, with
+`medBallRepBreakdown` empty: `trackingLevel: "full"`. The program exercise was saved under the
+generic level before `VideoTrackingToggle` learned to pick `med_ball` from the name, and
+`workout.tsx` routed the dialog on the saved level alone. Both trackers did what they do; the
+wrong one ran.
+
+`client/src/lib/resolve-tracking-mode.ts` is now the one resolver, read by the toggle when
+tracking is switched on and by the workout page when the item is built. A SPECIFIC saved level
+stands (the coach's decision); a GENERIC one ("full", "bar_path") resolves from the exercise's
+name and its library equipment ("Medicine Ball" catches a throw whose name never says ball);
+"none" stays off. Category is read only by the toggle at switch-on (plyometric -> jump): a "full"
+already saved on a barbell jump squat is a bar lift the coach kept as one, and remapping it at
+capture time would change what an existing program films. `resolve-tracking-mode.test.ts`.
+
+The squat the same morning, set 3, is the first on the drive window on the phone: 5 reps, ROM
+within 2%, mean 1.14 of the sensor (sets 1-3 of the session: 0.95, 0.83, 1.14). The per-rep
+window wanders +-0.1s against the sensor's; see `OVR_SQUAT_SET3_2026_10_01`. The box jump with
+the sensor at the hip replayed from the export matches the screen (`jumpBreakdown` is in the
+export now; `countermovement` arrives with the queued build).
+
 ## Med ball throw beside OVR, 2026-10-01: the sensor side
 
 Ten throws of a 12lb ball, the sensor on a box with the tether horizontal to a finger

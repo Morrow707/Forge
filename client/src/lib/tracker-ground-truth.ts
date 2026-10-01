@@ -872,12 +872,34 @@ export const OVR_BOX_JUMP_HIP_2026_10_01 = {
   },
 };
 
-// Back squat set 3 beside OVR, 2026-10-01, same session as sets 1 and 2 (OVR_SQUAT_SET1/SET2).
-// Camera numbers to be filled from the export; the sensor side is the screen.
+// Back squat set 3 beside OVR, 2026-10-01, same session as sets 1 and 2 (OVR_SQUAT_SET1/SET2),
+// the first squat on build 579's drive window ON THE PHONE. Count exact, range of motion within
+// 2%, and the mean 1.14 of the sensor: the three squats of the session now sit at 0.95, 0.83
+// and 1.14, which is the per-rep window wandering by +-0.1s against the sensor's, not a bias.
+// Camera per-rep windows 0.87/0.70/0.67/0.73/0.70s; the sensor's (range over mean)
+// 0.83/0.80/0.82/0.82/0.91. The shoulder ruler read 88.3 units here against 98.5 on set 1
+// (scale 0.00409 vs 0.00360), and the ROM still landed, which is the depth ruler and the 3D
+// shin carrying the blend.
 export const OVR_SQUAT_SET3_2026_10_01 = {
   build: 580,
   loadLb: 135,
   repsPerSet: 5,
+  forgeOnDevice: {
+    repCount: 5,
+    meanVelocityMps: 0.97,
+    peakVelocityMps: 1.34,
+    romCm: 69.8,
+    scaleSource: "both",
+    scale: 0.004092,
+    reps: [
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.24, concentricSeconds: 0.87 },
+      { meanVelocityMps: 1.01, peakVelocityMps: 1.35, concentricSeconds: 0.7 },
+      { meanVelocityMps: 1.08, peakVelocityMps: 1.37, concentricSeconds: 0.67 },
+      { meanVelocityMps: 0.95, peakVelocityMps: 1.29, concentricSeconds: 0.73 },
+      { meanVelocityMps: 1.05, peakVelocityMps: 1.45, concentricSeconds: 0.7 },
+    ],
+  },
+  rulers: { inPlane3D: 0.004642, shoulderWidth: 0.004962, depthRuler: 0.0053, height: 0.003821, sensorImplied: 0.00398 },
   sensor: {
     reps: [
       { meanVelocityMps: 0.84, peakVelocityMps: 1.35, romIn: 27.3, meanW: 503, peakW: 809, tpvS: 0.56, eai: 2.31 },
@@ -899,7 +921,12 @@ export const OVR_SQUAT_SET3_2026_10_01 = {
 // sensor reads the component of the hand's motion along the tether (the room's horizontal), so
 // the camera's matching number is medBallRepBreakdown[].peakHorizontalSpeedMps (build 580) and
 // the sensor's range of motion is the tether's horizontal travel, which has no camera number.
-// Filmed on build 580; the camera side waits on the export.
+// Filmed on build 580 -- BY THE BAR TRACKER. The program exercise ("Medicine Ball Rotational
+// Throw") was saved under the generic "full" level and the workout page routed on it, so the
+// camera reported four bar-path "reps" (0.66, 2.57, 1.46, 2.14 m/s), a 51cm range of motion and
+// a scale-suspect outcome, and no med-ball number. Not a tracker fault; the wrong tracker.
+// resolve-tracking-mode.ts (queued) sends it to the med-ball tracker; this set has no camera
+// side and the next one is the first comparison.
 export const OVR_MED_BALL_THROW_2026_10_01 = {
   build: 580,
   ballLb: 12,
