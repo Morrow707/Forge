@@ -24,7 +24,10 @@ describe("collecting the assumption-of-risk release", () => {
 
   it("is mandatory for a guardian claiming a minor's account", () => {
     const base = {
-      password: "correct horse",
+      // Carries a digit and a symbol because every password-setting schema now holds the
+      // shared rule (shared/password-rules.ts); this test is about the risk waiver, not the
+      // password, so the fixture just has to be a valid one.
+      password: "correct horse 7",
       agreedToTerms: true as const,
       agreedToPrivacyPolicy: true as const,
       agreedToMinorMediaRelease: true as const,

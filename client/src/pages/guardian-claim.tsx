@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
+import { PASSWORD_MIN_LENGTH, passwordIsAcceptable } from "@shared/password-rules";
+import { PasswordRequirements } from "@/components/password-requirements";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -114,11 +116,14 @@ export default function GuardianClaimPage() {
               <PasswordInput
                 id="guardian-claim-password"
                 required
-                minLength={6}
+                minLength={preview?.accountExists ? 1 : PASSWORD_MIN_LENGTH}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete={preview?.accountExists ? "current-password" : "new-password"}
               />
+              {!preview?.accountExists && (
+                <PasswordRequirements value={password} className="pt-0.5" />
+              )}
             </div>
             {/* Every box links ITS OWN document, because a mandatory checkbox over text the
                 person cannot reach is not a clickwrap. These all used to point at /legal, which
@@ -202,7 +207,11 @@ export default function GuardianClaimPage() {
                 className="pl-6 text-xs"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={!allAgreed || claimMutation.isPending}>
+            <Button type="submit" className="w-full" disabled={
+                !allAgreed ||
+                claimMutation.isPending ||
+                (!preview?.accountExists && !passwordIsAcceptable(password))
+              }>
               {claimMutation.isPending
                 ? preview?.accountExists
                   ? "Linking…"

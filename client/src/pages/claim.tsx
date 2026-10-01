@@ -5,6 +5,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { PASSWORD_MIN_LENGTH, passwordIsAcceptable } from "@shared/password-rules";
+import { PasswordRequirements } from "@/components/password-requirements";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -250,11 +252,12 @@ export default function ClaimPage() {
               <PasswordInput
                 id="claim-password"
                 required
-                minLength={6}
+                minLength={PASSWORD_MIN_LENGTH}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
               />
+              <PasswordRequirements value={password} className="pt-0.5" />
             </div>
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
               <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
@@ -277,6 +280,7 @@ export default function ClaimPage() {
               disabled={
                 !agreedToTerms ||
                 claimMutation.isPending ||
+                !passwordIsAcceptable(password) ||
                 (!!preview?.needsSport && !sport) ||
                 (!!preview?.needsPosition && !position.trim()) ||
                 (!!preview?.needsHeight && !heightIn.trim()) ||

@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
+import { passwordIsAcceptable } from "@shared/password-rules";
+import { PasswordRequirements } from "@/components/password-requirements";
 import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
@@ -86,8 +88,9 @@ export function ChangePasswordDialog({
               autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="Pick something only you would type"
             />
+            <PasswordRequirements value={newPassword} className="pt-0.5" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="confirm-password">Confirm new password</Label>
@@ -109,7 +112,7 @@ export function ChangePasswordDialog({
             onClick={() => changeMutation.mutate()}
             disabled={
               !currentPassword ||
-              newPassword.length < 6 ||
+              !passwordIsAcceptable(newPassword) ||
               newPassword !== confirmPassword ||
               changeMutation.isPending
             }

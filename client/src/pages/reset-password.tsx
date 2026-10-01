@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
+import { PASSWORD_MIN_LENGTH, passwordIsAcceptable } from "@shared/password-rules";
+import { PasswordRequirements } from "@/components/password-requirements";
 import { toast } from "sonner";
 
 export default function ResetPasswordPage() {
@@ -79,12 +81,13 @@ export default function ResetPasswordPage() {
                     id="password"
                     autoComplete="new-password"
                     required
-                    minLength={6}
+                    minLength={PASSWORD_MIN_LENGTH}
                     disabled={!token}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                   />
+                  <PasswordRequirements value={password} className="pt-0.5" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="confirm">Confirm new password</Label>
@@ -92,7 +95,7 @@ export default function ResetPasswordPage() {
                     id="confirm"
                     autoComplete="new-password"
                     required
-                    minLength={6}
+                    minLength={PASSWORD_MIN_LENGTH}
                     disabled={!token}
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
@@ -103,7 +106,7 @@ export default function ResetPasswordPage() {
                   type="submit"
                   size="lg"
                   className="w-full"
-                  disabled={!token || mutation.isPending}
+                  disabled={!token || mutation.isPending || !passwordIsAcceptable(password)}
                 >
                   {mutation.isPending ? "Saving…" : "Reset Password"}
                 </Button>

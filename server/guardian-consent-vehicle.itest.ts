@@ -68,7 +68,7 @@ describe("the guardian claim as the consent vehicle", () => {
     const { token } = await inviteFor(14);
     const res = await new TestClient(server.baseUrl).post(
       `/api/guardian-invites/${token}/claim`,
-      { password: "a-perfectly-fine-password" },
+      { password: "a-perfectly-fine-password-1" },
     );
     expect(res.status).toBe(400);
   });
@@ -80,7 +80,7 @@ describe("the guardian claim as the consent vehicle", () => {
     const res = await new TestClient(server.baseUrl).post(
       `/api/guardian-invites/${token}/claim`,
       {
-        password: "a-perfectly-fine-password",
+        password: "a-perfectly-fine-password-1",
         agreedToTerms: true,
         agreedToPrivacyPolicy: true,
       },
@@ -95,7 +95,7 @@ describe("the guardian claim as the consent vehicle", () => {
     const res = await new TestClient(server.baseUrl).post(
       `/api/guardian-invites/${token}/claim`,
       {
-        password: "a-perfectly-fine-password",
+        password: "a-perfectly-fine-password-1",
         agreedToTerms: true,
         agreedToPrivacyPolicy: true,
         agreedToMinorMediaRelease: true,
@@ -124,7 +124,7 @@ describe("the guardian claim as the consent vehicle", () => {
   it("records the media release for a teenager, not just an under-13", async () => {
     const { athlete, token } = await inviteFor(15);
     await new TestClient(server.baseUrl).post(`/api/guardian-invites/${token}/claim`, {
-      password: "a-perfectly-fine-password",
+      password: "a-perfectly-fine-password-1",
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
       agreedToMinorMediaRelease: true,
@@ -138,7 +138,7 @@ describe("the guardian claim as the consent vehicle", () => {
   it("keeps the COPPA record for an under-13 and withholds it from a teenager", async () => {
     const young = await inviteFor(9);
     await new TestClient(server.baseUrl).post(`/api/guardian-invites/${young.token}/claim`, {
-      password: "a-perfectly-fine-password",
+      password: "a-perfectly-fine-password-1",
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
       agreedToMinorMediaRelease: true,
@@ -148,7 +148,7 @@ describe("the guardian claim as the consent vehicle", () => {
 
     const teen = await inviteFor(16);
     await new TestClient(server.baseUrl).post(`/api/guardian-invites/${teen.token}/claim`, {
-      password: "a-perfectly-fine-password",
+      password: "a-perfectly-fine-password-1",
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
       agreedToMinorMediaRelease: true,
@@ -162,7 +162,7 @@ describe("the guardian claim as the consent vehicle", () => {
     const { athlete, token } = await inviteFor(14);
     expect(await storage.athleteGateStatus(athlete.id)).toBe("needs_guardian");
     await new TestClient(server.baseUrl).post(`/api/guardian-invites/${token}/claim`, {
-      password: "a-perfectly-fine-password",
+      password: "a-perfectly-fine-password-1",
       agreedToTerms: true,
       agreedToPrivacyPolicy: true,
       agreedToMinorMediaRelease: true,

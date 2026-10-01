@@ -20,6 +20,7 @@ import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { reviewEventPayloadSchema } from "./video-review";
+import { PASSWORD_RULES } from "./password-rules";
 import { BODY_PAIN_PARTS } from "./wellness";
 import type { WidgetLayoutEntry } from "./dashboard-widgets";
 import type { RosterGroup } from "./roster-groups";
@@ -930,13 +931,30 @@ export type GuardianInvite = typeof guardianInvites.$inferSelect;
 // a training calendar, so it asks for the athlete's name typed back -- the same shape as every
 // other irreversible confirmation in this app, and for the same reason: a destructive action one
 // tap away from a read-only screen is one somebody reaches by accident.
+/**
+ * The one password field. Every schema below that sets a password uses this; the ones that
+ * merely re-check an existing password (login, and the re-auth before an email or account
+ * change) deliberately keep `z.string().min(1)` -- see shared/password-rules.ts for why
+ * applying this at sign-in would lock out every account that predates the rule.
+ *
+ * superRefine rather than a chain of .refine() calls so a password missing two things is
+ * told about both at once instead of fixing one and being refused again.
+ */
+export const passwordField = z.string().superRefine((value, ctx) => {
+  for (const rule of PASSWORD_RULES) {
+    if (!rule.test(value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: rule.label });
+    }
+  }
+});
+
 export const withdrawGuardianConsentSchema = z.object({
   confirmAthleteName: z.string().min(1, "Type the athlete's name to confirm"),
 });
 export type WithdrawGuardianConsentInput = z.infer<typeof withdrawGuardianConsentSchema>;
 
 export const claimGuardianInviteSchema = z.object({
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: passwordField,
   agreedToTerms: z.literal(true, {
     errorMap: () => ({ message: "You must agree to the terms to create an account" }),
   }),
@@ -4073,7 +4091,7 @@ export type ProvisionalAthlete = typeof provisionalAthletes.$inferSelect;
 
 export const claimProvisionalAthleteSchema = z.object({
   email: z.string().trim().email(),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: passwordField,
   // Only required here if the coach's intake sheet didn't already capture
   // one (see provisionalAthletes.dateOfBirth) -- whichever of the two is
   // present is what the claim route uses to derive a privacy tier.
@@ -7872,7 +7890,7 @@ export const MAX_EXPECTED_ATHLETES = 5000;
 // never self-service, only promoted directly in the database.
 export const signupSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: passwordField,
   name: z.string().min(1, "Name is required"),
   role: z.enum(["coach", "athlete"]),
   coachCode: z.string().optional(),
@@ -7960,13 +7978,13 @@ export type RequestPasswordResetInput = z.infer<typeof requestPasswordResetSchem
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(1),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: passwordField,
 });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z.string().min(6, "Password must be at least 6 characters"),
+  newPassword: passwordField,
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
@@ -8103,7 +8121,7 @@ export const updateAccountEmailSchema = z.object({
 
 export const updateAccountPasswordSchema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(6),
+  newPassword: passwordField,
 });
 
 // Any staff member's own personal touch (not gated to the primary the

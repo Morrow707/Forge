@@ -1,4 +1,6 @@
 import { MAX_EXPECTED_ATHLETES } from "@shared/schema-constants";
+import { PASSWORD_MIN_LENGTH, passwordIsAcceptable } from "@shared/password-rules";
+import { PasswordRequirements } from "@/components/password-requirements";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -315,11 +317,12 @@ export default function SignupPage() {
                   id="password"
                   autoComplete="new-password"
                   required
-                  minLength={6}
+                  minLength={PASSWORD_MIN_LENGTH}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
+                  placeholder="Pick something only you would type"
                 />
+                <PasswordRequirements value={password} className="pt-0.5" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="dateOfBirth">Date of birth</Label>
@@ -569,6 +572,7 @@ export default function SignupPage() {
                 disabled={
                   signupMutation.isPending ||
                   !agreedToTerms ||
+                  !passwordIsAcceptable(password) ||
                   (isMinorAthlete && !guardianEmail.trim()) ||
                   (role === "athlete" && (!sport || !position.trim())) ||
                   (role === "athlete" && (!heightIn.trim() || !bodyWeightLbs.trim())) ||
