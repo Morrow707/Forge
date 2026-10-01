@@ -88,7 +88,7 @@ export default function ForgotPasswordPage() {
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
                   If an account exists for that email, we've sent a link to reset your password.
-                  It expires in an hour -- check your inbox (and spam folder), or try again if you
+                  It expires in an hour, check your inbox (and spam folder), or try again if you
                   mistyped the email.
                 </p>
                 <Button

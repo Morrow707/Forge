@@ -697,7 +697,7 @@ export function extractCaptureDeviceInfo(diagLog: string[]): CaptureDeviceInfo {
     activeFormat,
     focusMode,
     exposureMode,
-    aiPipeline: "Apple Vision framework (on-device VNDetectHumanBodyPoseRequest) -- no cloud AI involved",
+    aiPipeline: "Apple Vision framework (on-device VNDetectHumanBodyPoseRequest), no cloud AI involved",
     focusSettled,
     exposureSettled,
     telemetrySamples: camLines.length,

@@ -1129,7 +1129,7 @@ export function AppShell({
                   onClick={() => void refetchCoaches()}
                   className="flex items-center gap-1.5 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  Some sections are hidden -- tap to retry
+                  Some sections are hidden, tap to retry
                 </button>
               )}
               {user?.role === "coach" && (

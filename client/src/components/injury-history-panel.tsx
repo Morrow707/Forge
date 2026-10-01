@@ -103,7 +103,7 @@ export function InjuryHistoryPanel({
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        When and where you've been hurt -- lets the AI program builder add correctives around it
+        When and where you've been hurt, lets the AI program builder add correctives around it
         or stay cautious near it.
       </p>
 
@@ -126,7 +126,7 @@ export function InjuryHistoryPanel({
                 <p className="font-semibold">
                   {bodyPartLabel(e.bodyPart)}{" "}
                   <span className="font-normal text-muted-foreground">
-                    -- {format(parseISO(e.occurredOn), "MMM d, yyyy")}
+                    {format(parseISO(e.occurredOn), "MMM d, yyyy")}
                   </span>
                 </p>
                 {e.description && (

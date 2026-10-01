@@ -165,7 +165,7 @@ export function StatTile({
               {!unavailable && trend && <Sparkline values={trend} className="mb-1 shrink-0" />}
             </div>
             <p className="truncate text-sm text-muted-foreground">
-              {unavailable ? `${label} -- couldn't load` : label}
+              {unavailable ? `${label}, couldn't load` : label}
             </p>
           </div>
         </CardContent>

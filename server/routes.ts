@@ -605,7 +605,7 @@ const uploadTeamLogo = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
-      return cb(new Error("Unsupported image format -- use PNG, JPEG, or WebP"));
+      return cb(new Error("Unsupported image format, use PNG, JPEG, or WebP"));
     }
     cb(null, true);
   },
@@ -629,7 +629,7 @@ const uploadTeamBrandingLogo = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
-      return cb(new Error("Unsupported image format -- use PNG, JPEG, or WebP"));
+      return cb(new Error("Unsupported image format, use PNG, JPEG, or WebP"));
     }
     cb(null, true);
   },
@@ -653,7 +653,7 @@ const uploadProblemReportPhoto = multer({
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!TEAM_LOGO_EXTENSION_BY_MIME[file.mimetype.split(";")[0].trim().toLowerCase()]) {
-      return cb(new Error("Unsupported image format -- use PNG, JPEG, or WebP"));
+      return cb(new Error("Unsupported image format, use PNG, JPEG, or WebP"));
     }
     cb(null, true);
   },
@@ -816,7 +816,7 @@ async function requireFreeAgent(req: any, res: any, next: any) {
   const coaches = await storage.getCoachesForAthlete(user.id);
   if (coaches.length > 0) {
     return res.status(403).json({
-      message: "Your coach manages this for you now -- it's only self-serve while you don't have one.",
+      message: "Your coach manages this for you now, it's only self-serve while you don't have one.",
     });
   }
   next();
@@ -1802,7 +1802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = z.object({ query: z.string().trim().min(1).max(200) }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const result = await storage.interpretExerciseSearchQuery(parsed.data.query);
-    if (!result) return res.status(422).json({ message: "Couldn't interpret that search -- try the filters below instead." });
+    if (!result) return res.status(422).json({ message: "Couldn't interpret that search, try the filters below instead." });
     res.json(result);
   });
 
@@ -2189,7 +2189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const result = await storage.deleteClass(id);
     if (!result.deleted) {
       return res.status(409).json({
-        message: `Can't delete -- ${result.enrolledCount} athlete${result.enrolledCount === 1 ? "" : "s"} enrolled. Unpublish it instead if you don't want new signups.`,
+        message: `Can't delete, ${result.enrolledCount} athlete${result.enrolledCount === 1 ? "" : "s"} enrolled. Unpublish it instead if you don't want new signups.`,
       });
     }
     res.status(204).end();
@@ -2599,7 +2599,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!result) {
       return res
         .status(422)
-        .json({ message: "Couldn't interpret that search -- try the filters below instead." });
+        .json({ message: "Couldn't interpret that search, try the filters below instead." });
     }
     res.json(result);
   });
@@ -2758,7 +2758,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const draft = await storage.generateProgramDraftFromPhoto(user.id, parsed.data.images);
-    if (!draft) return res.status(422).json({ message: "Couldn't read that photo -- try a clearer shot." });
+    if (!draft) return res.status(422).json({ message: "Couldn't read that photo, try a clearer shot." });
     res.json(draft);
   });
 
@@ -2852,7 +2852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     if (!draft) {
       return res.status(422).json({
-        message: "Couldn't organize that into a class -- try pasting more text or a clearer photo.",
+        message: "Couldn't organize that into a class, try pasting more text or a clearer photo.",
       });
     }
     res.json(draft);
@@ -2902,7 +2902,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const result = await storage.deleteClass(id);
     if (!result.deleted) {
       return res.status(409).json({
-        message: `Can't delete -- ${result.enrolledCount} athlete${result.enrolledCount === 1 ? "" : "s"} enrolled. Unpublish it instead if you don't want new signups.`,
+        message: `Can't delete, ${result.enrolledCount} athlete${result.enrolledCount === 1 ? "" : "s"} enrolled. Unpublish it instead if you don't want new signups.`,
       });
     }
     res.status(204).end();
@@ -2954,7 +2954,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const draft = await storage.generateAcademyTrackDraftFromPhoto(parsed.data.images);
-    if (!draft) return res.status(422).json({ message: "Couldn't read that photo -- try a clearer shot." });
+    if (!draft) return res.status(422).json({ message: "Couldn't read that photo, try a clearer shot." });
     res.json(draft);
   });
 
@@ -3376,7 +3376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       throw err;
     }
     if (!result) {
-      return res.status(422).json({ message: "Couldn't understand that as a data query -- try naming an age range, sport, position, or metric directly." });
+      return res.status(422).json({ message: "Couldn't understand that as a data query, try naming an age range, sport, position, or metric directly." });
     }
     res.json(result);
   });
@@ -3427,7 +3427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     if (!result) {
       return res.status(422).json({
-        message: "Couldn't understand that as a data query -- try naming an age range, sport, position, or metric directly.",
+        message: "Couldn't understand that as a data query, try naming an age range, sport, position, or metric directly.",
       });
     }
 
@@ -3718,7 +3718,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const empty = parsed.data.unlockedSkillSports.filter((s) => !sportsWithContent.has(s));
       if (empty.length > 0) {
         return res.status(400).json({
-          message: `${empty.join(", ")} ${empty.length === 1 ? "has" : "have"} no Skill Bank content yet -- nothing to unlock.`,
+          message: `${empty.join(", ")} ${empty.length === 1 ? "has" : "have"} no Skill Bank content yet, nothing to unlock.`,
         });
       }
     }
@@ -3727,7 +3727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (unbuilt.length > 0) {
         const labels = unbuilt.map((id) => FREE_AGENT_ADD_ONS[id].label).join(", ");
         return res.status(400).json({
-          message: `${labels} ${unbuilt.length === 1 ? "isn't" : "aren't"} built yet -- nothing to assign.`,
+          message: `${labels} ${unbuilt.length === 1 ? "isn't" : "aren't"} built yet, nothing to assign.`,
         });
       }
     }
@@ -4260,7 +4260,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!prompt) return res.status(400).json({ message: "prompt is required" });
     const filters = await storage.translateNlqToAthleteFilters(prompt);
     if (!filters) {
-      return res.status(422).json({ message: "Couldn't understand that search -- try the filter panel instead." });
+      return res.status(422).json({ message: "Couldn't understand that search, try the filter panel instead." });
     }
     const user = currentUser(req);
     let rows;
@@ -4428,7 +4428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // first place.
     if (type === "terms_of_service") {
       return res.status(400).json({
-        message: "The Terms of Use are the signup agreement -- edit them in the signup agreement editor.",
+        message: "The Terms of Use are the signup agreement, edit them in the signup agreement editor.",
       });
     }
     const parsed = updateLegalDocumentSchema.safeParse(req.body);
@@ -4465,7 +4465,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")}</p>`;
     const result = await sendEmail({ to: parsed.data.to, subject: title, html });
-    if (!result.sent) return res.status(502).json({ message: "Email not sent -- provider isn't configured." });
+    if (!result.sent) return res.status(502).json({ message: "Email not sent, provider isn't configured." });
     res.json({ success: true });
   });
 
@@ -4731,7 +4731,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const draft = await storage.generateProgramDraftFromPhoto(user.id, parsed.data.images);
-    if (!draft) return res.status(422).json({ message: "Couldn't read that photo -- try a clearer shot." });
+    if (!draft) return res.status(422).json({ message: "Couldn't read that photo, try a clearer shot." });
     res.json(draft);
   });
 
@@ -5748,7 +5748,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Athlete not found" });
       }
       return res.status(400).json({
-        message: `You can only pin up to ${MAX_PINNED_ATHLETES} athletes -- unpin one first.`,
+        message: `You can only pin up to ${MAX_PINNED_ATHLETES} athletes, unpin one first.`,
       });
     }
     res.json({ pinned: result.pinned, pinnedAthleteIds: result.pinnedAthleteIds });
@@ -5892,7 +5892,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (v.status === "scoped" && !v.reason?.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Say why, in your own words -- it is recorded with the ruling.",
+            message: "Say why, in your own words, it is recorded with the ruling.",
           });
         }
       })
@@ -6133,7 +6133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...source,
         passageCount: 0,
         message:
-          "Uploaded. Reading the file and filing it by subject now -- progress shows on the " +
+          "Uploaded. Reading the file and filing it by subject now, progress shows on the " +
           "source below, and you can leave this screen.",
       });
     },
@@ -6430,7 +6430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!result) {
       return res
         .status(422)
-        .json({ message: "Couldn't work out an easier version just now -- try again in a bit." });
+        .json({ message: "Couldn't work out an easier version just now, try again in a bit." });
     }
     res.json(result);
   });
@@ -7106,7 +7106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = updateMovementScreenBatterySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const battery = await storage.updateMovementScreenBattery(user.id, Number(req.params.id), parsed.data);
-    if (!battery) return res.status(404).json({ message: "Battery not found, or it's the Forge-official one -- fork it first" });
+    if (!battery) return res.status(404).json({ message: "Battery not found, or it's the Forge-official one, fork it first" });
     res.json(battery);
   });
 
@@ -8045,7 +8045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const entitlements = await getEntitlementsForCoach(user.id);
       if (!entitlements.hasPersonalPage) {
         return res.status(402).json({
-          message: "Personal Page is a paid upgrade -- upgrade to customize your athletes' exercise screen.",
+          message: "Personal Page is a paid upgrade, upgrade to customize your athletes' exercise screen.",
           personalPagePaywall: true,
         });
       }
@@ -8598,7 +8598,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // reviewExternalWaiver returns null for a rejection with no reason, which is the one
         // way this fails that is worth its own sentence: the same file comes straight back
         // otherwise.
-        return res.status(400).json({ message: "Say why it was rejected -- they will see it." });
+        return res.status(400).json({ message: "Say why it was rejected, they will see it." });
       }
       res.json(updated);
     } catch (err) {
@@ -8696,7 +8696,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!target) return res.status(404).json({ message: "User not found" });
     if (target.role === "guardian") {
       return res.status(400).json({
-        message: "Guardian accounts can't be converted here -- their family-group linkage needs its own flow",
+        message: "Guardian accounts can't be converted here, their family-group linkage needs its own flow",
       });
     }
     const updated = await storage.setUserRole(userId, parsed.data.role);
@@ -10458,11 +10458,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // not exist" and sent people off to enter a whole nutrition panel by hand.
     if (result.status === "unavailable") {
       return res.status(503).json({
-        message: "Couldn't reach the food databases just now -- try again in a moment, or enter it manually.",
+        message: "Couldn't reach the food databases just now, try again in a moment, or enter it manually.",
       });
     }
     if (result.status === "not_found") {
-      return res.status(404).json({ message: "Couldn't find that product -- try search or enter it manually." });
+      return res.status(404).json({ message: "Couldn't find that product, try search or enter it manually." });
     }
     res.json(result.food);
   });
@@ -10483,7 +10483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const results = await storage.searchFoods(query);
     if (results.status === "unavailable") {
       return res.status(503).json({
-        message: "Couldn't reach the food database just now -- try again in a moment, or enter it manually.",
+        message: "Couldn't reach the food database just now, try again in a moment, or enter it manually.",
       });
     }
     res.json(results.foods);
@@ -10803,7 +10803,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { date: submittedDate, ...values } = parsed.data;
     if (submittedDate && !wellnessDateWithinWindow(submittedDate)) {
       return res.status(400).json({
-        message: "That check-in is for a day that's already passed -- it can't be filled in now.",
+        message: "That check-in is for a day that's already passed, it can't be filled in now.",
       });
     }
     const date = submittedDate ?? todayIso();
@@ -11745,7 +11745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!result) {
         return res
           .status(422)
-          .json({ message: "Couldn't interpret that search -- try the filters below instead." });
+          .json({ message: "Couldn't interpret that search, try the filters below instead." });
       }
       res.json(result);
     },
@@ -12460,7 +12460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lessonId = Number(req.params.lessonId);
       if (!testingUnlockAllPaywalls && user.email !== COMPED_FREE_AGENT_LESSON_BUYER) {
         return res.status(402).json({
-          message: "Lesson purchases aren't live yet -- payments are coming soon.",
+          message: "Lesson purchases aren't live yet, payments are coming soon.",
           freeAgentPaywall: true,
         });
       }
@@ -13053,7 +13053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lesson = await storage.getClassLessonForPurchase(parsed.data.classId, parsed.data.lessonId);
       if (!lesson) return res.status(404).json({ message: "Lesson not found" });
       if (!lesson.priceCents || lesson.priceCents <= 0) {
-        return res.status(400).json({ message: "That lesson is included -- nothing to buy." });
+        return res.status(400).json({ message: "That lesson is included, nothing to buy." });
       }
 
       const { successUrl, cancelUrl } = checkoutReturnUrls(req, `/athlete/classes/${parsed.data.classId}`);

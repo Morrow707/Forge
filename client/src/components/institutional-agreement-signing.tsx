@@ -372,7 +372,7 @@ export function InstitutionalAgreementSigning() {
         </CardTitle>
         <CardDescription>
           Your organisation needs a signed Institutional Service Agreement on file. Fill in your
-          details, read it through, and sign it here -- there is nothing to request, nothing to
+          details, read it through, and sign it here, there is nothing to request, nothing to
           print and nothing to wait for.
         </CardDescription>
       </CardHeader>
@@ -481,7 +481,7 @@ export function InstitutionalAgreementSigning() {
               <p className="rounded-md bg-muted p-3 text-[11px] leading-relaxed text-muted-foreground">
                 Print it or open it in a signing app, have{" "}
                 {details.signerName || "your authorised representative"} sign it, then come back and
-                upload the signed copy in the box below -- choose{" "}
+                upload the signed copy in the box below, choose{" "}
                 <span className="font-medium">{DOCUMENT_LABEL.institutional_agreement}</span> as the
                 document type. Signed on paper, it isn't on file until the signed copy has been
                 uploaded and checked.

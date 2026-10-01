@@ -96,7 +96,7 @@ export function GameDaysSection({ teamId, teamName }: { teamId: number; teamName
         />
       ) : teamGameDays.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No games scheduled yet -- add one to plan the week's training around it.
+          No games scheduled yet, add one to plan the week's training around it.
         </p>
       ) : (
         <div className="space-y-1.5">

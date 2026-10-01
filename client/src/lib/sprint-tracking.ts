@@ -367,7 +367,7 @@ export function detectSprintFaults(
       if (avgLean < thresholds.minAccelerationLeanDeg) {
         faults.push({
           code: "upright_acceleration",
-          label: "Running upright too early -- drive forward harder out of the start",
+          label: "Running upright too early, drive forward harder out of the start",
         });
       }
     }
@@ -396,7 +396,7 @@ export function detectSprintFaults(
       if (maxDrop > thresholds.hipDropRatioThreshold) {
         faults.push({
           code: "hip_drop",
-          label: "Hip drop during stance -- work on single-leg glute strength",
+          label: "Hip drop during stance, work on single-leg glute strength",
         });
       }
     }

@@ -59,7 +59,7 @@ export default function ResetPasswordPage() {
             <CardTitle>Choose a New Password</CardTitle>
             {!done && !token && (
               <CardDescription>
-                This link is missing its token -- request a new one from the forgot-password
+                This link is missing its token, request a new one from the forgot-password
                 page.
               </CardDescription>
             )}

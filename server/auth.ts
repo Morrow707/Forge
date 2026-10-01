@@ -1644,7 +1644,7 @@ export function setupAuth(app: Express) {
     const code = typeof req.body?.code === "string" ? req.body.code : "";
     const result = await storage.confirmMfaSetup(user.id, code);
     if (!result) {
-      return res.status(400).json({ message: "Invalid code -- check your authenticator app and try again." });
+      return res.status(400).json({ message: "Invalid code, check your authenticator app and try again." });
     }
     res.json(result);
   });

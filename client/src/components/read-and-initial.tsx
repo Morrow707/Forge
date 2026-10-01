@@ -102,7 +102,7 @@ export function InitialsField({
         placeholder="AB"
         aria-invalid={invalid || undefined}
       />
-      {invalid && <p className="text-xs text-destructive">Initials only -- two to five letters.</p>}
+      {invalid && <p className="text-xs text-destructive">Initials only, two to five letters.</p>}
     </div>
   );
 }

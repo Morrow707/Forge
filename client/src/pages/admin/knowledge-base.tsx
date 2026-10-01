@@ -169,7 +169,7 @@ export function KnowledgeBaseContent() {
       // likelier cause and the thing to do about it.
       toast.error(
         "The upload did not finish. This is usually the connection dropping partway through a " +
-          "large file -- check the list below in case it arrived, then try again on wifi.",
+          "large file, check the list below in case it arrived, then try again on wifi.",
         { duration: 15000 },
       );
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
@@ -215,7 +215,7 @@ export function KnowledgeBaseContent() {
       // count here would be inventing one.
       toast.info(
         "Checking for contradictions. This runs in the background and takes a while on a big " +
-          "book -- anything it finds appears in the queue above.",
+          "book, anything it finds appears in the queue above.",
         { duration: 10000 },
       );
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
@@ -312,7 +312,7 @@ export function KnowledgeBaseContent() {
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
               <p className="text-xs text-muted-foreground">
-                On a phone this opens the document picker -- choose Browse or Files to reach a PDF
+                On a phone this opens the document picker, choose Browse or Files to reach a PDF
                 saved on the device. Up to 60MB.
               </p>
             </div>
@@ -347,7 +347,7 @@ export function KnowledgeBaseContent() {
               </CardTitle>
               <CardDescription>
                 Two sources disagree. This is your review queue: a ruling is recorded here for
-                the record, and nothing about it reaches the assistants yet -- retrieval still
+                the record, and nothing about it reaches the assistants yet, retrieval still
                 quotes both passages exactly as before. Wiring a ruling into what the AI says is
                 a separate piece of work.
               </CardDescription>
@@ -586,7 +586,7 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         rows={2}
-        placeholder="Why, in your own words. Recorded with the ruling -- not shown to coaches today."
+        placeholder="Why, in your own words. Recorded with the ruling, not shown to coaches today."
       />
       <Input
         value={scopeSports}
@@ -935,7 +935,7 @@ function SearchHit({ hit }: { hit: any }) {
           />
           <p className="text-xs text-muted-foreground">
             Fixes the passage in place and re-indexes it. Use this for a misread number or a chunk
-            that split mid-table -- to remove content, delete the source.
+            that split mid-table, to remove content, delete the source.
           </p>
           <div className="flex gap-2">
             <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending || !text.trim()}>
@@ -1088,7 +1088,7 @@ function PagePicker({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        A blank tile is a page with nothing the reader can pick up -- it would transcribe to
+        A blank tile is a page with nothing the reader can pick up, it would transcribe to
         nothing, so it is worth leaving out of the range.
       </p>
     </div>
@@ -1208,7 +1208,7 @@ function IngestProgress({ source }: { source: Source }) {
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        This runs on the server -- you can leave this screen and come back.
+        This runs on the server, you can leave this screen and come back.
       </p>
     </div>
   );
@@ -1378,7 +1378,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
                   type="button"
                   key={p.pageNumber}
                   onClick={() => jumpToPage(p.pageNumber)}
-                  title={`Page ${p.pageNumber}: ${p.passages} passage(s), ${p.characters} characters -- tap to read it`}
+                  title={`Page ${p.pageNumber}: ${p.passages} passage(s), ${p.characters} characters, tap to read it`}
                   className={cn(
                     "rounded px-1.5 py-0.5 text-[10px] tabular-nums transition-colors",
                     p.pageNumber === page
@@ -1394,7 +1394,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Tap a page to read it. Amber pages produced very little text -- a run of them at the
+            Tap a page to read it. Amber pages produced very little text, a run of them at the
             front or the back is usually front matter, an index or a bibliography.
           </p>
           <div className="flex flex-wrap items-end gap-2">
@@ -1471,7 +1471,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
               </p>
               {page != null && (
                 <p className="text-xs text-muted-foreground">
-                  Page {page} of {source.pageCount ?? 0} -- {passages.length} passage(s) on it
+                  Page {page} of {source.pageCount ?? 0}, {passages.length} passage(s) on it
                 </p>
               )}
             </div>

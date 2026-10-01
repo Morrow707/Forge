@@ -92,7 +92,7 @@ export function AdminTeachChatPanel({
       setContent("");
       setProposal(result.proposal ?? null);
     },
-    onError: () => toast.error("Couldn't send that -- try again"),
+    onError: () => toast.error("Couldn't send that, try again"),
   });
 
   const apply = useMutation({
@@ -105,13 +105,13 @@ export function AdminTeachChatPanel({
       setProposal(null);
       toast.success("Applied");
     },
-    onError: () => toast.error("Couldn't apply that -- try again"),
+    onError: () => toast.error("Couldn't apply that, try again"),
   });
 
   async function handleCopy(message: KnowledgeMessage) {
     const copied = await copyToClipboard(message.content);
     if (!copied) {
-      toast.error("Couldn't copy -- try selecting the text instead");
+      toast.error("Couldn't copy, try selecting the text instead");
       return;
     }
     toast.success("Message copied");

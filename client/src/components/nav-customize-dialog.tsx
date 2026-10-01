@@ -90,7 +90,7 @@ export function NavCustomizeDialog({
         <DialogHeader>
           <DialogTitle>Customize navigation</DialogTitle>
           <DialogDescription>
-            Hide tabs your program doesn't use, or rename the ones you keep -- applies to you
+            Hide tabs your program doesn't use, or rename the ones you keep, applies to you
             and your whole staff. Your athletes' own navigation is unchanged.
           </DialogDescription>
         </DialogHeader>

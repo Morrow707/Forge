@@ -26,7 +26,7 @@ export function PendingVideosBanner() {
         <CardContent className="flex items-center gap-3 p-4">
           <CloudUpload className="h-5 w-5 shrink-0 text-primary" />
           <p className="flex-1 text-sm font-semibold text-foreground">
-            {count} video{count === 1 ? "" : "s"} waiting to upload -- will finish automatically on
+            {count} video{count === 1 ? "" : "s"} waiting to upload, will finish automatically on
             Wi-Fi, or upload now from the Video Bank.
           </p>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />

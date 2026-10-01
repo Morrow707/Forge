@@ -102,8 +102,8 @@ export function CalibrationEvidence() {
               </div>
               {data.evidence.loop.gravityReadings === 0 && (
                 <p className="pt-1 text-xs text-muted-foreground">
-                  Nothing has started it yet. One flat countermovement jump -- landing where you
-                  took off, not onto a box -- produces the first reading.
+                  Nothing has started it yet. One flat countermovement jump, landing where you
+                  took off, not onto a box, produces the first reading.
                 </p>
               )}
             </div>

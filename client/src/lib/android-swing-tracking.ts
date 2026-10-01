@@ -183,7 +183,7 @@ export function summarizeRotation(
         : {
             score: 45,
             label: "low",
-            notes: ["Cross-diagonal check didn't confirm this rotation -- the peak reading may be a tracking artifact"],
+            notes: ["Cross-diagonal check didn't confirm this rotation, the peak reading may be a tracking artifact"],
           };
   }
 

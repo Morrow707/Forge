@@ -295,7 +295,7 @@ export default function AdminAcademyTrackBuilder() {
                 value={keyPrinciplesForAi}
                 onChange={(e) => setKeyPrinciplesForAi(e.target.value)}
                 rows={3}
-                placeholder="A concise distillation injected into every AI coach's system prompt alongside every other track's -- not the full lesson text, just the core takeaways."
+                placeholder="A concise distillation injected into every AI coach's system prompt alongside every other track's, not the full lesson text, just the core takeaways."
               />
             </div>
           </CardContent>
@@ -378,7 +378,7 @@ export default function AdminAcademyTrackBuilder() {
                       )
                     }
                     rows={6}
-                    placeholder="Lesson content -- separate paragraphs with a blank line."
+                    placeholder="Lesson content, separate paragraphs with a blank line."
                   />
                 </CardContent>
               </Card>
@@ -521,7 +521,7 @@ export default function AdminAcademyTrackBuilder() {
                             )
                           }
                           rows={2}
-                          placeholder="Explanation shown when this answer is expanded -- why it's right or wrong."
+                          placeholder="Explanation shown when this answer is expanded, why it's right or wrong."
                         />
                       </div>
                     ))}
@@ -558,7 +558,7 @@ export default function AdminAcademyTrackBuilder() {
               <Eye className="h-4 w-4" />
               Preview
             </CardTitle>
-            <CardDescription>What a coach sees -- updates as you edit.</CardDescription>
+            <CardDescription>What a coach sees, updates as you edit.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>

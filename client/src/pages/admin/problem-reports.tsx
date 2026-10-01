@@ -56,7 +56,7 @@ export function ProblemReportsContent() {
             Reported problems
           </CardTitle>
           <CardDescription>
-            Sent from any coach/athlete/admin's account menu -- newest first. Reports stay here
+            Sent from any coach/athlete/admin's account menu, newest first. Reports stay here
             until you clear them.
           </CardDescription>
         </div>

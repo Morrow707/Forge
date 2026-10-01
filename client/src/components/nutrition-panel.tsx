@@ -326,7 +326,7 @@ export function NutritionPanel({
       )}
       {!editable && !hasAnyTarget && (
         <p className="py-4 text-center text-sm text-muted-foreground">
-          No nutrition targets set yet -- your coach hasn't added a plan here.
+          No nutrition targets set yet, your coach hasn't added a plan here.
         </p>
       )}
 
@@ -353,7 +353,7 @@ export function NutritionPanel({
             // The heads-up, so the fields disappearing later reads as designed rather than as
             // the app having lost them.
             <p className="rounded-md border border-border bg-surface-elevated p-3 text-xs text-muted-foreground">
-              Fill these in and save, and they tuck away into a single line -- your daily rings
+              Fill these in and save, and they tuck away into a single line, your daily rings
               move to the top. You can reopen them any time to change a number.
             </p>
           )}
@@ -411,7 +411,7 @@ export function NutritionPanel({
                 What's your main nutrition goal right now?
               </Label>
               <p className="text-xs text-muted-foreground">
-                One-time -- the nutrition AI remembers this so it doesn't ask again. You can
+                One-time, the nutrition AI remembers this so it doesn't ask again. You can
                 change it anytime with "Set new goal."
               </p>
               <RadioChipGroup
@@ -466,7 +466,7 @@ export function NutritionPanel({
                 Ask about nutrition
               </Label>
               <p className="text-xs text-muted-foreground">
-                General sports-nutrition education -- not a personal plan. For an individualized
+                General sports-nutrition education, not a personal plan. For an individualized
                 number, talk to a coach or a registered dietitian.
               </p>
               <div className="flex gap-2">

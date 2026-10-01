@@ -105,7 +105,7 @@ export default function CoachesCorner() {
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start checkout -- try again");
+      toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
       setBuying(false);
     }
   }
@@ -266,7 +266,7 @@ export default function CoachesCorner() {
             <p className="max-w-2xl text-sm text-muted-foreground">
               CSCS-aligned strength science, Olympic lift coaching progressions, youth development,
               sport-specific arm care, reading Forge's own analytics, season planning, and team
-              culture -- a real coach-education curriculum, for coaches who want to go deeper.
+              culture, a real coach-education curriculum, for coaches who want to go deeper.
             </p>
             {/* THE OLD COPY NAMED A PLAN THAT DOES NOT EXIST. "Included with a Pro
                 coaching plan" described a tier the org pricing model has no room for

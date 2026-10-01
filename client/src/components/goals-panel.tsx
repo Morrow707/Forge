@@ -210,7 +210,7 @@ export function GoalsPanel({
             <ReadFailed what="past goals" onRetry={() => void refetchHistory()} />
           ) : archivedGoals.length === 0 ? (
             <p className="py-2 text-center text-sm text-muted-foreground">
-              Nothing here yet -- goals you remove from the active list stay here.
+              Nothing here yet, goals you remove from the active list stay here.
             </p>
           ) : (
             archivedGoals.map((g) => {

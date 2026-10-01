@@ -54,11 +54,11 @@ export function describeSaveOutcome(outcome: SaveOutcome, noun = "file"): string
     case "photos":
       return `Saved to your Photos.`;
     case "shared":
-      return `Your ${noun} is ready -- pick where to save it.`;
+      return `Your ${noun} is ready, pick where to save it.`;
     case "downloaded":
       return `Downloaded.`;
     case "cancelled":
-      return `Save cancelled -- nothing was saved.`;
+      return `Save cancelled, nothing was saved.`;
     case "failed":
       return `Could not save that ${noun}: ${outcome.reason}`;
   }

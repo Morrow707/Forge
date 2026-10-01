@@ -69,7 +69,7 @@ export async function notifyGuardiansOfTermsChange(): Promise<{
     try {
       await sendEmail({
         to: guardian.email,
-        subject: "Forge's terms have changed -- please review",
+        subject: "Forge's terms have changed, please review",
         html: buildTermsChangeEmail(
           guardian.name,
           athletes.map((a) => a.athleteName),
@@ -110,7 +110,7 @@ export function buildTermsChangeEmail(guardianName: string, athleteNames: string
         <ul style="color:#555;margin:0 0 16px;">${names}</ul>
         <p style="color:#555;margin:0 0 16px;">
           Sign in to Forge and open your guardian dashboard to read the new terms and accept or
-          decline them. Your athlete can keep training in the meantime -- nothing is switched off
+          decline them. Your athlete can keep training in the meantime, nothing is switched off
           while you decide.
         </p>
         <p style="color:#999;font-size:12px;margin:0;">

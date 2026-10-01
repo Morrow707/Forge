@@ -86,7 +86,7 @@ export function assessOverheadSquat(frames: PoseFrame[]): OverheadSquatAssessmen
   };
   const minKneeAngle = kneeAngles.length ? percentile(kneeAngles, 0.1) : 180;
   if (minKneeAngle > 100) {
-    faults.push({ code: "shallow_depth", label: `Depth: knees only reached ~${Math.round(minKneeAngle)}° -- aim to break parallel` });
+    faults.push({ code: "shallow_depth", label: `Depth: knees only reached ~${Math.round(minKneeAngle)}°, aim to break parallel` });
   }
   if (valgusRatios.length && percentile(valgusRatios, 0.1) < 0.75) {
     faults.push({ code: "knee_valgus", label: "Knees caved inward past the ankles" });

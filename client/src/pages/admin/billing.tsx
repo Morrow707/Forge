@@ -185,7 +185,7 @@ export default function AdminBilling() {
             </CardTitle>
             <CardDescription>
               Trial promos a coach can redeem for temporary full access (e.g. a 14-day new-coach
-              offer, a seasonal free month) -- doesn't require a tier to be assigned first.
+              offer, a seasonal free month), doesn't require a tier to be assigned first.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -264,12 +264,12 @@ export default function AdminBilling() {
                 two shared tier files, so an operator could change a figure, see
                 "Price updated" and an "edited" badge, and change nothing at all. */}
             <CardDescription>
-              Every priced thing on the platform -- the org/coach plan formula, personalization
+              Every priced thing on the platform, the org/coach plan formula, personalization
               add-ons, Free Agent tiers and sport add-ons, video storage, and Skill Bank unlocks.
               These are set in code (shared/billing-tiers.ts and
               shared/free-agent-tiers.ts) so the page, the checkout and the invoice cannot
               disagree; this card is the one screen that says what Forge charges. Per-lesson
-              class prices below ARE editable -- that number is the one actually charged.
+              class prices below ARE editable, that number is the one actually charged.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -335,7 +335,7 @@ export default function AdminBilling() {
               </CardTitle>
               <CardDescription>
                 Per-lesson pricing only ever applies to a Forge-official class sold to a Free
-                Agent -- a coach's own class is never priced to their own roster. Blank = free.
+                Agent, a coach's own class is never priced to their own roster. Blank = free.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">

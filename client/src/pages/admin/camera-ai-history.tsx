@@ -52,7 +52,7 @@ function DomainCard({ domain, maxCount }: { domain: CameraAiDomain; maxCount: nu
         <CardDescription>
           {domain.status === "active"
             ? "Recognizes this by sight, verified against real photos before shipping."
-            : "No visual model yet -- tracked by motion only, see note below."}
+            : "No visual model yet, tracked by motion only, see note below."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">

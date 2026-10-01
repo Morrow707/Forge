@@ -56,7 +56,7 @@ export function ExerciseSheetTutorial() {
               </span>
             }
             title="Colored letter badges"
-            body="Each exercise gets a letter. Two exercises sharing a letter (A1, A2, ...) are a superset -- back-to-back, same color, same border down the left edge of the card."
+            body="Each exercise gets a letter. Two exercises sharing a letter (A1, A2, ...) are a superset, back-to-back, same color, same border down the left edge of the card."
           />
 
           <TutorialRow
@@ -93,7 +93,7 @@ export function ExerciseSheetTutorial() {
               </div>
             }
             title="Tap the name to open it"
-            body="Only one exercise stays open at a time. A link icon means it's chained to the next one in a superset -- everything for today is always listed, whether it's expanded or not."
+            body="Only one exercise stays open at a time. A link icon means it's chained to the next one in a superset, everything for today is always listed, whether it's expanded or not."
           />
 
           <TutorialRow
@@ -108,7 +108,7 @@ export function ExerciseSheetTutorial() {
               </div>
             }
             title="Log what you actually did"
-            body="Type reps and weight for the set you're viewing, then rate how it felt (RPE) if your coach uses it. A camera icon next to a set means video tracking is on for that exercise -- optional, on top of the numbers you type."
+            body="Type reps and weight for the set you're viewing, then rate how it felt (RPE) if your coach uses it. A camera icon next to a set means video tracking is on for that exercise, optional, on top of the numbers you type."
           />
         </div>
 

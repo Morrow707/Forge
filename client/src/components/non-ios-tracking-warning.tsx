@@ -48,7 +48,7 @@ export function NonIosTrackingNotice() {
         <p className="text-sm text-muted-foreground">
           On this device, bar path, sprint, and mechanics tracking run on a 2D-camera model
           instead of iPhone's more accurate native motion tracking. Numbers here may be a bit
-          less precise -- for the most accurate readings, use an iPhone.
+          less precise, for the most accurate readings, use an iPhone.
         </p>
         <DialogFooter>
           <Button onClick={dismiss}>Got it</Button>

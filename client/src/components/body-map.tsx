@@ -256,7 +256,7 @@ export function BodyMap({
     >
       <title id={titleId}>
         {view === "front" ? "Front of the body" : "Back of the body"}
-        {interactive ? " -- choose a muscle group" : ""}
+        {interactive ? ", choose a muscle group" : ""}
       </title>
 
       <defs>

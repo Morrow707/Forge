@@ -16,14 +16,14 @@ export function buildPasswordChangedEmail(name: string) {
         <h1 style="font-size:20px;margin:0 0 4px;">Your password was changed</h1>
         <p style="color:#555;margin:0 0 20px;">
           Hi ${firstName}, this is a confirmation that your Forge account password was just reset.
-          As a precaution, you've been logged out everywhere -- you'll need to log back in on any
+          As a precaution, you've been logged out everywhere, you'll need to log back in on any
           device you're using, including the app.
         </p>
         <p style="color:#555;margin:0 0 20px;">
           If this was you, there's nothing else to do.
         </p>
         <p style="color:#555;margin:0 0 20px;">
-          If it wasn't, someone else may have access to your email -- secure that account first,
+          If it wasn't, someone else may have access to your email, secure that account first,
           then reset your Forge password again from the login page.
         </p>
         <p style="color:#999;font-size:12px;margin-top:24px;">Sent by Forge.</p>

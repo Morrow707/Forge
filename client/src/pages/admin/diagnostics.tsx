@@ -90,7 +90,7 @@ function RecordAccessTab() {
           </CardTitle>
           <CardDescription>
             Who opened whose record, newest first. Written whenever staff reach another person's
-            data -- not every surface is instrumented yet, so read this as "what is covered", not
+            data, not every surface is instrumented yet, so read this as "what is covered", not
             "everything that ever happened".
           </CardDescription>
         </div>
@@ -177,7 +177,7 @@ function JobRunsTab() {
           Nightly job runs
         </CardTitle>
         <CardDescription>
-          Every recorded run, not just the last one the dashboard shows -- this is what answers
+          Every recorded run, not just the last one the dashboard shows, this is what answers
           "when did the minor-athlete video purge last actually delete something".
         </CardDescription>
       </CardHeader>
@@ -258,7 +258,7 @@ function SystemEventsTab() {
           </CardTitle>
           <CardDescription>
             The failure history behind the dashboard's badges, including events somebody has
-            already cleared -- which the dashboard deliberately hides and which is exactly what a
+            already cleared, which the dashboard deliberately hides and which is exactly what a
             "has this happened before?" question needs.
           </CardDescription>
         </div>
@@ -375,10 +375,10 @@ function StorageTab() {
           </CardTitle>
           <CardDescription>
             Free space, and the file ledger reconciled against what is actually on disk. A removal
-            Forge made itself is separated from one nobody can account for -- only the second is
+            Forge made itself is separated from one nobody can account for, only the second is
             a loss. A disk
             reporting healthy while yesterday's uploads are gone is the case that needs both
-            halves of this in one answer -- and is exactly what happened once.
+            halves of this in one answer, and is exactly what happened once.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
@@ -398,7 +398,7 @@ function StorageTab() {
               <Row label="Uploads root" value={data.uploadsRoot} mono />
               <Row
                 label="Persistent disk"
-                value={data.usingPersistentDisk ? "yes" : "NO -- falling back to local"}
+                value={data.usingPersistentDisk ? "yes" : "NO, falling back to local"}
                 warn={!data.usingPersistentDisk}
               />
               <Row
@@ -448,7 +448,7 @@ function StorageTab() {
                       value={`${data.ledger.unexplainedBeforeStamping} uploaded before ${format(
                         new Date(data.ledger.stampingBeganAt),
                         "d MMM yyyy",
-                      )} -- nothing can say who removed these`}
+                      )}, nothing can say who removed these`}
                     />
                   )}
                   {data.ledger.newestUnexplainedAt && (
@@ -555,7 +555,7 @@ function CaptureTracesTab() {
         </CardTitle>
         <CardDescription>
           The raw bar-path trace behind each tracked set, as a file. This is the input the replay
-          harness reads -- it re-runs rep segmentation and every metric over a trace with no phone
+          harness reads, it re-runs rep segmentation and every metric over a trace with no phone
           and no camera, so a miscount can be looked at instead of guessed at. Carries no names:
           sets are grouped under "Athlete 1", "Athlete 2", generated fresh for each download and
           mapped nowhere.
@@ -563,7 +563,7 @@ function CaptureTracesTab() {
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <p className="text-muted-foreground">
-          Newest sets first. Only sets that actually ran through the camera pipeline appear -- a
+          Newest sets first. Only sets that actually ran through the camera pipeline appear, a
           hand-logged set has no trace to export.
         </p>
         <div className="flex flex-wrap gap-2">

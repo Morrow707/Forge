@@ -258,14 +258,14 @@ export default function DocumentsPage() {
             </CardTitle>
             <CardDescription>
               {forSomeoneElse
-                ? `Filing on ${who}'s behalf. Whatever their school or club already had signed -- upload it here and it lands on their record, not yours.`
+                ? `Filing on ${who}'s behalf. Whatever their school or club already had signed, upload it here and it lands on their record, not yours.`
                 : audience === "coach"
                 ? "Certifications and clearances you already hold. Upload a copy so it's on file."
                 : audience === "athlete_rostered"
                   ? "If your school or club already had these signed, upload those instead of filling in ours again."
                   : "You train without a coach on Forge, so there's no school waiver to upload. These two still matter."}{" "}
               Nothing here replaces the agreements {forSomeoneElse ? "they" : "you"} accepted when
-              {forSomeoneElse ? " they" : " you"} signed up -- this is a copy of what was signed
+              {forSomeoneElse ? " they" : " you"} signed up, this is a copy of what was signed
               elsewhere, so we know it exists.
             </CardDescription>
           </CardHeader>
@@ -421,7 +421,7 @@ export default function DocumentsPage() {
             {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               PDF, or a photo of the signed page. It's read automatically as soon as you upload
-              it -- we check it's the document you picked and that it's actually signed. Nobody at
+              it, we check it's the document you picked and that it's actually signed. Nobody at
               Forge reads it unless that check can't clear it. The file is kept on your record so it
               can be produced later, and you can open it below.{" "}
               We can't confirm a form signed with someone else covers Forge, so the agreements you

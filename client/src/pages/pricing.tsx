@@ -63,7 +63,7 @@ export default function PricingPage() {
           </h1>
           <p className="max-w-md text-sm text-muted-foreground">
             One roster-based plan per program. Every tier includes AI coaching, form-check video
-            analysis, programming, and nutrition -- personalization scales with you.
+            analysis, programming, and nutrition, personalization scales with you.
           </p>
         </div>
 
@@ -133,7 +133,7 @@ export default function PricingPage() {
               </CardTitle>
               <CardDescription>
                 One flat per-athlete rate, no account fee, no volume discount, no roster-size
-                ceiling -- you pay for your roster and nothing else. Sold in blocks of{" "}
+                ceiling, you pay for your roster and nothing else. Sold in blocks of{" "}
                 {ORG_BLOCK_SIZE} above the starter bands. Full branding, personalization, and
                 multi-team support are included from {PERSONALIZATION_FROM} athletes up.
               </CardDescription>
@@ -174,8 +174,8 @@ export default function PricingPage() {
               to, contradicted on the same page. includesFullPersonalization is the
               only real answer, so both now read it. */}
           <p className="mb-6 text-center text-sm text-muted-foreground">
-            Add-ons for any band. The starter bands can add personalization à la carte -- programs
-            from {PERSONALIZATION_FROM} athletes up already include all of it -- and Coaches Corner,
+            Add-ons for any band. The starter bands can add personalization à la carte, programs
+            from {PERSONALIZATION_FROM} athletes up already include all of it, and Coaches Corner,
             the coach education library, is a separate add-on at every size.
           </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -204,7 +204,7 @@ export default function PricingPage() {
         <div className="mt-16">
           <h2 className="mb-1 text-center text-xl font-bold">Training on your own?</h2>
           <p className="mb-6 text-center text-sm text-muted-foreground">
-            No coach yet? Get your own AI coach -- these tiers are per athlete, not per team.
+            No coach yet? Get your own AI coach, these tiers are per athlete, not per team.
           </p>
           <div className={cn("grid gap-4", FREE_AGENT_TIER_GRID_COLS)}>
             {FREE_AGENT_TIER_ORDER.map((id) => {
@@ -260,7 +260,7 @@ export default function PricingPage() {
               return (
                 <div key={id} className="rounded-md border border-border p-3 text-center text-sm">
                   <span className="font-semibold">{addOn.label}</span>
-                  <span className="text-muted-foreground"> -- {formatCents(addOn.monthlyPriceCents)}/mo</span>
+                  <span className="text-muted-foreground">, {formatCents(addOn.monthlyPriceCents)}/mo</span>
                 </div>
               );
             })}
@@ -270,12 +270,12 @@ export default function PricingPage() {
             <Video className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <p className="text-muted-foreground">
               <span className="font-semibold text-foreground">
-                Extra video storage -- {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo
-              </span>{" "}
-              -- every athlete keeps {VIDEO_RETENTION.favoritedCap} favorited clips per exercise or
+                Extra video storage, {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo
+              </span>:{" "}
+              every athlete keeps {VIDEO_RETENTION.favoritedCap} favorited clips per exercise or
               skill drill, {VIDEO_RETENTION.totalCap} total on a rolling basis. This add-on bumps
               that to {VIDEO_STORAGE_ADD_ON.favoritedCap} favorited / {VIDEO_STORAGE_ADD_ON.totalCap}{" "}
-              total, for both form-check videos and skill clips. Applies per athlete on any plan --
+              total, for both form-check videos and skill clips. Applies per athlete on any plan,
               Free Agent or coached.
             </p>
           </div>

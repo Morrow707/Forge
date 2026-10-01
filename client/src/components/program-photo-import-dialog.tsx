@@ -49,11 +49,11 @@ export function ProgramPhotoImportDialog({
     },
     onSuccess: (result) => {
       if (!result?.program) {
-        toast.error("Couldn't read that photo -- try a clearer shot or build it manually");
+        toast.error("Couldn't read that photo, try a clearer shot or build it manually");
         return;
       }
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      toast.success("Imported -- review it before assigning to anyone");
+      toast.success("Imported, review it before assigning to anyone");
       if (result.note) toast.info(result.note, { duration: 10000 });
       onOpenChange(false);
       setImages([]);
@@ -74,7 +74,7 @@ export function ProgramPhotoImportDialog({
         <DialogHeader>
           <DialogTitle>Import Program from Photo</DialogTitle>
           <DialogDescription>
-            Photograph a printed or handwritten program -- it's transcribed verbatim, then you land in the full
+            Photograph a printed or handwritten program, it's transcribed verbatim, then you land in the full
             builder to review before assigning it to anyone.
           </DialogDescription>
         </DialogHeader>

@@ -109,10 +109,10 @@ export function DetectorTrainingFrames() {
         </CardTitle>
         <CardDescription>
           The object detector was trained on 3 barbell instances and 12 plates, all of them photos
-          of an empty gym -- racked bars and plate trees, nobody lifting. That is why it reads a
+          of an empty gym, racked bars and plate trees, nobody lifting. That is why it reads a
           rack upright as a plate. These are frames from real filmed sets: a loaded bar, an
           athlete under it, at the angle and distance the detector actually has to work at.
-          Extraction runs in this browser and nothing is stored -- the frames go straight to a
+          Extraction runs in this browser and nothing is stored, the frames go straight to a
           download.
         </CardDescription>
       </CardHeader>
@@ -131,7 +131,7 @@ export function DetectorTrainingFrames() {
             />
           </div>
           <p className="pb-2 text-xs text-muted-foreground">
-            Spread evenly across the set, not taken from one second of it -- consecutive frames are
+            Spread evenly across the set, not taken from one second of it, consecutive frames are
             near-duplicates and a model learns nothing from seeing the same picture forty times.
           </p>
         </div>

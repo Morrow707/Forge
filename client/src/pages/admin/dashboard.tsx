@@ -164,7 +164,7 @@ export default function AdminDashboard() {
             <div>
               <CardTitle>Next 3 Days</CardTitle>
               <CardDescription className="hidden sm:block">
-                Your own training -- synced with the full calendar.
+                Your own training, synced with the full calendar.
               </CardDescription>
             </div>
             <Link href="/admin/my">
@@ -261,7 +261,7 @@ export default function AdminDashboard() {
                     {exercisesFailed ? "--" : exercises.length}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {exercisesFailed ? "Forge exercises -- couldn't load" : "Forge exercises"}
+                    {exercisesFailed ? "Forge exercises, couldn't load" : "Forge exercises"}
                   </p>
                 </div>
               </CardContent>
@@ -291,7 +291,7 @@ export default function AdminDashboard() {
                     {pendingFailed ? "--" : pendingCount}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {pendingFailed ? "Awaiting review -- couldn't load" : "Awaiting review"}
+                    {pendingFailed ? "Awaiting review, couldn't load" : "Awaiting review"}
                   </p>
                 </div>
               </CardContent>
@@ -303,7 +303,7 @@ export default function AdminDashboard() {
           <CardHeader>
             <CardTitle>System Status</CardTitle>
             <CardDescription>
-              Live state, not just what's configured -- a badge turns red when something
+              Live state, not just what's configured, a badge turns red when something
               actually fails, and green again when it next succeeds.
             </CardDescription>
           </CardHeader>
@@ -347,7 +347,7 @@ export default function AdminDashboard() {
           <CardHeader>
             <CardTitle>Nightly jobs</CardTitle>
             <CardDescription>
-              Each sweep's last run. Overdue means its scheduled hour passed with no run recorded --
+              Each sweep's last run. Overdue means its scheduled hour passed with no run recorded,
               the failure a run history alone cannot show, since a job that never starts leaves no
               trace.
             </CardDescription>
@@ -407,7 +407,7 @@ export default function AdminDashboard() {
                     <p className="text-xs text-muted-foreground">
                       {event.count > 1 ? `${event.count} times, last ` : ""}
                       {format(new Date(event.lastSeenAt), "MMM d, h:mm a")}
-                      {event.detail ? ` -- ${event.detail}` : ""}
+                      {event.detail ? `, ${event.detail}` : ""}
                     </p>
                   </div>
                   <Button
@@ -464,14 +464,14 @@ function JobRow({ job }: { job: JobHealth }) {
               .map(([key, value]) => `${value} ${key}`)
               .join(", ")
           : null;
-        return `Ran ${when}${counts ? ` -- ${counts}` : ""}`;
+        return `Ran ${when}${counts ? `, ${counts}` : ""}`;
       }
       case "failed":
-        return `Failed ${when}${job.lastError ? ` -- ${job.lastError}` : ""}`;
+        return `Failed ${when}${job.lastError ? `, ${job.lastError}` : ""}`;
       case "skipped_locked":
-        return `Skipped ${when} -- another instance was running it`;
+        return `Skipped ${when}, another instance was running it`;
       case "skipped_unavailable":
-        return `Skipped ${when} -- could not reach the database`;
+        return `Skipped ${when}, could not reach the database`;
       default:
         return `Last seen ${when}`;
     }

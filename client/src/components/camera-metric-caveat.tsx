@@ -99,7 +99,7 @@ export function CameraMetricCaveat({
         <button
           type="button"
           onClick={acknowledge}
-          aria-label="Got it -- don't show this again"
+          aria-label="Got it, don't show this again"
           className="-mt-0.5 shrink-0 rounded p-0.5 text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
         >
           <X className="h-3.5 w-3.5" />

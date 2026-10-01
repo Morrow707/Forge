@@ -75,7 +75,7 @@ export function ModifiedWorkoutBanner({
               Pain flagged today
             </p>
             <p className="text-sm text-foreground">
-              You reported {painLabels} in today's check-in -- part of this session may aggravate it.
+              You reported {painLabels} in today's check-in, part of this session may aggravate it.
             </p>
           </div>
           <Button

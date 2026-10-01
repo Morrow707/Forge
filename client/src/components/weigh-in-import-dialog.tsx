@@ -109,7 +109,7 @@ export function WeighInImportDialog({
         <DialogHeader>
           <DialogTitle>Import Weigh-In Sheet</DialogTitle>
           <DialogDescription>
-            Photograph the team's weigh-in sheet -- review before it logs to anyone's history.
+            Photograph the team's weigh-in sheet, review before it logs to anyone's history.
           </DialogDescription>
         </DialogHeader>
 
@@ -150,7 +150,7 @@ export function WeighInImportDialog({
                       <SelectValue placeholder="Match athlete" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Unmatched ("{row.nameOnSheet}") -- skip</SelectItem>
+                      <SelectItem value="none">Unmatched ("{row.nameOnSheet}"), skip</SelectItem>
                       {roster.map((a) => (
                         <SelectItem key={a.id} value={String(a.id)}>
                           {a.name}

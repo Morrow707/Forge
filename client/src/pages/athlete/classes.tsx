@@ -169,7 +169,7 @@ export default function AthleteClasses() {
                 <GraduationCap className="h-10 w-10 text-muted-foreground" />
                 <p className="text-muted-foreground">
                   {isFreeAgent
-                    ? "Nothing here yet -- browse Forge Classes below to get started."
+                    ? "Nothing here yet, browse Forge Classes below to get started."
                     : "Your coach hasn't enrolled you in a Class yet."}
                 </p>
               </CardContent>

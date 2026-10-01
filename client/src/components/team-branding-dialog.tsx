@@ -299,7 +299,7 @@ export function TeamBrandingDialog({
       setLogoUrl(null);
       invalidateBranding();
       toast.success(
-        isTeamScope ? "Team override removed -- back to inheriting the org's branding" : "Branding reset to Forge defaults",
+        isTeamScope ? "Team override removed, back to inheriting the org's branding" : "Branding reset to Forge defaults",
       );
       onOpenChange(false);
     },
@@ -345,8 +345,8 @@ export function TeamBrandingDialog({
           </DialogTitle>
           <DialogDescription>
             {isTeamScope
-              ? "Overrides your org's colors and logo for this team only -- leave a field blank to keep inheriting the org's own branding."
-              : `Re-skin Forge with your own name, logo, exact colors, and team-page copy -- applies across your whole coaching staff and everyone on your roster. The ${POWERED_BY_FORGE_LABEL} mark stays as a small watermark either way. Turn off any nav sections your program doesn't use to keep the app simpler.`}
+              ? "Overrides your org's colors and logo for this team only, leave a field blank to keep inheriting the org's own branding."
+              : `Re-skin Forge with your own name, logo, exact colors, and team-page copy, applies across your whole coaching staff and everyone on your roster. The ${POWERED_BY_FORGE_LABEL} mark stays as a small watermark either way. Turn off any nav sections your program doesn't use to keep the app simpler.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -416,7 +416,7 @@ export function TeamBrandingDialog({
               {logoSwatches.length > 0 && (
                 <div className="space-y-1 pt-1">
                   <p className="text-[11px] text-muted-foreground">
-                    Pulled straight from your logo's own pixels -- tap to set as your primary color.
+                    Pulled straight from your logo's own pixels, tap to set as your primary color.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {logoSwatches.map((hex) => (
@@ -480,7 +480,7 @@ export function TeamBrandingDialog({
             <div className="space-y-1.5">
               <Label>Preview</Label>
               <p className="text-xs text-muted-foreground">
-                Updates live as you type/pick, before you save -- this is exactly what shows in the app header for you
+                Updates live as you type/pick, before you save, this is exactly what shows in the app header for you
                 and your athletes.
               </p>
               <div className="overflow-hidden rounded-md border border-border">
@@ -537,7 +537,7 @@ export function TeamBrandingDialog({
                     id="brand-mission"
                     value={mission}
                     onChange={(e) => setMission(e.target.value)}
-                    placeholder="Shown on your team's About page -- who you are, what the program's about"
+                    placeholder="Shown on your team's About page, who you are, what the program's about"
                     maxLength={500}
                     className="min-h-20"
                   />
@@ -549,7 +549,7 @@ export function TeamBrandingDialog({
                     type="email"
                     value={contactEmail}
                     onChange={(e) => setContactEmail(e.target.value)}
-                    placeholder="Shown on the About page -- never your real login email unless you enter it here"
+                    placeholder="Shown on the About page, never your real login email unless you enter it here"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -558,7 +558,7 @@ export function TeamBrandingDialog({
                     id="brand-welcome"
                     value={welcomeMessage}
                     onChange={(e) => setWelcomeMessage(e.target.value)}
-                    placeholder="Shown on your athletes' own dashboard -- a note in your own voice"
+                    placeholder="Shown on your athletes' own dashboard, a note in your own voice"
                     maxLength={300}
                     className="min-h-16"
                   />

@@ -82,7 +82,7 @@ export default function GuardianClaimPage() {
           <CardHeader>
             <CardTitle>Link not valid</CardTitle>
             <CardDescription>
-              This invite has already been used or has expired -- ask the athlete's coach or
+              This invite has already been used or has expired, ask the athlete's coach or
               program for a new one.
             </CardDescription>
           </CardHeader>

@@ -35,12 +35,12 @@ export function AcademyTrackPhotoImportPanel({
     },
     onSuccess: (draft) => {
       if (!draft) {
-        toast.error("Couldn't read that photo -- try a clearer shot");
+        toast.error("Couldn't read that photo, try a clearer shot");
         return;
       }
       onDraft(draft.structure, draft.note);
       setImages([]);
-      toast.success("Added from photo -- review it before saving");
+      toast.success("Added from photo, review it before saving");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not read that photo"),
   });
@@ -53,7 +53,7 @@ export function AcademyTrackPhotoImportPanel({
           Import from Photo
         </CardTitle>
         <CardDescription>
-          Photograph or screenshot a document, outline, or slides -- it fills in the fields to the left for
+          Photograph or screenshot a document, outline, or slides, it fills in the fields to the left for
           you to review and edit before saving.
         </CardDescription>
       </CardHeader>

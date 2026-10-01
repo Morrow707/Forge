@@ -86,7 +86,7 @@ export function DeleteAccountDialog({
             Delete account
           </DialogTitle>
           <DialogDescription>
-            This permanently deletes your account and everything tied to it -- programs, logged
+            This permanently deletes your account and everything tied to it, programs, logged
             workouts, and video. There is no way to undo this. Enter your password to confirm.
           </DialogDescription>
         </DialogHeader>

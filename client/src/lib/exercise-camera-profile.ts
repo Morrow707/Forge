@@ -457,7 +457,7 @@ const FILM_GUIDANCE_BY_NAME = new Map<string, ExerciseFilmGuidance>([
     oneRep: "One rep = arms straight with hands on the bench behind you, lower the hips toward the floor, press back up.",
   }],
   ["Bench Press", {
-    view: "Film from wherever you can -- every angle is measured. Square to the SIDE of the bench, camera level with the bar, is the most accurate: it is the only view where your own height can set real-world scale on a lift you do lying down. From the foot of the bench or behind the head it uses your shoulder breadth instead, which works but is looser, so distances carry a wider error bar.",
+    view: "Film from wherever you can, every angle is measured. Square to the SIDE of the bench, camera level with the bar, is the most accurate: it is the only view where your own height can set real-world scale on a lift you do lying down. From the foot of the bench or behind the head it uses your shoulder breadth instead, which works but is looser, so distances carry a wider error bar.",
     inFrame: "The bench, both feet on the floor, both plates, the bar at lockout, and the bar touching the chest.",
     follows: "The bar (wrists on it).",
     oneRep: "One rep = bar locked out over the shoulders, lower to touch the chest, press back to lockout. The rep ends at lockout.",
@@ -649,7 +649,7 @@ const FILM_GUIDANCE_BY_NAME = new Map<string, ExerciseFilmGuidance>([
     oneRep: "One rep = standing with the bar at the hips, dip to the hang above the knee, drive and receive overhead, stand.",
   }],
   ["Hex Bar Deadlift", {
-    view: "Directly in front or directly behind, camera level with the bar. Both plates should look the same size -- if one looks bigger, the phone is not square. The hex bar's frame blocks a side view of the legs.",
+    view: "Directly in front or directly behind, camera level with the bar. Both plates should look the same size, if one looks bigger, the phone is not square. The hex bar's frame blocks a side view of the legs.",
     inFrame: "The whole hex bar, both feet, full standing height.",
     follows: "The handles and the hips.",
     oneRep: "One rep = bar on the floor, stand to lockout, lower to the floor.",
@@ -705,7 +705,7 @@ const FILM_GUIDANCE_BY_NAME = new Map<string, ExerciseFilmGuidance>([
   ["Leg Press", {
     view: "Square to the side of the machine, camera level with the sled's travel.",
     inFrame: "The whole sled path, both feet on the platform, and the knees.",
-    follows: "The sled (feet) -- there is no bar or wrist to follow, so the tracker follows the ankles.",
+    follows: "The sled (feet), there is no bar or wrist to follow, so the tracker follows the ankles.",
     oneRep: "One rep = platform at lockout, lower until the knees reach 90 degrees, press back to lockout.",
   }],
   ["Lying Leg Curl", {
@@ -913,7 +913,7 @@ const FILM_GUIDANCE_BY_NAME = new Map<string, ExerciseFilmGuidance>([
     oneRep: "One rep = bar overhead with straight arms, pull down in an arc to the thighs, return.",
   }],
   ["Sumo Deadlift", {
-    view: "Directly in front or directly behind, camera level with the bar. Both plates should look the same size -- if one looks bigger, the phone is not square. A side view hides one leg behind the other on this stance.",
+    view: "Directly in front or directly behind, camera level with the bar. Both plates should look the same size, if one looks bigger, the phone is not square. A side view hides one leg behind the other on this stance.",
     inFrame: "Both plates, both feet, the bar at lockout.",
     follows: "The bar and the hips.",
     oneRep: "One rep = bar dead on the floor, stand to lockout, lower to the floor.",
@@ -928,7 +928,7 @@ const FILM_GUIDANCE_BY_NAME = new Map<string, ExerciseFilmGuidance>([
     view: "Square to the side.",
     inFrame: "The rope at the top (elbows bent) and at the bottom (arms straight).",
     follows: "The hands (rope).",
-    oneRep: "One rep = rope at chest height with elbows bent, press down until the arms are straight, return under control. 'Up' here means the working direction, which is down -- the tracker follows the hands moving away from the start.",
+    oneRep: "One rep = rope at chest height with elbows bent, press down until the arms are straight, return under control. 'Up' here means the working direction, which is down, the tracker follows the hands moving away from the start.",
   }],
   ["Turkish Get-Up", {
     view: "Square to the side, wide enough to see the whole body from lying to standing.",

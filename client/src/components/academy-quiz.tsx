@@ -38,7 +38,7 @@ export function AcademyQuiz({ questions }: { questions: QuizQuestion[] }) {
     <div className="mt-8 border-t border-border pt-6">
       <h2 className="mb-1 font-display text-lg font-bold uppercase tracking-wide">Track Quiz</h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        A self-check, not a scored test -- tap any answer to see why it's right or wrong, then try
+        A self-check, not a scored test, tap any answer to see why it's right or wrong, then try
         the others.
       </p>
       <div className="space-y-6">

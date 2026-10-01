@@ -76,7 +76,7 @@ export function WeaknessReportPanel({
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
         AI analysis of goniometer, asymmetry, load-management, wellness, and testing data on
-        file, identifying specific deficits and why they matter -- a starting signal, not a
+        file, identifying specific deficits and why they matter, a starting signal, not a
         diagnosis. Each report is a snapshot; generate a new one later to see what's changed.
       </p>
 

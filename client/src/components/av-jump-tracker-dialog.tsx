@@ -419,14 +419,14 @@ export function AvJumpTrackerDialog({
           const result = await uploadPromise;
           toast.error(
             result.status === "queued"
-              ? "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved. (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)"
+              ? "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved. (No Wi-Fi, video saved on your device, will upload for your coach once connected.)"
               : "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved. (Video saved for your coach.)",
           );
           if (result.status === "queued") {
             if (!hasWarnedAboutQueueing()) {
               markWarnedAboutQueueing();
               toast.info(
-                "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
+                "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
                 { duration: 10000 },
               );
             }
@@ -609,7 +609,7 @@ export function AvJumpTrackerDialog({
       // RULE #1. The state machine found no clean rep; the number on screen is the best read the
       // trace supports, and the athlete is told exactly that instead of nothing.
       toast.warning(
-        `Couldn't find a clean takeoff and landing -- showing the best read from the video (${Math.round(metrics.bestJumpHeightCm)} cm). Check the clip before trusting it.`,
+        `Couldn't find a clean takeoff and landing, showing the best read from the video (${Math.round(metrics.bestJumpHeightCm)} cm). Check the clip before trusting it.`,
         { duration: 8000 },
       );
     }
@@ -628,14 +628,14 @@ export function AvJumpTrackerDialog({
           const result = await uploadPromise;
           toast.error(
             result.status === "queued"
-              ? "Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)"
+              ? "Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi, video saved on your device, will upload for your coach once connected.)"
               : "Couldn't get a clean read on this take. The clip is saved. (Video saved for your coach.)",
           );
           if (result.status === "queued") {
             if (!hasWarnedAboutQueueing()) {
               markWarnedAboutQueueing();
               toast.info(
-                "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
+                "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
                 { duration: 10000 },
               );
             }
@@ -695,7 +695,7 @@ export function AvJumpTrackerDialog({
     // the whole set. That distinction previously only ever reached the buried diagnostics
     // report.
     if (recordingStats.readerStatus === "failed" && recordingStats.frameCount > 0) {
-      toast.warning("Analysis was cut short partway through this set -- numbers below may not cover every rep.");
+      toast.warning("Analysis was cut short partway through this set, numbers below may not cover every rep.");
     }
 
     // Direct answer to "did I clear it" -- the real payoff of detecting the box at all rather
@@ -735,11 +735,11 @@ export function AvJumpTrackerDialog({
       // is simply false, and it was phrased to be read exactly that way.
       if (metrics.bestBoxClearanceCm >= 0) {
         toast.success(
-          `Cleared the box -- feet peaked ${metrics.bestBoxClearanceCm.toFixed(1)} cm above the top`,
+          `Cleared the box, feet peaked ${metrics.bestBoxClearanceCm.toFixed(1)} cm above the top`,
         );
       } else {
         toast.warning(
-          `Did not clear the box -- feet peaked ${Math.abs(metrics.bestBoxClearanceCm).toFixed(1)} cm below the top`,
+          `Did not clear the box, feet peaked ${Math.abs(metrics.bestBoxClearanceCm).toFixed(1)} cm below the top`,
         );
       }
     }
@@ -769,7 +769,7 @@ export function AvJumpTrackerDialog({
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
           toast.info(
-            "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
             { duration: 10000 },
           );
         }
@@ -823,7 +823,7 @@ export function AvJumpTrackerDialog({
                       happening quietly behind it), and only takes over once analysis is done
                       but the upload still has a tail left. */}
                   {analyzing
-                    ? `Analyzing recording -- ${analyzedFrames} frames processed…`
+                    ? `Analyzing recording, ${analyzedFrames} frames processed…`
                     : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
                 </p>
                 {analyzing && (

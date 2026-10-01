@@ -147,7 +147,7 @@ function renderInline(text: string): React.ReactNode {
  * error message over and over. */
 const ENCOURAGING_FAIL_LINES = [
   "Oh, so close! Hit the books (well, the chapter) and give it another go.",
-  "Not quite -- your swing needs a little more film study first.",
+  "Not quite, your swing needs a little more film study first.",
   "Solid effort! Review the chapter and step back up to the plate.",
   "Almost there! A quick re-read and you'll crush this one.",
   "Good try! Brush up on the chapter and take another cut at it.",
@@ -338,7 +338,7 @@ export function ClassLessonReaderDialog({
     },
     onSuccess: () => {
       if (isPreview) {
-        toast.info("This is just a preview -- nothing was saved or added to a calendar.");
+        toast.info("This is just a preview, nothing was saved or added to a calendar.");
       } else {
         invalidateProgress();
         toast.success("Added to your calendar");
@@ -431,7 +431,7 @@ export function ClassLessonReaderDialog({
             </p>
           )}
           {phase === "quiz" && !quizResult && questions.length > 0 && (
-            <p className="text-xs text-muted-foreground">Chapter quiz -- {questions.length} questions</p>
+            <p className="text-xs text-muted-foreground">Chapter quiz, {questions.length} questions</p>
           )}
         </div>
 
@@ -656,7 +656,7 @@ export function ClassLessonReaderDialog({
               <p className="font-semibold">Content read and quiz passed.</p>
               <p className="max-w-sm text-sm text-muted-foreground">
                 {isPreview
-                  ? "That's the full lesson -- a real athlete would add its drills to their calendar here."
+                  ? "That's the full lesson, a real athlete would add its drills to their calendar here."
                   : "Add this lesson's drills to your calendar to start training it."}
               </p>
             </div>

@@ -39,7 +39,7 @@ export type CameraAiDomain = {
 
 export const CAMERA_AI_MODEL_NOTE =
   "The active classes below (med_ball, plate, baseball, golf_ball, tennis_ball) all live in " +
-  "one shared on-device model (MedBallDetector.mlpackage) -- adding a new class means " +
+  "one shared on-device model (MedBallDetector.mlpackage), adding a new class means " +
   "retraining that whole model, not a separate one per object. Every retrain in this history " +
   "was verified by running inference against a real reference photo of every class that " +
   "existed at that point, before being bundled and shipped, specifically so a new class can't " +
@@ -52,7 +52,7 @@ export const CAMERA_AI_DOMAINS: CameraAiDomain[] = [
     status: "active",
     trainingExampleCount: 3,
     notBuiltNote:
-      "The plates are recognized (see below), but the bar itself still has no visual class -- squat/bench/deadlift/row bar-path tracking runs on motion-diff (implement-tracking.ts / bar-tracking.ts), the same fallback used for every implement with no trained class.",
+      "The plates are recognized (see below), but the bar itself still has no visual class, squat/bench/deadlift/row bar-path tracking runs on motion-diff (implement-tracking.ts / bar-tracking.ts), the same fallback used for every implement with no trained class.",
     entries: [
       {
         date: "2026-09-02",
@@ -68,7 +68,7 @@ export const CAMERA_AI_DOMAINS: CameraAiDomain[] = [
     status: "not_built",
     trainingExampleCount: 0,
     notBuiltNote:
-      "No visual model, no labeled photos yet. Tracking runs entirely on motion-diff (implement-tracking.ts) -- it has no concept of \"dumbbell,\" doesn't know its size, and can't tell a heavy one from a light one by sight.",
+      "No visual model, no labeled photos yet. Tracking runs entirely on motion-diff (implement-tracking.ts), it has no concept of \"dumbbell,\" doesn't know its size, and can't tell a heavy one from a light one by sight.",
     entries: [],
   },
   {
@@ -77,7 +77,7 @@ export const CAMERA_AI_DOMAINS: CameraAiDomain[] = [
     status: "not_built",
     trainingExampleCount: 0,
     notBuiltNote:
-      "No visual model, no labeled photos yet. Tracking runs entirely on motion-diff (watches which pixels move near the wrist frame-to-frame) -- it has no concept of \"kettlebell,\" doesn't know it's round, and can't tell a heavier one from a lighter one by sight.",
+      "No visual model, no labeled photos yet. Tracking runs entirely on motion-diff (watches which pixels move near the wrist frame-to-frame), it has no concept of \"kettlebell,\" doesn't know it's round, and can't tell a heavier one from a lighter one by sight.",
     entries: [],
   },
   {
@@ -88,7 +88,7 @@ export const CAMERA_AI_DOMAINS: CameraAiDomain[] = [
     entries: [
       {
         date: "2026-09-01",
-        headline: "First detector trained -- med_ball only",
+        headline: "First detector trained, med_ball only",
         detail:
           "8 real training photos across 4 differently-sized/colored med balls (a 15lb slam ball, a 10lb slam ball, a green/black ~12lb ball, a 30lb slam ball). 98% confidence on its own training frame. Bounding boxes eyeballed against a pixel grid.",
       },
@@ -96,7 +96,7 @@ export const CAMERA_AI_DOMAINS: CameraAiDomain[] = [
         date: "2026-09-02",
         headline: "Training boxes re-measured with precise circle-fitting",
         detail:
-          "Same 8 photos, but the balls' bounding boxes were re-measured with cv2.HoughCircles (an objective edge-detection fit) instead of eyeballing -- every ball is photographed close to straight overhead, so its silhouette is a true circle. Confidence held at 95-99% on retrain, and 2 of the photos turned out to have a second ball in frame once measured carefully, so the real count of learned examples is 10, not 8.",
+          "Same 8 photos, but the balls' bounding boxes were re-measured with cv2.HoughCircles (an objective edge-detection fit) instead of eyeballing, every ball is photographed close to straight overhead, so its silhouette is a true circle. Confidence held at 95-99% on retrain, and 2 of the photos turned out to have a second ball in frame once measured carefully, so the real count of learned examples is 10, not 8.",
       },
     ],
   },
@@ -110,7 +110,7 @@ export const CAMERA_AI_DOMAINS: CameraAiDomain[] = [
         date: "2026-09-02",
         headline: "baseball class added",
         detail:
-          "2 real baseball photos (both in one frame) -- already in the training set (originally uploaded for floor-tile scale reference) that had never been labeled or used, circle-fit measured. 97.3-99.9% confidence, correctly told apart from every other class on the same test pass. Not yet wired into any live tracking feature -- no baseball throw tracker exists yet.",
+          "2 real baseball photos (both in one frame), already in the training set (originally uploaded for floor-tile scale reference) that had never been labeled or used, circle-fit measured. 97.3-99.9% confidence, correctly told apart from every other class on the same test pass. Not yet wired into any live tracking feature, no baseball throw tracker exists yet.",
       },
     ],
   },
@@ -124,7 +124,7 @@ export const CAMERA_AI_DOMAINS: CameraAiDomain[] = [
         date: "2026-09-02",
         headline: "golf_ball class added",
         detail:
-          "2 real golf ball photos (both in one frame), same set as baseball/tennis_ball, circle-fit measured. 97.3-99.9% confidence, correctly told apart from every other class on the same test pass. Not yet wired into any live tracking feature -- no golf swing/throw tracker exists yet.",
+          "2 real golf ball photos (both in one frame), same set as baseball/tennis_ball, circle-fit measured. 97.3-99.9% confidence, correctly told apart from every other class on the same test pass. Not yet wired into any live tracking feature, no golf swing/throw tracker exists yet.",
       },
     ],
   },
@@ -134,13 +134,13 @@ export const CAMERA_AI_DOMAINS: CameraAiDomain[] = [
     status: "active",
     trainingExampleCount: 1,
     notBuiltNote:
-      "Only 1 real labeled photo so far, the smallest example count of any active class -- confidence numbers on this class are the least proven of the five and should be trusted least until more real photos come in.",
+      "Only 1 real labeled photo so far, the smallest example count of any active class, confidence numbers on this class are the least proven of the five and should be trusted least until more real photos come in.",
     entries: [
       {
         date: "2026-09-02",
         headline: "tennis_ball class added",
         detail:
-          "1 real tennis ball photo, same set as baseball/golf_ball, circle-fit measured. 97.3-99.9% confidence, correctly told apart from every other class on the same test pass. Not yet wired into any live tracking feature -- no tennis throw/swing tracker exists yet.",
+          "1 real tennis ball photo, same set as baseball/golf_ball, circle-fit measured. 97.3-99.9% confidence, correctly told apart from every other class on the same test pass. Not yet wired into any live tracking feature, no tennis throw/swing tracker exists yet.",
       },
     ],
   },

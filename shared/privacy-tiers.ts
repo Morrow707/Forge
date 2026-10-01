@@ -59,7 +59,7 @@ export function ageLineForAi(
   if (dateOfBirth) {
     const age = ageFromDateOfBirth(dateOfBirth, asOf);
     const minor = age < 18;
-    return `${age}${minor ? " -- MINOR: apply the age-appropriate training rules in full, they are not optional for this athlete" : ""}`;
+    return `${age}${minor ? ", MINOR: apply the age-appropriate training rules in full, they are not optional for this athlete" : ""}`;
   }
   // No birthdate: an account predating that column. The self-reported
   // snapshot is better than nothing, and "not set" stays honest rather than

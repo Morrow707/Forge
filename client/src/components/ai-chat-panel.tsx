@@ -58,7 +58,7 @@ export function AiChatPanel({
   async function handleCopy(message: ChatMessage) {
     const copied = await copyToClipboard(message.content);
     if (!copied) {
-      toast.error("Couldn't copy -- try selecting the text instead");
+      toast.error("Couldn't copy, try selecting the text instead");
       return;
     }
     toast.success("Message copied");
@@ -85,7 +85,7 @@ export function AiChatPanel({
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setContent("");
     },
-    onError: () => toast.error("Couldn't send that -- try again"),
+    onError: () => toast.error("Couldn't send that, try again"),
   });
 
   // A Free Agent who hasn't paid gets a 402 here (see requirePaidAiAccess in
@@ -123,7 +123,7 @@ export function AiChatPanel({
           <span>
             {postUrl
               ? description
-              : `${athleteName ?? "This athlete"}'s conversation with the AI training chat -- always visible to you as their coach.`}
+              : `${athleteName ?? "This athlete"}'s conversation with the AI training chat, always visible to you as their coach.`}
           </span>
         </CardDescription>
       </CardHeader>
@@ -133,7 +133,7 @@ export function AiChatPanel({
           {!isLoading && !messages?.length && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {postUrl
-                ? "No messages yet -- ask something to get started."
+                ? "No messages yet, ask something to get started."
                 : "No messages yet."}
             </p>
           )}

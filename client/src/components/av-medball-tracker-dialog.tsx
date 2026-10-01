@@ -219,14 +219,14 @@ export function AvMedballTrackerDialog({
         const result = await uploadPromise;
         toast.error(
           result.status === "queued"
-            ? `${message} (No Wi-Fi -- video saved on your device, will upload for your coach once connected.)`
+            ? `${message} (No Wi-Fi, video saved on your device, will upload for your coach once connected.)`
             : `${message} (Video saved for your coach.)`,
         );
         if (result.status === "queued") {
           if (!hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
             toast.info(
-              "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
+              "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
               { duration: 10000 },
             );
           }
@@ -561,8 +561,8 @@ export function AvMedballTrackerDialog({
       const blended = blendSpeedEstimates(
         ballSignal,
         wristSignal,
-        "Ball wasn't confidently tracked for enough of this throw -- speed estimated from wrist motion alone",
-        "No wrist motion signal to cross-check against -- speed from ball tracking alone",
+        "Ball wasn't confidently tracked for enough of this throw, speed estimated from wrist motion alone",
+        "No wrist motion signal to cross-check against, speed from ball tracking alone",
       );
       if (!blended) return null;
       return {
@@ -675,7 +675,7 @@ export function AvMedballTrackerDialog({
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
           toast.info(
-            "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
             { duration: 10000 },
           );
         }
@@ -723,7 +723,7 @@ export function AvMedballTrackerDialog({
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                 <p className="text-sm text-white">
                   {analyzing
-                    ? `Analyzing recording -- ${analyzedFrames} frames processed…`
+                    ? `Analyzing recording, ${analyzedFrames} frames processed…`
                     : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
                 </p>
                 {analyzing && (

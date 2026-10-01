@@ -724,7 +724,7 @@ export function ClassBuilderPage({
                     : autosaveState === "pending"
                       ? "Unsaved changes"
                       : autosaveState === "error"
-                        ? "Autosave failed -- click Save Class"
+                        ? "Autosave failed, click Save Class"
                         : "All changes saved"}
                 </span>
               )}
@@ -1028,7 +1028,7 @@ function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: n
           <p className="text-sm font-semibold">Your pacing for this class</p>
         </div>
         <p className="text-xs text-muted-foreground">
-          Overrides the class's own default unlock rule for your roster only -- combine a real
+          Overrides the class's own default unlock rule for your roster only, combine a real
           "effort drip" (logged reps) with a "time drip" (minimum wait), or leave both off to use
           the class's own defaults.
         </p>
@@ -1679,7 +1679,7 @@ function LessonContentAndQuiz({
           </div>
           {lesson.quizQuestions.length > 0 && (
             <p className="text-[11px] text-muted-foreground">
-              A lesson with a quiz doesn't auto-activate -- the athlete must read every page, pass the
+              A lesson with a quiz doesn't auto-activate, the athlete must read every page, pass the
               quiz, then tap "Add to Calendar" themselves.
             </p>
           )}
@@ -1845,7 +1845,7 @@ function ContentPageRow({
               const val = e.target.value;
               onUpdate((p) => ({ ...p, videoUrl: val }));
             }}
-            placeholder="Video link, or upload a file -- e.g. a YouTube search or watch URL"
+            placeholder="Video link, or upload a file, e.g. a YouTube search or watch URL"
             className="h-8 flex-1 text-sm"
           />
           <Button
@@ -1887,7 +1887,7 @@ function ContentPageRow({
             onUpdate((p) => ({ ...p, imageUrlsText: val }));
           }}
           rows={2}
-          placeholder="Image URLs (optional), one per line -- or upload a file below"
+          placeholder="Image URLs (optional), one per line, or upload a file below"
           className="text-xs"
         />
         <Button

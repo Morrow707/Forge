@@ -191,7 +191,7 @@ export function MechanicsTrackerDialog({
         setModelLoading(false);
       })
       .catch(() => {
-        setCameraError("Couldn't load the pose-tracking model -- check your connection and retry.");
+        setCameraError("Couldn't load the pose-tracking model, check your connection and retry.");
         setModelLoading(false);
       });
 
@@ -223,7 +223,7 @@ export function MechanicsTrackerDialog({
       ensureCameraPermission().then((granted) => {
         if (cancelled) return;
         if (!granted) {
-          setCameraError("Camera access denied -- enable it for Forge in Settings.");
+          setCameraError("Camera access denied, enable it for Forge in Settings.");
           return;
         }
         navigator.mediaDevices
@@ -497,7 +497,7 @@ export function MechanicsTrackerDialog({
       // Said out loud, because a queued clip is otherwise indistinguishable from a lost one --
       // the numbers saved either way, and the athlete has no other sign the video is coming.
       if (queuedForWifi) {
-        toast.info("No Wi-Fi -- the clip is saved on your device and uploads once you reconnect.");
+        toast.info("No Wi-Fi, the clip is saved on your device and uploads once you reconnect.");
       }
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
@@ -586,7 +586,7 @@ export function MechanicsTrackerDialog({
             </div>
             <p className="text-sm text-muted-foreground">
               {recording
-                ? `Recording -- perform the full ${actionLabel.toLowerCase()}, then stop.`
+                ? `Recording, perform the full ${actionLabel.toLowerCase()}, then stop.`
                 : `Get in frame, then start recording your ${actionLabel.toLowerCase()}.`}
             </p>
             <DialogFooter>
@@ -729,7 +729,7 @@ export function MechanicsTrackerDialog({
               <span>
                 Save this clip so my coach can review it
                 <span className="block text-xs text-muted-foreground">
-                  Off by default -- only the numbers above are saved unless you turn this on.
+                  Off by default, only the numbers above are saved unless you turn this on.
                 </span>
               </span>
             </label>
@@ -739,7 +739,7 @@ export function MechanicsTrackerDialog({
                 <span>
                   Never auto-delete this clip
                   <span className="block text-xs text-muted-foreground">
-                    Your plan only keeps a limited number of saved clips per drill -- favoriting
+                    Your plan only keeps a limited number of saved clips per drill, favoriting
                     this one keeps it forever, even once older clips start rolling off.
                   </span>
                 </span>

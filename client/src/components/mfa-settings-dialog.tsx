@@ -108,7 +108,7 @@ export function MfaSettingsDialog({
             {step === "setup" &&
               "Scan this with an authenticator app (Google Authenticator, Authy, 1Password, etc.), then enter the code it shows."}
             {step === "backup-codes" &&
-              "Save these somewhere safe -- each one works once, if you ever lose access to your authenticator app."}
+              "Save these somewhere safe, each one works once, if you ever lose access to your authenticator app."}
             {step === "disable" && "Enter your password to turn two-factor authentication off."}
           </DialogDescription>
         </DialogHeader>
@@ -218,7 +218,7 @@ export function MfaSettingsDialog({
         {step === "backup-codes" && (
           <DialogFooter>
             <Button className="w-full" onClick={reset}>
-              I've saved these -- done
+              I've saved these, done
             </Button>
           </DialogFooter>
         )}

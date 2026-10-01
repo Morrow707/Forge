@@ -133,7 +133,7 @@ async function startAddOnCheckout(addOnId: FreeAgentAddOnId) {
     const { url } = await res.json();
     window.location.href = url;
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : "Couldn't start checkout -- try again");
+    toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
   }
 }
 
@@ -212,7 +212,7 @@ export default function AthleteUpgrade() {
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start checkout -- try again");
+      toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
       setCheckoutTier(null);
     }
   }
@@ -237,15 +237,15 @@ export default function AthleteUpgrade() {
     try {
       if (googleSupported) await purchaseFreeAgentTierOnGooglePlay(tier);
       else await purchaseFreeAgentTier(tier);
-      toast.success("You're upgraded -- welcome to the new tier.");
+      toast.success("You're upgraded, welcome to the new tier.");
       refetch();
     } catch (err) {
       if (err instanceof ApplePurchaseCancelledError || err instanceof GooglePlayPurchaseCancelledError) {
         // Athlete backed out of the store's purchase sheet -- not an error.
       } else if (err instanceof ApplePurchasePendingError || err instanceof GooglePlayPurchasePendingError) {
-        toast("Purchase pending approval -- you'll be upgraded once it's confirmed.");
+        toast("Purchase pending approval, you'll be upgraded once it's confirmed.");
       } else {
-        toast.error("Couldn't complete that purchase -- try again");
+        toast.error("Couldn't complete that purchase, try again");
       }
     } finally {
       setPurchasingTier(null);
@@ -260,7 +260,7 @@ export default function AthleteUpgrade() {
       toast.success("Purchases restored");
       refetch();
     } catch {
-      toast.error("Couldn't restore purchases -- try again");
+      toast.error("Couldn't restore purchases, try again");
     } finally {
       setRestoring(false);
     }
@@ -325,7 +325,7 @@ export default function AthleteUpgrade() {
                       </Button>
                     ) : (
                       <p className="rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
-                        Free while Forge is in beta -- nothing to pay yet.
+                        Free while Forge is in beta, nothing to pay yet.
                       </p>
                     )}
                   </CardContent>
@@ -340,7 +340,7 @@ export default function AthleteUpgrade() {
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <Sparkles className="h-10 w-10 text-muted-foreground" />
               <p className="max-w-sm text-muted-foreground">
-                Upgrades aren't open yet -- check back soon.
+                Upgrades aren't open yet, check back soon.
               </p>
             </CardContent>
           </Card>

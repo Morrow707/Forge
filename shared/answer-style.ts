@@ -111,7 +111,7 @@ export function answerStyleInstruction(
   if (parts.length === 0) return "";
 
   return [
-    "How this reader wants to be written to. This governs STYLE ONLY -- never",
+    "How this reader wants to be written to. This governs STYLE ONLY, never",
     "what you are willing to say. A brevity or plain-language preference is",
     "never a reason to drop a caution, a referral, or a rule you are bound by;",
     "shorten the explanation around it instead.",

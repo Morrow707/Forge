@@ -34,7 +34,7 @@ export default function DeleteAccountPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>Deleting your account removes your profile, logged workouts and programs, and any video you recorded (form-check clips and skill drills). Numeric performance history tied only to your account goes with it.</p>
-            <p>If you coach a roster, deleting your account does not delete your athletes' own accounts or data -- only your coach account and the content you own.</p>
+            <p>If you coach a roster, deleting your account does not delete your athletes' own accounts or data, only your coach account and the content you own.</p>
           </CardContent>
         </Card>
 
@@ -48,7 +48,7 @@ export default function DeleteAccountPage() {
         ) : (
           <Card>
             <CardContent className="space-y-3 pt-6 text-sm text-muted-foreground">
-              <p>You'll need to log in first -- account deletion has to be confirmed with your password.</p>
+              <p>You'll need to log in first, account deletion has to be confirmed with your password.</p>
               <Button asChild className="w-full">
                 <Link href="/login">Log in to delete my account</Link>
               </Button>

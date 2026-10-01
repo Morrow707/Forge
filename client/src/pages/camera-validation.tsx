@@ -39,7 +39,7 @@ const MOVEMENTS: Movement[] = [
     name: "Bench press",
     mode: "Bar path",
     status: "validated",
-    note: "The hardest case -- calibration needs the full body in frame, and a lying athlete often is not",
+    note: "The hardest case, calibration needs the full body in frame, and a lying athlete often is not",
   },
   { name: "Box jump", mode: "Jump", status: "validated" },
   { name: "Deadlift", mode: "Bar path", status: "unvalidated", note: "Next in line" },
@@ -53,7 +53,7 @@ const MOVEMENTS: Movement[] = [
     name: "Olympic lifts",
     mode: "None yet",
     status: "unvalidated",
-    note: "Deliberately not offered -- needs its own path model, see below",
+    note: "Deliberately not offered, needs its own path model, see below",
   },
 ];
 
@@ -80,7 +80,7 @@ export default function CameraValidationPage() {
             What the camera has actually been tested on
           </h1>
           <p className="mt-6 text-lg text-muted-foreground">
-            Forge films a set and derives numbers from it -- bar speed, range of motion, jump
+            Forge films a set and derives numbers from it, bar speed, range of motion, jump
             height, bar path. Four movements have been checked against real lifts. The rest have
             not. This page says which is which, because a number you cannot audit is not worth
             training on.
@@ -160,7 +160,7 @@ export default function CameraValidationPage() {
             <p className="mt-2 text-muted-foreground">
               One camera sees two dimensions. Depth is estimated, and it is the least reliable
               number in the pipeline. Filming a squat from behind puts forward-and-back drift on
-              exactly that estimated axis -- so the reading most coaches want from that angle is
+              exactly that estimated axis, so the reading most coaches want from that angle is
               the one the setup is worst at. Forge records the angle a set was filmed from and
               says so next to the number, rather than presenting all three axes as equals.
             </p>
@@ -189,7 +189,7 @@ export default function CameraValidationPage() {
               Turning pixels into centimetres needs a known real-world length in frame, and Forge
               calibrates from the athlete's own height. An athlete lying flat with their feet out
               of frame cannot produce that measurement. So on bench specifically, a wrong number
-              is more likely to be a calibration failure than a tracking failure -- and from
+              is more likely to be a calibration failure than a tracking failure, and from
               outside, the two look identical. A capture that cannot trust its scale is saved with
               a record of why rather than quietly reported as a result.
             </p>
@@ -203,7 +203,7 @@ export default function CameraValidationPage() {
             What happens when a capture fails
           </h2>
           <p className="mt-3 text-muted-foreground">
-            It is kept. A take the tracker could not read is not thrown away -- the video is saved
+            It is kept. A take the tracker could not read is not thrown away, the video is saved
             for the coach, the set is recorded with whatever could be counted, and the failure is
             stored with the reason. An empty result and a set nobody filmed are different things,
             and a system that cannot tell them apart cannot be debugged or improved.

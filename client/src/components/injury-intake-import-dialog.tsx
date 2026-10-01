@@ -115,7 +115,7 @@ export function InjuryIntakeImportDialog({
         <DialogHeader>
           <DialogTitle>Import Injury History Intake</DialogTitle>
           <DialogDescription>
-            Photograph a pre-participation/injury intake form -- this is medical information, so check every row
+            Photograph a pre-participation/injury intake form, this is medical information, so check every row
             carefully before applying.
           </DialogDescription>
         </DialogHeader>
@@ -149,7 +149,7 @@ export function InjuryIntakeImportDialog({
                       <SelectValue placeholder="Match athlete" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Unmatched ("{row.nameOnSheet}") -- skip</SelectItem>
+                      <SelectItem value="none">Unmatched ("{row.nameOnSheet}"), skip</SelectItem>
                       {roster.map((a) => (
                         <SelectItem key={a.id} value={String(a.id)}>
                           {a.name}

@@ -478,26 +478,26 @@ export function detectMechanicsFaults(
     if (result.weightTransferPct != null && result.weightTransferPct < thresholds.lowWeightTransferPct) {
       faults.push({
         code: "low_weight_transfer",
-        label: "Weight staying back -- work on shifting into your front side",
+        label: "Weight staying back, work on shifting into your front side",
       });
     }
     if (result.hipRotationDeg != null && result.hipRotationDeg < thresholds.lowHipRotationDeg) {
       faults.push({
         code: "low_hip_rotation",
-        label: "Hips aren't rotating through -- work on clearing your hips fully",
+        label: "Hips aren't rotating through, work on clearing your hips fully",
       });
     }
   } else {
     if (result.hipShoulderSeparationDeg != null && result.hipShoulderSeparationDeg < thresholds.lowSeparationDeg) {
       faults.push({
         code: "low_hip_shoulder_separation",
-        label: "Limited hip-shoulder separation -- work on delaying your upper body to build more torque",
+        label: "Limited hip-shoulder separation, work on delaying your upper body to build more torque",
       });
     }
     if (!result.sequencing.wellSequenced) {
       faults.push({
         code: "poor_sequencing",
-        label: "Upper body firing before the hips -- work on sequencing from the ground up",
+        label: "Upper body firing before the hips, work on sequencing from the ground up",
       });
     }
   }

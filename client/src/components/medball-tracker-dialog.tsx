@@ -146,7 +146,7 @@ export function MedballTrackerDialog({
         setModelLoading(false);
       })
       .catch(() => {
-        setCameraError("Couldn't load the pose-tracking model -- check your connection and retry.");
+        setCameraError("Couldn't load the pose-tracking model, check your connection and retry.");
         setModelLoading(false);
       });
 
@@ -155,7 +155,7 @@ export function MedballTrackerDialog({
       ensureCameraPermission().then((granted) => {
         if (cancelled) return;
         if (!granted) {
-          setCameraError("Camera access denied -- enable it for Forge in Settings.");
+          setCameraError("Camera access denied, enable it for Forge in Settings.");
           return;
         }
         navigator.mediaDevices
@@ -343,13 +343,13 @@ export function MedballTrackerDialog({
           const result = await uploadOrQueueVideo(blob, videoFilenameForBlob(blob, "form-check"), videoContext ?? { label: "Med Ball" }, setUploadProgress);
           toast.error(
             result.status === "queued"
-              ? `${message} (No Wi-Fi -- video saved on your device, will upload once connected.)`
+              ? `${message} (No Wi-Fi, video saved on your device, will upload once connected.)`
               : `${message} (Video saved for your coach.)`,
           );
           if (result.status === "queued" && !hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
             toast.info(
-              "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
+              "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
               { duration: 10000 },
             );
           }
@@ -411,8 +411,8 @@ export function MedballTrackerDialog({
       return blendSpeedEstimates(
         ballSignal,
         wristSignal,
-        "Ball wasn't confidently tracked for enough of this throw -- speed estimated from wrist motion alone",
-        "No wrist motion signal to cross-check against -- speed from ball tracking alone",
+        "Ball wasn't confidently tracked for enough of this throw, speed estimated from wrist motion alone",
+        "No wrist motion signal to cross-check against, speed from ball tracking alone",
       );
     }
 
@@ -464,7 +464,7 @@ export function MedballTrackerDialog({
       if (result.status === "queued" && !hasWarnedAboutQueueing()) {
         markWarnedAboutQueueing();
         toast.info(
-          "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+          "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
           { duration: 10000 },
         );
       }

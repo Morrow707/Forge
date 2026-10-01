@@ -191,7 +191,7 @@ export function renderNormsForPrompt(
     const base = `- ${n.metric} (${n.unit}), n=${n.n}: 10th ${n.p10}, 25th ${n.p25}, median ${n.p50}, 75th ${n.p75}, 90th ${n.p90}`;
     const value = athleteValues?.[n.metric];
     if (typeof value !== "number") return base;
-    return `${base}. This athlete: ${value} -- ${percentileBand(value, n, LOWER_IS_BETTER.has(n.metric) ? false : true)}`;
+    return `${base}. This athlete: ${value}, ${percentileBand(value, n, LOWER_IS_BETTER.has(n.metric) ? false : true)}`;
   });
 
   return [
@@ -203,7 +203,7 @@ export function renderNormsForPrompt(
     ...lines,
     "",
     "These describe Forge's own athletes, who are not a random sample of the",
-    "wider population -- they are the ones whose coach uses this software and",
+    "wider population, they are the ones whose coach uses this software and",
     "who record their training. Cite them as what they are, give the number of",
     "athletes behind any comparison you make, and never present them as",
     "national norms.",

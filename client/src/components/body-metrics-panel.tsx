@@ -80,7 +80,7 @@ export function BodyMetricsPanel({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Normally logged by {athleteName.split(" ")[0]} -- add an entry yourself for a testing day.
+        Normally logged by {athleteName.split(" ")[0]}, add an entry yourself for a testing day.
       </p>
 
       <form

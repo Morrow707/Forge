@@ -75,7 +75,7 @@ const METRICS: MetricDef[] = [
     unit: "bpm",
     decimals: 0,
     caption:
-      "A resting heart rate that creeps up week over week is one of the earliest signs of accumulating fatigue, dehydration, or illness -- watch for a rising trend, not just a single high day.",
+      "A resting heart rate that creeps up week over week is one of the earliest signs of accumulating fatigue, dehydration, or illness, watch for a rising trend, not just a single high day.",
   },
   {
     key: "hrv",
@@ -83,28 +83,28 @@ const METRICS: MetricDef[] = [
     unit: "ms",
     decimals: 0,
     caption:
-      "Heart rate variability trending down usually shows up before soreness or a slow bar speed does -- it's often the first signal that recovery is behind training load.",
+      "Heart rate variability trending down usually shows up before soreness or a slow bar speed does, it's often the first signal that recovery is behind training load.",
   },
   {
     key: "vo2Max",
     label: "VO2 Max",
     unit: "mL/kg/min",
     decimals: 1,
-    caption: "Aerobic capacity -- should trend upward over a training block as conditioning improves.",
+    caption: "Aerobic capacity, should trend upward over a training block as conditioning improves.",
   },
   {
     key: "respiratoryRate",
     label: "Respiratory Rate",
     unit: "br/min",
     decimals: 1,
-    caption: "Resting breathing rate -- a sustained rise here can be an early flag for illness.",
+    caption: "Resting breathing rate, a sustained rise here can be an early flag for illness.",
   },
   {
     key: "bodyMass",
     label: "Body Mass",
     unit: "lbs",
     decimals: 1,
-    caption: "Also shown on the Nutrition page -- useful context for a nutritionist reviewing targets.",
+    caption: "Also shown on the Nutrition page, useful context for a nutritionist reviewing targets.",
   },
   {
     key: "heartRateRecovery",
@@ -112,7 +112,7 @@ const METRICS: MetricDef[] = [
     unit: "bpm",
     decimals: 0,
     caption:
-      "How many bpm the heart rate drops in the first minute after training -- only fills in on days with a workout logged to Health. A steady rise over the season means better conditioning; a decline usually means illness or injury outrunning recovery, not just \"less improvement,\" and is worth flagging to a coach.",
+      "How many bpm the heart rate drops in the first minute after training, only fills in on days with a workout logged to Health. A steady rise over the season means better conditioning; a decline usually means illness or injury outrunning recovery, not just \"less improvement,\" and is worth flagging to a coach.",
   },
 ];
 
@@ -249,7 +249,7 @@ function WorkoutsTab() {
     <div className="space-y-2">
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        Calorie figures are the OS's own estimate from accelerometer and heart-rate data --
+        Calorie figures are the OS's own estimate from accelerometer and heart-rate data,
         reliable for steady-state cardio, less so for resistance training.
       </p>
       {workouts.map((w, i) => (
@@ -291,7 +291,7 @@ export default function AthleteRecovery() {
     <AppShell title="Recovery & Vitals">
       <p className="mb-6 text-sm text-muted-foreground">
         Trends from your daily check-ins and synced Apple Health data over the last{" "}
-        {HISTORY_DAYS} days. Averages recompute automatically every time you check in -- nothing
+        {HISTORY_DAYS} days. Averages recompute automatically every time you check in, nothing
         here is a running total.
       </p>
       {isError ? (

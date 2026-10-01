@@ -51,7 +51,7 @@ export default function PublicTeamPage() {
   usePageMeta({
     title: data?.teamName ? `${data.teamName} on Forge` : "Team",
     description: data?.motto?.trim()
-      ? `${data.teamName ?? "This program"} on Forge Performance Systems -- ${data.motto.trim()}`
+      ? `${data.teamName ?? "This program"} on Forge Performance Systems, ${data.motto.trim()}`
       : data?.teamName
         ? `${data.teamName} trains on Forge Performance Systems. See the program and get in touch with the coaching staff.`
         : "A coaching program on Forge Performance Systems.",

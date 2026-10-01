@@ -98,7 +98,7 @@ export const REQUIRED_DOCUMENTS: Record<DocumentAudience, RequiredDocument[]> = 
       kind: "coaching_certification",
       label: "Coaching certification",
       required: true,
-      why: "Whatever your governing body issues -- USAW, NSCA, a state association card.",
+      why: "Whatever your governing body issues, USAW, NSCA, a state association card.",
     },
     {
       kind: "cpr_first_aid",

@@ -20,7 +20,7 @@ export default function ForAthletesPage() {
   usePageMeta({
     title: "Forge for athletes",
     description:
-      "Your programming, your lift history and your own record of every session -- on the phone you already train with.",
+      "Your programming, your lift history and your own record of every session, on the phone you already train with.",
     path: "/for-athletes",
     image: "/marketing/shot-trophies.png",
   });
@@ -37,7 +37,7 @@ export default function ForAthletesPage() {
             Today's session, and everything you have already done
           </h1>
           <p className="mt-6 text-lg text-muted-foreground">
-            Open it in the weight room and your programming is there -- sets, reps, the weight you
+            Open it in the weight room and your programming is there, sets, reps, the weight you
             hit last time. Log as you go. It keeps working when the gym wifi does not, and syncs
             the moment you have signal again.
           </p>
@@ -76,7 +76,7 @@ export default function ForAthletesPage() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   Every session you have logged, every lift's progression, and your personal
                   records tracked without you having to maintain them. It follows you between
-                  teams -- the record belongs to your account, not to whoever is coaching you this
+                  teams, the record belongs to your account, not to whoever is coaching you this
                   season.
                 </p>
               </CardContent>
@@ -100,7 +100,7 @@ export default function ForAthletesPage() {
                 <h3 className="mt-4 font-display text-lg font-bold">Fuelling, without the lecture</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Log food by barcode or by photo. Guidance for athletes comes from published
-                  standards for your age and sport -- not from averaging what other people on the
+                  standards for your age and sport, not from averaging what other people on the
                   app happened to eat, which mostly measures who is under-eating.
                 </p>
               </CardContent>
@@ -116,7 +116,7 @@ export default function ForAthletesPage() {
           </h2>
           <p className="mt-4 text-muted-foreground">
             You can record a lift and send it to your coach for a form check. That part works and
-            it is genuinely useful -- a coach who could not be there still sees the rep.
+            it is genuinely useful, a coach who could not be there still sees the rep.
           </p>
           <Card className="mt-6 border-amber-500/40 bg-amber-500/5">
             <CardContent className="flex gap-3 p-6">
@@ -149,7 +149,7 @@ export default function ForAthletesPage() {
               </h2>
               <p className="mt-4 text-muted-foreground">
                 A parent or guardian has to claim their own account before yours starts working.
-                That is not a formality we can skip -- your account genuinely does not function
+                That is not a formality we can skip, your account genuinely does not function
                 until they do. They can switch camera tracking off for you and keep everything
                 else, and either of you can delete the account whenever you want.
               </p>

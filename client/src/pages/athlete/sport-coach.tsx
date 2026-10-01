@@ -18,11 +18,11 @@ import {
 // that is not a coach has no "ask about your swing" line to give. See FreeAgentAddOnId.
 const ADD_ON_DESCRIPTIONS: Record<SportCoachAddOnId, string> = {
   golf_swing:
-    "Ask about your swing, short game, or putting. There's no coach on this platform to loop in here -- for pain or injury, talk to a doctor or a certified instructor in person.",
+    "Ask about your swing, short game, or putting. There's no coach on this platform to loop in here, for pain or injury, talk to a doctor or a certified instructor in person.",
   hitting:
-    "Ask about your hitting mechanics or approach. There's no coach on this platform to loop in here -- for pain or injury, talk to a doctor or a certified instructor in person.",
+    "Ask about your hitting mechanics or approach. There's no coach on this platform to loop in here, for pain or injury, talk to a doctor or a certified instructor in person.",
   pitching:
-    "Ask about your pitching mechanics, arm care, or mound work. There's no coach on this platform to loop in here -- for pain or injury, talk to a doctor or a certified instructor in person.",
+    "Ask about your pitching mechanics, arm care, or mound work. There's no coach on this platform to loop in here, for pain or injury, talk to a doctor or a certified instructor in person.",
 };
 
 export default function AthleteSportCoach() {

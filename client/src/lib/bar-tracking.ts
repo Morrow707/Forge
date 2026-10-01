@@ -2706,7 +2706,7 @@ export function implausibleRangeOfMotion(
     if (traceSpanCm != null && Number.isFinite(traceSpanCm) && traceSpanCm >= floorCm) {
       return (
         `Range of motion came out as ${Math.round(romCm)}cm per rep, about ${underBy}x SHORTER ` +
-        `than this movement can travel for your height -- but the bar covered ` +
+        `than this movement can travel for your height, but the bar covered ` +
         `${Math.round(traceSpanCm)}cm across the whole set, which is a plausible distance for ` +
         `it. That points at the reps being split rather than the camera's scale being wrong, so ` +
         `re-filming may not change it. Either way the rep count and every number built on it ` +

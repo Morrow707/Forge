@@ -266,7 +266,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
       // picks it up immediately instead of waiting up to 30s for its own
       // poll.
       qc.invalidateQueries({ queryKey: ["/api/athlete/cara/status"] });
-      toast.success(data ? "Check-in updated" : "Thanks -- have a great session");
+      toast.success(data ? "Check-in updated" : "Thanks, have a great session");
       setEditing(false);
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't save your check-in"),
@@ -432,7 +432,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
           />
           {lastSyncedSleep.current != null && sleepHours === lastSyncedSleep.current && (
             <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Watch className="h-3 w-3" /> Synced from Health -- edit if this looks off
+              <Watch className="h-3 w-3" /> Synced from Health, edit if this looks off
             </p>
           )}
         </div>

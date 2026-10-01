@@ -117,17 +117,17 @@ export function redFlag(
 
   // A weight on the title means somebody's lift, not a demonstration of the movement.
   if (/\b\d+(\.\d+)?\s*(kg|kgs|lb|lbs|pounds|kilos)\b/i.test(rawTitle)) {
-    return { flagged: true, detail: "a weight in the title -- somebody's lift, not a demo" };
+    return { flagged: true, detail: "a weight in the title, somebody's lift, not a demo" };
   }
   if (/\b\d+\s*x\s*\d+\b/i.test(rawTitle)) {
-    return { flagged: true, detail: "a set x rep scheme -- a training clip, not a demo" };
+    return { flagged: true, detail: "a set x rep scheme, a training clip, not a demo" };
   }
   // Emoji. Unicode property escapes need the u flag.
   if (/\p{Extended_Pictographic}/u.test(seg)) {
     return { flagged: true, detail: "an emoji in the title" };
   }
   if (/[?!]/.test(seg)) {
-    return { flagged: true, detail: "a question or exclamation -- commentary, not a demo" };
+    return { flagged: true, detail: "a question or exclamation, commentary, not a demo" };
   }
   if (seg.includes("#")) {
     // Only in the FIRST segment: a trailing "#shorts" is boilerplate and is stripped elsewhere.
@@ -143,14 +143,14 @@ export function redFlag(
   if (letters.length >= 6) {
     const caps = shoutable.replace(/[^A-Z]/g, "").length;
     if (caps / letters.length > 0.5) {
-      return { flagged: true, detail: "shouting -- more than half the first segment is capitals" };
+      return { flagged: true, detail: "shouting, more than half the first segment is capitals" };
     }
   }
   for (const word of seg.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ")) {
     // A word the library itself uses is never commentary: "hack" in "Machine Hack Squat" is a
     // movement, and the flag refused the exercise's own name for it (2026-09-28).
     if (RED_FLAG_WORDS.has(word) && !knownTokens.has(word)) {
-      return { flagged: true, detail: `"${word}" -- commentary or a claim, not a demonstration` };
+      return { flagged: true, detail: `"${word}", commentary or a claim, not a demonstration` };
     }
   }
   return { flagged: false };

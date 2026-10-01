@@ -271,7 +271,7 @@ export async function persistVideoForUpload(
     } catch {
       // Nothing more to try; the throw below is still the honest answer.
     }
-    throw new Error("Couldn't save this video on your device -- storage may be full.");
+    throw new Error("Couldn't save this video on your device, storage may be full.");
   }
   return id;
 }
@@ -527,7 +527,7 @@ async function runVideoFlush() {
       toast.success(
         entry.reattach
           ? `${entry.label} finished uploading.`
-          : "A queued video just finished uploading -- check the Video Bank.",
+          : "A queued video just finished uploading, check the Video Bank.",
       );
     } catch (err) {
       // An ApiError is NOT the same as a permanent rejection, and treating it as one deleted
@@ -544,7 +544,7 @@ async function runVideoFlush() {
       if (isPermanentUploadRejection(status, code)) {
         await clearPersistedVideo(entry.id);
         toast.error(
-          `${entry.label}: couldn't be uploaded and was not saved -- you'll need to re-record it.`,
+          `${entry.label}: couldn't be uploaded and was not saved, you'll need to re-record it.`,
           { duration: 15000 },
         );
       }

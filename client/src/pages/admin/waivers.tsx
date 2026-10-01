@@ -72,7 +72,7 @@ export default function AdminWaiversPage() {
           <CardHeader>
             <CardTitle className="text-base">Documents from schools, clubs and clinics</CardTitle>
             <CardDescription>
-              Only the ones the automatic read could not clear reach this queue -- a document it
+              Only the ones the automatic read could not clear reach this queue, a document it
               accepted was never seen by anybody here. Confirm each one below arrived, is legible,
               and is what it says it is. That is the whole claim: accepting a form signed with a
               school does not make it cover Forge, which takes the institution signing our own
@@ -84,7 +84,7 @@ export default function AdminWaiversPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              There is no list of accepted documents. To produce one, look up the athlete below --
+              There is no list of accepted documents. To produce one, look up the athlete below,
               you'll be asked what it's for, and the document opens once.
             </p>
             <div className="flex gap-2">
@@ -143,7 +143,7 @@ export default function AdminWaiversPage() {
                 {waiver.reviewStatus === "pending_review" ? (
                   <div className="space-y-2">
                     <Input
-                      placeholder="Reason, if rejecting -- they'll see it"
+                      placeholder="Reason, if rejecting, they'll see it"
                       value={notes[waiver.id] ?? ""}
                       onChange={(e) => setNotes((n) => ({ ...n, [waiver.id]: e.target.value }))}
                       className="h-9 text-sm"
@@ -262,7 +262,7 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
       <CardHeader>
         <CardTitle className="text-base">Athlete {athleteId}</CardTitle>
         <CardDescription>
-          Opening a document records who you are, when, and the reason you give. It opens once --
+          Opening a document records who you are, when, and the reason you give. It opens once,
           you can ask again, and that is another line in the log.
         </CardDescription>
       </CardHeader>

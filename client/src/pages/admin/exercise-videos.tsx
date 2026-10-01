@@ -118,7 +118,7 @@ function CopyButton({ text, label = "Copy" }: { text: () => string; label?: stri
           setDone(true);
           setTimeout(() => setDone(false), 1500);
         } catch {
-          toast.error("Could not copy -- the browser refused clipboard access.");
+          toast.error("Could not copy, the browser refused clipboard access.");
         }
       }}
     >
@@ -133,7 +133,7 @@ const REJECTION_GROUPS: Array<{ key: RejectReason; title: string; blurb: string 
     key: "head",
     title: "Different movement",
     blurb:
-      "The title's movement word is not this exercise's. \"Squat Box Jump\" is a jump, so Box Squat cannot have it. Nothing to tune -- these were never candidates.",
+      "The title's movement word is not this exercise's. \"Squat Box Jump\" is a jump, so Box Squat cannot have it. Nothing to tune, these were never candidates.",
   },
   {
     key: "combo",
@@ -145,7 +145,7 @@ const REJECTION_GROUPS: Array<{ key: RejectReason; title: string; blurb: string 
     key: "modifier",
     title: "A word that changes the variation",
     blurb:
-      "Same movement, different version: the title adds or drops a modifier. \"Barbell Wrist Curl\" against Barbell Curl. Correct refusals -- unless Forge is missing that variation as its own exercise.",
+      "Same movement, different version: the title adds or drops a modifier. \"Barbell Wrist Curl\" against Barbell Curl. Correct refusals, unless Forge is missing that variation as its own exercise.",
   },
   {
     key: "equipment",
@@ -157,13 +157,13 @@ const REJECTION_GROUPS: Array<{ key: RejectReason; title: string; blurb: string 
     key: "muscle-unexplained",
     title: "Names a muscle this exercise does not train",
     blurb:
-      "The title says a muscle that is not in this exercise's metadata -- usually a sign it is a different movement, occasionally a sign our metadata is thin.",
+      "The title says a muscle that is not in this exercise's metadata, usually a sign it is a different movement, occasionally a sign our metadata is thin.",
   },
   {
     key: "unknown-count",
     title: "A word the library has never seen",
     blurb:
-      "The strictest rule and the most productive one. An unrecognised word in the name is either a variation we have no word for or one that changes the movement. The words themselves are listed below -- that list is what to fix.",
+      "The strictest rule and the most productive one. An unrecognised word in the name is either a variation we have no word for or one that changes the movement. The words themselves are listed below, that list is what to fix.",
   },
   {
     key: "red-flag",
@@ -181,7 +181,7 @@ const REJECTION_GROUPS: Array<{ key: RejectReason; title: string; blurb: string 
     key: "no-head",
     title: "No movement word at all",
     blurb:
-      "Either the title names nothing we recognise, or this exercise's own name has no head word -- worth checking the name itself if a common lift lands here.",
+      "Either the title names nothing we recognise, or this exercise's own name has no head word, worth checking the name itself if a common lift lands here.",
   },
 ];
 
@@ -192,7 +192,7 @@ const rejectionLine = (t: Unmatched) =>
 
 function summaryText(report: Report): string {
   const lines = [
-    report.written == null ? "DRY RUN" : `APPLIED -- ${report.written} written`,
+    report.written == null ? "DRY RUN" : `APPLIED, ${report.written} written`,
     `Lifts: ${report.byKind?.exercise.matched ?? 0} of ${report.byKind?.exercise.considered ?? 0}. Skill drills: ${report.byKind?.skill.matched ?? 0} of ${report.byKind?.skill.considered ?? 0}.`,
     `Tier A ${report.tierCounts?.A ?? 0}, Tier B ${report.tierCounts?.B ?? 0}. Cap ${mmss(report.maxDurationSeconds)}. ${report.quota.units} quota units over ${report.quota.calls} calls.`,
     "",
@@ -230,11 +230,11 @@ function duplicatesText(report: Report): string {
 
 function noMatchText(unmatched: Unmatched[]): string {
   const lifts = unmatched.filter((t) => t.kind === "exercise");
-  const out = [`NO MATCH -- ${unmatched.length} keep their search link (${lifts.length} lifts)`];
+  const out = [`NO MATCH, ${unmatched.length} keep their search link (${lifts.length} lifts)`];
   for (const group of REJECTION_GROUPS) {
     const rows = lifts.filter((t) => t.rejection?.reason === group.key);
     if (rows.length === 0) continue;
-    out.push("", `${group.title} -- ${rows.length}`, ...rows.map(rejectionLine));
+    out.push("", `${group.title}, ${rows.length}`, ...rows.map(rejectionLine));
   }
   return out.join("\n");
 }
@@ -280,7 +280,7 @@ export default function AdminExerciseVideos() {
       if (which === "apply") {
         pending.refetch();
         toast.success(
-          `${data.written ?? 0} video${data.written === 1 ? "" : "s"} written -- ${data.unmatched.length} left on a search link`,
+          `${data.written ?? 0} video${data.written === 1 ? "" : "s"} written, ${data.unmatched.length} left on a search link`,
         );
       }
     },
@@ -301,7 +301,7 @@ export default function AdminExerciseVideos() {
           <h1 className="text-2xl font-bold">Demo videos</h1>
           <p className="text-sm text-muted-foreground">
             Every seeded exercise carries a YouTube <em>search link</em>, not a video, so nothing
-            plays inside Forge. This replaces those with real clips -- shortest match wins, and a
+            plays inside Forge. This replaces those with real clips, shortest match wins, and a
             URL anybody chose by hand is never touched.
           </p>
         </div>
@@ -337,7 +337,7 @@ export default function AdminExerciseVideos() {
                   )}
                   <p className="text-muted-foreground">
                     Channels: {pending.data?.channels.join(", ")}. Cap{" "}
-                    {mmss(pending.data?.maxDurationSeconds ?? 0)} by default -- most winners come in
+                    {mmss(pending.data?.maxDurationSeconds ?? 0)} by default, most winners come in
                     well under it, because a Short beats a breakdown of the same lift.
                   </p>
                 </>
@@ -377,7 +377,7 @@ export default function AdminExerciseVideos() {
               />
               <span>
                 <strong className="text-foreground">Search YouTube for the ones no channel has.</strong>{" "}
-                The long tail -- stretches, mobility, odd equipment -- is missing because no
+                The long tail, stretches, mobility, odd equipment, is missing because no
                 channel in the pool films it at all, not because it was refused. This searches for
                 each one and takes the most watched result that still passes every rule. Costs 100
                 quota units per exercise against 10,000 a day, so a run covers about 90 and says
@@ -398,7 +398,7 @@ export default function AdminExerciseVideos() {
             </Button>
             {busy && (
               <span className="text-xs text-muted-foreground">
-                Pulling channel catalogues -- a full run takes a minute or two.
+                Pulling channel catalogues, a full run takes a minute or two.
               </span>
             )}
           </CardContent>
@@ -409,7 +409,7 @@ export default function AdminExerciseVideos() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                  <span>{report.written == null ? "Dry run" : `Applied -- ${report.written} written`}</span>
+                  <span>{report.written == null ? "Dry run" : `Applied, ${report.written} written`}</span>
                   <span className="ml-auto flex gap-1">
                     <CopyButton text={() => summaryText(report)} label="Copy summary" />
                     <CopyButton text={() => wholeReportText(report)} label="Copy whole report" />
@@ -424,14 +424,14 @@ export default function AdminExerciseVideos() {
                     {report.byKind?.exercise.considered ?? 0}
                   </strong>
                   . Skill drills: {report.byKind?.skill.matched ?? 0} of{" "}
-                  {report.byKind?.skill.considered ?? 0} -- these are niche enough that no
+                  {report.byKind?.skill.considered ?? 0}, these are niche enough that no
                   strength channel carries them, and a search link is the expected outcome.
                   <br />
                   <br />
-                  <strong>Tier A {report.tierCounts?.A ?? 0}</strong> -- applied without review:
+                  <strong>Tier A {report.tierCounts?.A ?? 0}</strong>, applied without review:
                   nothing unrecognised in the title, equipment stated rather than assumed, under
                   two minutes, from a channel you have watched.{" "}
-                  <strong>Tier B {report.tierCounts?.B ?? 0}</strong> -- a match nothing is wrong
+                  <strong>Tier B {report.tierCounts?.B ?? 0}</strong>, a match nothing is wrong
                   with that nobody has confirmed. Apply writes tier A only.
                   <br />
                   {report.searchFill && (
@@ -441,7 +441,7 @@ export default function AdminExerciseVideos() {
                       had: {report.searchFill.filled} filled, {report.searchFill.stillEmpty} found
                       nothing that passed,{" "}
                       {report.searchFill.remaining > 0
-                        ? `${report.searchFill.remaining} still waiting -- run again to continue.`
+                        ? `${report.searchFill.remaining} still waiting, run again to continue.`
                         : "none left waiting."}
                     </>
                   )}
@@ -470,13 +470,13 @@ export default function AdminExerciseVideos() {
                               Opposite problems, opposite fixes. */}
                           {c.status === "handle_not_found" && (
                             <span className="ml-2 text-xs text-destructive">
-                              handle did not resolve -- needs a UC... channel ID, not a verdict on
+                              handle did not resolve, needs a UC... channel ID, not a verdict on
                               the channel
                             </span>
                           )}
                           {c.status === "error" && (
                             <span className="ml-2 text-xs text-destructive">
-                              API error (most likely quota) -- nothing was read
+                              API error (most likely quota), nothing was read
                             </span>
                           )}
                         </td>
@@ -497,7 +497,7 @@ export default function AdminExerciseVideos() {
                   </tbody>
                 </table>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  A channel with a catalogue but few matches is a content verdict -- it is not
+                  A channel with a catalogue but few matches is a content verdict, it is not
                   making short demonstrations. A catalogue of 0 is not: nothing was ever read, so
                   the length cap never saw it.
                 </p>
@@ -528,7 +528,7 @@ export default function AdminExerciseVideos() {
                         variant={p.match.tier === "A" ? "default" : "outline"}
                         className="shrink-0"
                       >
-                        {p.match.tier === "A" ? "A" : "B -- review"}
+                        {p.match.tier === "A" ? "A" : "B, review"}
                       </Badge>
                       <span className="font-medium">{p.name}</span>
                       <span className="text-muted-foreground">&rarr;</span>
@@ -560,7 +560,7 @@ export default function AdminExerciseVideos() {
                     Each of these cost at least one match. Read them as a to-do list: a word that
                     never changes a movement ("beginners", "gym") belongs in the filler table; a
                     word that names a real variation ("scap", "anti", "tempo") belongs in the
-                    library as its own exercise, or in the modifier list. Both are code changes --
+                    library as its own exercise, or in the modifier list. Both are code changes,
                     the vocabulary stays in the repo under test rather than editable here.
                   </CardDescription>
                 </CardHeader>
@@ -580,7 +580,7 @@ export default function AdminExerciseVideos() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <span>Library names that mean the same thing -- {report.duplicateSignatures.length}</span>
+                    <span>Library names that mean the same thing, {report.duplicateSignatures.length}</span>
                     <span className="ml-auto"><CopyButton text={() => duplicatesText(report)} /></span>
                   </CardTitle>
                   <CardDescription>
@@ -626,7 +626,7 @@ function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-          <span>No match -- {unmatched.length} keep their search link ({lifts.length} lifts)</span>
+          <span>No match, {unmatched.length} keep their search link ({lifts.length} lifts)</span>
           <span className="ml-auto"><CopyButton text={() => noMatchText(unmatched)} label="Copy all groups" /></span>
         </CardTitle>
         <CardDescription>
@@ -641,9 +641,9 @@ function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
           return (
             <div key={group.key} className="space-y-1">
               <p className="flex items-center gap-2 text-sm font-semibold">
-                <span>{group.title} -- {rows.length}</span>
+                <span>{group.title}, {rows.length}</span>
                 <CopyButton
-                  text={() => [`${group.title} -- ${rows.length}`, ...rows.map(rejectionLine)].join("\n")}
+                  text={() => [`${group.title}, ${rows.length}`, ...rows.map(rejectionLine)].join("\n")}
                 />
               </p>
               <p className="text-xs text-muted-foreground">{group.blurb}</p>

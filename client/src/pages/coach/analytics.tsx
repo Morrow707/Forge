@@ -538,7 +538,7 @@ function SetRepTable({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Not camera-tracked -- no per-rep data.</p>
+            <p className="text-sm text-muted-foreground">Not camera-tracked, no per-rep data.</p>
           )
         ) : (
           <table className="w-full text-left text-sm">
@@ -1366,7 +1366,7 @@ export default function CoachAnalytics() {
               <CardHeader>
                 <CardTitle>Force-Velocity Profile</CardTitle>
                 <CardDescription>
-                  Load vs. mean concentric velocity across every tracked set -- the standard
+                  Load vs. mean concentric velocity across every tracked set, the standard
                   barbell proxy for a force-velocity relationship, fit from at least 3 tracked
                   sets at different loads.
                 </CardDescription>
@@ -1396,7 +1396,7 @@ export default function CoachAnalytics() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Not enough tracked sets at different loads yet to fit a profile -- keep logging
+                    Not enough tracked sets at different loads yet to fit a profile, keep logging
                     velocity-tracked sets across a range of weights.
                   </p>
                 )}
@@ -1463,7 +1463,7 @@ export default function CoachAnalytics() {
                 <CardTitle>AI Overwatch</CardTitle>
                 <CardDescription>
                   Reviews this athlete's recent camera-tracked sets of this exercise for a form
-                  fault that keeps recurring across sessions -- not a single set, a real pattern.
+                  fault that keeps recurring across sessions, not a single set, a real pattern.
                   Anonymized: Claude only sees fault-code frequency counts, never video or joint
                   coordinates.
                 </CardDescription>
@@ -1527,7 +1527,7 @@ export default function CoachAnalytics() {
               <CardHeader>
                 <CardTitle>Power Output</CardTitle>
                 <CardDescription>
-                  Estimated power (load × gravity × concentric velocity) per tracked set --
+                  Estimated power (load × gravity × concentric velocity) per tracked set,
                   requires a numeric weight to have been entered for the tracker to estimate
                   from.
                 </CardDescription>
@@ -1566,7 +1566,7 @@ export default function CoachAnalytics() {
                 <CardTitle>Velocity Loss (Fatigue)</CardTitle>
                 <CardDescription>
                   How much peak concentric velocity dropped from the first rep to the last, per
-                  tracked set -- the standard within-set fatigue signal in velocity-based
+                  tracked set, the standard within-set fatigue signal in velocity-based
                   training. Negative means the last rep was actually faster.
                 </CardDescription>
               </CardHeader>
@@ -1666,7 +1666,7 @@ export default function CoachAnalytics() {
                 <CardTitle>Ground Contact &amp; Reactive Strength</CardTitle>
                 <CardDescription>
                   Time on the ground between jumps, and Reactive Strength Index (jump height ÷
-                  ground contact time) -- the standard power/reactivity metric for repeated
+                  ground contact time), the standard power/reactivity metric for repeated
                   jumps.
                 </CardDescription>
               </CardHeader>
@@ -1752,7 +1752,7 @@ export default function CoachAnalytics() {
               <CardHeader>
                 <CardTitle>Swing Tempo</CardTitle>
                 <CardDescription>
-                  Backswing and downswing duration per tracked set -- the classic 3:1 tempo ratio
+                  Backswing and downswing duration per tracked set, the classic 3:1 tempo ratio
                   is the usual coaching reference point.
                 </CardDescription>
               </CardHeader>
@@ -1846,7 +1846,7 @@ export default function CoachAnalytics() {
                 <div>
                   <CardTitle>Kettlebell Swing</CardTitle>
                   <CardDescription>
-                    Peak full-3D bell speed and peak swing height, per tracked set -- the arc
+                    Peak full-3D bell speed and peak swing height, per tracked set, the arc
                     pattern needs true speed magnitude, not just vertical velocity.
                   </CardDescription>
                 </div>
@@ -1942,7 +1942,7 @@ export default function CoachAnalytics() {
               <CardHeader>
                 <CardTitle>Bar Path Shape</CardTitle>
                 <CardDescription>
-                  The actual path traced during each set (not just the deviation number) --
+                  The actual path traced during each set (not just the deviation number),
                   horizontal drift vs. vertical position, both in cm from where tracking started.
                   Overlaying recent sets shows whether the path is repeatable rep to rep.
                 </CardDescription>
@@ -1993,7 +1993,7 @@ export default function CoachAnalytics() {
                 <CardTitle>Arm Symmetry</CardTitle>
                 <CardDescription>
                   Left vs. right wrist path for the most recent tracked set (
-                  {format(parseISO(latestArmPathSet.date), "MMM d")} · Set {latestArmPathSet.setNumber}) --
+                  {format(parseISO(latestArmPathSet.date), "MMM d")} · Set {latestArmPathSet.setNumber}),
                   the averaged bar path above can hide one side lagging or drifting differently; this
                   can't.
                 </CardDescription>
@@ -2044,7 +2044,7 @@ export default function CoachAnalytics() {
                   Left vs. right knee extension rate during the drive phase, rep by rep, for the
                   most recent bilateral lift with a detected asymmetry (
                   {format(parseISO(latestLegDriveSet.date), "MMM d")} · Set{" "}
-                  {latestLegDriveSet.setNumber}) -- a consistent lean to one side across reps is
+                  {latestLegDriveSet.setNumber}), a consistent lean to one side across reps is
                   the load-management signal, not any single rep.
                 </CardDescription>
               </CardHeader>
@@ -2082,9 +2082,9 @@ export default function CoachAnalytics() {
                 <CardTitle>Rep-by-Rep Velocity Decay</CardTitle>
                 <CardDescription>
                   Peak concentric velocity, rep by rep, for the most recent multi-rep tracked set (
-                  {format(parseISO(latestRepDecaySet.date), "MMM d")} · Set {latestRepDecaySet.setNumber}) --
+                  {format(parseISO(latestRepDecaySet.date), "MMM d")} · Set {latestRepDecaySet.setNumber}),
                   the drop-off across a set is the actual autoregulation signal, not just the set's
-                  best rep. Time to peak velocity is how long into each rep that peak was reached --
+                  best rep. Time to peak velocity is how long into each rep that peak was reached,
                   a rep still accelerating right up to lockout reads very differently from one that
                   peaked early and decelerated the rest of the way, even at the same total duration.
                 </CardDescription>
@@ -2160,7 +2160,7 @@ export default function CoachAnalytics() {
                 <CardTitle>Range of Motion</CardTitle>
                 <CardDescription>
                   Average per-rep vertical travel during the concentric (lifting) phase, per
-                  tracked set -- a shrinking number over time can mean the depth is creeping up
+                  tracked set, a shrinking number over time can mean the depth is creeping up
                   even while the weight goes up too.
                 </CardDescription>
               </CardHeader>
@@ -2190,7 +2190,7 @@ export default function CoachAnalytics() {
               <CardHeader>
                 <CardTitle>Form Fault Trend</CardTitle>
                 <CardDescription>
-                  Share of tracked sets flagging each fault, by week -- turns a one-off in-session
+                  Share of tracked sets flagging each fault, by week, turns a one-off in-session
                   flag into something to actually program around: is it improving, or is it stuck?
                 </CardDescription>
               </CardHeader>
@@ -2225,7 +2225,7 @@ export default function CoachAnalytics() {
                 <CardTitle>Asymmetry Trend</CardTitle>
                 <CardDescription>
                   Average left/right drive imbalance by week, for sets where one side clearly
-                  dominated the reps -- a single lopsided set is a data point, favoring the same
+                  dominated the reps, a single lopsided set is a data point, favoring the same
                   side for weeks in a row is a load-management flag worth programming around.
                 </CardDescription>
               </CardHeader>
@@ -2392,7 +2392,7 @@ export default function CoachAnalytics() {
               </DialogHeader>
               {videoPreview && videoPreviewError && (
                 <div className="rounded-md border border-border bg-secondary/30 p-4 text-center text-sm text-muted-foreground">
-                  This video couldn't be loaded -- it may not have finished uploading, or the file is missing.
+                  This video couldn't be loaded, it may not have finished uploading, or the file is missing.
                 </div>
               )}
               {videoPreview && !videoPreviewError && (
@@ -2569,7 +2569,7 @@ function AthletePickerField({
               {rosterFailed
                 ? "We couldn't load your roster."
                 : roster.length === 0
-                  ? "No athletes yet -- invite one from Roster and their history shows up here."
+                  ? "No athletes yet, invite one from Roster and their history shows up here."
                   : "No athletes match"}
             </p>
           )}
@@ -3000,7 +3000,7 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
           <ReadFailed what="this athlete's training load" onRetry={() => void refetch()} />
         ) : !hasEnoughData ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No training load logged in the last {windowDays} days -- try a wider window.
+            No training load logged in the last {windowDays} days, try a wider window.
           </p>
         ) : (
           <>
@@ -3131,7 +3131,7 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
               Volume & Intensity
             </CardTitle>
             <CardDescription>
-              Weekly training load -- total volume lifted (bars) vs. average weight per rep
+              Weekly training load, total volume lifted (bars) vs. average weight per rep
               (line). Only counts sets logged with a numeric weight.
             </CardDescription>
           </div>
@@ -3152,7 +3152,7 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
           <ReadFailed what="this athlete's weekly load" onRetry={() => void refetch()} />
         ) : !hasEnoughData ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No training load logged in the last {windowWeeks} weeks -- try a wider window.
+            No training load logged in the last {windowWeeks} weeks, try a wider window.
           </p>
         ) : (
           <div className="h-64">
@@ -3414,7 +3414,7 @@ function CoachClassFunnelRow({ row }: { row: CoachClassAnalyticsRow }) {
                 );
               })}
               <p className="pt-1 text-[11px] text-muted-foreground">
-                Lighter bar = read the content, solid bar = passed the quiz -- out of{" "}
+                Lighter bar = read the content, solid bar = passed the quiz, out of{" "}
                 {row.enrolledCount} of your enrolled athletes.
               </p>
             </div>

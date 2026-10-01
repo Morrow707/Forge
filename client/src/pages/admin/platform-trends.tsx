@@ -200,7 +200,7 @@ function CohortQueryCard() {
           Ask for a data cut
         </CardTitle>
         <CardDescription>
-          Describe the cohort in plain English -- age, gender, sport, position, a specific lift.
+          Describe the cohort in plain English, age, gender, sport, position, a specific lift.
           Same anonymity floor as everything else on this page: an answer with fewer than{" "}
           {mutation.data?.minCohortSize ?? 5} matching athletes is withheld, never shown small.
         </CardDescription>
@@ -239,7 +239,7 @@ function CohortQueryCard() {
 
         {mutation.isError && (
           <p className="text-sm text-destructive">
-            {(mutation.error as any)?.message || "Couldn't run that query -- try again."}
+            {(mutation.error as any)?.message || "Couldn't run that query, try again."}
           </p>
         )}
 
@@ -274,7 +274,7 @@ function CohortQueryCard() {
                   {r.suppressed ? (
                     <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Lock className="h-3.5 w-3.5 shrink-0" />
-                      Only {r.n} athlete{r.n === 1 ? "" : "s"} match -- below the anonymity floor,
+                      Only {r.n} athlete{r.n === 1 ? "" : "s"} match, below the anonymity floor,
                       suppressed.
                     </div>
                   ) : (
@@ -293,7 +293,7 @@ function CohortQueryCard() {
                       </p>
                       {r.source === "tracked" && !mutation.data!.filters.exerciseNames?.length && (
                         <p className="mt-1 text-[11px] italic text-muted-foreground">
-                          No specific lift named -- pooled across every tracked exercise for this
+                          No specific lift named, pooled across every tracked exercise for this
                           metric.
                         </p>
                       )}
@@ -325,7 +325,7 @@ function CohortQueryCard() {
                           <td className="py-1.5 pr-3">{row.n}</td>
                           {row.suppressed ? (
                             <td className="py-1.5 text-muted-foreground italic" colSpan={4}>
-                              below floor -- suppressed
+                              below floor, suppressed
                             </td>
                           ) : (
                             <>
@@ -405,7 +405,7 @@ export default function AdminPlatformTrends() {
           <CardContent className="flex items-start gap-3 p-4 text-sm text-muted-foreground">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <p>
-              Anonymized and aggregated across every athlete on Forge -- no names, emails, or
+              Anonymized and aggregated across every athlete on Forge, no names, emails, or
               individual records ever appear here. Any group smaller than{" "}
               {data?.minCohortSize ?? 5} athletes is left out of a breakdown entirely rather than
               shown small, so no single athlete's data is ever isolable from these numbers.
@@ -472,7 +472,7 @@ export default function AdminPlatformTrends() {
                 <CardTitle>Training Load Risk (ACWR)</CardTitle>
                 <CardDescription>
                   Acute:chronic workload ratio band, snapshotted across every athlete with logged
-                  training in the last 28 days -- not broken out by sport, since that would shrink
+                  training in the last 28 days, not broken out by sport, since that would shrink
                   the "high risk" count small enough to risk pointing at one athlete.
                 </CardDescription>
               </CardHeader>
@@ -480,7 +480,7 @@ export default function AdminPlatformTrends() {
                 {data.acwrDistribution.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
                     Fewer than {data.minCohortSize} athletes have logged training in the last 28
-                    days -- not enough for a platform-wide risk snapshot yet.
+                    days, not enough for a platform-wide risk snapshot yet.
                   </p>
                 ) : (
                   <div className="h-56">
@@ -518,7 +518,7 @@ export default function AdminPlatformTrends() {
               <CardHeader>
                 <CardTitle>Benchmarks by Sport</CardTitle>
                 <CardDescription>
-                  Group averages only -- each column requires at least {data.minCohortSize}{" "}
+                  Group averages only, each column requires at least {data.minCohortSize}{" "}
                   athletes contributing a value for that specific field, so some cells show a dash
                   even for an otherwise-eligible sport.
                 </CardDescription>
@@ -526,7 +526,7 @@ export default function AdminPlatformTrends() {
               <CardContent className="overflow-x-auto">
                 {data.bySport.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    No sport has {data.minCohortSize}+ athletes yet -- this table fills in as the
+                    No sport has {data.minCohortSize}+ athletes yet, this table fills in as the
                     roster grows.
                   </p>
                 ) : (

@@ -41,7 +41,7 @@ export function buildNewDeviceLoginEmail(input: {
           </tr>
         </table>
         <p style="color:#555;margin:0 0 20px;">
-          If this was you, there's nothing else to do -- feel free to disregard this email.
+          If this was you, there's nothing else to do, feel free to disregard this email.
         </p>
         <p style="color:#555;margin:0 0 20px;">
           If it wasn't, change your password right away and use "Where you're logged in" from

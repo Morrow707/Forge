@@ -75,7 +75,7 @@ export default function AthleteSportCoaches() {
     try {
       if (nativeIap) {
         await purchaseFreeAgentAddOn(id);
-        toast.success("Unlocked -- your new coach is ready.");
+        toast.success("Unlocked, your new coach is ready.");
         await refetch();
       } else {
         const res = await apiRequest("POST", "/api/billing/checkout/free-agent-add-on", {
@@ -89,7 +89,7 @@ export default function AthleteSportCoaches() {
       if (err instanceof ApplePurchaseCancelledError) {
         // Backed out of Apple's sheet -- not an error.
       } else if (err instanceof ApplePurchasePendingError) {
-        toast("Purchase pending approval -- you'll be unlocked once it's confirmed.");
+        toast("Purchase pending approval, you'll be unlocked once it's confirmed.");
       } else {
         toast.error(err instanceof Error ? err.message : "Couldn't start that purchase");
       }
@@ -181,7 +181,7 @@ export default function AthleteSportCoaches() {
                       // plan" was the other wrong answer: there is no plan this is
                       // in, and nothing sells it yet.
                       <p className="mt-auto rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
-                        Not available yet -- this coach will be purchasable when billing opens.
+                        Not available yet, this coach will be purchasable when billing opens.
                       </p>
                     )}
                     {unlocked && !owned && (
