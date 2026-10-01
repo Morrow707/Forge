@@ -893,6 +893,9 @@ export const OVR_SQUAT_SET3_2026_10_01 = {
 // Med ball throw beside OVR, 2026-10-01: the sensor on a box with its tether pulled out
 // HORIZONTALLY to a finger, 12lb ball, logged on the sensor as "Push Press" 12lb x 12. Scott:
 // "rep 1 and rep 7 were setup reps, me just trapping the cord." The ten throws are below. The
+// exercise is logged in Forge as 3x5 but is 3x5 EACH SIDE, so a set is ten throws, which is
+// what the sensor recorded here; Scott also noted "the sensor only measured 4 reps" of the set
+// in question, so the per-set split between the two sides is not known from the sensor. The
 // sensor reads the component of the hand's motion along the tether (the room's horizontal), so
 // the camera's matching number is medBallRepBreakdown[].peakHorizontalSpeedMps (build 580) and
 // the sensor's range of motion is the tether's horizontal travel, which has no camera number.
