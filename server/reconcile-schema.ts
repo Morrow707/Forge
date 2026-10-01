@@ -1946,11 +1946,14 @@ CREATE TABLE IF NOT EXISTS "subscriptions" (
   "stripe_customer_id" text,
   "stripe_subscription_id" text,
   "apple_original_transaction_id" text,
+  "google_play_purchase_token" text,
   "created_at" timestamp NOT NULL DEFAULT now(),
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
+ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "google_play_purchase_token" text;
 CREATE UNIQUE INDEX IF NOT EXISTS "subscriptions_user_idx" ON "subscriptions" ("user_id");
 CREATE INDEX IF NOT EXISTS "subscriptions_stripe_subscription_idx" ON "subscriptions" ("stripe_subscription_id");
+CREATE INDEX IF NOT EXISTS "subscriptions_google_play_token_idx" ON "subscriptions" ("google_play_purchase_token");
 
 CREATE TABLE IF NOT EXISTS "billing_audit_log" (
   "id" serial PRIMARY KEY,

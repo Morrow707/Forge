@@ -3060,6 +3060,10 @@ export const subscriptions = pgTable(
     stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     appleOriginalTransactionId: text("apple_original_transaction_id"),
+    // The third channel, 2026-10-01: a Google Play subscription is identified by its purchase
+    // token (Play's real-time developer notifications carry the token, never a user), the same
+    // lookup-by-external-id shape the Apple column has.
+    googlePlayPurchaseToken: text("google_play_purchase_token"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

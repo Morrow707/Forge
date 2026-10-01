@@ -1,5 +1,13 @@
 import { useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import {
+  isGooglePlayBillingSupported,
+  fetchGooglePlayTierProducts,
+  purchaseFreeAgentTierOnGooglePlay,
+  restoreGooglePlayPurchases,
+  GooglePlayPurchaseCancelledError,
+  GooglePlayPurchasePendingError,
+} from "@/lib/google-play-billing";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
 import { useQuery } from "@tanstack/react-query";
@@ -150,13 +158,23 @@ export default function AthleteUpgrade() {
   // grid the web shows, which inside a Play-distributed app is a policy violation. The server
   // refuses a Stripe checkout from any native platform header regardless.
   const androidNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+  // Google Play is the Android store, the way StoreKit is the iOS one: same products, same
+  // verify-then-acknowledge contract (google-play-billing.ts), its own live switch.
+  const googleSupported = isGooglePlayBillingSupported();
+  const { data: googleLiveConfig } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/billing/google-play-enabled"],
+    queryFn: () => getJson("/api/billing/google-play-enabled"),
+    enabled: googleSupported,
+  });
+  const googleLive = googleSupported && !!googleLiveConfig?.enabled;
 
   const { data: liveConfig } = useQuery<{ enabled: boolean }>({
     queryKey: ["/api/billing/apple-iap-enabled"],
     queryFn: () => getJson("/api/billing/apple-iap-enabled"),
     enabled: supported,
   });
-  const live = supported && !!liveConfig?.enabled;
+  const live = (supported && !!liveConfig?.enabled) || googleLive;
+  const storeName = googleSupported ? "Google Play" : "the App Store";
 
   // The web half's own live switch. Card checkout is refused server-side
   // while Forge is in beta (see chargingClosed in server/billing.ts), so
@@ -175,8 +193,8 @@ export default function AthleteUpgrade() {
     isError: productsFailed,
     refetch,
   } = useQuery<FreeAgentTierProduct[]>({
-    queryKey: ["apple-iap-free-agent-products"],
-    queryFn: fetchFreeAgentTierProducts,
+    queryKey: [googleSupported ? "google-play-free-agent-products" : "apple-iap-free-agent-products"],
+    queryFn: googleSupported ? fetchGooglePlayTierProducts : fetchFreeAgentTierProducts,
     enabled: live,
   });
 
@@ -217,13 +235,14 @@ export default function AthleteUpgrade() {
   async function handlePurchase(tier: FreeAgentTierId) {
     setPurchasingTier(tier);
     try {
-      await purchaseFreeAgentTier(tier);
+      if (googleSupported) await purchaseFreeAgentTierOnGooglePlay(tier);
+      else await purchaseFreeAgentTier(tier);
       toast.success("You're upgraded -- welcome to the new tier.");
       refetch();
     } catch (err) {
-      if (err instanceof ApplePurchaseCancelledError) {
-        // Athlete backed out of the Apple purchase sheet -- not an error.
-      } else if (err instanceof ApplePurchasePendingError) {
+      if (err instanceof ApplePurchaseCancelledError || err instanceof GooglePlayPurchaseCancelledError) {
+        // Athlete backed out of the store's purchase sheet -- not an error.
+      } else if (err instanceof ApplePurchasePendingError || err instanceof GooglePlayPurchasePendingError) {
         toast("Purchase pending approval -- you'll be upgraded once it's confirmed.");
       } else {
         toast.error("Couldn't complete that purchase -- try again");
@@ -236,7 +255,8 @@ export default function AthleteUpgrade() {
   async function handleRestore() {
     setRestoring(true);
     try {
-      await restoreFreeAgentPurchases();
+      if (googleSupported) await restoreGooglePlayPurchases();
+      else await restoreFreeAgentPurchases();
       toast.success("Purchases restored");
       refetch();
     } catch {
@@ -264,7 +284,7 @@ export default function AthleteUpgrade() {
           ) : undefined
         }
       >
-        {androidNative && (
+        {androidNative && !live && (
           <Card className="mt-6">
             <CardContent className="p-6 text-sm text-muted-foreground">
               <p className="font-semibold text-foreground">Subscriptions aren't available in the Android app yet.</p>
@@ -314,7 +334,7 @@ export default function AthleteUpgrade() {
             })}
           </div>
         )}
-        <SportCoachAddOns webCheckout={!supported} />
+        <SportCoachAddOns webCheckout={!supported && !androidNative} />
         {supported && !live && (
           <Card className="mt-6">
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
@@ -328,7 +348,7 @@ export default function AthleteUpgrade() {
         {live && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {productsFailed && !isLoading && (
-              <ReadFailed what="the plans from the App Store" onRetry={() => void refetch()} />
+              <ReadFailed what={`the plans from ${storeName}`} onRetry={() => void refetch()} />
             )}
             {isLoading &&
               [0, 1, 2].map((i) => <div key={i} className="h-56 animate-pulse rounded-lg bg-surface" />)}

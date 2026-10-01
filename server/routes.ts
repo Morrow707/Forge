@@ -110,6 +110,7 @@ import {
   type FreeAgentTierId,
 } from "@shared/free-agent-tiers";
 import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
+import { GOOGLE_PLAY_BILLING_LIVE, verifyGooglePlayPurchase } from "./google-play-billing";
 import { verifyMediaUrl } from "./media-url-signing";
 import { summarizeCspReport } from "./csp-report";
 import { shouldTouchLastSeen } from "./session-tracking";
@@ -10127,6 +10128,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // The Google Play twin of apple-iap/verify: the phone hands over the purchase token, the
+  // server asks Google what it is worth (server/google-play-billing.ts), and only a confirmed
+  // active subscription for a product this app sells is recorded. 502 when the service account
+  // is not configured, the same "ready, not live" answer the Apple route gives.
+  app.post(
+    "/api/athlete/google-play/verify",
+    requireRole("athlete"),
+    requireFreeAgent,
+    async (req, res) => {
+      const user = currentUser(req);
+      const schema = z.object({ purchaseToken: z.string().min(1), productId: z.string().min(1) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const verified = await verifyGooglePlayPurchase(parsed.data.purchaseToken);
+      if (!verified) {
+        return res.status(502).json({ message: "Google Play purchases aren't set up yet." });
+      }
+      if (verified.productId !== parsed.data.productId) {
+        return res.status(422).json({ message: "That purchase is for a different product." });
+      }
+      const result = await storage.applyGooglePlayVerification(user.id, verified);
+      if (!result.ok) return res.status(422).json({ message: result.error });
+      res.status(204).end();
+    },
+  );
+
   // MAY I USE THE CAMERA -- the same question requireVideoTrackingAccess answers, asked by the UI
   // before it draws a record button instead of after the clip fails to upload.
   //
@@ -13057,6 +13086,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/billing/apple-iap-enabled", requireAuth, async (req, res) => {
     res.json({ enabled: APPLE_IAP_LIVE });
+  });
+
+  // The Android twin: GOOGLE_PLAY_BILLING_LIVE gates whether the Android app draws a purchase
+  // button at all. Off, the Upgrade screen says plans are not sold in the Android app yet.
+  app.get("/api/billing/google-play-enabled", requireAuth, async (_req, res) => {
+    res.json({ enabled: GOOGLE_PLAY_BILLING_LIVE });
   });
 
   // The web twin of apple-iap-enabled: is anything actually for sale by card

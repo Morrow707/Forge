@@ -341,6 +341,27 @@ export function appleProductIdForFreeAgentAddOn(addOn: FreeAgentAddOnId): string
   return `${APPLE_BUNDLE_ID}.addon.${addOn}_v1`;
 }
 
+/** GOOGLE PLAY, the same products under Play's naming. A Play subscription product id is
+ * lowercase letters, digits, underscores and dots, unique within the app (not namespaced
+ * under the package name the way StoreKit's are), and each product carries one or more BASE
+ * PLANS; the app sells one, GOOGLE_PLAY_BASE_PLAN_ID. Created in the Play Console under
+ * Monetize > Subscriptions with exactly these ids before GOOGLE_PLAY_BILLING_LIVE can be
+ * true. Mutual exclusivity between tiers is not a Play concept (no subscription group), so
+ * the server's applyGooglePlayVerification writes the tier the way the Apple path does and a
+ * second tier purchase replaces the first on the subscription row.
+ *
+ * Like Apple's ids, a Play product id can never be reused once deleted. No suffix history yet. */
+export const GOOGLE_PLAY_PACKAGE_NAME = APPLE_BUNDLE_ID;
+export const GOOGLE_PLAY_BASE_PLAN_ID = "monthly";
+
+export function googlePlayProductIdForFreeAgentTier(tier: FreeAgentTierId): string {
+  return `freeagent_${tier}`;
+}
+
+export function googlePlayProductIdForFreeAgentAddOn(addOn: FreeAgentAddOnId): string {
+  return `addon_${addOn}`;
+}
+
 // Skill Bank sport-unlock pricing -- a separate dimension from the add-ons
 // above (those are 3 specific unbuilt AI specialties; this is "any of the
 // SPORTS taxonomy's sports"). A Free Agent's Skill Bank is free for their

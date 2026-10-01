@@ -353,6 +353,12 @@ import {
   type VerifiedAppleTransaction,
   type VerifiedAppleNotification,
 } from "./apple-iap";
+import {
+  tierForGooglePlayProductId,
+  addOnForGooglePlayProductId,
+  type VerifiedGooglePlayPurchase,
+  type GooglePlayNotification,
+} from "./google-play-billing";
 import { PRICING_CATALOG, type PricingCatalogItem } from "./pricing-catalog";
 import {
   eq,
@@ -4870,6 +4876,104 @@ export const storage = {
         console.error("failed to record Apple IAP as parental verification:", err);
       }
     }
+    return { ok: true };
+  },
+
+  // THE GOOGLE PLAY TWIN of applyAppleIapVerification, 2026-10-01. Same two kinds of purchase
+  // (an add-on appends, a tier replaces), the same billing log, the same parental-verification
+  // corroboration for a real (non-test) purchase. The purchase token is the external id.
+  async applyGooglePlayVerification(
+    userId: number,
+    verified: VerifiedGooglePlayPurchase,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const addOnId = addOnForGooglePlayProductId(verified.productId);
+    if (addOnId) {
+      await this.addFreeAgentAddOn(userId, addOnId);
+      await this.logBillingEvent(userId, "google_play.verified", {
+        purchaseToken: verified.purchaseToken,
+        orderId: verified.orderId,
+        productId: verified.productId,
+        freeAgentAddOn: addOnId,
+        testPurchase: verified.isTestPurchase,
+      });
+      return { ok: true };
+    }
+    const freeAgentTier = tierForGooglePlayProductId(verified.productId);
+    if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
+    const updated = await this.updateSubscriptionByUserId(userId, {
+      accountType: "free_agent",
+      tier: entitlementTierForFreeAgentTier(freeAgentTier),
+      status: "active",
+      googlePlayPurchaseToken: verified.purchaseToken,
+      currentPeriodEnd: verified.expiresAt,
+      cancelAtPeriodEnd: verified.state === "canceled",
+    });
+    if (!updated) return { ok: false, error: "No subscription found for this account." };
+    await this.logBillingEvent(userId, "google_play.verified", {
+      purchaseToken: verified.purchaseToken,
+      orderId: verified.orderId,
+      productId: verified.productId,
+      freeAgentTier,
+      testPurchase: verified.isTestPurchase,
+    });
+    // Same rule as Apple: a card charged through Play corroborates a guardian's identity, and a
+    // license-tester purchase that cost nothing records nothing.
+    if (!verified.isTestPurchase) {
+      try {
+        await this.recordPaymentAsParentalVerification({
+          payerId: userId,
+          reference: verified.orderId ?? verified.purchaseToken,
+          source: "google_play",
+        });
+      } catch (err) {
+        console.error("failed to record Google Play purchase as parental verification:", err);
+      }
+    }
+    return { ok: true };
+  },
+
+  async updateSubscriptionByGooglePlayPurchaseToken(
+    purchaseToken: string,
+    patch: Partial<typeof subscriptions.$inferInsert>,
+  ) {
+    const [row] = await db
+      .update(subscriptions)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(subscriptions.googlePlayPurchaseToken, purchaseToken))
+      .returning();
+    return row ?? null;
+  },
+
+  /** The DB half of a Play real-time developer notification. The notification names a token
+   *  and a type; `verified` is what Google said about that token when re-asked (null when the
+   *  subscription is no longer active, which is what a revocation looks like). */
+  async applyGooglePlayNotification(
+    notification: GooglePlayNotification,
+    verified: VerifiedGooglePlayPurchase | null,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (notification.kind === "ignored" || !notification.purchaseToken) return { ok: true };
+    const event = `google_play.rtdn_${notification.notificationType}`;
+    if (notification.kind === "revoked" || !verified) {
+      const updated = await this.updateSubscriptionByGooglePlayPurchaseToken(notification.purchaseToken, {
+        status: "canceled",
+      });
+      if (!updated) return { ok: false, error: "No subscription found for this purchase token." };
+      await this.logBillingEvent(updated.userId, event, { purchaseToken: notification.purchaseToken });
+      return { ok: true };
+    }
+    const freeAgentTier = tierForGooglePlayProductId(verified.productId);
+    if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
+    const updated = await this.updateSubscriptionByGooglePlayPurchaseToken(notification.purchaseToken, {
+      tier: entitlementTierForFreeAgentTier(freeAgentTier),
+      status: "active",
+      currentPeriodEnd: verified.expiresAt,
+      cancelAtPeriodEnd: verified.state === "canceled",
+    });
+    if (!updated) return { ok: false, error: "No subscription found for this purchase token." };
+    await this.logBillingEvent(updated.userId, event, {
+      purchaseToken: notification.purchaseToken,
+      productId: verified.productId,
+    });
     return { ok: true };
   },
 
@@ -29237,7 +29341,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     payerId: number;
     reference: string;
     amountCents?: number | null;
-    source: "stripe" | "apple_iap";
+    source: "stripe" | "apple_iap" | "google_play";
   }): Promise<number> {
     const payer = await this.getUser(input.payerId);
     if (!payer) return 0;
