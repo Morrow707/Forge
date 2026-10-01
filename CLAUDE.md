@@ -352,6 +352,9 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
+- **Queued on `main`, not yet uploaded** (#207): the coming-soon gate (`SignupCta`, the
+  signup page's invite card). Server half is live on Render; inert until `PUBLIC_SIGNUPS_OPEN`
+  and `SIGNUP_INVITE_CODE` are set there. Rides the next `beta`.
 - **Queued on `main`, not yet uploaded** (#205): the double dash swept out of every rendered
   string (205 files; comments, legal documents, SQL and AI prompts untouched). Ordinary copy,
   not calibration; rides the next `beta`.
