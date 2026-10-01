@@ -352,6 +352,9 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
+- **Queued on `main`, not yet uploaded** (#205): the double dash swept out of every rendered
+  string (205 files; comments, legal documents, SQL and AI prompts untouched). Ordinary copy,
+  not calibration; rides the next `beta`.
 - Build **585** is the newest TestFlight build, cut 2026-10-01 from `e9705daa` when Scott
   lifted the hold ("Hold is lifted, upload everything"). It clears the queue: height typed as
   feet and inches (`shared/height-units.ts`), the store-launch items from #201 (the AI Training
