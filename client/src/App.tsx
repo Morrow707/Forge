@@ -15,6 +15,7 @@ import { TermsReacceptanceGate } from "@/components/terms-reacceptance-gate";
 import { FirstRunDialogProvider } from "@/hooks/use-first-run-dialogs";
 import { RATE_LIMITED_MESSAGE, isRateLimited } from "@/lib/rate-limit-message";
 import { watchAppleIapTransactionUpdates } from "@/lib/apple-iap";
+import { watchGooglePlayPurchaseUpdates } from "@/lib/google-play-billing";
 import { DebugConsole } from "@/components/debug-console";
 import { withLoadTimeout } from "@/lib/lazy-load-recovery";
 
@@ -365,7 +366,10 @@ function Router() {
   // another device). No-op on every platform but iOS; see
   // watchAppleIapTransactionUpdates' own comment.
   useEffect(() => {
-    if (Capacitor.isNativePlatform()) watchAppleIapTransactionUpdates();
+    if (Capacitor.isNativePlatform()) {
+      watchAppleIapTransactionUpdates();
+      watchGooglePlayPurchaseUpdates();
+    }
   }, []);
 
   return (

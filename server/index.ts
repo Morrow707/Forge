@@ -93,6 +93,7 @@ import { startResearchMirrorJob } from "./research-mirror-job";
 import { startCohortNormsJob } from "./cohort-norms-job";
 import { verifyStripeWebhook, handleStripeWebhookEvent } from "./billing";
 import { verifyAppleNotification } from "./apple-iap";
+import { decodeRtdnPush, rtdnPushAuthorized, verifyGooglePlayPurchase } from "./google-play-billing";
 import { storage } from "./storage";
 import { signMediaUrlsDeep } from "./media-url-signing";
 import { verifyRequestOrigin } from "./csrf-protection";
@@ -263,6 +264,28 @@ app.post(
     const notification = await verifyAppleNotification(parsed.signedPayload);
     if (!notification) return res.status(400).send("Invalid signature");
     await storage.applyAppleServerNotification(notification);
+    res.json({ received: true });
+  },
+);
+
+// Google Play real-time developer notifications, delivered by a Pub/Sub push subscription.
+// The push carries a purchase token and a type and nothing about the subscription's state, so
+// the token is re-verified against Google's API before anything is written (the same
+// fail-closed rule as the Apple route). The push is accepted only with GOOGLE_PLAY_RTDN_TOKEN
+// in its query string, which is how a push subscription without OIDC proves it is Google's.
+// Nothing is registered in the Play Console yet, so nothing reaches this in practice.
+app.post(
+  "/api/webhooks/google-play",
+  webhookLimiter,
+  express.json({ limit: "64kb" }),
+  async (req, res) => {
+    if (!rtdnPushAuthorized(req.query.token)) return res.status(401).send("Unauthorized");
+    const notification = decodeRtdnPush(req.body);
+    if (!notification) return res.status(400).send("Invalid payload");
+    if (notification.kind === "ignored" || !notification.purchaseToken) return res.json({ received: true });
+    const verified = await verifyGooglePlayPurchase(notification.purchaseToken);
+    await storage.applyGooglePlayNotification(notification, verified);
+    // 2xx always, once the message was understood: Pub/Sub redelivers anything else for days.
     res.json({ received: true });
   },
 );

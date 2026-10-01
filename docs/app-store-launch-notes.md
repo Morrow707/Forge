@@ -129,3 +129,23 @@ Kept here so they are not lost between sessions. None of these is code.
   Notifications capability turned on in the Apple Developer portal, in
   addition to the three `APNS_*` secrets that live in Render (not here) --
   see `render.yaml`'s own comment on those.
+
+## Google Play Billing (added 2026-10-01)
+
+The Android app sells the same tiers and add-ons through Google Play Billing, the way the iOS
+app sells them through StoreKit. Code: `GooglePlayBillingPlugin.java` (native),
+`client/src/lib/google-play-billing.ts` (bridge), `server/google-play-billing.ts` (verification
+and notifications), `storage.applyGooglePlayVerification`. Until the pieces below exist the
+Android Upgrade screen says plans are not sold in the app yet and shows no purchase button.
+
+| Where | What |
+|---|---|
+| Play Console -> Monetize -> Subscriptions | One subscription product per tier and add-on, ids from `googlePlayProductIdForFreeAgentTier` / `...AddOn` (`freeagent_basic`, `freeagent_ai_coach`, `freeagent_ai_coach_video`, `addon_golf_swing`, ...), each with a base plan id `monthly`. A Play product id can never be reused once deleted. |
+| Play Console -> Setup -> API access | A service account with "View financial data" and this app's subscription permissions. Its JSON key goes on Render as `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (raw JSON or base64). Without it every verification answers "not set up yet". |
+| Play Console -> Monetize -> Monetization setup | Real-time developer notifications: a Pub/Sub topic with a PUSH subscription to `https://<host>/api/webhooks/google-play?token=<GOOGLE_PLAY_RTDN_TOKEN>`. The token is a long random string set on Render; the webhook refuses a push without it. |
+| Render | `GOOGLE_PLAY_BILLING_LIVE=true` turns the purchase UI on in the Android app. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`, `GOOGLE_PLAY_RTDN_TOKEN` as above. |
+| Play Console -> Setup -> License testing | Tester Google accounts whose purchases cost nothing; the server records them as test purchases and never as parental verification. |
+
+Not tested on a device yet: the plugin compiles against Billing Library 7.1.1 and the server
+half is unit-tested against Google's documented response shapes. The first real test is a
+license tester buying `freeagent_basic` on an internal-testing build.

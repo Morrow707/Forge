@@ -13,6 +13,7 @@ const PAYWALL_SURFACES = [
   "client/src/components/camera-metric-caveat.tsx",
   "shared/camera-accuracy-copy.ts",
   "shared/free-agent-tiers.ts",
+  "client/src/lib/google-play-billing.ts",
 ];
 const STEERS_TO_THE_WEB =
   /\b(on our website|on the website|visit our site|at forge\.[a-z]+|cheaper (on|at)|subscribe online|sign up online|buy online|save \d+% online|web price)\b/i;
@@ -32,6 +33,9 @@ describe("the in-app paywall never points a buyer at the website", () => {
     expect(src).toMatch(/androidNative/);
     expect(src).toMatch(/\{!supported && !androidNative && \(/);
     expect(src).toMatch(/Subscriptions aren't available in the Android app yet/);
+    // When Play Billing is live the Android app buys through Google, never through Stripe.
+    expect(src).toMatch(/purchaseFreeAgentTierOnGooglePlay\(/);
+    expect(src).toMatch(/SportCoachAddOns webCheckout=\{!supported && !androidNative\}/);
   });
 
   it("Restore Purchases is on the paywall, which 3.1.1 requires", () => {
