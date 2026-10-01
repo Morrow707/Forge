@@ -362,6 +362,10 @@ can install. Delete entries as a `beta` ships them.
   (`shared/height-units.ts`, `HeightInput` on signup, the provisional-athlete claim and the
   profile form; `users.heightIn` is unchanged total inches, no migration). Goes with the first
   `beta` after the hold lifts.
+- **Queued on `main`, not yet uploaded** (#201, store-launch items): the AI Training Chat
+  screen's not-medical-advice line, the paywall never-steer scan, Android RECORD_AUDIO and
+  POST_NOTIFICATIONS, the Apple Health switch's AI sentence, the Smart App Banner injected from
+  `VITE_APP_STORE_ID`. Launch checklist: https://claude.ai/artifact/QAkD4pcu9E4zo9jKfsNTZB
 - Build **584** is the newest TestFlight build, cut 2026-10-01 from `d2e8b361`: the password rule
   (`shared/password-rules.ts`: six characters, a number and a special character, held by ONE
   `passwordField` across all six schemas that set a password) and the live red-to-green checklist
