@@ -767,3 +767,65 @@ export const OVR_SQUAT_SET1_2026_10_01 = {
   },
   rulers: { inPlane3D: 0.004162, shoulderWidth: 0.004448, depthRuler: 0.004186, height: 0.003353, sensorImplied: 0.00377 },
 };
+
+// Back squat set 2 beside OVR, 2026-10-01, filmed oblique from the front of the rack on build
+// 578, the same session as set 1. The range of motion and the count land; the mean does not.
+// Set 1 replays at 0.95 of the sensor under the drive window and this take replays at 0.83
+// UNCHANGED from the phone, because its concentric window is 0.15s wider than the sensor's on
+// every rep (0.80-0.93s against 0.70-0.78s) and the velocity curve is a flat plateau at 1.04
+// m/s where the sensor saw a 1.56 peak. Replayed at 165, 100 and 66ms of velocity smoothing:
+// the mean never moves (it is range over the window) and the peak only climbs with the noise,
+// so smoothing is NOT the cause. Open: whether the shoulders, carrying the bar on an oblique
+// view (713 shoulder points, 45 equipment-agreement frames), lag the bar in time.
+export const OVR_SQUAT_SET2_2026_10_01 = {
+  build: 578,
+  loadLb: 135,
+  repsPerSet: 5,
+  camera: "front of the rack, oblique (cameraView.subjectFacing oblique; roll -0.3, pitch 7.1); the shoulders carried the bar (713 shoulder points)",
+  captureFormat: "1920x1080 @ 120fps (16:9 fallback)",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.92, peakVelocityMps: 1.57, romIn: 26.1, meanW: 554, peakW: 942, tpvS: 0.45, eai: 3.41 },
+      { meanVelocityMps: 0.96, peakVelocityMps: 1.62, romIn: 26.6, meanW: 577, peakW: 975, tpvS: 0.47, eai: 3.40 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.57, romIn: 25.8, meanW: 561, peakW: 942, tpvS: 0.49, eai: 3.17 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.60, romIn: 27.1, meanW: 566, peakW: 958, tpvS: 0.51, eai: 3.11 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.46, romIn: 27.2, meanW: 536, peakW: 875, tpvS: 0.56, eai: 2.57 },
+    ],
+    reported: { meanVelocityMps: 0.93, peakVelocityMps: 1.56, romIn: 26.5, meanW: 558, peakW: 938, tpvS: 0.49, eai: 3.13 },
+  },
+  forgeOnDevice: {
+    repCount: 5,
+    meanVelocityMps: 0.77,
+    peakVelocityMps: 1.07,
+    romCm: 66,
+    medianRomCm: 66.4,
+    scaleSource: "both",
+    scale: 0.003737,
+    axisSource: "gravity",
+    concentricSeconds: [0.93, 0.8, 0.83, 0.9, 0.93],
+  },
+  rulers: { inPlane3D: 0.004377, shoulderWidth: 0.004599, depthRuler: 0.004867, height: 0.003466, plate: 0.001135, sensorImplied: 0.00381 },
+};
+
+// Jump squat beside OVR, 2026-10-01 (logged as Box Jump set 2, 24in box, 1lb on the sensor's
+// side). Scott: "I noticed ovr was a little short, but it also starts about 3 inches above the
+// ground, so not a great measurement but, good start." The sensor's range of motion on a jump
+// is the tether's travel from the bottom of the countermovement to the apex, which is NOT the
+// camera's jump height (takeoff to apex), so the two are recorded and not compared as equals.
+// The sensor's peak 3.16 m/s implies 51cm of rise after peak velocity (v^2/2g); the camera's
+// reps read 63-69cm with the set reported at 72.3.
+export const OVR_JUMP_SQUAT_2026_10_01 = {
+  build: 578,
+  repsPerSet: 5,
+  sensor: {
+    reps: [
+      { meanVelocityMps: 2.12, peakVelocityMps: 3.36, romIn: 22.6, tpvS: 0.12 },
+      { meanVelocityMps: 2.00, peakVelocityMps: 2.97, romIn: 21.9, tpvS: 0.07 },
+      { meanVelocityMps: 1.81, peakVelocityMps: 3.11, romIn: 21.1, tpvS: 0.13 },
+      { meanVelocityMps: 1.89, peakVelocityMps: 3.30, romIn: 22.1, tpvS: 0.06 },
+      { meanVelocityMps: 2.00, peakVelocityMps: 3.11, romIn: 22.0, tpvS: 0.08 },
+    ],
+    reported: { meanVelocityMps: 1.96, peakVelocityMps: 3.16, romIn: 21.9, tpvS: 0.09 },
+  },
+  forgeOnDevice: { repCount: 5, jumpHeightCm: 72.3, repJumpHeightsCm: [63.7, 69.3, 64, 63.2, 63.7], boxRiseScaleErrorRatio: 1.045, scale: 0.003126 },
+};

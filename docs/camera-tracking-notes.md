@@ -1808,6 +1808,60 @@ pinned by `squat-drive-window.test.ts`.
   will jump with the OVR on next time, and its range of motion is the comparison (hip rise
   from standing to the top), not a velocity, which the jump path does not report.
 
+## Build 578 beside OVR, squat set 2 and a jump squat: the oblique squat's window is wide
+
+Same session as the squat above, 2026-10-01, filmed on build 578 before 579 reached the phone.
+Ground truth in `OVR_SQUAT_SET2_2026_10_01` and `OVR_JUMP_SQUAT_2026_10_01`; the squat's fixture
+is `squat-set2-2026-10-01.json`, pinned in `squat-drive-window.test.ts`.
+
+**Squat set 2, oblique (`cameraView.subjectFacing: oblique`), shoulders carrying the bar.**
+
+| | sensor | phone (578) | replay (579, drive window) |
+|---|---|---|---|
+| reps | 5 | 5 | 5 |
+| range of motion | 67.3cm | 66.0 | 66.0 |
+| mean | 0.93 | 0.77 | 0.77 |
+| peak | 1.56 | 1.07 | 1.07 |
+| concentric (range over mean) | 0.72s | 0.88 | 0.88 |
+
+Set 1 moved from 0.65 to 0.95 under the drive window; set 2 does not move at all. The per-rep
+windows are 0.80-0.93s against the sensor's 0.70-0.78s, so each rep is ~0.15s wide, and the
+velocity curve is a flat plateau at 1.04 m/s from 20cm to 44cm of travel where the sensor saw a
+1.56 peak. The sit in the hole IS trimmed (the samples under 7% of the peak are dropped, as
+designed); the width is in the drive itself.
+
+**Smoothing is ruled out as the cause** (`VELOCITY_SMOOTHING_MS`, replayed at 165, 100 and 66ms
+across both squats and benches 7, 9 and 10):
+
+| smoothing | squat1 mean/peak | squat2 mean/peak | bench7 | bench9 | bench10 |
+|---|---|---|---|---|---|
+| 165 | 0.95 / 1.45 | 0.77 / 1.07 | 0.87 / 1.11 | 1.71 / 1.79 | 0.82 / 1.08 |
+| 100 | 0.95 / 1.48 | 0.77 / 1.08 | 0.87 / 1.14 | 1.62 / 1.77 | 0.82 / 1.14 |
+| 66 | 0.95 / 1.79 | 0.77 / 1.34 | 0.87 / 1.40 | 1.68 / 1.94 | 0.92 / 1.40 |
+
+The mean never moves, because it is range over the window and the window is set by the
+threshold crossing, not the smoothing. The peak climbs at 66ms on every set, including the ones
+already on the sensor, which is noise being counted, not a lift being recovered. 165 stays.
+
+**Open suspect: the shoulder witness on an oblique view.** Both squats were carried by the
+shoulders (`barWitness: "shoulders"`); set 1 head-on landed, set 2 oblique did not. The 2D
+shoulder landmark is a joint estimate, and on a rotated torso Vision can drift it along the
+trapezius as the athlete rises, which would stretch the window in time while leaving the total
+rise (range of motion, correct here) alone. The test is a take where the plate carries the bar
+on the same lift (`barPointFromEquipment` was 0 on both; the plate vote agreed on 45 frames and
+was outvoted), or the replay with the bar point taken from the hands where both were seen (642
+frames). Not done tonight; the fixture is in place for it.
+
+**Jump squat on the sensor.** Scott: "I noticed ovr was a little short, but it also starts
+about 3 inches above the ground, so not a great measurement but, good start." The sensor's range
+of motion on a jump is the tether's travel from the bottom of the countermovement to the apex;
+the camera's jump height is takeoff to apex. Different quantities, so recorded and not held
+against each other. What the sensor does give is a velocity: peak 3.16 m/s, which by v^2/2g is
+~51cm of rise after peak velocity. The camera read 63-69cm per rep (72.3 for the set) on a 24in
+box. The camera's takeoff velocity is computed per rep (build 556) but is not in the export; add
+it to `jumpEvents` or the rep breakdown before the next paired jump, or this comparison cannot
+be made either.
+
 ## Build 578 beside OVR, set 12 and the two rows
 
 Bench set 12 (Sep 30, set 4), the first take through the weighted blend on the phone. Ground
