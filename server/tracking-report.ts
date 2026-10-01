@@ -625,7 +625,7 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
         `${d.trace.combinedVelocityRejections ? `, ${d.trace.combinedVelocityRejections} bar points dropped for teleporting (the two hands swapping, not the bar moving)` : ""}` +
         `${
           d.trace.barPointFromBothHands != null
-            ? `. Bar point built from both hands on ${d.trace.barPointFromBothHands} frames, from one hand carried back to the middle on ${d.trace.barPointFromLoneHandCarried ?? 0}, from a bare single hand (so it marks the END of the bar, not the middle) on ${d.trace.barPointFromBareLoneHand ?? 0}${d.trace.barPointSideFlipped ? `. Vision's left/right label was overruled by continuity on ${d.trace.barPointSideFlipped} of those -- a swapped label puts the point a whole grip width out` : ""}` +
+            ? `. Bar point built from both hands on ${d.trace.barPointFromBothHands} frames, from one hand carried back to the middle on ${d.trace.barPointFromLoneHandCarried ?? 0}, from a bare single hand (so it marks the END of the bar, not the middle) on ${d.trace.barPointFromBareLoneHand ?? 0}${d.trace.barPointSideFlipped ? `. Vision's left/right label was overruled by continuity on ${d.trace.barPointSideFlipped} of those, a swapped label puts the point a whole grip width out` : ""}` +
         `${
           d.trace.torsoStillThisTake == null
             ? ""

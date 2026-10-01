@@ -179,7 +179,7 @@ export default function AdminCoachesCorner() {
       }
     >
       <p className="mb-6 max-w-2xl text-sm text-muted-foreground">
-        Coach-education content -- what a regular coach sees as a locked, paywalled catalog (see the
+        Coach-education content, what a regular coach sees as a locked, paywalled catalog (see the
         Coaches Corner nav item next to the account menu). Click a track to read it, or the pencil to
         edit its lessons and quiz.
       </p>

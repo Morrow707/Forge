@@ -42,6 +42,6 @@ export function verifyRequestOrigin(nativeAppOrigins: string[]): RequestHandler 
     const requestHost = hostFromHeaderValue(req.headers.origin) ?? hostFromHeaderValue(req.headers.referer);
     if (!requestHost) return next();
     if (requestHost === req.headers.host || allowedHosts.has(requestHost)) return next();
-    return res.status(403).json({ message: "Request blocked -- origin mismatch." });
+    return res.status(403).json({ message: "Request blocked, origin mismatch." });
   };
 }

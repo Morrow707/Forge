@@ -154,7 +154,7 @@ export function AccountSettingsDialog({
       // most confusing possible outcome for a coach who just paid or was
       // comped.
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success(`Code redeemed -- full access unlocked through ${until}`);
+      toast.success(`Code redeemed, full access unlocked through ${until}`);
       setRedeemCode("");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't redeem that code"),
@@ -213,7 +213,7 @@ export function AccountSettingsDialog({
           <div className="space-y-1.5 border-t border-border pt-4">
             <Label>Appearance</Label>
             <p className="text-xs text-muted-foreground">
-              Dark is the default. This is just a look for this device -- it switches immediately,
+              Dark is the default. This is just a look for this device, it switches immediately,
               nothing to save.
             </p>
             <div className="flex gap-2">
@@ -257,7 +257,7 @@ export function AccountSettingsDialog({
               <div className="space-y-1.5">
                 <Label>Personal theme</Label>
                 <p className="text-xs text-muted-foreground">
-                  Yours alone -- everything below is layered on top of whatever your program's own
+                  Yours alone, everything below is layered on top of whatever your program's own
                   branding already sets, only in your own view, and never touches what your athletes
                   or other coaches see. Type an exact hex/number if you know it, or use the pickers.
                 </p>
@@ -265,7 +265,7 @@ export function AccountSettingsDialog({
 
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">
-                  Accent -- buttons, focus rings, card outlines, "today" highlights, PR/stat numbers,
+                  Accent, buttons, focus rings, card outlines, "today" highlights, PR/stat numbers,
                   and the ambient glow under every card.
                 </p>
                 <ColorField label="Accent" value={accentColor || "#F65B23"} onChange={setAccentColor} />
@@ -313,7 +313,7 @@ export function AccountSettingsDialog({
 
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">
-                  Secondary -- your own second color, independent of your accent (mirrors your
+                  Secondary, your own second color, independent of your accent (mirrors your
                   program's own primary + secondary pair).
                 </p>
                 <ColorField label="Secondary" value={secondaryColor || "#4C6B8A"} onChange={setSecondaryColor} />
@@ -361,7 +361,7 @@ export function AccountSettingsDialog({
 
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">
-                  Background tint -- shifts the whole app's neutral surfaces (background, cards,
+                  Background tint, shifts the whole app's neutral surfaces (background, cards,
                   borders) toward a hue of your choice, keeping the exact same contrast already tuned
                   for legibility.
                 </p>
@@ -423,7 +423,7 @@ export function AccountSettingsDialog({
             <div className="space-y-1.5 border-t border-border pt-4">
               <Label htmlFor="coaching-philosophy">Coaching philosophy</Label>
               <p className="text-xs text-muted-foreground">
-                A short line about your approach or a personal quote -- shown under your own name
+                A short line about your approach or a personal quote, shown under your own name
                 on your team's public About page, alongside anyone else on staff who sets one.
               </p>
               <Textarea
@@ -581,7 +581,7 @@ function AnswerStyleSection() {
       <div className="space-y-1.5">
         <Label>How the AI writes to you</Label>
         <p className="text-xs text-muted-foreground">
-          Applies everywhere an assistant writes to you. It changes the wording only -- never
+          Applies everywhere an assistant writes to you. It changes the wording only, never
           what you are told, and never a safety caveat.
         </p>
       </div>
@@ -653,7 +653,7 @@ function MyResearchConsentSection() {
       toast.success(
         granted
           ? "You're opted in to research data collection"
-          : "You're opted out -- nothing prepared from now on will include you",
+          : "You're opted out, nothing prepared from now on will include you",
       );
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't change that"),
@@ -685,7 +685,7 @@ function MyResearchConsentSection() {
           <p className="text-xs text-muted-foreground">
             When you said yes, the only limit we named was that a report already sent
             can't be recalled. We've added one: if you delete your account, the group
-            numbers stay -- age, sport, position and the training numbers, with nothing
+            numbers stay, age, sport, position and the training numbers, with nothing
             in them that points back to you. Your account, your videos and anything that
             identifies you still go.
           </p>

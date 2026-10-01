@@ -263,10 +263,10 @@ export function ExercisePickerDialog({
       // hip mobility with a band" substring match against exercise names.
       setSearch(result.searchText ?? "");
       if (!family && !result.equipment && !result.movementType && !result.searchText) {
-        toast.info("Couldn't narrow that down -- try the filters below instead.");
+        toast.info("Couldn't narrow that down, try the filters below instead.");
       }
     },
-    onError: () => toast.error("Couldn't interpret that search -- try the filters below instead."),
+    onError: () => toast.error("Couldn't interpret that search, try the filters below instead."),
   });
 
   const isBrowsing = !search.trim();

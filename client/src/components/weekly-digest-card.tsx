@@ -39,7 +39,7 @@ export function WeeklyDigestCard() {
         {isQuiet ? (
           <p className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
             <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-            Quiet week -- no new PRs, missed workouts, or wellness flags.
+            Quiet week, no new PRs, missed workouts, or wellness flags.
           </p>
         ) : (
           <>

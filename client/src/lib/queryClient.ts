@@ -141,7 +141,7 @@ export class NetworkError extends Error {
 function transportError(method: string, url: string, err: unknown): NetworkError {
   const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
   return new NetworkError(
-    `Can't reach Forge right now -- check your connection and try again. (${method} ${url}: ${detail})`,
+    `Can't reach Forge right now, check your connection and try again. (${method} ${url}: ${detail})`,
   );
 }
 

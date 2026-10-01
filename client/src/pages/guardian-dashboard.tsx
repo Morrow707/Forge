@@ -416,7 +416,7 @@ export default function GuardianDashboardPage() {
                     <CardTitle className="text-base">Camera tracking</CardTitle>
                     <CardDescription>
                       {athlete.trackingOptOut
-                        ? "Off -- no new tracked video, bar speed, jump height, or swing/sprint mechanics are being recorded for " +
+                        ? "Off, no new tracked video, bar speed, jump height, or swing/sprint mechanics are being recorded for " +
                           athlete.name +
                           "."
                         : athlete.name + " can use Forge's camera-tracking features during workouts."}
@@ -424,7 +424,7 @@ export default function GuardianDashboardPage() {
                   </CardHeader>
                   <CardContent className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
-                      This only affects future collection -- it doesn't delete anything already
+                      This only affects future collection, it doesn't delete anything already
                       recorded, and doesn't affect the rest of {athlete.name}'s account.
                     </p>
                     <Button
@@ -451,7 +451,7 @@ export default function GuardianDashboardPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">Recent training</CardTitle>
-                    <CardDescription>Last 14 days -- view only.</CardDescription>
+                    <CardDescription>Last 14 days, view only.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {recent.length === 0 ? (
@@ -634,7 +634,7 @@ export default function GuardianDashboardPage() {
                     <CardHeader>
                       <CardTitle className="text-base">Eating and drinking</CardTitle>
                       <CardDescription>
-                        Today's log against whatever targets are set. Forge is not a nutritionist --
+                        Today's log against whatever targets are set. Forge is not a nutritionist,
                         targets are guidance, and the log is only what {athlete.name} wrote down.
                       </CardDescription>
                     </CardHeader>
@@ -693,7 +693,7 @@ export default function GuardianDashboardPage() {
                   <CardHeader>
                     <CardTitle className="text-base">Videos</CardTitle>
                     <CardDescription>
-                      Every video on {athlete.name}'s record. You can ask us to take one down --
+                      Every video on {athlete.name}'s record. You can ask us to take one down,
                       we'll review it and remove it. You can't delete it yourself, and neither can
                       anyone else on the account without us seeing the request.
                     </CardDescription>
@@ -825,7 +825,7 @@ function ResearchReConsent() {
     },
     onSuccess: (_d, input) => {
       qc.invalidateQueries({ queryKey: ["/api/guardian/research-re-consent"] });
-      toast.success(input.granted ? "Recorded -- thank you" : "Withdrawn");
+      toast.success(input.granted ? "Recorded, thank you" : "Withdrawn");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
   });
@@ -851,7 +851,7 @@ function ResearchReConsent() {
         <CardDescription>
           When you agreed your athlete's numbers could be used for research, the only limit we
           named was that a report already sent can't be recalled. We've added one: if the account
-          is deleted, the group numbers stay -- age, sport, position and the training numbers,
+          is deleted, the group numbers stay, age, sport, position and the training numbers,
           with nothing in them that points back to your athlete. The account, the videos and
           anything identifying still go. Until you answer, the version you agreed to is the one
           that applies.
@@ -861,7 +861,7 @@ function ResearchReConsent() {
         {athletes.map((a) => (
           <div key={a.athleteId} className="rounded-md border border-border p-3">
             <p className="text-sm">
-              <span className="font-semibold">{a.athleteName ?? "Your athlete"}</span> -- agreed{" "}
+              <span className="font-semibold">{a.athleteName ?? "Your athlete"}</span>, agreed{" "}
               {a.grantedAt ? new Date(a.grantedAt).toLocaleDateString() : "previously"}.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">

@@ -61,7 +61,7 @@ export function SkillSessionsPanel({
   return (
     <>
       <p className="mb-3 text-sm text-muted-foreground">
-        Saved swing/throw clips {athleteName.split(" ")[0]} chose to share -- draw on a frame to
+        Saved swing/throw clips {athleteName.split(" ")[0]} chose to share, draw on a frame to
         leave feedback.
       </p>
 

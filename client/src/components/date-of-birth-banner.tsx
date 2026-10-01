@@ -49,7 +49,7 @@ export function DateOfBirthBanner() {
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-500 md:px-8">
         <span className="flex items-center gap-1.5">
           <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-          Your account is missing a date of birth -- we need it to apply the right privacy protections.
+          Your account is missing a date of birth, we need it to apply the right privacy protections.
         </span>
         <Button
           type="button"
@@ -68,7 +68,7 @@ export function DateOfBirthBanner() {
             <DialogTitle>Add your date of birth</DialogTitle>
             <DialogDescription>
               Your account was created before Forge collected this. It's used to apply the right
-              privacy protections for your age -- it won't be shown to anyone else on the platform.
+              privacy protections for your age, it won't be shown to anyone else on the platform.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">

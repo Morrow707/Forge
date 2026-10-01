@@ -123,7 +123,7 @@ export function ExercisePageThemeDialog({
             Exercise Screen Colors
           </DialogTitle>
           <DialogDescription>
-            Recolor your athletes' real exercise-logging screen -- the bottom action bar, the
+            Recolor your athletes' real exercise-logging screen, the bottom action bar, the
             Watch Demo button, the completed-set indicator, and the set-paging arrows.
           </DialogDescription>
         </DialogHeader>

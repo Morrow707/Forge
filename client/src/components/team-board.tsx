@@ -63,7 +63,7 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
           Team Board
         </CardTitle>
         <CardDescription>
-          One shared board for the whole team -- everyone on the roster and the coach can see
+          One shared board for the whole team, everyone on the roster and the coach can see
           every question and answer here.
         </CardDescription>
       </CardHeader>
@@ -96,7 +96,7 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
                 onCheckedChange={(checked) => setIsAnnouncement(checked === true)}
               />
               <Megaphone className="h-3.5 w-3.5" />
-              Send as a push notification to the whole team (emergencies only -- reaches
+              Send as a push notification to the whole team (emergencies only, reaches
               everyone regardless of their notification settings)
             </label>
           )}
@@ -106,7 +106,7 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
           {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
           {!isLoading && !posts?.length && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No posts yet -- be the first to ask something.
+              No posts yet, be the first to ask something.
             </p>
           )}
           {posts?.map((p) => (

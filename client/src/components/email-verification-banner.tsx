@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 export function EmailVerificationBanner() {
   const resendMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/resend-verification"),
-    onSuccess: () => toast.success("Verification email sent -- check your inbox."),
+    onSuccess: () => toast.success("Verification email sent, check your inbox."),
     onError: (err: ApiError) => toast.error(err.message || "Couldn't send that email"),
   });
 

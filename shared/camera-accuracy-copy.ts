@@ -29,18 +29,18 @@
 /** Full paragraph. For a dialog, or a banner with a whole row to itself. */
 export const CAMERA_ACCURACY_LONG =
   "The camera records and saves your video normally. But right now, the numbers it calculates " +
-  "from that video -- velocity, range of motion, power, and similar tracked metrics -- are not " +
+  "from that video, velocity, range of motion, power, and similar tracked metrics, are not " +
   "accurate. We're actively calibrating the system. Don't make training decisions based on " +
   "these numbers until that's done.";
 
 /** One or two lines. For a tier card, or under a chart. */
 export const CAMERA_ACCURACY_SHORT =
   "Camera records fine, but tracked metrics (velocity, range of motion, power) aren't accurate " +
-  "right now -- we're calibrating.";
+  "right now, we're calibrating.";
 
 /** Tightest form, for sitting directly against a number that is already on
  * screen. Assumes the reader can see what it is talking about. */
-export const CAMERA_ACCURACY_INLINE = "Not accurate yet -- camera metrics are still being calibrated.";
+export const CAMERA_ACCURACY_INLINE = "Not accurate yet, camera metrics are still being calibrated.";
 
 /**
  * SHOWN WHERE SOMEBODY IS ABOUT TO PAY FOR THE CAMERA, which is a different moment from every
@@ -61,7 +61,7 @@ export const CAMERA_ACCURACY_INLINE = "Not accurate yet -- camera metrics are st
  */
 export const CAMERA_ACCURACY_PURCHASE_WARNING =
   "Before you buy: the camera records and saves your video normally, and that part works. The " +
-  "numbers calculated from it -- velocity, range of motion, power, rep counts -- are NOT " +
+  "numbers calculated from it, velocity, range of motion, power, rep counts, are NOT " +
   "accurate yet and we are still calibrating them. Buy this tier for the video itself, not for " +
   "the measurements. Purchase at your own risk.";
 

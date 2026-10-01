@@ -12,7 +12,7 @@ export function buildVerifyEmailEmail(verifyLink: string) {
       <div style="padding:24px;">
         <h1 style="font-size:20px;margin:0 0 4px;">Confirm your email</h1>
         <p style="color:#555;margin:0 0 20px;">
-          One more step -- confirm this is your email address. The link below expires in 24
+          One more step, confirm this is your email address. The link below expires in 24
           hours.
         </p>
         <a

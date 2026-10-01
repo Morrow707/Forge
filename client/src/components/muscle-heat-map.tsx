@@ -152,7 +152,7 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
           <ReadFailed what="this training load" onRetry={() => void refetch()} />
         ) : entries.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No sets logged in the last {windowDays} days -- try a wider window.
+            No sets logged in the last {windowDays} days, try a wider window.
           </p>
         ) : (
           <>

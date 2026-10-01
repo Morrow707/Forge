@@ -87,7 +87,7 @@ export function LegalDocumentReader({
             // able to tell that apart from a document that is genuinely blank,
             // because one of those is a reason not to agree yet.
             <p className="text-xs text-muted-foreground">
-              Couldn't load this document right now -- close this and try again in a moment.
+              Couldn't load this document right now, close this and try again in a moment.
             </p>
           ) : (
             <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground">

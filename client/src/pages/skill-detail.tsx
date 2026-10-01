@@ -326,7 +326,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                     colorClass={SPORT_FILTER_ACTIVE_CLASS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Which sports' coaches should be able to find this drill -- a generic arm-care
+                    Which sports' coaches should be able to find this drill, a generic arm-care
                     drill might be tagged Baseball, Softball, Volleyball, and Football even though
                     its skill type is Throwing.
                   </p>
@@ -383,7 +383,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                     colorClass={TARGET_FILTER_ACTIVE_CLASS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    What this drill actually trains -- accuracy, power, reaction time, mental
+                    What this drill actually trains, accuracy, power, reaction time, mental
                     focus. Not a muscle group; a drill can carry more than one (a throwing drill is
                     usually both Accuracy and Arm Strength).
                   </p>

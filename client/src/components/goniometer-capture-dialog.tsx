@@ -62,7 +62,7 @@ export function GoniometerCaptureDialog({
       })
       .catch(() => {
         if (!stopped) {
-          setCameraError("Couldn't load the pose-tracking model -- check your connection and retry.");
+          setCameraError("Couldn't load the pose-tracking model, check your connection and retry.");
           setModelLoading(false);
         }
       });
@@ -70,7 +70,7 @@ export function GoniometerCaptureDialog({
     ensureCameraPermission().then((granted) => {
       if (stopped) return;
       if (!granted) {
-        setCameraError("Camera access denied -- enable it for Forge in Settings.");
+        setCameraError("Camera access denied, enable it for Forge in Settings.");
         return;
       }
       navigator.mediaDevices
@@ -127,7 +127,7 @@ export function GoniometerCaptureDialog({
             Camera-Assisted Reading
           </DialogTitle>
           <DialogDescription>
-            {jointLabel} &middot; {movementLabel}. Hold the end-range position -- this is an estimate from a 2D
+            {jointLabel} &middot; {movementLabel}. Hold the end-range position, this is an estimate from a 2D
             camera view, not a clinical-grade reading. Capture, then adjust the number if it looks off.
           </DialogDescription>
         </DialogHeader>

@@ -759,7 +759,7 @@ export function AvBarTrackerDialog({
           if (!hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
             toast.info(
-              "No Wi-Fi -- the video is saved on your device and will upload for your coach once connected. "
+              "No Wi-Fi, the video is saved on your device and will upload for your coach once connected. "
                 + "You can also send it manually from the Video Bank.",
               { duration: 10000 },
             );
@@ -2374,7 +2374,7 @@ export function AvBarTrackerDialog({
     // clip's real-time length (frame striding, no real-time playback constraint), so that
     // comparison would false-positive on plenty of ordinary, complete reads.
     if (recordingStats.readerStatus === "failed" && recordingStats.frameCount > 0) {
-      toast.warning("Analysis was cut short partway through this set -- numbers below may not cover every rep.");
+      toast.warning("Analysis was cut short partway through this set, numbers below may not cover every rep.");
     }
 
     // SAY SO WHEN THE COUNT DOES NOT MATCH.
@@ -2393,7 +2393,7 @@ export function AvBarTrackerDialog({
       const found = metrics.repBreakdown.length;
       toast.info(
         `Tracked ${found} rep${found === 1 ? "" : "s"} on a set prescribed at ${targetReps}. ` +
-          `Check the rep list below if that isn't what you did -- the set's averages are built from it.`,
+          `Check the rep list below if that isn't what you did, the set's averages are built from it.`,
         { duration: 10000 },
       );
     }
@@ -2424,7 +2424,7 @@ export function AvBarTrackerDialog({
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
           toast.info(
-            "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
             { duration: 10000 },
           );
         }
@@ -2492,7 +2492,7 @@ export function AvBarTrackerDialog({
                       and only takes over once analysis is done but the upload still has a tail
                       left. */}
                   {analyzing
-                    ? `Analyzing recording -- ${analyzedFrames} frames processed…`
+                    ? `Analyzing recording, ${analyzedFrames} frames processed…`
                     : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
                 </p>
                 {/* Cancel only applies to the on-device analysis pass (cancelAnalysis calls

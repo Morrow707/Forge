@@ -38,7 +38,7 @@ export function PhotoUploadField({
       const captured = await Promise.all(picked.map((f) => downscalePhotoFile(f, { document })));
       onChange([...images, ...captured]);
     } catch {
-      toast.error("Couldn't read that photo -- try a different one");
+      toast.error("Couldn't read that photo, try a different one");
     }
   }
 
@@ -86,7 +86,7 @@ export function PhotoUploadField({
         }}
       />
       {images.length > 1 && (
-        <p className="text-xs text-muted-foreground">{images.length} photos -- multiple pages are combined</p>
+        <p className="text-xs text-muted-foreground">{images.length} photos, multiple pages are combined</p>
       )}
     </div>
   );

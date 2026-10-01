@@ -184,7 +184,7 @@ export function VideoAnnotationDialog({
           </DialogTitle>
           <DialogDescription>
             {captured
-              ? "Draw directly on the frame -- circle, arrow, whatever gets the point across."
+              ? "Draw directly on the frame, circle, arrow, whatever gets the point across."
               : "Play to the moment you want to mark up, then capture that frame."}
           </DialogDescription>
         </DialogHeader>

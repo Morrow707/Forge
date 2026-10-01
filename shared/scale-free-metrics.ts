@@ -68,5 +68,5 @@ export function metricIsScaleFree(metric: string): boolean {
  *  warning, it is the absence of one, and it has to say why or it reads as an oversight. */
 export const SCALE_FREE_METRIC_NOTE =
   "Measured in frames rather than in centimetres, so this one does not depend on the camera " +
-  "working out real-world scale -- it is unaffected by the accuracy warning on the distance " +
+  "working out real-world scale, it is unaffected by the accuracy warning on the distance " +
   "and velocity numbers.";

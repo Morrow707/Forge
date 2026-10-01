@@ -33,7 +33,7 @@ export function SquadQuests() {
           <Trophy className="h-5 w-5 text-primary" />
           Squad Quests
         </CardTitle>
-        <CardDescription>Your team's shared push -- everyone's sets count toward it.</CardDescription>
+        <CardDescription>Your team's shared push, everyone's sets count toward it.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {challenges.map((c) => (

@@ -149,7 +149,7 @@ export function AvOverheadSquatCaptureDialog({
             {noReading && !recording && !analyzing && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                Couldn't get a clear enough read -- make sure your whole body stayed in frame and try again.
+                Couldn't get a clear enough read, make sure your whole body stayed in frame and try again.
               </div>
             )}
 

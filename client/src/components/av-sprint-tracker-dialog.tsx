@@ -443,7 +443,7 @@ export function AvSprintTrackerDialog({
     manuallyTimedRef.current = true;
     const manualResult = buildManualResult(startTime, finishTime, checkpoints);
     if (!manualResult) {
-      toast.error("Finish must be after start -- scrub back and try again");
+      toast.error("Finish must be after start, scrub back and try again");
       return;
     }
     finishWithResult(manualResult);
@@ -553,7 +553,7 @@ export function AvSprintTrackerDialog({
       // Said out loud, because a queued clip is otherwise indistinguishable from a lost one --
       // the numbers saved either way, and the athlete has no other sign the video is coming.
       if (queuedForWifi) {
-        toast.info("No Wi-Fi -- the clip is saved on your device and uploads once you reconnect.");
+        toast.info("No Wi-Fi, the clip is saved on your device and uploads once you reconnect.");
       }
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
@@ -641,7 +641,7 @@ export function AvSprintTrackerDialog({
             <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">This one records sideways.</span>{" "}
               The screen turns with it. A sprint runs across the frame, so landscape roughly
-              halves how far back the phone has to sit -- about 90ft instead of 240ft for a
+              halves how far back the phone has to sit, about 90ft instead of 240ft for a
               60-yard run, or about 70ft on the 0.5x lens.
             </p>
             <DialogFooter>
@@ -781,7 +781,7 @@ export function AvSprintTrackerDialog({
           <div className="space-y-4 py-6 text-center">
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
             <p className="text-sm text-muted-foreground">
-              Analyzing recording -- {analyzedFrames} frames processed so far…
+              Analyzing recording, {analyzedFrames} frames processed so far…
             </p>
             <Button variant="outline" size="sm" onClick={cancelAnalysis}>
               <XCircle className="h-4 w-4" />
@@ -796,7 +796,7 @@ export function AvSprintTrackerDialog({
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
                 Couldn't auto-detect a clean checkpoint crossing from this take. Scrub the clip below and mark Start
-                and Finish by hand -- the time will still count.
+                and Finish by hand, the time will still count.
               </p>
             </div>
             {videoUrl && (
@@ -816,7 +816,7 @@ export function AvSprintTrackerDialog({
             </div>
             {manualStartTime != null && (
               <p className="text-center text-xs text-muted-foreground">
-                Start marked at {manualStartTime.toFixed(2)}s -- scrub to the finish and tap Mark Finish.
+                Start marked at {manualStartTime.toFixed(2)}s, scrub to the finish and tap Mark Finish.
               </p>
             )}
             <DialogFooter>
@@ -849,7 +849,7 @@ export function AvSprintTrackerDialog({
             {result.likelyGlitch && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                This time looks faster than any human has ever run -- almost certainly a tracking glitch,
+                This time looks faster than any human has ever run, almost certainly a tracking glitch,
                 not a real split. Recommend retaking before saving.
               </div>
             )}
@@ -859,7 +859,7 @@ export function AvSprintTrackerDialog({
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 Only {result.crossingsFound} of this drill's {result.crossingsExpected} checkpoints were
                 crossed, so this time covers part of the run, not all of it. The speed is right for the
-                ground actually measured -- it just isn't the whole drill.
+                ground actually measured, it just isn't the whole drill.
               </div>
             )}
 
@@ -900,7 +900,7 @@ export function AvSprintTrackerDialog({
                 <span>
                   Save this clip so my coach can review it
                   <span className="block text-xs text-muted-foreground">
-                    Off by default -- only the numbers above are saved unless you turn this on.
+                    Off by default, only the numbers above are saved unless you turn this on.
                   </span>
                 </span>
               </label>
@@ -911,7 +911,7 @@ export function AvSprintTrackerDialog({
                 <span>
                   Never auto-delete this clip
                   <span className="block text-xs text-muted-foreground">
-                    Your plan only keeps a limited number of saved clips per drill -- favoriting
+                    Your plan only keeps a limited number of saved clips per drill, favoriting
                     this one keeps it forever, even once older clips start rolling off.
                   </span>
                 </span>

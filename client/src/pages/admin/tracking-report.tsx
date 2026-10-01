@@ -225,7 +225,7 @@ export default function AdminTrackingReport() {
       const res = await apiRequest("GET", `/api/admin/tracking-report?limit=${appliedLimit}`);
       const text = await res.text();
       await navigator.clipboard.writeText(text);
-      toast.success("Copied -- paste it wherever you need it");
+      toast.success("Copied, paste it wherever you need it");
     } catch {
       toast.error("Couldn't copy the report");
     }
@@ -247,7 +247,7 @@ export default function AdminTrackingReport() {
             </CardTitle>
             <CardDescription>
               Every camera-tracked set's data points, methodology, confidence, and the device/AI
-              context that captured it -- most recent first.
+              context that captured it, most recent first.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -390,7 +390,7 @@ export default function AdminTrackingReport() {
 
         {entries && entries.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No tracked sets yet -- nothing has been recorded with a camera tracking mode enabled.
+            No tracked sets yet, nothing has been recorded with a camera tracking mode enabled.
           </p>
         )}
 

@@ -801,7 +801,7 @@ export function BarTrackerDialog({
         previewTick();
       })
       .catch(() => {
-        setCameraError("Couldn't load the pose-tracking model -- check your connection and retry.");
+        setCameraError("Couldn't load the pose-tracking model, check your connection and retry.");
         setModelLoading(false);
       });
 
@@ -910,7 +910,7 @@ export function BarTrackerDialog({
       ensureCameraPermission().then((granted) => {
         if (stopped) return;
         if (!granted) {
-          setCameraError("Camera access denied -- enable it for Forge in Settings.");
+          setCameraError("Camera access denied, enable it for Forge in Settings.");
           return;
         }
         navigator.mediaDevices
@@ -1105,7 +1105,7 @@ export function BarTrackerDialog({
     if (!autoStartTriggeredRef.current) {
       setAlignmentHint(
         alignment?.reason === "axial"
-          ? "Front-on framing -- good for bar tilt and shoulder symmetry; forward/back drift readings will be less reliable from this angle"
+          ? "Front-on framing, good for bar tilt and shoulder symmetry; forward/back drift readings will be less reliable from this angle"
           : null,
       );
     }
@@ -2333,7 +2333,7 @@ export function BarTrackerDialog({
                         {r.likelyTrackingGlitch && (
                           <AlertTriangle
                             className="h-3.5 w-3.5 text-amber-500"
-                            aria-label="Way off from this set's other jumps -- likely a tracking glitch, not corrected automatically"
+                            aria-label="Way off from this set's other jumps, likely a tracking glitch, not corrected automatically"
                           />
                         )}
                         <span className={r.likelyTrackingGlitch ? "text-amber-500" : undefined}>
@@ -2600,7 +2600,7 @@ export function BarTrackerDialog({
                         if (!hasWarnedAboutQueueing()) {
                           markWarnedAboutQueueing();
                           toast.info(
-                            "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+                            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
                             { duration: 10000 },
                           );
                         }
@@ -2610,7 +2610,7 @@ export function BarTrackerDialog({
                       }
                       onOpenChange(false);
                     } catch {
-                      toast.error("Couldn't upload the video -- analytics are still saved below.");
+                      toast.error("Couldn't upload the video, analytics are still saved below.");
                       onCapture(result);
                       onOpenChange(false);
                     } finally {

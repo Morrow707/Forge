@@ -191,7 +191,7 @@ function ConnectionProblem() {
       <p className="text-sm text-muted-foreground">
         {rateLimited
           ? RATE_LIMITED_MESSAGE
-          : "Having trouble reaching Forge. Your session is still fine -- check your connection and try again."}
+          : "Having trouble reaching Forge. Your session is still fine, check your connection and try again."}
       </p>
       <button
         type="button"

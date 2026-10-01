@@ -45,7 +45,7 @@ export function ChangePasswordDialog({
   const changeMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/account/change-password", { currentPassword, newPassword }),
     onSuccess: () => {
-      toast.success("Password changed -- your other devices have been logged out.");
+      toast.success("Password changed, your other devices have been logged out.");
       reset();
       onOpenChange(false);
     },
@@ -67,7 +67,7 @@ export function ChangePasswordDialog({
             Change password
           </DialogTitle>
           <DialogDescription>
-            Changing your password logs every other device out -- this one stays signed in.
+            Changing your password logs every other device out, this one stays signed in.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

@@ -481,7 +481,7 @@ export function ExerciseDetailPage({
                     colorClass={MUSCLE_FILTER_ACTIVE_CLASS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Secondary muscles worked besides the main body part above -- shown on this
+                    Secondary muscles worked besides the main body part above, shown on this
                     exercise's detail page only.
                   </p>
                 </div>
@@ -507,7 +507,7 @@ export function ExerciseDetailPage({
                     colorClass={SPORT_FILTER_ACTIVE_CLASS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Sports this exercise is worth surfacing for -- lets coaches filter/search the
+                    Sports this exercise is worth surfacing for, lets coaches filter/search the
                     exercise bank by sport.
                   </p>
                 </div>
@@ -541,7 +541,7 @@ export function ExerciseDetailPage({
                     allowNone
                   />
                   <p className="text-xs text-muted-foreground">
-                    Which part of the body this exercise trains as a whole -- lets a coach or the
+                    Which part of the body this exercise trains as a whole, lets a coach or the
                     AI pull "today's upper body exercises" directly instead of inferring it from
                     body part.
                   </p>
@@ -556,7 +556,7 @@ export function ExerciseDetailPage({
                     allowNone
                   />
                   <p className="text-xs text-muted-foreground">
-                    Only meaningful alongside a Push/Press/Pull movement type -- e.g. bench press
+                    Only meaningful alongside a Push/Press/Pull movement type, e.g. bench press
                     is horizontal, overhead press is vertical.
                   </p>
                 </div>
@@ -591,7 +591,7 @@ export function ExerciseDetailPage({
                 <div className="space-y-1.5">
                   <Label>What does the athlete log?</Label>
                   <p className="text-xs text-muted-foreground">
-                    Check every field this exercise actually needs -- the athlete's logging
+                    Check every field this exercise actually needs, the athlete's logging
                     screen only shows these, nothing else. Check more than one for a combo
                     movement (e.g. a dumbbell box step-up needs both weight and box height).
                   </p>

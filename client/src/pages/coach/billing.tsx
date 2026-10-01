@@ -115,7 +115,7 @@ export default function CoachBilling() {
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start checkout -- try again");
+      toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
       setBuyingAddOn(null);
     }
   }
@@ -132,7 +132,7 @@ export default function CoachBilling() {
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start checkout -- try again");
+      toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
       setStarting(false);
     }
   }
@@ -155,7 +155,7 @@ export default function CoachBilling() {
         setPlanForbidden(true);
         toast.error("Only the primary coach can change the plan.");
       } else {
-        toast.error(err instanceof Error ? err.message : "Couldn't update the plan -- try again");
+        toast.error(err instanceof Error ? err.message : "Couldn't update the plan, try again");
       }
     } finally {
       setSavingPlan(false);
@@ -348,7 +348,7 @@ export default function CoachBilling() {
               the surprise this sentence was meant to prevent. */}
           <p className="text-xs text-muted-foreground">
             ${(ORG_PER_ATHLETE_CENTS / 100).toFixed(2)} per athlete, the same rate at every roster
-            size. You pay for the band, so adding an athlete inside it doesn't change your bill --
+            size. You pay for the band, so adding an athlete inside it doesn't change your bill,
             going past {band.athleteCapIncluded} moves you to the next band.
           </p>
 
@@ -359,7 +359,7 @@ export default function CoachBilling() {
             </p>
           ) : !billingOpen ? (
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
-              Free while Forge is in beta. Nothing is charged, and there is nothing to set up --
+              Free while Forge is in beta. Nothing is charged, and there is nothing to set up,
               the band above is what this roster would cost once billing opens.
             </p>
           ) : (

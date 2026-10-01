@@ -43,7 +43,7 @@ export default function AthleteLiftHistory() {
   return (
     <AppShell title="Full Lift History">
       <p className="mb-6 text-sm text-muted-foreground">
-        Every exercise's most recent PR, most recent first -- tap one to see the trend.
+        Every exercise's most recent PR, most recent first, tap one to see the trend.
       </p>
 
       {isLoading ? (

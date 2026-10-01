@@ -179,7 +179,7 @@ export function crossingTrustScore(input: CrossingTrustInput): SetTrustScore {
   return build(100, [
     {
       penalty: input.likelyGlitch ? 55 : 0,
-      note: "This time implies a speed no human has run -- almost certainly a checkpoint-detection glitch",
+      note: "This time implies a speed no human has run, almost certainly a checkpoint-detection glitch",
     },
     {
       penalty: precision <= CROSSING_PRECISION_GOOD ? 0 : precision <= CROSSING_PRECISION_WEAK ? 15 : 30,
@@ -254,7 +254,7 @@ export function mechanicsTrustScore(input: MechanicsTrustInput): SetTrustScore {
       // Enough on its own to drop a clean capture to "low" -- a landmark
       // that jumped across the frame is not a nuance to average away.
       penalty: input.implausibleWristSpeed ? 50 : 0,
-      note: "Peak wrist speed came back physically impossible -- a misdetected landmark, not a real throw",
+      note: "Peak wrist speed came back physically impossible, a misdetected landmark, not a real throw",
     },
     {
       penalty: coverage >= MECHANICS_TORSO_COVERAGE_GOOD ? 0 : coverage >= MECHANICS_TORSO_COVERAGE_WEAK ? 15 : 30,

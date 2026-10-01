@@ -124,7 +124,7 @@ function flagIfNoNutrientsMatched(
   if (coreFieldsAllNull && rawNutrientKeysPresent.length > 0) {
     console.warn(
       `${source} food lookup: none of this file's expected nutrient keys matched a real response for` +
-        ` "${candidate.description}" even though the response carried nutrient data -- the field-name` +
+        ` "${candidate.description}" even though the response carried nutrient data, the field-name` +
         ` mapping in food-lookup.ts is likely wrong. Raw keys the API actually returned:`,
       rawNutrientKeysPresent.join(", "),
     );

@@ -71,7 +71,7 @@ export function CoachingStaffDialog({
       qc.invalidateQueries({ queryKey: ["/api/coach/programs"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
       setJoinCode("");
-      toast.success("Joined -- you now share this staff's full roster and programs");
+      toast.success("Joined, you now share this staff's full roster and programs");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't join with that code"),
   });
@@ -110,7 +110,7 @@ export function CoachingStaffDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success("New invite code generated -- the old one no longer works");
+      toast.success("New invite code generated, the old one no longer works");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't generate a new code"),
   });
@@ -125,7 +125,7 @@ export function CoachingStaffDialog({
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/programs"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
-      toast.success("Left the staff -- back to your own roster");
+      toast.success("Left the staff, back to your own roster");
       onOpenChange(false);
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't leave"),
@@ -144,7 +144,7 @@ export function CoachingStaffDialog({
           <DialogTitle>Coaching Staff</DialogTitle>
           <DialogDescription>
             Every coach on the same staff sees and edits the same roster, teams, programs, and
-            exercise bank -- built for a program with an assistant or position-coach staff, not
+            exercise bank, built for a program with an assistant or position-coach staff, not
             just a solo coach.
           </DialogDescription>
         </DialogHeader>
@@ -179,7 +179,7 @@ export function CoachingStaffDialog({
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Share this with another coach -- when they enter it below, they join your staff
+                  Share this with another coach, when they enter it below, they join your staff
                   and see everything you do. This is a different code from your athlete signup
                   invite, so sharing it with athletes or recruits doesn't grant them staff access.
                 </p>
@@ -251,7 +251,7 @@ export function CoachingStaffDialog({
                           <div className="space-y-2 border-t border-border p-2.5">
                             <div className="space-y-1.5">
                               <p className="text-xs text-muted-foreground">
-                                Display title -- shown instead of "Coach" wherever {s.name.split(" ")[0]}'s
+                                Display title, shown instead of "Coach" wherever {s.name.split(" ")[0]}'s
                                 name appears. Leave blank to keep the default.
                               </p>
                               <div className="flex items-center gap-2">
@@ -288,7 +288,7 @@ export function CoachingStaffDialog({
                               </div>
                             </div>
                             <p className="pt-1 text-xs text-muted-foreground">
-                              What {s.name.split(" ")[0]} can see -- unchecked sections stay hidden from
+                              What {s.name.split(" ")[0]} can see, unchecked sections stay hidden from
                               their nav until you turn them back on.
                             </p>
                             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
@@ -359,7 +359,7 @@ export function CoachingStaffDialog({
                 </div>
                 {data && data.staff.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    You'll need to remove your current staff members first -- a coach can't run
+                    You'll need to remove your current staff members first, a coach can't run
                     their own staff and join someone else's at the same time.
                   </p>
                 )}

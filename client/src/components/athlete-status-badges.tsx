@@ -59,7 +59,7 @@ export function WellnessBadge({
         e.stopPropagation();
         onClick();
       }}
-      aria-label={`Readiness ${entry.score}/100, ${READINESS_LABEL[entry.level]} -- view wellness history`}
+      aria-label={`Readiness ${entry.score}/100, ${READINESS_LABEL[entry.level]}, view wellness history`}
       className={cn(
         "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80",
         READINESS_CLASSNAME[entry.level],
@@ -95,7 +95,7 @@ export function AcwrBadge({
         e.stopPropagation();
         onClick();
       }}
-      aria-label={`Training load: ${ACWR_RISK_LABEL[entry.level]} -- view load history`}
+      aria-label={`Training load: ${ACWR_RISK_LABEL[entry.level]}, view load history`}
       className={cn(
         "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80",
         ACWR_RISK_CLASSNAME[entry.level],
@@ -125,7 +125,7 @@ export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`/api/coach/roster/${athleteId}/guardian-notice`] });
-      toast.success("Marked -- waiver/consent on file");
+      toast.success("Marked, waiver/consent on file");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not update"),
   });
@@ -143,8 +143,8 @@ export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
           e.stopPropagation();
           void refetch();
         }}
-        title="We couldn't check this athlete's guardian status -- tap to try again"
-        aria-label="Guardian status unknown -- the check failed. Tap to try again."
+        title="We couldn't check this athlete's guardian status, tap to try again"
+        aria-label="Guardian status unknown, the check failed. Tap to try again."
         className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
       >
         <ShieldAlert className="h-3 w-3" />
@@ -162,8 +162,8 @@ export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
         ackMutation.mutate();
       }}
       disabled={ackMutation.isPending}
-      aria-label="This athlete signed up as a minor -- recommend a parent/guardian waiver, click once one is on file"
-      title="Signed up as a minor -- recommend getting a parent/guardian waiver or consent on file, then click to mark it done"
+      aria-label="This athlete signed up as a minor, recommend a parent/guardian waiver, click once one is on file"
+      title="Signed up as a minor, recommend getting a parent/guardian waiver or consent on file, then click to mark it done"
       className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-500 transition-opacity hover:opacity-80"
     >
       <ShieldAlert className="h-3 w-3" />
@@ -206,7 +206,7 @@ export function HealthStatusToggle({
         mutation.mutate(isHealthy ? "hurt" : "healthy");
       }}
       disabled={mutation.isPending}
-      aria-label={`${isHealthy ? "Healthy" : "Hurt"} -- click to mark ${isHealthy ? "hurt" : "healthy"}`}
+      aria-label={`${isHealthy ? "Healthy" : "Hurt"}, click to mark ${isHealthy ? "hurt" : "healthy"}`}
       className={cn(
         "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors",
         isHealthy
@@ -267,12 +267,12 @@ export function TrackingOptOutToggle({
         disabled={mutation.isPending}
         aria-label={
           trackingOptOut
-            ? "Camera tracking is off for this athlete -- click to turn back on"
-            : "Camera tracking is on -- click to turn off at a parent/guardian's request"
+            ? "Camera tracking is off for this athlete, click to turn back on"
+            : "Camera tracking is on, click to turn off at a parent/guardian's request"
         }
         title={
           trackingOptOut
-            ? "Camera tracking is off for this athlete at a parent/guardian's request -- click to turn back on"
+            ? "Camera tracking is off for this athlete at a parent/guardian's request, click to turn back on"
             : "Turn off camera-tracking collection for this athlete (parent/guardian request)"
         }
         className={cn(
@@ -289,7 +289,7 @@ export function TrackingOptOutToggle({
         open={confirming}
         onOpenChange={setConfirming}
         title="Turn off camera tracking?"
-        description="This stops all future camera-tracked video and tracking metrics (bar speed, jump height, swing mechanics, and the like) from being collected for this athlete going forward, at a parent or guardian's request. It does not delete anything already recorded, and doesn't affect the rest of their account -- they can still log workouts normally."
+        description="This stops all future camera-tracked video and tracking metrics (bar speed, jump height, swing mechanics, and the like) from being collected for this athlete going forward, at a parent or guardian's request. It does not delete anything already recorded, and doesn't affect the rest of their account, they can still log workouts normally."
         confirmLabel="Turn off tracking"
         onConfirm={() => mutation.mutate(true)}
         isPending={mutation.isPending}
@@ -377,10 +377,10 @@ export function ResearchConsentControl({ athleteId }: { athleteId: number }) {
         )}
         aria-label={
           consentFailed
-            ? "We couldn't check this athlete's research consent -- click to try again"
+            ? "We couldn't check this athlete's research consent, click to try again"
             : granted
-              ? "Research consent given -- click to withdraw"
-              : "No research consent on file -- click to record a guardian's consent"
+              ? "Research consent given, click to withdraw"
+              : "No research consent on file, click to record a guardian's consent"
         }
       >
         {consentFailed ? "Research: ?" : granted ? "Research: yes" : "Research: no"}

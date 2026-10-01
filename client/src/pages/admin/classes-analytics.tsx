@@ -92,7 +92,7 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
           {row.suppressed ? (
             <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
               <Lock className="h-3.5 w-3.5" />
-              Fewer than 5 athletes enrolled -- withheld so no individual's progress is isolable.
+              Fewer than 5 athletes enrolled, withheld so no individual's progress is isolable.
             </p>
           ) : row.enrolledCount === 0 ? (
             <p className="py-2 text-center text-xs text-muted-foreground">No enrollments yet.</p>
@@ -117,13 +117,13 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
                       />
                     </div>
                     <span className="w-24 shrink-0 text-right text-muted-foreground">
-                      {l.suppressed ? "< 5 -- withheld" : `${l.started} read / ${l.passed} passed`}
+                      {l.suppressed ? "< 5, withheld" : `${l.started} read / ${l.passed} passed`}
                     </span>
                   </div>
                 );
               })}
               <p className="pt-1 text-[11px] text-muted-foreground">
-                Lighter bar = read the content, solid bar = passed the quiz -- out of{" "}
+                Lighter bar = read the content, solid bar = passed the quiz, out of{" "}
                 {row.enrolledCount} enrolled. Any lesson fewer than 5 athletes have reached is
                 withheld the same way.
               </p>
@@ -203,7 +203,7 @@ export default function AdminClassesAnalytics() {
               <CardHeader>
                 <CardTitle>Per-Class Enrollment &amp; Drop-off</CardTitle>
                 <CardDescription>
-                  Every class on Forge, Forge-official and coach-authored alike -- no names, no
+                  Every class on Forge, Forge-official and coach-authored alike, no names, no
                   athlete-level detail, ever. Expand a class to see where athletes stall lesson by
                   lesson. A class (or a single lesson within one) with fewer than 5 athletes
                   enrolled/reached shows its enrollment count but withholds completion numbers

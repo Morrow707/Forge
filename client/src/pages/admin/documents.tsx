@@ -28,9 +28,9 @@ type ComplianceReportData = {
 };
 
 const TIER_LABEL: Record<string, string> = {
-  tier1_under13: "Tier 1 -- Under 13",
-  tier2_teen_13_17: "Tier 2 -- Teen (13-17)",
-  tier3_adult_18plus: "Tier 3 -- Adult (18+)",
+  tier1_under13: "Tier 1, Under 13",
+  tier2_teen_13_17: "Tier 2, Teen (13-17)",
+  tier3_adult_18plus: "Tier 3, Adult (18+)",
   unknown: "Unknown (no date of birth on file)",
 };
 
@@ -62,7 +62,7 @@ const CONSENT_LABEL: Record<string, string> = {
 function LiveBadge() {
   return (
     <Badge variant="success" className="text-[10px]">
-      LIVE -- shown at signup
+      LIVE, shown at signup
     </Badge>
   );
 }
@@ -191,7 +191,7 @@ function ResearchDataReviewCard() {
             <li>
               A minor's consent comes from a guardian; a coach relaying it names who they are
               relaying from. Withdrawal writes its own dated record and cannot reach an extract
-              already sent -- the consent text says so.
+              already sent, the consent text says so.
             </li>
           </ul>
         </div>
@@ -243,7 +243,7 @@ export default function AdminDocuments() {
               Every document here is live: an edit changes what the next person reads or agrees
               to, and an edit to the Terms re-asks every account to accept them. Treat a change as
               a change to a contract. Tier thresholds and retention windows are real, current
-              system behavior -- not a claim that the underlying approach is legally sound. What is
+              system behavior, not a claim that the underlying approach is legally sound. What is
               still open with counsel is in docs/legal-open-questions.md.
             </p>
           </CardContent>
@@ -258,7 +258,7 @@ export default function AdminDocuments() {
               <LiveBadge />
             </CardTitle>
             <CardDescription>
-              Shown to every coach/athlete on the signup page -- they must check a box agreeing
+              Shown to every coach/athlete on the signup page, they must check a box agreeing
               to this exact text before an account is created. Editing it only affects signups
               from now on; nobody who already agreed sees their own record change.
             </CardDescription>
@@ -294,7 +294,7 @@ export default function AdminDocuments() {
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <SubSection title="Privacy tiers -- roster counts">
+                <SubSection title="Privacy tiers, roster counts">
                   {compliance.tierCounts.map((t) => (
                     <Row key={t.tier} label={TIER_LABEL[t.tier] ?? t.tier} value={String(t.count)} />
                   ))}
@@ -358,7 +358,7 @@ export default function AdminDocuments() {
             <CardDescription>
               The signup agreement is the one Terms now; edit it in the Signup agreement editor
               above. Served at /terms, where anyone can read exactly what they accepted. The old
-              public Terms of Service is retired -- its clauses were carried into the signup
+              public Terms of Service is retired, its clauses were carried into the signup
               agreement and the open questions are in docs/legal-open-questions.md.
             </CardDescription>
           </CardHeader>
@@ -394,12 +394,12 @@ export default function AdminDocuments() {
             </CardTitle>
             <CardDescription>
               A standalone consent for the camera-tracked movement data Forge collects (see
-              Section 4 of the Privacy Policy) -- separate from it on purpose, since laws like
+              Section 4 of the Privacy Policy), separate from it on purpose, since laws like
               Illinois' BIPA expect a dedicated written consent, not a clause inside a longer
               policy. Unlike the drafts above this one is LIVE: an adult agrees to it at signup or
               at the camera, and a guardian agrees to it for a minor at claim time, and the text
               below is snapshotted verbatim into each of those consent records. Editing it changes
-              what the next person agrees to -- and this is the one document here that HAS been
+              what the next person agrees to, and this is the one document here that HAS been
               reviewed: built with a lawyer and supplied 2026-09-17. Treat a change to it like a
               change to a contract, not an edit to a draft.
             </CardDescription>
@@ -416,13 +416,13 @@ export default function AdminDocuments() {
               <LiveBadge />
             </CardTitle>
             <CardDescription>
-              Addressed to a parent, not the athlete -- what any minor athlete's parent or guardian
+              Addressed to a parent, not the athlete, what any minor athlete's parent or guardian
               actually receives, whether the athlete signed themselves up or a coach created the
               slot. For an under-13 athlete it is also the document their guardian's consent is
               recorded against. This is the content half of the guardian-notice system (see
               users.requiresGuardianNotice and GUARDIAN_NOTICE_LIVE in shared/privacy-tiers.ts);
               its content is embedded and delivered today in the guardian-invite email sent at
-              signup (see issueGuardianInviteIfNeeded in server/auth.ts) -- every minor's parent
+              signup (see issueGuardianInviteIfNeeded in server/auth.ts), every minor's parent
               gets this text, so editing it changes what the next one reads.
             </CardDescription>
           </CardHeader>
@@ -453,8 +453,8 @@ export default function AdminDocuments() {
             <CardDescription>
               The SOFTWARE licence, distinct from the Terms of Use, which govern the service.
               It carries the clauses Apple requires of an app that replaces the standard licence
-              with its own -- Apple as a third-party beneficiary, and Apple disclaiming
-              maintenance and warranty -- and App Store Connect's licence URL points at this page.
+              with its own, Apple as a third-party beneficiary, and Apple disclaiming
+              maintenance and warranty, and App Store Connect's licence URL points at this page.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -469,7 +469,7 @@ export default function AdminDocuments() {
               <PublishedBadge at="/ai-terms" />
             </CardTitle>
             <CardDescription>
-              The AI features specifically -- program generation, form-check feedback, the coaching
+              The AI features specifically, program generation, form-check feedback, the coaching
               assistant. A supplement to the Terms of Use, not a rival: its own "Service" is the AI
               features and it points platform use back at the Terms. It was seeded, routed and
               served at /ai-terms with no card here, so it was the one document an admin could
@@ -534,7 +534,7 @@ function SignupAgreementEditor() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/legal-agreement"] });
-      toast.success("Agreement updated -- new signups will see this text");
+      toast.success("Agreement updated, new signups will see this text");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save"),
   });

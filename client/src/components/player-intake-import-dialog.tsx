@@ -131,7 +131,7 @@ export function PlayerIntakeImportDialog({
         <DialogHeader>
           <DialogTitle>Import Player Intake Sheet</DialogTitle>
           <DialogDescription>
-            Photograph a tryout/sign-up sheet -- each person gets a claim code to finish their own signup with.
+            Photograph a tryout/sign-up sheet, each person gets a claim code to finish their own signup with.
           </DialogDescription>
         </DialogHeader>
 
@@ -247,7 +247,7 @@ export function PlayerIntakeImportDialog({
         {step === "done" && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Hand each person their claim link -- they finish signup themselves and it links to you automatically.
+              Hand each person their claim link, they finish signup themselves and it links to you automatically.
             </p>
             <div className="space-y-2">
               {created.map((slot) => (

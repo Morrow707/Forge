@@ -87,7 +87,7 @@ export function MovementScreenPanel({ athleteId }: { athleteId: number }) {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Functional-movement screening history -- informational, not a gate. A flagged result
+          Functional-movement screening history, informational, not a gate. A flagged result
           suggests correctives below and quietly informs the AI's program suggestions; nothing
           here blocks an assignment.
         </p>
@@ -303,7 +303,7 @@ function NewScreenDialog({
                 <SelectContent>
                   {batteries.map((b) => (
                     <SelectItem key={b.id} value={b.id.toString()}>
-                      {b.isForgeOfficial ? "FORGE -- " : ""}
+                      {b.isForgeOfficial ? "FORGE, " : ""}
                       {b.name}
                     </SelectItem>
                   ))}

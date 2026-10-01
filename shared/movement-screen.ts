@@ -67,7 +67,7 @@ export const FORGE_STANDARD_SCREEN_TESTS: MovementScreenTestDef[] = [
     category: "mobility",
     scoreType: "distance_in",
     side: "unilateral",
-    instructions: "Knee-to-wall lunge test -- record the farthest distance (inches) from the wall the big toe can be while the knee still touches the wall, heel flat.",
+    instructions: "Knee-to-wall lunge test, record the farthest distance (inches) from the wall the big toe can be while the knee still touches the wall, heel flat.",
     faultCode: "ankle_mobility_limited",
   },
   {
@@ -76,7 +76,7 @@ export const FORGE_STANDARD_SCREEN_TESTS: MovementScreenTestDef[] = [
     category: "mobility",
     scoreType: "distance_in",
     side: "unilateral",
-    instructions: "One hand reaches over the shoulder, the other up the back -- record the gap (inches) between fingertips. Smaller is better.",
+    instructions: "One hand reaches over the shoulder, the other up the back, record the gap (inches) between fingertips. Smaller is better.",
     faultCode: "shoulder_mobility_limited",
   },
   {
@@ -99,7 +99,7 @@ export const FORGE_STANDARD_SCREEN_TESTS: MovementScreenTestDef[] = [
   },
   {
     testKey: "y_balance_anterior",
-    label: "Y-Balance -- Anterior Reach",
+    label: "Y-Balance, Anterior Reach",
     category: "balance",
     scoreType: "distance_in",
     side: "unilateral",
@@ -108,7 +108,7 @@ export const FORGE_STANDARD_SCREEN_TESTS: MovementScreenTestDef[] = [
   },
   {
     testKey: "y_balance_posteromedial",
-    label: "Y-Balance -- Posteromedial Reach",
+    label: "Y-Balance, Posteromedial Reach",
     category: "balance",
     scoreType: "distance_in",
     side: "unilateral",
@@ -117,7 +117,7 @@ export const FORGE_STANDARD_SCREEN_TESTS: MovementScreenTestDef[] = [
   },
   {
     testKey: "y_balance_posterolateral",
-    label: "Y-Balance -- Posterolateral Reach",
+    label: "Y-Balance, Posterolateral Reach",
     category: "balance",
     scoreType: "distance_in",
     side: "unilateral",

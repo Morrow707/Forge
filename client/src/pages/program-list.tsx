@@ -223,7 +223,7 @@ export function ProgramListPage({
         return;
       }
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      toast.success("Draft created -- review it before assigning to anyone");
+      toast.success("Draft created, review it before assigning to anyone");
       if (result.note) {
         toast.info(result.note, { duration: 10000 });
       }
@@ -530,7 +530,7 @@ export function ProgramListPage({
                   maxLength={500}
                 />
                 <p className="text-xs text-muted-foreground">
-                  This only creates a draft using exercises already in your bank -- you'll land
+                  This only creates a draft using exercises already in your bank, you'll land
                   in the full builder to review and change anything before assigning it to
                   anyone.
                 </p>

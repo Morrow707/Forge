@@ -163,7 +163,7 @@ export default function AthleteDashboard() {
           days={days}
           entries={upcoming}
           calendarHref="/athlete/calendar"
-          description="Quick look at what's coming up -- synced with the full calendar."
+          description="Quick look at what's coming up, synced with the full calendar."
           onEntryClick={(e) =>
             navigate(
               e.kind === "skill"
@@ -346,7 +346,7 @@ export default function AthleteDashboard() {
                 Free Agent
               </Badge>
               <p className="max-w-sm text-muted-foreground">
-                You don't have a coach yet. Head to Library to build a program -- start from a
+                You don't have a coach yet. Head to Library to build a program, start from a
                 Forge template and swap out any exercise that doesn't work for you, or let the AI
                 ask a few questions and build it with you on a paid plan.
               </p>

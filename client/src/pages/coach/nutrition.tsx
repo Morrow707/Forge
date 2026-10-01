@@ -59,7 +59,7 @@ export default function CoachNutrition() {
     <AppShell title="Nutrition">
       <p className="mb-6 text-sm text-muted-foreground">
         Today's macro goals vs. what each athlete has actually logged. Click an athlete to see
-        their full targets and food-log history -- set targets there too, ideally from a real
+        their full targets and food-log history, set targets there too, ideally from a real
         nutritionist's plan. The AI never generates these numbers.
       </p>
 

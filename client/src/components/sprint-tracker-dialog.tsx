@@ -223,7 +223,7 @@ export function SprintTrackerDialog({
         setModelLoading(false);
       })
       .catch(() => {
-        setCameraError("Couldn't load the pose-tracking model -- check your connection and retry.");
+        setCameraError("Couldn't load the pose-tracking model, check your connection and retry.");
         setModelLoading(false);
       });
 
@@ -276,7 +276,7 @@ export function SprintTrackerDialog({
       ensureCameraPermission().then((granted) => {
         if (cancelled) return;
         if (!granted) {
-          setCameraError("Camera access denied -- enable it for Forge in Settings.");
+          setCameraError("Camera access denied, enable it for Forge in Settings.");
           return;
         }
         navigator.mediaDevices
@@ -665,7 +665,7 @@ export function SprintTrackerDialog({
       // Said out loud, because a queued clip is otherwise indistinguishable from a lost one --
       // the numbers saved either way, and the athlete has no other sign the video is coming.
       if (queuedForWifi) {
-        toast.info("No Wi-Fi -- the clip is saved on your device and uploads once you reconnect.");
+        toast.info("No Wi-Fi, the clip is saved on your device and uploads once you reconnect.");
       }
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
@@ -784,7 +784,7 @@ export function SprintTrackerDialog({
                     </>
                   ) : preset.tapCount === 1 ? (
                     <>
-                      Tap the video where the <strong>start/finish line</strong> is -- the 3-cone starts and ends
+                      Tap the video where the <strong>start/finish line</strong> is, the 3-cone starts and ends
                       at the same spot ({checkpointCount}/1 marked).
                     </>
                   ) : (
@@ -825,7 +825,7 @@ export function SprintTrackerDialog({
             {step === "capture" && (
               <>
                 <p className="text-sm text-teal-400">
-                  Recording -- run through{" "}
+                  Recording, run through{" "}
                   {preset.tapCount === 3
                     ? "all three markers"
                     : preset.tapCount === 1
@@ -884,7 +884,7 @@ export function SprintTrackerDialog({
                 <p className="text-xs text-muted-foreground">
                   Yards / sec
                   {preset.id === "3-cone" && (
-                    <span className="block text-[10px] normal-case">(approximate -- path isn't a straight line)</span>
+                    <span className="block text-[10px] normal-case">(approximate, path isn't a straight line)</span>
                   )}
                 </p>
               </div>
@@ -893,7 +893,7 @@ export function SprintTrackerDialog({
             {result.likelyGlitch && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                This time looks faster than any human has ever run -- almost certainly a tracking glitch,
+                This time looks faster than any human has ever run, almost certainly a tracking glitch,
                 not a real split. Recommend retaking before saving.
               </div>
             )}
@@ -938,7 +938,7 @@ export function SprintTrackerDialog({
                 <span>
                   Save this clip so my coach can review it
                   <span className="block text-xs text-muted-foreground">
-                    Off by default -- only the numbers above are saved unless you turn this on.
+                    Off by default, only the numbers above are saved unless you turn this on.
                   </span>
                 </span>
               </label>
@@ -949,7 +949,7 @@ export function SprintTrackerDialog({
                 <span>
                   Never auto-delete this clip
                   <span className="block text-xs text-muted-foreground">
-                    Your plan only keeps a limited number of saved clips per drill -- favoriting
+                    Your plan only keeps a limited number of saved clips per drill, favoriting
                     this one keeps it forever, even once older clips start rolling off.
                   </span>
                 </span>

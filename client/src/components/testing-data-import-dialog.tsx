@@ -123,7 +123,7 @@ export function TestingDataImportDialog({
         <DialogHeader>
           <DialogTitle>Import OVR / Perch Testing Data</DialogTitle>
           <DialogDescription>
-            Photograph a velocity-based-training printout or screen -- check every number, this doesn't
+            Photograph a velocity-based-training printout or screen, check every number, this doesn't
             auto-correct itself the way a live tracked set does.
           </DialogDescription>
         </DialogHeader>

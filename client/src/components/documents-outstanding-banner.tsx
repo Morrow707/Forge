@@ -28,7 +28,7 @@ export function DocumentsOutstandingBanner() {
           <div className="min-w-0 flex-1">
             <p className="font-semibold">Your documents aren't done yet</p>
             <p className="text-sm text-muted-foreground">
-              Look around as much as you like -- training, skills and the camera stay locked
+              Look around as much as you like, training, skills and the camera stay locked
               until {missing.length === 1 ? "one form is" : `${missing.length} forms are`} on
               file.
             </p>

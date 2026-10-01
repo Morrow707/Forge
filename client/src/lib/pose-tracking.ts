@@ -370,7 +370,7 @@ export function blendSpeedEstimates(
       label: "low",
       notes: [
         `Object-tracked speed (${objectSignal.speedMps.toFixed(1)} m/s) and body-motion speed ` +
-          `(${proxySignal.speedMps.toFixed(1)} m/s) disagreed significantly this set -- treat with caution`,
+          `(${proxySignal.speedMps.toFixed(1)} m/s) disagreed significantly this set, treat with caution`,
       ],
     },
   };
@@ -1853,7 +1853,7 @@ export function isPlausibleMedBallSize(diameterM: number): boolean {
 export function calibrationConfidenceNote(uncertaintyFraction: number): string | null {
   if (uncertaintyFraction <= 0) return null;
   const pct = Math.round(uncertaintyFraction * 1000) / 10;
-  return `Calibrated from a generic size assumption (±${pct}%) -- confirm the exact plate/ball size for tighter accuracy.`;
+  return `Calibrated from a generic size assumption (±${pct}%), confirm the exact plate/ball size for tighter accuracy.`;
 }
 
 // Not enough samples to trust a correction -- same "don't apply a bad multiplier with false
@@ -2270,7 +2270,7 @@ export function cameraViewMismatch(
     // The two shoulders spread wide whether the athlete is facing the camera or has their back
     // to it, so this cannot tell those apart and does not pretend to. What it can say is what
     // this framing costs, which is one axis, and it says that instead of condemning the take.
-    return "Filmed head-on or from behind. Everything vertical is measured normally, and side-to-side bar drift and tilt are measured well from here -- only forward-and-back drift points at the lens, so that one axis is not reported.";
+    return "Filmed head-on or from behind. Everything vertical is measured normally, and side-to-side bar drift and tilt are measured well from here, only forward-and-back drift points at the lens, so that one axis is not reported.";
   }
   if (expected === "front" && facing === "side_on") {
     return "This lift needs a front or back view. From the side, one arm or leg hides the other.";
@@ -2688,7 +2688,7 @@ export function chainConsistencyPenalty(
 
   return {
     penalty: Math.min(20, stillJoints.length * 10),
-    note: `${stillJoints.map((j) => j.name).join("/")} showed little motion while other joints in the same chain moved a lot -- possible tracking glitch`,
+    note: `${stillJoints.map((j) => j.name).join("/")} showed little motion while other joints in the same chain moved a lot, possible tracking glitch`,
   };
 }
 
@@ -3195,7 +3195,7 @@ export function detectFormFaults(
   if (context === "lift" && isKneeDrivenMovement && minKneeAngle > thresholds.minKneeAngleDeg) {
     faults.push({
       code: "shallow_depth",
-      label: `Depth: knees only reached ~${Math.round(minKneeAngle)}° -- aim to break parallel`,
+      label: `Depth: knees only reached ~${Math.round(minKneeAngle)}°, aim to break parallel`,
     });
   }
 
@@ -3219,7 +3219,7 @@ export function detectFormFaults(
     if (maxHipDropRatio > 0.12) {
       faults.push({
         code: "pelvic_drop",
-        label: "Hip dropped on one side during the rep -- work on single-leg glute strength",
+        label: "Hip dropped on one side during the rep, work on single-leg glute strength",
       });
     }
   }
@@ -3234,7 +3234,7 @@ export function detectFormFaults(
     if (maxHeelRise > 0.03) {
       faults.push({
         code: "ankle_mobility_limit",
-        label: "Heel lifted off the ground at depth -- likely limited ankle dorsiflexion",
+        label: "Heel lifted off the ground at depth, likely limited ankle dorsiflexion",
       });
     }
   }
@@ -3252,7 +3252,7 @@ export function detectFormFaults(
       if (maxTorsoAngle > 30) {
         faults.push({
           code: "thoracic_extension_loss",
-          label: `Losing thoracic extension -- torso rounded ~${Math.round(maxTorsoAngle)}° from vertical, more than an overhead squat can afford`,
+          label: `Losing thoracic extension, torso rounded ~${Math.round(maxTorsoAngle)}° from vertical, more than an overhead squat can afford`,
         });
       }
     } else if (maxTorsoAngle > thresholds.maxTorsoLeanDeg) {
@@ -3372,7 +3372,7 @@ export function detectFormFaults(
     if (maxLockoutLean > 20) {
       faults.push({
         code: "lockout_lean",
-        label: `Leaning ~${Math.round(maxLockoutLean)}° off vertical at lockout -- check for an excessive arch or lean instead of a straight bar path overhead`,
+        label: `Leaning ~${Math.round(maxLockoutLean)}° off vertical at lockout, check for an excessive arch or lean instead of a straight bar path overhead`,
       });
     }
   }

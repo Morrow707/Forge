@@ -125,7 +125,7 @@ export function TestingDayImportDialog({
         <DialogHeader>
           <DialogTitle>Import Testing Day Results</DialogTitle>
           <DialogDescription>
-            Photograph a combine/testing results sheet -- review the numbers before they save.
+            Photograph a combine/testing results sheet, review the numbers before they save.
           </DialogDescription>
         </DialogHeader>
 
@@ -162,7 +162,7 @@ export function TestingDayImportDialog({
                         <SelectValue placeholder="Match athlete" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Unmatched -- skip</SelectItem>
+                        <SelectItem value="none">Unmatched, skip</SelectItem>
                         {roster.map((a) => (
                           <SelectItem key={a.id} value={String(a.id)}>
                             {a.name}

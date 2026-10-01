@@ -73,7 +73,7 @@ export function DebugConsole() {
         >
           <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
             <span className="font-mono text-[11px] font-semibold text-white/80">
-              DEBUG CONSOLE -- {entries.length} lines
+              DEBUG CONSOLE, {entries.length} lines
               {buildLabel ? <span className="ml-2 text-primary">{buildLabel}</span> : null}
             </span>
             <div className="flex items-center gap-1">

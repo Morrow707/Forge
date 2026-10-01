@@ -72,7 +72,7 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
     path: "/for-athletes",
     title: "For athletes",
     description:
-      "Your programming, your lift history and your own record of every session -- on the phone you already train with.",
+      "Your programming, your lift history and your own record of every session, on the phone you already train with.",
     index: true,
     priority: 0.9,
     image: "/marketing/shot-trophies.png",

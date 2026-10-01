@@ -176,7 +176,7 @@ export function AcwrHistoryDialog({
             {athleteName}'s Training Load
           </DialogTitle>
           <DialogDescription>
-            Acute (7-day) vs. chronic (28-day average) training load -- a general
+            Acute (7-day) vs. chronic (28-day average) training load, a general
             load-management guideline, not a medical diagnosis.
           </DialogDescription>
         </DialogHeader>

@@ -39,14 +39,14 @@ export const MOVEMENTS: Movement[] = [
       "How much the bar slowed from the first rep to the last",
     ],
     caveat:
-      "Filming from behind means forward-and-back drift lands on the depth axis, which a single camera estimates rather than measures -- so it is the least reliable number in the set. Side-on gives a better answer to that specific question and a worse one to everything else.",
+      "Filming from behind means forward-and-back drift lands on the depth axis, which a single camera estimates rather than measures, so it is the least reliable number in the set. Side-on gives a better answer to that specific question and a worse one to everything else.",
   },
   {
     slug: "bench-press",
     name: "Bench press",
     mode: "Bar path",
     filming:
-      "Any angle you can film from is an angle Forge will measure -- see the caveat for what each one costs. Square to the side, camera level with the bar, is the most accurate, because it is the only view where a lying athlete's own height can be used to set real-world scale. From the foot of the bench or behind the head, scale comes from shoulder breadth instead, which works from those angles and is looser.",
+      "Any angle you can film from is an angle Forge will measure, see the caveat for what each one costs. Square to the side, camera level with the bar, is the most accurate, because it is the only view where a lying athlete's own height can be used to set real-world scale. From the foot of the bench or behind the head, scale comes from shoulder breadth instead, which works from those angles and is looser.",
     measures: [
       "Bar speed through the press",
       "Range of motion from chest to lockout",
@@ -54,7 +54,7 @@ export const MOVEMENTS: Movement[] = [
       "Rep count and tempo",
     ],
     caveat:
-      "Bench is the only lift Forge tracks where the athlete is lying down, and that costs it a ruler. A lying body shows its true length only when it lies ACROSS the frame; filmed from the foot of the bench or behind the head it points at the lens, so height cannot be read and scale falls to shoulder breadth alone. Shoulder breadth is a population average against height and can be out by around a tenth on build alone, so distances -- range of motion above all -- are the numbers to treat with most suspicion from those angles. The set is still measured and still reported; it is a wider error bar, not a refusal.",
+      "Bench is the only lift Forge tracks where the athlete is lying down, and that costs it a ruler. A lying body shows its true length only when it lies ACROSS the frame; filmed from the foot of the bench or behind the head it points at the lens, so height cannot be read and scale falls to shoulder breadth alone. Shoulder breadth is a population average against height and can be out by around a tenth on build alone, so distances, range of motion above all, are the numbers to treat with most suspicion from those angles. The set is still measured and still reported; it is a wider error bar, not a refusal.",
   },
   {
     slug: "pendlay-row",
@@ -76,7 +76,7 @@ export const MOVEMENTS: Movement[] = [
     name: "Box jump",
     mode: "Jump",
     filming:
-      "Side-on, far enough back that the athlete and the whole box stay in frame at the top of the jump. Landscape, and keep the phone still -- this mode reads the box's top edge out of the footage.",
+      "Side-on, far enough back that the athlete and the whole box stay in frame at the top of the jump. Landscape, and keep the phone still, this mode reads the box's top edge out of the footage.",
     measures: [
       "Jump height",
       "Horizontal distance travelled",
@@ -84,7 +84,7 @@ export const MOVEMENTS: Movement[] = [
       "Reactive strength index",
     ],
     caveat:
-      "Height is measured against the box's top surface, found by the tracker in the footage. A box that blends into the floor, a cluttered background behind it, or a box partly out of frame all make that read fail -- and when it does, the set is saved with a note saying so rather than reported with a number nobody should trust.",
+      "Height is measured against the box's top surface, found by the tracker in the footage. A box that blends into the floor, a cluttered background behind it, or a box partly out of frame all make that read fail, and when it does, the set is saved with a note saying so rather than reported with a number nobody should trust.",
   },
 ];
 

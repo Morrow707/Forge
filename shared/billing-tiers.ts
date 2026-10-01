@@ -182,7 +182,7 @@ export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
     id: "custom_colors",
     label: "Custom Colors",
     monthlyPriceCents: 999,
-    description: "Exact hex colors, eyedropper, WCAG contrast guardrail -- logo and a primary color are already free at every tier.",
+    description: "Exact hex colors, eyedropper, WCAG contrast guardrail, logo and a primary color are already free at every tier.",
   },
   team_identity: {
     id: "team_identity",
@@ -225,7 +225,7 @@ export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
     id: "personal_page",
     label: "Personal Page",
     monthlyPriceCents: 999,
-    description: "Recolor your athletes' exercise-logging screen -- the backdrop, the Watch Demo button, the completed-set indicator, and the set-paging arrows -- all yours, not just Forge's defaults.",
+    description: "Recolor your athletes' exercise-logging screen, the backdrop, the Watch Demo button, the completed-set indicator, and the set-paging arrows, all yours, not just Forge's defaults.",
   },
 };
 

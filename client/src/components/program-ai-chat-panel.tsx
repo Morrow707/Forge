@@ -100,7 +100,7 @@ export function ProgramAiChatPanel({
   async function handleCopy(message: ProgramChatMessage) {
     const copied = await copyToClipboard(message.content);
     if (!copied) {
-      toast.error("Couldn't copy -- try selecting the text instead");
+      toast.error("Couldn't copy, try selecting the text instead");
       return;
     }
     toast.success("Message copied");
@@ -139,7 +139,7 @@ export function ProgramAiChatPanel({
     // chance to succeed before the athlete has to notice and resend by hand.
     retry: 2,
     retryDelay: (attempt) => 1000 * 2 ** attempt,
-    onError: () => toast.error("Couldn't send that -- try again"),
+    onError: () => toast.error("Couldn't send that, try again"),
   });
 
   const [thinkingStep, setThinkingStep] = useState(0);
@@ -197,7 +197,7 @@ export function ProgramAiChatPanel({
         </button>
         {open && (
           <CardDescription>
-            Describe what you want -- the AI rewrites the program and applies it immediately.
+            Describe what you want, the AI rewrites the program and applies it immediately.
           </CardDescription>
         )}
       </CardHeader>

@@ -165,7 +165,7 @@ function NoCoachCard() {
       <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
         <Trophy className="h-10 w-10 text-muted-foreground" />
         <p className="text-muted-foreground">
-          The leaderboard ranks you against your coach's roster -- you'll see it once you join a
+          The leaderboard ranks you against your coach's roster, you'll see it once you join a
           team.
         </p>
       </CardContent>

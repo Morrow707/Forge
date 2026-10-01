@@ -142,7 +142,7 @@ export default function AdminUsers() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast.success("MFA reset -- they can log in with just their password now");
+      toast.success("MFA reset, they can log in with just their password now");
       setMfaResetTarget(null);
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't reset MFA"),
@@ -362,7 +362,7 @@ export default function AdminUsers() {
       {data && users.length === data.limit && (
         <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
           <ShieldAlert className="h-3.5 w-3.5" />
-          Showing the first {data.limit} results -- narrow your search to see more.
+          Showing the first {data.limit} results, narrow your search to see more.
         </p>
       )}
 
@@ -397,8 +397,8 @@ export default function AdminUsers() {
             <DialogTitle>Change role?</DialogTitle>
             <DialogDescription>
               {roleChangeTarget?.name} will become a{roleChangeTarget?.role === "admin" ? "n" : ""}{" "}
-              <strong className="capitalize">{roleChangeTarget?.role}</strong>, effective immediately
-              -- this changes what they can see and do the next time they load the app.
+              <strong className="capitalize">{roleChangeTarget?.role}</strong>, effective immediately.
+              This changes what they can see and do the next time they load the app.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

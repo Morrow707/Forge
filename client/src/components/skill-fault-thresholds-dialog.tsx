@@ -94,7 +94,7 @@ export function SkillFaultThresholdsDialog({
           <>
         <p className="text-sm text-muted-foreground">
           These control how sensitive the camera tracker's automatic fault flags are for sprint
-          and swing/throw mechanics. They started as general coaching-literature defaults --
+          and swing/throw mechanics. They started as general coaching-literature defaults,
           adjust any of them if they're too sensitive (or not sensitive enough) for your athletes.
         </p>
         <div className="space-y-4">

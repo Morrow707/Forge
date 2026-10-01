@@ -125,7 +125,7 @@ export function ManageRosterGroupsDialog({
           ))}
           {groups.length === 0 && (
             <p className="text-xs text-muted-foreground">
-              No groups left -- add one below, or close this and the default Group A/B/C split
+              No groups left, add one below, or close this and the default Group A/B/C split
               comes back.
             </p>
           )}

@@ -309,7 +309,7 @@ export function compare(
     return {
       ok: false,
       reason: "combo",
-      detail: `the title goes on to a ${other} -- a complex or a sequence, not this lift alone`,
+      detail: `the title goes on to a ${other}, a complex or a sequence, not this lift alone`,
     };
   }
   if (titleSig.head !== exSig.head) {

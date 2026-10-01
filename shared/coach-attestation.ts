@@ -24,7 +24,7 @@ I am adding an athlete under the age of 13 to my roster on Forge.
 I confirm that:
 
 - A parent or legal guardian of this athlete has given permission for this athlete to use Forge as part of my program, and I am relaying that permission as the program's agent.
-- I have told that parent or guardian what Forge collects -- training logs, and, where they turn it on, video of their child training and the measurements taken from it.
+- I have told that parent or guardian what Forge collects, training logs, and, where they turn it on, video of their child training and the measurements taken from it.
 - Forge itself has not verified this permission and has captured no signature from the parent or guardian. My confirmation here is the only record of it.
 - The parent or guardian can be reached at the email address I have supplied, and camera tracking stays off for this athlete until they turn it on themselves.
 

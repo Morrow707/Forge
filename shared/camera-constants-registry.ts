@@ -110,7 +110,7 @@ export const CAMERA_CONSTANTS: CameraConstant[] = [
     basis:
       "Derived from geometry, not from footage: a 0.45m plate against grips of 0.40-0.81m lands at 0.56-1.13, and perspective pushes it to about 1.6 at 45 degrees off square. 2.0 keeps a margin above that.",
     revisedBy:
-      "The object-lock telemetry's refusal counts and accepted distances. It is refusing almost everything today, which is correct on the takes seen so far -- one box was 3.4x the hand span and was a rack upright.",
+      "The object-lock telemetry's refusal counts and accepted distances. It is refusing almost everything today, which is correct on the takes seen so far, one box was 3.4x the hand span and was a rack upright.",
   },
   {
     name: "MIN_PLAUSIBILITY_BASELINE_MS",
@@ -130,7 +130,7 @@ export const CAMERA_CONSTANTS: CameraConstant[] = [
     file: "shared/cohort-norms.ts",
     decides: "The smallest group a percentile may describe.",
     basis:
-      "Not an anonymity floor -- that is 5 and answers a different question. Thirty is the minimum for a percentile to mean anything.",
+      "Not an anonymity floor, that is 5 and answers a different question. Thirty is the minimum for a percentile to mean anything.",
     revisedBy: null,
   },
 ];

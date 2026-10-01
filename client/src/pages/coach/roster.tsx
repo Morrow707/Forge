@@ -114,7 +114,7 @@ const PHOTO_IMPORT_OPTIONS: { kind: PhotoImportKind; label: string; description:
   {
     kind: "player-intake",
     label: "Player Intake Sheet",
-    description: "New tryout/sign-up sheet -- creates claim codes",
+    description: "New tryout/sign-up sheet, creates claim codes",
     icon: UserPlus2,
   },
 ];
@@ -396,7 +396,7 @@ export default function CoachRoster() {
     onSuccess: (result: { athleteName: string }) => {
       setAddFreeAgentOpen(false);
       setFreeAgentEmail("");
-      toast.success(`Invite sent to ${result.athleteName} -- they'll show up on your roster once they accept`);
+      toast.success(`Invite sent to ${result.athleteName}, they'll show up on your roster once they accept`);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not send that invite"),
   });
@@ -1302,7 +1302,7 @@ export default function CoachRoster() {
             <DialogTitle>Add Free Agent</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Send an existing athlete account an invite by email -- they have to accept it before
+            Send an existing athlete account an invite by email, they have to accept it before
             they show up on your roster, and it only works for athletes who aren't already
             coached by someone else.
           </p>
@@ -1430,7 +1430,7 @@ export default function CoachRoster() {
         title="Delete this team?"
         description={
           deleteTeamTarget
-            ? `${deleteTeamTarget.name} will be deleted, along with its ${deleteTeamTarget.memberCount} membership${deleteTeamTarget.memberCount === 1 ? "" : "s"}, any team challenges and any game days. The athletes themselves stay on your roster with all of their training and history -- only the grouping goes.`
+            ? `${deleteTeamTarget.name} will be deleted, along with its ${deleteTeamTarget.memberCount} membership${deleteTeamTarget.memberCount === 1 ? "" : "s"}, any team challenges and any game days. The athletes themselves stay on your roster with all of their training and history, only the grouping goes.`
             : ""
         }
         confirmLabel="Delete team"

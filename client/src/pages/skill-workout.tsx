@@ -204,7 +204,7 @@ function SkillWorkoutPageInner() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
-      toast.success(day?.completed ? "Marked not done" : "Nice work -- marked done");
+      toast.success(day?.completed ? "Marked not done" : "Nice work, marked done");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't update that"),
   });
@@ -388,7 +388,7 @@ function SkillWorkoutPageInner() {
                             a title and an empty box is not something an athlete can execute. */}
                         <p className="text-xs text-muted-foreground">
                           Prescribed: {ex.prescribedSets} x {ex.reps}
-                          {ex.restSeconds != null && ` -- rest ${ex.restSeconds}s`}
+                          {ex.restSeconds != null && `, rest ${ex.restSeconds}s`}
                         </p>
                         {ex.targets && ex.targets.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">

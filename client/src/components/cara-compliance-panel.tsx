@@ -130,7 +130,7 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Tracks countable athletically-related activity time against a weekly cap. Off by
-            default -- turn it on only if your program needs it. Once set, each athlete's
+            default, turn it on only if your program needs it. Once set, each athlete's
             training session starts timing itself the moment they submit their daily check-in.
           </p>
           <div className="flex items-end gap-2">
@@ -313,7 +313,7 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
               <Input
                 value={logNote}
                 onChange={(e) => setLogNote(e.target.value)}
-                placeholder="e.g. Film review -- last week's game"
+                placeholder="e.g. Film review, last week's game"
               />
             </div>
           </div>

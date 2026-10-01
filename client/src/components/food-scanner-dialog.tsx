@@ -217,8 +217,8 @@ export function FoodScannerDialog({
         const granted = await ensureCameraPermission();
         if (cancelled) return;
         if (!granted) {
-          setCameraError("Camera access denied -- enable it for Forge in Settings.");
-          setPhotoError("Camera access denied -- enable it for Forge in Settings, or upload a photo instead.");
+          setCameraError("Camera access denied, enable it for Forge in Settings.");
+          setPhotoError("Camera access denied, enable it for Forge in Settings, or upload a photo instead.");
           return;
         }
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -233,8 +233,8 @@ export function FoodScannerDialog({
         setCameraStream(stream);
       } catch {
         if (!cancelled) {
-          setCameraError("Couldn't access the camera -- check permissions.");
-          setPhotoError("Couldn't access the camera -- check permissions, or upload a photo instead.");
+          setCameraError("Couldn't access the camera, check permissions.");
+          setPhotoError("Couldn't access the camera, check permissions, or upload a photo instead.");
         }
       }
     };
@@ -312,11 +312,11 @@ export function FoodScannerDialog({
             await handleBarcodeDetected(barcode);
           },
           () => {
-            if (!cancelled) setCameraError("Couldn't access the camera -- check permissions.");
+            if (!cancelled) setCameraError("Couldn't access the camera, check permissions.");
           },
         );
       } catch {
-        if (!cancelled) setCameraError("Couldn't access the camera -- check permissions.");
+        if (!cancelled) setCameraError("Couldn't access the camera, check permissions.");
       }
     })();
 
@@ -355,7 +355,7 @@ export function FoodScannerDialog({
       setServings("1");
       setMode("confirm");
     } catch {
-      toast.error("Couldn't find that product -- try search or enter it manually.");
+      toast.error("Couldn't find that product, try search or enter it manually.");
       setMode("search");
     }
   }
@@ -376,7 +376,7 @@ export function FoodScannerDialog({
       setSearching(false);
       // The server says when name search simply isn't configured (503) -- that is
       // not something retrying fixes, so don't tell the athlete to try again.
-      toast.error(err.message || "Search failed -- try again");
+      toast.error(err.message || "Search failed, try again");
     },
   });
 
@@ -426,7 +426,7 @@ export function FoodScannerDialog({
         });
       }
     },
-    onError: () => toast.error("Couldn't log that -- try again"),
+    onError: () => toast.error("Couldn't log that, try again"),
   });
 
   async function analyzePhoto(photo: CapturedPhoto) {
@@ -439,7 +439,7 @@ export function FoodScannerDialog({
       setMode("photo-review");
     } catch (err) {
       const message =
-        err instanceof ApiError ? err.message : "Couldn't analyze that photo -- try again or enter it manually.";
+        err instanceof ApiError ? err.message : "Couldn't analyze that photo, try again or enter it manually.";
       setPhotoError(message);
     } finally {
       setAnalyzingPhoto(false);
@@ -459,7 +459,7 @@ export function FoodScannerDialog({
       const photo = await downscalePhotoFile(file);
       await analyzePhoto(photo);
     } catch {
-      setPhotoError("Couldn't read that image -- try another one.");
+      setPhotoError("Couldn't read that image, try another one.");
     }
   }
 
@@ -527,7 +527,7 @@ export function FoodScannerDialog({
         });
       }
     },
-    onError: () => toast.error("Couldn't log one or more of those items -- try again"),
+    onError: () => toast.error("Couldn't log one or more of those items, try again"),
   });
 
   function pickSearchResult(result: FoodCandidate) {
@@ -659,7 +659,7 @@ export function FoodScannerDialog({
         {mode === "photo-review" && (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Review and adjust the estimates below -- these are Claude's best guess from the
+              Review and adjust the estimates below, these are Claude's best guess from the
               photo, not a database lookup.
             </p>
             <div className="max-h-96 space-y-3 overflow-y-auto">

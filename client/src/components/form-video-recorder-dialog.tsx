@@ -182,7 +182,7 @@ export function FormVideoRecorderDialog({
       ensureCameraPermission().then((granted) => {
         if (cancelled) return;
         if (!granted) {
-          setCameraError("Camera access denied -- enable it for Forge in Settings.");
+          setCameraError("Camera access denied, enable it for Forge in Settings.");
           return;
         }
         navigator.mediaDevices
@@ -302,13 +302,13 @@ export function FormVideoRecorderDialog({
       // actually happened and leave the dialog open so the athlete still has
       // the clip and can retry.
       if (!persistedVideoIdRef.current) {
-        toast.error("Couldn't save this video on your device -- storage may be full.");
+        toast.error("Couldn't save this video on your device, storage may be full.");
         return;
       }
       if (!hasWarnedAboutQueueing()) {
         markWarnedAboutQueueing();
         toast.info(
-          "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+          "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
           { duration: 10000 },
         );
       }
@@ -366,7 +366,7 @@ export function FormVideoRecorderDialog({
           // not a final loss, whenever persistence actually took.
           toast.error(
             persistedVideoIdRef.current
-              ? "Upload didn't go through -- it's saved on your device and will finish uploading automatically once you're back online."
+              ? "Upload didn't go through, it's saved on your device and will finish uploading automatically once you're back online."
               : "Upload failed — try again",
           );
           setStep("preview");

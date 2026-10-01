@@ -55,7 +55,7 @@ export default function MovementScreensPage() {
     },
     onSuccess: (battery) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/movement-screens/batteries"] });
-      toast.success(`Saved as "${battery.name}" -- edit it freely`);
+      toast.success(`Saved as "${battery.name}", edit it freely`);
       setEditingId(battery.id);
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't duplicate that battery"),
@@ -229,7 +229,7 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
       <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Battery</DialogTitle>
-          <DialogDescription>Your own copy -- editing this never touches Forge's version.</DialogDescription>
+          <DialogDescription>Your own copy, editing this never touches Forge's version.</DialogDescription>
         </DialogHeader>
         {isError ? (
           // The editor would otherwise sit on a shimmer forever, so a coach waits on a battery

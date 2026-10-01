@@ -419,7 +419,7 @@ export function AvHorizontalLoadTrackerDialog({
       movementProfile?.maxPlausibleSprintSpeedYardsPerSec ?? undefined,
     );
     if (!manualResult) {
-      toast.error("Finish must be after start (and distance must be set) -- scrub back and try again");
+      toast.error("Finish must be after start (and distance must be set), scrub back and try again");
       return;
     }
     finishWithResult(manualResult);
@@ -468,7 +468,7 @@ export function AvHorizontalLoadTrackerDialog({
           if (!hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
             toast.info(
-              "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+              "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
               { duration: 10000 },
             );
           }
@@ -609,7 +609,7 @@ export function AvHorizontalLoadTrackerDialog({
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
                 Couldn't auto-detect a clean checkpoint crossing from this take. Scrub the clip below and mark Start
-                and Finish by hand -- the time will still count.
+                and Finish by hand, the time will still count.
               </p>
             </div>
             {videoUrl && (
@@ -629,7 +629,7 @@ export function AvHorizontalLoadTrackerDialog({
             </div>
             {manualStartTime != null && (
               <p className="text-center text-xs text-muted-foreground">
-                Start marked at {manualStartTime.toFixed(2)}s -- scrub to the finish and tap Mark Finish.
+                Start marked at {manualStartTime.toFixed(2)}s, scrub to the finish and tap Mark Finish.
               </p>
             )}
             <DialogFooter>
@@ -662,7 +662,7 @@ export function AvHorizontalLoadTrackerDialog({
             {result.likelyGlitch && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                This time looks faster than realistically possible -- almost certainly a tracking glitch, not a
+                This time looks faster than realistically possible, almost certainly a tracking glitch, not a
                 real split. Recommend retaking before saving.
               </div>
             )}

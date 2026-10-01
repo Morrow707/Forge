@@ -146,7 +146,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
         Joint range-of-motion readings from a goniometer, compared against standard clinical
-        normal ranges as a starting signal -- not a diagnosis. Flag a reading as this athlete's
+        normal ranges as a starting signal, not a diagnosis. Flag a reading as this athlete's
         own normal to stop re-flagging it going forward.
       </p>
 

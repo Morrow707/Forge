@@ -101,7 +101,7 @@ export function ForgeAiContent() {
       setAttachedImage(null);
       setProposal(result.proposal ?? null);
     },
-    onError: () => toast.error("Couldn't send that -- try again"),
+    onError: () => toast.error("Couldn't send that, try again"),
   });
 
   const apply = useMutation({
@@ -112,9 +112,9 @@ export function ForgeAiContent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/forge-ai"] });
       setProposal(null);
-      toast.success("Applied -- Forge AI knows this now");
+      toast.success("Applied, Forge AI knows this now");
     },
-    onError: () => toast.error("Couldn't apply that -- try again"),
+    onError: () => toast.error("Couldn't apply that, try again"),
   });
 
   const retire = useMutation({
@@ -127,7 +127,7 @@ export function ForgeAiContent() {
       setRetireReason("");
       toast.success("Retired");
     },
-    onError: () => toast.error("Couldn't retire that -- a reason is required"),
+    onError: () => toast.error("Couldn't retire that, a reason is required"),
   });
 
   return (
@@ -140,7 +140,7 @@ export function ForgeAiContent() {
               Talk with Forge AI
             </CardTitle>
             <CardDescription>
-              A real conversation, not an intake form -- discuss ideas, ask questions, paste research. When something's
+              A real conversation, not an intake form, discuss ideas, ask questions, paste research. When something's
               concrete enough to teach, it'll propose an entry for you to review below.
             </CardDescription>
           </CardHeader>
@@ -152,7 +152,7 @@ export function ForgeAiContent() {
               )}
               {!isError && !isLoading && messages.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nothing taught yet -- paste an idea, a quote, a link, or just ask a question to start.
+                  Nothing taught yet, paste an idea, a quote, a link, or just ask a question to start.
                 </p>
               )}
               {messages.map((m) => (
@@ -317,7 +317,7 @@ export function ForgeAiContent() {
                       onClick={() => setRetiringId(e.id)}
                       className="mt-1 text-[10px] font-semibold text-muted-foreground hover:text-destructive"
                     >
-                      This was wrong -- retire it
+                      This was wrong, retire it
                     </button>
                   )}
                 </div>
@@ -334,7 +334,7 @@ export function ForgeAiContent() {
               <CardTitle className="text-base">Reflection findings</CardTitle>
               <CardDescription>
                 Patterns the background reflection job found in the injury/training-load data and the roster itself,
-                weighed against what's been taught. Every finding carries its own sample size -- read the number, not
+                weighed against what's been taught. Every finding carries its own sample size, read the number, not
                 just the headline.
               </CardDescription>
             </CardHeader>

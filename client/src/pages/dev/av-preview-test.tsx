@@ -312,7 +312,7 @@ export default function AvPreviewTestPage() {
         {clipUrl && (
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">
-              Native AVFoundation clip -- check sharpness against the ARKit preview test page,
+              Native AVFoundation clip, check sharpness against the ARKit preview test page,
               and that zoom/lens switches actually changed the field of view:
             </p>
             <video src={clipUrl} controls playsInline className="w-full rounded-md" />

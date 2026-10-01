@@ -262,14 +262,14 @@ export default function AdminQueryEngine() {
             <div className="space-y-1 text-xs text-muted-foreground">
               <p>
                 <span className="font-semibold text-foreground">Rows identify nobody.</span> Each
-                carries a subject code derived under a salt generated fresh for this query -- stable
+                carries a subject code derived under a salt generated fresh for this query, stable
                 within one result, different in the next, and mapped nowhere.
               </p>
               <p>
                 <span className="font-semibold text-foreground">
                   A result too small to report comes back empty,
                 </span>{" "}
-                not partial -- so a filter cannot be narrowed until one athlete matches. Each query
+                not partial, so a filter cannot be narrowed until one athlete matches. Each query
                 also spends one of a rolling 24-hour budget, which is what stops the same answer
                 being recovered by subtracting two queries that each passed the floor.
               </p>
@@ -317,8 +317,8 @@ export default function AdminQueryEngine() {
           <CardHeader>
             <CardTitle className="text-base">Filters</CardTitle>
             <CardDescription>
-              Leave anything blank to ignore it. The window applies to repeated measures -- sets,
-              wellness check-ins, skill captures -- not to profile values or an unresolved injury,
+              Leave anything blank to ignore it. The window applies to repeated measures, sets,
+              wellness check-ins, skill captures, not to profile values or an unresolved injury,
               which are true today whenever they were recorded.
             </CardDescription>
           </CardHeader>
@@ -523,7 +523,7 @@ export default function AdminQueryEngine() {
               </CardTitle>
               {rows.length === 0 && (
                 <CardDescription>
-                  Nothing to show. That means either no athlete matched, or too few did to report --
+                  Nothing to show. That means either no athlete matched, or too few did to report,
                   the two are deliberately indistinguishable from here.
                 </CardDescription>
               )}

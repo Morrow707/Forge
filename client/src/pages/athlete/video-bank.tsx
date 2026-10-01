@@ -43,7 +43,7 @@ const UNATTACHED_ROUTE = "/api/athlete/unattached-videos";
 const CAUSE_COPY: Record<UnattachedVideoCause, string> = {
   not_your_upload: "The upload was recorded under a different account.",
   assignment_not_yours: "The program this set belonged to is no longer assigned to you.",
-  no_log_for_date: "No sets were saved for the day it was filmed -- it may have saved under the next date.",
+  no_log_for_date: "No sets were saved for the day it was filmed, it may have saved under the next date.",
   exercise_not_logged: "That exercise was no longer on the day's log when the clip finished uploading.",
   set_not_logged: "That set number was no longer on the day's log when the clip finished uploading.",
   set_already_has_video: "That set already had a video by the time this one finished uploading.",
@@ -93,7 +93,7 @@ export default function AthleteVideoBank() {
       refresh();
       qc.invalidateQueries({ queryKey: [UNATTACHED_ROUTE] });
     } catch {
-      toast.error("Couldn't upload that video -- it's still saved on your device, try again later.");
+      toast.error("Couldn't upload that video, it's still saved on your device, try again later.");
     } finally {
       setUploadingId(null);
     }
@@ -121,7 +121,7 @@ export default function AthleteVideoBank() {
     <AppShell title="Video Bank">
       <p className="mb-6 text-sm text-muted-foreground">
         Videos recorded with no Wi-Fi are saved right here on your device instead of using your
-        cellular data -- they upload automatically once you're connected, or you can send them
+        cellular data, they upload automatically once you're connected, or you can send them
         now, cellular data and all.
       </p>
 
@@ -140,7 +140,7 @@ export default function AthleteVideoBank() {
             </h2>
             {pending.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                Nothing queued -- every recent clip has uploaded.
+                Nothing queued, every recent clip has uploaded.
               </p>
             ) : (
               <div className="space-y-2">
@@ -190,7 +190,7 @@ export default function AthleteVideoBank() {
               </h2>
               <p className="mb-3 text-xs text-muted-foreground">
                 These uploaded fine, but the set they were recorded for had changed by the time
-                they finished. Link one to the set it belongs to, or dismiss it -- the video is
+                they finished. Link one to the set it belongs to, or dismiss it, the video is
                 kept either way.
               </p>
               <div className="space-y-3">

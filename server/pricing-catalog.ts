@@ -73,7 +73,7 @@ export const PRICING_CATALOG: PricingCatalogItem[] = [
     key: "coaches_corner",
     category: "Coaches Corner",
     label: "Coaches Corner access",
-    description: `Per coach account, sold on its own rather than bundled into a plan. Free for rosters of ${COACHES_CORNER_FREE_AT_ATHLETE_COUNT}+ athletes. Access is still gated on subscription tier in routes.ts -- pricing it here is the first half of that change, not the whole of it.`,
+    description: `Per coach account, sold on its own rather than bundled into a plan. Free for rosters of ${COACHES_CORNER_FREE_AT_ATHLETE_COUNT}+ athletes. Access is still gated on subscription tier in routes.ts, pricing it here is the first half of that change, not the whole of it.`,
     defaultCents: COACHES_CORNER_MONTHLY_PRICE_CENTS,
   },
   {

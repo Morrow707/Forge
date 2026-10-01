@@ -719,7 +719,7 @@ export function ProgramBuilderPage({
                 </div>
                 {blocks.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    Optional -- group weeks into named phases (Hypertrophy, Peaking, Deload...) to
+                    Optional, group weeks into named phases (Hypertrophy, Peaking, Deload...) to
                     plan periodization. Assign a block to each week below once you've added one.
                   </p>
                 ) : (
@@ -780,7 +780,7 @@ export function ProgramBuilderPage({
 
             {days.length === 0 ? (
               <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
-                <p>No days yet. Add training days one at a time -- no need to plan whole weeks.</p>
+                <p>No days yet. Add training days one at a time, no need to plan whole weeks.</p>
                 <Button onClick={addDay}>
                   <Plus className="h-4 w-4" />
                   Add Day
@@ -955,7 +955,7 @@ export function ProgramBuilderPage({
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {selfAssignWeekdays.length > 0
-                    ? "Day 1 lands on the first one of these on or after your start date, and each day after that goes to the next one -- so a 3-day program stays spaced out every week instead of landing three days in a row."
+                    ? "Day 1 lands on the first one of these on or after your start date, and each day after that goes to the next one, so a 3-day program stays spaced out every week instead of landing three days in a row."
                     : "Leave blank to just run the days back-to-back starting from your start date."}
                 </p>
               </div>

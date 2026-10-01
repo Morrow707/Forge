@@ -348,7 +348,7 @@ export function VideoReviewEditorDialog({
     } catch {
       // Left dirty on purpose: the marks stay on screen and the button stays live, so a failed
       // save is a retry rather than lost work.
-      toast.error("Couldn't save the review. Your drawings are still here -- try again.");
+      toast.error("Couldn't save the review. Your drawings are still here, try again.");
     } finally {
       setSaving(false);
     }

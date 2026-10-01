@@ -1574,7 +1574,7 @@ export function WorkoutPage({
         // athlete then sees "A workout you logged offline was rejected by the server and
         // can't be synced" for a save that had already failed in front of them.
         if (isPermanentRejection) {
-          logDebug("SAVE", `classified PERMANENT (${(err as ApiError).status}) -- not queued`);
+          logDebug("SAVE", `classified PERMANENT (${(err as ApiError).status}), not queued`);
           lastPermanentRejectionRef.current = (err as ApiError).status;
           throw err;
         }
@@ -1691,7 +1691,7 @@ export function WorkoutPage({
         setHydrated(false);
         baseRevisionRef.current = null;
         qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
-        toast.info("Catching up with the saved version of this workout -- one moment.", {
+        toast.info("Catching up with the saved version of this workout, one moment.", {
           duration: 6000,
         });
         return;
@@ -1712,7 +1712,7 @@ export function WorkoutPage({
       // that loudly once it's clearly not transient, rather than never.
       consecutiveAutosaveFailuresRef.current += 1;
       if (consecutiveAutosaveFailuresRef.current === 3) {
-        toast.error("Your sets aren't saving -- reload this page and log back in if needed.", {
+        toast.error("Your sets aren't saving, reload this page and log back in if needed.", {
           duration: 15000,
         });
       }
@@ -3420,7 +3420,7 @@ function ExerciseLogContent({
               <button
                 type="button"
                 aria-label={`Ask for an easier version of ${item.exerciseName}`}
-                title="This is too hard -- ask for an easier version"
+                title="This is too hard, ask for an easier version"
                 onClick={() => setRegressOpen(true)}
                 className="text-muted-foreground transition-colors hover:text-amber-500"
               >
@@ -3558,8 +3558,8 @@ function ExerciseLogContent({
                 reference, a 45cm plate or the athlete's own height. So: weight
                 first, then record, and only where there are metrics to be had. */}
             {videoCheckMode === "ai"
-              ? "Record each set for full AI analytics -- velocity, bar path, and form."
-              : "Your coach wants a video -- record each set below."}
+              ? "Record each set for full AI analytics, velocity, bar path, and form."
+              : "Your coach wants a video, record each set below."}
             {/* Only where there are tracked numbers to lose. A video check with
                 trackingLevel "none" computes no metrics at all, so weight order
                 genuinely does not matter there and saying otherwise is noise. */}
@@ -3922,7 +3922,7 @@ function ExerciseLogContent({
                     <ShieldAlert className="h-3 w-3 shrink-0" />
                     <span>
                       {set.trustScores.some((t) => t.label === "low")
-                        ? "Tracking was shaky on at least one rep -- take those numbers with a grain of salt"
+                        ? "Tracking was shaky on at least one rep, take those numbers with a grain of salt"
                         : "Tracking mostly solid, a couple reps less certain"}
                     </span>
                   </div>
@@ -3968,7 +3968,7 @@ function ExerciseLogContent({
                         )}
                         title={
                           j.likelyTrackingGlitch
-                            ? "Way off from this set's other jumps -- likely a tracking glitch"
+                            ? "Way off from this set's other jumps, likely a tracking glitch"
                             : undefined
                         }
                       >
@@ -4742,7 +4742,7 @@ function ExerciseLogContent({
               Make {item.exerciseName} easier
             </DialogTitle>
             <DialogDescription>
-              Same movement, less of it -- fewer sets or reps, or less load. Your coach sees that
+              Same movement, less of it, fewer sets or reps, or less load. Your coach sees that
               you asked, which is the point: training lighter for weeks without them knowing is
               the thing this avoids.
             </DialogDescription>
@@ -4855,7 +4855,7 @@ function ExerciseLogContent({
               type="button"
               onClick={() => onUpdateItem({ rpe: String(opt.value) })}
               aria-pressed={Number(item.rpe) === opt.value}
-              aria-label={`RPE ${opt.value} -- ${opt.label}`}
+              aria-label={`RPE ${opt.value}, ${opt.label}`}
               title={opt.label}
               className={cn(
                 "rounded-md border py-2 text-sm font-bold transition-colors",

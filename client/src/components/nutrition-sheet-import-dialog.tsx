@@ -120,7 +120,7 @@ export function NutritionSheetImportDialog({
         <DialogHeader>
           <DialogTitle>Import Nutrition Sheet</DialogTitle>
           <DialogDescription>
-            Photograph a macro/target sheet -- review the numbers before they become an athlete's targets.
+            Photograph a macro/target sheet, review the numbers before they become an athlete's targets.
           </DialogDescription>
         </DialogHeader>
 
@@ -152,7 +152,7 @@ export function NutritionSheetImportDialog({
                       <SelectValue placeholder="Match athlete" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Unmatched ("{row.nameOnSheet}") -- skip</SelectItem>
+                      <SelectItem value="none">Unmatched ("{row.nameOnSheet}"), skip</SelectItem>
                       {roster.map((a) => (
                         <SelectItem key={a.id} value={String(a.id)}>
                           {a.name}

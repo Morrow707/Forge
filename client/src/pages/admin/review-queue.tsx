@@ -146,7 +146,7 @@ export function ReviewQueueContent() {
               Trending Across Coaches ({submissionsTotal})
             </CardTitle>
             <CardDescription>
-              No one nominated these -- two or more coaches independently added an exercise
+              No one nominated these, two or more coaches independently added an exercise
               with this exact name, which is its own signal. Approving adds it to the Forge
               library (give it a canonical name first if you want) and hands it the FORGE badge
               for every coach immediately.
@@ -252,7 +252,7 @@ export function ReviewQueueContent() {
               Reported Issues ({reportsTotal})
             </CardTitle>
             <CardDescription>
-              Problems coaches have flagged on Forge exercises -- broken links, wrong info,
+              Problems coaches have flagged on Forge exercises, broken links, wrong info,
               typos.
             </CardDescription>
           </CardHeader>

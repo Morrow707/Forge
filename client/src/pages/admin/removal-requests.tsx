@@ -53,7 +53,7 @@ export default function AdminRemovalRequestsPage() {
           ? "Marked as not removed."
           : result.deleted
             ? "Video deleted."
-            : "Marked removed -- the file was already gone.",
+            : "Marked removed, the file was already gone.",
       );
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't update that request"),

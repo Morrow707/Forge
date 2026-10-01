@@ -107,7 +107,7 @@ export function MovementKnowledgeContent() {
       setContent("");
       setProposal(result.proposal ?? null);
     },
-    onError: () => toast.error("Couldn't send that -- try again"),
+    onError: () => toast.error("Couldn't send that, try again"),
   });
 
   // Reads the uploaded library for this movement instead of waiting to be typed at. Same
@@ -122,7 +122,7 @@ export function MovementKnowledgeContent() {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setProposal(result.proposal ?? null);
     },
-    onError: () => toast.error("Couldn't read the library -- try again"),
+    onError: () => toast.error("Couldn't read the library, try again"),
   });
 
   const apply = useMutation({
@@ -135,7 +135,7 @@ export function MovementKnowledgeContent() {
       setProposal(null);
       toast.success("Applied");
     },
-    onError: () => toast.error("Couldn't apply that -- try again"),
+    onError: () => toast.error("Couldn't apply that, try again"),
   });
 
   const canSend = !!content.trim() && !send.isPending;
@@ -166,7 +166,7 @@ export function MovementKnowledgeContent() {
               Teach the Tracker: {movementType}
             </CardTitle>
             <CardDescription>
-              Describe cues, corrections, or paste a URL about {movementType.toLowerCase()} mechanics --
+              Describe cues, corrections, or paste a URL about {movementType.toLowerCase()} mechanics,
               the camera tracker's form-fault checks for this movement will use it from the moment you
               apply it.
             </CardDescription>
@@ -182,7 +182,7 @@ export function MovementKnowledgeContent() {
               )}
               {!isError && !isLoading && messages.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nothing taught yet for {movementType} -- try something like "knees should break
+                  Nothing taught yet for {movementType}, try something like "knees should break
                   parallel, don't let the threshold get more lenient than 95 degrees" or paste a URL
                   to an article on the movement.
                 </p>
@@ -230,7 +230,7 @@ export function MovementKnowledgeContent() {
                 </p>
                 {changedFields.length === 0 && !cameraNotesChanged ? (
                   <p className="text-xs text-muted-foreground">
-                    No threshold changes in this proposal -- just the note below.
+                    No threshold changes in this proposal, just the note below.
                   </p>
                 ) : (
                   <div className="space-y-1 rounded bg-background/60 p-2 font-mono text-xs">
@@ -318,8 +318,8 @@ export function MovementKnowledgeContent() {
             </CardTitle>
             <CardDescription>
               {activeProfile
-                ? `Version ${activeProfile.version} -- live for every ${movementType} set tracked right now.`
-                : "Nothing applied yet -- the tracker is using its built-in hardcoded defaults for this movement."}
+                ? `Version ${activeProfile.version}, live for every ${movementType} set tracked right now.`
+                : "Nothing applied yet, the tracker is using its built-in hardcoded defaults for this movement."}
             </CardDescription>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-y-auto">

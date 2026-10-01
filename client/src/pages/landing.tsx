@@ -108,12 +108,12 @@ const AI_CARDS = [
   {
     icon: Video,
     title: "AI Form Check",
-    body: "Film a set on the phone that's already recording it and get feedback on bar path, depth, and rep quality -- the same kind of notes a coach standing right there would give.",
+    body: "Film a set on the phone that's already recording it and get feedback on bar path, depth, and rep quality, the same kind of notes a coach standing right there would give.",
   },
   {
     icon: Bot,
     title: "AI Chat Coach",
-    body: "Free Agents get a training partner built into the app -- ask a question about today's session and get an answer that already knows the program, the numbers, and the history.",
+    body: "Free Agents get a training partner built into the app, ask a question about today's session and get an answer that already knows the program, the numbers, and the history.",
   },
   {
     icon: Activity,
@@ -154,7 +154,7 @@ const AUDIENCES = [
   {
     icon: Dumbbell,
     title: "Coaches",
-    body: "Build programs in minutes with an AI that understands periodization, assign them to a whole roster, and see exactly how every athlete is responding -- not just whether they showed up.",
+    body: "Build programs in minutes with an AI that understands periodization, assign them to a whole roster, and see exactly how every athlete is responding, not just whether they showed up.",
   },
   {
     icon: Target,
@@ -164,7 +164,7 @@ const AUDIENCES = [
   {
     icon: Sparkles,
     title: "Free Agents",
-    body: "Training on your own? Forge's AI becomes your coach -- building programs, answering questions, and adjusting based on how you're actually recovering.",
+    body: "Training on your own? Forge's AI becomes your coach, building programs, answering questions, and adjusting based on how you're actually recovering.",
   },
 ];
 
@@ -269,7 +269,7 @@ export default function LandingPage() {
             </Link>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Free to get started -- no credit card required.
+            Free to get started, no credit card required.
           </p>
         </div>
 
@@ -304,8 +304,8 @@ export default function LandingPage() {
               Watch it get built.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Tell Forge's AI what you're training for -- a 5-day collegiate baseball split, a
-              return-to-play block, a 4-week peaking cycle -- and it drafts the whole thing:
+              Tell Forge's AI what you're training for, a 5-day collegiate baseball split, a
+              return-to-play block, a 4-week peaking cycle, and it drafts the whole thing:
               exercises, sets, reps, supersets, and rest, pulled from your own exercise library.
               Keep chatting with it right inside the builder to adjust anything, on any program,
               at any time.
@@ -332,7 +332,7 @@ export default function LandingPage() {
             </h2>
             <p className="mt-4 text-muted-foreground">
               The AI program builder is just the start. The same intelligence shows up
-              everywhere training actually takes time -- reading form, reading recovery, and
+              everywhere training actually takes time, reading form, reading recovery, and
               turning raw numbers into plain answers.
             </p>
           </div>
@@ -371,13 +371,13 @@ export default function LandingPage() {
             </h2>
             <p className="mt-4 text-muted-foreground">
               Every logged set rolls up into a muscle load map, weekly volume and intensity
-              trends, and an acute:chronic workload ratio -- automatically, with zero extra
+              trends, and an acute:chronic workload ratio, automatically, with zero extra
               data entry. Bar speed, jump height, and rep-by-rep velocity decay come straight
               from the camera your athletes are already using.
             </p>
             <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Video className="h-4 w-4 shrink-0 text-primary" />
-              No wearables, no extra hardware -- just a phone camera.
+              No wearables, no extra hardware, just a phone camera.
             </div>
             {/* Directly under the claim it qualifies. It first went in the pricing
                 section below, which reads like the right place and is not: that whole
@@ -407,7 +407,7 @@ export default function LandingPage() {
               Earned and saved.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Trophies stack like a real collection -- every threshold an athlete ever crosses
+              Trophies stack like a real collection, every threshold an athlete ever crosses
               stays unlocked, even after a streak breaks. Locked ones stay visible too, greyed
               out with exactly what it takes to earn them, so the next goal is never a mystery.
               Team leaderboards and daily streaks turn consistency into something everyone can
@@ -435,7 +435,7 @@ export default function LandingPage() {
               in seconds.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Snap a photo, scan a barcode, or type it in -- Forge fills in the macros (and the
+              Snap a photo, scan a barcode, or type it in, Forge fills in the macros (and the
               micros) automatically and rolls them up against whatever targets the coach set.
               No spreadsheets, no manual math, just a running total that updates the moment
               food gets logged.
@@ -452,7 +452,7 @@ export default function LandingPage() {
               Everything else a program needs
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Forge isn't just a program builder -- it's the whole operation, from injury-risk
+              Forge isn't just a program builder, it's the whole operation, from injury-risk
               flagging to the compliance report.
             </p>
           </div>
@@ -510,7 +510,7 @@ export default function LandingPage() {
               No hidden fees. Ever.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              One price, shown up front, for exactly what's included -- whether you're training
+              One price, shown up front, for exactly what's included, whether you're training
               on your own or running a whole program. Every plan starts with a 14-day free trial
               with everything unlocked, no credit card required.
             </p>
@@ -559,7 +559,7 @@ export default function LandingPage() {
                 </h3>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Priced by roster size -- pay for the athletes you actually coach.
+                Priced by roster size, pay for the athletes you actually coach.
               </p>
               <div className="mt-6 overflow-x-auto">
                 <table className="w-full text-sm">
@@ -591,16 +591,16 @@ export default function LandingPage() {
             <Snowflake className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
             <p className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">Off-season is free.</span> Pause
-              any plan and your dashboards, videos, and history stay exactly as you left them --
+              any plan and your dashboards, videos, and history stay exactly as you left them,
               no charge while you're not actively training or coaching. Resume whenever you're
               back.
             </p>
           </div>
 
           <p className="mx-auto mt-6 max-w-3xl text-center text-xs text-muted-foreground">
-            Pricing reflects our launch plan and isn't live for billing yet -- signing up today
+            Pricing reflects our launch plan and isn't live for billing yet, signing up today
             is free either way. Optional add-ons (branding, extra video storage, sport
-            specialists) are listed in full on the pricing page -- nothing is charged that
+            specialists) are listed in full on the pricing page, nothing is charged that
             isn't shown there first.
           </p>
         </div>

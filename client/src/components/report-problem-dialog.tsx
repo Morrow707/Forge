@@ -56,7 +56,7 @@ export function ReportProblemDialog({
       await apiRequest("POST", "/api/report-problem", form);
     },
     onSuccess: () => {
-      toast.success("Thanks -- we got your report.");
+      toast.success("Thanks, we got your report.");
       reset();
       onOpenChange(false);
     },
@@ -78,7 +78,7 @@ export function ReportProblemDialog({
             Report a problem
           </DialogTitle>
           <DialogDescription>
-            Tell us what happened -- a screenshot helps but isn't required. This goes straight to
+            Tell us what happened, a screenshot helps but isn't required. This goes straight to
             the Forge team, not your coach.
           </DialogDescription>
         </DialogHeader>

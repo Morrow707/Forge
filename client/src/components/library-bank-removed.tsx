@@ -27,7 +27,7 @@ export function LibraryBankRemoved({
       <Card className="mt-6">
         <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
           <p className="max-w-sm text-muted-foreground">
-            There's no standalone bank to browse here -- everything comes from your AI-built
+            There's no standalone bank to browse here, everything comes from your AI-built
             programs.
           </p>
           <Button onClick={() => navigate(redirectTo)}>

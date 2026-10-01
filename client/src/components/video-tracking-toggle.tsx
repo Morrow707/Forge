@@ -68,7 +68,7 @@ export function VideoTrackingToggle({
       aria-pressed={isOn}
       title={
         isOn
-          ? "Camera tracking + AI form-check is on for this exercise -- click to turn off"
+          ? "Camera tracking + AI form-check is on for this exercise, click to turn off"
           : "Turn on camera tracking (bar path, velocity, power, ROM, form faults) + AI form-check"
       }
       onClick={() =>

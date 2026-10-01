@@ -39,7 +39,7 @@ if (!emailEnabled) {
   // developer would notice. Verify a sending domain in Resend and set
   // RESEND_FROM_EMAIL to fix -- see render.yaml's own comment on this var.
   console.warn(
-    "Email sending is using Resend's SANDBOX address (RESEND_FROM_EMAIL not set) -- " +
+    "Email sending is using Resend's SANDBOX address (RESEND_FROM_EMAIL not set), " +
       "emails to any address other than this Resend account's own verified email will silently fail to deliver. " +
       "Verify a domain in Resend and set RESEND_FROM_EMAIL before relying on guardian-invite or other real recipient emails.",
   );

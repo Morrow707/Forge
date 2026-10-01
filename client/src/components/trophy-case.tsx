@@ -143,7 +143,7 @@ export function TrophyCase({
     <div className="space-y-5">
       {trophies.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          {emptyHint ?? "No trophies unlocked yet -- log workouts to start earning them."}
+          {emptyHint ?? "No trophies unlocked yet, log workouts to start earning them."}
         </p>
       )}
       {CATEGORY_ORDER.map((category) => (

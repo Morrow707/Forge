@@ -143,7 +143,7 @@ export function SkillProgramListPage({
         return;
       }
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-programs`] });
-      toast.success("Draft created -- review it before assigning it to anything");
+      toast.success("Draft created, review it before assigning it to anything");
       if (result.note) toast.info(result.note, { duration: 10000 });
       setAiDialogOpen(false);
       setAiPrompt("");
@@ -363,7 +363,7 @@ export function SkillProgramListPage({
               placeholder="e.g. eight weeks of pitching mechanics, three sessions a week, mostly command work and a long-toss progression"
             />
             <p className="text-xs text-muted-foreground">
-              You get an editable draft to review -- nothing is assigned to your calendar until you
+              You get an editable draft to review, nothing is assigned to your calendar until you
               say so.
             </p>
           </div>

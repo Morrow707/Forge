@@ -289,7 +289,7 @@ function queueLogInline(
   const trimmedEntry = trimmed ? { ...entry, payload: trimmed } : null;
   if (trimmedEntry && trySetQueue([...others, trimmedEntry])) {
     toast.warning(
-      "Ran out of offline storage -- your set was saved, but the skeleton replay for it was dropped.",
+      "Ran out of offline storage, your set was saved, but the skeleton replay for it was dropped.",
       { duration: 10000 },
     );
     return trimmedEntry;
@@ -304,7 +304,7 @@ function queueLogInline(
   const keptEntry = trimmedEntry ?? entry;
   if (trySetQueue([...othersTrimmed, keptEntry])) {
     toast.warning(
-      "Ran out of offline storage -- your sets were all saved, but their skeleton replays were dropped.",
+      "Ran out of offline storage, your sets were all saved, but their skeleton replays were dropped.",
       { duration: 10000 },
     );
     return keptEntry;
@@ -316,7 +316,7 @@ function queueLogInline(
   for (let drop = 1; drop <= byAge.length; drop++) {
     if (trySetQueue([...byAge.slice(drop), keptEntry])) {
       toast.warning(
-        "Ran out of offline storage -- an older unsynced day was dropped to make room for this one.",
+        "Ran out of offline storage, an older unsynced day was dropped to make room for this one.",
         { duration: 10000 },
       );
       return keptEntry;
@@ -325,14 +325,14 @@ function queueLogInline(
 
   if (trimmedEntry && trySetQueue([trimmedEntry])) {
     toast.warning(
-      "Ran out of offline storage -- your set was saved, but the skeleton replay for it was dropped.",
+      "Ran out of offline storage, your set was saved, but the skeleton replay for it was dropped.",
       { duration: 10000 },
     );
     return trimmedEntry;
   }
 
   toast.error(
-    "Out of offline storage -- this workout could NOT be saved on your device. Write your numbers down, or reconnect and log them again before closing the app.",
+    "Out of offline storage, this workout could NOT be saved on your device. Write your numbers down, or reconnect and log them again before closing the app.",
     { duration: 30000 },
   );
   return null;
@@ -463,7 +463,7 @@ async function runFlush() {
         if (heldMs > HELD_NOTICE_AFTER_MS && !entry.heldNoticeShown) {
           writeQueue(readQueue().map((p) => (p.id === entry.id ? { ...p, heldNoticeShown: true } : p)));
           toast.warning(
-            "A workout you logged a week ago is still waiting on the server to accept it. It's safe on this phone and will keep trying -- nothing for you to do.",
+            "A workout you logged a week ago is still waiting on the server to accept it. It's safe on this phone and will keep trying, nothing for you to do.",
             { duration: 20000 },
           );
         }
@@ -509,7 +509,7 @@ async function runFlush() {
       // the same words as any other rejection.
       if (status === 400) {
         const now = new Date().toISOString();
-        logDebug("SAVE", `flush HELD (${entry.dayKey}): 400 -- kept on this phone, retried on a slowing clock, never dropped`);
+        logDebug("SAVE", `flush HELD (${entry.dayKey}): 400, kept on this phone, retried on a slowing clock, never dropped`);
         writeQueue(
           readQueue().map((p) =>
             p.id === entry.id ? { ...p, heldSince: p.heldSince ?? now, lastHeldAttemptAt: now } : p,
@@ -535,8 +535,8 @@ async function runFlush() {
         // day would have them type over it.
         toast.error(
           status === 409
-            ? "A workout you logged offline couldn't sync because that day was updated somewhere else -- open it and check what's there before re-entering anything."
-            : "A workout you logged offline was rejected by the server and can't be synced -- open that day and re-enter it.",
+            ? "A workout you logged offline couldn't sync because that day was updated somewhere else, open it and check what's there before re-entering anything."
+            : "A workout you logged offline was rejected by the server and can't be synced, open that day and re-enter it.",
           { duration: 20000 },
         );
         continue;
@@ -567,7 +567,7 @@ async function runFlush() {
       });
       if (shouldNotify) {
         toast.error(
-          "A workout log saved while you were offline still hasn't synced -- check that day and re-enter it if it's missing.",
+          "A workout log saved while you were offline still hasn't synced, check that day and re-enter it if it's missing.",
           { duration: 15000 },
         );
       }

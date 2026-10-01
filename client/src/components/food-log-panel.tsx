@@ -335,7 +335,7 @@ export function FoodLogPanel({
                       <div className="min-w-0">
                         <p className="truncate font-medium">{e.description}</p>
                         <p className="text-xs text-muted-foreground">
-                          {e.servingDescription ? `${e.servingDescription} -- ` : ""}
+                          {e.servingDescription ? `${e.servingDescription}, ` : ""}
                           {e.caloriesKcal ?? "?"} kcal
                           {e.proteinG != null ? `, ${e.proteinG}g protein` : ""}
                         </p>

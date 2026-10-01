@@ -89,7 +89,7 @@ export function SessionRecorderControls() {
     return (
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] text-white/70">
-          Take ready -- {(take.sizeBytes / 1_000_000).toFixed(1)} MB. Save it to your phone or it
+          Take ready, {(take.sizeBytes / 1_000_000).toFixed(1)} MB. Save it to your phone or it
           is gone.
         </span>
         <Button size="sm" className="ml-auto" onClick={() => void save()} disabled={busy}>
@@ -106,7 +106,7 @@ export function SessionRecorderControls() {
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-[11px] text-white/50">
         {recording
-          ? "Recording this session -- everything on screen, and your voice."
+          ? "Recording this session, everything on screen, and your voice."
           : "Nothing here is saved to Forge. Record the session to keep it."}
       </span>
       {recording ? (

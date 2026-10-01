@@ -99,7 +99,7 @@ export function ActiveSessionsDialog({
           <DialogTitle>Where you're logged in</DialogTitle>
           <DialogDescription>
             Every device with an active Forge session. Location is approximate, based on IP
-            address -- not exact.
+            address, not exact.
           </DialogDescription>
         </DialogHeader>
 

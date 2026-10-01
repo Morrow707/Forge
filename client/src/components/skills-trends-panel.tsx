@@ -257,7 +257,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
 
       {active?.trackingLevel === "none" && (
         <p className="text-sm text-muted-foreground">
-          These were typed in rather than measured by the camera, so there is nothing to chart --
+          These were typed in rather than measured by the camera, so there is nothing to chart,
           the entries themselves are below.
         </p>
       )}

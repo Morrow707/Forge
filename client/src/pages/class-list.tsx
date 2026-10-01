@@ -227,7 +227,7 @@ export function ClassListPage({
     },
     onSuccess: (_data, { isDraft }) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/classes`] });
-      toast.success(isDraft ? "Unpublished -- hidden from browse and enrollment" : "Published");
+      toast.success(isDraft ? "Unpublished, hidden from browse and enrollment" : "Published");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not update publish state"),
   });
@@ -397,7 +397,7 @@ export function ClassListPage({
                         size="icon"
                         variant="ghost"
                         aria-label={c.isDraft ? `Publish ${c.name}` : `Unpublish ${c.name}`}
-                        title={c.isDraft ? "Publish -- make visible for browse/enroll" : "Unpublish -- hide from new browse/enroll"}
+                        title={c.isDraft ? "Publish, make visible for browse/enroll" : "Unpublish, hide from new browse/enroll"}
                         disabled={publishMutation.isPending}
                         onClick={() => publishMutation.mutate({ id: c.id, isDraft: !c.isDraft })}
                       >
@@ -498,7 +498,7 @@ export function ClassListPage({
                   value={aiText}
                   onChange={(e) => setAiText(e.target.value)}
                   rows={8}
-                  placeholder="Paste an article, your notes, or a full document -- an existing chapter structure carries straight through into lessons."
+                  placeholder="Paste an article, your notes, or a full document, an existing chapter structure carries straight through into lessons."
                 />
               </div>
               <div className="space-y-1.5">
@@ -506,7 +506,7 @@ export function ClassListPage({
                 <PhotoUploadField images={aiImages} onChange={setAiImages} maxImages={6} />
               </div>
               <p className="text-xs text-muted-foreground">
-                Claude organizes this into lessons, reading pages, and a quiz per lesson -- every fact and
+                Claude organizes this into lessons, reading pages, and a quiz per lesson, every fact and
                 every quiz answer comes only from what's provided here, nothing invented. Created as a draft,
                 invisible to everyone else, so you can review and edit everything before publishing.
               </p>
@@ -551,7 +551,7 @@ export function ClassListPage({
         description={
           deleteTarget
             ? deleteTarget.enrolledAthleteCount > 0
-              ? `"${deleteTarget.name}" has ${deleteTarget.enrolledAthleteCount} enrolled athlete${deleteTarget.enrolledAthleteCount === 1 ? "" : "s"} -- the server will refuse this delete to protect their progress. Unpublish it instead if you don't want new signups. Try anyway?`
+              ? `"${deleteTarget.name}" has ${deleteTarget.enrolledAthleteCount} enrolled athlete${deleteTarget.enrolledAthleteCount === 1 ? "" : "s"}, the server will refuse this delete to protect their progress. Unpublish it instead if you don't want new signups. Try anyway?`
               : `Delete "${deleteTarget.name}"? This cannot be undone.`
             : ""
         }

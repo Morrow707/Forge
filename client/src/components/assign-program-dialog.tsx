@@ -266,7 +266,7 @@ export function AssignProgramDialog({
                 className="h-12 text-base"
               />
               <p className="text-xs text-muted-foreground">
-                Day 1 of Week 1 lands on this date by default -- adjust individual days below for
+                Day 1 of Week 1 lands on this date by default, adjust individual days below for
                 games, travel, or extra rest.
               </p>
             </div>
@@ -318,7 +318,7 @@ export function AssignProgramDialog({
               </div>
               <p className="text-xs text-muted-foreground">
                 {trainingWeekdays.length > 0
-                  ? "Sets each day to the next one of these on or after the start date, so the program stays spaced out every week instead of running days in a row -- still adjust any individual day below for a game or practice."
+                  ? "Sets each day to the next one of these on or after the start date, so the program stays spaced out every week instead of running days in a row, still adjust any individual day below for a game or practice."
                   : "Leave blank to just run the days back-to-back starting from the start date."}
               </p>
             </div>

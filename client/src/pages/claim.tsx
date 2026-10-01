@@ -109,7 +109,7 @@ export default function ClaimPage() {
           <CardHeader>
             <CardTitle>Link not valid</CardTitle>
             <CardDescription>
-              This claim link has already been used or doesn't exist -- ask your coach for a new one.
+              This claim link has already been used or doesn't exist, ask your coach for a new one.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -213,7 +213,7 @@ export default function ClaimPage() {
                   </div>
                 )}
                 <p className="col-span-2 text-xs text-muted-foreground">
-                  Required for camera tracking -- your height is how the app converts what it sees
+                  Required for camera tracking, your height is how the app converts what it sees
                   into real distances and speeds.
                 </p>
               </div>

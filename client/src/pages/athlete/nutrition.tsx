@@ -76,7 +76,7 @@ export default function AthleteNutrition() {
             made survives: not a dietitian, not a prescription, go to a person who knows you.
             A disclaimer nobody finishes reading protects nobody. */}
         <p className="text-xs text-muted-foreground">
-          Not a dietitian, and nothing here is a prescription -- your own targets should come from
+          Not a dietitian, and nothing here is a prescription, your own targets should come from
           a coach or a registered dietitian who knows you.
         </p>
       </div>

@@ -336,14 +336,14 @@ export function AvSwingTrackerDialog({
           const result = await uploadPromise;
           toast.error(
             result.status === "queued"
-              ? "Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi -- video saved on your device, will upload once connected.)"
+              ? "Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi, video saved on your device, will upload once connected.)"
               : "Couldn't get a clean read on this take. The clip is saved. (Video saved for your coach.)",
           );
           if (result.status === "queued") {
             if (!hasWarnedAboutQueueing()) {
               markWarnedAboutQueueing();
               toast.info(
-                "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
+                "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
                 { duration: 10000 },
               );
             }
@@ -396,7 +396,7 @@ export function AvSwingTrackerDialog({
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
           toast.info(
-            "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
             { duration: 10000 },
           );
         }
@@ -444,7 +444,7 @@ export function AvSwingTrackerDialog({
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                 <p className="text-sm text-white">
                   {analyzing
-                    ? `Analyzing swing -- ${analyzedFrames} frames processed…`
+                    ? `Analyzing swing, ${analyzedFrames} frames processed…`
                     : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
                 </p>
                 {analyzing && (

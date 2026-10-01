@@ -64,13 +64,13 @@ export async function watermarkVideo(
         canvas.height = src.videoHeight;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          reject(new Error("This browser can't add a watermark -- try downloading without one."));
+          reject(new Error("This browser can't add a watermark, try downloading without one."));
           return;
         }
 
         const captureCanvas = (canvas as any).captureStream ?? (canvas as any).mozCaptureStream;
         if (!captureCanvas) {
-          reject(new Error("This browser can't add a watermark -- try downloading without one."));
+          reject(new Error("This browser can't add a watermark, try downloading without one."));
           return;
         }
         const canvasStream: MediaStream = captureCanvas.call(canvas, 30);
@@ -93,7 +93,7 @@ export async function watermarkVideo(
           if (e.data.size > 0) chunks.push(e.data);
         };
         recorder.onstop = () => resolve(new Blob(chunks, { type: recordedVideoType(recorder, mimeType) }));
-        recorder.onerror = () => reject(new Error("Could not add the watermark -- try again."));
+        recorder.onerror = () => reject(new Error("Could not add the watermark, try again."));
 
         // Sized relative to the frame -- readable on a phone-sized clip
         // without covering meaningful content in the corner.

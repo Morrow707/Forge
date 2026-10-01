@@ -89,7 +89,7 @@ export function PlateCalculatorDialog({
               Load per side
             </p>
             {breakdown.plates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Just the bar -- no plates needed.</p>
+              <p className="text-sm text-muted-foreground">Just the bar, no plates needed.</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {breakdown.plates.map((p, i) => (

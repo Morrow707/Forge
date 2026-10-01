@@ -107,7 +107,7 @@ export function NotificationSettingsDialog({
     try {
       if (next) {
         await enableHealthSync(user.id);
-        toast.success(`${nativeHealthName()} sync enabled -- your check-in will pre-fill when available`);
+        toast.success(`${nativeHealthName()} sync enabled, your check-in will pre-fill when available`);
       } else {
         disableHealthSync(user.id);
         toast.success(`${nativeHealthName()} sync turned off`);
@@ -141,9 +141,9 @@ export function NotificationSettingsDialog({
       };
       const lines = [describe("Web", result.web), describe("Apple", result.apns)];
       if (result.web.delivered || result.apns.delivered) {
-        toast.success(`Test sent -- ${lines.join(", ")}`);
+        toast.success(`Test sent, ${lines.join(", ")}`);
       } else {
-        toast.error(`Nothing was sent -- ${lines.join(", ")}`);
+        toast.error(`Nothing was sent, ${lines.join(", ")}`);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not send a test notification");
@@ -222,7 +222,7 @@ export function NotificationSettingsDialog({
                   <Bell className="h-3.5 w-3.5" /> Push notifications
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Sent to this device/browser only -- enable on each one you want alerts on.
+                  Sent to this device/browser only, enable on each one you want alerts on.
                 </span>
               </span>
             </label>
@@ -259,7 +259,7 @@ export function NotificationSettingsDialog({
             </Button>
             <p className="mt-1 text-xs text-muted-foreground">
               Goes to your own devices only, and tells you which of web and Apple push actually
-              took it -- the quickest way to tell "set up wrong" from "nothing has happened yet".
+              took it, the quickest way to tell "set up wrong" from "nothing has happened yet".
             </p>
           </div>
           {bioLockAvailable && (
@@ -273,7 +273,7 @@ export function NotificationSettingsDialog({
                   <ScanFace className="h-3.5 w-3.5" /> Require Face ID / Touch ID
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Lock the app on this device until you authenticate -- on top of
+                  Lock the app on this device until you authenticate, on top of
                   staying signed in, not instead of it.
                 </span>
               </span>
@@ -292,7 +292,7 @@ export function NotificationSettingsDialog({
                 </span>
                 <span className="text-xs text-muted-foreground">
                   Pre-fills sleep, resting heart rate, and heart rate variability on
-                  your daily check-in from your watch or tracker -- always editable
+                  your daily check-in from your watch or tracker, always editable
                   before you submit. The AI coach reads your check-in when it adjusts
                   your training, so a synced value can reach the AI provider as part
                   of that request. Never sold, never used for ads.

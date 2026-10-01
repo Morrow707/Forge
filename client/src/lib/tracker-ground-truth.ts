@@ -65,7 +65,7 @@ export const GROUND_TRUTH: GroundTruthEntry[] = [
     unit: "cm",
     instrument: "bar sensor (OVR)",
     setupNote:
-      "5'10\" athlete, 135lb, camera at the foot of the bench. Calibration reported success on 121 of 639 frames -- the tracker did not know it had failed, which is the part that matters.",
+      "5'10\" athlete, 135lb, camera at the foot of the bench. Calibration reported success on 121 of 639 frames, the tracker did not know it had failed, which is the part that matters.",
     recordedOn: "2026-01-01",
   },
 
@@ -117,7 +117,7 @@ export const GROUND_TRUTH: GroundTruthEntry[] = [
     instrumentNote:
       "Mean of OVR's own two sets at the same load (0.70 and 0.71), which agreed to within its own display rounding.",
     setupNote:
-      "155lb bench. The set aggregate is close even though the per-rep figures behind it are not -- see this block's own comment on why that is the signature of a segmentation error rather than a scale error.",
+      "155lb bench. The set aggregate is close even though the per-rep figures behind it are not, see this block's own comment on why that is the signature of a segmentation error rather than a scale error.",
     recordedOn: "2026-09-18",
   },
   {
@@ -292,7 +292,7 @@ export const OVR_BENCH_SIDE_ON_2026_09_22 = {
 export const OVR_BENCH_HEAD_ON_2026_09_22 = {
   loadLb: 135,
   repsPerSet: 10,
-  camera: "head-on, from the foot of the bench -- unusable framing",
+  camera: "head-on, from the foot of the bench, unusable framing",
   sensor: { meanVelocityMps: 0.78, peakVelocityMps: 1.10, romIn: 15.2, meanW: 469, peakW: 662, tpvS: 0.28 },
   forge: {
     romCm: 42.9,

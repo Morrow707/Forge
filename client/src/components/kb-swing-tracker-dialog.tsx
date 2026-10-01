@@ -135,7 +135,7 @@ export function KbSwingTrackerDialog({
         setModelLoading(false);
       })
       .catch(() => {
-        setCameraError("Couldn't load the pose-tracking model -- check your connection and retry.");
+        setCameraError("Couldn't load the pose-tracking model, check your connection and retry.");
         setModelLoading(false);
       });
 
@@ -144,7 +144,7 @@ export function KbSwingTrackerDialog({
       ensureCameraPermission().then((granted) => {
         if (cancelled) return;
         if (!granted) {
-          setCameraError("Camera access denied -- enable it for Forge in Settings.");
+          setCameraError("Camera access denied, enable it for Forge in Settings.");
           return;
         }
         navigator.mediaDevices
@@ -299,13 +299,13 @@ export function KbSwingTrackerDialog({
           const result = await uploadOrQueueVideo(blob, videoFilenameForBlob(blob, "form-check"), videoContext ?? { label: "Kettlebell Swing" }, setUploadProgress);
           toast.error(
             result.status === "queued"
-              ? `${message} (No Wi-Fi -- video saved on your device, will upload once connected.)`
+              ? `${message} (No Wi-Fi, video saved on your device, will upload once connected.)`
               : `${message} (Video saved for your coach.)`,
           );
           if (result.status === "queued" && !hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
             toast.info(
-              "You can also upload a queued video manually anytime -- even over cellular -- from the Video Bank.",
+              "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
               { duration: 10000 },
             );
           }
@@ -376,8 +376,8 @@ export function KbSwingTrackerDialog({
     const blended = blendSpeedEstimates(
       bellSignal,
       wristSignal,
-      "Bell wasn't confidently tracked for enough of this set -- speed from wrist motion alone",
-      "No wrist motion signal to cross-check against -- speed from bell tracking alone",
+      "Bell wasn't confidently tracked for enough of this set, speed from wrist motion alone",
+      "No wrist motion signal to cross-check against, speed from bell tracking alone",
     );
     const metrics: KbSwingSetMetrics = {
       ...wristMetrics,
@@ -398,7 +398,7 @@ export function KbSwingTrackerDialog({
       if (result.status === "queued" && !hasWarnedAboutQueueing()) {
         markWarnedAboutQueueing();
         toast.info(
-          "No Wi-Fi -- this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+          "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
           { duration: 10000 },
         );
       }

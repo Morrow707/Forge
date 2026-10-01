@@ -299,7 +299,7 @@ export function AvMechanicsTrackerDialog({
       // Said out loud, because a queued clip is otherwise indistinguishable from a lost one --
       // the numbers saved either way, and the athlete has no other sign the video is coming.
       if (queuedForWifi) {
-        toast.info("No Wi-Fi -- the clip is saved on your device and uploads once you reconnect.");
+        toast.info("No Wi-Fi, the clip is saved on your device and uploads once you reconnect.");
       }
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
@@ -427,7 +427,7 @@ export function AvMechanicsTrackerDialog({
               {step === "analyzing" && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-                  <p className="text-sm text-white">Analyzing -- {analyzedFrames} frames processed…</p>
+                  <p className="text-sm text-white">Analyzing, {analyzedFrames} frames processed…</p>
                   <Button variant="outline" size="sm" onClick={cancelAnalysis}>
                     <XCircle className="h-4 w-4" />
                     Cancel
@@ -468,7 +468,7 @@ export function AvMechanicsTrackerDialog({
             {uncalibrated && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                Couldn't calibrate real-world scale this take -- speed and distance numbers aren't shown, but
+                Couldn't calibrate real-world scale this take, speed and distance numbers aren't shown, but
                 angles, sequencing, and timing below are still good.
               </div>
             )}
@@ -570,7 +570,7 @@ export function AvMechanicsTrackerDialog({
               <span>
                 Save this clip so my coach can review it
                 <span className="block text-xs text-muted-foreground">
-                  Off by default -- only the numbers above are saved unless you turn this on.
+                  Off by default, only the numbers above are saved unless you turn this on.
                 </span>
               </span>
             </label>
@@ -580,7 +580,7 @@ export function AvMechanicsTrackerDialog({
                 <span>
                   Never auto-delete this clip
                   <span className="block text-xs text-muted-foreground">
-                    Your plan only keeps a limited number of saved clips per drill -- favoriting
+                    Your plan only keeps a limited number of saved clips per drill, favoriting
                     this one keeps it forever, even once older clips start rolling off.
                   </span>
                 </span>

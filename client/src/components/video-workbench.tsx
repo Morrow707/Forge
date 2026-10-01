@@ -65,7 +65,7 @@ export function CoachVideoWorkbenchCard({
       open={open}
       setOpen={setOpen}
       subject={{ kind: "roster", athleteId, athleteName }}
-      heading={`Video analysis -- ${athleteName}`}
+      heading={`Video analysis, ${athleteName}`}
     />
   );
 }
@@ -93,7 +93,7 @@ function WorkbenchBody({
               <p className="font-semibold">{heading}</p>
               <p className="text-sm text-muted-foreground">
                 Put one of your lifts next to a reference clip, step through them together, draw
-                on them and talk over the top. Record the session and save it to your phone --
+                on them and talk over the top. Record the session and save it to your phone,
                 Forge keeps no copy.
               </p>
             </div>

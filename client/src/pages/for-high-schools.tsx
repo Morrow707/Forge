@@ -151,7 +151,7 @@ export default function ForHighSchoolsPage() {
             <h3 className="font-display text-lg font-bold">What happens to video?</h3>
             <p className="mt-2 text-muted-foreground">
               Form-check clips are kept to a per-athlete limit and then aged out. When a video is
-              removed, the measurements taken from it survive -- an athlete does not lose their
+              removed, the measurements taken from it survive, an athlete does not lose their
               training history because a file was cleaned up.
             </p>
           </div>

@@ -96,7 +96,7 @@ export default function AthleteClassDetail() {
     },
     onError: (err: ApiError) => {
       if (err.status === 402) {
-        toast.info(err.message || "Payments aren't live yet -- coming soon.");
+        toast.info(err.message || "Payments aren't live yet, coming soon.");
       } else {
         toast.error(err.message || "Could not unlock lesson");
       }
@@ -204,11 +204,11 @@ export default function AthleteClassDetail() {
                       <Badge variant="outline">Lesson {lesson.lessonNumber}</Badge>
                       <p className="font-semibold">{lesson.title}</p>
                       {lesson.quizPerfectAt ? (
-                        <span title="Gold star -- perfect quiz score">
+                        <span title="Gold star, perfect quiz score">
                           <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-400" />
                         </span>
                       ) : lesson.quizPassedAt ? (
-                        <span title="Bronze star -- quiz passed">
+                        <span title="Bronze star, quiz passed">
                           <Star className="h-4 w-4 shrink-0 fill-amber-700 text-amber-700" />
                         </span>
                       ) : null}

@@ -64,7 +64,7 @@ export function OverheadSquatCaptureDialog({
       })
       .catch(() => {
         if (!stopped) {
-          setCameraError("Couldn't load the pose-tracking model -- check your connection and retry.");
+          setCameraError("Couldn't load the pose-tracking model, check your connection and retry.");
           setModelLoading(false);
         }
       });
@@ -72,7 +72,7 @@ export function OverheadSquatCaptureDialog({
     ensureCameraPermission().then((granted) => {
       if (stopped) return;
       if (!granted) {
-        setCameraError("Camera access denied -- enable it for Forge in Settings.");
+        setCameraError("Camera access denied, enable it for Forge in Settings.");
         return;
       }
       navigator.mediaDevices
@@ -148,7 +148,7 @@ export function OverheadSquatCaptureDialog({
           </DialogTitle>
           <DialogDescription>
             Stand where your whole body is in frame, arms overhead, then record one rep. This is an estimate from a
-            2D camera view -- review the suggested grade before using it.
+            2D camera view, review the suggested grade before using it.
           </DialogDescription>
         </DialogHeader>
 

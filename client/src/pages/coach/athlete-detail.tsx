@@ -210,9 +210,9 @@ export default function AthleteDetailPage() {
       if (result.sent) {
         toast.success("Progress report emailed");
       } else if (result.error === "not_configured") {
-        toast.info("Email sending isn't set up yet -- ask your Forge admin to configure it.");
+        toast.info("Email sending isn't set up yet, ask your Forge admin to configure it.");
       } else {
-        toast.error("Couldn't send that report -- try again in a bit.");
+        toast.error("Couldn't send that report, try again in a bit.");
       }
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't send that report"),
@@ -723,7 +723,7 @@ export default function AthleteDetailPage() {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             They'll lose access to your programs, calendar, and roster tools. Their training
-            history and account stay intact -- this just takes them off your roster, so you can
+            history and account stay intact, this just takes them off your roster, so you can
             always re-add them later with your coach code.
           </p>
           <DialogFooter>
@@ -786,7 +786,7 @@ function SuggestedCorrectives({ athleteId }: { athleteId: number }) {
           <p className="font-bold">Suggested correctives</p>
           <p className="text-xs text-muted-foreground">
             Drafted from this athlete's repeated soreness, screen findings and unresolved
-            injuries. Nothing is applied -- add what you agree with in the corrective editor.
+            injuries. Nothing is applied, add what you agree with in the corrective editor.
           </p>
         </div>
         <Button size="sm" onClick={() => suggest.mutate()} disabled={suggest.isPending}>
