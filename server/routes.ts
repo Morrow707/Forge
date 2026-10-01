@@ -3207,6 +3207,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reactiveStrengthIndex: r.reportedReactiveStrengthIndex,
         repBreakdown: r.reportedRepBreakdown,
         formFaults: r.reportedFormFaults,
+        jumpBreakdown: r.reportedJumpBreakdown,
+        medBallPeakSpeedMps: r.reportedMedBallPeakSpeedMps,
+        medBallReleaseHeightCm: r.reportedMedBallReleaseHeightCm,
+        medBallTrustScore: r.reportedMedBallTrustScore,
+        medBallRepBreakdown: r.reportedMedBallRepBreakdown,
       },
 
       // The capture conditions. Without these a bad number cannot be told apart from a bad take.

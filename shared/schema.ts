@@ -8659,6 +8659,15 @@ export const medBallRepBreakdownEntrySchema = z.object({
   repNumber: z.number(),
   peakSpeedMps: z.number(),
   trust: setTrustScoreSchema,
+  // Added 2026-10-01 for the OVR comparison: the sensor sits on a box with its tether pulled out
+  // HORIZONTALLY, so it reads the component of the hand's motion along the room's horizontal,
+  // not the in-plane speed above. peakHorizontalSpeedMps is the ball's image-x speed (95th
+  // percentile over the throw, same pool as peakSpeedMps); ballSpeedMps and wristSpeedMps are
+  // the two witnesses BEFORE the blend, so a sensor comparison can say which one was right
+  // instead of only how the blend did. Each optional: older rows and takes with one witness.
+  peakHorizontalSpeedMps: z.number().nullable().optional(),
+  ballSpeedMps: z.number().nullable().optional(),
+  wristSpeedMps: z.number().nullable().optional(),
 });
 
 // What the camera/AI pipeline was actually doing during this specific recording -- device,

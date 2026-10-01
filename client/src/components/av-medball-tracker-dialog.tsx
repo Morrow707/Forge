@@ -84,7 +84,15 @@ import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracki
 // "if i do 10 reps, it only shows one average m/s not 10 averages, which is wrong." Each entry's
 // own trust reflects how well that ONE throw's ball-tracked and wrist-proxy signals agreed, same
 // blendSpeedEstimates reasoning as the set-level trust below, just per rep instead of once.
-export type MedballRepBreakdownEntry = { repNumber: number; peakSpeedMps: number; trust: SetTrustScore };
+export type MedballRepBreakdownEntry = {
+  repNumber: number;
+  peakSpeedMps: number;
+  trust: SetTrustScore;
+  // The sensor's axis and the two witnesses before the blend -- see medBallRepBreakdownEntrySchema.
+  peakHorizontalSpeedMps?: number | null;
+  ballSpeedMps?: number | null;
+  wristSpeedMps?: number | null;
+};
 
 export type MedballSetMetrics = {
   // Hardest throw of the set -- max(repBreakdown[].peakSpeedMps), kept for whatever still reads
@@ -356,6 +364,30 @@ export function AvMedballTrackerDialog({
     return { speedMps, confidence };
   }
 
+  // The ball's speed along the image's horizontal only, same pool and percentile as
+  // peakImplementSpeed. This is what a linear transducer on a box with its tether pulled out
+  // horizontally measures (the OVR beside a med-ball throw, 2026-10-01), so it is the number that
+  // comparison is made against; the in-plane speed above is still the one reported. Image-x is
+  // the room's horizontal only to the extent the phone is level, and recording.cameraRollDeg
+  // says how level it was.
+  function peakImplementHorizontalSpeed(
+    points: { t: number; x: number; y: number; confidence: number }[],
+  ): number | null {
+    const confident = points.filter((p) => p.confidence >= MIN_TRACKING_CONFIDENCE);
+    if (confident.length < MIN_BALL_SPEED_SAMPLES) return null;
+    const speeds: number[] = [];
+    for (let i = 1; i < confident.length; i++) {
+      const dtSeconds = (confident[i].t - confident[i - 1].t) / 1000;
+      if (dtSeconds <= 0) continue;
+      speeds.push(Math.abs(confident[i].x - confident[i - 1].x) / dtSeconds);
+    }
+    if (speeds.length < MIN_BALL_SPEED_SAMPLES) return null;
+    const plausible = speeds.filter(
+      (v) => v <= (movementProfile?.maxPlausibleSpeedMps ?? MAX_PLAUSIBLE_BALL_SPEED_MPS),
+    );
+    return Math.round(percentile(plausible.length > 0 ? plausible : speeds, 0.95) * 100) / 100;
+  }
+
   // Frame-to-frame ball speed across the WHOLE clip, unaggregated -- feeds detectThrowReps
   // (which needs to see where speed rises and falls to find rep boundaries in the first place),
   // distinct from peakImplementSpeed above (which collapses an already-known window into one
@@ -500,7 +532,10 @@ export function AvMedballTrackerDialog({
     // detected throw's own [startT, endT] when called per rep below. Exactly the same signal
     // sources and blendSpeedEstimates call the pre-per-rep version of this dialog always made,
     // just parameterized by window instead of hardcoded to the full clip.
-    function blendedSpeedForWindow(startT: number, endT: number): BlendedSpeedResult | null {
+    function blendedSpeedForWindow(
+      startT: number,
+      endT: number,
+    ): (BlendedSpeedResult & { horizontalMps: number | null; ballMps: number | null; wristMps: number | null }) | null {
       const windowBallPoints = ballPoints.filter((p) => p.t >= startT && p.t <= endT);
       const windowFrames = frames.filter((f) => f.t >= startT && f.t <= endT);
       const windowMechanics = startT === -Infinity && endT === Infinity ? mechanicsResult : analyzeMechanics(windowFrames, "throw");
@@ -523,12 +558,19 @@ export function AvMedballTrackerDialog({
         windowMechanics.peakWristSpeedMps != null
           ? { speedMps: windowMechanics.peakWristSpeedMps, confidence: avgWristConfidence }
           : null;
-      return blendSpeedEstimates(
+      const blended = blendSpeedEstimates(
         ballSignal,
         wristSignal,
         "Ball wasn't confidently tracked for enough of this throw -- speed estimated from wrist motion alone",
         "No wrist motion signal to cross-check against -- speed from ball tracking alone",
       );
+      if (!blended) return null;
+      return {
+        ...blended,
+        horizontalMps: peakImplementHorizontalSpeed(windowBallPoints),
+        ballMps: ballSignal?.speedMps ?? null,
+        wristMps: wristSignal?.speedMps ?? null,
+      };
     }
 
     // Each individual throw within this recording, not one blended number for the whole clip --
@@ -542,11 +584,18 @@ export function AvMedballTrackerDialog({
     const repWindows = detectThrowReps(implementSpeedTrace(ballPoints));
     const windowsToProcess: { repNumber: number; startT: number; endT: number }[] =
       repWindows.length > 0 ? repWindows : [{ repNumber: 1, startT: -Infinity, endT: Infinity }];
-    const repBreakdown: { repNumber: number; peakSpeedMps: number; trust: SetTrustScore }[] = [];
+    const repBreakdown: MedballRepBreakdownEntry[] = [];
     for (const w of windowsToProcess) {
       const blended = blendedSpeedForWindow(w.startT, w.endT);
       if (blended) {
-        repBreakdown.push({ repNumber: w.repNumber, peakSpeedMps: blended.speedMps, trust: blended.trust });
+        repBreakdown.push({
+          repNumber: w.repNumber,
+          peakSpeedMps: blended.speedMps,
+          trust: blended.trust,
+          peakHorizontalSpeedMps: blended.horizontalMps,
+          ballSpeedMps: blended.ballMps,
+          wristSpeedMps: blended.wristMps,
+        });
       }
     }
     // Backward-compatible headline number -- the hardest throw of the set, same "best-of-set"

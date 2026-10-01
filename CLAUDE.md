@@ -352,7 +352,11 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **579** is the newest TestFlight build, cut 2026-10-01 from the first sensor-paired
+- Build **580** is the newest TestFlight build, cut 2026-10-01 for the next two sensor pairings:
+  each med-ball rep carries `peakHorizontalSpeedMps` (the axis a horizontal tether reads) and
+  the ball and wrist witnesses before the blend. The export now carries `jumpBreakdown` and the
+  med-ball columns (server-side, Render). See docs/camera-tracking-notes.md, "Build 580".
+- Build **579** was the previous build, cut 2026-10-01 from the first sensor-paired
   squat: the reported concentric window is the drive (`trimPhaseToDrive`,
   `DRIVE_ONSET_FRACTION` 0.07) while the filters keep the travel margin, the set's mean and mean
   power are distance over time, and the typed grip width is gone from the profile and the

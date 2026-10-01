@@ -1862,6 +1862,36 @@ box. The camera's takeoff velocity is computed per rep (build 556) but is not in
 it to `jumpEvents` or the rep breakdown before the next paired jump, or this comparison cannot
 be made either.
 
+## Build 580: the export carries every per-rep number, and the med ball gets the sensor's axis
+
+Added 2026-10-01 for the next two sensor pairings Scott described:
+
+- **Box jump with the OVR clipped to the shoe laces**, the sensor on the floor, the tether
+  starting about 3.5 inches off the ground. Scott: "that needs to be added to our total." A
+  tether reads a CHANGE in length, so the starting height does not add to its number: the laces
+  rise the same distance whether the clip starts at 0 or at 3.5 inches. What the offset does do
+  is sit the sensor's zero at the laces rather than the hip, so the sensor measures the FOOT's
+  rise (standing to apex) and the camera measures the hip's (takeoff to apex). A tucked landing
+  on a box lifts the feet further than the hips. Both are recorded (`OVR_JUMP_SQUAT_2026_10_01`
+  and the next entry); neither is corrected toward the other until a flat jump, where the feet
+  and hips rise together, says which way the gap runs.
+- **Med ball throw with the OVR on a box, tether pulled out horizontally to a finger.** The
+  sensor reads the component of the hand's motion ALONG the tether, which is the room's
+  horizontal. The camera's `peakSpeedMps` is the in-plane speed (x and y together). So each
+  med-ball rep now also carries `peakHorizontalSpeedMps` (the ball's image-x speed, same 95th
+  percentile pool) and the two witnesses before the blend, `ballSpeedMps` and `wristSpeedMps`,
+  so the comparison can say which witness was right rather than only how the blend did. Image-x
+  is the room's horizontal only as far as the phone is level; `recording.cameraRollDeg` says how
+  level it was. `medBallRepBreakdownEntrySchema` declares all three (a zod object strips what it
+  does not declare).
+
+**The export was missing both modes' per-rep numbers.** `jumpBreakdown` (per-rep
+`takeoffVelocityMps`, `flightSeconds`, `jumpHeightCm`, `peakHeightCm`) and every `medBall*`
+column were written on every capture and never read by `/api/admin/tracking-report/captures/recent`,
+which is why the 2026-10-01 jump could not be compared on velocity. Both are in `reported` now.
+That half is server-side and ships on Render; the med-ball fields are client-side and ship in
+the build.
+
 ## Build 578 beside OVR, set 12 and the two rows
 
 Bench set 12 (Sep 30, set 4), the first take through the weighted blend on the phone. Ground
