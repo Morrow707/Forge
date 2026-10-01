@@ -1,4 +1,5 @@
 import { QueryCache, QueryClient, QueryFunction, type Query } from "@tanstack/react-query";
+import { PUBLIC_ORIGIN } from "@shared/public-origin";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { Capacitor } from "@capacitor/core";
 import { getDeviceId } from "@/lib/device-id";
@@ -15,7 +16,7 @@ import { getDeviceId } from "@/lib/device-id";
 // match the expected pattern." failure on native, not anything
 // form/validation-related -- see login.tsx's noValidate comment, which
 // was chasing the wrong theory before this was found.
-const NATIVE_API_BASE_URL = "https://forge-ebhd.onrender.com";
+const NATIVE_API_BASE_URL = PUBLIC_ORIGIN;
 
 /** Resolves a same-origin-relative path ("/api/...", "/uploads/...") to an
  * absolute URL on native platforms; passes web/already-absolute URLs

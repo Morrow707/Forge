@@ -1,6 +1,7 @@
 import passport from "passport";
 import { under13SelfSignupClosed, UNDER_13_SIGNUP_CLOSED_MESSAGE } from "./age-policy";
 import { signupAllowed, SIGNUP_CLOSED_MESSAGE } from "./signup-availability";
+import { publicOrigin } from "./public-origin";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -346,7 +347,7 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
 // Bearer-token fallback for the native app, alongside (not instead of) the
 // cookie session above. iOS's WKWebView is subject to Apple's Intelligent
 // Tracking Prevention, which silently drops a cross-origin Set-Cookie from a
-// fetch() response -- forge-ebhd.onrender.com is "third-party" relative to
+// fetch() response -- forgeperformancesystems.com is "third-party" relative to
 // the app's own capacitor://localhost origin, so the session cookie set by
 // login never actually gets stored, and every request after it is
 // unauthenticated. Login itself still appeared to work because its response
@@ -1094,7 +1095,7 @@ export function setupAuth(app: Express) {
     guardian: { id: number; email: string },
     athleteId: number,
   ) {
-    const origin = process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+    const origin = publicOrigin(req);
     storage
       .getUser(athleteId)
       .then((athlete) => {
@@ -1119,7 +1120,7 @@ export function setupAuth(app: Express) {
     storage
       .createEmailVerificationToken(user.id)
       .then((token) => {
-        const origin = process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+        const origin = publicOrigin(req);
         const verifyLink = `${origin}/verify-email?token=${token}`;
         return sendEmail({
           to: user.email,
@@ -1182,7 +1183,7 @@ export function setupAuth(app: Express) {
       .createGuardianInvite(athlete.id, guardianEmail)
       .then(async (invite) => {
         if (!("token" in invite)) return;
-        const origin = process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+        const origin = publicOrigin(req);
         const claimLink = `${origin}/guardian/claim?token=${invite.token}`;
         const parentalNotice = await storage.getLegalDocument("parental_notice");
         const result = await sendEmail({
@@ -1296,9 +1297,6 @@ export function setupAuth(app: Express) {
     return { deviceLabel: formatDeviceLabel(req.headers["user-agent"], kind), ipAddress: normalizeIp(req.ip) };
   }
 
-  function publicOrigin(req: any): string {
-    return process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
-  }
 
   async function sendDeviceApprovalEmail(
     req: any,
@@ -1806,7 +1804,7 @@ export function setupAuth(app: Express) {
         // not derived from anything a client sends, so it's what production
         // always uses; the request-derived fallback only still applies
         // locally, where there's no attacker-facing Host header to spoof.
-        const origin = process.env.RENDER_EXTERNAL_URL ?? `${req.protocol}://${req.get("host")}`;
+        const origin = publicOrigin(req);
         const resetLink = `${origin}/reset-password?token=${resetToken}`;
         await sendEmail({
           to: user.email,

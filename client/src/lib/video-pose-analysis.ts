@@ -53,7 +53,7 @@ export async function analyzeVideoPose(
   // throws a SecurityError ("The operation is insecure") uploading a texture
   // from a cross-origin element that wasn't explicitly loaded with CORS. On
   // native this element's src IS cross-origin (capacitor://localhost's own
-  // WebView loading a real https://forge-ebhd.onrender.com video, see
+  // WebView loading a real https://forgeperformancesystems.com video, see
   // resolveApiUrl's own comment below) -- "anonymous" (no cookies) is enough
   // since /uploads is served unauthenticated, and the server's CORS
   // allowlist already covers capacitor://localhost (see server/index.ts).

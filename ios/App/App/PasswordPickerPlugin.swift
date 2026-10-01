@@ -79,7 +79,7 @@ public class PasswordPickerPlugin: CAPPlugin, CAPBridgedPlugin {
     //
     // The webview form cannot do this no matter how it is marked up: AutoFill matches on page
     // ORIGIN, and the bundle is served from capacitor://localhost, which matches no saved entry
-    // for forge-ebhd.onrender.com. The Associated Domains entitlement is what ties THIS APP to
+    // for forgeperformancesystems.com. The Associated Domains entitlement is what ties THIS APP to
     // that domain, so a native field inside it resolves to the right credential.
     //
     // Deliberately only collects credentials. The actual login still goes through the same API
@@ -186,7 +186,7 @@ public class PasswordPickerPlugin: CAPPlugin, CAPBridgedPlugin {
 /// WHY IT IS NATIVE AT ALL, since this is otherwise a web app and duplicating a screen is a cost.
 /// iOS AutoFill decides which saved password to offer by the PAGE ORIGIN, and the web bundle is
 /// served from capacitor://localhost -- WKWebView reserves http and https, so a Capacitor app can
-/// never serve its own files under forge-ebhd.onrender.com (see the iosScheme note in
+/// never serve its own files under forgeperformancesystems.com (see the iosScheme note in
 /// @capacitor/cli's declarations). No Apple Passwords entry can match a page at that address, so
 /// the web form is never filled and never offered a save, however it is marked up -- and its
 /// autocomplete attributes were already correct.
