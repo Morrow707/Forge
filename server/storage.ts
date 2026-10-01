@@ -23163,6 +23163,15 @@ ${catalog}`;
         reportedReactiveStrengthIndex: workoutSetEntries.reactiveStrengthIndex,
         reportedRepBreakdown: workoutSetEntries.repBreakdown,
         reportedFormFaults: workoutSetEntries.formFaults,
+        // Per-rep jump numbers (takeoff velocity, flight, height) and the med-ball numbers were
+        // saved on every capture and never exported, so the first OVR-paired jump (2026-10-01)
+        // could not be compared on velocity at all. A sensor comparison needs every number the
+        // phone wrote, per rep.
+        reportedJumpBreakdown: workoutSetEntries.jumpBreakdown,
+        reportedMedBallPeakSpeedMps: workoutSetEntries.medBallPeakSpeedMps,
+        reportedMedBallReleaseHeightCm: workoutSetEntries.medBallReleaseHeightCm,
+        reportedMedBallTrustScore: workoutSetEntries.medBallTrustScore,
+        reportedMedBallRepBreakdown: workoutSetEntries.medBallRepBreakdown,
 
         // What the capture conditions were.
         trustScores: workoutSetEntries.trustScores,
