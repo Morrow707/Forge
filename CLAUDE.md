@@ -352,6 +352,16 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
+- **UPLOADS ARE ON HOLD. Scott, 2026-10-01: "queue everything but dont upload, fable is working
+  on something."** Keep committing and pushing to `main` as normal; do not run the `beta` lane,
+  and do not run `verify_build` either while another session may be using the macOS runner --
+  the workflow's concurrency group is per-lane, so a second `verify_build` CANCELS the first,
+  and cancelling another session's pre-flight is a worse outcome than waiting. The hold lasts
+  until Scott lifts it, which is how every hold in this file works.
+- **Queued on `main`, not yet uploaded:** height typed as feet and inches
+  (`shared/height-units.ts`, `HeightInput` on signup, the provisional-athlete claim and the
+  profile form; `users.heightIn` is unchanged total inches, no migration). Goes with the first
+  `beta` after the hold lifts.
 - Build **584** is the newest TestFlight build, cut 2026-10-01 from `d2e8b361`: the password rule
   (`shared/password-rules.ts`: six characters, a number and a special character, held by ONE
   `passwordField` across all six schemas that set a password) and the live red-to-green checklist
