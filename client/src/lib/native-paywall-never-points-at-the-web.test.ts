@@ -27,6 +27,13 @@ describe("the in-app paywall never points a buyer at the website", () => {
     });
   }
 
+  it("the Android app never renders the web checkout (Google Play's billing policy)", () => {
+    const src = readFileSync("client/src/pages/athlete/upgrade.tsx", "utf8");
+    expect(src).toMatch(/androidNative/);
+    expect(src).toMatch(/\{!supported && !androidNative && \(/);
+    expect(src).toMatch(/Subscriptions aren't available in the Android app yet/);
+  });
+
   it("Restore Purchases is on the paywall, which 3.1.1 requires", () => {
     expect(readFileSync("client/src/pages/athlete/upgrade.tsx", "utf8")).toMatch(/Restore Purchases/);
   });

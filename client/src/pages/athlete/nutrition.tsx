@@ -1,3 +1,4 @@
+import { nativeHealthName } from "@/lib/native-health";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { NutritionPanel } from "@/components/nutrition-panel";
@@ -103,7 +104,7 @@ export default function AthleteNutrition() {
                   )}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Body mass, synced from Apple Health
+                  Body mass, synced from {nativeHealthName()}
                 </p>
               </div>
             </div>

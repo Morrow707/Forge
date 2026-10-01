@@ -8,11 +8,12 @@ import { Health } from "@capgo/capacitor-health";
 // nobody opted into" posture as biometric-lock.ts. Read-only: Forge never
 // writes anything back to Health.
 //
-// iOS only for now, same gating as ar-measure.ts/native-ar-preview.ts --
-// the underlying plugin also supports Android Health Connect, but that
-// needs its own AndroidManifest permissions and a privacy-policy handler
-// this app doesn't have yet, so exposing the toggle there would offer
-// something that silently does nothing.
+// iOS (HealthKit) and Android (Health Connect), through the same plugin and the same data types.
+// Android was switched on 2026-10-01 for the store launch: the plugin's own manifest declares
+// the Health Connect permissions (trimmed to what this file READS in android/app's manifest, the
+// Play health policy refuses unused ones), strings.xml names the privacy policy URL the Health
+// Connect sheet opens, and Health Connect's absence on an older phone is a plain message, not a
+// toggle that silently does nothing. Read-only on both.
 // Both keys below are suffixed with the signed-in athlete's id. The phone's
 // Health store belongs to whoever owns the phone, but the app's sign-in does
 // not: a shared team iPad, a family phone, a sibling borrowing a device.
@@ -62,7 +63,18 @@ const NON_SLEEP_STATES = new Set(["inBed", "awake"]);
 const LBS_PER_KG = 2.20462;
 
 export function isNativeHealthSupported() {
-  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+  return Capacitor.isNativePlatform() && (Capacitor.getPlatform() === "ios" || Capacitor.getPlatform() === "android");
+}
+
+/** What the phone calls its health store, for every label and toast that names it. */
+export function nativeHealthName(): string {
+  return Capacitor.getPlatform() === "android" ? "Health Connect" : "Apple Health";
+}
+
+function healthSettingsHint(): string {
+  return Capacitor.getPlatform() === "android"
+    ? "Enable it in Health Connect to sync."
+    : "Enable it in iOS Settings to sync.";
 }
 
 function scoped(key: string, userId: number): string {
@@ -86,11 +98,19 @@ export async function enableHealthSync(userId: number): Promise<void> {
   if (!isNativeHealthSupported()) {
     throw new Error("Health sync isn't supported on this device.");
   }
+  // Health Connect ships with Android 14; on 8 to 13 it is a separate install. Saying so beats a
+  // permission sheet that never opens.
+  if (Capacitor.getPlatform() === "android") {
+    const availability = await Health.isAvailable().catch(() => null);
+    if (availability && availability.available === false) {
+      throw new Error("Health Connect isn't installed on this phone. Install it from the Play Store, then turn sync on.");
+    }
+  }
   const status = await Health.requestAuthorization({ read: [...READ_TYPES, WORKOUT_READ_TYPE], write: [] });
   localStorage.setItem(scoped(PROMPTED_KEY, userId), "1");
   const authorized = status.readAuthorized ?? [];
   if (!READ_TYPES.some((t) => authorized.includes(t))) {
-    throw new Error("Health access was denied. Enable it in iOS Settings to sync.");
+    throw new Error(`Health access was denied. ${healthSettingsHint()}`);
   }
   localStorage.setItem(scoped(STORAGE_KEY, userId), "1");
 }

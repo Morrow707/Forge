@@ -37,6 +37,7 @@ import {
   isHealthSyncEnabled,
   enableHealthSync,
   disableHealthSync,
+  nativeHealthName,
 } from "@/lib/native-health";
 
 export function NotificationSettingsDialog({
@@ -106,10 +107,10 @@ export function NotificationSettingsDialog({
     try {
       if (next) {
         await enableHealthSync(user.id);
-        toast.success("Apple Health sync enabled -- your check-in will pre-fill when available");
+        toast.success(`${nativeHealthName()} sync enabled -- your check-in will pre-fill when available`);
       } else {
         disableHealthSync(user.id);
-        toast.success("Apple Health sync turned off");
+        toast.success(`${nativeHealthName()} sync turned off`);
       }
       setHealthSyncEnabledState(next);
     } catch (err) {
@@ -287,7 +288,7 @@ export function NotificationSettingsDialog({
               />
               <span>
                 <span className="flex items-center gap-1.5 font-semibold">
-                  <Watch className="h-3.5 w-3.5" /> Sync Apple Health
+                  <Watch className="h-3.5 w-3.5" /> Sync {nativeHealthName()}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   Pre-fills sleep, resting heart rate, and heart rate variability on

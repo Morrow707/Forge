@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
 import { useQuery } from "@tanstack/react-query";
@@ -142,6 +143,13 @@ async function startAddOnCheckout(addOnId: FreeAgentAddOnId) {
  * the button surfaces it rather than failing silently. */
 export default function AthleteUpgrade() {
   const supported = isAppleIapSupported();
+  // THE ANDROID APP SELLS NOTHING YET, AND SAYS SO. Google Play's billing policy is Apple's:
+  // a digital subscription bought inside the app goes through Play Billing, and the app may not
+  // hand a buyer to the web checkout or name it. Until the Play Billing path exists (see the
+  // launch checklist), the Android app shows the tiers and no purchase button -- not the Stripe
+  // grid the web shows, which inside a Play-distributed app is a policy violation. The server
+  // refuses a Stripe checkout from any native platform header regardless.
+  const androidNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 
   const { data: liveConfig } = useQuery<{ enabled: boolean }>({
     queryKey: ["/api/billing/apple-iap-enabled"],
@@ -157,9 +165,9 @@ export default function AthleteUpgrade() {
   const { data: billingStatus } = useQuery<{ open: boolean }>({
     queryKey: ["/api/billing/status"],
     queryFn: () => getJson("/api/billing/status"),
-    enabled: !supported,
+    enabled: !supported && !androidNative,
   });
-  const webBillingOpen = !supported && !!billingStatus?.open;
+  const webBillingOpen = !supported && !androidNative && !!billingStatus?.open;
 
   const {
     data: products,
@@ -256,7 +264,18 @@ export default function AthleteUpgrade() {
           ) : undefined
         }
       >
-        {!supported && (
+        {androidNative && (
+          <Card className="mt-6">
+            <CardContent className="p-6 text-sm text-muted-foreground">
+              <p className="font-semibold text-foreground">Subscriptions aren't available in the Android app yet.</p>
+              <p className="mt-2">
+                Everything you already have access to keeps working. Plans will be sold here through Google Play
+                once that is ready.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+        {!supported && !androidNative && (
           <div className={cn("mt-6 grid grid-cols-1 gap-4", FREE_AGENT_TIER_GRID_COLS)}>
             {FREE_AGENT_TIER_ORDER.map((id) => {
               const tier = FREE_AGENT_TIERS[id];

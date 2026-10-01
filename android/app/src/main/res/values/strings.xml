@@ -4,4 +4,8 @@
     <string name="title_activity_main">Forge</string>
     <string name="package_name">com.foreperformancesystems.forge</string>
     <string name="custom_url_scheme">com.foreperformancesystems.forge</string>
+    <!-- The page the Health Connect permission sheet opens from its "Privacy policy" link
+         (@capgo/capacitor-health's PermissionsRationaleActivity reads this). The Privacy
+         Policy already discloses the health data read and its AI use. Moves with the domain. -->
+    <string name="health_connect_privacy_policy_url">https://forge-ebhd.onrender.com/privacy</string>
 </resources>

@@ -39,6 +39,7 @@ import {
   promptHealthSyncOnce,
   fetchLatestHealthSnapshot,
   fetchTodaysHeartRateRecovery,
+  nativeHealthName,
 } from "@/lib/native-health";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -193,7 +194,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
       if (healthUserId == null) return;
       if (!isHealthSyncEnabled(healthUserId)) await enableHealthSync(healthUserId);
       await syncFromHealth();
-      toast.success("Synced with Apple Health");
+      toast.success(`Synced with ${nativeHealthName()}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't sync with Health");
     } finally {
