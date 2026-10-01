@@ -352,7 +352,7 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **581** is the newest TestFlight build, cut 2026-10-01: the jump's countermovement read
+- Build **582** is the newest TestFlight build, cut 2026-10-01 (581 was a verify_build run): the jump's countermovement read
   off the hip (`measureCountermovement`, `JumpRep.countermovement`: dip depth, eccentric and
   concentric durations and velocities, the window a hip-mounted OVR reads), and the tracker that
   films a set following the exercise (`resolve-tracking-mode.ts`: a generic "full" on a
