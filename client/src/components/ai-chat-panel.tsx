@@ -28,7 +28,11 @@ export function AiChatPanel({
   postUrl,
   athleteName,
   title = "AI Training Chat",
-  description = "Ask about your training, recovery, or progress. If you join a coach later, they'll be able to see this conversation.",
+  // The sentence a reviewer reads (App Store guideline 1.4.1): the AI's own instructions already
+  // refuse to diagnose and send pain to a doctor, and the EULA carries the legal disclaimer, but
+  // neither is on this screen. The sport coach pages say the same thing in their own words;
+  // ai-coach-says-not-medical-advice.test.ts keeps every AI chat surface saying it.
+  description = "Ask about your training, recovery, or progress. Training guidance, not medical advice: for pain or injury, see a doctor or athletic trainer. If you join a coach later, they'll be able to see this conversation.",
 }: {
   fetchUrl: string;
   postUrl?: string;

@@ -4,9 +4,26 @@ import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 import { visualizer } from "rollup-plugin-visualizer";
 
+// The App Store Smart App Banner (<meta name="apple-itunes-app">) is the one direction Apple
+// is happy to see between the website and the app: the web sending people TO the store. Nobody
+// has the App Store id until the app record exists, so the tag is injected from
+// VITE_APP_STORE_ID at build time and is absent, not a placeholder, until the id is set. Scott
+// supplies the id; see CLAUDE.md "Three things parked by Scott, 2026-09-20".
+function smartAppBanner() {
+  return {
+    name: "forge-smart-app-banner",
+    transformIndexHtml(html: string) {
+      const id = (process.env.VITE_APP_STORE_ID ?? "").trim();
+      if (!/^\d{6,}$/.test(id)) return html;
+      return html.replace("</head>", `    <meta name="apple-itunes-app" content="app-id=${id}" />\n  </head>`);
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
+    smartAppBanner(),
     // `VITE_BUNDLE_STATS=/some/dir npm run build` writes a treemap of what is inside each chunk
     // (dist sizes are visible in the build log; what is IN the 600kB entry is not). Off by default:
     // the report is for a person looking at the bundle, not a build artifact.

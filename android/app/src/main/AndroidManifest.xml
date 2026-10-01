@@ -33,6 +33,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The video review's voice-over (video-review-editor.tsx, getUserMedia audio) needs the
+         microphone; the WebView's onPermissionRequest can only grant what the manifest declares.
+         Android 13+ makes notifications a runtime permission, and the push plugin's prompt is
+         refused silently without this line. Nothing else is declared on purpose: no storage
+         permission (the Filesystem plugin writes to the app's own directory) and no location. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- getUserMedia's WebView-level camera access still needs the OS
          permission below (WebChromeClient.onPermissionRequest) even though
          live tracking talks to the camera through getUserMedia rather than
