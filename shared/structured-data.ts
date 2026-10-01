@@ -10,15 +10,17 @@
  * is a manual action from Google as well as a lie. No sameAs: there are no social profiles to
  * point at (shared/contact.ts is the whole of what Forge publishes). No claim about measurement
  * accuracy anywhere -- schema.org has no field for it and the honest statement lives in
- * shared/camera-accuracy-copy.ts, on the page, where a buyer reads it. A FAQPage is not emitted
- * because no public page has an FAQ; adding the schema without the visible questions is exactly
- * the kind of markup Google penalises.
+ * shared/camera-accuracy-copy.ts, on the page, where a buyer reads it. The one FAQPage is on
+ * /for-high-schools, emitted from the same list the page renders (shared/high-schools-faq.ts),
+ * because a FAQPage without the visible questions is exactly the kind of markup Google
+ * penalises.
  */
 import { PUBLIC_ROUTES, type PublicRoute } from "./public-routes";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "./free-agent-tiers";
 import { BILLING_TIERS, ORG_PER_ATHLETE_CENTS } from "./billing-tiers";
 import { FORGE_CONTACT_EMAIL, FORGE_LEGAL_ENTITY, FORGE_POSTAL_ADDRESS } from "./contact";
 import { MOVEMENTS } from "./movement-library";
+import { highSchoolsFaqJsonLd } from "./high-schools-faq";
 
 export const SITE_NAME = "Forge Performance Systems";
 export const LOGO_PATH = "/icon-512.png";
@@ -171,5 +173,6 @@ export function jsonLdForRoute(origin: string, route: PublicRoute, imageAbsolute
       inLanguage: "en",
     });
   }
+  if (route.path === "/for-high-schools") graph.push(highSchoolsFaqJsonLd());
   return { "@context": "https://schema.org", "@graph": graph };
 }
