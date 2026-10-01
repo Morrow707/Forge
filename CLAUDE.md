@@ -362,6 +362,16 @@ can install. Delete entries as a `beta` ships them.
   (`shared/height-units.ts`, `HeightInput` on signup, the provisional-athlete claim and the
   profile form; `users.heightIn` is unchanged total inches, no migration). Goes with the first
   `beta` after the hold lifts.
+- **Queued on `main`, not yet uploaded** (#202, #203, store-launch items): Health Connect on
+  Android (same plugin and types as HealthKit; unused permissions removed at manifest merge),
+  Google Play Billing end to end (`GooglePlayBillingPlugin.java`, `google-play-billing.ts`
+  client and server, `subscriptions.google_play_purchase_token`; the Android Upgrade screen
+  sells nothing and says so until `GOOGLE_PLAY_BILLING_LIVE`), `ACCEPT_UNDER_13_SIGNUPS=false`
+  as the under-13 self-signup switch, App Review notes in docs/app-store-listing-copy.md. The
+  Play Console steps are in docs/app-store-launch-notes.md. Untested on an Android device.
+- **On a branch, NOT merged: the schools FAQ** (`claude/faq-high-schools`,
+  `shared/high-schools-faq.ts`, FAQPage schema on /for-high-schools). Scott reads the ten
+  answers before it ships, per the 2026-09-20 note; merging deploys it to the website.
 - **Queued on `main`, not yet uploaded** (#201, store-launch items): the AI Training Chat
   screen's not-medical-advice line, the paywall never-steer scan, Android RECORD_AUDIO and
   POST_NOTIFICATIONS, the Apple Health switch's AI sentence, the Smart App Banner injected from
