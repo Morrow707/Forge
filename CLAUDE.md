@@ -489,7 +489,31 @@ Two things worth saying out loud when someone tests this:
   under attorney review; a change to it changes the hash on every later signature, which is
   the point of storing it.
 
-## The strength profile: a percentile that names nobody
+## The site is visible, sign-up is closed: "Coming soon"
+
+Added 2026-10-01. Scott: "we have a website, but we need to hide how people can access it ...
+build like a coming soon icon where people can see it but not sign up." The marketing pages
+stay up and indexable. Every way to create an account is closed to the public and reads
+"Coming soon"; a person holding the invite code still signs up.
+
+- **Two Render variables.** `PUBLIC_SIGNUPS_OPEN=false` closes it; unset or anything else is
+  open, so a deploy missing the variable is the launched product, never a locked one.
+  `SIGNUP_INVITE_CODE` is the code (case-insensitive, trimmed); with none set a closed site has
+  no door, which is a valid state. `server/signup-availability.ts`.
+- **One rule, asked by both sides.** `GET /api/public/signup-availability` tells the client
+  what to draw; `POST /api/auth/signup` refuses with 403 and `signupClosed: true` without a
+  valid `inviteCode` in the body. The button is presentation; the route is the gate.
+- **One CTA component.** `SignupCta` and `SignupLink` (`client/src/components/signup-cta.tsx`)
+  are the only things that link to /signup; `signup-is-closed-everywhere.test.ts` refuses a
+  bare link anywhere else. Unknown draws the open label disabled, so the page never flashes.
+- **The invite travels as `/signup?invite=CODE`** (the link to send a tester) or is typed on
+  the signup page's coming-soon card, and is kept in sessionStorage so the rest of the site
+  opens up for that visitor until the browser closes. Never stored on the account.
+- **What stays open:** login, password reset, a guardian claiming a minor's account, an athlete
+  claiming a coach-provisioned account, a staff coach joining by invite code INSIDE a signup
+  that already passed the gate. None of those is public sign-up.
+
+
 
 Added 2026-09-21. Scott wanted three things -- a comparison against other athletes, a
 per-muscle map like the one in the screenshots he sent, and an interactive figure beginners

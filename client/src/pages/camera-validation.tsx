@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { SignupCta } from "@/components/signup-cta";
 import { Card, CardContent } from "@/components/ui/card";
 import { Check, X, AlertTriangle, ArrowRight, Camera } from "lucide-react";
 import { MarketingShell } from "@/components/marketing-shell";
@@ -209,11 +210,9 @@ export default function CameraValidationPage() {
             and a system that cannot tell them apart cannot be debugged or improved.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/signup">
-              <Button>
-                Try Forge <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-            </Link>
+            <SignupCta>
+              Try Forge <ArrowRight className="ml-1.5 h-4 w-4" />
+            </SignupCta>
             <Link href="/for-high-schools">
               <Button variant="outline">For schools and clubs</Button>
             </Link>

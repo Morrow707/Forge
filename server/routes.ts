@@ -111,6 +111,7 @@ import {
 } from "@shared/free-agent-tiers";
 import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
 import { GOOGLE_PLAY_BILLING_LIVE, verifyGooglePlayPurchase } from "./google-play-billing";
+import { publicSignupOpen, inviteCodeAccepted } from "./signup-availability";
 import { verifyMediaUrl } from "./media-url-signing";
 import { summarizeCspReport } from "./csp-report";
 import { shouldTouchLastSeen } from "./session-tracking";
@@ -12721,6 +12722,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // they have an account to log into at all. Doesn't reveal anything a
   // failed/successful signup attempt with the same code wouldn't already:
   // whether it resolves to a real program.
+  // What the marketing pages and /signup draw: "Get started" or "Coming soon". With ?invite=
+  // the page can learn whether a typed code opens the door before the form is shown. The
+  // answer is presentation; POST /api/auth/signup is the gate. See server/signup-availability.ts.
+  app.get("/api/public/signup-availability", async (req, res) => {
+    const open = publicSignupOpen();
+    const invite = typeof req.query.invite === "string" ? req.query.invite : undefined;
+    res.json({ open, inviteAccepted: !open && inviteCodeAccepted(invite) });
+  });
+
   app.get("/api/public/branding", async (req, res) => {
     const code = typeof req.query.code === "string" ? req.query.code.trim() : "";
     if (!code) {

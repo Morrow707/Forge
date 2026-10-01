@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { SignupCta } from "@/components/signup-cta";
 import { Card, CardContent } from "@/components/ui/card";
 import { ShieldCheck, Users, FileCheck, Lock, ArrowRight, AlertTriangle, School, ChevronDown } from "lucide-react";
 import { MarketingShell } from "@/components/marketing-shell";
@@ -51,11 +52,9 @@ export default function ForHighSchoolsPage() {
             field on a form.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/signup">
-              <Button>
-                Get started <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-            </Link>
+            <SignupCta>
+              Get started <ArrowRight className="ml-1.5 h-4 w-4" />
+            </SignupCta>
             <Link href="/pricing">
               <Button variant="outline">See pricing</Button>
             </Link>

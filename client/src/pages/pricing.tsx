@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { SignupCta } from "@/components/signup-cta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -282,9 +283,7 @@ export default function PricingPage() {
         </div>
 
         <div className="mt-12 flex flex-col items-center gap-3">
-          <Link href="/signup">
-            <Button size="lg">Get started</Button>
-          </Link>
+          <SignupCta size="lg">Get started</SignupCta>
           <p className="text-sm text-muted-foreground">
             Already have an account?{" "}
             <Link href="/login" className="font-semibold text-primary hover:underline">

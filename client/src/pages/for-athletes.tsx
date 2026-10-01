@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { SignupCta } from "@/components/signup-cta";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dumbbell, LineChart, Trophy, Apple, ArrowRight, AlertTriangle, ShieldCheck } from "lucide-react";
 import { MarketingShell } from "@/components/marketing-shell";
@@ -42,11 +43,9 @@ export default function ForAthletesPage() {
             the moment you have signal again.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/signup">
-              <Button>
-                Create an account <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-            </Link>
+            <SignupCta>
+              Create an account <ArrowRight className="ml-1.5 h-4 w-4" />
+            </SignupCta>
             <Link href="/pricing">
               <Button variant="outline">See pricing</Button>
             </Link>

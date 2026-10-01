@@ -7898,6 +7898,9 @@ export const signupSchema = z.object({
   name: z.string().min(1, "Name is required"),
   role: z.enum(["coach", "athlete"]),
   coachCode: z.string().optional(),
+  // The pilot invite code, read while public sign-up is closed (server/signup-availability.ts).
+  // Ignored when sign-up is open; never stored.
+  inviteCode: z.string().trim().max(64).optional(),
   // Required for every signup (coach and athlete both) so the route can
   // derive a privacy tier (see shared/privacy-tiers.ts) before the account
   // is ever created -- an athlete signup that resolves to Tier 1 (under 13)

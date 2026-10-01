@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { Button } from "@/components/ui/button";
+import { SignupCta } from "@/components/signup-cta";
 import {
   AlertTriangle,
   Sparkles,
@@ -256,12 +257,10 @@ export default function LandingPage() {
             answers a coach can actually act on.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/signup">
-              <Button size="lg" className="w-full sm:w-auto">
-                Get Started Free
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            <SignupCta size="lg" className="w-full sm:w-auto">
+              Get Started Free
+              <ArrowRight className="h-4 w-4" />
+            </SignupCta>
             <Link href="/login">
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
                 Log In
@@ -619,12 +618,10 @@ export default function LandingPage() {
             Create a free account and build your first program in the next five minutes.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/signup">
-              <Button size="lg" className="w-full sm:w-auto">
-                Get Started Free
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            <SignupCta size="lg" className="w-full sm:w-auto">
+              Get Started Free
+              <ArrowRight className="h-4 w-4" />
+            </SignupCta>
             <Link href="/login">
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
                 Log In
