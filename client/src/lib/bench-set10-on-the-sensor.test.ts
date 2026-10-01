@@ -16,7 +16,10 @@ describe("set 10 lands on the sensor", () => {
     // (see capture-replay.ts). The ten presses after it are the device's ten, rep for rep.
     const presses = result.metrics!.repBreakdown.filter((r) => r.startT >= 10_000);
     expect(presses.length).toBe(10);
-    const mean = presses.reduce((a, r) => a + r.meanVelocityMps, 0) / presses.length;
+    // Distance over time across the presses, the way the set-level number is built since build
+    // 579 (see meanVelocityMps in summarizeTrackedSet): an average of per-rep ratios lets one
+    // dropout rep with a short window move the set.
+    const mean = presses.reduce((a, r) => a + r.romCm / 100, 0) / presses.reduce((a, r) => a + r.concentricSeconds, 0);
     const roms = presses.map((r) => r.romCm).sort((a, b) => a - b);
     const medianRom = roms[Math.floor(roms.length / 2)];
     expect(mean / sensor.meanVelocityMps).toBeGreaterThan(0.9);

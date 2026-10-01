@@ -352,8 +352,11 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- **Queued on `main`, not yet uploaded:** the typed grip width removed from the profile and
-  the tracker (see "The camera measures the athlete"). Goes with the next `beta`.
+- Build **579** is the newest TestFlight build, cut 2026-10-01 from the first sensor-paired
+  squat: the reported concentric window is the drive (`trimPhaseToDrive`,
+  `DRIVE_ONSET_FRACTION` 0.07) while the filters keep the travel margin, the set's mean and mean
+  power are distance over time, and the typed grip width is gone from the profile and the
+  tracker. See docs/camera-tracking-notes.md, "Build 578 beside OVR, the first squat".
 - Build **578** is the newest TestFlight build, cut 2026-09-30 from set 11: the two 3D-pose
   rulers are one vote in `reconcileScaleEstimates`, the blend is inverse-variance weighted, and
   the 3D-pose uncertainties are set from seven sensor-paired benches (0.2). See

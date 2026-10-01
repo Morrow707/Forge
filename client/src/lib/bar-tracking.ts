@@ -1111,6 +1111,50 @@ export function travelOnsetMarginFor(romKind: string | null | undefined): number
   return (romKind && TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M[romKind]) || TRAVEL_ONSET_MARGIN_M;
 }
 
+/** THE CONCENTRIC WINDOW IS WHERE THE BAR WAS MOVING: bounded by a fraction of the rep's own
+ *  peak speed, the way a bar sensor defines it.
+ *
+ *  The travel margin (trimPhaseToTravel, a centimetre or three quarters of one) was fitted to
+ *  two takes and held on the benches, then failed on the back squat beside OVR, 2026-10-01:
+ *  a dead-flat 0.6s sit in the hole within a centimetre of the bottom, and the centimetre
+ *  margin counted the sit as lifting. Windows of 1.0-1.2s against the sensor's 0.68-0.84, mean
+ *  velocity 0.65 against 1.00 with the range of motion within 4%. A margin in centimetres
+ *  cannot know a 70cm squat from a 36cm press, and a share of range lands on the drive.
+ *
+ *  A speed threshold knows neither and needs neither: the window opens at the last sample
+ *  before the peak where the bar was still under DRIVE_ONSET_FRACTION of that rep's peak speed
+ *  and closes at the first sample after it that drops under the same line. Replayed through
+ *  this on the squat: 0.73, 0.67, 0.60, 0.67, 0.63 against the sensor's 0.71, 0.68, 0.70,
+ *  0.73, 0.84 at a tenth of the peak. Swept through the real pipeline on six sensor-paired
+ *  sets, the set windows against the sensor's: at 0.10 every take read about 7% short (squat
+ *  0.67/0.73, bench 7 0.44/0.475, bench 10 0.45/0.48); at 0.07 the three clean benches land
+ *  within 4% (0.46/0.475, 0.49/0.48, 0.50/0.47) and the squat 11% long (0.81/0.73) on a slow
+ *  first drive. Seven hundredths it is; the next sensor-paired squat says whether the long
+ *  side is the fraction or that take. Decided on speedsMps (the decision array), never the
+ *  reported one. Falls back to the travel margin when the window would collapse, so a rep is
+ *  never left without one. */
+export const DRIVE_ONSET_FRACTION = 0.07;
+
+export function trimPhaseToDrive(
+  speeds: number[],
+  startIdx: number,
+  endIdx: number,
+  peakIdx: number,
+  fraction: number = DRIVE_ONSET_FRACTION,
+): { startIdx: number; endIdx: number } | null {
+  if (endIdx - startIdx < 2) return null;
+  if (!(peakIdx > startIdx && peakIdx < endIdx)) return null;
+  const peak = speeds[peakIdx];
+  if (!(peak > 0)) return null;
+  const threshold = peak * fraction;
+  let from = peakIdx;
+  while (from > startIdx && speeds[from - 1] >= threshold) from--;
+  let to = peakIdx;
+  while (to < endIdx && speeds[to + 1] >= threshold) to++;
+  if (to - from < 2) return null;
+  return { startIdx: from, endIdx: to };
+}
+
 export function trimPhaseToTravel(
   positions: number[],
   startIdx: number,
@@ -1465,26 +1509,34 @@ export function summarizeTrackedSet(
     // The peak is found over the whole phase first, because the travel window is anchored on it
     // -- see trimPhaseToTravel. The speed-based trim only ever finds a window this one contains.
     const wholePhasePeak = robustPeakSpeed(speedsReportedMps, phase.startIdx, phase.endIdx, confidences);
+    // TWO WINDOWS, TWO JOBS. The travel-margin window is what every phantom and rack-move
+    // filter below was fitted on (duration ratios, implausibly-fast, overlong), so it keeps
+    // deciding which phases are reps. The drive window (trimPhaseToDrive) is what is REPORTED:
+    // the sensor's definition of the concentric, fitted to the sensor. Same split as speedsMps
+    // against speedsReportedMps, and for the same reason: changing what a number is read over
+    // must not change which reps exist.
     const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx, travelOnsetMarginFor(romKind));
     const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
+    const drive = trimPhaseToDrive(speedsMps, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx) ?? moving;
+    const driveDuration = (points[drive.endIdx].t - points[drive.startIdx].t) / 1000;
     // RANGE OF MOTION OVER THE TIME THE BAR WAS TRAVELLING -- a bar sensor's definition of mean
     // concentric velocity, and the one this is calibrated against. The sample mean of the
     // smoothed speeds it replaced sat at 0.42x of the sensor on the same reps: a mean of
     // instantaneous speeds over a window that includes the slow start is not distance over time.
     // Capped at the same plausibility ceiling every other reported speed is.
     const romM = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
-    const slice = speedsReportedMps.slice(moving.startIdx, moving.endIdx + 1);
-    const confidenceSlice = confidences.slice(moving.startIdx, moving.endIdx + 1);
+    const slice = speedsReportedMps.slice(drive.startIdx, drive.endIdx + 1);
+    const confidenceSlice = confidences.slice(drive.startIdx, drive.endIdx + 1);
     const mean =
-      duration > 0 && romM > 0
-        ? Math.min(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, romM / duration)
+      driveDuration > 0 && romM > 0
+        ? Math.min(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, romM / driveDuration)
         : plausibleMean(slice, confidenceSlice);
     // peak/peakIdx (index within the whole trace, used to report how long
     // it took to reach peak velocity, a standard VBT metric) come from
     // robustPeakSpeed rather than a raw max -- see its own comment above.
     // Measured over the moving window too: time-to-peak-velocity counted from a turning point
     // the athlete then stood at for two seconds is not time to peak velocity.
-    const { peak: rawPeak, peakIdx } = robustPeakSpeed(speedsReportedMps, moving.startIdx, moving.endIdx, confidences);
+    const { peak: rawPeak, peakIdx } = robustPeakSpeed(speedsReportedMps, drive.startIdx, drive.endIdx, confidences);
     // A REP'S PEAK IS BOUNDED BY ITS OWN MEAN. Set 10 beside OVR (build 576, 2026-09-30): rep 2
     // read a peak of 0.15 m/s against a mean of 0.52 -- impossible, a peak is never below the
     // average of the window it is read over -- because a hand dropout froze the trace mid-rep
@@ -1501,9 +1553,12 @@ export function summarizeTrackedSet(
       peak,
       mean,
       duration,
+      // What is reported for the rep: the drive window's length and onset.
+      driveDuration,
+      romM,
       startIdx: phase.startIdx,
       endIdx: phase.endIdx,
-      movingStartIdx: moving.startIdx,
+      movingStartIdx: drive.startIdx,
       peakIdx,
       peakFloored,
       peakCapped,
@@ -2002,7 +2057,7 @@ export function summarizeTrackedSet(
       repNumber: repBreakdown.length + 1,
       peakVelocityMps: Math.round(phase.peak * 100) / 100,
       meanVelocityMps: Math.round(phase.mean * 100) / 100,
-      concentricSeconds: Math.round(phase.duration * 100) / 100,
+      concentricSeconds: Math.round(phase.driveDuration * 100) / 100,
       timeToPeakVelocitySeconds,
       eai,
       startT: points[repStartIdx].t,
@@ -2110,13 +2165,22 @@ export function summarizeTrackedSet(
       ) / 100,
     repPeaksFlooredToMean: setConcentric.filter((c) => c.peakFloored).length,
     repPeaksCappedToMeanRatio: setConcentric.filter((c) => c.peakCapped).length,
-    meanVelocityMps:
-      Math.round(
-        (setConcentric.reduce((a, c) => a + c.mean, 0) / (setConcentric.length || 1)) * 100,
-      ) / 100,
+    // THE SET'S MEAN IS THE SET'S DISTANCE OVER THE SET'S TIME, not the average of the reps'
+    // ratios. A rep whose hands dropped out mid-drive gets a short window and a mean of 1.2 on
+    // a set lifted at 0.8; averaging ratios lets that one rep move the set 10%, while summing
+    // distance and time weights it by the fraction of the set it actually was. On clean reps
+    // the two agree to the second decimal (the sensor averages its rep means, and its reps are
+    // clean); on the 2026-09-30 benches the average of ratios ran 12-18% over the sensor and
+    // the distance-over-time 2-5%.
+    meanVelocityMps: (() => {
+      const dist = setConcentric.reduce((a, c) => a + c.romM, 0);
+      const time = setConcentric.reduce((a, c) => a + c.driveDuration, 0);
+      const weighted = time > 0 ? Math.min(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, dist / time) : setConcentric.reduce((a, c) => a + c.mean, 0) / (setConcentric.length || 1);
+      return Math.round(weighted * 100) / 100;
+    })(),
     concentricSeconds:
       Math.round(
-        (setConcentric.reduce((a, c) => a + c.duration, 0) / (setConcentric.length || 1)) * 100,
+        (setConcentric.reduce((a, c) => a + c.driveDuration, 0) / (setConcentric.length || 1)) * 100,
       ) / 100,
     eccentricSeconds:
       setEccentric.length > 0
@@ -2138,13 +2202,15 @@ export function summarizeTrackedSet(
             loadKg * GRAVITY_MPS2 * (setConcentric.reduce((a, c) => a + c.peak, 0) / (setConcentric.length || 1)),
           )
         : null,
+    // Distance over time, like meanVelocityMps above.
     meanPowerWatts:
       loadKg && loadKg > 0
-        ? Math.round(
-            loadKg *
-              GRAVITY_MPS2 *
-              (setConcentric.reduce((a, c) => a + c.mean, 0) / (setConcentric.length || 1)),
-          )
+        ? (() => {
+            const dist = setConcentric.reduce((a, c) => a + c.romM, 0);
+            const time = setConcentric.reduce((a, c) => a + c.driveDuration, 0);
+            const v = time > 0 ? Math.min(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, dist / time) : setConcentric.reduce((a, c) => a + c.mean, 0) / (setConcentric.length || 1);
+            return Math.round(loadKg * GRAVITY_MPS2 * v);
+          })()
         : null,
     romCm:
       repBreakdown.length > 0

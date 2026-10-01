@@ -1764,6 +1764,50 @@ pinned by `bench-set7-count.test.ts` (ten reps, the un-rack settle folded into r
   `trackingDiagnostics.cameraView` now, with the facing and the expected view beside it;
   `no-framing-advice-after-a-take.test.ts` refuses the toast. Rule #1, 2026-09-29 clause.
 
+## Build 578 beside OVR, the first squat since the window was fitted: the window is the drive
+
+Back squat, 2026-10-01, 135lb x 5, filmed head-on from the front of the rack (Scott's photo:
+phone upright at the rack, the plates both visible). The shoulders carried the bar on 602
+points. Ground truth `OVR_SQUAT_SET1_2026_10_01`; fixture `squat-set1-2026-10-01.json`,
+pinned by `squat-drive-window.test.ts`.
+
+| | Device (578) | Sensor | Replayed (579) |
+|---|---|---|---|
+| Reps | 5 | 5 | 5 |
+| Range of motion | 69.9cm | 72.9cm | 69.9cm |
+| Mean velocity | 0.65 m/s | 1.00 | 0.95 |
+| Concentric window | 1.11s | 0.73s | 0.75s |
+| Peak velocity | 1.27 | 1.60 | 1.45 |
+
+- **Count exact and range of motion within 4%; the time was wrong.** The centimetre travel
+  margin (`trimPhaseToTravel`) was fitted on a single squat rep on 09-28 whose bottom wobbled;
+  this squat's bottom is a dead-flat 0.6s sit within a centimetre of the floor of the rep,
+  and the margin counted the sit as lifting. Mean velocity 35% low with the distance right.
+- **The window is now the drive** (`trimPhaseToDrive`, `DRIVE_ONSET_FRACTION` 0.07): open
+  at the last sample before the peak still under seven hundredths of that rep's peak speed,
+  close at the first after it that drops under the line. The sensor's definition, in effect.
+  Swept through the real pipeline on six sensor-paired sets: at a tenth every take read 7%
+  short; at seven hundredths the three clean benches land within 4% of the sensor's window
+  (0.46/0.475, 0.49/0.48, 0.50/0.47) and the squat at 0.75/0.73. No per-lift table needed.
+- **Two windows, two jobs.** Every phantom and rack-move filter was fitted on the travel
+  margin's duration, so that window still decides which phases are reps; the drive window is
+  what is reported (concentric seconds, mean, peak, time to peak). Same split as `speedsMps`
+  against `speedsReportedMps`: changing what a number is read over must not change which reps
+  exist. Counts on every fixture are unchanged.
+- **The set's mean is distance over time**, not the average of the reps' ratios. A rep whose
+  hands dropped out mid-drive gets a short window and a mean of 1.2 on a set lifted at 0.8;
+  summing distance and time weights it by what it was. On the 09-30 benches the average of
+  ratios ran 12-18% over the sensor, distance-over-time 2-5%. Mean power follows.
+- **Replayed, ratio to the sensor's mean:** squat 0.95, bench 7 1.05, bench 10 1.03, bench 5
+  0.94, bench 6 0.79 (its scale is the 26% in-plane miss from 09-29, unchanged here).
+- **Peak is still 10% low on the squat** (1.45 against 1.60). The 165ms velocity smoothing
+  flattens a 0.7s drive's peak; a bench at 0.45s would be flatter still, and the bench peaks
+  read within 2% because they are bounded by the mean and averaged. Open.
+- **The box jump from the same session** read 65.8cm with the box as its ruler and two reps
+  inside it at 81 and 74cm. Nothing has ever checked the jump tracker against anything; Scott
+  will jump with the OVR on next time, and its range of motion is the comparison (hip rise
+  from standing to the top), not a velocity, which the jump path does not report.
+
 ## Build 578 beside OVR, set 12 and the two rows
 
 Bench set 12 (Sep 30, set 4), the first take through the weighted blend on the phone. Ground
