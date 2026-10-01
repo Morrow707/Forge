@@ -1,5 +1,6 @@
 import passport from "passport";
 import { under13SelfSignupClosed, UNDER_13_SIGNUP_CLOSED_MESSAGE } from "./age-policy";
+import { signupAllowed, SIGNUP_CLOSED_MESSAGE } from "./signup-availability";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -586,6 +587,11 @@ export function setupAuth(app: Express) {
       const parsed = signupSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      // The site is visible, sign-up is closed (server/signup-availability.ts). The button on
+      // every page says "Coming soon"; this is the gate.
+      if (!signupAllowed(parsed.data.inviteCode)) {
+        return res.status(403).json({ message: SIGNUP_CLOSED_MESSAGE, signupClosed: true });
       }
       const {
         email,

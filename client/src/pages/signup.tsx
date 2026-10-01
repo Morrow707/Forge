@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useSignupAvailability } from "@/hooks/use-signup-availability";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -29,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Dumbbell, ClipboardList, Sparkles, Check, Lock } from "lucide-react";
+import { Dumbbell, ClipboardList, Sparkles, Check, Lock, Clock } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
@@ -59,6 +60,10 @@ function useDebounced<T>(value: T, delayMs: number): T {
 
 export default function SignupPage() {
   const { user, isLoading, signupMutation } = useAuth();
+  // The site is visible, sign-up is closed (server/signup-availability.ts). Closed and without
+  // an accepted invite, the page is a "Coming soon" card with a place to type the code.
+  const availability = useSignupAvailability();
+  const [inviteDraft, setInviteDraft] = useState(availability.inviteCode);
   // A QR code or shared link can carry ?code=XXXX (see the coach dashboard's
   // invite QR) so scanning it lands here with the athlete role and invite
   // code already filled in -- just enter name/email/password and go.
@@ -200,6 +205,7 @@ export default function SignupPage() {
     setFormError("");
     isFreeAgentAttemptRef.current = role === "athlete" && !coachCode.trim();
     signupMutation.mutate({
+      inviteCode: availability.inviteCode || undefined,
       name,
       email,
       password,
@@ -253,6 +259,52 @@ export default function SignupPage() {
           )}
         </div>
 
+        {availability.canSignUp === false ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" /> Coming soon
+              </CardTitle>
+              <CardDescription>
+                Forge isn't open for sign-ups yet. Have a look around; the whole site is here. If you
+                were given an invite code, enter it to create your account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form
+                className="space-y-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  availability.setInviteCode(inviteDraft);
+                }}
+              >
+                <div className="space-y-1.5">
+                  <Label htmlFor="invite-code">Invite code</Label>
+                  <Input
+                    id="invite-code"
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    value={inviteDraft}
+                    onChange={(e) => setInviteDraft(e.target.value)}
+                    placeholder="Enter your invite code"
+                  />
+                </div>
+                {availability.inviteRejected && (
+                  <p className="text-sm text-destructive">That code didn't open the door. Check it and try again.</p>
+                )}
+                <Button type="submit" className="w-full" disabled={!inviteDraft.trim()}>
+                  Continue
+                </Button>
+                <p className="text-center text-sm text-muted-foreground">
+                  Already have an account?{" "}
+                  <Link href="/login" className="font-semibold text-primary hover:underline">
+                    Log in
+                  </Link>
+                </p>
+              </form>
+            </CardContent>
+          </Card>
+        ) : (
         <Card>
           <CardHeader>
             <CardTitle>Create Account</CardTitle>
@@ -583,6 +635,7 @@ export default function SignupPage() {
             </p>
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );

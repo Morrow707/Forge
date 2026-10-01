@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, Redirect, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { SignupLink } from "@/components/signup-cta";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
@@ -243,9 +244,7 @@ export default function LoginPage() {
               </form>
               <p className="mt-5 text-center text-sm text-muted-foreground">
                 Don't have an account?{" "}
-                <Link href="/signup" className="font-semibold text-primary hover:underline">
-                  Sign up
-                </Link>
+                <SignupLink className="font-semibold text-primary hover:underline">Sign up</SignupLink>
               </p>
               <p className="mt-2 text-center text-sm text-muted-foreground">
                 Are you an admin?{" "}

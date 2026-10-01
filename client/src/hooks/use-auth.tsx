@@ -13,6 +13,8 @@ type SignupPayload = {
   name: string;
   role: "coach" | "athlete";
   coachCode?: string;
+  /** The pilot invite code while public sign-up is closed; see use-signup-availability.ts. */
+  inviteCode?: string;
   phone?: string;
   dateOfBirth: string;
   guardianEmail?: string;
