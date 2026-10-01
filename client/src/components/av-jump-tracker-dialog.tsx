@@ -15,7 +15,7 @@ import { AvCameraChrome } from "@/components/av-camera-chrome";
 import { visionJointsToWorldLandmarks, visionBoxTopToWorldY } from "@/lib/vision-body-landmarks";
 import { bodyScaleFallbacks } from "@/lib/body-scale-fallback";
 import {
-  deriveJumpPoint,
+  deriveJumpPoint, deriveHipPoint,
   detectFormFaults,
   computeLandingAsymmetry,
   calibrateFromFrames,
@@ -500,7 +500,17 @@ export function AvJumpTrackerDialog({
     // actually improving detection through the jump itself.
     const JUMP_OCCLUSION_MAX_GAP_MS = 600;
     const trace: TrackedPoint[] = [];
+    // The hip beside the ankle, for the countermovement (measureCountermovement). Same frames,
+    // same scale, same clock; not bridged across gaps because nothing is segmented on it.
+    const hipTrace: TrackedPoint[] = [];
     for (const f of frames) {
+      const hip = deriveHipPoint(f.worldLandmarks);
+      if (hip) {
+        const lHip = f.worldLandmarks[POSE_LANDMARKS.LEFT_HIP];
+        const rHip = f.worldLandmarks[POSE_LANDMARKS.RIGHT_HIP];
+        const hipConfidence = Math.max(visible(lHip) ? lHip.visibility : 0, visible(rHip) ? rHip.visibility : 0);
+        hipTrace.push({ t: f.t, x: hip.x, y: hip.y, z: hip.z, confidence: hipConfidence });
+      }
       const point = deriveJumpPoint(f.worldLandmarks);
       if (!point) continue;
       const lAnkle = f.worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE];
@@ -593,7 +603,7 @@ export function AvJumpTrackerDialog({
       boxTopWorldY,
       frameIntervalSeconds,
       jumpEvents,
-      { usesBox: usesBox === true, boxHeightCm: boxHeightIn && boxHeightIn > 0 ? boxHeightIn * 2.54 : null },
+      { usesBox: usesBox === true, boxHeightCm: boxHeightIn && boxHeightIn > 0 ? boxHeightIn * 2.54 : null, hipTrace },
     );
     if (metrics?.bestEffort) {
       // RULE #1. The state machine found no clean rep; the number on screen is the best read the
