@@ -1862,6 +1862,45 @@ box. The camera's takeoff velocity is computed per rep (build 556) but is not in
 it to `jumpEvents` or the rep breakdown before the next paired jump, or this comparison cannot
 be made either.
 
+## Queued: the loading dip and the drive, read off the hip (jump)
+
+Added 2026-10-01. Scott: "Will the camera differentiate between the loading drop portion, and
+the rise concentric, back to the landing eccentric?" It did not. The jump tracker marks three
+MOMENTS from the ankle trace (takeoff, landing, next takeoff) and the dip happens at the hip,
+which no jump number read. "Build it. Queue it. Upload with next calibration batch."
+
+**Body tracker, one more reading from the same sensor; nothing removed, nothing appointed.**
+`deriveHipPoint` (pose-tracking.ts) is the hip midpoint; the jump dialog builds a hip trace
+beside the ankle trace from the same scaled frames and hands it to `summarizeJumpSet` as
+`options.hipTrace`. `measureCountermovement` (jump-tracking.ts) reads, per rep, off the
+Kalman-smoothed hip y, walking back from the ankle's takeoff instant:
+
+- the **drive**: back while the hip was lower earlier, with 1cm of hysteresis
+  (`COUNTERMOVEMENT_HYSTERESIS_M`); the lowest hip is the bottom;
+- the **eccentric**: back from the bottom while the hip was higher earlier, to the standing
+  level, then forward to the last moment the hip was still within 1cm of it (a still hip
+  jitters under the hysteresis for as long as the athlete stands, and the first cut counted the
+  whole stand as the eccentric);
+- bounded by the previous landing and `COUNTERMOVEMENT_MAX_SECONDS` (2.5).
+
+`JumpRep.countermovement` carries `dipDepthCm`, `eccentricSeconds`, `eccentricMeanVelocityMps`,
+`concentricSeconds`, `concentricRiseCm`, `concentricMeanVelocityMps`, `concentricPeakVelocityMps`
+and the two timestamps. It is attached BEFORE the gravity and box-rise corrections so both scale
+it by the same ratio as the heights (`scaleCountermovement`; durations are clocks and stay).
+Null, never a number, when the hip did not dip. It reads nothing the state machine decided
+from, so it cannot move a rep count. Declared in `jumpBreakdownEntrySchema`.
+
+**What it makes comparable, for the OVR on a finger with hands on hips:** the sensor's mean
+velocity is the drive's mean, which is `concentricMeanVelocityMps`; its peak is
+`concentricPeakVelocityMps` (and `takeoffVelocityMps` from flight time is a second read of the
+same instant); its range of motion is the tether's travel from the bottom to the apex, which is
+`concentricRiseCm + jumpHeightCm`. The two previous jump pairings could compare none of these.
+
+`jump-countermovement.test.ts`: a synthetic hip (30cm dip over 0.4s, 36cm drive over 0.3s) read
+within 1cm and 0.05s; a still hip returns null; the window does not reach past the previous
+landing; a correction scales the centimetres and not the clocks; the dialog wires the trace and
+both corrections scale it.
+
 ## Build 580: the export carries every per-rep number, and the med ball gets the sensor's axis
 
 Added 2026-10-01 for the next two sensor pairings Scott described:

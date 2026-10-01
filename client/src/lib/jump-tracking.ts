@@ -107,7 +107,134 @@ export type JumpRep = {
    *  is the best read the trace supports -- the highest the ankle rose above standing -- and it
    *  is reported rather than withheld, with this flag so a reader knows what it is. */
   bestEffort?: boolean;
+  /** The loading dip and the drive, read off the HIP (see measureCountermovement). Absent when
+   *  no hip trace was supplied or the hip never dipped before this takeoff. */
+  countermovement?: JumpCountermovement;
 };
+
+/** What a linear transducer at the hip reads on a jump, from the camera's hip trace. Scott,
+ *  2026-10-01: "Will the camera differentiate between the loading drop portion, and the rise
+ *  concentric, back to the landing eccentric?" It did not: the ankle trace gives takeoff and
+ *  landing, and the dip happens at the hip. The sensor's range of motion on a jump is the
+ *  tether's travel from the bottom of the dip to the apex, and its mean velocity spans the
+ *  drive, so these are the numbers that make a hip-mounted sensor comparable. Every centimetre
+ *  here is scaled and is divided by the same ratio the corrections apply to the heights. */
+export type JumpCountermovement = {
+  /** When the hip began to drop (standing), hit bottom, and left the floor, ms on the trace clock. */
+  standingT: number;
+  bottomT: number;
+  /** Hip drop from standing to the bottom of the dip, cm. */
+  dipDepthCm: number;
+  /** Standing to bottom. */
+  eccentricSeconds: number;
+  /** Hip drop over the eccentric, m/s (positive). */
+  eccentricMeanVelocityMps: number;
+  /** Bottom to the ankle's takeoff instant. */
+  concentricSeconds: number;
+  /** Hip rise from the bottom to takeoff, cm. With jumpHeightCm this is the tether's travel. */
+  concentricRiseCm: number;
+  concentricMeanVelocityMps: number;
+  /** The hip's fastest rise inside the concentric, m/s, from the smoothed hip trace. */
+  concentricPeakVelocityMps: number;
+};
+
+/** How much the hip has to move before a direction change counts, so a jittering standing hip
+ *  does not read as a dip. 1cm on a scaled trace. */
+export const COUNTERMOVEMENT_HYSTERESIS_M = 0.01;
+/** A dip starts no earlier than this before takeoff; a longer window is the previous landing's
+ *  absorption or a walk-up, not this rep's load. */
+export const COUNTERMOVEMENT_MAX_SECONDS = 2.5;
+
+/** Reads the loading dip and the drive off a smoothed hip trace for one takeoff. y is down, so
+ *  the dip is y INCREASING. Walks back from takeoff while the hip was lower earlier (the drive),
+ *  then while it was higher earlier (the eccentric), each with 1cm of hysteresis; the window is
+ *  bounded by windowStartT (the previous landing) and COUNTERMOVEMENT_MAX_SECONDS. Null when
+ *  there is no dip of at least the hysteresis before takeoff. Never changes the rep. */
+export function measureCountermovement(
+  hipPoints: TrackedPoint[],
+  hipYSmoothed: number[],
+  windowStartT: number | null,
+  takeoffT: number,
+): JumpCountermovement | null {
+  if (hipPoints.length < 4 || hipYSmoothed.length !== hipPoints.length) return null;
+  let takeoffIdx = -1;
+  for (let i = 0; i < hipPoints.length; i++) if (hipPoints[i].t <= takeoffT) takeoffIdx = i;
+  if (takeoffIdx < 2) return null;
+  const earliestT = Math.max(windowStartT ?? -Infinity, takeoffT - COUNTERMOVEMENT_MAX_SECONDS * 1000);
+  const h = COUNTERMOVEMENT_HYSTERESIS_M;
+
+  // The drive: back from takeoff while the hip was lower (greater y) earlier. The bottom is the
+  // greatest y seen; stop once the hip has been more than the hysteresis above it.
+  let bottomIdx = takeoffIdx;
+  for (let i = takeoffIdx - 1; i >= 0 && hipPoints[i].t >= earliestT; i--) {
+    if (hipYSmoothed[i] > hipYSmoothed[bottomIdx]) bottomIdx = i;
+    else if (hipYSmoothed[bottomIdx] - hipYSmoothed[i] > h) break;
+  }
+  if (bottomIdx === takeoffIdx) return null;
+
+  // The eccentric: back from the bottom while the hip was higher (lesser y) earlier. Standing is
+  // the least y seen; stop once the hip has been more than the hysteresis below it.
+  let standingIdx = bottomIdx;
+  for (let i = bottomIdx - 1; i >= 0 && hipPoints[i].t >= earliestT; i--) {
+    if (hipYSmoothed[i] < hipYSmoothed[standingIdx]) standingIdx = i;
+    else if (hipYSmoothed[i] - hipYSmoothed[standingIdx] > h) break;
+  }
+  // That found the standing LEVEL; a still hip jitters under the hysteresis for as long as the
+  // athlete stands there, which would stretch the eccentric to cover the whole stand. The
+  // eccentric starts at the last moment the hip was still within the hysteresis of standing.
+  const standingY = hipYSmoothed[standingIdx];
+  for (let i = bottomIdx - 1; i > standingIdx; i--) {
+    if (hipYSmoothed[i] - standingY <= h) {
+      standingIdx = i;
+      break;
+    }
+  }
+  const dipDepthM = hipYSmoothed[bottomIdx] - hipYSmoothed[standingIdx];
+  if (dipDepthM < h) return null;
+  const riseM = hipYSmoothed[bottomIdx] - hipYSmoothed[takeoffIdx];
+  const eccentricSeconds = (hipPoints[bottomIdx].t - hipPoints[standingIdx].t) / 1000;
+  const concentricSeconds = (hipPoints[takeoffIdx].t - hipPoints[bottomIdx].t) / 1000;
+  if (!(eccentricSeconds > 0) || !(concentricSeconds > 0)) return null;
+
+  // The hip's fastest rise in the drive: central difference over at least 33ms, so a 120fps
+  // trace is not differenced across one frame of jitter.
+  let peak = 0;
+  for (let i = bottomIdx + 1; i <= takeoffIdx; i++) {
+    let lo = i - 1;
+    while (lo > bottomIdx && hipPoints[i].t - hipPoints[lo].t < 33) lo--;
+    const dt = (hipPoints[i].t - hipPoints[lo].t) / 1000;
+    if (dt <= 0) continue;
+    peak = Math.max(peak, (hipYSmoothed[lo] - hipYSmoothed[i]) / dt);
+  }
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  return {
+    standingT: hipPoints[standingIdx].t,
+    bottomT: hipPoints[bottomIdx].t,
+    dipDepthCm: r1(dipDepthM * 100),
+    eccentricSeconds: r2(eccentricSeconds),
+    eccentricMeanVelocityMps: r2(dipDepthM / eccentricSeconds),
+    concentricSeconds: r2(concentricSeconds),
+    concentricRiseCm: r1(riseM * 100),
+    concentricMeanVelocityMps: r2(riseM / concentricSeconds),
+    concentricPeakVelocityMps: r2(peak),
+  };
+}
+
+/** The countermovement's centimetres and velocities are scaled numbers; every correction that
+ *  divides the heights by a ratio divides these too. Durations are clocks and stay. */
+export function scaleCountermovement(cm: JumpCountermovement, ratio: number): JumpCountermovement {
+  const r2 = (v: number) => Math.round((v / ratio) * 100) / 100;
+  const r1 = (v: number) => Math.round((v / ratio) * 10) / 10;
+  return {
+    ...cm,
+    dipDepthCm: r1(cm.dipDepthCm),
+    eccentricMeanVelocityMps: r2(cm.eccentricMeanVelocityMps),
+    concentricRiseCm: r1(cm.concentricRiseCm),
+    concentricMeanVelocityMps: r2(cm.concentricMeanVelocityMps),
+    concentricPeakVelocityMps: r2(cm.concentricPeakVelocityMps),
+  };
+}
 
 export type JumpSetMetrics = {
   bestJumpHeightCm: number;
@@ -301,6 +428,9 @@ export function summarizeJumpSet(
     /** The box's typed height. A known distance the ankle must rise by on every box rep, so
      *  it is a scale ruler the way a plate is -- see applyBoxRiseCorrection. */
     boxHeightCm?: number | null;
+    /** The hip midpoint on the same clock and scale as rawPoints -- see measureCountermovement.
+     *  Optional so every existing caller and fixture is unchanged. */
+    hipTrace?: TrackedPoint[] | null;
   },
 ): JumpSetMetrics | null {
   if (rawPoints.length < 6) return null;
@@ -659,6 +789,24 @@ export function summarizeJumpSet(
   // ratio and the heights are rebuilt from flight time and the corrected net rise. The original
   // travels beside it (uncorrectedJumpHeightCm) so the correction can be checked against a
   // sensor rather than trusted.
+  // THE LOADING DIP AND THE DRIVE, from the hip. Attached before the corrections so the
+  // corrections scale it with everything else. Reads nothing the state machine decided from, so
+  // it cannot move a rep count.
+  const hipTrace = options?.hipTrace ?? null;
+  if (hipTrace && hipTrace.length >= 4) {
+    const hipY = kalmanSmooth(
+      hipTrace.map((p) => p.y),
+      hipTrace.map((p) => p.t),
+      hipTrace.map((p) => p.confidence ?? 1),
+    );
+    let previousLanding: number | null = null;
+    for (const rep of reps) {
+      const cm = measureCountermovement(hipTrace, hipY, previousLanding, rep.takeoffT);
+      if (cm) rep.countermovement = cm;
+      previousLanding = rep.landingT;
+    }
+  }
+
   const applied = applyGravityCorrection(reps, gravityVerdictRaw);
   const gravityVerdict = gravityVerdictRaw ? { ...gravityVerdictRaw, applied } : null;
   // THE BOX IS A RULER. Scott, 2026-09-28: "Be mindful, I am jumping to a 24 inch box." On a
@@ -736,6 +884,7 @@ export function applyBoxRiseCorrection(
     rep.peakHeightCm = Math.round((rep.peakHeightCm / ratio) * 10) / 10;
     if (rep.horizontalDistanceCm != null) rep.horizontalDistanceCm = Math.round((rep.horizontalDistanceCm / ratio) * 10) / 10;
     if (rep.boxClearanceCm != null) rep.boxClearanceCm = Math.round((rep.boxClearanceCm / ratio) * 10) / 10;
+    if (rep.countermovement) rep.countermovement = scaleCountermovement(rep.countermovement, ratio);
     const t = rep.flightSeconds;
     if (t > 0) {
       const v0 = (rep.netRiseCm / 100 + (GRAVITY_MPS2 * t * t) / 2) / t;
@@ -768,6 +917,7 @@ export function applyGravityCorrection(
     rep.peakHeightCm = Math.round((rep.peakHeightCm / ratio) * 10) / 10;
     if (rep.horizontalDistanceCm != null) rep.horizontalDistanceCm = Math.round((rep.horizontalDistanceCm / ratio) * 10) / 10;
     if (rep.boxClearanceCm != null) rep.boxClearanceCm = Math.round((rep.boxClearanceCm / ratio) * 10) / 10;
+    if (rep.countermovement) rep.countermovement = scaleCountermovement(rep.countermovement, ratio);
     const t = rep.flightSeconds;
     if (t > 0) {
       const v0 = (rep.netRiseCm / 100 + (GRAVITY_MPS2 * t * t) / 2) / t;

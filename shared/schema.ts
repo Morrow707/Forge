@@ -9286,6 +9286,23 @@ export const jumpBreakdownEntrySchema = z.object({
   jumpHeightCm: z.number(),
   // Vertical takeoff velocity -- see jump-tracking.ts's JumpRep.takeoffVelocityMps.
   takeoffVelocityMps: z.number().optional(),
+  // The loading dip and the drive, read off the hip -- see jump-tracking.ts's
+  // measureCountermovement. What a hip-mounted linear transducer reads on a jump. Declared here
+  // because a zod object strips what it does not declare.
+  countermovement: z
+    .object({
+      standingT: z.number(),
+      bottomT: z.number(),
+      dipDepthCm: z.number(),
+      eccentricSeconds: z.number(),
+      eccentricMeanVelocityMps: z.number(),
+      concentricSeconds: z.number(),
+      concentricRiseCm: z.number(),
+      concentricMeanVelocityMps: z.number(),
+      concentricPeakVelocityMps: z.number(),
+    })
+    .optional()
+    .nullable(),
   peakHeightCm: z.number(),
   horizontalDistanceCm: z.number().nullable(),
   // Time on the ground before this jump's takeoff, measured from the

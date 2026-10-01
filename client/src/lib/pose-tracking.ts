@@ -2403,6 +2403,14 @@ export function deriveJumpPoint(worldLandmarks: Landmark[]): WorldPoint | null {
   return averageWorldPoint([worldLandmarks[POSE_LANDMARKS.LEFT_ANKLE], worldLandmarks[POSE_LANDMARKS.RIGHT_ANKLE]]);
 }
 
+// The hip midpoint, for the countermovement on a jump (see jump-tracking.ts's
+// measureCountermovement). The ankle trace above says when the feet left the floor; it barely
+// moves during the loading dip, which happens at the hip. A sensor clipped to the hip (the OVR
+// on a finger with hands on hips, 2026-10-01) reads this point.
+export function deriveHipPoint(worldLandmarks: Landmark[]): WorldPoint | null {
+  return averageWorldPoint([worldLandmarks[POSE_LANDMARKS.LEFT_HIP], worldLandmarks[POSE_LANDMARKS.RIGHT_HIP]]);
+}
+
 // Each wrist's own real-world position, independent of deriveBarPoint's
 // averaged midpoint -- lets the caller track left/right separately for an
 // asymmetry view instead of only the combined bar path.
