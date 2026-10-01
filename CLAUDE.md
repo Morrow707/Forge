@@ -352,16 +352,14 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- **Queued, not yet uploaded:** the tracker that films a set follows the exercise
-  (`resolve-tracking-mode.ts`): a generic "full" on a med-ball-named exercise now runs the
-  med-ball tracker, which the 2026-10-01 sensor-paired throw did not. First comparison needs
-  this on the phone.
-- **Queued on `main`, not yet uploaded (Scott: "Queue it. Upload with next calibration
-  batch"):** the jump's countermovement read off the hip (`measureCountermovement`,
-  `JumpRep.countermovement`: dip depth, eccentric and concentric durations and velocities), so
-  a hip-mounted OVR has a matching window. See docs/camera-tracking-notes.md, "Queued: the
-  loading dip and the drive".
-- Build **580** is the newest TestFlight build, cut 2026-10-01 for the next two sensor pairings:
+- Build **581** is the newest TestFlight build, cut 2026-10-01: the jump's countermovement read
+  off the hip (`measureCountermovement`, `JumpRep.countermovement`: dip depth, eccentric and
+  concentric durations and velocities, the window a hip-mounted OVR reads), and the tracker that
+  films a set following the exercise (`resolve-tracking-mode.ts`: a generic "full" on a
+  med-ball-named exercise runs the med-ball tracker, which the 2026-10-01 sensor-paired throw did
+  not). See docs/camera-tracking-notes.md, "Queued: the loading dip and the drive" and "Queued:
+  the tracker that films a set".
+- Build **580** was the previous build, cut 2026-10-01 for the next two sensor pairings:
   each med-ball rep carries `peakHorizontalSpeedMps` (the axis a horizontal tether reads) and
   the ball and wrist witnesses before the blend. The export now carries `jumpBreakdown` and the
   med-ball columns (server-side, Render). See docs/camera-tracking-notes.md, "Build 580".
