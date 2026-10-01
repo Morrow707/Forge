@@ -1276,18 +1276,30 @@ eyes" and read as "these need producing". Do not repeat that: when asked what
 legal work is left, say the state of each document before naming any task.
 
 **Eight documents, all with usable text, none carrying draft language**
-(`server/seed-data/documents-are-not-drafts.test.ts` enforces the last part):
+(`server/seed-data/documents-are-not-drafts.test.ts` enforces the last part). **EVERY ONE OF
+THEM WAS BUILT THROUGH ROCKET LAWYER WITH FORGE'S ATTORNEY THERE.** Scott, 2026-10-01: "all of
+those were built on rocket lawyer, label them as such." Some started from a Rocket Lawyer
+template and were modified by the attorney (the Service Agreement, the AI Terms, the Privacy
+Policy), some the attorney wrote because no template fit (the Terms of Use, the research
+consent, the Assumption of Risk, the biometric consent); the file headers record which. The
+distinction is history, not standing: the attorney is Rocket Lawyer's, every text is theirs,
+and a question about any of them goes back to that attorney through Rocket Lawyer.
 
-| Document | Where |
-|---|---|
-| Privacy Policy | `legal-documents-draft.ts` |
-| Notice to Parent or Guardian | `legal-documents-draft.ts` |
-| EULA | `legal-documents-draft.ts` |
-| Terms of Use (signup AND /terms) | `signup-agreement.ts` |
-| Video and Biometric Consent | `biometric-release.ts` |
-| Assumption of Risk | `assumption-of-risk.ts` |
-| AI Terms of Use | `ai-terms-of-use-draft.ts` |
-| Research consent | `shared/research-consent.ts` |
+| Document | Where | Built on Rocket Lawyer |
+|---|---|---|
+| Privacy Policy | `legal-documents-draft.ts` | Yes, attorney-reviewed |
+| Notice to Parent or Guardian | `legal-documents-draft.ts` | Yes, attorney-reviewed |
+| EULA | `legal-documents-draft.ts` | Yes, attorney-reviewed |
+| Terms of Use (signup AND /terms) | `signup-agreement.ts` | Yes, attorney's rewrite |
+| Video and Biometric Consent | `biometric-release.ts` | Yes, built with the attorney |
+| Assumption of Risk | `assumption-of-risk.ts` | Yes, attorney's opinion on the text |
+| AI Terms of Use | `ai-terms-of-use-draft.ts` | Yes, template modified by the attorney |
+| Research consent | `shared/research-consent.ts` | Yes, attorney's rewrite |
+| Institutional Service Agreement | `shared/institutional-service-agreement.ts` | Yes, drafted with the attorney |
+
+The Institutional Service Agreement is the ninth document here and was always on Rocket
+Lawyer; it is listed with the eight because the question "which documents are the lawyer's"
+has one answer, and a list that leaves one out invites a second EULA being generated for it.
 
 The `_DRAFT` suffixes are historical variable names, not banners. The remaining
 `DRAFT --` strings in the repo are the `from` side of LIVE_DOCUMENT_PATCHES,
@@ -1299,8 +1311,12 @@ document that gets in the way"): `TERMS_OF_SERVICE_DRAFT` is retired, six of its
 carried into `SIGNUP_AGREEMENT` in its own words, and /terms now serves the document people
 actually accept. Do not add a public Terms of Service back.
 
-**Every document is attorney-reviewed as of 2026-09-20.** Nothing needs writing and
-nothing is waiting on a lawyer. The Video and Biometric Consent (built with counsel,
+**Every document is attorney-reviewed as of 2026-09-20, and counsel's answers to the open
+questions arrived 2026-10-01** (Scott: "ive gotten counsel answers, the documents are in";
+among them, under-13 athletes are accepted, so `ACCEPT_UNDER_13_SIGNUPS` stays unset). Fold
+each answer into the clause it changes as a registered version, and move the question out of
+`docs/legal-open-questions.md` when it is. Nothing needs writing and nothing is waiting on a
+lawyer. The Video and Biometric Consent (built with counsel,
 2026-09-17), the Assumption of Risk (counsel's opinion 2026-09-19, question 8), the AI
 Terms of Use (lawyer-modified from the Rocket Lawyer draft), the research consent
 (counsel's rewrite, live verbatim 2026-09-19, question 9; one word changed to "age" with
