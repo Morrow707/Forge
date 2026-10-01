@@ -369,9 +369,10 @@ can install. Delete entries as a `beta` ships them.
   sells nothing and says so until `GOOGLE_PLAY_BILLING_LIVE`), `ACCEPT_UNDER_13_SIGNUPS=false`
   as the under-13 self-signup switch, App Review notes in docs/app-store-listing-copy.md. The
   Play Console steps are in docs/app-store-launch-notes.md. Untested on an Android device.
-- **On a branch, NOT merged: the schools FAQ** (`claude/faq-high-schools`,
-  `shared/high-schools-faq.ts`, FAQPage schema on /for-high-schools). Scott reads the ten
-  answers before it ships, per the 2026-09-20 note; merging deploys it to the website.
+- **The schools FAQ shipped** (#204, `shared/high-schools-faq.ts`, FAQPage schema on
+  /for-high-schools). Scott read the ten answers 2026-10-01 ("the answers are fine"). Web only;
+  nothing waiting on an upload from it. Of the three items parked 2026-09-20, the Smart App
+  Banner now needs only the App Store id and the heading font is still a decision.
 - **Queued on `main`, not yet uploaded** (#201, store-launch items): the AI Training Chat
   screen's not-medical-advice line, the paywall never-steer scan, Android RECORD_AUDIO and
   POST_NOTIFICATIONS, the Apple Health switch's AI sentence, the Smart App Banner injected from
