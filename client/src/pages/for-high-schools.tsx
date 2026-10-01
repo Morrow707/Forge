@@ -1,10 +1,11 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ShieldCheck, Users, FileCheck, Lock, ArrowRight, AlertTriangle, School } from "lucide-react";
+import { ShieldCheck, Users, FileCheck, Lock, ArrowRight, AlertTriangle, School, ChevronDown } from "lucide-react";
 import { MarketingShell } from "@/components/marketing-shell";
 import { usePageMeta } from "@/lib/page-meta";
 import { CAMERA_ACCURACY_SHORT } from "@shared/camera-accuracy-copy";
+import { HIGH_SCHOOLS_FAQ } from "@shared/high-schools-faq";
 
 /** THE SCHOOLS AND CLUBS PAGE.
  *
@@ -179,6 +180,29 @@ export default function ForHighSchoolsPage() {
       {/* Placed before the call to action rather than in a footnote. A school buying on the
           strength of camera tracking is the one buyer most likely to be disappointed right now,
           and finding this out after signing is worse for everyone than reading it here. */}
+      <section className="border-t border-border px-4 py-14 md:px-8">
+        <div className="mx-auto max-w-3xl">
+          <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
+            Questions athletic directors ask
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Short answers, each one a fact about what the software does. The documents behind them
+            are on the site to read before anyone signs.
+          </p>
+          <div className="mt-6 divide-y divide-border border-y border-border">
+            {HIGH_SCHOOLS_FAQ.map((f) => (
+              <details key={f.question} className="group py-4">
+                <summary className="flex cursor-pointer list-none items-start justify-between gap-4 font-semibold">
+                  <span>{f.question}</span>
+                  <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <p className="mt-3 text-sm text-muted-foreground">{f.answer}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="border-t border-border px-4 py-14 md:px-8">
         <div className="mx-auto max-w-3xl">
           <Card className="border-amber-500/40 bg-amber-500/5">
