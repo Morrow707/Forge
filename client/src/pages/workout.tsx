@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { apiRequest, ApiError, NetworkError, resolveApiUrl, getNativeToken, getJson } from "@/lib/queryClient";
+import { resolveTrackingMode } from "@/lib/resolve-tracking-mode";
 import type { EffectiveBranding } from "@/lib/branding-style";
 import { cn } from "@/lib/utils";
 import { contrastForegroundHsl } from "@/lib/color";
@@ -767,7 +768,17 @@ function buildItem(
     supersetGroup: kind === "exercise" ? (prescribed as PrescribedExercise).supersetGroup : null,
     restAfterGroupOnly:
       kind === "exercise" ? (prescribed as PrescribedExercise).restAfterGroupOnly : false,
-    trackingLevel: kind === "exercise" ? (prescribed as PrescribedExercise).trackingLevel : "none",
+    // The tracker that films this exercise. A generic saved level ("full") resolves from the
+    // exercise's name and equipment here, once, so every read of item.trackingLevel below (the
+    // dialog switch, the per-rep display, the save columns) sees the same answer the coach's
+    // toggle would give. See resolve-tracking-mode.ts for the med-ball throw this fixed.
+    trackingLevel:
+      kind === "exercise"
+        ? resolveTrackingMode((prescribed as PrescribedExercise).trackingLevel, {
+            exerciseName: prescribed.exercise.name,
+            equipment: prescribed.exercise.equipment,
+          })
+        : "none",
     videoCheckEnabled:
       kind === "exercise" ? (prescribed as PrescribedExercise).videoCheckEnabled : false,
     lastPerformance: prescribed.lastPerformance,

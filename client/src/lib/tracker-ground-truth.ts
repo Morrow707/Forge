@@ -829,3 +829,127 @@ export const OVR_JUMP_SQUAT_2026_10_01 = {
   },
   forgeOnDevice: { repCount: 5, jumpHeightCm: 72.3, repJumpHeightsCm: [63.7, 69.3, 64, 63.2, 63.7], boxRiseScaleErrorRatio: 1.045, scale: 0.003126 },
 };
+
+// Box jump beside OVR, 2026-10-01, the sensor on a finger with hands on hips (the first jump
+// with the sensor at the hip; the laces set above is OVR_JUMP_SQUAT_2026_10_01). OVR "set 2"
+// logged 6 reps; Scott: "OVR counted my first rep as me grabbing the cord and setting up for
+// box jump. Ignore rep 1." Reps 2-6 below are the five jumps. Filmed on build 580, before the
+// countermovement landed (queued), so the camera has takeoff velocity and height per rep and
+// no dip or drive window yet; those come with the next paired jump.
+//
+// The camera's takeoff velocity reads 3.46-3.55 against the sensor's 2.75-3.19 peak at the hip:
+// about 20% high on every rep. On a box jump the camera's takeoff velocity is rebuilt from the
+// flight time and the net rise ONTO THE BOX (applyBoxRiseCorrection), so it inherits the
+// take's scale through the net rise, and the ankle lands on the box with the knee bent, which
+// shortens the measured rise and lengthens nothing. A flat jump with the sensor at the hip is
+// the take that separates those; the per-rep camera numbers are from the phone's screen.
+export const OVR_BOX_JUMP_HIP_2026_10_01 = {
+  build: 580,
+  boxHeightIn: 24,
+  repsPerSet: 5,
+  sensor: {
+    ignoredRep1: { meanVelocityMps: 1.01, peakVelocityMps: 1.84, romIn: 33.2, tpvS: 0.42 },
+    reps: [
+      { meanVelocityMps: 1.52, peakVelocityMps: 2.75, romIn: 27.0, tpvS: 0.16 },
+      { meanVelocityMps: 1.44, peakVelocityMps: 3.00, romIn: 27.0, tpvS: 0.18 },
+      { meanVelocityMps: 1.45, peakVelocityMps: 3.19, romIn: 27.2, tpvS: 0.21 },
+      { meanVelocityMps: 1.52, peakVelocityMps: 2.82, romIn: 27.4, tpvS: 0.18 },
+      { meanVelocityMps: 1.50, peakVelocityMps: 2.84, romIn: 28.5, tpvS: 0.21 },
+    ],
+    // The set row on the sensor still averages the ignored rep in.
+    reportedIncludingRep1: { meanVelocityMps: 1.40, peakVelocityMps: 2.74, romIn: 28.3, tpvS: 0.22 },
+  },
+  forgeOnDevice: {
+    repCount: 5,
+    jumpHeightIn: 29.4,
+    reps: [
+      { jumpHeightIn: 27.1, takeoffVelocityMps: 3.47 },
+      { jumpHeightIn: 26.9, takeoffVelocityMps: 3.46, groundSeconds: 2.735 },
+      { jumpHeightIn: 29.0, takeoffVelocityMps: 3.47, groundSeconds: 2.569 },
+      { jumpHeightIn: 28.2, takeoffVelocityMps: 3.55, groundSeconds: 2.769 },
+      { jumpHeightIn: 29.4, takeoffVelocityMps: 3.51, groundSeconds: 2.802 },
+    ],
+  },
+};
+
+// Back squat set 3 beside OVR, 2026-10-01, same session as sets 1 and 2 (OVR_SQUAT_SET1/SET2),
+// the first squat on build 579's drive window ON THE PHONE. Count exact, range of motion within
+// 2%, and the mean 1.14 of the sensor: the three squats of the session now sit at 0.95, 0.83
+// and 1.14, which is the per-rep window wandering by +-0.1s against the sensor's, not a bias.
+// Camera per-rep windows 0.87/0.70/0.67/0.73/0.70s; the sensor's (range over mean)
+// 0.83/0.80/0.82/0.82/0.91. The shoulder ruler read 88.3 units here against 98.5 on set 1
+// (scale 0.00409 vs 0.00360), and the ROM still landed, which is the depth ruler and the 3D
+// shin carrying the blend.
+export const OVR_SQUAT_SET3_2026_10_01 = {
+  build: 580,
+  loadLb: 135,
+  repsPerSet: 5,
+  forgeOnDevice: {
+    repCount: 5,
+    meanVelocityMps: 0.97,
+    peakVelocityMps: 1.34,
+    romCm: 69.8,
+    scaleSource: "both",
+    scale: 0.004092,
+    reps: [
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.24, concentricSeconds: 0.87 },
+      { meanVelocityMps: 1.01, peakVelocityMps: 1.35, concentricSeconds: 0.7 },
+      { meanVelocityMps: 1.08, peakVelocityMps: 1.37, concentricSeconds: 0.67 },
+      { meanVelocityMps: 0.95, peakVelocityMps: 1.29, concentricSeconds: 0.73 },
+      { meanVelocityMps: 1.05, peakVelocityMps: 1.45, concentricSeconds: 0.7 },
+    ],
+  },
+  rulers: { inPlane3D: 0.004642, shoulderWidth: 0.004962, depthRuler: 0.0053, height: 0.003821, sensorImplied: 0.00398 },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.35, romIn: 27.3, meanW: 503, peakW: 809, tpvS: 0.56, eai: 2.31 },
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.35, romIn: 27.8, meanW: 529, peakW: 809, tpvS: 0.53, eai: 2.54 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.35, romIn: 28.6, meanW: 533, peakW: 810, tpvS: 0.54, eai: 2.46 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.25, romIn: 27.4, meanW: 509, peakW: 752, tpvS: 0.56, eai: 2.20 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.12, romIn: 28.8, meanW: 483, peakW: 677, tpvS: 0.64, eai: 1.74 },
+    ],
+    reported: { meanVelocityMps: 0.85, peakVelocityMps: 1.28, romIn: 27.9, meanW: 511, peakW: 771, tpvS: 0.56, eai: 2.25 },
+  },
+};
+
+// Med ball throw beside OVR, 2026-10-01: the sensor on a box with its tether pulled out
+// HORIZONTALLY to a finger, 12lb ball, logged on the sensor as "Push Press" 12lb x 12. Scott:
+// "rep 1 and rep 7 were setup reps, me just trapping the cord." The ten throws are below. The
+// exercise is logged in Forge as 3x5 but is 3x5 EACH SIDE, so a set is ten throws, which is
+// what the sensor recorded here; Scott also noted "the sensor only measured 4 reps" of the set
+// in question, so the per-set split between the two sides is not known from the sensor. The
+// sensor reads the component of the hand's motion along the tether (the room's horizontal), so
+// the camera's matching number is medBallRepBreakdown[].peakHorizontalSpeedMps (build 580) and
+// the sensor's range of motion is the tether's horizontal travel, which has no camera number.
+// Filmed on build 580 -- BY THE BAR TRACKER. The program exercise ("Medicine Ball Rotational
+// Throw") was saved under the generic "full" level and the workout page routed on it, so the
+// camera reported four bar-path "reps" (0.66, 2.57, 1.46, 2.14 m/s), a 51cm range of motion and
+// a scale-suspect outcome, and no med-ball number. Not a tracker fault; the wrong tracker.
+// resolve-tracking-mode.ts (queued) sends it to the med-ball tracker; this set has no camera
+// side and the next one is the first comparison.
+export const OVR_MED_BALL_THROW_2026_10_01 = {
+  build: 580,
+  ballLb: 12,
+  throws: 10,
+  sensor: {
+    ignoredReps: [
+      { rep: 1, meanVelocityMps: 0.65, peakVelocityMps: 1.75, romIn: 34.0 },
+      { rep: 7, meanVelocityMps: 0.25, peakVelocityMps: 0.72, romIn: 10.1 },
+    ],
+    reps: [
+      { meanVelocityMps: 2.29, peakVelocityMps: 5.59, romIn: 48.8, meanW: 122, peakW: 298, tpvS: 0.34 },
+      { meanVelocityMps: 2.36, peakVelocityMps: 6.55, romIn: 51.1, meanW: 126, peakW: 349, tpvS: 0.34 },
+      { meanVelocityMps: 2.27, peakVelocityMps: 6.86, romIn: 53.7, meanW: 121, peakW: 365, tpvS: 0.43 },
+      { meanVelocityMps: 2.10, peakVelocityMps: 7.02, romIn: 52.5, meanW: 111, peakW: 374, tpvS: 0.43 },
+      { meanVelocityMps: 3.82, peakVelocityMps: 7.07, romIn: 50.1, meanW: 203, peakW: 377, tpvS: 0.18 },
+      { meanVelocityMps: 2.84, peakVelocityMps: 6.28, romIn: 51.1, meanW: 151, peakW: 335, tpvS: 0.27 },
+      { meanVelocityMps: 2.19, peakVelocityMps: 6.63, romIn: 56.5, meanW: 116, peakW: 354, tpvS: 0.46 },
+      { meanVelocityMps: 3.51, peakVelocityMps: 7.15, romIn: 53.4, meanW: 187, peakW: 381, tpvS: 0.18 },
+      { meanVelocityMps: 2.00, peakVelocityMps: 6.47, romIn: 52.9, meanW: 106, peakW: 345, tpvS: 0.47 },
+      { meanVelocityMps: 1.86, peakVelocityMps: 6.47, romIn: 54.5, meanW: 99, peakW: 345, tpvS: 0.54 },
+    ],
+    // The set row on the sensor still averages the two setup reps in.
+    reportedIncludingSetup: { meanVelocityMps: 2.17, peakVelocityMps: 5.71, romIn: 47.3, meanW: 115, peakW: 304, tpvS: 0.41 },
+    // Across the ten throws: peak 6.6 m/s (5.59-7.15), mean 2.5, horizontal travel 52in.
+  },
+};
