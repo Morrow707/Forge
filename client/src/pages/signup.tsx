@@ -1,6 +1,7 @@
 import { MAX_EXPECTED_ATHLETES } from "@shared/schema-constants";
 import { PASSWORD_MIN_LENGTH, passwordIsAcceptable } from "@shared/password-rules";
 import { PasswordRequirements } from "@/components/password-requirements";
+import { HeightInput } from "@/components/height-input";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -447,20 +448,7 @@ export default function SignupPage() {
               )}
               {role === "athlete" && (
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="heightIn">Height (inches)</Label>
-                    <Input
-                      id="heightIn"
-                      type="number"
-                      inputMode="numeric"
-                      required
-                      min={1}
-                      max={120}
-                      value={heightIn}
-                      onChange={(e) => setHeightIn(e.target.value)}
-                      placeholder="e.g. 72"
-                    />
-                  </div>
+                  <HeightInput id="heightIn" value={heightIn} onChange={setHeightIn} required />
                   <div className="space-y-1.5">
                     <Label htmlFor="bodyWeightLbs">Weight (lbs)</Label>
                     <Input

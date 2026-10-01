@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { HeightInput } from "@/components/height-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -239,19 +240,11 @@ export function ProfileFieldsForm({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={`${idPrefix}-height`}>Height (inches)</Label>
-          <Input
-            id={`${idPrefix}-height`}
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={120}
-            value={value.heightIn}
-            onChange={(e) => onChange({ ...value, heightIn: e.target.value })}
-            placeholder="e.g. 72"
-          />
-        </div>
+        <HeightInput
+          id={`${idPrefix}-height`}
+          value={value.heightIn}
+          onChange={(heightIn: string) => onChange({ ...value, heightIn })}
+        />
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-weight`}>Body weight (lbs)</Label>
           <Input

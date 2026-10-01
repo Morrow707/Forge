@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { PASSWORD_MIN_LENGTH, passwordIsAcceptable } from "@shared/password-rules";
 import { PasswordRequirements } from "@/components/password-requirements";
+import { HeightInput } from "@/components/height-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -193,20 +194,7 @@ export default function ClaimPage() {
             {(preview?.needsHeight || preview?.needsWeight) && (
               <div className="grid grid-cols-2 gap-3">
                 {preview?.needsHeight && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="claim-height">Height (inches)</Label>
-                    <Input
-                      id="claim-height"
-                      type="number"
-                      inputMode="numeric"
-                      required
-                      min={1}
-                      max={120}
-                      value={heightIn}
-                      onChange={(e) => setHeightIn(e.target.value)}
-                      placeholder="e.g. 72"
-                    />
-                  </div>
+                  <HeightInput id="claim-height" value={heightIn} onChange={setHeightIn} required />
                 )}
                 {preview?.needsWeight && (
                   <div className="space-y-1.5">
