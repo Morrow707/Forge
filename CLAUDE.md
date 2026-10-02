@@ -169,6 +169,44 @@ flag and a caveat instead, and let the number through.
   sections are written from; when a fix needs a number the export does not carry, add the field
   to the export in the same change, or the next comparison cannot be made.
 
+## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
+
+Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever
+seen. Scott, looking at it beside the real screen: "That's not what it looks like" / "Those are
+what our builds look like, with the slider button, everything else" / "I don't want to post
+something that isn't in our actual code, anytime you make a video, only use our code, no
+inventing things."
+
+**EVERY SCREEN IN A VIDEO IS A COPY OF A SCREEN THAT EXISTS.** Not an impression of one, not a
+tidier version, not what the screen probably looks like from reading its labels. The layout,
+the controls, the order of the fields, the empty states and the words are the ones in the
+repo.
+
+What went wrong is worth naming, because it felt like diligence at the time: the reel's copy
+was assembled by grepping for strings -- "Program name", "Add Day", "Add Exercise", "Sets",
+"Reps" -- and every one of those words was real. The STRUCTURE around them was invented. The
+real builder has an AI Program Builder card, Training Blocks with a periodization note, a
+Rest day checkbox, a drag handle and a delete on every exercise, a REST toggle reading
+"Between Each / After The Group", a Back and an Add to My Calendar button beside Save Program,
+and a "No days yet" empty state. The reel had none of them, and invented a "Week 1" header and
+a bare row of four boxes instead. Real words in a made-up frame is still a made-up screen, and
+it is worse than an obviously rough mock because it looks authoritative.
+
+- **Read the COMPONENT, never just grep its strings.** A grep tells you a label exists. It does
+  not tell you what sits beside it, what wraps it, what state it starts in, or what the screen
+  does when it is empty. Open the page and the components it renders.
+- **Ask for a screenshot when one would settle it.** Scott can take one in thirty seconds. That
+  is cheaper than a reel that has to be rebuilt, and far cheaper than one that gets posted.
+- **A feature the video claims must be the feature the code has**, at the tier the code gates
+  it to. The AI Program Builder edits the program from inside the builder; the AI Training
+  Chat is a separate screen behind `requirePaidAiAccess`. They are different things and a
+  video may not blur them.
+- **No camera accuracy claim, ever** -- the numbers are uncalibrated and carry
+  `CAMERA_ACCURACY_PURCHASE_WARNING`. A marketing video is exactly where that warning cannot
+  be attached, so the claim does not go in one.
+- **This applies to anything that leaves the building**: reels, screenshots, teasers, App Store
+  captures, a deck. If it shows Forge, it shows Forge as built.
+
 ## RULE #2: EVERY CAMERA SENSOR IS A PEER. NONE LEADS. OVERWATCH IS THE ONLY ARBITER. NONE IS EVER SWITCHED OFF.
 
 Scott, 2026-09-28, after the 3D body pose was turned off to save five seconds of analysis:
