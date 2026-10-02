@@ -1314,6 +1314,11 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     /// going from ~19s of analysis to 66s. So it is scaled to whatever the camera actually ran
     /// at. Lives here rather than inline in analyzeRecording because the live path has to reach
     /// the SAME number: two feeders sampling different frames is two different measurements.
+    /// See liveAnalysisResult. Half the target rate (15Hz at a 30Hz target) with no gap over a
+    /// quarter second; the live run skips frames by cadence, so a healthy take sits well above.
+    private static let minLiveCoverage = 0.5
+    private static let maxLiveInterFrameGapSeconds = 0.25
+
     private func effectiveSampleStride(baseline: Int) -> Int {
         let rateRatio = max(1.0, activeCaptureFrameRate / 60.0)
         return max(1, Int((Double(max(1, baseline)) * rateRatio).rounded()))
@@ -1666,15 +1671,24 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // a frame that Vision then drops as late is still a frame the coach's video needs.
         uploadCopyWriter?.append(sampleBuffer)
         guard let run = liveRun, run.active else { return }
+        // Cadence first (see AvLiveAnalysisRun.lastProcessedPresentationSeconds). The target is
+        // the same rate the file path samples at; a frame arriving before three quarters of that
+        // interval has elapsed is skipped here, cheaply, before the scaler runs.
+        let presentationSeconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        let targetInterval = Double(run.ctx.sampleEveryNthFrame) / max(1.0, activeCaptureFrameRate)
+        if let last = run.lastProcessedPresentationSeconds, presentationSeconds - last < targetInterval * 0.75 {
+            run.skippedForCadence += 1
+            return
+        }
+        run.lastProcessedPresentationSeconds = presentationSeconds
         // SPEED UP, NEVER CUT (CLAUDE.md Rule #2). The file path decodes at 1280 on its longest
         // side; the live path was handing Vision the full 1920x1080 and keeping 33-46% of its
         // frames. Same budget on both feeders now: the frame is scaled once, on the GPU, before
         // any sensor sees it. Only frames this run will actually process are scaled.
-        let scaled: CVPixelBuffer? =
-            run.state.frameIndex % run.ctx.sampleEveryNthFrame == 0
-                ? CMSampleBufferGetImageBuffer(sampleBuffer).flatMap { liveFrameScaler.scale($0) }
-                : nil
-        processFrame(sampleBuffer: sampleBuffer, ctx: run.ctx, state: run.state, progress: nil, pixelBufferOverride: scaled) { [weak self] data in
+        let scaled: CVPixelBuffer? = CMSampleBufferGetImageBuffer(sampleBuffer).flatMap { liveFrameScaler.scale($0) }
+        // The cadence above already chose this frame; processFrame's own every-Nth guard is for
+        // the file path, whose reader hands over every decoded frame.
+        processFrame(sampleBuffer: sampleBuffer, ctx: run.ctx, state: run.state, progress: nil, pixelBufferOverride: scaled, bypassStrideGuard: true) { [weak self] data in
             // Tagged so the JS side can keep live frames apart from a later file read's frames:
             // it now listens from the moment recording starts (it used to subscribe only at
             // stop, which threw every live frame away before it could be used).
@@ -1722,8 +1736,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let dropRate = Double(run.droppedFrames) / max(1.0, expectedFrames)
         lastLiveCoverage = coverage
         lastLiveDropRate = dropRate
-        guard coverage >= 0.9, dropRate <= 0.05 else {
+        // COMPLETE ENOUGH IS A GAP, NOT A COUNT. The old gate wanted 90% of the target frames and
+        // under 5% dropped, which no 120fps take on this phone has ever met (coverage 0.47-0.49,
+        // dropRate ~2.1 on all three OVR-paired lifts of 2026-10-02), so every take paid for a
+        // second full read of the clip. What makes a trace unusable is a HOLE in it -- a rep the
+        // sampler slept through -- and that is what maxInterFrameGapSeconds measures. A trace at
+        // half the target rate with no gap wider than a quarter second is the same measurement at
+        // a coarser cadence (the stored corpus the thresholds were calibrated on ran at 7-15Hz).
+        // Coverage and drop rate are still recorded for the report.
+        let maxGapSeconds = run.state.maxInterFrameGapSeconds ?? 0
+        guard coverage >= Self.minLiveCoverage, maxGapSeconds <= Self.maxLiveInterFrameGapSeconds else {
             let why = "coverage=\(String(format: "%.2f", coverage)) dropRate=\(String(format: "%.3f", dropRate)) "
+                + "maxGap=\(String(format: "%.2f", maxGapSeconds))s "
                 + "processed=\(run.state.processedCount) expected=\(String(format: "%.0f", expectedFrames))"
             lastLiveFallbackReason = why
             logDiag("live analysis unusable: \(lastLiveFallbackReason!)")
@@ -1761,6 +1785,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             "liveAttempted": true,
             "liveCoverage": coverage,
             "liveDropRate": dropRate,
+            "liveSkippedForCadence": run.skippedForCadence,
+            "liveMaxGapSeconds": maxGapSeconds,
         ]
         if ctx.coreMlDetectionEnabled {
             result["objectLock"] = coreMlImplementDetector.telemetry.dictionary
@@ -2293,11 +2319,14 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // The live path hands in a scaled copy of the frame (see AvLiveFrameScaler); the file
         // path's reader already decoded at analysisDecodeMaxDimension and passes nil.
         pixelBufferOverride: CVPixelBuffer? = nil,
+        // The live path samples by presentation time (see AvLiveAnalysisRun) and has already
+        // decided this frame is wanted; only the file path uses the every-Nth guard.
+        bypassStrideGuard: Bool = false,
         emit: @escaping ([String: Any]) -> Void
     ) {
         let thisFrameIndex = state.frameIndex
         state.frameIndex += 1
-        guard thisFrameIndex % ctx.sampleEveryNthFrame == 0 else { return }
+        guard bypassStrideGuard || thisFrameIndex % ctx.sampleEveryNthFrame == 0 else { return }
         guard let pixelBuffer = pixelBufferOverride ?? CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         // Every frame of this loop runs Vision pose estimation, optionally Vision hand
         // pose, a CoreML object detection and a camera-drift estimate, and each of those
@@ -3167,6 +3196,15 @@ private final class AvLiveAnalysisRun {
     let state = AvFrameRunState()
     let startedAt = Date()
     var droppedFrames = 0
+    // THE LIVE PATH SAMPLES BY TIME, NOT BY DELIVERED-FRAME COUNT. Vision takes ~45ms a frame on
+    // this phone, so at 120fps the delegate is busy for five frames out of six and the capture
+    // discards them as late. Counting "every Nth delivered frame" on top of that produced a
+    // trace with a cadence nobody chose. Instead a frame is processed when at least one target
+    // interval (stride / capture rate) has passed since the last one was, and anything sooner is
+    // skipped before it costs a scaled copy. Three takes on 2026-10-02 fell back to the file
+    // path at coverage 0.47-0.49, and the athlete waited 18-22 extra seconds on each.
+    var lastProcessedPresentationSeconds: Double?
+    var skippedForCadence = 0
     // False from the moment stopRecording is called. The delegate checks it so frames that
     // arrive after the take has ended (the session keeps running for the next set) cannot
     // append themselves to a finished trace.

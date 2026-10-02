@@ -959,7 +959,7 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
           uncertaintyFraction: Math.max(pose3d[0].uncertaintyFraction, pose3d[1].uncertaintyFraction),
         }
       : null;
-  const voters = collapsed ? [...usable.filter((e) => !pose3d.includes(e)), collapsed] : usable;
+  let voters = collapsed ? [...usable.filter((e) => !pose3d.includes(e)), collapsed] : usable;
   const ranked = [...voters].sort((a, b) => rank(a) - rank(b));
 
   // The largest set that agrees with each other, preferring the one anchored on the most
@@ -992,6 +992,34 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
   // disagree are two guesses that pull opposite ways more often than not; with nothing anchored
   // in the room the average is the better answer, exactly as it was for height and shoulders.
   const BODY_RULERS: ScaleEstimate["source"][] = ["height", "shoulder_width", "body_3d", "depth"];
+
+  // A PLATE NOBODY AGREES WITH IS NOT A PLATE. Rule #2: no witness leads by rule.
+  //
+  // The plate ranks first because a disc of known size is the best ruler there is WHEN IT IS
+  // A DISC. In every sensor-paired take where the detector offered one (squat set 2 on
+  // 2026-10-01, the push press and the Pendlay row on 2026-10-02) it was the athlete's torso or
+  // a rack, read at a third of the true scale, and because rank decides between singleton
+  // clusters it was the whole answer each time two body rulers stood against it. So a plate
+  // that corroborates with nothing, when at least two other rulers are in the room, steps out
+  // of the vote and is reported as the outlier it is. A plate that agrees with anything keeps
+  // its rank; a plate that is the only other ruler keeps it too (one against one is a tie
+  // rank is allowed to break).
+  if (best.length === 1 && best[0].source === "plate" && voters.length >= 3) {
+    const withoutPlate = voters.filter((e) => e.source !== "plate");
+    const rerankedWithoutPlate = [...withoutPlate].sort((a, b) => rank(a) - rank(b));
+    let bestWithoutPlate: ScaleEstimate[] = [rerankedWithoutPlate[0]];
+    for (const anchor of rerankedWithoutPlate) {
+      const cluster = rerankedWithoutPlate.filter((other) => {
+        const tolerance =
+          Math.max(anchor.uncertaintyFraction, other.uncertaintyFraction) * SCALE_AGREEMENT_MULTIPLE;
+        return Math.abs(other.scale / anchor.scale - 1) <= tolerance;
+      });
+      if (cluster.length > bestWithoutPlate.length) bestWithoutPlate = cluster;
+    }
+    best = bestWithoutPlate;
+    voters = withoutPlate;
+  }
+
   const onlyBodyRulers = voters.every((e) => BODY_RULERS.includes(e.source));
   const bodyRulerCount = voters.filter((e) => BODY_RULERS.includes(e.source)).length;
   let blended = false;
@@ -1140,7 +1168,7 @@ export function shoulderWidthScaleFromFrames(
   // Refusing by POSTURE rather than by geometry is the honest shape: it is a fact about how the
   // lift is filmed, it is already known before a frame is read, and it cannot be defeated by
   // the landmark space the caller happens to pass.
-  posture?: "standing" | "seated" | "lying" | "supported" | "hanging",
+  posture?: "standing" | "seated" | "lying" | "supported" | "hanging" | "bent_over",
 ): ShoulderScaleReading {
   const empty: ShoulderScaleReading = {
     scale: null,

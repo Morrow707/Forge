@@ -138,7 +138,13 @@ export const MIN_YARDSTICK_PX = 24;
  * What this really excludes is a box that is not a disc at all: the rack upright, the bench end,
  * the shadow under the bar. The read that prompted all of this boxed at 3.12, which is a post.
  */
-export const MAX_PLATE_ASPECT_RATIO = 2.5;
+// 2.5 -> 1.7, 2026-10-02. The push press and the Pendlay row beside OVR both locked a "plate"
+// that was a box about twice as tall as it was wide (103x214 and 191x344 px, aspect 2.08 and
+// 1.81): the athlete's own torso, at a scale a third of the truth, and both sailed through at
+// 2.5. A plate is a disc; the dialog's own "reads as a disc" band is 0.8 to 1.25. A disc seen
+// 54 degrees off its axis reads 1.7, and past that the read is a worse ruler than the body
+// anyway. A sample filter, not a refusal: the take keeps every other ruler.
+export const MAX_PLATE_ASPECT_RATIO = 1.7;
 
 /** A plate is a 45cm disc and every barbell grip is wider than that, so a plate read wider
  *  than TWO grips is a rack, a bench end or two plates -- not the ruler. The Swift side

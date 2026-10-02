@@ -30,8 +30,8 @@ describe("sensors are thinned, never cut", () => {
   it("the live path scales the frame before any sensor sees it, and the detector re-searches on a cadence", () => {
     const swift = read("ios/App/App/AvBodyTrackingPlugin.swift");
     const delegate = swift.slice(swift.indexOf("didOutput sampleBuffer: CMSampleBuffer"));
-    expect(delegate.slice(0, 1500)).toMatch(/liveFrameScaler\.scale\(/);
-    expect(delegate.slice(0, 1500)).toMatch(/pixelBufferOverride: scaled/);
+    expect(delegate.slice(0, 3000)).toMatch(/liveFrameScaler\.scale\(/);
+    expect(delegate.slice(0, 3000)).toMatch(/pixelBufferOverride: scaled/);
     expect(swift).toMatch(/private final class AvLiveFrameScaler/);
     expect(swift).toMatch(/searchesSkippedForCadence \+= 1/);
   });

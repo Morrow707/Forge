@@ -29,7 +29,8 @@ describe("live analysis and file analysis are one implementation", () => {
     expect(calls.length).toBeGreaterThanOrEqual(2);
     // The live delegate has to be one of them.
     const delegate = source.slice(source.indexOf("didOutput sampleBuffer: CMSampleBuffer"));
-    expect(delegate.slice(0, 1600)).toMatch(/processFrame\(/);
+    // 2026-10-02: the delegate now samples by presentation time before it calls in.
+    expect(delegate.slice(0, 3000)).toMatch(/processFrame\(/);
   });
 
   it("derives both strides from one helper", () => {
@@ -84,9 +85,10 @@ describe("live analysis and file analysis are one implementation", () => {
   it("refuses a live trace it cannot show to be complete", () => {
     const fn = source.slice(source.indexOf("private func liveAnalysisResult"));
     const body = fn.slice(0, fn.indexOf("\n    }\n"));
-    // coverage and drop-rate gates, both returning nil (= fall back and re-read the file)
-    expect(body).toMatch(/coverage >= 0\.9/);
-    expect(body).toMatch(/dropRate <= 0\.05/);
+    // Coverage and largest-gap gates, both returning nil (= fall back and re-read the file).
+    // 2026-10-02: the drop-rate gate is gone; see liveAnalysisResult's own comment.
+    expect(body).toMatch(/coverage >= Self\.minLiveCoverage/);
+    expect(body).toMatch(/maxGapSeconds <= Self\.maxLiveInterFrameGapSeconds/);
     expect(body).toMatch(/return nil/);
   });
 

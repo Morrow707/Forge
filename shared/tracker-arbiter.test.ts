@@ -250,9 +250,11 @@ describe("a reference object has to be the right shape AND in the right place", 
   it("accepts a plate foreshortened by an oblique camera angle", () => {
     // A disc viewed off-axis squashes along one axis only, and the scale read already takes the
     // LARGER axis as the diameter. Rejecting this would refuse most real side-on footage.
-    const v = check({ ...plateOnTheBar, medianHeightPx: 200 / 2 });
+    // 2026-10-02: the example here was 2:1, and two measured torsos (2.08, 1.81) sat right
+    // beside it, so the limit is 1.7 and the oblique example is a disc 48 degrees off-axis.
+    const v = check({ ...plateOnTheBar, medianHeightPx: 200 / 1.5 });
     expect(v.usable).toBe(true);
-    expect(v.aspectRatio).toBeCloseTo(2, 5);
+    expect(v.aspectRatio).toBeCloseTo(1.5, 5);
   });
 
   it("rejects the rack upright that started all this", () => {

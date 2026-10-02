@@ -57,11 +57,14 @@ describe("postureForExercise", () => {
   // start refusing them. A bent-over row and an RDL fold the torso but the athlete is still
   // standing on their feet, and calibrateFromFrames takes a median across the take's frames --
   // the upright setup and lockout frames are what it calibrates from.
+  // 2026-10-02: Pendlay Row and Bent-Over Row LEFT this list. The reasoning above assumed the
+  // upright frames would carry the median; the Pendlay row beside OVR had no upright frames
+  // (hinged for the whole set, ankles behind the plates) and the height ruler came out 37%
+  // low. A row done hinged is "bent_over" now, with no height ruler and no stature check. An
+  // RDL and a deadlift still start and finish upright, so they stay.
   it.each([
     "Back Squat",
     "Deadlift",
-    "Pendlay Row",
-    "Bent-Over Row",
     "Romanian Deadlift",
     "Overhead Press",
     "Push Press",
@@ -71,6 +74,11 @@ describe("postureForExercise", () => {
   ])("leaves %s standing, so its numbers are unchanged", (name) => {
     expect(postureForExercise(name)).toBe("standing");
     expect(heightCalibrationUnreliable(name)).toBe(false);
+  });
+
+  it.each(["Pendlay Row", "Bent-Over Row", "T-Bar Row", "Good Morning"])("%s is bent over and not height-calibrated", (name) => {
+    expect(postureForExercise(name)).toBe("bent_over");
+    expect(heightCalibrationUnreliable(name)).toBe(true);
   });
 
   it("keeps a strict dead hang usable and a bent-legged hang not", () => {
@@ -216,7 +224,9 @@ describe("the movementType backstop", () => {
   });
 
   // The backstop must not reach the lifts that carry real numbers today.
-  it.each([["Back Squat", "Squat"], ["Deadlift", "Hinge"], ["Overhead Press", "Press"], ["Pendlay Row", "Pull"]])(
+  // (Pendlay Row left this list 2026-10-02: it is bent over now, and that is the posture
+  // speaking, not the movementType backstop.)
+  it.each([["Back Squat", "Squat"], ["Deadlift", "Hinge"], ["Overhead Press", "Press"], ["Upright Row", "Pull"]])(
     "leaves %s measurable with its own movementType",
     (name, type) => {
       expect(heightCalibrationUnreliable(name, type)).toBe(false);

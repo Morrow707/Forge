@@ -352,13 +352,21 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **592** is the newest TestFlight build, cut 2026-10-02 from `4913f052`: Reduced Motion
+- Build **593** is the newest TestFlight build, cut 2026-10-02 from the three sensor-paired lifts
+  (bench, Pendlay row, push press; docs/camera-tracking-notes.md "Three lifts beside OVR,
+  2026-10-02"): `bent_over` posture (no height ruler, no stature check on a hinged row; the row's
+  scale goes from 0.64 to 1.11 of the sensor), a lone uncorroborated plate steps out of the scale
+  vote (Rule #2; the "plate" was the torso in all three paired sets it appeared in),
+  `MAX_PLATE_ASPECT_RATIO` 1.7, `inferMovementType` for a program row with no type, and the
+  live path sampling by time with a largest-gap gate so a 120fps take stops re-reading its own
+  clip (untested on a phone; `analysisPath` in the next capture's diagnostics is the answer).
+  Also Reduce Transparency honoured. Calibration work: uploaded on commit.
+- Build **592** was the previous build, cut 2026-10-02 from `4913f052`: Reduced Motion
   honoured app-wide (one global `prefers-reduced-motion` rule in `index.css`) and Larger Text
   on iOS (`client/src/lib/dynamic-type.ts` scales the root font from the system body size, 1.0
   at the default setting). `accessibility-claims.test.ts` pins the three features ticked on
   the App Store Connect accessibility page: Dark Interface, Reduced Motion, Larger Text. Nothing
-  else is ticked there and nothing else should be until it is true and pinned. This is the build
-  to attach to the version 1.0 submission.
+  else is ticked there and nothing else should be until it is true and pinned.
 - Build **591** was the previous build, cut 2026-10-02 from `4eb622e7` (590 was a
   verify_build run). It carries #209 (the launch email list: "Notify me" on the coming-soon card
   and the footer, the admin mailing screen), #210 (`DEMO_ACCOUNT_PASSWORD` on Render sets the

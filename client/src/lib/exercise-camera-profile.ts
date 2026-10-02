@@ -48,7 +48,13 @@
  * manual's own text shows the legs are NOT straight (a dip taken with the ankles crossed, an
  * assisted pull-up taken kneeling on the platform).
  */
-export type CameraPosture = "standing" | "seated" | "lying" | "supported" | "hanging";
+/** "bent_over" added 2026-10-02 from the Pendlay row beside OVR: a hinged torso puts the
+ * shoulders a metre nearer the floor than standing, so every ruler that maps the athlete's
+ * STATURE onto the shoulder-to-ankle span reads a short body, and the implied-height
+ * plausibility check then convicts the rulers that were right. The row's height ruler came out
+ * 37% low and carried a 0.05 uncertainty, which made it the whole answer. See
+ * docs/camera-tracking-notes.md, "Three lifts beside OVR, 2026-10-02". */
+export type CameraPosture = "standing" | "seated" | "lying" | "supported" | "hanging" | "bent_over";
 
 /** Whether an athlete in this posture can have real-world scale derived from their height. */
 export function postureAllowsHeightCalibration(posture: CameraPosture): boolean {
@@ -95,7 +101,19 @@ const POSTURE_BY_NAME = new Map<string, CameraPosture>([
   ["Assisted Pull-Up", "supported"],
   ["Dip", "supported"],
   ["Chin-Up", "hanging"],
-  ["Pull-Up", "hanging"],]);
+  ["Pull-Up", "hanging"],
+  // Hinged at the hip for the whole set: the torso is near horizontal and stays there.
+  ["Pendlay Row", "bent_over"],
+  ["Barbell Row", "bent_over"],
+  ["Bent-Over Row", "bent_over"],
+  ["Bent Over Row", "bent_over"],
+  ["Dumbbell Row", "bent_over"],
+  ["Single-Arm Dumbbell Row", "bent_over"],
+  ["T-Bar Row", "bent_over"],
+  ["Good Morning", "bent_over"],
+  ["Kroc Row", "bent_over"],
+  ["Meadows Row", "bent_over"],
+  ["Yates Row", "bent_over"],]);
 
 // For the ~300 library exercises the manual does not cover. Ordered: first match wins.
 //
@@ -124,6 +142,10 @@ const POSTURE_PATTERNS: [RegExp, CameraPosture][] = [
   [/\bmachine\s+(?:chest|shoulder)\s+press\b/i, "seated"],
   [/\b(?:preacher|concentration)\s+curl\b/i, "seated"],
   [/\bdip\b/i, "supported"],
+  // A row the athlete does hinged over. Inverted, seated, cable and upright rows are matched
+  // earlier (lying, seated) or are standing; everything else called a row is bent over.
+  [/\b(?:bent[-\s]*over|pendlay|t-?bar|kroc|meadows|yates|dumbbell|barbell)\s+row\b/i, "bent_over"],
+  [/\bgood\s+morning\b/i, "bent_over"],
   [/\bassisted\s+pull-?up\b/i, "supported"],
   // Floor and quadruped work. A plank, bird dog, bear crawl, ab-wheel rollout, superman hold,
   // glute-ham raise and neck bridge all put the body somewhere that head-to-ankle means nothing.
@@ -168,6 +190,26 @@ export function postureForExercise(name: string | null | undefined): CameraPostu
     if (pattern.test(normalized)) return posture;
   }
   return "standing";
+}
+
+/** THE MOVEMENT TYPE A PROGRAM ROW FORGOT, from the name.
+ *
+ * The bench press beside OVR on 2026-10-02 reached the tracker with movementType null: the
+ * program exercise was a copy that never carried the library's "Push". Everything keyed on the
+ * type then ran on nothing -- the expected pattern, the torso-at-rest rule, the lower-body
+ * chain -- and the trust notes read "didn't clearly match the selected exercise" on every rep
+ * of a textbook bench. The name is enough to say which family a barbell lift is in; this is
+ * the fallback for a missing type, never an override of one the row has. Null when the name
+ * says nothing, which keeps today's behaviour for everything it does not recognise. */
+export function inferMovementType(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const n = name.toLowerCase();
+  if (/\b(?:squat|leg\s+press|pistol)\b/.test(n) && !/\bsplit\s+squat\b/.test(n)) return "Squat";
+  if (/\b(?:lunge|split\s+squat|step[-\s]*up)\b/.test(n)) return "Lunge";
+  if (/\b(?:deadlift|rdl|romanian|good\s+morning|hinge|swing|hip\s+thrust|glute\s+bridge|clean|snatch)\b/.test(n)) return "Hinge";
+  if (/\b(?:row|pull[-\s]*(?:up|down)|chin[-\s]*up|curl|pullover|face\s+pull|shrug)\b/.test(n)) return "Pull";
+  if (/\b(?:press|push[-\s]*up|dip|fly|flye|extension|raise)\b/.test(n)) return "Push";
+  return null;
 }
 
 /** True when this lift's numbers must NOT be derived from the athlete's height.

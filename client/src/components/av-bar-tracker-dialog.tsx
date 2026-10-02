@@ -110,6 +110,7 @@ import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
 import {
   postureForExercise,
   heightCalibrationUnreliable,
+  inferMovementType,
   filmGuidanceForExercise,
   barPathAssumptionInvalid,
   expectedCameraView,
@@ -548,7 +549,7 @@ export function AvBarTrackerDialog({
   onOpenChange,
   mode,
   exerciseName,
-  movementType,
+  movementType: movementTypeProp,
   equipment,
   laterality,
   heightIn,
@@ -716,6 +717,9 @@ export function AvBarTrackerDialog({
   // Held loosely on purpose. The plate class's supporting data is eleven instances from three
   // photos and the training script rebuilds from scratch each time, so this is worth measuring
   // through the replay harness before anyone treats a plate-derived scale as settled.
+  // A program row with no movement type is read by its name (inferMovementType); a row that
+  // has one is believed. The bench beside OVR on 2026-10-02 arrived with null.
+  const movementType = movementTypeProp ?? inferMovementType(exerciseName);
   const coreMlTrackingMode: string | undefined = heightCalibrationUnreliable(exerciseName, movementType)
     ? "plate"
     : equipment
@@ -1258,7 +1262,12 @@ export function AvBarTrackerDialog({
     // see rejectImplausibleScales. A scale that puts a 5'10" lifter at sixteen inches tall is
     // measuring something other than what it thinks it is, and that is knowable from the footage
     // rather than from which source it came out of.
-    const bodySpanUnits = impliedBodyLengthUnits(calibrationInput);
+    // A HINGED BODY HAS NO USABLE LENGTH IN FRAME. The Pendlay row beside OVR, 2026-10-02: the
+    // shoulder-to-ankle span of a torso held parallel to the floor, with the ankles behind the
+    // plates, implied a 142-inch athlete for the shoulder ruler and a 39-inch one for the plate,
+    // and the one ruler that survived (height, built on that same span) was 37% low. The grip
+    // yardstick still runs; only the stature check stands down, and only for this posture.
+    const bodySpanUnits = posture === "bent_over" ? null : impliedBodyLengthUnits(calibrationInput);
     const scaleCandidatesRaw = [
       ...(plateScale != null
         ? [

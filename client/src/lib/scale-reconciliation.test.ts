@@ -46,13 +46,23 @@ describe("reconcileScaleEstimates", () => {
     expect(verdict.outliers[0].ratioToChosen).toBeLessThan(0.25);
   });
 
-  it("falls back to the most trustworthy source when nothing agrees", () => {
-    // Three readings, all far apart. A plate is an object of known size and does not care where
-    // the camera is standing, so it answers -- but the result is honest that nothing backed it.
+  it("a lone plate against two body rulers steps aside; the body rulers are blended", () => {
+    // Three readings, all far apart. This used to go to the plate by rank ("an object of known
+    // size does not care where the camera is standing"), and in every sensor-paired take where
+    // the detector offered a plate that nothing corroborated (squat set 2 2026-10-01, the push
+    // press and the Pendlay row 2026-10-02) the "plate" was the athlete's torso at a third of the
+    // true scale. Rule #2: a witness nobody agrees with does not lead.
     const verdict = reconcileScaleEstimates([shoulder(0.004), height(0.008), plate(0.012)]);
+    expect(verdict.agreedSources).toEqual(["shoulder_width", "height"]);
+    expect(verdict.blended).toBe(true);
+    expect(verdict.corroborated).toBe(false);
+    expect(verdict.outliers.map((o) => o.source)).toEqual(["plate"]);
+  });
+
+  it("a lone plate against ONE other ruler still answers (one against one is rank's to break)", () => {
+    const verdict = reconcileScaleEstimates([shoulder(0.004), plate(0.012)]);
     expect(verdict.agreedSources).toEqual(["plate"]);
     expect(verdict.corroborated).toBe(false);
-    expect(verdict.outliers).toHaveLength(2);
   });
 
   it("prefers the larger agreeing group over the more trusted lone source", () => {
@@ -198,14 +208,25 @@ describe("the two body rulers are averaged when they are all the take has", () =
     expect(v.outliers).toEqual([]);
   });
 
-  it("never blends when a real ruler is in the room", () => {
+  it("never blends when a real ruler is in the room AND something agrees with it", () => {
+    const v = reconcileScaleEstimates([
+      { source: "plate", scale: 0.0030, uncertaintyFraction: 0.05 },
+      { source: "height", scale: 0.00321, uncertaintyFraction: 0.05 },
+      { source: "shoulder_width", scale: 0.0044, uncertaintyFraction: 0.08 },
+    ]);
+    expect(v.blended).toBeFalsy();
+    expect(v.agreedSources).toContain("plate");
+    expect(v.corroborated).toBe(true);
+  });
+
+  it("a plate that agrees with nobody is an outlier and the body rulers blend (2026-10-02)", () => {
     const v = reconcileScaleEstimates([
       { source: "plate", scale: 0.0030, uncertaintyFraction: 0.05 },
       { source: "height", scale: 0.00351, uncertaintyFraction: 0.05 },
       { source: "shoulder_width", scale: 0.0044, uncertaintyFraction: 0.08 },
     ]);
-    expect(v.blended).toBeFalsy();
-    expect(v.agreedSources).toContain("plate");
+    expect(v.blended).toBe(true);
+    expect(v.outliers.map((o) => o.source)).toEqual(["plate"]);
   });
 
   it("leaves a lone ruler alone", () => {

@@ -1,5 +1,96 @@
 # Camera tracking: what is validated, what is assumed, what will break
 
+## Three lifts beside OVR, 2026-10-02: bench, Pendlay row, push press (build 589)
+
+Three sets of ten with the bar sensor on the bar, all filmed on build 589 at 120fps, all from an
+oblique. Export: the admin captures export of 2026-10-02 19:13. Ground truth in
+`client/src/lib/tracker-ground-truth.ts` (`OVR_BENCH_2026_10_02`, `OVR_PENDLAY_ROW_2026_10_02`,
+`OVR_PUSH_PRESS_2026_10_02`). The replay harness (`capture-replay.ts`) reproduces the phone on
+all three to the second decimal, so every finding below was checked against the replay.
+
+| Set | Sensor mean / peak / ROM | Camera mean / peak / ROM | Reps | Scale vs sensor |
+|---|---|---|---|---|
+| Bench 135x10 | 0.74 / 1.08 / 37.1cm | 0.85 / 1.22 / 34.7cm | 10/10 | 0.94 |
+| Pendlay row 135x10 | 0.85 / 1.54 / 50.0cm | 0.77 / 0.93 / 31.9cm | 11/10 | 0.64 |
+| Push press 95x10 | 1.05 / 1.75 / 65.8cm | 1.33 / 1.76 / 81cm | 10/10 | 1.23 |
+
+**Every ruler against every paired set.** With these three there are fourteen sensor-paired takes
+carrying each ruler's reading, enough to measure each ruler rather than guess at it (ratio of
+ruler to sensor-implied scale, geometric mean and spread of the log ratio):
+
+| Ruler | n | mean ratio | spread |
+|---|---|---|---|
+| shoulder_width | 13 | 1.13 | 0.095 |
+| body_3d (in-plane) | 14 | 0.94 | 0.165 |
+| depth | 14 | 0.83 | 0.305 |
+| height | 4 | 0.84 | 0.167 |
+| plate | 3 | 0.35 | (torso every time) |
+
+Modelled under leave-one-out, the weights `reconcileScaleEstimates` already carries come out best
+(about 10% rms); bias-correcting the rulers by their mean ratio made it worse on the sets where
+the ruler was exact, and raising the height ruler's uncertainty from its 0.05 cost the three
+squats their 4% accuracy. So the constants did not move. The two big misses had specific causes:
+
+- **The row (0.64) was a posture bug, not a weight.** `rejectImplausibleScales` measured the
+  body span on a torso held parallel to the floor with the ankles behind the plates, and that
+  span implied a 142-inch athlete for the shoulder ruler (0.00475, within 19% of the sensor) and
+  a 39-inch one for the plate. Both were thrown out. The one ruler left standing was the height
+  ruler, built on that same span, 37% low, carrying a 0.05 uncertainty, so it was the whole
+  answer. Fix: `CameraPosture` gains `bent_over` (rows done hinged, good mornings;
+  `exercise-camera-profile.ts`), which runs no height ruler and withholds the body span from the
+  stature check (`av-bar-tracker-dialog.tsx`, `bodySpanUnits`). The row's remaining rulers then
+  blend to 1.11 of the sensor. The grip yardstick still runs on every posture.
+- **The push press (1.23) is the shoulder ruler at 1.34 on a standing athlete turned 26 degrees
+  from the lens** (`gripAxisFromVerticalDeg`). The 2D shoulder span foreshortens with the turn
+  and the ruler's assumed breadth does not. OPEN: the in-plane 3D ruler read 0.83 on the same
+  take and is yaw-aware by construction; a yaw read off the 3D pose could de-foreshorten the 2D
+  ruler. One take is not enough to fit that. Logged in the fixture; nothing changed for it.
+- **The "plate" was the athlete's torso on both standing takes** (103x214 and 191x344 px boxes,
+  aspect 2.08 and 1.81, at a third of the true scale), and the plate has now been wrong in all
+  three paired sets where the detector offered one. Two fixes: `MAX_PLATE_ASPECT_RATIO` 2.5 ->
+  1.7 (`shared/tracker-arbiter.ts`; a disc 54 degrees off-axis reads 1.7), and a plate that
+  corroborates with NOTHING while two or more other rulers are present steps out of the vote
+  (`reconcileScaleEstimates`). Before this a lone plate won by rank, which is a leader wearing a
+  rule's clothes (Rule #2). A plate anything agrees with keeps its rank; one against one is still
+  rank's to break.
+- **The bench reached the tracker with `movementType` null.** The program row was a copy that
+  never carried the library's "Push", so the expected pattern, the torso-at-rest rule and the
+  trust note all ran on nothing ("didn't clearly match the selected exercise" on a textbook
+  bench). `inferMovementType(name)` is the fallback for a missing type, never an override.
+
+**Still open from these three, with the code each belongs to:**
+
+- **Bench mean 15% high with the range of motion 6% low** means the concentric window is short:
+  0.33s against the sensor's ~0.50s on the middle reps. `trimPhaseToDrive` / `trimPhaseToTravel`
+  (`bar-tracking.ts`). Bench set 10 passes within 10% through the same code, so the difference
+  is in this trace: oblique, 100 lone-hand-carried frames, 14 side flips, a 2.6s hole
+  (`largestGapSeconds`). Rep 1 (0.29 m/s, 0.83s) is the settle after the un-rack read as a rep.
+- **Row counted 11.** The eleventh (19980-22382ms, 0.70 mean = peak, 27cm) is the bar going to
+  the floor after the last pull. Its oddness score sits under `MIN_COUNT_TRIM_ODDNESS` (1) so the
+  count trim kept it. Not changed: lowering that floor on one set is the kind of tuning that
+  broke bench set 3.
+- **Push press rep 1 is the un-rack and dip** (34cm, 0.23s, mean = peak at 1.64) and the count
+  trim removed a real press from the far end instead. `repConsistency.outlierReps` already names
+  it. Same rule as the bench settle: it is at the front edge and odd; the trim chose the back.
+- **Peak velocity on the press read 1.76 against 1.75 with the scale 23% high**, so at the right
+  scale the camera's peak is 20% low on a lift whose time to peak is 0.21s. `velocitySmoothingMs`
+  165 flattens a 0.2s drive. The squats and benches (0.3-0.5s drives) do not show it.
+
+**The live path, and why the press felt slow.** All three takes fell back from the live trace to
+a full re-read of the file: coverage 0.47-0.49, drop rate ~2.1 against a gate of 0.9 and 0.05.
+Vision takes ~45ms a frame on this phone, so at 120fps the delegate is busy for five frames in
+six and the capture discards them as late; "every Nth delivered frame" on top of that gave a
+cadence nobody chose, and the gate was never going to pass at 120fps. The press clip was 33s and
+so paid the longest re-read (22s of analysis after a 22s set). `AvBodyTrackingPlugin.swift`:
+the live delegate now samples by presentation time (one target interval, stride over capture
+rate, between processed frames; sooner frames are skipped before the scaler runs), and the gate
+is coverage >= 0.5 of the target rate AND the largest inter-frame gap <= 0.25s
+(`maxInterFrameGapSeconds`, which was already measured). A trace at half the rate with no hole in
+it is the same measurement at a coarser cadence; a hole is what makes one unusable. The result
+carries `liveSkippedForCadence` and `liveMaxGapSeconds`. UNTESTED ON A PHONE: the next take says
+whether it holds (`analysisPath: "live"` in the recording diagnostics). If it does, the wait
+after Stop drops from ~20s to the upload alone.
+
 ## RULE #1, BEFORE ANYTHING ELSE IN THIS DOCUMENT: THE CAMERA NEVER REJECTS. EVER.
 
 Scott, 2026-09-22: "Camera should never ever reject, I'd rather have bad data then it reject the

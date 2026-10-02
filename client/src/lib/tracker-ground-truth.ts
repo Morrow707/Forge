@@ -953,3 +953,153 @@ export const OVR_MED_BALL_THROW_2026_10_01 = {
     // Across the ten throws: peak 6.6 m/s (5.59-7.15), mean 2.5, horizontal travel 52in.
   },
 };
+
+// ---- Three lifts beside OVR, 2026-10-02, build 589 ----
+//
+// Bench 135x10, Pendlay row 135x10, push press 95x10 (logged in Forge as "Barbell Shoulder
+// Press"), all filmed on build 589 at 1920x1080 @ 120fps. Every take fell back from the live
+// path to the file read (coverage 0.47-0.49). The sensor's range of motion gives the scale the
+// camera SHOULD have found (sensorImplied = device scale x camera ROM / sensor ROM). What each
+// take settled is in docs/camera-tracking-notes.md, "Three lifts beside OVR, 2026-10-02".
+export const OVR_BENCH_2026_10_02 = {
+  build: 589,
+  loadLb: 135,
+  repsPerSet: 10,
+  forgeOnDevice: {
+    repCount: 10,
+    meanVelocityMps: 0.85,
+    peakVelocityMps: 1.22,
+    romCm: 34.7,
+    concentricSeconds: 0.43,
+    scaleSource: "both",
+    scale: 0.003776,
+    movementTypeReceived: null,
+    cameraView: "oblique",
+    largestGapSeconds: 2.568,
+    reps: [
+      { meanVelocityMps: 0.29, peakVelocityMps: 0.5, romCm: 25.2, concentricSeconds: 0.83 },
+      { meanVelocityMps: 1.22, peakVelocityMps: 1.46, romCm: 35, concentricSeconds: 0.3 },
+      { meanVelocityMps: 0.67, peakVelocityMps: 1.34, romCm: 34.2, concentricSeconds: 0.53 },
+      { meanVelocityMps: 1.01, peakVelocityMps: 1.25, romCm: 28.2, concentricSeconds: 0.3 },
+      { meanVelocityMps: 1.03, peakVelocityMps: 1.26, romCm: 31.8, concentricSeconds: 0.33 },
+      { meanVelocityMps: 1.19, peakVelocityMps: 1.28, romCm: 36.2, concentricSeconds: 0.33 },
+      { meanVelocityMps: 1.0, peakVelocityMps: 1.35, romCm: 42.1, concentricSeconds: 0.43 },
+      { meanVelocityMps: 0.92, peakVelocityMps: 1.26, romCm: 42, concentricSeconds: 0.47 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.34, romCm: 31.9, concentricSeconds: 0.43 },
+      { meanVelocityMps: 1.24, peakVelocityMps: 1.24, romCm: 40, concentricSeconds: 0.33 },
+    ],
+  },
+  rulers: { inPlane3D: 0.003057, depthRuler: 0.001711, shoulderWidth: 0.004148, plate: null, sensorImplied: 0.004035 },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.11, romIn: 13.3, meanW: 434, peakW: 669, tpvS: 0.31, eai: 3.53 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.21, romIn: 14.4, meanW: 497, peakW: 727, tpvS: 0.30, eai: 3.95 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.18, romIn: 14.3, meanW: 476, peakW: 710, tpvS: 0.28, eai: 3.98 },
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.10, romIn: 13.8, meanW: 459, peakW: 661, tpvS: 0.30, eai: 3.59 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.10, romIn: 14.0, meanW: 446, peakW: 661, tpvS: 0.32, eai: 3.39 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.14, romIn: 14.9, meanW: 495, peakW: 694, tpvS: 0.28, eai: 3.89 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.02, romIn: 14.3, meanW: 432, peakW: 611, tpvS: 0.34, eai: 2.97 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.05, romIn: 14.6, meanW: 450, peakW: 628, tpvS: 0.32, eai: 3.22 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.05, romIn: 15.6, meanW: 435, peakW: 628, tpvS: 0.34, eai: 3.05 },
+      { meanVelocityMps: 0.60, peakVelocityMps: 0.88, romIn: 17.4, meanW: 360, peakW: 528, tpvS: 0.37, eai: 2.33 },
+    ],
+    reported: { meanVelocityMps: 0.74, peakVelocityMps: 1.08, romIn: 14.6, meanW: 448, peakW: 651, tpvS: 0.31, eai: 3.38 },
+  },
+};
+
+export const OVR_PENDLAY_ROW_2026_10_02 = {
+  build: 589,
+  loadLb: 135,
+  repsPerSet: 10,
+  forgeOnDevice: {
+    repCount: 11,
+    meanVelocityMps: 0.77,
+    peakVelocityMps: 0.93,
+    romCm: 31.9,
+    concentricSeconds: 0.43,
+    scaleSource: "both",
+    scale: 0.002545,
+    cameraView: "oblique",
+    // Shoulder ruler and "plate" both rejected as implausible against a body span measured on
+    // a hinged torso with the ankles behind the plates; the height ruler, built on that same
+    // span, carried a 0.05 uncertainty and was the whole answer at 37% low.
+    scalesRejectedAsImplausible: ["plate", "shoulder_width"],
+    reps: [
+      { meanVelocityMps: 0.53, peakVelocityMps: 0.69, romCm: 26.1, concentricSeconds: 0.53 },
+      { meanVelocityMps: 0.67, peakVelocityMps: 0.8, romCm: 28.2, concentricSeconds: 0.43 },
+      { meanVelocityMps: 0.96, peakVelocityMps: 1.08, romCm: 31.4, concentricSeconds: 0.37 },
+      { meanVelocityMps: 0.37, peakVelocityMps: 0.62, romCm: 26.5, concentricSeconds: 0.7 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.02, romCm: 34.2, concentricSeconds: 0.47 },
+      { meanVelocityMps: 0.63, peakVelocityMps: 0.96, romCm: 30.3, concentricSeconds: 0.5 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 0.95, romCm: 32.8, concentricSeconds: 0.43 },
+      { meanVelocityMps: 0.91, peakVelocityMps: 1.09, romCm: 30.7, concentricSeconds: 0.37 },
+      { meanVelocityMps: 0.93, peakVelocityMps: 1.01, romCm: 34.4, concentricSeconds: 0.4 },
+      { meanVelocityMps: 0.96, peakVelocityMps: 1.37, romCm: 35.4, concentricSeconds: 0.4 },
+      { meanVelocityMps: 0.7, peakVelocityMps: 0.7, romCm: 27, concentricSeconds: 0.4 },
+    ],
+  },
+  rulers: { inPlane3D: 0.003764, depthRuler: 0.002609, height: 0.002508, shoulderWidth: 0.00475, plate: 0.001307, sensorImplied: 0.003992 },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.70, peakVelocityMps: 1.69, romIn: 20.7, meanW: 417, peakW: 1016, tpvS: 0.56, eai: 2.98 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.54, romIn: 20.5, meanW: 562, peakW: 925, tpvS: 0.37, eai: 4.09 },
+      { meanVelocityMps: 0.96, peakVelocityMps: 1.60, romIn: 20.0, meanW: 577, peakW: 958, tpvS: 0.34, eai: 4.69 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.62, romIn: 19.9, meanW: 564, peakW: 975, tpvS: 0.33, eai: 4.90 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.60, romIn: 19.2, meanW: 535, peakW: 958, tpvS: 0.35, eai: 4.45 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.51, romIn: 19.2, meanW: 536, peakW: 909, tpvS: 0.34, eai: 4.45 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.47, romIn: 19.3, meanW: 482, peakW: 883, tpvS: 0.40, eai: 3.65 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.49, romIn: 18.6, meanW: 480, peakW: 892, tpvS: 0.42, eai: 3.52 },
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.51, romIn: 19.9, meanW: 505, peakW: 908, tpvS: 0.40, eai: 3.75 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.38, romIn: 20.1, meanW: 482, peakW: 826, tpvS: 0.40, eai: 3.41 },
+    ],
+    reported: { meanVelocityMps: 0.85, peakVelocityMps: 1.54, romIn: 19.7, meanW: 514, peakW: 925, tpvS: 0.39, eai: 3.98 },
+  },
+};
+
+// Logged in Forge as "Barbell Shoulder Press" (seated in the library, so no height ruler), done
+// as a standing push press and logged on the sensor as such.
+export const OVR_PUSH_PRESS_2026_10_02 = {
+  build: 589,
+  loadLb: 95,
+  repsPerSet: 10,
+  forgeOnDevice: {
+    repCount: 10,
+    meanVelocityMps: 1.33,
+    peakVelocityMps: 1.76,
+    romCm: 81,
+    concentricSeconds: 0.63,
+    scaleSource: "both",
+    scale: 0.005807,
+    gripAxisFromVerticalDeg: 25.7,
+    // Rep 1 is the un-rack and dip (34cm, 0.23s); the ten presses are reps 2-10 plus one the
+    // count trim removed. The sensor's rep 1 is a full press.
+    reps: [
+      { meanVelocityMps: 1.64, peakVelocityMps: 1.64, romCm: 34.3, concentricSeconds: 0.23 },
+      { meanVelocityMps: 1.35, peakVelocityMps: 1.41, romCm: 78.8, concentricSeconds: 0.6 },
+      { meanVelocityMps: 1.13, peakVelocityMps: 1.94, romCm: 80.8, concentricSeconds: 0.73 },
+      { meanVelocityMps: 1.44, peakVelocityMps: 2.17, romCm: 95.4, concentricSeconds: 0.7 },
+      { meanVelocityMps: 1.48, peakVelocityMps: 1.78, romCm: 85.9, concentricSeconds: 0.6 },
+      { meanVelocityMps: 1.47, peakVelocityMps: 1.75, romCm: 90, concentricSeconds: 0.63 },
+      { meanVelocityMps: 1.4, peakVelocityMps: 1.72, romCm: 88.5, concentricSeconds: 0.63 },
+      { meanVelocityMps: 1.15, peakVelocityMps: 1.66, romCm: 81.8, concentricSeconds: 0.74 },
+      { meanVelocityMps: 1.28, peakVelocityMps: 1.55, romCm: 82.8, concentricSeconds: 0.67 },
+      { meanVelocityMps: 1.21, peakVelocityMps: 1.73, romCm: 86.9, concentricSeconds: 0.73 },
+    ],
+  },
+  rulers: { inPlane3D: 0.003929, depthRuler: 0.003589, shoulderWidth: 0.00632, plate: 0.002105, sensorImplied: 0.004717 },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 1.09, peakVelocityMps: 1.88, romIn: 26.4, meanW: 462, peakW: 796, tpvS: 0.23, eai: 8.05 },
+      { meanVelocityMps: 1.28, peakVelocityMps: 2.16, romIn: 26.7, meanW: 540, peakW: 912, tpvS: 0.21, eai: 9.99 },
+      { meanVelocityMps: 1.27, peakVelocityMps: 2.16, romIn: 26.6, meanW: 538, peakW: 912, tpvS: 0.27, eai: 8.00 },
+      { meanVelocityMps: 0.99, peakVelocityMps: 1.67, romIn: 25.9, meanW: 418, peakW: 703, tpvS: 0.24, eai: 6.85 },
+      { meanVelocityMps: 1.00, peakVelocityMps: 1.51, romIn: 25.0, meanW: 420, peakW: 639, tpvS: 0.19, eai: 7.64 },
+      { meanVelocityMps: 0.99, peakVelocityMps: 1.62, romIn: 26.1, meanW: 416, peakW: 686, tpvS: 0.21, eai: 7.51 },
+      { meanVelocityMps: 1.02, peakVelocityMps: 1.57, romIn: 25.5, meanW: 429, peakW: 663, tpvS: 0.24, eai: 6.45 },
+      { meanVelocityMps: 0.95, peakVelocityMps: 1.73, romIn: 26.5, meanW: 400, peakW: 732, tpvS: 0.23, eai: 7.40 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.49, romIn: 25.9, meanW: 364, peakW: 628, tpvS: 0.25, eai: 5.94 },
+      { meanVelocityMps: 1.08, peakVelocityMps: 1.79, romIn: 25.1, meanW: 455, peakW: 756, tpvS: 0.30, eai: 5.88 },
+    ],
+    reported: { meanVelocityMps: 1.05, peakVelocityMps: 1.75, romIn: 25.9, meanW: 444, peakW: 742, tpvS: 0.23, eai: 7.37 },
+  },
+};
