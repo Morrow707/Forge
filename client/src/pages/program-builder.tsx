@@ -66,8 +66,6 @@ import {
   Lock,
   Layers,
   CalendarPlus,
-  CalendarCog,
-  ChevronDown,
 } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 import {
@@ -75,7 +73,6 @@ import {
   PERIODIZATION_PHASE_LABEL,
   type PeriodizationPhase,
 } from "@shared/schema-constants";
-import { WEEKDAY_OPTIONS } from "@/lib/weekdays";
 import { todayIso } from "@/lib/local-date";
 import { ReadFailed } from "@/components/read-failed";
 
@@ -344,17 +341,6 @@ export function ProgramBuilderPage({
   const [selfAssignDate, setSelfAssignDate] = useState(() => todayIso());
   // 0=Sun..6=Sat -- which weekdays this program's non-rest days land on.
   // Empty means the old "every day in a row from the start date" default.
-  const [selfAssignWeekdays, setSelfAssignWeekdays] = useState<number[]>([]);
-  /* THE PER-DAY LIST IS THE SCHEDULE, AND THE WEEKDAY PATTERN IS THE SHORTCUT. Scott,
-     2026-10-02, on a four-day program with Wednesday as a rest day: "have the athlete go
-     through and select each day individually, just like how we select the correctives." A
-     weekday pattern can only say "these days, every week", so a program whose rest day falls
-     mid-week walks onto dates nobody asked for -- the reported case started on a Friday and
-     scattered week 1 across Fri, Mon, Tue, Thu. The pattern still works and is still offered;
-     it just stops being the only thing visible. Opening this by default puts every day and its
-     date on screen, where a date that looks wrong can be changed before it is committed rather
-     than discovered on the calendar afterwards. */
-  const [selfAssignScheduleOpen, setSelfAssignScheduleOpen] = useState(true);
   // Per-day manual overrides on top of the weekday pattern above -- lets a
   // game/practice bump one specific day without abandoning the pattern for
   // the rest of the program. Same mechanism as AssignProgramDialog.
@@ -368,18 +354,22 @@ export function ProgramBuilderPage({
   // wrong dates.
   useEffect(() => {
     setSelfAssignDateOverrides(new Map());
-  }, [selfAssignDate, selfAssignWeekdays.join(",")]);
+  }, [selfAssignDate]);
 
   const { data: selfAssignSchedule = [] } = useQuery<ScheduleDay[]>({
-    queryKey: [`${apiBase}/programs`, programId, "schedule", selfAssignDate, selfAssignWeekdays.join(",")],
+    queryKey: [`${apiBase}/programs`, programId, "schedule", selfAssignDate],
     queryFn: async () => {
       const params = new URLSearchParams({ startDate: selfAssignDate });
-      for (const wd of selfAssignWeekdays) params.append("trainingWeekdays", String(wd));
       const res = await apiRequest("GET", `${apiBase}/programs/${programId}/schedule?${params.toString()}`);
       return res.json();
     },
     enabled: selfAssignOpen && !!selfAssignDate,
   });
+
+  // Only worth labelling the week when there is more than one of them.
+  const selfAssignWeekCount = selfAssignSchedule.length
+    ? Math.max(...selfAssignSchedule.map((d) => d.weekNumber))
+    : 1;
 
   useEffect(() => {
     if (program && !hydrated) {
@@ -542,21 +532,15 @@ export function ProgramBuilderPage({
   const selfAssignMutation = useMutation({
     mutationFn: async () => {
       if (editable) await saveMutation.mutateAsync();
-      // Same reasoning as AssignProgramDialog's assignMutation -- whenever a
-      // weekday pattern is set, every day's (already weekday-walked) date
-      // needs to go over explicitly, not just the ones manually tweaked in
-      // "Customize schedule", since the self-assign endpoint's own
-      // trainingWeekdays computation doesn't know about a save-triggered
-      // schedule refetch happening on this side. Manual edits still win.
-      const effectiveOverrides =
-        selfAssignWeekdays.length > 0
-          ? new Map(
-              selfAssignSchedule.map((d) => [
-                d.programDayId,
-                selfAssignDateOverrides.get(d.programDayId) ?? d.defaultDate,
-              ]),
-            )
-          : selfAssignDateOverrides;
+      // Every day is chosen on screen now, so every day is sent. No pattern is left for
+      // the server to re-derive the untouched days from, and a partial map would
+      // silently fall back to a back-to-back grid for whatever was not edited.
+      const effectiveOverrides = new Map(
+        selfAssignSchedule.map((d) => [
+          d.programDayId,
+          selfAssignDateOverrides.get(d.programDayId) ?? d.defaultDate,
+        ]),
+      );
       const res = await apiRequest("POST", `${apiBase}/my/assignments`, {
         programId,
         startDate: selfAssignDate,
@@ -656,8 +640,6 @@ export function ProgramBuilderPage({
                     }
                   }
                   setSelfAssignDate(todayIso());
-                  setSelfAssignWeekdays([]);
-                  setSelfAssignScheduleOpen(false);
                   setSelfAssignOpen(true);
                 }}
               >
@@ -936,122 +918,67 @@ export function ProgramBuilderPage({
                   required
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>Which days do you train?</Label>
-                <div className="flex gap-1.5">
-                  {WEEKDAY_OPTIONS.map((wd) => (
-                    <button
-                      key={wd.value}
-                      type="button"
-                      aria-pressed={selfAssignWeekdays.includes(wd.value)}
-                      onClick={() =>
-                        setSelfAssignWeekdays((prev) =>
-                          prev.includes(wd.value)
-                            ? prev.filter((v) => v !== wd.value)
-                            : [...prev, wd.value].sort(),
-                        )
-                      }
-                      className={cn(
-                        "flex h-9 w-9 items-center justify-center rounded-full border text-xs font-bold transition-colors",
-                        selfAssignWeekdays.includes(wd.value)
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border text-muted-foreground hover:border-primary/50",
-                      )}
-                    >
-                      {wd.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {selfAssignWeekdays.length > 0
-                    ? "Day 1 lands on the first one of these on or after your start date, and each day after that goes to the next one, so a 3-day program stays spaced out every week instead of landing three days in a row."
-                    : "Leave blank to just run the days back-to-back starting from your start date."}
-                </p>
-              </div>
-
+              {/* PER DAY, ALWAYS, AND THE WORKOUT IS ON SCREEN WHILE YOU PICK. Scott,
+                  2026-10-02: "It should be per day, day one is what day, day two is what day,
+                  day 3 is what day, and so on", and "have it give the workout too so they can
+                  see it and select which day." Same change as AssignProgramDialog -- see the
+                  longer note there for why the weekday pattern went rather than being hidden. */}
               {selfAssignSchedule.length > 0 && (
-                <div className="rounded-md border border-border">
-                  <button
-                    type="button"
-                    onClick={() => setSelfAssignScheduleOpen((v) => !v)}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm font-semibold"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <CalendarCog className="h-4 w-4 text-muted-foreground" />
-                      Customize schedule
-                      {selfAssignDateOverrides.size > 0 && (
-                        <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                          {selfAssignDateOverrides.size} changed
-                        </span>
-                      )}
-                    </span>
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 transition-transform",
-                        selfAssignScheduleOpen && "rotate-180",
-                      )}
-                    />
-                  </button>
-                  {selfAssignScheduleOpen && (
-                    <div className="max-h-56 space-y-1 overflow-y-auto border-t border-border p-2">
-                      {selfAssignSchedule.map((day) => {
-                        const value = selfAssignDateOverrides.get(day.programDayId) ?? day.defaultDate;
-                        const changed = selfAssignDateOverrides.has(day.programDayId);
-                        return (
-                          <div
-                            key={day.programDayId}
-                            className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs"
-                          >
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center gap-1.5 truncate text-muted-foreground">
-                                Wk {day.weekNumber} · {day.title}
-                                {day.isRestDay && (
-                                  <span className="shrink-0 rounded-full border border-border px-1.5 py-0 text-[9px] font-bold uppercase text-muted-foreground">
-                                    Rest
-                                  </span>
-                                )}
+                <div className="space-y-1.5">
+                  <Label>When is each day?</Label>
+                  <div className="max-h-72 min-w-0 space-y-1.5 overflow-y-auto rounded-md border border-border p-2">
+                    {selfAssignSchedule.map((day, i) => (
+                      <div
+                        key={day.programDayId}
+                        className="min-w-0 rounded-md border border-border/60 p-2"
+                      >
+                        <div className="flex min-w-0 items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                                Day {i + 1}
                               </span>
-                              {day.exercisePreview && (
-                                <span className="block truncate text-[10px] text-muted-foreground/70">
-                                  {day.exercisePreview}
+                              {selfAssignWeekCount > 1 && (
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Wk {day.weekNumber}
                                 </span>
                               )}
-                            </span>
-                            <div className="flex shrink-0 items-center gap-1.5">
-                              <Input
-                                type="date"
-                                value={value}
-                                onChange={(e) =>
-                                  setSelfAssignDateOverrides((prev) => {
-                                    const next = new Map(prev);
-                                    next.set(day.programDayId, e.target.value);
-                                    return next;
-                                  })
-                                }
-                                className="h-7 w-auto text-xs"
-                              />
-                              {changed && (
-                                <button
-                                  type="button"
-                                  title="Reset to default date"
-                                  onClick={() =>
-                                    setSelfAssignDateOverrides((prev) => {
-                                      const next = new Map(prev);
-                                      next.delete(day.programDayId);
-                                      return next;
-                                    })
-                                  }
-                                  className="text-muted-foreground hover:text-destructive"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                              <span className="text-xs font-semibold">{day.title}</span>
+                              {day.isRestDay && (
+                                <span className="shrink-0 rounded-full border border-border px-1.5 py-0 text-[9px] font-bold uppercase text-muted-foreground">
+                                  Rest
+                                </span>
                               )}
                             </div>
+                            {/* The whole workout, wrapped rather than cut off at one line --
+                                seeing WHICH session it is is the point of choosing its day. */}
+                            {day.exercisePreview && (
+                              <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                                {day.exercisePreview}
+                              </p>
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          <Input
+                            type="date"
+                            aria-label={`Date for day ${i + 1}, ${day.title}`}
+                            value={selfAssignDateOverrides.get(day.programDayId) ?? day.defaultDate}
+                            onChange={(e) =>
+                              setSelfAssignDateOverrides((prev) => {
+                                const next = new Map(prev);
+                                next.set(day.programDayId, e.target.value);
+                                return next;
+                              })
+                            }
+                            className="h-8 w-[8.5rem] min-w-0 shrink-0 px-1.5 text-xs"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Each day starts out the day after the one before it. Set any date to fit
+                    games, practice or rest.
+                  </p>
                 </div>
               )}
 
