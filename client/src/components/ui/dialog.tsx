@@ -67,7 +67,7 @@ const DialogContent = React.forwardRef<
         // more contrast to stay legible while still reading as glass.
         // Rim/inset-highlight driven by --rim, ambient --glow layer added
         // same as card.tsx (invisible until a coach personalizes).
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border border-[hsl(var(--rim)/0.3)] bg-card/85 p-6 shadow-[inset_0_1px_0_0_hsl(var(--rim)/0.08),0_24px_60px_-20px_rgba(0,0,0,0.7),0_28px_64px_-10px_hsl(var(--glow)/var(--glow-alpha))] backdrop-blur-xl backdrop-saturate-150 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-lg overflow-y-auto",
+        "fixed left-1/2 top-1/2 z-50 grid grid-cols-[minmax(0,1fr)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border border-[hsl(var(--rim)/0.3)] bg-card/85 p-6 shadow-[inset_0_1px_0_0_hsl(var(--rim)/0.08),0_24px_60px_-20px_rgba(0,0,0,0.7),0_28px_64px_-10px_hsl(var(--glow)/var(--glow-alpha))] backdrop-blur-xl backdrop-saturate-150 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-lg overflow-y-auto",
         className,
       )}
       // CENTRED IN THE SAFE AREA, NOT IN THE RAW VIEWPORT.

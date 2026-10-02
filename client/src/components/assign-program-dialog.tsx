@@ -344,14 +344,14 @@ export function AssignProgramDialog({
                   />
                 </button>
                 {scheduleOpen && (
-                  <div className="max-h-56 space-y-1 overflow-y-auto border-t border-border p-2">
+                  <div className="max-h-56 min-w-0 space-y-1 overflow-y-auto border-t border-border p-2">
                     {schedule.map((day) => {
                       const value = dateOverrides.get(day.programDayId) ?? day.defaultDate;
                       const changed = dateOverrides.has(day.programDayId);
                       return (
                         <div
                           key={day.programDayId}
-                          className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs"
+                          className="flex min-w-0 items-center justify-between gap-2 rounded px-1.5 py-1 text-xs"
                         >
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center gap-1.5 truncate text-muted-foreground">
@@ -382,7 +382,7 @@ export function AssignProgramDialog({
                                   return next;
                                 })
                               }
-                              className="h-7 w-auto text-xs"
+                              className="h-7 w-[7.5rem] min-w-0 px-1.5 text-xs"
                             />
                             {changed && (
                               <button
