@@ -352,7 +352,7 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **593** is the newest TestFlight build, cut 2026-10-02 from the three sensor-paired lifts
+- Build **594** is the newest TestFlight build (593 was a verify_build run), cut 2026-10-02 from the three sensor-paired lifts
   (bench, Pendlay row, push press; docs/camera-tracking-notes.md "Three lifts beside OVR,
   2026-10-02"): `bent_over` posture (no height ruler, no stature check on a hinged row; the row's
   scale goes from 0.64 to 1.11 of the sensor), a lone uncorroborated plate steps out of the scale
