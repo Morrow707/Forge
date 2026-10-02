@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { replayCapture, type StoredCapture } from "./capture-replay";
-import { LOW_VISIBILITY_WRIST_FLOOR, MIN_VISIBILITY, lowVisibilityWristConfidence, POSE_LANDMARKS, type Landmark } from "./pose-tracking";
+import { LOW_VISIBILITY_WRIST_FLOOR, MIN_VISIBILITY, lowVisibilityWristConfidence, POSE_LANDMARKS } from "./pose-tracking";
+
+type Landmark = Parameters<typeof lowVisibilityWristConfidence>[0][number];
 import row from "./__fixtures__/pendlay-row-set2-2026-10-02.json";
 import bench from "./__fixtures__/bench-set2-2026-10-02.json";
 import press from "./__fixtures__/push-press-set2-2026-10-02.json";
@@ -18,7 +20,7 @@ describe("the Pendlay row's pickup is not a rep", () => {
     expect(result.repCount).toBe(9);
     const m = result.metrics!;
     expect(m.meanVelocityMps).toBeCloseTo(1.02, 1);
-    expect(Math.abs(m.romCm - 49.5) / 49.5).toBeLessThan(0.05);
+    expect(Math.abs(m.romCm! - 49.5) / 49.5).toBeLessThan(0.05);
     expect(Math.min(...m.repBreakdown.map((r) => r.startT))).toBeGreaterThan(5_000);
   });
   it("is an edge rule with a stated ratio", () => {
@@ -42,7 +44,7 @@ describe("the bench whose wrists Vision lost for half the take", () => {
   // it; the next bench from that angle can, through trace.wristsBelowVisibilityFloor.
   it.fails("lands within 20% of the sensor's mean", () => {
     const result = replayCapture((bench as StoredCapture[])[0]);
-    expect(Math.abs(result.metrics!.meanVelocityMps - 0.76) / 0.76).toBeLessThan(0.2);
+    expect(Math.abs(result.metrics!.meanVelocityMps! - 0.76) / 0.76).toBeLessThan(0.2);
   });
   it("uses a wrist under the visibility floor at its own confidence, and only above the low floor", () => {
     const lm = (visibility: number): Landmark[] => {
