@@ -345,7 +345,16 @@ export function ProgramBuilderPage({
   // 0=Sun..6=Sat -- which weekdays this program's non-rest days land on.
   // Empty means the old "every day in a row from the start date" default.
   const [selfAssignWeekdays, setSelfAssignWeekdays] = useState<number[]>([]);
-  const [selfAssignScheduleOpen, setSelfAssignScheduleOpen] = useState(false);
+  /* THE PER-DAY LIST IS THE SCHEDULE, AND THE WEEKDAY PATTERN IS THE SHORTCUT. Scott,
+     2026-10-02, on a four-day program with Wednesday as a rest day: "have the athlete go
+     through and select each day individually, just like how we select the correctives." A
+     weekday pattern can only say "these days, every week", so a program whose rest day falls
+     mid-week walks onto dates nobody asked for -- the reported case started on a Friday and
+     scattered week 1 across Fri, Mon, Tue, Thu. The pattern still works and is still offered;
+     it just stops being the only thing visible. Opening this by default puts every day and its
+     date on screen, where a date that looks wrong can be changed before it is committed rather
+     than discovered on the calendar afterwards. */
+  const [selfAssignScheduleOpen, setSelfAssignScheduleOpen] = useState(true);
   // Per-day manual overrides on top of the weekday pattern above -- lets a
   // game/practice bump one specific day without abandoning the pattern for
   // the rest of the program. Same mechanism as AssignProgramDialog.
@@ -1238,8 +1247,8 @@ function SupersetConnector({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 py-0 pl-3">
-      <div className={cn("h-2 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
+    <div className="flex items-center gap-1.5 py-1.5 pl-3">
+      <div className={cn("h-4 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
       <button
         type="button"
         onClick={onToggle}

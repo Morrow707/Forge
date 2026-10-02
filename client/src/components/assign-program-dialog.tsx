@@ -82,7 +82,16 @@ export function AssignProgramDialog({
   const [startDate, setStartDate] = useState(() => todayIso());
   const [durationWeeks, setDurationWeeks] = useState(1);
   const [correctivesQueue, setCorrectivesQueue] = useState<CorrectivesQueueItem[] | null>(null);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
+  /* THE PER-DAY LIST IS THE SCHEDULE, AND THE WEEKDAY PATTERN IS THE SHORTCUT. Scott,
+     2026-10-02, on a four-day program with Wednesday as a rest day: "have the athlete go
+     through and select each day individually, just like how we select the correctives." A
+     weekday pattern can only say "these days, every week", so a program whose rest day falls
+     mid-week walks onto dates nobody asked for -- the reported case started on a Friday and
+     scattered week 1 across Fri, Mon, Tue, Thu. The pattern still works and is still offered;
+     it just stops being the only thing visible. Opening this by default puts every day and its
+     date on screen, where a date that looks wrong can be changed before it is committed rather
+     than discovered on the calendar afterwards. */
+  const [scheduleOpen, setScheduleOpen] = useState(true);
   const [dateOverrides, setDateOverrides] = useState<Map<number, string>>(new Map());
   // 0=Sun..6=Sat -- which weekdays the roster trains on. Empty means the
   // old "every day in a row from the start date" default. Games/practices
