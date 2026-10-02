@@ -3557,6 +3557,33 @@ CREATE INDEX IF NOT EXISTS "exercise_video_reviews_pair_idx"
   ON "exercise_video_reviews" ("exercise_id", "video_id");
 CREATE INDEX IF NOT EXISTS "exercise_video_reviews_channel_idx"
   ON "exercise_video_reviews" ("channel");
+
+-- 2026-10-02: the launch email list. Addresses that asked to hear from Forge while sign-up is
+-- closed, and the mailings sent to them. No link to users; an address is all a row knows.
+-- See shared/schema.ts and server/email-list.ts.
+CREATE TABLE IF NOT EXISTS "email_list_subscribers" (
+  "id" serial PRIMARY KEY,
+  "email" text NOT NULL,
+  "source" text,
+  "unsubscribe_token" text NOT NULL,
+  "subscribed_at" timestamp NOT NULL DEFAULT now(),
+  "unsubscribed_at" timestamp
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "email_list_subscribers_email_idx"
+  ON "email_list_subscribers" ("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "email_list_subscribers_token_idx"
+  ON "email_list_subscribers" ("unsubscribe_token");
+CREATE TABLE IF NOT EXISTS "email_list_campaigns" (
+  "id" serial PRIMARY KEY,
+  "sent_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "subject" text NOT NULL,
+  "body" text NOT NULL,
+  "recipient_count" integer NOT NULL DEFAULT 0,
+  "sent_count" integer NOT NULL DEFAULT 0,
+  "failed_count" integer NOT NULL DEFAULT 0,
+  "started_at" timestamp NOT NULL DEFAULT now(),
+  "finished_at" timestamp
+);
 `;
 
 async function main() {

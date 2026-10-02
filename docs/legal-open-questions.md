@@ -157,6 +157,22 @@ because there is nothing left to take precedence over, /terms now serves this do
 `TERMS_OF_SERVICE_DRAFT` is retired. The DMCA agent is still to be registered
 (`docs/app-store-launch-notes.md`).
 
+## 11. The launch email list and the Privacy Policy -- OPEN, 2026-10-02
+
+Since 2026-10-02 the website takes an email address from anyone who wants to hear when
+sign-ups open ("Notify me" on the coming-soon card and in the footer), and an admin can mail
+everyone on that list (`server/email-list.ts`). It is a list of addresses and nothing else: no
+account, no name, no age, no link to a user row. Every mailing carries an unsubscribe link,
+unsubscribing is honoured at once and permanently until the person re-joins, and the list is
+never shared or sold.
+
+The Privacy Policy does not mention it. It describes the data an ACCOUNT holder gives Forge;
+a visitor who leaves an address on the coming-soon page has no account. Question for counsel:
+does the Policy need a sentence naming the launch list (what is collected, that it is used
+only to send Forge's own news and offers, how to unsubscribe), and if so where. The code
+already does each of those things; the question is only whether the document has to say so.
+Until answered, nothing about the list is written into a reviewed document.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and

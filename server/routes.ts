@@ -28,6 +28,7 @@ import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { setupAuth, requireAuth, requireRole, toPublicUser } from "./auth";
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
+import { registerEmailListRoutes } from "./email-list";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
@@ -1376,6 +1377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerNumericParamGuards(app);
   setupAuth(app);
   registerInstitutionalAgreementRoutes(app);
+  registerEmailListRoutes(app);
   // attachNativeTokenAuth is mounted inside setupAuth itself now (before the
   // auth routes it needs to cover) -- see its own comment there for why.
   // Keeps "see who's logged in"'s lastSeenAt reasonably fresh -- reads

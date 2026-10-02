@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { SignupCta, SignupLink } from "@/components/signup-cta";
+import { EmailListSignup } from "@/components/email-list-signup";
 import { ForgeMark } from "@/components/forge-mark";
 
 /** The nav and footer every public marketing page shares.
@@ -61,6 +62,10 @@ export function MarketingFooter() {
             <Link href="/camera-validation" className="hover:text-foreground">Camera accuracy</Link>
             <Link href="/movements" className="hover:text-foreground">Movements</Link>
           </div>
+        </div>
+        <div className="flex flex-col items-center gap-2 border-t border-border pt-6 sm:flex-row sm:justify-between">
+          <span className="text-foreground">Get launch updates</span>
+          <EmailListSignup source="footer" compact className="w-full max-w-sm" />
         </div>
         <div className="flex flex-col items-center justify-between gap-4 border-t border-border pt-6 sm:flex-row">
           <span>&copy; {new Date().getFullYear()} Forge Performance Systems LLC</span>

@@ -495,6 +495,30 @@ Two things worth saying out loud when someone tests this:
   under attorney review; a change to it changes the hash on every later signature, which is
   the point of storing it.
 
+## The launch email list
+
+Added 2026-10-02, the night the site went up behind "Coming soon". Scott: "can we have people
+signup to like a newsletter or email list? way to mass emails to everyone for discounts or
+something, and then obviously before we launch have people sign up to an email list."
+
+- **One form, two places.** `EmailListSignup` (`client/src/components/email-list-signup.tsx`)
+  on the coming-soon card and in the marketing footer; `POST /api/public/email-list`. The
+  rules live in `server/email-list.ts` and `server/email-list.itest.ts` proves each.
+- **Joining never says whether the address was already there.** Same answer for new, repeat
+  and re-join, so the form cannot be used to test who is on the list.
+- **The link in the email never acts.** `/unsubscribe?token=` is a page with one button; the
+  POST is what writes. Mail scanners fetch every link. Same rule as the new-device email, and
+  `server/email-list.test.ts` refuses a GET unsubscribe route.
+- **Unsubscribing keeps the row**, flagged. A re-join is the person's own act from the form,
+  never a side effect of a send or an import.
+- **Recipients are read when the send starts**, never from the count the admin screen showed.
+  The send runs in the background and the campaign row carries its counters; the screen polls.
+- **Admin screen** at `/admin/email-list` (nav: Email List): counts, CSV of the active list,
+  send-a-test-to-myself, send-to-everyone, every mailing ever sent. Server-side; ships on a
+  Render deploy, not a build.
+- **The Privacy Policy does not mention the list yet.** It is a reviewed document and is not
+  edited here; `docs/legal-open-questions.md` question 11 carries it to counsel.
+
 ## The site is visible, sign-up is closed: "Coming soon"
 
 Added 2026-10-01. Scott: "we have a website, but we need to hide how people can access it ...

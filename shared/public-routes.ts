@@ -182,6 +182,13 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
     description: "Request a password reset link for your Forge account.",
     index: false,
   },
+  {
+    path: "/unsubscribe",
+    title: "Unsubscribe",
+    description: "Stop receiving launch updates from Forge Performance Systems.",
+    // A token landing; nothing to rank.
+    index: false,
+  },
 ];
 
 /** Reachable without a session but never crawlable: one-shot token landings and per-athlete
