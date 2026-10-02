@@ -100,6 +100,27 @@ function demoPassword(publishedPassword: string): string {
   return process.env.NODE_ENV === "production" ? crypto.randomUUID() : publishedPassword;
 }
 
+/** THE REVIEW DEMO ACCOUNTS SIGN IN WITH THE PASSWORD ON RENDER.
+ *
+ * In production demoPassword() gives the three demo accounts a random password nobody holds,
+ * and their @forge.app addresses deliver nowhere, so a reset is impossible too. That is the
+ * right default for a seed. It also means an App Store reviewer could not sign in to any of
+ * them. DEMO_ACCOUNT_PASSWORD on Render is the one password all three use while a review is
+ * open: set it before submitting, hand it to Apple in the review notes, unset it after approval
+ * and the next deploy puts a random one back. Only DEMO_ACCOUNT_EMAILS; no real account is ever
+ * touched by this. Re-applied on every boot so a changed value takes effect. */
+async function applyDemoAccountPassword(): Promise<void> {
+  const configured = (process.env.DEMO_ACCOUNT_PASSWORD ?? "").trim();
+  if (!configured) return;
+  const passwordHash = await hashPassword(configured);
+  for (const email of DEMO_ACCOUNT_EMAILS) {
+    const user = await storage.getUserByEmail(email);
+    if (!user) continue;
+    await db.update(users).set({ passwordHash }).where(eq(users.id, user.id));
+  }
+  console.log("Demo accounts set to DEMO_ACCOUNT_PASSWORD for App Review.");
+}
+
 async function keepDemoAccountsOnCurrentTerms(): Promise<void> {
   const live = await storage.getLegalAgreement();
   for (const email of DEMO_ACCOUNT_EMAILS) {
@@ -6258,6 +6279,7 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // three (DEMO_ACCOUNT_EMAILS, the same list the device-verification exemption uses); no real
   // account is ever accepted on anyone's behalf.
   await keepDemoAccountsOnCurrentTerms();
+  await applyDemoAccountPassword();
 
   if (agreement !== null && existingAgreement !== UNCONFIGURED_FALLBACK) {
     try {
