@@ -5883,6 +5883,57 @@ export const institutionalAgreementSignatures = pgTable(
 export type InstitutionalAgreementSignature =
   typeof institutionalAgreementSignatures.$inferSelect;
 
+// ---------- Email list (launch updates) ----------
+// Addresses that asked to hear from Forge while sign-up is closed, and the mailings sent to
+// them. NOT accounts: a row here knows nothing about a person but an address, which is the
+// whole point of a "tell me when it opens" list. Nothing on the platform joins to it.
+//
+// Rules, each enforced in server/email-list.ts and proved by server/email-list.itest.ts:
+// - Joining is idempotent and answers the same whether or not the address was already on the
+//   list, so the public form cannot be used to check who is on it.
+// - Every mailing carries an unsubscribe link keyed by the row's own token; the link opens a
+//   page with a button, and only the POST acts (mail scanners fetch every link). A row is
+//   never deleted by unsubscribing -- unsubscribed_at is set, so a re-join is the person's
+//   choice and a repeat send can never reach a withdrawn address by accident.
+// - A send goes only to rows with unsubscribed_at null, decided at send time, never from a
+//   list the admin screen fetched earlier.
+export const emailListSubscribers = pgTable(
+  "email_list_subscribers",
+  {
+    id: serial("id").primaryKey(),
+    // Lower-cased and trimmed before insert; the unique index is on this column.
+    email: text("email").notNull(),
+    // Where the form was: "signup" (the coming-soon card), "footer", or whatever a later surface
+    // names itself. Descriptive only.
+    source: text("source"),
+    // The secret in the unsubscribe link. 32 random bytes, hex.
+    unsubscribeToken: text("unsubscribe_token").notNull(),
+    subscribedAt: timestamp("subscribed_at").notNull().defaultNow(),
+    unsubscribedAt: timestamp("unsubscribed_at"),
+  },
+  (table) => ({
+    emailIdx: uniqueIndex("email_list_subscribers_email_idx").on(table.email),
+    tokenIdx: uniqueIndex("email_list_subscribers_token_idx").on(table.unsubscribeToken),
+  }),
+);
+export type EmailListSubscriber = typeof emailListSubscribers.$inferSelect;
+
+// One row per mailing, written before the first email leaves and updated as the send runs, so
+// an admin can see a campaign that is still going out and one that stopped half way.
+export const emailListCampaigns = pgTable("email_list_campaigns", {
+  id: serial("id").primaryKey(),
+  sentByUserId: integer("sent_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  subject: text("subject").notNull(),
+  // Plain text as typed; rendered to HTML at send time (paragraphs, line breaks, bare URLs).
+  body: text("body").notNull(),
+  recipientCount: integer("recipient_count").notNull().default(0),
+  sentCount: integer("sent_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+});
+export type EmailListCampaign = typeof emailListCampaigns.$inferSelect;
+
 // ---------- Record access audit log ----------
 // Immutable, insert-only log of a staff member (coach or admin) touching
 // one specific athlete's video or biometric record -- the per-record

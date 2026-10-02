@@ -52,6 +52,7 @@ import {
   Video,
   FileCheck2,
   FileWarning,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -228,6 +229,7 @@ const adminNav: NavItem[] = [
   // two different capabilities.
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
+  { href: "/admin/email-list", label: "Email List", icon: Mail, overflow: true },
   { href: "/admin/documents", label: "Legal & Compliance", icon: ShieldCheck, overflow: true },
   // BOTH OF THESE EXISTED, WORKED, AND HAD NO WAY IN.
   //

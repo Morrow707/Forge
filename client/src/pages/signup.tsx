@@ -31,6 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Dumbbell, ClipboardList, Sparkles, Check, Lock, Clock } from "lucide-react";
+import { EmailListSignup } from "@/components/email-list-signup";
 import { ForgeMark } from "@/components/forge-mark";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
@@ -302,6 +303,9 @@ export default function SignupPage() {
                   </Link>
                 </p>
               </form>
+              <div className="mt-6 border-t pt-5">
+                <EmailListSignup source="signup" />
+              </div>
             </CardContent>
           </Card>
         ) : (

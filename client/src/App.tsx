@@ -32,6 +32,7 @@ import PublicTeamPage from "@/pages/public-team";
 import GuardianPendingPage from "@/pages/guardian-pending";
 import DateOfBirthRequiredPage from "@/pages/date-of-birth-required";
 import ForgotPasswordPage from "@/pages/forgot-password";
+import UnsubscribePage from "@/pages/unsubscribe";
 import ResetPasswordPage from "@/pages/reset-password";
 import DeviceApprovalPage from "@/pages/device-approval";
 import VerifyEmailPage from "@/pages/verify-email";
@@ -144,6 +145,7 @@ const AdminDocuments = lazy(withLoadTimeout(() => import("@/pages/admin/document
 const AdminMyCalendar = lazy(withLoadTimeout(() => import("@/pages/admin/my-calendar")));
 const AdminMyWorkout = lazy(withLoadTimeout(() => import("@/pages/admin/my-workout")));
 const AdminPlatformTrends = lazy(withLoadTimeout(() => import("@/pages/admin/platform-trends")));
+const AdminEmailList = lazy(withLoadTimeout(() => import("@/pages/admin/email-list")));
 const AdminKnowledgeBase = lazy(withLoadTimeout(() => import("@/pages/admin/knowledge-base")));
 const AdminAiSpend = lazy(withLoadTimeout(() => import("@/pages/admin/ai-spend")));
 const AdminExerciseVideos = lazy(withLoadTimeout(() => import("@/pages/admin/exercise-videos")));
@@ -408,6 +410,8 @@ function Router() {
         <Route path="/claim/:code" component={ClaimPage} />
         <Route path="/guardian/claim" component={GuardianClaimPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
+        {/* The unsubscribe link in every launch email lands here; a button, then a POST. */}
+        <Route path="/unsubscribe" component={UnsubscribePage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/device-approval" component={DeviceApprovalPage} />
         <Route path="/verify-email" component={VerifyEmailPage} />
@@ -639,6 +643,9 @@ function Router() {
         {/* The coach's view of everyone ELSE's documents. /documents above is their own. */}
         <Route path="/coach/athlete-documents">
           <ProtectedRoute role="coach" component={CoachAthleteDocuments} />
+        </Route>
+        <Route path="/admin/email-list">
+          <ProtectedRoute role="admin" component={AdminEmailList} />
         </Route>
         <Route path="/admin/query-engine">
           <ProtectedRoute role="admin" component={AdminQueryEngine} />
