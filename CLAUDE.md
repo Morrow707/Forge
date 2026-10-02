@@ -352,22 +352,16 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- **THE NEXT `beta` WAITS ON THE DOMAIN.** #208 moves the native app's API base to
-  `https://forgeperformancesystems.com` (`shared/public-origin.ts`). A phone on that build
-  cannot reach the server until the domain answers on Render with a certificate. Do not run
-  `beta` until Scott says the domain is live; `verify_build` is fine. Steps in
-  docs/app-store-launch-notes.md, "The production domain".
-- **Queued on `main`, not yet uploaded** (#208): the production domain in the native API base,
-  the iOS web-credentials entitlement (new domain added, onrender host kept) and the Android
-  Health Connect privacy URL. Server side, emailed links read `PUBLIC_ORIGIN` first (in
-  render.yaml; confirm on the live service).
-- **Queued on `main`, not yet uploaded** (#207): the coming-soon gate (`SignupCta`, the
-  signup page's invite card). Server half is live on Render; inert until `PUBLIC_SIGNUPS_OPEN`
-  and `SIGNUP_INVITE_CODE` are set there. Rides the next `beta`.
-- **Queued on `main`, not yet uploaded** (#205): the double dash swept out of every rendered
-  string (205 files; comments, legal documents, SQL and AI prompts untouched). Ordinary copy,
-  not calibration; rides the next `beta`.
-- Build **585** is the newest TestFlight build, cut 2026-10-01 from `e9705daa` when Scott
+- Build **589** is the newest TestFlight build, cut 2026-10-02 from `335cf566` the moment
+  `forgeperformancesystems.com` answered on Render with a certificate (GoDaddy: A `@` ->
+  216.24.57.1, CNAME `www` -> forge-ebhd.onrender.com; the root's first certificate attempt
+  stuck on "Certificate Error" and was cleared by removing and re-adding the domain in Render).
+  It carries #208 (the native API base on the production domain, the iOS web-credentials
+  entitlement with both hosts, the Android Health Connect privacy URL), #207 (the coming-soon
+  gate, inert until `PUBLIC_SIGNUPS_OPEN` and `SIGNUP_INVITE_CODE` are set on Render), #206 and
+  #205 (the dash sweep). Still to set on Render by Scott: `PUBLIC_ORIGIN`,
+  `PUBLIC_SIGNUPS_OPEN=false`, `SIGNUP_INVITE_CODE`; and the domain verified in Resend.
+- Build **585** was the previous build, cut 2026-10-01 from `e9705daa` when Scott
   lifted the hold ("Hold is lifted, upload everything"). It clears the queue: height typed as
   feet and inches (`shared/height-units.ts`), the store-launch items from #201 (the AI Training
   Chat's not-medical-advice line, the paywall never-steer scan, Android RECORD_AUDIO and
