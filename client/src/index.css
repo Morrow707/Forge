@@ -379,3 +379,18 @@ html [data-sonner-toaster][data-theme="dark"] {
     animation: none;
   }
 }
+
+/* REDUCED MOTION, everywhere. Before this only the shimmer and two components honoured the
+   phone's setting; every tailwindcss-animate dialog, sheet and toast still slid and zoomed.
+   Animations are cut to a single near-instant frame rather than `none` so anything that waits
+   for animationend (Radix exit animations) still fires and the element still unmounts. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

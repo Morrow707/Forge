@@ -5,6 +5,7 @@ import App from "./App";
 import { startOfflineLogSync } from "@/lib/offline-queue";
 import { startOfflineVideoSync } from "@/lib/video-offline-store";
 import { bootstrapNativeShell } from "@/lib/native-bootstrap";
+import { startDynamicType } from "@/lib/dynamic-type";
 import { recoverFromStuckChunkLoad } from "@/lib/lazy-load-recovery";
 import "./index.css";
 
@@ -107,3 +108,4 @@ createRoot(document.getElementById("root")!).render(
   </Sentry.ErrorBoundary>,
 );
 void bootstrapNativeShell();
+startDynamicType();
