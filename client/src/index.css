@@ -380,6 +380,20 @@ html [data-sonner-toaster][data-theme="dark"] {
   }
 }
 
+/* REDUCE TRANSPARENCY. The glass surfaces (bg-card/85 + backdrop-blur on cards, dialogs,
+   sheets and the overlay) go solid when the phone asks, which is the iOS "Reduce Transparency"
+   setting. Thirty components use the blur; one rule covers them all, keyed on the Tailwind
+   class names so a new glass surface is covered the moment it uses them. */
+@media (prefers-reduced-transparency: reduce) {
+  [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  [class*="bg-card/"] {
+    background-color: hsl(var(--card)) !important;
+  }
+}
+
 /* REDUCED MOTION, everywhere. Before this only the shimmer and two components honoured the
    phone's setting; every tailwindcss-animate dialog, sheet and toast still slid and zoomed.
    Animations are cut to a single near-instant frame rather than `none` so anything that waits

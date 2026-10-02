@@ -25,6 +25,14 @@ describe("Reduced Motion", () => {
   });
 });
 
+describe("Reduce Transparency (not one of Apple's checkboxes, honoured anyway)", () => {
+  it("glass surfaces go solid when the phone asks", () => {
+    const block = css.slice(css.indexOf("@media (prefers-reduced-transparency: reduce)"));
+    expect(block).toContain("backdrop-filter: none !important");
+    expect(block).toContain("background-color: hsl(var(--card)) !important");
+  });
+});
+
 describe("Larger Text", () => {
   it("the root font follows iOS Dynamic Type from the entry point", () => {
     expect(main).toContain("startDynamicType();");
