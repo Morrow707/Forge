@@ -24,7 +24,12 @@ describe("sensors are thinned, never cut", () => {
     expect(swift).toMatch(/handPoseStride: Int = 1/);
     expect(swift).not.toMatch(/call\.getBool\("body3D"\)/);
     expect(swift).not.toMatch(/call\.getBool\("handPose"\)/);
-    expect(swift).toMatch(/thisFrameIndex % ctx\.handPoseStride == 0/);
+    expect(swift).toMatch(/strideIndex % ctx\.handPoseStride == 0/);
+    // The strides are in delivered frames on BOTH feeders: the live path's processed-frame index
+    // is scaled back up by the sample stride before a sensor's stride reads it (2026-10-02, the
+    // row that went live ran the 3D pose once every four seconds instead of once a second).
+    expect(swift).toMatch(/let strideIndex = bypassStrideGuard \? thisFrameIndex \* ctx\.sampleEveryNthFrame : thisFrameIndex/);
+    expect(swift).toMatch(/strideIndex % ctx\.body3DDetectionStride == 0/);
   });
 
   it("the live path scales the frame before any sensor sees it, and the detector re-searches on a cadence", () => {

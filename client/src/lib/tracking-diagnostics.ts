@@ -62,6 +62,8 @@ export type TraceDiagnostics = {
    *  other is the filter. */
   framesUsable?: number;
   framesNoWristOrImplement?: number;
+  /** Hand readings taken from a wrist under MIN_VISIBILITY (see lowVisibilityWristConfidence). */
+  wristsBelowVisibilityFloor?: number;
   framesVelocityRejected?: number;
   velocityRejections: number;
   /** Reps whose instantaneous peak was unusable and bounded by the rep's own mean -- see

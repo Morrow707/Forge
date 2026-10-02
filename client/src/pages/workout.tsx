@@ -3116,7 +3116,15 @@ function ExerciseLogContent({
   // flow). videoCheckEnabled with trackingLevel "none" still falls back to
   // that standalone flow, unchanged.
   const videoRequired = item.videoCheckEnabled && videoCheckMode !== "off";
-  const mergedTracking = item.trackingLevel !== "none" && videoRequired;
+  // A SET THE CAMERA FILMED KEEPS ITS CLIP. This used to be `&& videoRequired`, so a tracked
+  // exercise whose program row had the form-check switch off (the builder's default) ran the
+  // whole camera pipeline and threw the video away: the numbers saved, the athlete opened the
+  // set and there was nothing to watch. Scott, 2026-10-02, on the shoulder press: "doesn't
+  // record a video I can watch? Doesn't show up for the athlete." The form-check switch still
+  // decides whether a coach is ASKED to review it (videoRequired, the mutations below); it no
+  // longer decides whether the clip the camera already has is saved. Access to the camera at
+  // all is the server's call (useCameraAccess), unchanged.
+  const mergedTracking = item.trackingLevel !== "none";
 
   // Shared by the three "Use" shortcut buttons below (1RM/progression/last-
   // performance suggestions) -- they bulk-fill every set at once.
@@ -3868,7 +3876,7 @@ function ExerciseLogContent({
                           : "Record & Analyze"}
                       </button>
                     )}
-                    {videoRequired && mergedTracking && set.formCheckVideoUrl && (
+                    {mergedTracking && set.formCheckVideoUrl && (
                       <button
                         type="button"
                         onClick={() => setPreviewSetNumber(set.setNumber)}
@@ -4222,8 +4230,9 @@ function ExerciseLogContent({
             }
             // Same downstream handling FormVideoRecorderDialog's onSaved
             // does below -- a merged capture's video is just as much a
-            // real form-check clip as a standalone one.
-            if (videoUrl) {
+            // real form-check clip as a standalone one. Only when the row asked for a form
+            // check: a clip kept for the athlete's own replay is not a review request.
+            if (videoUrl && videoRequired) {
               if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSetNumber, videoUrl });
               else postFormVideoMutation.mutate({ setNumber: targetSetNumber, videoUrl });
             }
@@ -4258,7 +4267,7 @@ function ExerciseLogContent({
               },
               { immediate: true },
             );
-            if (videoUrl) {
+            if (videoUrl && videoRequired) {
               if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSet, videoUrl });
               else postFormVideoMutation.mutate({ setNumber: targetSet, videoUrl });
             }
@@ -4288,7 +4297,7 @@ function ExerciseLogContent({
               },
               { immediate: true },
             );
-            if (videoUrl) {
+            if (videoUrl && videoRequired) {
               if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSet, videoUrl });
               else postFormVideoMutation.mutate({ setNumber: targetSet, videoUrl });
             }
@@ -4317,7 +4326,7 @@ function ExerciseLogContent({
               },
               { immediate: true },
             );
-            if (videoUrl) {
+            if (videoUrl && videoRequired) {
               if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSet, videoUrl });
               else postFormVideoMutation.mutate({ setNumber: targetSet, videoUrl });
             }
@@ -4342,7 +4351,7 @@ function ExerciseLogContent({
               },
               { immediate: true },
             );
-            if (videoUrl) {
+            if (videoUrl && videoRequired) {
               if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
               else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
             }

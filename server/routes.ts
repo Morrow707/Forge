@@ -3153,6 +3153,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       exerciseName: r.exerciseName,
       movementType: r.movementType,
       trackingLevel: r.trackingLevel,
+      hasVideo: r.hasVideo,
+      videoCheckEnabled: r.videoCheckEnabled,
       setNumber: r.setNumber,
       heightIn: r.heightIn,
       // The replay takes kilograms; sets are logged in whichever unit the athlete preferred at

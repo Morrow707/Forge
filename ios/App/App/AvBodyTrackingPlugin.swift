@@ -2327,6 +2327,15 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let thisFrameIndex = state.frameIndex
         state.frameIndex += 1
         guard bypassStrideGuard || thisFrameIndex % ctx.sampleEveryNthFrame == 0 else { return }
+        // THE SENSOR STRIDES ARE STATED IN DELIVERED FRAMES, ON BOTH FEEDERS. body3DStride 120 means
+        // "once a second at 120fps" and the file path's frameIndex counts every decoded frame, so
+        // it did. The live path's frameIndex only counts the frames the cadence chose (one in
+        // sampleEveryNthFrame), so the same 120 ran the 3D pose once every four seconds: the
+        // 2026-10-02 row that went live had 6 3D frames against 27 on the file read of the set
+        // before it, under MIN_BODY_3D_FRAMES for every bone, and the take's scale came from the
+        // shoulder ruler alone. Scaling the index back up puts the strides in the same units on
+        // both paths (RULE #2: thinned the same, never thinner on one feeder).
+        let strideIndex = bypassStrideGuard ? thisFrameIndex * ctx.sampleEveryNthFrame : thisFrameIndex
         guard let pixelBuffer = pixelBufferOverride ?? CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         // Every frame of this loop runs Vision pose estimation, optionally Vision hand
         // pose, a CoreML object detection and a camera-drift estimate, and each of those
@@ -2450,7 +2459,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // that conflates it with the already-accepted pose-only cost.
         var handJoints: [[String: Any]] = []
         let handPoseStart = Date()
-        let runHandPose = thisFrameIndex % ctx.handPoseStride == 0
+        let runHandPose = strideIndex % ctx.handPoseStride == 0
         do {
             if runHandPose { try handler.perform([ctx.handPoseRequest]) }
             if runHandPose, let handObservations = ctx.handPoseRequest.results as? [VNHumanHandPoseObservation] {
@@ -2504,7 +2513,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // the 3D request, omit-when-nil like everything else here.
         var body3DHeightM: Double? = nil
         var body3DHeightSource: String? = nil
-        if let body3DRequest = ctx.body3DRequest, thisFrameIndex % ctx.body3DDetectionStride == 0 {
+        if let body3DRequest = ctx.body3DRequest, strideIndex % ctx.body3DDetectionStride == 0 {
             let body3DStart = Date()
             do {
                 try handler.perform([body3DRequest])
@@ -2574,7 +2583,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             state.body3DElapsedSeconds += Date().timeIntervalSince(body3DStart)
         }
 
-        if ctx.detectBox, thisFrameIndex % ctx.boxDetectionStride == 0,
+        if ctx.detectBox, strideIndex % ctx.boxDetectionStride == 0,
            let candidate = detectBoxTopCandidate(
                handler: handler, request: ctx.rectanglesRequest,
                leftAnkle: leftAnkleJoint, rightAnkle: rightAnkleJoint

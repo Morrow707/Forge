@@ -301,6 +301,26 @@ export function wristConfidence(worldLandmarks: Landmark[], side: "left" | "righ
   return visible(lm) ? lm.visibility : 0;
 }
 
+// A WRIST THE MODEL IS UNSURE OF IS STILL A WRIST (RULE #1, at the sample). Below MIN_VISIBILITY
+// wristConfidence answers 0 and the frame has no hand at all; on Scott's bench of 2026-10-02
+// (set 2, build 594, filmed from the foot of the bench at an angle) that was 360 of 680 frames,
+// against 26 on the set before it. The trace it left had fifteen holes of a third of a second
+// or more, the segmenter read the holes as reps, and the set came out at 0.47 m/s against the
+// sensor's 0.76. A wrist read at 0.3 is a worse point than one read at 0.7, and it is a far
+// better point than none: it still goes through the plausibility gate like every other sample,
+// and it carries its own low confidence into the trust score. This is the floor under which
+// even that stops -- below it Vision is guessing, not reading.
+export const LOW_VISIBILITY_WRIST_FLOOR = 0.2;
+
+/** The wrist's raw visibility when it is under MIN_VISIBILITY but over the low floor, else 0. */
+export function lowVisibilityWristConfidence(worldLandmarks: Landmark[], side: "left" | "right"): number {
+  const lm = worldLandmarks[side === "left" ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST];
+  if (!lm) return 0;
+  const visibility = lm.visibility;
+  if (visibility >= MIN_VISIBILITY) return 0;
+  return visibility >= LOW_VISIBILITY_WRIST_FLOOR ? visibility : 0;
+}
+
 // Same {score, label, notes} shape bar-tracking.ts's own per-rep RepTrustScore already uses, for
 // a best-of-set mode (med-ball, kb-swing, swing) that has exactly one confidence reading for the
 // whole set rather than one per rep.

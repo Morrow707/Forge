@@ -6,6 +6,7 @@ import { Network } from "@capacitor/network";
 import { App } from "@capacitor/app";
 import { apiRequest, uploadWithProgress, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { logDebug } from "@/lib/debug-console";
 
 // Persists a recorded video to native disk the moment an athlete taps Save,
 // before the upload even starts. Until now the blob only ever lived in
@@ -419,16 +420,28 @@ export async function uploadOrQueueVideo(
    *  no queue, and an athlete filming a sprint off Wi-Fi burned their cellular data. */
   endpoint: string = "/api/athlete/form-video",
 ): Promise<{ status: "uploaded"; url: string } | { status: "queued" }> {
+  // THE DEBUG CONSOLE LOGS EVERY VIDEO OUTCOME, same as every save outcome (CLAUDE.md). Scott,
+  // 2026-10-02: "the shoulder press doesn't record a video I can watch? Doesn't show up for the
+  // athlete" -- and the console had nothing to say about where the clip went, because nothing
+  // here wrote a line. One line per outcome: uploaded, queued and why, or refused.
+  const sizeKb = Math.round(blob.size / 1024);
   if (!(await isOnWifi())) {
     await persistVideoForUpload(blob, endpoint, "video", filename, context);
+    logDebug("VIDEO", `${sizeKb}KB queued: not on Wi-Fi`);
     return { status: "queued" };
   }
+  const startedAt = Date.now();
   try {
     const formData = new FormData();
     formData.append("video", blob, filename);
     const { url } = await uploadWithProgress(endpoint, formData, onProgress);
+    logDebug("VIDEO", `${sizeKb}KB uploaded in ${Date.now() - startedAt}ms`);
     return { status: "uploaded", url };
   } catch (err) {
+    logDebug(
+      "VIDEO",
+      `${sizeKb}KB upload FAILED: ${err instanceof ApiError ? `${err.status} ${err.message}` : String(err)}`,
+    );
     // Same classification runVideoFlush uses below, for the same reason: an ApiError is not
     // a permanent rejection. This used to rethrow EVERY ApiError -- 500, 502, 503, 429 and
     // 401 included -- so a server cold start or a deploy in the seconds after a set was
@@ -446,6 +459,7 @@ export async function uploadOrQueueVideo(
       context,
       err instanceof ApiError ? "server_error" : "offline",
     );
+    logDebug("VIDEO", `${sizeKb}KB queued for retry (${err instanceof ApiError ? "server error" : "offline"})`);
     return { status: "queued" };
   }
 }

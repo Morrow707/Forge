@@ -1677,6 +1677,10 @@ export function summarizeTrackedSet(
       ? concentricAmplitudes[Math.floor(concentricAmplitudes.length / 2)]
       : 0;
   const EDGE_PHANTOM_AMPLITUDE_RATIO = 0.5;
+  // The pickup on the 2026-10-02 row was 1.79x its set's median; the deepest genuine rep at an
+  // edge across the fourteen sensor-paired sets to date reached 1.3x. 1.6 sits nearer the real
+  // reps, so a deep first rep after a pause survives -- under-counting is the worse failure.
+  const EDGE_OVERSIZED_AMPLITUDE_RATIO = 1.6;
   // AND THE OTHER HALF OF WHAT A RACK ARTIFACT LOOKS LIKE: IT IS SLOW.
   //
   // The amplitude test above catches a rack move that is SHORT. It does not catch one that
@@ -1752,6 +1756,19 @@ export function summarizeTrackedSet(
     if (
       medianConcentricAmplitude > 0 &&
       amplitude < medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO
+    ) {
+      return true;
+    }
+    // Or far TOO LONG: the bar coming up off the floor, or off the hooks, before the first rep.
+    // Scott's Pendlay row, 2026-10-02 set 2 (build 594): nine rows beside the sensor, ten counted,
+    // and the "first" was the pickup -- 96.8cm from the floor to the hang against a 54cm median,
+    // 3.7 seconds against 1.5. Every real rep of a lift moves about the same distance; a phase
+    // at the edge that moves close to twice that is the bar being brought to the start, not a
+    // rep of the movement. Edge-only, like every short test here: an oversized phase in the
+    // middle of a set is a deeper rep, and it stays.
+    if (
+      medianConcentricAmplitude > 0 &&
+      amplitude > medianConcentricAmplitude * EDGE_OVERSIZED_AMPLITUDE_RATIO
     ) {
       return true;
     }

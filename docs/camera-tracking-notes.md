@@ -21,6 +21,52 @@ code alone and not discoverable by testing the wrong exercise, so a session
 that reaches for the obvious answer will get a plausible number that is
 wrong.
 
+## Set 2 beside OVR, 2026-10-02: bench, Pendlay row, push press (build 594)
+
+The second set of each lift on build 594, the build cut from the first. Fixtures:
+`client/src/lib/__fixtures__/{pendlay-row,bench,push-press}-set2-2026-10-02.json`; test:
+`client/src/lib/set-two-beside-ovr-2026-10-02.test.ts`.
+
+| Lift | Path | Device | Sensor | Fix |
+|---|---|---|---|---|
+| Push press, set 2 | live, 747 frames | 9 reps, 1.07 m/s, 70cm | 9 reps | none needed; the live path's first full take |
+| Pendlay row, set 2 | live, 533 frames | 10 reps, 1.07, 56cm | 9 reps, 1.02, 49.5cm | pickup dropped; replays at 9, 1.02, 50.5cm |
+| Bench, set 2 | file (live fell back, maxGap 0.43s) | 10 reps, 0.47, 33cm | 10 reps, 0.76, 38.6cm | open, see below |
+
+- **The row's tenth rep was the pickup** (`bar-tracking.ts`, `isEdgeRackArtifact`,
+  `EDGE_OVERSIZED_AMPLITUDE_RATIO` 1.6). The first concentric ran 96.8cm over 3.7s, the bar
+  coming off the floor to the hang, against a 54cm median rep. Every edge test before this
+  looked for a phase that fell SHORT; a phase at the edge that moves far too much is the bar
+  being brought to the start. The count trim could not catch it: the program row prescribes
+  ten and Scott did nine, so the count agreed with the wrong answer.
+- **The live path ran the 3D pose once every four seconds** (`AvBodyTrackingPlugin.swift`,
+  `processFrame`, `strideIndex`). The sensor strides are stated in delivered frames (120 is
+  once a second at 120fps) and the file path's frame index counts every decoded frame. The
+  live path's index counts only the frames the cadence chose, one in four, so the same stride
+  fired a quarter as often: 6 3D frames on the row against 27 on its file-read set 1, under
+  `MIN_BODY_3D_FRAMES` for every bone, and the take's scale came from the shoulder ruler alone
+  (`scaleCandidates` had one entry). The index is scaled back up on the live path, so both
+  feeders thin each sensor the same.
+- **The bench lost its wrists on 360 of 680 frames** (`trace.framesNoWristOrImplement`; set 1
+  from nearly the same angle lost 26). Vision read both wrists under `MIN_VISIBILITY` for half
+  the take, the stored trace has fifteen holes of 0.3-1.4s, the segmenter read the holes as
+  reps (reps 1-3 are the un-rack at 47-50cm; reps 4-10 are the presses, with their peaks
+  floored to their means because the concentric fell in a hole). Fix at capture time, so no
+  replay can show it yet: a wrist between `LOW_VISIBILITY_WRIST_FLOOR` (0.2) and the floor is
+  used at its own confidence rather than dropped (`pose-tracking.ts`,
+  `lowVisibilityWristConfidence`; `av-bar-tracker-dialog.tsx`, `fuseSide`), still through the
+  plausibility gate, counted in `trace.wristsBelowVisibilityFloor`. Rule #1 at the sample: a
+  wrist read at 0.3 is a worse point than one at 0.7 and far better than none. The plate was
+  no help here (`equipmentOffsetSpreadGrips` 0.63 against the 0.25 the substitute needs), and
+  the shoulders do not move with a bench bar. Open: whether the plate's offset gate is too
+  tight for an oblique bench, and why the live path's largest gap was 0.43s on this take.
+- **The press had no video because the program row's form-check switch was off**
+  (`workout.tsx`, `mergedTracking`). `recordVideo` required `videoCheckEnabled`, the builder's
+  default is off, so the camera filmed the set, saved the numbers and threw the clip away. A
+  tracked set now always keeps its clip; the switch only decides whether a coach is asked to
+  review it. The export carries `hasVideo` and `videoCheckEnabled` per set so this is a
+  column next time, not a guess, and the debug console logs every video outcome (`VIDEO`).
+
 ## Three lifts beside OVR, 2026-10-02: bench, Pendlay row, push press (build 589)
 
 Three sets of ten with the bar sensor on the bar, all filmed on build 589 at 120fps, all from an

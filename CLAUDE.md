@@ -352,7 +352,14 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **594** is the newest TestFlight build (593 was a verify_build run), cut 2026-10-02 from the three sensor-paired lifts
+- Build **595** is the newest TestFlight build, cut 2026-10-02 from set 2 beside OVR
+  (docs/camera-tracking-notes.md "Set 2 beside OVR, 2026-10-02"): the row's pickup is not a rep
+  (`EDGE_OVERSIZED_AMPLITUDE_RATIO`), the live path thins the 3D pose and hand pose at the same
+  rate as the file path (`strideIndex`), a wrist under the visibility floor is used at its own
+  confidence (`lowVisibilityWristConfidence`), a tracked set always keeps its clip whatever the
+  form-check switch says, the debug console logs every video outcome, and the export carries
+  `hasVideo` / `videoCheckEnabled` (server-side, Render). Calibration work: uploaded on commit.
+- Build **594** was the previous build (593 was a verify_build run), cut 2026-10-02 from the three sensor-paired lifts
   (bench, Pendlay row, push press; docs/camera-tracking-notes.md "Three lifts beside OVR,
   2026-10-02"): `bent_over` posture (no height ruler, no stature check on a hinged row; the row's
   scale goes from 0.64 to 1.11 of the sensor), a lone uncorroborated plate steps out of the scale

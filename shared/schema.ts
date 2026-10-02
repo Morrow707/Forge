@@ -9181,6 +9181,7 @@ export const trackingDiagnosticsSchema = z.object({
       repsFound: z.number().optional().nullable(),
       framesUsable: z.number().optional(),
       framesNoWristOrImplement: z.number().optional(),
+      wristsBelowVisibilityFloor: z.number().optional(),
       framesVelocityRejected: z.number().optional(),
       velocityRejections: z.number(),
       repPeaksFlooredToMean: z.number().optional(),

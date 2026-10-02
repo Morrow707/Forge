@@ -60,6 +60,7 @@ import {
   chainConsistencyPenalty,
   LOWER_BODY_MOVEMENT_TYPES,
   wristConfidence,
+  lowVisibilityWristConfidence,
   calibrateFromFrames,
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
@@ -1505,6 +1506,8 @@ export function AvBarTrackerDialog({
     // ways a frame can produce nothing actually happened, so the only route to an answer was
     // reasoning backwards from an empty trace -- which is where the last two of these went wrong.
     let framesNoWristOrImplement = 0;
+    // Hand readings (one per side) that came from a wrist under MIN_VISIBILITY.
+    let wristsBelowVisibilityFloor = 0;
     let framesVelocityRejected = 0;
     let framesUsable = 0;
     let lastHalfSpan: { x: number; y: number } | null = null;
@@ -1538,7 +1541,17 @@ export function AvBarTrackerDialog({
       frame: NativePoseFrame,
     ): { fused: { x: number; y: number; confidence: number } | null; nextPrev: { x: number; y: number; t: number }[] } {
       const wristWorld = worldLm[side === "left" ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST];
-      const rawWristConf = wristConfidence(worldLm, side);
+      let rawWristConf = wristConfidence(worldLm, side);
+      // See lowVisibilityWristConfidence: a wrist under the visibility floor is used at its own
+      // low confidence rather than dropped, and counted so the take says how often it happened.
+      let lowVisibilityWrist = false;
+      if (rawWristConf === 0) {
+        const lowVis = lowVisibilityWristConfidence(worldLm, side);
+        if (lowVis > 0) {
+          rawWristConf = lowVis;
+          lowVisibilityWrist = true;
+        }
+      }
       // Corroboration nudge, not a seed replacement -- AvImplementTracker's own motion-diff
       // search already ran natively, seeded off the raw wrist joint, before this function ever
       // sees the frame, so (unlike bar-tracker-dialog.tsx's MediaPipe/Android equivalent) there's
@@ -1576,6 +1589,7 @@ export function AvBarTrackerDialog({
         fused = null;
       }
       let nextPrev = prevFused;
+      if (fused && lowVisibilityWrist) wristsBelowVisibilityFloor++;
       if (fused) {
         nextPrev = [...prevFused, { x: fused.x, y: fused.y, t }].slice(-PLAUSIBILITY_HISTORY);
         velocitySamples.push({ t, y: verticalSign * fused.y, confidence: fused.confidence });
@@ -1903,6 +1917,7 @@ export function AvBarTrackerDialog({
         repPeaksCappedToMeanRatio: peakBounds?.repPeaksCappedToMeanRatio,
         framesUsable,
         framesNoWristOrImplement,
+        wristsBelowVisibilityFloor,
         framesVelocityRejected,
         velocityRejections: rejectionEvents.length,
         combinedVelocityRejections: combinedRejectionEvents.length,

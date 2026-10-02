@@ -23241,6 +23241,12 @@ ${catalog}`;
         // will happily run the barbell model over a jump and report a peak bar velocity for a
         // movement that has no bar.
         trackingLevel: programExercises.trackingLevel,
+        // WHETHER A CLIP WAS KEPT, AND WHETHER THE PROGRAM ROW ASKED FOR ONE. Scott, 2026-10-02:
+        // "the shoulder press doesn't record a video I can watch?" -- and the export could not
+        // say whether the set had a video, let alone why not. The URL itself stays out (it is a
+        // path on Render's disk and the export is anonymous); presence is what a comparison needs.
+        hasVideo: sql<boolean>`${workoutSetEntries.formCheckVideoUrl} is not null`,
+        videoCheckEnabled: programExercises.videoCheckEnabled,
         setNumber: workoutSetEntries.setNumber,
         heightIn: users.heightIn,
         weight: workoutSetEntries.weight,
