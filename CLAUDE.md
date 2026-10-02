@@ -352,7 +352,14 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **589** is the newest TestFlight build, cut 2026-10-02 from `335cf566` the moment
+- Build **591** is the newest TestFlight build, cut 2026-10-02 from `4eb622e7` (590 was a
+  verify_build run). It carries #209 (the launch email list: "Notify me" on the coming-soon card
+  and the footer, the admin mailing screen), #210 (`DEMO_ACCOUNT_PASSWORD` on Render sets the
+  three demo accounts' password for App Review; the seed is server-side, the build only rides
+  along) and Opus's dialog fix (`grid-cols-[minmax(0,1fr)]` on `DialogContent`, the Assign
+  Program date input bounded, `dialog-cannot-outgrow-the-screen.test.ts`). This is the build
+  to attach to the App Store version 1.0 submission.
+- Build **589** was the previous build, cut 2026-10-02 from `335cf566` the moment
   `forgeperformancesystems.com` answered on Render with a certificate (GoDaddy: A `@` ->
   216.24.57.1, CNAME `www` -> forge-ebhd.onrender.com; the root's first certificate attempt
   stuck on "Certificate Error" and was cleared by removing and re-adding the domain in Render).
