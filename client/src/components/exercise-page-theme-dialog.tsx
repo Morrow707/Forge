@@ -112,7 +112,9 @@ export function ExercisePageThemeDialog({
 
   const entitled = data?.entitled ?? false;
   const hasAnyTheme = !!(backdropColor || watchDemoColor || completedSetColor || navArrowColor);
-  const addOn = BILLING_ADD_ONS.personal_page;
+  // The exercise-screen colors are part of Full Personalization (2026-10-03); the upsell names
+  // the thing that is actually for sale.
+  const addOn = BILLING_ADD_ONS.full_bundle;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

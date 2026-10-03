@@ -78,6 +78,8 @@ describe("the add-on checkout routes derive their ids from the shared lists", ()
 describe("Coaches Corner is a real, priced coach add-on", () => {
   it("is on the add-on list and carries the shared price", () => {
     expect(BILLING_ADD_ON_ORDER).toContain("coaches_corner");
+    // 2026-10-03: personalization is offered as one bundle, never as four pieces.
+    expect(BILLING_ADD_ON_ORDER).toEqual(["full_bundle", "coaches_corner"]);
     expect(BILLING_ADD_ONS.coaches_corner.monthlyPriceCents).toBe(
       COACHES_CORNER_MONTHLY_PRICE_CENTS,
     );

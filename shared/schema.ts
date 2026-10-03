@@ -37,7 +37,7 @@ export type ExercisePageTheme = {
 };
 import {
   BILLING_TIER_ORDER,
-  BILLING_ADD_ON_ORDER,
+  ALL_ADD_ON_IDS,
   type BillingTierId,
   type AddOnId,
 } from "./billing-tiers";
@@ -8206,7 +8206,9 @@ export const updateCoachingPhilosophySchema = z.object({
 // also being a real entry in billing-tiers.ts.
 export const updateCoachBillingSchema = z.object({
   billingTier: z.enum(BILLING_TIER_ORDER as [BillingTierId, ...BillingTierId[]]).optional().nullable(),
-  billingAddOns: z.array(z.enum(BILLING_ADD_ON_ORDER as [AddOnId, ...AddOnId[]])).optional(),
+  // ALL_ADD_ON_IDS, not BILLING_ADD_ON_ORDER: an account granted a single personalization piece
+  // before the bundle became the only offer must still validate when an admin saves it.
+  billingAddOns: z.array(z.enum(ALL_ADD_ON_IDS as [AddOnId, ...AddOnId[]])).optional(),
   isBetaAccount: z.boolean().optional(),
 });
 

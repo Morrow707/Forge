@@ -175,11 +175,11 @@ export default function PricingPage() {
               to, contradicted on the same page. includesFullPersonalization is the
               only real answer, so both now read it. */}
           <p className="mb-6 text-center text-sm text-muted-foreground">
-            Add-ons for any band. The starter bands can add personalization à la carte, programs
-            from {PERSONALIZATION_FROM} athletes up already include all of it, and Coaches Corner,
-            the coach education library, is a separate add-on at every size.
+            Add-ons for any band. The starter bands can add Full Personalization as one bundle,
+            programs from {PERSONALIZATION_FROM} athletes up already include it, and Coaches
+            Corner, the coach education library, is a separate add-on at every size.
           </p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2">
             {BILLING_ADD_ON_ORDER.map((id) => {
               const addOn = BILLING_ADD_ONS[id];
               return (

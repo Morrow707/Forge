@@ -998,6 +998,11 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   rides with the camera entitlement through `useCameraAccess`. The Stripe Prices and the
   App Store products are created to match on launch day; `missingPriceEnvVars()` names the
   env vars.
+- **Personalization is one add-on, Full Personalization at $24.99** (2026-10-03, Scott: "don't make
+  them individual add ons, make them only the full personalization page"). The four pieces stay
+  as ids because full_bundle resolves to them and an account granted one earlier keeps it;
+  `BILLING_ADD_ON_ORDER` is what is offered, `ALL_ADD_ON_IDS` what can be owned. Admin-assigned,
+  no checkout, no Apple product.
 - **The locked state for a non-comped account says "not available yet"**, never "free in beta":
   that branch is reached only by an account that is not comped.
 

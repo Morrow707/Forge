@@ -198,9 +198,10 @@ export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
   },
   full_bundle: {
     id: "full_bundle",
-    label: "Full Personalization Bundle",
+    label: "Full Personalization",
     monthlyPriceCents: 2499,
-    description: "Custom Colors + Team Identity + Workflow Customization together, at a discount over buying separately.",
+    description:
+      "Everything that makes Forge look like your program: a second brand color, your motto, mission page, contact email and athlete welcome message, nav tabs hidden or renamed, dashboard widgets chosen, and your athletes' exercise-logging screen in your colors.",
   },
   // Distinct from custom_colors above -- that one governs the org-wide
   // header/nav re-skin (brandPrimaryColor/brandSecondaryColor), where a
@@ -229,7 +230,17 @@ export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
   },
 };
 
-export const BILLING_ADD_ON_ORDER: AddOnId[] = [
+/** WHAT IS OFFERED, 2026-10-03. Scott: "don't make them individual add ons, make them only the
+ * full personalization page." The four personalization pieces (custom_colors, team_identity,
+ * workflow, personal_page) are no longer offered on their own: the pricing page, the admin
+ * assignment panel and the catalog show Full Personalization and Coaches Corner only. The four
+ * ids stay in AddOnId and in ALL_ADD_ON_IDS because an account recorded as owning one keeps it
+ * (getEntitlementsForCoach still reads them), and because full_bundle resolves to all four. */
+export const BILLING_ADD_ON_ORDER: AddOnId[] = ["full_bundle", "coaches_corner"];
+
+/** Everything an account can be RECORDED as owning, offered or not. The admin billing
+ * validator reads this so a coach granted a single piece before 2026-10-03 still saves. */
+export const ALL_ADD_ON_IDS: AddOnId[] = [
   "custom_colors",
   "team_identity",
   "workflow",
