@@ -102,6 +102,9 @@ import {
   academyLessons,
   academyLessonCompletions,
   academyQuizAttempts,
+  coachDiscussionThreads,
+  coachDiscussionReplies,
+  coachDiscussionReports,
   academyQuizQuestions,
   academyQuizAnswers,
   aiKnowledgeMessages,
@@ -13962,6 +13965,197 @@ Hard rules, no exceptions:
       .filter((l) => cited.has(l.index))
       .map(({ trackId, trackTitle, lessonId, lessonNumber, lessonTitle }) => ({ trackId, trackTitle, lessonId, lessonNumber, lessonTitle }));
     return { answer: text.trim(), citations };
+  },
+
+  // ---------- Coaches Corner peer discussion (2026-10-03) ----------
+  // Coaches only, by name, never an athlete. Hidden rows are kept and never served to a coach;
+  // an admin sees them with the reason. See coachDiscussionThreads in schema.ts.
+
+  async listDiscussionThreads(opts: { trackId?: number | null; limit?: number; offset?: number; includeHidden?: boolean }) {
+    const limit = Math.min(opts.limit ?? 30, 100);
+    const conditions = [] as any[];
+    if (!opts.includeHidden) conditions.push(isNull(coachDiscussionThreads.hiddenAt));
+    if (opts.trackId != null) conditions.push(eq(coachDiscussionThreads.trackId, opts.trackId));
+    const rows = await db.query.coachDiscussionThreads.findMany({
+      where: conditions.length ? and(...conditions) : undefined,
+      orderBy: [desc(coachDiscussionThreads.pinned), desc(coachDiscussionThreads.lastActivityAt)],
+      limit,
+      offset: opts.offset ?? 0,
+      with: {
+        author: { columns: { id: true, name: true } },
+        track: { columns: { id: true, title: true } },
+      },
+    });
+    return rows.map((t) => ({
+      id: t.id,
+      title: t.title,
+      body: t.body,
+      pinned: t.pinned,
+      locked: t.locked,
+      replyCount: t.replyCount,
+      lastActivityAt: t.lastActivityAt,
+      createdAt: t.createdAt,
+      hiddenAt: t.hiddenAt,
+      hiddenReason: t.hiddenReason,
+      author: { id: t.author.id, name: t.author.name },
+      track: t.track ? { id: t.track.id, title: t.track.title } : null,
+    }));
+  },
+
+  async getDiscussionThread(threadId: number, opts: { includeHidden?: boolean } = {}) {
+    const t = await db.query.coachDiscussionThreads.findFirst({
+      where: eq(coachDiscussionThreads.id, threadId),
+      with: {
+        author: { columns: { id: true, name: true } },
+        track: { columns: { id: true, title: true } },
+        replies: {
+          orderBy: asc(coachDiscussionReplies.createdAt),
+          with: { author: { columns: { id: true, name: true } } },
+        },
+      },
+    });
+    if (!t) return null;
+    if (t.hiddenAt && !opts.includeHidden) return null;
+    return {
+      id: t.id,
+      title: t.title,
+      body: t.body,
+      pinned: t.pinned,
+      locked: t.locked,
+      replyCount: t.replyCount,
+      createdAt: t.createdAt,
+      lastActivityAt: t.lastActivityAt,
+      hiddenAt: t.hiddenAt,
+      hiddenReason: t.hiddenReason,
+      author: { id: t.author.id, name: t.author.name },
+      track: t.track ? { id: t.track.id, title: t.track.title } : null,
+      replies: t.replies
+        .filter((r) => opts.includeHidden || !r.hiddenAt)
+        .map((r) => ({
+          id: r.id,
+          body: r.body,
+          createdAt: r.createdAt,
+          hiddenAt: r.hiddenAt,
+          hiddenReason: r.hiddenReason,
+          author: { id: r.author.id, name: r.author.name },
+        })),
+    };
+  },
+
+  async createDiscussionThread(authorId: number, input: { title: string; body: string; trackId?: number | null }) {
+    const [row] = await db
+      .insert(coachDiscussionThreads)
+      .values({ authorId, title: input.title, body: input.body, trackId: input.trackId ?? null })
+      .returning();
+    return row;
+  },
+
+  /** A reply on an open, visible thread. Null when the thread is hidden, locked or missing. */
+  async createDiscussionReply(authorId: number, threadId: number, body: string) {
+    return db.transaction(async (tx) => {
+      const [thread] = await tx
+        .select({ id: coachDiscussionThreads.id, locked: coachDiscussionThreads.locked, hiddenAt: coachDiscussionThreads.hiddenAt })
+        .from(coachDiscussionThreads)
+        .where(eq(coachDiscussionThreads.id, threadId));
+      if (!thread || thread.locked || thread.hiddenAt) return null;
+      const [reply] = await tx.insert(coachDiscussionReplies).values({ threadId, authorId, body }).returning();
+      await tx
+        .update(coachDiscussionThreads)
+        .set({ replyCount: sql`${coachDiscussionThreads.replyCount} + 1`, lastActivityAt: new Date() })
+        .where(eq(coachDiscussionThreads.id, threadId));
+      return reply;
+    });
+  },
+
+  /** A coach removes their own post: hidden, not deleted, so a report filed against it still
+   * resolves to something. The author predicate is what stops one coach hiding another's. */
+  async hideOwnDiscussionThread(authorId: number, threadId: number) {
+    const [row] = await db
+      .update(coachDiscussionThreads)
+      .set({ hiddenAt: new Date(), hiddenReason: "Removed by the author" })
+      .where(and(eq(coachDiscussionThreads.id, threadId), eq(coachDiscussionThreads.authorId, authorId), isNull(coachDiscussionThreads.hiddenAt)))
+      .returning({ id: coachDiscussionThreads.id });
+    return Boolean(row);
+  },
+  async hideOwnDiscussionReply(authorId: number, replyId: number) {
+    const [row] = await db
+      .update(coachDiscussionReplies)
+      .set({ hiddenAt: new Date(), hiddenReason: "Removed by the author" })
+      .where(and(eq(coachDiscussionReplies.id, replyId), eq(coachDiscussionReplies.authorId, authorId), isNull(coachDiscussionReplies.hiddenAt)))
+      .returning({ id: coachDiscussionReplies.id });
+    return Boolean(row);
+  },
+
+  async reportDiscussion(reporterId: number, target: { threadId?: number; replyId?: number }, reason: string) {
+    const [row] = await db
+      .insert(coachDiscussionReports)
+      .values({ reporterId, threadId: target.threadId ?? null, replyId: target.replyId ?? null, reason })
+      .returning();
+    return row;
+  },
+
+  // Admin: the queue and the switches.
+  async listOpenDiscussionReports() {
+    const reports = await db.query.coachDiscussionReports.findMany({
+      where: isNull(coachDiscussionReports.resolvedAt),
+      orderBy: asc(coachDiscussionReports.createdAt),
+    });
+    const out = [];
+    for (const r of reports) {
+      const reporter = await this.getUser(r.reporterId);
+      const thread = r.threadId != null ? await this.getDiscussionThread(r.threadId, { includeHidden: true }) : null;
+      let reply: { id: number; body: string; author: { id: number; name: string }; hiddenAt: Date | null; threadId: number } | null = null;
+      if (r.replyId != null) {
+        const row = await db.query.coachDiscussionReplies.findFirst({
+          where: eq(coachDiscussionReplies.id, r.replyId),
+          with: { author: { columns: { id: true, name: true } } },
+        });
+        if (row) reply = { id: row.id, body: row.body, author: row.author, hiddenAt: row.hiddenAt, threadId: row.threadId };
+      }
+      out.push({
+        id: r.id,
+        reason: r.reason,
+        createdAt: r.createdAt,
+        reporter: reporter ? { id: reporter.id, name: reporter.name } : null,
+        thread: thread ? { id: thread.id, title: thread.title, body: thread.body, author: thread.author, hiddenAt: thread.hiddenAt } : null,
+        reply,
+      });
+    }
+    return out;
+  },
+
+  async resolveDiscussionReport(reportId: number, resolution: string) {
+    const [row] = await db
+      .update(coachDiscussionReports)
+      .set({ resolvedAt: new Date(), resolution })
+      .where(and(eq(coachDiscussionReports.id, reportId), isNull(coachDiscussionReports.resolvedAt)))
+      .returning({ id: coachDiscussionReports.id });
+    return Boolean(row);
+  },
+
+  async setDiscussionThreadModeration(threadId: number, patch: { hidden?: boolean; reason?: string | null; pinned?: boolean; locked?: boolean }) {
+    const set: Record<string, unknown> = {};
+    if (patch.hidden === true) {
+      set.hiddenAt = new Date();
+      set.hiddenReason = patch.reason ?? "Hidden by Forge";
+    } else if (patch.hidden === false) {
+      set.hiddenAt = null;
+      set.hiddenReason = null;
+    }
+    if (patch.pinned != null) set.pinned = patch.pinned;
+    if (patch.locked != null) set.locked = patch.locked;
+    if (Object.keys(set).length === 0) return true;
+    const [row] = await db.update(coachDiscussionThreads).set(set).where(eq(coachDiscussionThreads.id, threadId)).returning({ id: coachDiscussionThreads.id });
+    return Boolean(row);
+  },
+
+  async setDiscussionReplyHidden(replyId: number, hidden: boolean, reason?: string | null) {
+    const [row] = await db
+      .update(coachDiscussionReplies)
+      .set(hidden ? { hiddenAt: new Date(), hiddenReason: reason ?? "Hidden by Forge" } : { hiddenAt: null, hiddenReason: null })
+      .where(eq(coachDiscussionReplies.id, replyId))
+      .returning({ id: coachDiscussionReplies.id });
+    return Boolean(row);
   },
 
   async getCoachesCornerPrinciplesForAi(): Promise<string> {

@@ -5133,6 +5133,101 @@ export const academyQuizAttempts = pgTable(
   }),
 );
 
+// ---------- Coaches Corner peer discussion (2026-10-03) ----------
+// The App Store listing for the add-on says "Coach library, programs and peer discussion"; this
+// is the discussion. Coaches with the add-on talk to each other, by name (they are adults and
+// the board is for coaches only), in threads that may be tied to a track. Two rules the code
+// keeps: NO ATHLETE DATA is ever attached (there is no athlete column anywhere here, on
+// purpose) and every post can be reported and hidden by an admin. Hidden rows stay for the
+// record; nothing is deleted by a coach, only hidden.
+export const coachDiscussionThreads = pgTable(
+  "coach_discussion_threads",
+  {
+    id: serial("id").primaryKey(),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    trackId: integer("track_id").references(() => academyTracks.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    pinned: boolean("pinned").notNull().default(false),
+    locked: boolean("locked").notNull().default(false),
+    hiddenAt: timestamp("hidden_at"),
+    hiddenReason: text("hidden_reason"),
+    replyCount: integer("reply_count").notNull().default(0),
+    lastActivityAt: timestamp("last_activity_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    activityIdx: index("coach_discussion_threads_activity_idx").on(table.lastActivityAt),
+    trackIdx: index("coach_discussion_threads_track_idx").on(table.trackId),
+  }),
+);
+
+export const coachDiscussionReplies = pgTable(
+  "coach_discussion_replies",
+  {
+    id: serial("id").primaryKey(),
+    threadId: integer("thread_id")
+      .notNull()
+      .references(() => coachDiscussionThreads.id, { onDelete: "cascade" }),
+    authorId: integer("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    hiddenAt: timestamp("hidden_at"),
+    hiddenReason: text("hidden_reason"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    threadIdx: index("coach_discussion_replies_thread_idx").on(table.threadId),
+  }),
+);
+
+// A coach flags a thread or a reply; an admin resolves it. One of threadId/replyId is set.
+export const coachDiscussionReports = pgTable(
+  "coach_discussion_reports",
+  {
+    id: serial("id").primaryKey(),
+    reporterId: integer("reporter_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    threadId: integer("thread_id").references(() => coachDiscussionThreads.id, { onDelete: "cascade" }),
+    replyId: integer("reply_id").references(() => coachDiscussionReplies.id, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+    resolution: text("resolution"),
+  },
+  (table) => ({
+    openIdx: index("coach_discussion_reports_open_idx").on(table.resolvedAt),
+  }),
+);
+
+export const coachDiscussionThreadsRelations = relations(coachDiscussionThreads, ({ one, many }) => ({
+  author: one(users, { fields: [coachDiscussionThreads.authorId], references: [users.id] }),
+  track: one(academyTracks, { fields: [coachDiscussionThreads.trackId], references: [academyTracks.id] }),
+  replies: many(coachDiscussionReplies),
+}));
+export const coachDiscussionRepliesRelations = relations(coachDiscussionReplies, ({ one }) => ({
+  thread: one(coachDiscussionThreads, { fields: [coachDiscussionReplies.threadId], references: [coachDiscussionThreads.id] }),
+  author: one(users, { fields: [coachDiscussionReplies.authorId], references: [users.id] }),
+}));
+
+export const DISCUSSION_TITLE_MAX = 140;
+export const DISCUSSION_BODY_MAX = 5000;
+export const createDiscussionThreadSchema = z.object({
+  title: z.string().trim().min(3).max(DISCUSSION_TITLE_MAX),
+  body: z.string().trim().min(1).max(DISCUSSION_BODY_MAX),
+  trackId: z.number().int().positive().nullable().optional(),
+});
+export const createDiscussionReplySchema = z.object({
+  body: z.string().trim().min(1).max(DISCUSSION_BODY_MAX),
+});
+export const reportDiscussionSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
 // One quiz per track, shown after the lesson list. Since 2026-10-03 it is also scored (see
 // academyQuizAttempts); the explanations stay, every answer's, after the attempt. Every answer carries its own
 // explanation, correct or not, so a coach can expand any answer at any

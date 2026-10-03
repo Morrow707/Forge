@@ -157,6 +157,7 @@ const AdminClasses = lazy(withLoadTimeout(() => import("@/pages/admin/classes"))
 const AdminClassesAnalytics = lazy(withLoadTimeout(() => import("@/pages/admin/classes-analytics")));
 const AdminClassBuilder = lazy(withLoadTimeout(() => import("@/pages/admin/class-builder")));
 const AdminCoachesCorner = lazy(withLoadTimeout(() => import("@/pages/admin/coaches-corner")));
+const AdminCoachesCornerReports = lazy(withLoadTimeout(() => import("@/pages/admin/coaches-corner-reports")));
 const AdminAcademyTrackBuilder = lazy(withLoadTimeout(() => import("@/pages/admin/academy-track-builder")));
 
 function FullScreenSpinner() {
@@ -696,6 +697,9 @@ function Router() {
         </Route>
         <Route path="/admin/classes-analytics">
           <ProtectedRoute role="admin" component={AdminClassesAnalytics} />
+        </Route>
+        <Route path="/admin/coaches-corner/reports">
+          <ProtectedRoute role="admin" component={AdminCoachesCornerReports} />
         </Route>
         <Route path="/admin/coaches-corner">
           <ProtectedRoute role="admin" component={AdminCoachesCorner} />

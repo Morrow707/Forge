@@ -172,10 +172,15 @@ export default function AdminCoachesCorner() {
     <AppShell
       title="Coaches Corner"
       actions={
-        <Button onClick={() => navigate("/admin/academy-tracks/new")}>
-          <Plus className="h-4 w-4" />
-          New Lesson
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => navigate("/admin/coaches-corner/reports")}>
+            Discussion reports
+          </Button>
+          <Button onClick={() => navigate("/admin/academy-tracks/new")}>
+            <Plus className="h-4 w-4" />
+            New Lesson
+          </Button>
+        </div>
       }
     >
       <p className="mb-6 max-w-2xl text-sm text-muted-foreground">

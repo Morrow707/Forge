@@ -233,6 +233,9 @@ import {
   enrollInClassSchema,
   classCoachSettingsInputSchema,
   academyTrackStructureSchema,
+  createDiscussionThreadSchema,
+  createDiscussionReplySchema,
+  reportDiscussionSchema,
   createProblemReportSchema,
   updateCoachFeaturesSchema,
   adminAthleteQueryFiltersSchema,
@@ -2540,6 +2543,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Minutes of reading, from the lessons' own estimates: what a director would ask.
       estimatedMinutes: track.lessons.reduce((sum, l) => sum + (l.estMinutes ?? 0), 0),
     });
+  });
+
+  // ---------- Coaches Corner peer discussion (2026-10-03) ----------
+  // Same gate as the lessons. Coaches by name, no athlete anywhere, every post reportable.
+  async function requireCorner(req: any, res: any): Promise<ReturnType<typeof currentUser> | null> {
+    const user = currentUser(req);
+    if (!(await hasCoachesCornerAccess(user))) {
+      res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
+      return null;
+    }
+    return user;
+  }
+
+  app.get("/api/coach/discussion/threads", requireRole("coach"), async (req, res) => {
+    if (!(await requireCorner(req, res))) return;
+    const trackId = req.query.trackId ? Number(req.query.trackId) : null;
+    const offset = req.query.offset ? Math.max(0, Number(req.query.offset)) : 0;
+    const threads = await storage.listDiscussionThreads({ trackId: Number.isFinite(trackId as number) ? trackId : null, offset, limit: 30 });
+    res.json(threads);
+  });
+
+  app.post("/api/coach/discussion/threads", requireRole("coach"), async (req, res) => {
+    const user = await requireCorner(req, res);
+    if (!user) return;
+    const parsed = createDiscussionThreadSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    if (parsed.data.trackId != null && !(await storage.getAcademyTrackFull(parsed.data.trackId))) {
+      return res.status(400).json({ message: "That track doesn't exist." });
+    }
+    const thread = await storage.createDiscussionThread(user.id, parsed.data);
+    res.status(201).json(thread);
+  });
+
+  app.get("/api/coach/discussion/threads/:id", requireRole("coach"), async (req, res) => {
+    if (!(await requireCorner(req, res))) return;
+    const thread = await storage.getDiscussionThread(Number(req.params.id));
+    if (!thread) return res.status(404).json({ message: "Thread not found" });
+    res.json(thread);
+  });
+
+  app.post("/api/coach/discussion/threads/:id/replies", requireRole("coach"), async (req, res) => {
+    const user = await requireCorner(req, res);
+    if (!user) return;
+    const parsed = createDiscussionReplySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const reply = await storage.createDiscussionReply(user.id, Number(req.params.id), parsed.data.body);
+    if (!reply) return res.status(409).json({ message: "This thread is closed to replies." });
+    res.status(201).json(reply);
+  });
+
+  // A coach removes their own post. Hidden, not deleted (see hideOwnDiscussionThread).
+  app.delete("/api/coach/discussion/threads/:id", requireRole("coach"), async (req, res) => {
+    const user = await requireCorner(req, res);
+    if (!user) return;
+    const ok = await storage.hideOwnDiscussionThread(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Not your thread, or already removed." });
+    res.status(204).end();
+  });
+  app.delete("/api/coach/discussion/replies/:id", requireRole("coach"), async (req, res) => {
+    const user = await requireCorner(req, res);
+    if (!user) return;
+    const ok = await storage.hideOwnDiscussionReply(user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Not your reply, or already removed." });
+    res.status(204).end();
+  });
+
+  app.post("/api/coach/discussion/threads/:id/report", requireRole("coach"), async (req, res) => {
+    const user = await requireCorner(req, res);
+    if (!user) return;
+    const parsed = reportDiscussionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    if (!(await storage.getDiscussionThread(Number(req.params.id)))) return res.status(404).json({ message: "Thread not found" });
+    await storage.reportDiscussion(user.id, { threadId: Number(req.params.id) }, parsed.data.reason);
+    res.status(201).json({ ok: true });
+  });
+  app.post("/api/coach/discussion/replies/:id/report", requireRole("coach"), async (req, res) => {
+    const user = await requireCorner(req, res);
+    if (!user) return;
+    const parsed = reportDiscussionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    await storage.reportDiscussion(user.id, { replyId: Number(req.params.id) }, parsed.data.reason);
+    res.status(201).json({ ok: true });
+  });
+
+  // Admin moderation: the open report queue, hide/unhide, pin, lock. An admin also reads the
+  // board itself, hidden posts included, through the same list with includeHidden.
+  app.get("/api/admin/discussion/reports", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listOpenDiscussionReports());
+  });
+  app.get("/api/admin/discussion/threads", requireRole("admin"), async (req, res) => {
+    const offset = req.query.offset ? Math.max(0, Number(req.query.offset)) : 0;
+    res.json(await storage.listDiscussionThreads({ includeHidden: true, offset, limit: 50 }));
+  });
+  app.get("/api/admin/discussion/threads/:id", requireRole("admin"), async (req, res) => {
+    const thread = await storage.getDiscussionThread(Number(req.params.id), { includeHidden: true });
+    if (!thread) return res.status(404).json({ message: "Thread not found" });
+    res.json(thread);
+  });
+  app.post("/api/admin/discussion/reports/:id/resolve", requireRole("admin"), async (req, res) => {
+    const parsed = z.object({ resolution: z.string().trim().min(1).max(500) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const ok = await storage.resolveDiscussionReport(Number(req.params.id), parsed.data.resolution);
+    if (!ok) return res.status(404).json({ message: "Report not found or already resolved" });
+    res.json({ ok: true });
+  });
+  app.patch("/api/admin/discussion/threads/:id", requireRole("admin"), async (req, res) => {
+    const parsed = z
+      .object({
+        hidden: z.boolean().optional(),
+        reason: z.string().trim().max(300).nullable().optional(),
+        pinned: z.boolean().optional(),
+        locked: z.boolean().optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const ok = await storage.setDiscussionThreadModeration(Number(req.params.id), parsed.data);
+    if (!ok) return res.status(404).json({ message: "Thread not found" });
+    res.json({ ok: true });
+  });
+  app.patch("/api/admin/discussion/replies/:id", requireRole("admin"), async (req, res) => {
+    const parsed = z.object({ hidden: z.boolean(), reason: z.string().trim().max(300).nullable().optional() }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const ok = await storage.setDiscussionReplyHidden(Number(req.params.id), parsed.data.hidden, parsed.data.reason);
+    if (!ok) return res.status(404).json({ message: "Reply not found" });
+    res.json({ ok: true });
   });
 
   // Ask Forge's coaching library: grounded in the Corner's own lessons, nothing outside Forge.
