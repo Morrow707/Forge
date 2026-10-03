@@ -993,6 +993,11 @@ const BRANDING_COLUMNS = {
   brandMission: true,
   brandContactEmail: true,
   brandWelcomeMessage: true,
+  brandBackgroundHue: true,
+  brandBackgroundStrength: true,
+  brandHeadingFont: true,
+  brandSlug: true,
+  brandSenderName: true,
 } as const;
 
 const BRANDING_COLUMNS_SQL = {
@@ -1004,6 +1009,11 @@ const BRANDING_COLUMNS_SQL = {
   brandMission: users.brandMission,
   brandContactEmail: users.brandContactEmail,
   brandWelcomeMessage: users.brandWelcomeMessage,
+  brandBackgroundHue: users.brandBackgroundHue,
+  brandBackgroundStrength: users.brandBackgroundStrength,
+  brandHeadingFont: users.brandHeadingFont,
+  brandSlug: users.brandSlug,
+  brandSenderName: users.brandSenderName,
 };
 
 // Shared by every AI program-generation prompt (generateProgramDraft and
@@ -19032,6 +19042,11 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         ...(values.mission !== undefined && { brandMission: values.mission }),
         ...(values.contactEmail !== undefined && { brandContactEmail: values.contactEmail }),
         ...(values.welcomeMessage !== undefined && { brandWelcomeMessage: values.welcomeMessage }),
+        ...(values.backgroundHue !== undefined && { brandBackgroundHue: values.backgroundHue }),
+        ...(values.backgroundStrength !== undefined && { brandBackgroundStrength: values.backgroundStrength }),
+        ...(values.headingFont !== undefined && { brandHeadingFont: values.headingFont }),
+        ...(values.slug !== undefined && { brandSlug: values.slug }),
+        ...(values.senderName !== undefined && { brandSenderName: values.senderName }),
       })
       .where(eq(users.id, primaryCoachId))
       .returning(BRANDING_COLUMNS_SQL);
@@ -19126,10 +19141,27 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       brandMission: null,
       brandContactEmail: null,
       brandWelcomeMessage: null,
+      brandBackgroundHue: null,
+      brandBackgroundStrength: null,
+      brandHeadingFont: null,
+      brandSlug: null,
+      brandSenderName: null,
       navLabelOverrides: {},
       features: resolveCoachFeatures(null),
       exercisePageTheme: null,
     };
+    // A guardian wears the colors of the program their child is on, same as the child: the
+    // guardian dashboard and every email they get is about that program.
+    if (user.role === "guardian") {
+      const linked = await this.getAthletesForGuardian(userId);
+      const child = linked[0];
+      if (!child) return emptyBranding;
+      const childCoaches = await this.getCoachesForAthlete(child.id);
+      if (childCoaches.length === 0) return emptyBranding;
+      const ids = await this.getEffectiveCoachIds(childCoaches[0].id);
+      const org = await this.getCoachBranding(ids[0]);
+      return { ...emptyBranding, ...org };
+    }
     const coaches = await this.getCoachesForAthlete(userId);
     if (coaches.length === 0) {
       return emptyBranding;
@@ -19194,12 +19226,19 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         brandSecondaryColor: team.brandSecondaryColor ?? orgBranding?.brandSecondaryColor ?? null,
       };
     }
-    const coach = await this.getUserByCoachCode(code);
+    const coach = (await this.getUserByCoachCode(code)) ?? (await this.getCoachByBrandSlug(code));
     if (coach && coach.role === "coach") {
       const coachIds = await this.getEffectiveCoachIds(coach.id);
       return this.getCoachBranding(coachIds[0]);
     }
     return null;
+  },
+
+  /** The primary coach whose program owns a public address (/team/<slug>). */
+  async getCoachByBrandSlug(slug: string) {
+    const clean = slug.trim().toLowerCase();
+    if (!clean) return null;
+    return (await db.query.users.findFirst({ where: eq(users.brandSlug, clean) })) ?? null;
   },
 
   // ---------- Nav / dashboard personalization ----------

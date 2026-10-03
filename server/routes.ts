@@ -7902,7 +7902,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
    */
   app.get("/api/public/team/:code", async (req, res) => {
     const code = String(req.params.code).trim();
-    const coach = (await storage.getUserByCoachCode(code)) ?? null;
+    // A coach code, or the program's own public address (brandSlug); see getPublicBrandingForCode.
+    const coach = (await storage.getUserByCoachCode(code)) ?? (await storage.getCoachByBrandSlug(code));
     const team = coach ? null : await storage.getTeamByCode(code);
     const ownerId = coach?.role === "coach" ? coach.id : (team?.coachId ?? null);
     if (ownerId == null) return res.status(404).json({ message: "No program with that code." });
@@ -7987,12 +7988,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // than rejected so a Solo/Coach account editing what they're actually
     // allowed to still succeeds in one request.
     const values = { ...parsed.data };
-    if (!entitlements.hasCustomColors) delete values.secondaryColor;
+    if (!entitlements.hasCustomColors) {
+      delete values.secondaryColor;
+      delete values.backgroundHue;
+      delete values.backgroundStrength;
+      delete values.headingFont;
+    }
     if (!entitlements.hasTeamIdentity) {
       delete values.motto;
       delete values.mission;
       delete values.contactEmail;
       delete values.welcomeMessage;
+      delete values.slug;
+      delete values.senderName;
+    }
+    if (values.slug) {
+      const owner = await storage.getCoachByBrandSlug(values.slug);
+      if (owner && owner.id !== coachIds[0]) {
+        return res.status(409).json({ message: "That team address is taken. Try another." });
+      }
     }
     const updated = await storage.updateCoachBranding(coachIds[0], values);
     res.json(updated);

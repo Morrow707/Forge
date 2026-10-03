@@ -4,7 +4,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { DeleteAccountDialog } from "@/components/delete-account-dialog";
-import { ForgeMark } from "@/components/forge-mark";
+import { BrandedMark } from "@/components/branded-mark";
+import { useRememberedBrand } from "@/lib/remembered-brand";
+import { computeBrandingStyle } from "@/lib/branding-style";
 import { Trash2 } from "lucide-react";
 
 /** Public, unauthenticated-reachable page describing account deletion --
@@ -17,13 +19,12 @@ export default function DeleteAccountPage() {
   const { user, isLoading } = useAuth();
   const [open, setOpen] = useState(false);
 
+  const brand = useRememberedBrand();
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10" style={computeBrandingStyle(brand)}>
       <div className="w-full max-w-md space-y-6">
-        <div className="flex flex-col items-center gap-3">
-          <ForgeMark className="h-12 w-12 rounded-xl" />
-          <h1 className="font-display text-2xl font-bold uppercase tracking-wide">Delete Your Account</h1>
-        </div>
+        <BrandedMark brand={brand} size="md" />
+        <h1 className="text-center font-display text-2xl font-bold uppercase tracking-wide">Delete Your Account</h1>
 
         <Card>
           <CardHeader>

@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
-import { ForgeMark } from "@/components/forge-mark";
+import { BrandedMark } from "@/components/branded-mark";
+import { useRememberedBrand } from "@/lib/remembered-brand";
+import { computeBrandingStyle } from "@/lib/branding-style";
 import { ShieldCheck, MailCheck, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -56,10 +58,11 @@ export default function GuardianPendingPage() {
     onError: (err: ApiError) => toast.error(err.message || "Couldn't send that right now"),
   });
 
+  const brand = useRememberedBrand();
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12" style={computeBrandingStyle(brand)}>
       <div className="w-full max-w-md space-y-6 text-center">
-        <ForgeMark className="mx-auto h-14 w-14 rounded-xl" />
+        <BrandedMark brand={brand} size="md" />
         <div className="space-y-3">
           <ShieldCheck className="mx-auto h-8 w-8 text-primary" />
           <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide">

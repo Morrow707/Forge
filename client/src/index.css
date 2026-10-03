@@ -77,17 +77,21 @@
      here still resolves through hsl(var(--background)) etc exactly as
      before, just with its first component indirected. */
   --neutral-hue: 222;
-  --background: var(--neutral-hue) 20% 5%;
+  /* Multiplies the saturation of every neutral token below (1 = Forge's subtle tint, 3 = a
+     surface that is unmistakably the team's color). Lightness never moves, so the contrast
+     the ladder was tuned for holds at every strength. Set from brandBackgroundStrength. */
+  --neutral-sat: 1;
+  --background: var(--neutral-hue) calc(20% * var(--neutral-sat)) 5%;
   --foreground: 0 0% 96%;
 
-  --card: var(--neutral-hue) 17% 16%;
+  --card: var(--neutral-hue) calc(17% * var(--neutral-sat)) 16%;
   --card-foreground: 0 0% 97%;
 
-  --popover: var(--neutral-hue) 17% 16%;
+  --popover: var(--neutral-hue) calc(17% * var(--neutral-sat)) 16%;
   --popover-foreground: 0 0% 97%;
 
-  --surface: var(--neutral-hue) 16% 11%;
-  --surface-elevated: var(--neutral-hue) 16% 21%;
+  --surface: var(--neutral-hue) calc(16% * var(--neutral-sat)) 11%;
+  --surface-elevated: var(--neutral-hue) calc(16% * var(--neutral-sat)) 21%;
 
   /* "Deep ember" -- pulled back from the original 16 92% 55% (too bright/
      neon per feedback against the deepened palette above) toward a richer,
@@ -102,10 +106,10 @@
      org branding's own brandSecondaryColor -- can override it to a genuine
      second accent (e.g. a program's actual gold), independent of the
      neutral tint. */
-  --secondary: var(--neutral-hue) 15% 20%;
+  --secondary: var(--neutral-hue) calc(15% * var(--neutral-sat)) 20%;
   --secondary-foreground: 0 0% 92%;
 
-  --muted: var(--neutral-hue) 13% 19%;
+  --muted: var(--neutral-hue) calc(13% * var(--neutral-sat)) 19%;
   --muted-foreground: 220 9% 64%;
 
   --accent: 14 85% 42%;
@@ -117,8 +121,8 @@
   --success: 142 71% 45%;
   --success-foreground: 0 0% 100%;
 
-  --border: var(--neutral-hue) 17% 24%;
-  --input: var(--neutral-hue) 17% 24%;
+  --border: var(--neutral-hue) calc(17% * var(--neutral-sat)) 24%;
+  --input: var(--neutral-hue) calc(17% * var(--neutral-sat)) 24%;
   --ring: 14 85% 42%;
 
   /* Border/inset-highlight color for the frosted glass surfaces (Card,

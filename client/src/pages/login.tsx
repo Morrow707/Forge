@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ForgeMark } from "@/components/forge-mark";
+import { BrandedMark } from "@/components/branded-mark";
+import { useRememberedBrand } from "@/lib/remembered-brand";
+import { computeBrandingStyle, ensureBrandFontLoaded } from "@/lib/branding-style";
 import { MfaLoginStep } from "@/components/mfa-login-step";
 import { DeviceApprovalStep } from "@/components/device-approval-step";
 import { isNativeLoginAvailable, presentNativeLogin } from "@/lib/native-auth";
@@ -113,22 +115,19 @@ export default function LoginPage() {
   const devicePending =
     !mfaPending && loginMutation.data && "deviceApprovalRequired" in loginMutation.data ? loginMutation.data : null;
 
+  const brand = useRememberedBrand();
+  useEffect(() => ensureBrandFontLoaded(brand?.brandHeadingFont), [brand?.brandHeadingFont]);
   return (
     <div
       className="flex min-h-screen items-center justify-center bg-background px-4"
       style={{
+        ...computeBrandingStyle(brand),
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <ForgeMark className="h-14 w-14 rounded-xl" />
-          <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
-            Forge
-          </h1>
-          <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>
-        </div>
+        <BrandedMark brand={brand} className="mb-8" tagline="Coach. Program. Perform." />
 
         {nativeShowing && !mfaPending && !devicePending ? (
           // What sits behind the native screen. It is presented full screen and cannot be swiped

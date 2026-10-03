@@ -1,3 +1,4 @@
+import { BRAND_HEADING_FONT_IDS, BRAND_SLUG_PATTERN } from "./branding-options";
 import {
   pgTable,
   serial,
@@ -566,6 +567,19 @@ export const users = pgTable(
     // the About page) in that this is meant to read like a note from the
     // coach, not a program description.
     brandWelcomeMessage: text("brand_welcome_message"),
+    // THE REST OF THE LOOK, 2026-10-03 (Scott: "every single thing"). Org-wide, primary-coach
+    // edited on the Branding page, read by every athlete under the program:
+    //  - brandBackgroundHue / brandBackgroundStrength: the tint of every neutral surface
+    //    (--neutral-hue and --neutral-sat in index.css); hue 0-359, strength 1-3.
+    //  - brandHeadingFont: one of BRAND_HEADING_FONTS, sets --font-display.
+    //  - brandSlug: the public team address, /team/<slug>, unique across programs.
+    //  - brandSenderName: the display name on emails to this program's athletes and guardians
+    //    ("Cal Strength via Forge"); the address stays Forge's.
+    brandBackgroundHue: integer("brand_background_hue"),
+    brandBackgroundStrength: integer("brand_background_strength"),
+    brandHeadingFont: text("brand_heading_font"),
+    brandSlug: text("brand_slug"),
+    brandSenderName: text("brand_sender_name"),
     // Exercise-logging screen personalization -- entirely gated behind the
     // "personal_page" billing add-on (see shared/billing-tiers.ts and
     // server/billing.ts's hasPersonalPage), unlike brandPrimaryColor/
@@ -8130,6 +8144,18 @@ export const updateBrandingSchema = z.object({
   // kept a plain nullable email check rather than a preprocessing chain.
   contactEmail: z.string().trim().toLowerCase().email().max(255).optional().nullable(),
   welcomeMessage: z.string().trim().max(300).optional().nullable(),
+  backgroundHue: z.number().int().min(0).max(359).optional().nullable(),
+  backgroundStrength: z.number().int().min(1).max(3).optional().nullable(),
+  headingFont: z.enum(BRAND_HEADING_FONT_IDS).optional().nullable(),
+  // Lowercased before the pattern so a coach typing "CalStrength" gets "calstrength", not a 400.
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(BRAND_SLUG_PATTERN, "Use 3 to 30 lowercase letters, numbers or hyphens.")
+    .optional()
+    .nullable(),
+  senderName: z.string().trim().max(40).optional().nullable(),
 });
 
 // Exercise-page theme -- see ExercisePageTheme's own comment up top and

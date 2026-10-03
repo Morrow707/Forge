@@ -87,7 +87,8 @@ const AccountSettingsDialog = lazyDialog(() => import("@/components/account-sett
 import { CameraAccuracyNotice } from "@/components/camera-accuracy-notice";
 import { PoweredByFooter } from "@/components/powered-by-footer";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
-import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
+import { computeBrandingStyle, ensureBrandFontLoaded, type EffectiveBranding } from "@/lib/branding-style";
+import { rememberBrand } from "@/lib/remembered-brand";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
 import { COACH_SECTION_NAV_HREFS } from "@shared/coach-sections";
 
@@ -375,6 +376,13 @@ export function AppShell({
   // Reverts to the static Forge defaults the moment branding clears
   // (logo removed, or an unbranded user's session loads), rather than
   // leaving a previous session's icon stuck.
+  // The device remembers this program's look for the screens before sign-in (see
+  // remembered-brand.ts), and fetches the heading font if the brand chose one.
+  useEffect(() => {
+    if (branding === undefined) return;
+    rememberBrand(branding);
+    ensureBrandFontLoaded(branding?.brandHeadingFont);
+  }, [branding]);
   useEffect(() => {
     const logoHref = branding?.brandLogoUrl ? resolveApiUrl(branding.brandLogoUrl) : null;
     const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');

@@ -1,4 +1,5 @@
 import { hexToHslTriplet } from "@/lib/color";
+import { BRAND_HEADING_FONTS } from "@shared/branding-options";
 import type { ExercisePageTheme } from "@shared/schema";
 
 export type EffectiveBranding = {
@@ -10,6 +11,12 @@ export type EffectiveBranding = {
   brandMission?: string | null;
   brandContactEmail?: string | null;
   brandWelcomeMessage?: string | null;
+  // The rest of the look (2026-10-03): see users.brandBackgroundHue and friends in schema.ts.
+  brandBackgroundHue?: number | null;
+  brandBackgroundStrength?: number | null;
+  brandHeadingFont?: string | null;
+  brandSlug?: string | null;
+  brandSenderName?: string | null;
   // Only ever populated for an athlete's own /api/branding/me response --
   // rides along so athlete-facing screens can read a primary-coach-set term
   // (e.g. DAILY_CHECKIN_TERM_KEY in shared/wellness.ts) through this same
@@ -66,11 +73,25 @@ export function computeBrandingStyle(
       vars["--primary"] = hsl;
       vars["--ring"] = hsl;
       vars["--accent"] = hsl;
+      // The ambient glow follows the program's color, the same way a coach's own accent
+      // already lit it. Before 2026-10-03 a branded app glowed Forge orange under blue buttons.
+      vars["--glow"] = hsl;
+      vars["--glow-alpha"] = "0.18";
     }
   }
   if (branding?.brandSecondaryColor) {
     const hsl = hexToHslTriplet(branding.brandSecondaryColor);
     if (hsl) vars["--secondary"] = hsl;
+  }
+  if (typeof branding?.brandBackgroundHue === "number") {
+    vars["--neutral-hue"] = String(branding.brandBackgroundHue);
+  }
+  if (typeof branding?.brandBackgroundStrength === "number" && branding.brandBackgroundStrength > 1) {
+    vars["--neutral-sat"] = String(branding.brandBackgroundStrength);
+  }
+  if (branding?.brandHeadingFont) {
+    const font = BRAND_HEADING_FONTS.find((f) => f.id === branding.brandHeadingFont);
+    if (font) vars["--font-display"] = font.stack;
   }
   if (personal?.accentColor) {
     const hsl = hexToHslTriplet(personal.accentColor);
@@ -91,4 +112,19 @@ export function computeBrandingStyle(
     vars["--neutral-hue"] = String(personal.backgroundHue);
   }
   return Object.keys(vars).length > 0 ? (vars as React.CSSProperties) : undefined;
+}
+
+/** Loads the Google Fonts stylesheet a brand heading font needs, once, and only for a face the
+ *  app does not already carry. Call it from wherever a branding record is applied. */
+export function ensureBrandFontLoaded(fontId: string | null | undefined): void {
+  if (!fontId || typeof document === "undefined") return;
+  const font = BRAND_HEADING_FONTS.find((f) => f.id === fontId);
+  if (!font?.googleFontsUrl) return;
+  const id = `brand-font-${font.id}`;
+  if (document.getElementById(id)) return;
+  const link = document.createElement("link");
+  link.id = id;
+  link.rel = "stylesheet";
+  link.href = font.googleFontsUrl;
+  document.head.appendChild(link);
 }

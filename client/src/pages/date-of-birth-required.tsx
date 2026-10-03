@@ -6,7 +6,9 @@ import { CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ForgeMark } from "@/components/forge-mark";
+import { BrandedMark } from "@/components/branded-mark";
+import { useRememberedBrand } from "@/lib/remembered-brand";
+import { computeBrandingStyle } from "@/lib/branding-style";
 import { useAuth } from "@/hooks/use-auth";
 import { todayIso } from "@/lib/local-date";
 import type { PublicUser } from "@shared/schema";
@@ -42,10 +44,11 @@ export default function DateOfBirthRequiredPage() {
     onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
   });
 
+  const brand = useRememberedBrand();
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12" style={computeBrandingStyle(brand)}>
       <div className="w-full max-w-md space-y-6 text-center">
-        <ForgeMark className="mx-auto h-14 w-14 rounded-xl" />
+        <BrandedMark brand={brand} size="md" />
         <div className="space-y-3">
           <CalendarClock className="mx-auto h-8 w-8 text-primary" />
           <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide">
