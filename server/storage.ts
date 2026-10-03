@@ -282,6 +282,7 @@ import type {
   ClassAiDraft,
   ClassCoachSettingsInput,
   AcademyTrackStructureInput,
+  AcademyLessonSource,
   AcademyQuizQuestionInput,
   AdminAthleteQueryFilters,
   AdminSavedView,
@@ -348,6 +349,7 @@ import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
 import type { CoachSection } from "@shared/coach-sections";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import type { RosterGroup } from "@shared/roster-groups";
+import { findVerbatimLesson } from "./academy-draft-guard";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
 import { learnFromTake, type BodyModelWithHistory } from "./body-model-learning";
@@ -1811,6 +1813,41 @@ const academyTrackPhotoLessonSchema = z.object({
   title: z.string().trim().min(1).max(200),
   content: z.string().trim().min(1),
   estMinutes: z.number().int().min(1).max(120).optional().nullable(),
+});
+const academyLibraryDraftSchema = z.object({
+  note: z.string().trim().max(1000).optional().nullable(),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().min(1).max(2000),
+  keyPrinciplesForAi: z.string().trim().min(1).max(4000),
+  lessons: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(200),
+        content: z.string().trim().min(1),
+        estMinutes: z.number().int().min(1).max(120).optional().nullable(),
+        sourceIndexes: z.array(z.number().int().min(1)).default([]),
+      }),
+    )
+    .min(1)
+    .max(8),
+  quizQuestions: z
+    .array(
+      z.object({
+        questionText: z.string().trim().min(1).max(500),
+        answers: z
+          .array(
+            z.object({
+              answerText: z.string().trim().min(1).max(300),
+              isCorrect: z.boolean(),
+              explanation: z.string().trim().min(1).max(1000),
+            }),
+          )
+          .min(2)
+          .max(6),
+      }),
+    )
+    .max(15)
+    .default([]),
 });
 const academyTrackPhotoDraftSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
@@ -13587,6 +13624,7 @@ Hard rules, no exceptions:
             title: l.title,
             content: l.content,
             estMinutes: l.estMinutes ?? null,
+            sources: l.sources ?? [],
           })),
         );
       }
@@ -13665,6 +13703,7 @@ Hard rules, no exceptions:
               title: lesson.title,
               content: lesson.content,
               estMinutes: lesson.estMinutes ?? null,
+              sources: lesson.sources ?? [],
             })
             // trackId is in the predicate, not just the id. An id is taken
             // straight from the submitted payload, and without this a
@@ -13682,6 +13721,7 @@ Hard rules, no exceptions:
             title: lesson.title,
             content: lesson.content,
             estMinutes: lesson.estMinutes ?? null,
+            sources: lesson.sources ?? [],
           });
         }
       }
@@ -26480,6 +26520,15 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     return db.query.knowledgeSources.findFirst({ where: eq(knowledgeSources.fileHash, fileHash) });
   },
 
+  async setKnowledgeSourceDerivedContentLicensed(id: number, licensed: boolean, licenceNote?: string | null) {
+    const [row] = await db
+      .update(knowledgeSources)
+      .set(licenceNote === undefined ? { derivedContentLicensed: licensed } : { derivedContentLicensed: licensed, licenceNote })
+      .where(eq(knowledgeSources.id, id))
+      .returning({ id: knowledgeSources.id });
+    return Boolean(row);
+  },
+
   async listKnowledgeSources() {
     const rows = await db
       .select({
@@ -26500,6 +26549,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         // a column the client's own type declares is a whole feature that
         // typechecks, ships, and does nothing.
         licenceNote: knowledgeSources.licenceNote,
+        derivedContentLicensed: knowledgeSources.derivedContentLicensed,
         transcribedThroughPage: knowledgeSources.transcribedThroughPage,
         progressDone: knowledgeSources.progressDone,
         progressTotal: knowledgeSources.progressTotal,
@@ -30767,10 +30817,230 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         title: l.title,
         content: l.content,
         estMinutes: l.estMinutes ?? null,
+        sources: [],
       })),
       quizQuestions: [],
     };
 
     return { structure, note: draft.note?.trim() || null };
+  },
+
+  /** A Coaches Corner track drafted from the knowledge library (2026-10-03).
+   *
+   * The admin names a topic; the relevant passages are retrieved from every source in the
+   * chosen domains; the model writes a track IN ITS OWN WORDS -- lessons, a quiz, the AI
+   * principles -- and names, per lesson, which passages it drew on. Those become the lesson's
+   * "Further reading" (title, citation, pages), never the passage text. The draft is then held
+   * against the passages by findVerbatimLesson, and a lesson that repeats a source is refused
+   * with a note saying which, rather than saved. docs/legal-open-questions.md question 12 is
+   * the rule; this function is where it is enforced. Lands in the builder for review like the
+   * photo draft does, never straight into the catalog. */
+  async generateAcademyTrackDraftFromLibrary(input: {
+    topic: string;
+    domains: string[];
+    lessonCount?: number;
+  }): Promise<{ structure: AcademyTrackStructureInput; note: string | null; passagesUsed: number } | { refused: string }> {
+    if (!aiEnabled) return { refused: "AI isn't configured on this server." };
+    const lessonCount = Math.min(Math.max(input.lessonCount ?? 4, 2), 8);
+    const passages = await searchKnowledgePassages({
+      query: input.topic,
+      domains: input.domains,
+      limit: 24,
+      licensedOnly: true,
+    });
+    if (passages.length === 0) {
+      return {
+        refused:
+          "No licensed source in the library covers that topic. Only a source marked \"licensed for Forge-written content\" on the Knowledge Library page can feed a lesson that is sold (counsel, 2026-10-03). Upload Forge's own material, or mark a source once the publisher's licence is in hand.",
+      };
+    }
+    const labelled = passages.map((p, i) => ({
+      index: i + 1,
+      label: `${p.citation || p.sourceTitle}, ${p.pageNumber === p.endPageNumber ? `p. ${p.pageNumber}` : `pp. ${p.pageNumber}-${p.endPageNumber}`}`,
+      passage: p,
+    }));
+    const reference = labelled
+      .map((l) => `[${l.index}] ${l.label}${l.passage.fromVision ? " (transcribed from an image; verify numbers)" : ""}\n${l.passage.text}`)
+      .join("\n\n");
+
+    const system = [
+      "You write coach-education tracks for Forge, a strength and conditioning platform used by high-school and club coaches.",
+      "You are given reference passages from textbooks Forge has in its library. TEACH WHAT THEY TEACH, IN YOUR OWN WORDS.",
+      "Hard rules:",
+      "- Never copy a sentence or a phrase longer than a few words from a passage. Paraphrase, restructure, use your own examples. A lesson that repeats a passage is rejected by a check after you, so there is no benefit in trying.",
+      "- Do not invent facts, statistics, thresholds or citations that are not supported by the passages. Where the passages are silent, say what a careful coach would do and say that it is practice, not the source.",
+      "- Every lesson names the passages it drew on by their bracketed numbers in sourceIndexes. A lesson that uses none leaves it empty.",
+      "- Each lesson is 350 to 600 words of plain prose, paragraphs separated by a blank line, written for a coach with a roster to run tomorrow: what to do, why, what goes wrong. No headers, no bullet lists, no markdown.",
+      "- The quiz is ten questions, four answers each, exactly one correct, every answer with its own one or two sentence explanation that stands on its own. Questions test judgement, not recall of a number.",
+      "- keyPrinciplesForAi is a 100 to 200 word distillation an AI assistant can carry as context, not the lesson text.",
+      "- Never name a certification body or a certification. Never say 'the book says'. Write as Forge.",
+    ].join("\n");
+    const tool = {
+      name: "report_library_track",
+      description: "A coach-education track drafted in Forge's own words from the reference passages.",
+      input_schema: {
+        type: "object",
+        properties: {
+          note: { type: "string", description: "Optional: anything the passages left thin or contradictory that the admin should check." },
+          title: { type: "string" },
+          description: { type: "string", description: "One or two sentences for the catalog card." },
+          keyPrinciplesForAi: { type: "string" },
+          lessons: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                content: { type: "string" },
+                estMinutes: { type: "integer" },
+                sourceIndexes: { type: "array", items: { type: "integer" }, description: "Bracketed numbers of the passages this lesson drew on." },
+              },
+              required: ["title", "content", "sourceIndexes"],
+            },
+          },
+          quizQuestions: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                questionText: { type: "string" },
+                answers: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      answerText: { type: "string" },
+                      isCorrect: { type: "boolean" },
+                      explanation: { type: "string" },
+                    },
+                    required: ["answerText", "isCorrect", "explanation"],
+                  },
+                },
+              },
+              required: ["questionText", "answers"],
+            },
+          },
+        },
+        required: ["title", "description", "keyPrinciplesForAi", "lessons", "quizQuestions"],
+      },
+    };
+    const raw = await askClaudeStructured<{
+      note?: string;
+      title: string;
+      description: string;
+      keyPrinciplesForAi: string;
+      lessons: { title: string; content: string; estMinutes?: number; sourceIndexes?: number[] }[];
+      quizQuestions: { questionText: string; answers: { answerText: string; isCorrect: boolean; explanation: string }[] }[];
+    }>(
+      system,
+      `Topic: ${input.topic}\nWrite ${lessonCount} lessons.\n\nReference passages:\n\n${reference}`,
+      tool,
+      { maxTokens: 8192, feature: "academy_library_draft" },
+    );
+    const parsed = academyLibraryDraftSchema.safeParse(raw);
+    if (!parsed.success) return { refused: "The draft came back malformed. Try again, or narrow the topic." };
+    const draft = parsed.data;
+
+    const verbatim = findVerbatimLesson(
+      draft.lessons,
+      labelled.map((l) => ({ text: l.passage.text, label: l.label })),
+    );
+    if (verbatim) {
+      return {
+        refused: `Lesson ${verbatim.lessonIndex + 1} ("${draft.lessons[verbatim.lessonIndex].title}") repeats ${verbatim.run} words in a row from ${verbatim.sourceLabel}. The draft was not kept; try again.`,
+      };
+    }
+
+    const sourcesFor = (indexes: number[]): AcademyLessonSource[] => {
+      const seen = new Set<string>();
+      const out: AcademyLessonSource[] = [];
+      for (const i of indexes) {
+        const l = labelled[i - 1];
+        if (!l) continue;
+        const key = `${l.passage.sourceId}:${l.passage.pageNumber}:${l.passage.endPageNumber}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          sourceId: l.passage.sourceId,
+          sourceTitle: l.passage.sourceTitle,
+          citation: l.passage.citation,
+          pageStart: l.passage.pageNumber,
+          pageEnd: l.passage.endPageNumber,
+        });
+      }
+      return out.slice(0, 12);
+    };
+
+    const structure: AcademyTrackStructureInput = {
+      title: draft.title,
+      description: draft.description,
+      keyPrinciplesForAi: draft.keyPrinciplesForAi,
+      orderIndex: 0,
+      lessons: draft.lessons.map((l, i) => ({
+        lessonNumber: i + 1,
+        title: l.title,
+        content: l.content,
+        estMinutes: l.estMinutes ?? Math.max(3, Math.round(l.content.split(/\s+/).length / 180)),
+        sources: sourcesFor(l.sourceIndexes ?? []),
+      })),
+      quizQuestions: draft.quizQuestions.map((q, qi) => ({
+        orderIndex: qi,
+        questionText: q.questionText,
+        answers: q.answers.map((a, ai) => ({
+          orderIndex: ai,
+          answerText: a.answerText,
+          isCorrect: a.isCorrect,
+          explanation: a.explanation,
+        })),
+      })),
+    };
+    return { structure, note: draft.note?.trim() || null, passagesUsed: passages.length };
+  },
+
+  /** Further reading for lessons that have none (2026-10-03): the library passages that best
+   * match each lesson, as page pointers. No model call -- retrieval only -- so it costs
+   * nothing to run over the whole catalog, and it attaches a citation only where the library
+   * really has something close. A lesson that already carries sources is left alone. */
+  async suggestSourcesForLessons(
+    lessons: { title: string; content: string; sources?: AcademyLessonSource[] | null }[],
+    domains: string[],
+  ): Promise<AcademyLessonSource[][]> {
+    const out: AcademyLessonSource[][] = [];
+    for (const lesson of lessons) {
+      if (lesson.sources && lesson.sources.length > 0) {
+        out.push(lesson.sources);
+        continue;
+      }
+      // The title plus the opening of the lesson is a good query; the whole lesson is too
+      // many terms for websearch_to_tsquery to rank anything above noise.
+      const opening = lesson.content.split(/\s+/).slice(0, 40).join(" ");
+      const query = `${lesson.title} ${opening}`.replace(/["'()&|!:]/g, " ");
+      let passages: Awaited<ReturnType<typeof searchKnowledgePassages>> = [];
+      try {
+        passages = await searchKnowledgePassages({ query, domains, limit: 6, licensedOnly: true });
+      } catch (err) {
+        console.error("Citation retrieval failed:", err);
+      }
+      const seen = new Set<string>();
+      const sources: AcademyLessonSource[] = [];
+      for (const p of passages) {
+        // Only a passage that ranks well above the tail: the top result's rank is the yardstick,
+        // so a weak match on a lesson the library does not cover attaches nothing.
+        if (passages[0] && p.rank < passages[0].rank * 0.5) continue;
+        const key = `${p.sourceId}:${p.pageNumber}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        sources.push({
+          sourceId: p.sourceId,
+          sourceTitle: p.sourceTitle,
+          citation: p.citation,
+          pageStart: p.pageNumber,
+          pageEnd: p.endPageNumber,
+        });
+        if (sources.length >= 3) break;
+      }
+      out.push(sources);
+    }
+    return out;
   },
 };

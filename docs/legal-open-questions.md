@@ -212,6 +212,48 @@ only to send Forge's own news and offers, how to unsubscribe), and if so where. 
 already does each of those things; the question is only whether the document has to say so.
 Until answered, nothing about the list is written into a reviewed document.
 
+## 12. Teaching from a purchased textbook inside a paid product -- ANSWERED 2026-10-03
+
+Counsel, same day: legally precarious. Copyright protects expression, not the training
+methods, so paraphrase with citation is less exposed than copying, but AI copyright litigation
+turns on MARKET SUBSTITUTION (a subscriber who asks Forge's chat instead of buying the book),
+and the publisher's own EULA almost certainly forbids automated extraction and ingestion into
+an AI store, which is a breach-of-contract claim that is easier to win than the copyright one.
+Verdict: without an express commercial licence from the publisher permitting AI ingestion, do
+not rely on an outside textbook through retrieval. "Ask Forge's Coaching Library", grounded in
+Forge's own tracks, is entirely safe.
+
+What the code does with that:
+
+- The coach-facing chat is grounded in Forge's own tracks and principles only
+  (`academyTracks`, `academyLessons`, `keyPrinciplesForAi`). It never retrieves from
+  `knowledge_passages`.
+- A Coaches Corner draft may draw on a library source only when an admin has marked it
+  `derivedContentLicensed` and written what the licence is (`knowledge_sources`, the switch on
+  the Knowledge Library page). Nothing is marked by default, so with no licence in hand the
+  draft button refuses and says why. The verbatim guard (`server/academy-draft-guard.ts`)
+  stays on top of that. The same gate covers the citation pass.
+- OPEN, for Scott: the uploaded textbook ALREADY feeds Forge's AI assistants (the program
+  builder, the nutrition and readiness answers) through the same retrieval, in paraphrase. By
+  counsel's reasoning that is the same exposure, with the EULA point in front. Options are to
+  remove the source from the library, to narrow retrieval everywhere to licensed sources (one
+  flag, `licensedOnly`, already exists), or to ask the publisher for a licence. Not changed
+  here without a decision.
+
+## 13. Naming a certification Forge does not hold -- ANSWERED 2026-10-03
+
+Counsel: nominative fair use allows the plain-text mark to state a fact that cannot be stated
+without it, such as a coach's own earned credential on their profile ("Jane Doe, MS, CSCS"),
+with no logo or badge and nothing implying the NSCA endorses Forge or its AI. Marketing
+banners, landing headers, upsell cards, feature names and system titles are infringement
+territory. Verdict: purge the mark from product marketing, features, titles and upgrade cards;
+allow it only as a human's biographical credential.
+
+What the code does with that: the upsell card no longer names it (2026-10-03), and
+`client/src/lib/no-certification-marks.test.ts` refuses "CSCS" and "NSCA" in client pages and
+components. A coach typing their own credentials into a free-text bio is their statement, not
+Forge's, and is not scanned.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and

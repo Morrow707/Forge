@@ -79,6 +79,10 @@ export async function searchKnowledgePassages(input: {
   query: string;
   domains: string[];
   limit?: number;
+  /** Only sources an admin has marked derivedContentLicensed. Required by anything that writes
+   * content sold to a subscriber (the Coaches Corner library draft, the citation pass). See
+   * knowledge_sources.derived_content_licensed. */
+  licensedOnly?: boolean;
 }): Promise<RetrievedPassage[]> {
   const query = input.query.trim();
   if (!query || input.domains.length === 0) return [];
@@ -106,9 +110,10 @@ export async function searchKnowledgePassages(input: {
                     THEN p.topics && $2::text[]
                     ELSE s.domains && $2::text[]
                END)
+          AND ($4::boolean = false OR s.derived_content_licensed = true)
         ORDER BY rank DESC, p.id ASC
         LIMIT $3`,
-      [query, input.domains, limit],
+      [query, input.domains, limit, Boolean(input.licensedOnly)],
     ),
   );
 

@@ -41,6 +41,7 @@ import { registerNumericParamGuards } from "./numeric-route-params";
 import { apnsEnabled } from "./apns";
 import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail, emailEnabled, isEmailConfigured } from "./email";
+import { KNOWLEDGE_DOMAIN_KEYS } from "@shared/knowledge-domains";
 import { buildWelcomeEmail } from "./welcome-email";
 import { buildRosterDocumentEmail } from "./email-roster-documents";
 import { aiEnabled } from "./ai";
@@ -2962,6 +2963,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const draft = await storage.generateAcademyTrackDraftFromPhoto(parsed.data.images);
     if (!draft) return res.status(422).json({ message: "Couldn't read that photo, try a clearer shot." });
     res.json(draft);
+  });
+
+  // A track drafted from the knowledge library, in Forge's own words with page citations.
+  // Lands in the builder for review, same as the photo draft. See
+  // generateAcademyTrackDraftFromLibrary for the rules it enforces.
+  app.post("/api/admin/academy/tracks/library-draft", requireRole("admin"), async (req, res) => {
+    const parsed = z
+      .object({
+        topic: z.string().trim().min(3).max(200),
+        domains: z.array(z.enum(KNOWLEDGE_DOMAIN_KEYS as [string, ...string[]])).min(1).max(6).default(["strength"]),
+        lessonCount: z.number().int().min(2).max(8).optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const draft = await storage.generateAcademyTrackDraftFromLibrary(parsed.data);
+    if ("refused" in draft) return res.status(422).json({ message: draft.refused });
+    res.json(draft);
+  });
+
+  // Further reading for the lessons sent, from the library: retrieval only, no model call.
+  // Takes the builder's current lessons rather than a track id so unsaved lessons get
+  // citations too; returns one source list per lesson, in order.
+  app.post("/api/admin/academy/suggest-sources", requireRole("admin"), async (req, res) => {
+    const parsed = z
+      .object({
+        lessons: z
+          .array(
+            z.object({
+              title: z.string().trim().min(1).max(200),
+              content: z.string().trim().min(1),
+              sources: z.array(z.any()).optional().nullable(),
+            }),
+          )
+          .min(1)
+          .max(40),
+        domains: z.array(z.enum(KNOWLEDGE_DOMAIN_KEYS as [string, ...string[]])).min(1).max(6).default(["strength"]),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const sources = await storage.suggestSourcesForLessons(parsed.data.lessons as any, parsed.data.domains);
+    res.json({ sources });
   });
 
   app.put("/api/admin/academy/tracks/:id", requireRole("admin"), async (req, res) => {
@@ -6548,6 +6590,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // The one clean undo: a bad ingest, or a licence that lapsed, takes every
   // passage and the stored file with it.
+  // Counsel 2026-10-03 (question 12): a source feeds Forge-written paid content only with a
+  // licence in hand. The switch is the admin's statement that it is; the note says what it is.
+  app.patch("/api/admin/knowledge-sources/:id/licence", requireRole("admin"), async (req, res) => {
+    const parsed = z
+      .object({
+        derivedContentLicensed: z.boolean(),
+        licenceNote: z.string().trim().max(500).nullable().optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    if (parsed.data.derivedContentLicensed && !(parsed.data.licenceNote ?? "").trim()) {
+      return res.status(400).json({ message: "Say what the licence is before marking a source licensed." });
+    }
+    const ok = await storage.setKnowledgeSourceDerivedContentLicensed(
+      Number(req.params.id),
+      parsed.data.derivedContentLicensed,
+      parsed.data.licenceNote,
+    );
+    if (!ok) return res.status(404).json({ message: "Source not found" });
+    res.json({ ok: true });
+  });
+
   app.delete("/api/admin/knowledge-sources/:id", requireRole("admin"), async (req, res) => {
     const id = Number(req.params.id);
     const removed = await storage.deleteKnowledgeSource(id);

@@ -27,6 +27,7 @@ type Source = {
   status: "extracting" | "ready" | "failed" | "needs_vision" | "transcribing";
   statusDetail: string | null;
   licenceNote: string | null;
+  derivedContentLicensed: boolean;
   transcribedThroughPage: number | null;
   progressDone: number | null;
   progressTotal: number | null;
@@ -176,6 +177,31 @@ export function KnowledgeBaseContent() {
     } finally {
       setUploading(false);
     }
+  }
+
+  // Counsel 2026-10-03: a source feeds a Coaches Corner draft only once an admin says Forge
+  // holds a licence for that. Asks for the licence in words before it will flip on.
+  const setLicensed = useMutation({
+    mutationFn: async ({ id, licensed, note }: { id: number; licensed: boolean; note?: string }) => {
+      await apiRequest("PATCH", `/api/admin/knowledge-sources/${id}/licence`, {
+        derivedContentLicensed: licensed,
+        licenceNote: note,
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] }),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't update the licence"),
+  });
+  function toggleLicensed(s: { id: number; derivedContentLicensed: boolean; licenceNote: string | null }) {
+    if (s.derivedContentLicensed) {
+      setLicensed.mutate({ id: s.id, licensed: false });
+      return;
+    }
+    const note = window.prompt(
+      "What licence lets Forge write paid lessons from this source? (Forge's own material, or the publisher's written permission and its date.)",
+      s.licenceNote ?? "",
+    );
+    if (note == null || !note.trim()) return;
+    setLicensed.mutate({ id: s.id, licensed: true, note: note.trim() });
   }
 
   const deleteSource = useMutation({
@@ -481,6 +507,17 @@ export function KnowledgeBaseContent() {
                     {s.status === "ready" && s.statusDetail && (
                       <p className="text-xs text-muted-foreground">{s.statusDetail}</p>
                     )}
+                    <label className="mt-1 flex w-fit cursor-pointer items-center gap-2 text-xs">
+                      <Checkbox
+                        checked={s.derivedContentLicensed}
+                        onCheckedChange={() => toggleLicensed(s)}
+                        disabled={setLicensed.isPending}
+                      />
+                      <span className={s.derivedContentLicensed ? "text-foreground" : "text-muted-foreground"}>
+                        Licensed for Forge-written content
+                        {s.derivedContentLicensed && s.licenceNote ? `: ${s.licenceNote}` : ""}
+                      </span>
+                    </label>
                   </div>
                   <Button
                     variant="ghost"

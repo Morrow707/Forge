@@ -1265,6 +1265,8 @@ CREATE TABLE IF NOT EXISTS "academy_lessons" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "academy_lessons_track_idx" ON "academy_lessons" ("track_id");
+-- Further reading (2026-10-03): the library sources a lesson draws on, as page pointers.
+ALTER TABLE "academy_lessons" ADD COLUMN IF NOT EXISTS "sources" jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS "academy_lesson_completions" (
   "id" serial PRIMARY KEY,
@@ -3081,6 +3083,8 @@ CREATE INDEX IF NOT EXISTS "cohort_norms_lookup_idx"
 -- re-reading and re-paying for every page before the failure.
 -- Free text, read by a person. What Forge may do with this source.
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "licence_note" text;
+-- Counsel 2026-10-03: only a source Forge holds a licence for may feed paid derived content.
+ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "derived_content_licensed" boolean NOT NULL DEFAULT false;
 
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribed_through_page" integer;
 ALTER TABLE "knowledge_sources" ADD COLUMN IF NOT EXISTS "transcribe_heartbeat_at" timestamp;

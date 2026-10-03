@@ -5065,12 +5065,25 @@ export const academyLessons = pgTable(
     title: text("title").notNull(),
     content: text("content").notNull(),
     estMinutes: integer("est_minutes"),
+    // "Further reading" under the lesson (2026-10-03): the library sources a lesson draws on,
+    // as title, citation and page range. A pointer to a page, never the page's text -- see
+    // docs/legal-open-questions.md question 12. Written by the library draft and the
+    // citation pass, editable in the builder, shown to the coach.
+    sources: json("sources").$type<AcademyLessonSource[]>().notNull().default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
     trackIdx: index("academy_lessons_track_idx").on(table.trackId),
   }),
 );
+
+export type AcademyLessonSource = {
+  sourceId: number | null;
+  sourceTitle: string;
+  citation: string | null;
+  pageStart: number;
+  pageEnd: number;
+};
 
 // A coach's own "read this" checkbox -- purely a personal progress marker
 // (drives a completion count on the track catalog), never gates access to
@@ -5199,6 +5212,18 @@ export const academyLessonInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
   content: z.string().trim().min(1),
   estMinutes: z.number().int().min(1).nullable().optional(),
+  sources: z
+    .array(
+      z.object({
+        sourceId: z.number().int().nullable().default(null),
+        sourceTitle: z.string().trim().min(1).max(300),
+        citation: z.string().trim().max(500).nullable().default(null),
+        pageStart: z.number().int().min(0),
+        pageEnd: z.number().int().min(0),
+      }),
+    )
+    .max(12)
+    .default([]),
 });
 
 export const academyQuizAnswerInputSchema = z.object({
@@ -6321,6 +6346,13 @@ export const knowledgeSources = pgTable(
     // paying customer's coach, or included in something sold to an outside
     // party -- a question with no answer at all today.
     licenceNote: text("licence_note"),
+    // WHETHER FORGE MAY WRITE PAID CONTENT FROM THIS SOURCE. Counsel, 2026-10-03
+    // (docs/legal-open-questions.md, question 12): a purchased textbook may not feed a chat
+    // or a drafted lesson sold to subscribers without an express licence from the publisher
+    // that permits it. False by default; an admin ticks it only with that licence in hand (and
+    // writes what it is in licenceNote). The library draft and the citation pass read only
+    // sources with this true. Forge's own material is ticked at upload.
+    derivedContentLicensed: boolean("derived_content_licensed").notNull().default(false),
     // How far a vision transcription pass has got, as a page number.
     //
     // Written after every batch of pages, so a restart, a redeploy or a

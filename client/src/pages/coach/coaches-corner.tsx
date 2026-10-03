@@ -35,6 +35,12 @@ type TrackSummary = {
   unlocked: boolean;
 };
 
+type LessonSource = {
+  sourceTitle: string;
+  citation: string | null;
+  pageStart: number;
+  pageEnd: number;
+};
 type LessonDetail = {
   id: number;
   lessonNumber: number;
@@ -42,6 +48,7 @@ type LessonDetail = {
   content?: string;
   estMinutes?: number | null;
   completed?: boolean;
+  sources?: LessonSource[];
 };
 
 type QuizAnswerDetail = { id: number; answerText: string; isCorrect: boolean; explanation: string };
@@ -193,6 +200,23 @@ export default function CoachesCorner() {
               <p key={i}>{para}</p>
             ))}
           </div>
+          {(selectedLesson.sources?.length ?? 0) > 0 && (
+            // A pointer to a page, never the page: the sources are where this lesson's
+            // teaching comes from, for a coach who wants the long version.
+            <div className="rounded-md border border-border bg-surface px-4 py-3">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Further reading
+              </p>
+              <ul className="space-y-1 text-sm">
+                {selectedLesson.sources!.map((s, i) => (
+                  <li key={i}>
+                    {s.citation || s.sourceTitle},{" "}
+                    {s.pageStart === s.pageEnd ? `p. ${s.pageStart}` : `pp. ${s.pageStart}-${s.pageEnd}`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold">
             <Checkbox
               checked={!!selectedLesson.completed}
@@ -264,7 +288,7 @@ export default function CoachesCorner() {
               </h2>
             </div>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              CSCS-aligned strength science, Olympic lift coaching progressions, youth development,
+              The strength and conditioning science the major certifications test, Olympic lift coaching progressions, youth development,
               sport-specific arm care, reading Forge's own analytics, season planning, and team
               culture, a real coach-education curriculum, for coaches who want to go deeper.
             </p>

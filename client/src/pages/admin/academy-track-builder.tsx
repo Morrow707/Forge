@@ -12,9 +12,16 @@ import {
   AcademyTrackPhotoImportPanel,
   type PhotoDraftStructure,
 } from "@/components/academy-track-photo-import-panel";
+import {
+  AcademyTrackLibraryDraftPanel,
+  formatLessonSource,
+  type LessonSource,
+  type LibraryDraftStructure,
+} from "@/components/academy-track-library-draft-panel";
+import { KNOWLEDGE_DOMAINS } from "@shared/knowledge-domains";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Save, Eye } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Save, Eye, BookMarked, X } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
 
 type LessonForm = {
@@ -23,6 +30,7 @@ type LessonForm = {
   title: string;
   content: string;
   estMinutes: number | null;
+  sources: LessonSource[];
 };
 type AnswerForm = { id?: number; orderIndex: number; answerText: string; isCorrect: boolean; explanation: string };
 type QuestionForm = { id?: number; orderIndex: number; questionText: string; answers: AnswerForm[] };
@@ -48,7 +56,7 @@ function emptyQuestion(orderIndex: number): QuestionForm {
   };
 }
 function emptyLesson(lessonNumber: number): LessonForm {
-  return { lessonNumber, title: "", content: "", estMinutes: null };
+  return { lessonNumber, title: "", content: "", estMinutes: null, sources: [] };
 }
 
 /** One row in the live preview -- collapsed it's just the read-view list
@@ -118,7 +126,7 @@ export default function AdminAcademyTrackBuilder() {
       setDescription(existing.description);
       setKeyPrinciplesForAi(existing.keyPrinciplesForAi);
       setOrderIndex(existing.orderIndex);
-      setLessons(existing.lessons);
+      setLessons(existing.lessons.map((l) => ({ ...l, sources: l.sources ?? [] })));
       setQuestions(existing.quizQuestions);
     }
   }, [existing]);
@@ -160,6 +168,36 @@ export default function AdminAcademyTrackBuilder() {
       navigate("/admin/coaches-corner");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete"),
+  });
+
+  // Further reading for every lesson that has none, from the licensed library. Retrieval
+  // only, so it is cheap and attaches nothing where the library has nothing close.
+  const citeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/academy/suggest-sources", {
+        lessons: lessons.filter((l) => l.title.trim() && l.content.trim()).map((l) => ({
+          title: l.title,
+          content: l.content,
+          sources: l.sources,
+        })),
+        domains: KNOWLEDGE_DOMAINS.map((d) => d.key),
+      });
+      return res.json() as Promise<{ sources: LessonSource[][] }>;
+    },
+    onSuccess: ({ sources }) => {
+      let attached = 0;
+      setLessons((prev) => {
+        let k = 0;
+        return prev.map((l) => {
+          if (!l.title.trim() || !l.content.trim()) return l;
+          const next = sources[k++] ?? l.sources;
+          if (next.length > l.sources.length) attached += 1;
+          return { ...l, sources: next };
+        });
+      });
+      toast.success(attached > 0 ? `Further reading added to ${attached} lesson${attached === 1 ? "" : "s"}` : "The licensed library has nothing close to these lessons");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't find citations"),
   });
 
   if (!isNew && isLoading) {
@@ -219,9 +257,36 @@ export default function AdminAcademyTrackBuilder() {
         title: l.title,
         content: l.content,
         estMinutes: l.estMinutes,
+        sources: [],
       })),
     ]);
     if (note) toast.info(note, { duration: 10000 });
+  }
+
+  // Same shape as the photo draft, plus the quiz and each lesson's further reading.
+  function handleLibraryDraft(structure: LibraryDraftStructure, note: string | null) {
+    setTitle((prev) => prev || structure.title);
+    setDescription((prev) => prev || structure.description);
+    setKeyPrinciplesForAi((prev) => prev || structure.keyPrinciplesForAi);
+    setLessons((prev) => [
+      ...prev,
+      ...structure.lessons.map((l, i) => ({
+        lessonNumber: prev.length + i + 1,
+        title: l.title,
+        content: l.content,
+        estMinutes: l.estMinutes,
+        sources: l.sources ?? [],
+      })),
+    ]);
+    setQuestions((prev) => [
+      ...prev,
+      ...structure.quizQuestions.map((q, qi) => ({
+        orderIndex: prev.length + qi,
+        questionText: q.questionText,
+        answers: q.answers.map((a, ai) => ({ orderIndex: ai, ...a })),
+      })),
+    ]);
+    if (note) toast.info(note, { duration: 15000 });
   }
 
   return (
@@ -304,14 +369,26 @@ export default function AdminAcademyTrackBuilder() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-lg font-bold uppercase tracking-wide">Lessons</h2>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setLessons((prev) => [...prev, emptyLesson(prev.length + 1)])}
-            >
-              <Plus className="h-4 w-4" />
-              Add Lesson
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => citeMutation.mutate()}
+                disabled={citeMutation.isPending || lessons.every((l) => !l.content.trim())}
+                title="Attach further reading from the licensed library to lessons that have none"
+              >
+                <BookMarked className="h-4 w-4" />
+                {citeMutation.isPending ? "Finding..." : "Find citations"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setLessons((prev) => [...prev, emptyLesson(prev.length + 1)])}
+              >
+                <Plus className="h-4 w-4" />
+                Add Lesson
+              </Button>
+            </div>
           </div>
           <div className="space-y-3">
             {lessons.map((lesson, i) => (
@@ -380,6 +457,32 @@ export default function AdminAcademyTrackBuilder() {
                     rows={6}
                     placeholder="Lesson content, separate paragraphs with a blank line."
                   />
+                  {lesson.sources.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold uppercase text-muted-foreground">Further reading</p>
+                      <ul className="space-y-1">
+                        {lesson.sources.map((src, si) => (
+                          <li key={si} className="flex items-center gap-2 text-xs">
+                            <span className="min-w-0 flex-1 truncate">{formatLessonSource(src)}</span>
+                            <button
+                              type="button"
+                              aria-label="Remove this source"
+                              className="text-muted-foreground hover:text-destructive"
+                              onClick={() =>
+                                setLessons((prev) =>
+                                  prev.map((l, li) =>
+                                    li === i ? { ...l, sources: l.sources.filter((_, k) => k !== si) } : l,
+                                  ),
+                                )
+                              }
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -550,6 +653,7 @@ export default function AdminAcademyTrackBuilder() {
       </div>
 
       <div className="w-full space-y-6 lg:sticky lg:top-4 lg:w-80 lg:shrink-0 lg:self-start">
+        <AcademyTrackLibraryDraftPanel onDraft={handleLibraryDraft} />
         <AcademyTrackPhotoImportPanel onDraft={handlePhotoDraft} />
 
         <Card>

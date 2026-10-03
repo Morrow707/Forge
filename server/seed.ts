@@ -5493,7 +5493,7 @@ async function main() {
           description: track.description,
           keyPrinciplesForAi: track.keyPrinciplesForAi,
           orderIndex: seedAcademyTracks.indexOf(track),
-          lessons: track.lessons,
+          lessons: track.lessons.map((l) => ({ ...l, sources: [] })),
           quizQuestions: track.quizQuestions,
         });
       } else {
