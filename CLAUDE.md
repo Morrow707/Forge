@@ -551,6 +551,10 @@ can install. Delete entries as a `beta` ships them.
   opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
 - Build **553** (`48505970`, #167 + #168): the 720p upload copy encoded during the recording, the
   sensor-fitted concentric window, the jump-decision and live-fallback diagnostics.
+- **Queued, not yet in a build:** Full Personalization end to end (the Branding page at
+  `/coach/branding`, the background hue/strength and heading font, the remembered brand on the
+  login screens, the branded invite and public page, `--chart-2`). Server halves (branded
+  emails, the slug, the test-email route) ship on Render.
 - **Nothing else on `main` is waiting on an upload.**
 
 Two things worth saying out loud when someone tests this:
@@ -571,6 +575,47 @@ Two things worth saying out loud when someone tests this:
   copy never writes a record -- only signing or uploading does. The agreement text is still
   under attorney review; a change to it changes the hash on every later signature, which is
   the point of storing it.
+
+## Full Personalization: the Branding page, and what it reaches
+
+Added 2026-10-03. Scott: "if cal berkley used us, can they change everything to blue and gold?
+every single thing", with Powered by Forge watermarked everywhere, and "make sure there is a
+place to actually edit it all in the coaches/admins profiles ... in order of how the app
+appears, login page first, landing page, emails, so on and so forth." One add-on, Full
+Personalization at $24.99 (included for rosters over 20); the old Custom Colours and Team
+Identity add-ons are folded into it.
+
+- **One page edits all of it:** `/coach/branding` (`client/src/pages/coach/branding.tsx`), six
+  sections in the order the app appears -- login, home, emails, athlete screens, public page,
+  everywhere -- each previewing the REAL component in the draft brand. The shell's Branding menu
+  item goes there; the org `TeamBrandingDialog` is gone from the shell and the team-scope one
+  stays on the roster. Pull-colours-from-a-logo (`client/src/lib/image-colors.ts`) and a saved
+  palette answer "some schools have weird colours": any hex was already accepted.
+- **The look is more than two colours.** `users.brandBackgroundHue` / `brandBackgroundStrength`
+  (the neutral ladder in `index.css` is `calc(N% * var(--neutral-sat))` under `--neutral-hue`),
+  `brandHeadingFont` (`shared/branding-options.ts`, loaded by `ensureBrandFontLoaded`),
+  `brandSlug` (the program's address: `/team/<slug>` and `/login?team=<slug>`, one per program,
+  409 on a clash) and `brandSenderName`. `computeBrandingStyle` is the ONE function that turns
+  a brand into CSS variables; every branded screen calls it, including the public page.
+- **The screens before sign-in wear the brand the visitor last saw.** `remembered-brand.ts`
+  keeps the last effective brand in localStorage and reads `?team=` on the login link, so an
+  athlete's login screen is their program's, not Forge's. `BrandedMark` draws the logo and
+  name there, with Powered by Forge under it.
+- **Emails wear the program too, and never drop the word Forge.** `sendEmail({ brandForUserId })`
+  rewrites the shared header after the fact (`server/email-branding.ts`): band colour, logo,
+  team name, "Powered by Forge" in the band, buttons recoloured, "Sent by <program> via Forge",
+  and a From line of "<sender> via Forge" on the verified address. Every builder keeps its
+  orange header as written -- the rewrite is the one place -- and HTML without that header is
+  left alone rather than half-branded. `POST /api/coach/branding/test-email` sends the welcome
+  email to the coach's own inbox. The lookup is one more await before a fire-and-forget send, so
+  a test clearing `testOutbox` after a sign-in filters on recipient or subject, never count.
+- **Charts:** the second series is `--chart-2`, the program's secondary when set, the old blue
+  otherwise. Canvas colours (`video-overlay.ts`, `share-card.ts`, the watermark) stay Forge's:
+  the watermark IS the Powered by Forge mark and the overlay is diagnostic.
+- **Not changeable:** the app's name and icon on the phone (Apple's build, not a setting), and
+  the Forge mark that says Powered by Forge.
+- `server/branding-page.itest.ts` proves the slug rule, the athlete's effective look, the test
+  send and a branded password reset beside an unbranded Free Agent's.
 
 ## The launch email list
 
