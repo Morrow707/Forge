@@ -44,6 +44,16 @@ with `drizzle-kit --version` and a full `npm run build`.
 
 Drop the override once `drizzle-kit` stops depending on `@esbuild-kit/*`.
 
+## Audit allowlist: `braces` GHSA-vfj7-8cjw-p6xm
+
+Not an override, because there is nothing to override to: `braces@3.0.3` is the newest release
+and the advisory (stack exhaustion on a deeply nested brace pattern, published 2026-10-03) has
+no fixed version. It reaches Forge only through `tailwindcss@3` (`chokidar`, `micromatch`,
+`fast-glob`), which runs at build time over Forge's own content globs; no pattern from outside
+the repo ever reaches it. Listed in `scripts/npm-audit-allowlist.json` with an expiry so it is
+re-checked rather than forgotten: an expired entry fails CI. Remove it when `braces` ships a
+fix or Tailwind 4 drops the dependency.
+
 ## Why `@capacitor/assets` is not a dependency
 
 It was removed rather than patched. It is a one-off tool for generating app

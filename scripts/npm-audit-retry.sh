@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# npm audit, retried only when npm's audit SERVER fails to answer.
+# npm audit (through scripts/npm-audit-check.mjs, which applies the allowlist), retried only
+# when npm's audit SERVER fails to answer.
 #
 # A real advisory exits 1 with the advisory table and is reported on the
 # first attempt -- this never retries that. What it retries is the registry
@@ -10,7 +11,7 @@
 set -u
 attempts=4
 for i in $(seq 1 "$attempts"); do
-  out=$(npm audit "$@" 2>&1)
+  out=$(node scripts/npm-audit-check.mjs "$@" 2>&1)
   status=$?
   printf '%s\n' "$out"
   if [ "$status" -eq 0 ]; then exit 0; fi
