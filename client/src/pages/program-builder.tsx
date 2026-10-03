@@ -1092,7 +1092,14 @@ function DayCard({
               >
                 <div className="space-y-1">
                   {day.exercises.map((ex, i) => (
-                    <div key={ex.key}>
+                    /* THE GAP ABOVE THE LINK CHIP AND THE GAP BELOW IT ARE THE SAME ONE.
+                       The card, its Link chip and the group's Rest chips are all children of
+                       this wrapper, and only the WRAPPERS were spaced (space-y-1 on the list).
+                       So the chip got nothing above it and the full gap below, which is why it
+                       read as stuck to the card above rather than sitting between two cards.
+                       Spacing the wrapper's own children with the same step makes every gap in
+                       the stack identical, and it fixes the Rest chips at the same time. */
+                    <div key={ex.key} className="space-y-1">
                       <SortableExerciseRow
                         exercise={ex}
                         label={exerciseLabels[ex.key]}
@@ -1127,7 +1134,7 @@ function DayCard({
                         />
                       )}
                       {isEndOfLinkedGroup(day.exercises, i) && (
-                        <div className="py-1 pl-3">
+                        <div className="pl-3">
                           <RadioChipGroup
                             label="Rest"
                             options={["Between each", "After the group"]}
@@ -1174,8 +1181,8 @@ function SupersetConnector({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 py-1.5 pl-3">
-      <div className={cn("h-4 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
+    <div className="flex items-center gap-1.5 pl-3">
+      <div className={cn("h-2.5 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
       <button
         type="button"
         onClick={onToggle}
