@@ -166,6 +166,11 @@ const RESOLVED_ANOTHER_WAY = new Map<string, string>([
       "tenancy one.",
   ],
   [
+    "GET /api/coach/academy/tracks/:id/certificate::getAcademyTrackFull",
+    "Same table, same reason: the track is platform-wide. Everything personal on the " +
+      "certificate (completions, the best attempt, the name) is read by user.id.",
+  ],
+  [
     "GET /api/athlete/programs/:id::getProgramFull",
     "Fetch-then-check: the row is loaded unscoped, then the handler 404s unless " +
       "ownerIds.includes(program.coachId). Safe only because nothing is written to the " +

@@ -556,7 +556,11 @@ can install. Delete entries as a `beta` ships them.
   opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
 - Build **553** (`48505970`, #167 + #168): the 720p upload copy encoded during the recording, the
   sensor-fitted concentric window, the jump-decision and live-fallback diagnostics.
-- **Nothing on `main` is waiting on an upload.**
+- **Queued, not yet in a build:** Coaches Corner (Ask the library, scored quizzes and the
+  certificate page, Further reading under lessons, the admin builder's library draft and Find
+  citations, the Knowledge Library licence switch). Server halves (routes, the six new tracks)
+  ship on Render.
+- **Nothing else on `main` is waiting on an upload.**
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
@@ -576,6 +580,41 @@ Two things worth saying out loud when someone tests this:
   copy never writes a record -- only signing or uploading does. The agreement text is still
   under attorney review; a change to it changes the hash on every later signature, which is
   the point of storing it.
+
+## Coaches Corner: worth the $19.99, and what counsel said about the textbook
+
+Added 2026-10-03. Scott: "we have the cscs book uploaded now ... can we add verbiage to those
+classes? quizzes? build more classes? make it worth its value" and then "we bought the cscs
+book, but can we profit from it?" Counsel answered the same day (docs/legal-open-questions.md,
+questions 12 and 13), and the answers shape everything below.
+
+- **An outside textbook never feeds paid content.** Copyright turns on market substitution and
+  the publisher's EULA forbids ingestion; without an express licence, no retrieval over the book
+  reaches a subscriber. `knowledge_sources.derivedContentLicensed` is the gate: false by default,
+  set by an admin only with the licence written into `licenceNote`, and
+  `searchKnowledgePassages({ licensedOnly: true })` is what the Coaches Corner draft and the
+  citation pass read. The book still feeds the AI assistants through the unflagged path; that
+  exposure is OPEN in question 12 and is Scott's call (remove the source, narrow every retrieval
+  to licensed sources, or get a licence).
+- **"Ask the library"** (`askCoachesCornerLibrary`, `POST /api/coach/academy/ask`) answers from
+  Forge's own tracks and principles only, cites the lessons it used as chips that open them, and
+  says when the library does not cover a question. Stateless.
+- **The admin builder drafts from licensed sources** (`generateAcademyTrackDraftFromLibrary`):
+  lessons, a ten-question quiz and the AI principles in Forge's own words, page citations under
+  each lesson, and `server/academy-draft-guard.ts` refusing any lesson that repeats more than
+  twelve consecutive words of a passage. "Find citations" attaches further reading by retrieval
+  alone. `academy_lessons.sources` carries citations as page pointers, never text.
+- **Quizzes are scored on the server** (`academy_quiz_attempts`, 80% in `shared/academy-quiz.ts`,
+  best attempt counts); a track is complete when every lesson is read and the quiz passed, and
+  only then does `GET /api/coach/academy/tracks/:id/certificate` issue a printable certificate
+  that names Forge and no certifying body.
+- **Thirteen tracks.** The original seven plus six written 2026-10-03 in
+  `server/seed-data/coaches-corner/` (energy systems, speed and agility, plyometrics, warm-up and
+  recovery, testing, technique and safety), each four lessons and eight questions, added by title
+  on deploy. `tracks.test.ts` checks shape, the marks, and that no two lessons share a long run.
+- **No certification mark on any surface.** "CSCS-aligned" is gone from the upsell card and
+  `client/src/lib/no-certification-marks.test.ts` refuses CSCS and NSCA in client pages and
+  components. A coach's own credential in their bio is theirs to state.
 
 ## Full Personalization: the Branding page, and what it reaches
 

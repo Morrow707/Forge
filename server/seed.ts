@@ -19,6 +19,7 @@ import {
 import { eq, isNull, and, asc } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
+import { COACHES_CORNER_TRACKS_2026_10 } from "./seed-data/coaches-corner";
 // BIOMETRIC_WAIVER_DRAFT is deliberately not imported: the seed never writes it. A fresh
 // install gets the real document straight from nextBiometricRelease(null), and an install still
 // carrying the draft is recognised by BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX, which is its own
@@ -5484,6 +5485,10 @@ async function main() {
         ],
       },
     ];
+
+    // The six tracks added 2026-10-03 live one per file under seed-data/coaches-corner and
+    // follow the original seven in the catalog. Same add-by-title rule.
+    seedAcademyTracks.push(...COACHES_CORNER_TRACKS_2026_10);
 
     for (const track of seedAcademyTracks) {
       const existingId = existingTrackIdByTitle.get(track.title);
