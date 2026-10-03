@@ -5,6 +5,7 @@ import {
   FREE_AGENT_ADD_ON_ORDER,
   FREE_AGENT_TIER_ORDER,
   FREE_AGENT_TIERS,
+  appleProductIdForCoachAddOn,
   appleProductIdForFreeAgentAddOn,
   appleProductIdForFreeAgentTier,
   type FreeAgentAddOnId,
@@ -113,10 +114,32 @@ export async function fetchFreeAgentAddOnProducts(): Promise<FreeAgentAddOnProdu
 // AppleIapPlugin.swift's own comment on why finishTransaction is never
 // called eagerly.
 async function verifyAndFinish(transaction: AppleIapTransaction): Promise<void> {
-  await apiRequest("POST", "/api/athlete/apple-iap/verify", {
+  // The account-scoped route: the server reads the role and applies the receipt to the right
+  // kind of purchase (a Free Agent's tier or add-on, a coach's Coaches Corner).
+  await apiRequest("POST", "/api/account/apple-iap/verify", {
     signedTransactionInfo: transaction.signedTransactionInfo,
   });
   await AppleIap.finishTransaction({ transactionId: transaction.transactionId });
+}
+
+/** StoreKit's live price for a coach add-on (Coaches Corner), or null until App Store Connect
+ * carries a priced Product for its id. A card with no price never offers a purchase button. */
+export async function fetchCoachAddOnPrice(addOn: string): Promise<string | null> {
+  const { products } = await AppleIap.getProducts();
+  return products.find((p) => p.id === appleProductIdForCoachAddOn(addOn))?.displayPrice ?? null;
+}
+
+/** A coach buying Coaches Corner through StoreKit. Same verify-then-finish contract and the
+ * same two typed rejections as purchaseFreeAgentTier. */
+export async function purchaseCoachAddOn(addOn: string): Promise<void> {
+  try {
+    const transaction = await AppleIap.purchase({ productId: appleProductIdForCoachAddOn(addOn) });
+    await verifyAndFinish(transaction);
+  } catch (err: any) {
+    if (err?.message === "cancelled") throw new ApplePurchaseCancelledError();
+    if (err?.message === "pending") throw new ApplePurchasePendingError();
+    throw err;
+  }
 }
 
 export class ApplePurchaseCancelledError extends Error {}

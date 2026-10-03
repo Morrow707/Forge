@@ -5,7 +5,7 @@ import {
   COACH_COPPA_ATTESTATION_NOT_TAKEN,
   needsCoppaAttestation,
 } from "@shared/coach-attestation";
-import { bandForAthleteCount } from "@shared/billing-tiers";
+import { bandForAthleteCount, COACH_PURCHASABLE_ADD_ON_ORDER, type AddOnId } from "@shared/billing-tiers";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import {
   users,
@@ -297,6 +297,7 @@ import {
   FREE_AGENT_TIERS,
   FREE_AGENT_ADD_ON_ORDER,
   appleProductIdForFreeAgentAddOn,
+  appleProductIdForCoachAddOn,
   type FreeAgentAddOnId,
 } from "@shared/free-agent-tiers";
 
@@ -310,6 +311,12 @@ import {
  * athlete would have been granted nothing. */
 const APPLE_PRODUCT_ID_TO_ADD_ON: Record<string, FreeAgentAddOnId> = Object.fromEntries(
   FREE_AGENT_ADD_ON_ORDER.map((addOn) => [appleProductIdForFreeAgentAddOn(addOn), addOn]),
+);
+// The coach add-ons a coach can buy in the app (Coaches Corner), derived from the same
+// purchasable list the Stripe checkout and the entitlements route read, so a product cannot be
+// sold at Apple that the server would then verify as "Unrecognized product".
+const APPLE_PRODUCT_ID_TO_COACH_ADD_ON: Record<string, AddOnId> = Object.fromEntries(
+  COACH_PURCHASABLE_ADD_ON_ORDER.map((addOn) => [appleProductIdForCoachAddOn(addOn), addOn]),
 );
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { CAMERA_CAPTURE_EVIDENCE_COLUMNS, CAMERA_EVIDENCE_NEEDS_A_VALUE } from "@shared/schema";
@@ -4821,7 +4828,23 @@ export const storage = {
   async applyAppleIapVerification(
     userId: number,
     verified: VerifiedAppleTransaction,
+    // WHO IS VERIFYING decides which products count. A coach's receipt for Coaches Corner must
+    // never land on an athlete's row and an athlete's tier must never land on a coach's; the
+    // route that knows the role says so, and a product outside the scope is "Unrecognized".
+    scope: "free_agent" | "coach" = "free_agent",
   ): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (scope === "coach") {
+      const coachAddOn = APPLE_PRODUCT_ID_TO_COACH_ADD_ON[verified.productId];
+      if (!coachAddOn) return { ok: false, error: "Unrecognized product." };
+      await this.addCoachBillingAddOn(userId, coachAddOn);
+      await this.logBillingEvent(userId, "apple_iap.verified", {
+        originalTransactionId: verified.originalTransactionId,
+        productId: verified.productId,
+        coachAddOn,
+        environment: verified.environment,
+      });
+      return { ok: true };
+    }
     // An add-on first, because it is a different KIND of purchase: it appends to
     // users.freeAgentAddOns and leaves the subscription row's tier alone.
     const addOnId = APPLE_PRODUCT_ID_TO_ADD_ON[verified.productId];

@@ -939,6 +939,13 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   `applyAppleIapVerification` recognises add-on products (without that an iOS purchase would
   verify as "unrecognized product": money taken, nothing granted). Add-on products must NOT go
   in the tier subscription group at App Store Connect: add-ons combine, tiers are exclusive.
+- **Coaches Corner is sold in the app too** (2026-10-03, Scott: "we need to add coaches corner to
+  apple in store purchase"): `appleProductIdForCoachAddOn("coaches_corner")` is
+  `...addon.coaches_corner_v1`, in its own "Coach Add-ons" subscription group, created in App
+  Store Connect that day and submitted with 1.1. `POST /api/account/apple-iap/verify` is the one
+  verify route for any signed-in buyer; it scopes `applyAppleIapVerification` by role so a
+  coach's receipt grants `billingAddOns` and an athlete's grants a tier, never the other way.
+  The review notes say a coach can buy exactly this one thing.
 - **Prices confirmed 2026-10-03** (Scott: "keep them"): Coaches Corner $19.99/mo, sport coaches
   $7.99/mo each, in the shared constants. The video workbench is NOT an add-on any more (same
   day: "there are 3 tiers, built on purpose, and anyone being coached gets it already"); it

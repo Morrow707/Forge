@@ -1,5 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ApplePurchaseCancelledError,
+  ApplePurchasePendingError,
+  fetchCoachAddOnPrice,
+  isAppleIapSupported,
+  purchaseCoachAddOn,
+  restoreFreeAgentPurchases,
+} from "@/lib/apple-iap";
 import { Capacitor } from "@capacitor/core";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -107,6 +115,58 @@ export default function CoachBilling() {
     queryFn: () => getJson("/api/coach/entitlements"),
   });
   const [buyingAddOn, setBuyingAddOn] = useState<string | null>(null);
+  // ON iOS THE ADD-ON IS SOLD THROUGH STOREKIT, like the Free Agent tiers: Apple requires a
+  // digital subscription bought inside the app to go through in-app purchase, and the Stripe
+  // checkout above is refused from a native platform. The button appears only once App Store
+  // Connect answers with a price for the product (2026-10-03: Coaches Corner).
+  const appleSupported = isAppleIapSupported();
+  const [applePrices, setApplePrices] = useState<Record<string, string | null>>({});
+  const [restoring, setRestoring] = useState(false);
+  useEffect(() => {
+    if (!appleSupported || !entitlements) return;
+    let cancelled = false;
+    (async () => {
+      const next: Record<string, string | null> = {};
+      for (const addOn of entitlements.purchasableAddOns) {
+        next[addOn.id] = await fetchCoachAddOnPrice(addOn.id).catch(() => null);
+      }
+      if (!cancelled) setApplePrices(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [appleSupported, entitlements]);
+
+  async function buyAddOnWithApple(addOnId: string) {
+    setBuyingAddOn(addOnId);
+    try {
+      await purchaseCoachAddOn(addOnId);
+      toast.success("Purchased. Thank you.");
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/entitlements"] });
+    } catch (err) {
+      if (err instanceof ApplePurchaseCancelledError) return;
+      if (err instanceof ApplePurchasePendingError) {
+        toast.info("Waiting on approval from the App Store. It unlocks on its own once approved.");
+        return;
+      }
+      toast.error(err instanceof Error ? err.message : "The purchase didn't go through, try again");
+    } finally {
+      setBuyingAddOn(null);
+    }
+  }
+
+  async function restoreApplePurchases() {
+    setRestoring(true);
+    try {
+      await restoreFreeAgentPurchases();
+      toast.success("Purchases restored");
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/entitlements"] });
+    } catch {
+      toast.error("Couldn't restore purchases, try again");
+    } finally {
+      setRestoring(false);
+    }
+  }
 
   async function buyAddOn(addOnId: string) {
     setBuyingAddOn(addOnId);
@@ -308,9 +368,32 @@ export default function CoachBilling() {
                     {buyingAddOn === addOn.id ? "Opening checkout..." : `Get ${addOn.label}`}
                   </Button>
                 )}
+                {!unlocked && appleSupported && applePrices[addOn.id] && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-fit"
+                    disabled={buyingAddOn !== null}
+                    onClick={() => void buyAddOnWithApple(addOn.id)}
+                  >
+                    {buyingAddOn === addOn.id ? "Purchasing..." : `Get ${addOn.label} (${applePrices[addOn.id]}/mo)`}
+                  </Button>
+                )}
               </div>
             );
           })}
+          {appleSupported && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-fit text-muted-foreground"
+              disabled={restoring}
+              onClick={() => void restoreApplePurchases()}
+            >
+              {restoring ? "Restoring..." : "Restore Purchases"}
+            </Button>
+          )}
           {!entitlements && <p className="text-sm text-muted-foreground">Loading…</p>}
         </CardContent>
       </Card>

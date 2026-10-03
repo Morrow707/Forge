@@ -216,10 +216,11 @@ build can show.
 > produces is shown with an accuracy notice; this is stated on the pricing surfaces and in the
 > listing because the measurements are still being calibrated against a bar sensor.
 >
-> IN-APP PURCHASE: the Free Agent tiers and add-ons are StoreKit auto-renewable subscriptions
-> (Restore Purchases is on the Upgrade screen). Coaches and their rostered athletes do not buy
-> anything in the app; a school is billed outside it for its roster, and nothing in the app
-> links to that.
+> IN-APP PURCHASE: the Free Agent tiers are StoreKit auto-renewable subscriptions (Restore
+> Purchases is on the Upgrade screen). A coach can buy one add-on, Coaches Corner, as a StoreKit
+> subscription from the coach Billing screen (Restore Purchases is there too). Rostered athletes
+> buy nothing; a school is billed outside the app for its roster, and nothing in the app links
+> to that.
 >
 > ACCOUNTS: every athlete under 18 is created inert and does nothing until a parent or guardian
 > claims a linked account from an email. The three demo accounts are adults. Account deletion is

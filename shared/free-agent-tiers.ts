@@ -313,6 +313,14 @@ export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitti
  * The "_v1" suffix has no history behind it, unlike the tiers' "_v2" -- none of
  * these ids has ever been created in App Store Connect. It is there so the first
  * mistake with one costs a suffix bump rather than a dead id. */
+/** The App Store Connect Product id for a COACH add-on (Coaches Corner today), sold to a coach
+ * inside the app. Same ".addon." namespace and "_v1" suffix as the free-agent add-ons, and the
+ * same rule: its own subscription group ("Coach Add-ons"), never the tier group. Created in App
+ * Store Connect on 2026-10-03 as com.foreperformancesystems.forge.addon.coaches_corner_v1. */
+export function appleProductIdForCoachAddOn(addOn: string): string {
+  return `${APPLE_BUNDLE_ID}.addon.${addOn}_v1`;
+}
+
 export function appleProductIdForFreeAgentAddOn(addOn: FreeAgentAddOnId): string {
   return `${APPLE_BUNDLE_ID}.addon.${addOn}_v1`;
 }

@@ -10135,6 +10135,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // ONE VERIFY ROUTE FOR WHOEVER IS SIGNED IN, scoped by role. The athlete route above stays for
+  // the Upgrade screen; this one is what the background transaction watcher and the coach's
+  // Coaches Corner purchase call, because a coach's StoreKit transaction has to be verified by a
+  // coach-scoped apply (see applyAppleIapVerification's scope) and the watcher runs before
+  // anybody has said which screen they are on. Added 2026-10-03 when Coaches Corner went on
+  // sale in the app (Scott: "we need to add coaches corner to apple in store purchase").
+  app.post("/api/account/apple-iap/verify", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const schema = z.object({ signedTransactionInfo: z.string().min(1) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    if (user.role === "athlete" && (await storage.getCoachesForAthlete(user.id)).length > 0) {
+      return res.status(403).json({ message: "A coached athlete's plan is their program's." });
+    }
+    if (user.role !== "athlete" && user.role !== "coach") {
+      return res.status(403).json({ message: "Nothing is sold to this account in the app." });
+    }
+    const verified = await verifyAppleTransaction(parsed.data.signedTransactionInfo);
+    if (!verified) return res.status(502).json({ message: "Apple In-App Purchase isn't set up yet." });
+    const result = await storage.applyAppleIapVerification(
+      user.id,
+      verified,
+      user.role === "coach" ? "coach" : "free_agent",
+    );
+    if (!result.ok) return res.status(422).json({ message: result.error });
+    res.status(204).end();
+  });
+
   // The Google Play twin of apple-iap/verify: the phone hands over the purchase token, the
   // server asks Google what it is worth (server/google-play-billing.ts), and only a confirmed
   // active subscription for a product this app sells is recorded. 502 when the service account
