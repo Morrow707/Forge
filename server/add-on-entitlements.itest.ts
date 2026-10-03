@@ -72,8 +72,25 @@ describe("a Free Agent's add-ons", () => {
    * PURCHASE all open every other entitlement in this system, and it has to beat all three. */
   const offered = FREE_AGENT_ADD_ON_ORDER.filter((id) => !WITHDRAWN_ADD_ONS.includes(id));
 
-  it("still gives a beta account every add-on that is actually offered", () => {
-    expect(offered.length).toBeGreaterThan(0);
+  /* NOTHING IS OFFERED ON THE FREE AGENT SIDE TODAY, and that is the designed state rather than
+   * a gap. The three sport coaches are withdrawn (above), and the Video Analysis add-on is gone
+   * as of 2026-10-03 -- Scott: "there are 3 tiers, built on purpose, and anyone being coached
+   * gets it already", so the video workbench rides with the camera entitlement instead of being
+   * sold separately. That emptied `offered`, and this test used to assert the list was non-empty,
+   * which is a rule nobody ever made: it was a guard against the loop below going vacuous, and it
+   * failed the moment the last Free Agent add-on stopped being sold.
+   *
+   * So it states the emptiness explicitly instead. The loop below stays and is vacuous today --
+   * harmlessly, because this test is what says why, so nothing is silently passing. The live
+   * version of that contract ("beta opens what is offered, and does not claim it was bought") is
+   * pinned on the coach side, where Coaches Corner really is sold. */
+  it("offers no Free Agent add-on today, with the machinery intact behind it", () => {
+    expect(offered).toEqual([]);
+    // The ids still exist and are still withdrawn, which is the difference between an add-on
+    // being unsellable and the add-on framework being gone. Same reasoning as
+    // WITHDRAWN_FREE_AGENT_TIERS being kept while empty.
+    expect(FREE_AGENT_ADD_ON_ORDER.length).toBeGreaterThan(0);
+    expect(WITHDRAWN_ADD_ONS.length).toBe(FREE_AGENT_ADD_ON_ORDER.length);
   });
 
   it("gives a beta account the offered add-ons, without anybody having bought one", async () => {
