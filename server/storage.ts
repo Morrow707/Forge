@@ -102,6 +102,8 @@ import {
   academyLessons,
   academyLessonCompletions,
   academyQuizAttempts,
+  academyPaths,
+  academyPathTracks,
   coachDiscussionThreads,
   coachDiscussionReplies,
   coachDiscussionReports,
@@ -286,6 +288,7 @@ import type {
   ClassAiDraft,
   ClassCoachSettingsInput,
   AcademyTrackStructureInput,
+  AcademyPathInput,
   AcademyLessonSource,
   AcademyQuizQuestionInput,
   AdminAthleteQueryFilters,
@@ -13965,6 +13968,74 @@ Hard rules, no exceptions:
       .filter((l) => cited.has(l.index))
       .map(({ trackId, trackTitle, lessonId, lessonNumber, lessonTitle }) => ({ trackId, trackTitle, lessonId, lessonNumber, lessonTitle }));
     return { answer: text.trim(), citations };
+  },
+
+  // ---------- Coaches Corner learning paths (2026-10-03) ----------
+
+  async listAcademyPaths() {
+    const rows = await db.query.academyPaths.findMany({
+      orderBy: asc(academyPaths.orderIndex),
+      with: {
+        tracks: {
+          orderBy: asc(academyPathTracks.orderIndex),
+          with: { track: { columns: { id: true, title: true, description: true } } },
+        },
+      },
+    });
+    return rows.map((p) => ({
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      audience: p.audience,
+      orderIndex: p.orderIndex,
+      tracks: p.tracks.map((pt) => ({ id: pt.track.id, title: pt.track.title, description: pt.track.description })),
+    }));
+  },
+
+  async getAcademyPath(id: number) {
+    const all = await this.listAcademyPaths();
+    return all.find((p) => p.id === id) ?? null;
+  },
+
+  async createAcademyPath(input: AcademyPathInput) {
+    return db.transaction(async (tx) => {
+      const [path] = await tx
+        .insert(academyPaths)
+        .values({ title: input.title, description: input.description, audience: input.audience, orderIndex: input.orderIndex })
+        .returning();
+      await tx.insert(academyPathTracks).values(input.trackIds.map((trackId, i) => ({ pathId: path.id, trackId, orderIndex: i })));
+      return path.id;
+    });
+  },
+
+  async updateAcademyPath(id: number, input: AcademyPathInput) {
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(academyPaths)
+        .set({ title: input.title, description: input.description, audience: input.audience, orderIndex: input.orderIndex })
+        .where(eq(academyPaths.id, id))
+        .returning({ id: academyPaths.id });
+      if (!row) return false;
+      await tx.delete(academyPathTracks).where(eq(academyPathTracks.pathId, id));
+      await tx.insert(academyPathTracks).values(input.trackIds.map((trackId, i) => ({ pathId: id, trackId, orderIndex: i })));
+      return true;
+    });
+  },
+
+  async deleteAcademyPath(id: number) {
+    const [row] = await db.delete(academyPaths).where(eq(academyPaths.id, id)).returning({ id: academyPaths.id });
+    return Boolean(row);
+  },
+
+  /** Seed helper: a path by title, created once with the tracks named; never overwritten. */
+  async ensureAcademyPath(input: { title: string; description: string; audience: string; orderIndex: number; trackTitles: string[] }) {
+    const existing = await db.query.academyPaths.findFirst({ where: eq(academyPaths.title, input.title) });
+    if (existing) return existing.id;
+    const tracks = await db.query.academyTracks.findMany({ columns: { id: true, title: true } });
+    const byTitle = new Map(tracks.map((t) => [t.title, t.id]));
+    const trackIds = input.trackTitles.map((t) => byTitle.get(t)).filter((id): id is number => id != null);
+    if (trackIds.length === 0) return null;
+    return this.createAcademyPath({ title: input.title, description: input.description, audience: input.audience, orderIndex: input.orderIndex, trackIds });
   },
 
   // ---------- Coaches Corner peer discussion (2026-10-03) ----------

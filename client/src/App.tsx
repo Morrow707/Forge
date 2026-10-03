@@ -83,6 +83,13 @@ const CoachClasses = lazy(withLoadTimeout(() => import("@/pages/coach/classes"))
 const CoachClassBuilder = lazy(withLoadTimeout(() => import("@/pages/coach/class-builder")));
 const CoachCoachesCorner = lazy(withLoadTimeout(() => import("@/pages/coach/coaches-corner")));
 const CoachCoachesCornerCertificate = lazy(withLoadTimeout(() => import("@/pages/coach/coaches-corner-certificate")));
+const CoachCoachesCornerPathCertificate = lazy(
+  withLoadTimeout(() =>
+    import("@/pages/coach/coaches-corner-certificate").then((m) => ({
+      default: () => <m.default kind="path" />,
+    })),
+  ),
+);
 const CoachRoster = lazy(withLoadTimeout(() => import("@/pages/coach/roster")));
 const CoachAthleteDetail = lazy(withLoadTimeout(() => import("@/pages/coach/athlete-detail")));
 const CoachMovementScreens = lazy(withLoadTimeout(() => import("@/pages/coach/movement-screens")));
@@ -478,6 +485,9 @@ function Router() {
         </Route>
         <Route path="/coach/coaches-corner/certificate/:trackId">
           <ProtectedRoute role="coach" component={CoachCoachesCornerCertificate} />
+        </Route>
+        <Route path="/coach/coaches-corner/path-certificate/:pathId">
+          <ProtectedRoute role="coach" component={CoachCoachesCornerPathCertificate} />
         </Route>
         <Route path="/coach/coaches-corner">
           <ProtectedRoute role="coach" component={CoachCoachesCorner} />

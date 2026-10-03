@@ -14,6 +14,7 @@ import { ReadFailed } from "@/components/read-failed";
 import { AcademyQuiz, type QuizAttemptSummary } from "@/components/academy-quiz";
 import { CoachesCornerAsk } from "@/components/coaches-corner-ask";
 import { CoachesCornerDiscussion } from "@/components/coaches-corner-discussion";
+import { CoachesCornerPaths } from "@/components/coaches-corner-paths";
 import { formatCents } from "@shared/billing-tiers";
 
 /** The Coaches Corner half of GET /api/coach/entitlements. `unlocked` is the same
@@ -373,6 +374,7 @@ export default function CoachesCorner() {
       {anyUnlocked && view === "discussion" && (
         <CoachesCornerDiscussion tracks={tracks.map((t) => ({ id: t.id, title: t.title }))} />
       )}
+      {view === "library" && <CoachesCornerPaths onOpenTrack={(id) => setSelectedTrackId(id)} />}
       {anyUnlocked && view === "library" && (
         <CoachesCornerAsk
           onOpenLesson={(trackId, lessonId) => {

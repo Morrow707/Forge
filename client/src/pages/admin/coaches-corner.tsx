@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
+import { AdminAcademyPathsEditor } from "@/components/admin-academy-paths-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -189,6 +190,7 @@ export default function AdminCoachesCorner() {
         edit its lessons and quiz.
       </p>
       {isError && <ReadFailed what="the coach-education tracks" onRetry={() => void refetch()} />}
+      <AdminAcademyPathsEditor tracks={tracks.map((t) => ({ id: t.id, title: t.title }))} />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tracks.map((track) => (
           // The whole card opens the track, not just the words in its title. The card already

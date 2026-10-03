@@ -233,6 +233,7 @@ import {
   enrollInClassSchema,
   classCoachSettingsInputSchema,
   academyTrackStructureSchema,
+  academyPathInputSchema,
   createDiscussionThreadSchema,
   createDiscussionReplySchema,
   reportDiscussionSchema,
@@ -2419,33 +2420,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // description, lesson count) so the locked state still reads as a real
   // teaser rather than an empty page; lesson content is stripped out until
   // hasCoachesCornerAccess is true for this coach.
+  // A coach's standing on every track, computed once for the catalog, the paths and the
+  // certificates: "completed" is every lesson read and the quiz passed (or no quiz).
+  async function academyProgressForCoach(coachId: number) {
+    const [tracks, completions, bestAttempts] = await Promise.all([
+      storage.getAllAcademyTracks(),
+      storage.getAcademyCompletionsForCoach(coachId),
+      storage.getBestAcademyQuizAttemptsForCoach(coachId),
+    ]);
+    const byTrack = new Map<number, { lessonsRead: number; lessonCount: number; quizQuestionCount: number; bestAttempt: any; completed: boolean }>();
+    for (const t of tracks) {
+      const read = t.lessons.filter((l) => completions.has(l.id)).length;
+      const best = bestAttempts.get(t.id) ?? null;
+      const quizPassed = t.quizQuestions.length === 0 ? true : Boolean(best?.passed);
+      byTrack.set(t.id, {
+        lessonsRead: read,
+        lessonCount: t.lessons.length,
+        quizQuestionCount: t.quizQuestions.length,
+        bestAttempt: best,
+        completed: t.lessons.length > 0 && read === t.lessons.length && quizPassed,
+      });
+    }
+    return { tracks, byTrack };
+  }
+
   app.get("/api/coach/academy/tracks", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const unlocked = await hasCoachesCornerAccess(user);
-    const tracks = await storage.getAllAcademyTracks();
-    // Progress rides on the catalog so a card can say "3/4 read" and "Completed" without a
-    // read per track. Completed means every lesson read and the quiz passed (or no quiz).
-    const [completions, bestAttempts] = unlocked
-      ? await Promise.all([storage.getAcademyCompletionsForCoach(user.id), storage.getBestAcademyQuizAttemptsForCoach(user.id)])
-      : [new Set<number>(), new Map()];
+    const { tracks, byTrack } = unlocked
+      ? await academyProgressForCoach(user.id)
+      : { tracks: await storage.getAllAcademyTracks(), byTrack: new Map() };
     res.json(
       tracks.map((t) => {
-        const read = t.lessons.filter((l) => completions.has(l.id)).length;
-        const best = bestAttempts.get(t.id) ?? null;
-        const quizPassed = t.quizQuestions.length === 0 ? true : Boolean(best?.passed);
+        const p = byTrack.get(t.id);
         return {
           id: t.id,
           title: t.title,
           description: t.description,
           lessonCount: t.lessons.length,
           unlocked,
-          lessonsRead: read,
+          lessonsRead: p?.lessonsRead ?? 0,
           quizQuestionCount: t.quizQuestions.length,
-          bestAttempt: best,
-          completed: unlocked && t.lessons.length > 0 && read === t.lessons.length && quizPassed,
+          bestAttempt: p?.bestAttempt ?? null,
+          completed: unlocked && Boolean(p?.completed),
         };
       }),
     );
+  });
+
+  // Learning paths with the coach's progress through each. Visible locked too, as a teaser.
+  app.get("/api/coach/academy/paths", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const unlocked = await hasCoachesCornerAccess(user);
+    const paths = await storage.listAcademyPaths();
+    const { byTrack } = unlocked ? await academyProgressForCoach(user.id) : { byTrack: new Map() };
+    res.json(
+      paths.map((p) => {
+        const tracks = p.tracks.map((t) => ({ ...t, completed: Boolean(byTrack.get(t.id)?.completed) }));
+        const done = tracks.filter((t) => t.completed).length;
+        return { ...p, unlocked, tracks, tracksCompleted: done, completed: unlocked && tracks.length > 0 && done === tracks.length };
+      }),
+    );
+  });
+
+  app.get("/api/coach/academy/paths/:id/certificate", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    if (!(await hasCoachesCornerAccess(user))) {
+      return res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
+    }
+    const path = await storage.getAcademyPath(Number(req.params.id));
+    if (!path) return res.status(404).json({ message: "Path not found" });
+    const { tracks, byTrack } = await academyProgressForCoach(user.id);
+    const inPath = tracks.filter((t) => path.tracks.some((pt) => pt.id === t.id));
+    if (inPath.length === 0 || !inPath.every((t) => byTrack.get(t.id)?.completed)) {
+      return res.status(409).json({ message: "Finish every track in the path to earn its certificate." });
+    }
+    const latest = inPath
+      .map((t) => byTrack.get(t.id)?.bestAttempt?.completedAt)
+      .filter((d): d is Date => d instanceof Date)
+      .sort((a, b) => b.getTime() - a.getTime())[0];
+    res.json({
+      trackTitle: path.title,
+      coachName: user.name,
+      lessonCount: inPath.reduce((n, t) => n + t.lessons.length, 0),
+      quiz: null,
+      trackCount: inPath.length,
+      completedAt: latest ?? new Date(),
+      estimatedMinutes: inPath.reduce((n, t) => n + t.lessons.reduce((m, l) => m + (l.estMinutes ?? 0), 0), 0),
+    });
+  });
+
+  app.get("/api/admin/academy/paths", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listAcademyPaths());
+  });
+  app.post("/api/admin/academy/paths", requireRole("admin"), async (req, res) => {
+    const parsed = academyPathInputSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const id = await storage.createAcademyPath(parsed.data);
+    res.status(201).json(await storage.getAcademyPath(id));
+  });
+  app.put("/api/admin/academy/paths/:id", requireRole("admin"), async (req, res) => {
+    const parsed = academyPathInputSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const ok = await storage.updateAcademyPath(Number(req.params.id), parsed.data);
+    if (!ok) return res.status(404).json({ message: "Path not found" });
+    res.json(await storage.getAcademyPath(Number(req.params.id)));
+  });
+  app.delete("/api/admin/academy/paths/:id", requireRole("admin"), async (req, res) => {
+    const ok = await storage.deleteAcademyPath(Number(req.params.id));
+    if (!ok) return res.status(404).json({ message: "Path not found" });
+    res.status(204).end();
   });
 
   app.get("/api/coach/academy/tracks/:id", requireRole("coach"), async (req, res) => {

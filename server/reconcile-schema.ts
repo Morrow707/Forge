@@ -1286,6 +1286,23 @@ CREATE TABLE IF NOT EXISTS "academy_quiz_attempts" (
   "completed_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "academy_quiz_attempts_coach_track_idx" ON "academy_quiz_attempts" ("coach_id", "track_id");
+-- Coaches Corner learning paths (2026-10-03).
+CREATE TABLE IF NOT EXISTS "academy_paths" (
+  "id" serial PRIMARY KEY,
+  "title" text NOT NULL,
+  "description" text NOT NULL,
+  "audience" text NOT NULL DEFAULT '',
+  "order_index" integer NOT NULL DEFAULT 0,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS "academy_path_tracks" (
+  "id" serial PRIMARY KEY,
+  "path_id" integer NOT NULL REFERENCES "academy_paths"("id") ON DELETE CASCADE,
+  "track_id" integer NOT NULL REFERENCES "academy_tracks"("id") ON DELETE CASCADE,
+  "order_index" integer NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS "academy_path_tracks_path_idx" ON "academy_path_tracks" ("path_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "academy_path_tracks_path_track_idx" ON "academy_path_tracks" ("path_id", "track_id");
 -- Coaches Corner peer discussion (2026-10-03). No athlete column anywhere here, on purpose.
 CREATE TABLE IF NOT EXISTS "coach_discussion_threads" (
   "id" serial PRIMARY KEY,

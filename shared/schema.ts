@@ -5133,6 +5133,56 @@ export const academyQuizAttempts = pgTable(
   }),
 );
 
+// ---------- Coaches Corner learning paths (2026-10-03) ----------
+// An ordered set of tracks for a kind of coach: "New to strength coaching", "Running an
+// in-season program", "Youth and middle school". A path is complete when every track in it is
+// (every lesson read, quiz passed), and completing a path earns its own certificate. Admin
+// authored; the seed carries three. Tracks can be in several paths.
+export const academyPaths = pgTable("academy_paths", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  // Who it is for, in one line, shown on the card: "Your first season with a weight room."
+  audience: text("audience").notNull().default(""),
+  orderIndex: integer("order_index").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const academyPathTracks = pgTable(
+  "academy_path_tracks",
+  {
+    id: serial("id").primaryKey(),
+    pathId: integer("path_id")
+      .notNull()
+      .references(() => academyPaths.id, { onDelete: "cascade" }),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => academyTracks.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull().default(0),
+  },
+  (table) => ({
+    pathIdx: index("academy_path_tracks_path_idx").on(table.pathId),
+    pathTrackUnique: uniqueIndex("academy_path_tracks_path_track_idx").on(table.pathId, table.trackId),
+  }),
+);
+
+export const academyPathsRelations = relations(academyPaths, ({ many }) => ({
+  tracks: many(academyPathTracks),
+}));
+export const academyPathTracksRelations = relations(academyPathTracks, ({ one }) => ({
+  path: one(academyPaths, { fields: [academyPathTracks.pathId], references: [academyPaths.id] }),
+  track: one(academyTracks, { fields: [academyPathTracks.trackId], references: [academyTracks.id] }),
+}));
+
+export const academyPathInputSchema = z.object({
+  title: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(1000),
+  audience: z.string().trim().max(160).default(""),
+  orderIndex: z.number().int().default(0),
+  trackIds: z.array(z.number().int().positive()).min(1).max(20),
+});
+export type AcademyPathInput = z.infer<typeof academyPathInputSchema>;
+
 // ---------- Coaches Corner peer discussion (2026-10-03) ----------
 // The App Store listing for the add-on says "Coach library, programs and peer discussion"; this
 // is the discussion. Coaches with the add-on talk to each other, by name (they are adults and

@@ -12,6 +12,7 @@ type Certificate = {
   coachName: string;
   lessonCount: number;
   quiz: { correct: number; total: number } | null;
+  trackCount?: number;
   completedAt: string;
   estimatedMinutes: number;
 };
@@ -21,11 +22,12 @@ type Certificate = {
  * It says what was done -- lessons, minutes, the score -- and names Forge as the issuer. It
  * never names a certification body or claims continuing-education credit: whether a director
  * accepts it is their call (docs/legal-open-questions.md, question 13). */
-export default function CoachesCornerCertificate() {
-  const { trackId } = useParams<{ trackId: string }>();
+export default function CoachesCornerCertificate({ kind = "track" }: { kind?: "track" | "path" }) {
+  const { trackId, pathId } = useParams<{ trackId?: string; pathId?: string }>();
+  const url = kind === "path" ? `/api/coach/academy/paths/${pathId}/certificate` : `/api/coach/academy/tracks/${trackId}/certificate`;
   const { data, isLoading, isError, error, refetch } = useQuery<Certificate>({
-    queryKey: [`/api/coach/academy/tracks/${trackId}/certificate`],
-    queryFn: () => getJson(`/api/coach/academy/tracks/${trackId}/certificate`),
+    queryKey: [url],
+    queryFn: () => getJson(url),
     retry: false,
   });
 
@@ -70,7 +72,9 @@ export default function CoachesCornerCertificate() {
           Certificate of completion
         </p>
         <h1 className="mt-6 font-display text-3xl font-bold uppercase tracking-wide">{data.coachName}</h1>
-        <p className="mt-3 text-sm text-muted-foreground">has completed the Coaches Corner track</p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          has completed the Coaches Corner {kind === "path" ? "learning path" : "track"}
+        </p>
         <h2 className="mt-2 font-display text-2xl font-bold">{data.trackTitle}</h2>
         <div className="mx-auto mt-8 grid max-w-sm grid-cols-3 gap-4 text-sm">
           <div>
@@ -82,8 +86,17 @@ export default function CoachesCornerCertificate() {
             <p className="text-xs text-muted-foreground">minutes of study</p>
           </div>
           <div>
-            <p className="text-2xl font-bold">{data.quiz ? `${data.quiz.correct}/${data.quiz.total}` : "—"}</p>
-            <p className="text-xs text-muted-foreground">quiz score</p>
+            {kind === "path" ? (
+              <>
+                <p className="text-2xl font-bold">{data.trackCount ?? "—"}</p>
+                <p className="text-xs text-muted-foreground">tracks, quizzes passed</p>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-bold">{data.quiz ? `${data.quiz.correct}/${data.quiz.total}` : "—"}</p>
+                <p className="text-xs text-muted-foreground">quiz score</p>
+              </>
+            )}
           </div>
         </div>
         <p className="mt-8 text-sm text-muted-foreground">

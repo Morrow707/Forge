@@ -88,6 +88,9 @@ const GLOBAL_BY_DESIGN = new Set([
   // (hasCoachesCornerAccess), not tenancy. No athlete is attached to a thread anywhere.
   "/api/coach/discussion/threads/:id",
   "/api/coach/discussion/threads/:id/report",
+  // A learning path is platform-wide like a track; the progress on the certificate is read
+  // by user.id inside academyProgressForCoach.
+  "/api/coach/academy/paths/:id/certificate",
   // Terms and privacy policy, and only the types on a public allowlist.
   "/api/legal-documents/:type",
   // The same public document as a PDF, from the same public set; nothing about it is per-user.
@@ -178,6 +181,11 @@ const RESOLVED_ANOTHER_WAY = new Map<string, string>([
   [
     "POST /api/coach/discussion/threads/:id/report::getDiscussionThread",
     "Same board; the read is only an existence check before a report is filed against it.",
+  ],
+  [
+    "GET /api/coach/academy/paths/:id/certificate::getAcademyPath",
+    "academy_paths has no owner: Forge-authored, one catalog for every coach. The coach's own " +
+      "progress is read by user.id and the certificate is refused until it is complete.",
   ],
   [
     "GET /api/coach/academy/tracks/:id/certificate::getAcademyTrackFull",
