@@ -221,6 +221,10 @@ export interface FreeAgentAddOnDef {
   description: string;
 }
 
+// PRICES CONFIRMED 2026-10-03 (Scott: "keep them"). $7.99 for each sport coach, below the
+// $9.99 AI Coach it sits on; Video Analysis $14.99, between AI Coach and AI Coach + Video.
+// These are the numbers the Stripe Prices and the App Store products are created to match.
+//
 // All three sport-specialist coaches are live -- see requireFreeAgentAddOn
 // in routes.ts (which gates /api/athlete/coach/:addOnId/chat on
 // users.freeAgentAddOns) and storage.sendSportCoachChatMessage. This still

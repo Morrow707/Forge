@@ -170,11 +170,11 @@ export interface AddOnDef {
 // getEntitlements in server/billing.ts).
 /** Coaches Corner's monthly price, as a standalone coach add-on.
  *
- * PLACEHOLDER. $19.99 is the number this product has carried since it was first
- * priced, and nobody has been charged it -- billing is closed (BILLING_LIVE is
- * off) and every checkout refuses. Scott sets the real number before billing
- * opens; until then this is what every surface quotes, derived from here rather
- * than typed anywhere. */
+ * THE REAL PRICE. Scott, 2026-10-03 ("keep them"): $19.99, the same as the top
+ * athlete tier, confirmed as the launch price. Nobody has been charged it yet --
+ * billing is closed (BILLING_LIVE is off) and every checkout refuses -- but it is
+ * no longer a placeholder: the Stripe Price and the App Store product are created
+ * to match this number, derived from here rather than typed anywhere. */
 export const COACHES_CORNER_MONTHLY_PRICE_CENTS = 1999;
 
 export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {

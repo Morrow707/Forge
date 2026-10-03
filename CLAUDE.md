@@ -939,9 +939,10 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   `applyAppleIapVerification` recognises add-on products (without that an iOS purchase would
   verify as "unrecognized product": money taken, nothing granted). Add-on products must NOT go
   in the tier subscription group at App Store Connect: add-ons combine, tiers are exclusive.
-- **Placeholder prices**: Coaches Corner $19.99/mo, sport coaches $7.99/mo each, in the shared
-  constants. Scott sets the real numbers before BILLING_LIVE. Four Stripe Prices and three
-  App Store products are the launch-day work; `missingPriceEnvVars()` names the env vars.
+- **Prices confirmed 2026-10-03** (Scott: "keep them"): Coaches Corner $19.99/mo, sport coaches
+  $7.99/mo each, Video Analysis $14.99/mo, in the shared constants. The Stripe Prices and the
+  App Store products are created to match on launch day; `missingPriceEnvVars()` names the
+  env vars.
 - **The locked state for a non-comped account says "not available yet"**, never "free in beta":
   that branch is reached only by an account that is not comped.
 
