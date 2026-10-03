@@ -390,7 +390,12 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **598** is the newest TestFlight build, cut 2026-10-03 from `5338c7aa`: every program
+- Build **600** is the newest TestFlight build, cut 2026-10-03 from `24c984a3` (599 was the
+  verify_build run): Full Personalization end to end -- the Branding page at `/coach/branding`,
+  the background hue/strength and heading font, the remembered brand on the login screens, the
+  branded invite and public page, `--chart-2`. Server halves (branded emails, the slug, the
+  test-email route) shipped on Render with the same push.
+- Build **598** was the previous build, cut 2026-10-03 from `5338c7aa`: every program
   day picks its own date with its workout on screen (the weekday picker is gone from both
   Assign Program and the builder's self-assign, and each day's date is sent explicitly rather
   than inferred), every Free Agent gets the Exercise Bank in their Library (the Skill Bank
@@ -551,11 +556,7 @@ can install. Delete entries as a `beta` ships them.
   opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
 - Build **553** (`48505970`, #167 + #168): the 720p upload copy encoded during the recording, the
   sensor-fitted concentric window, the jump-decision and live-fallback diagnostics.
-- **Queued, not yet in a build:** Full Personalization end to end (the Branding page at
-  `/coach/branding`, the background hue/strength and heading font, the remembered brand on the
-  login screens, the branded invite and public page, `--chart-2`). Server halves (branded
-  emails, the slug, the test-email route) ship on Render.
-- **Nothing else on `main` is waiting on an upload.**
+- **Nothing on `main` is waiting on an upload.**
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
