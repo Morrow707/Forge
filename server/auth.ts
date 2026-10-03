@@ -316,6 +316,7 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
     publicUser.assumptionOfRiskRequired = !(await storage.hasAcknowledgedAssumptionOfRisk(user.id));
     const gate = await storage.athleteGateStatus(user.id);
     publicUser.guardianLinkRequired = gate === "needs_guardian";
+    publicUser.guardianVerificationRequired = gate === "needs_guardian_verification";
     publicUser.dateOfBirthRequired = gate === "needs_date_of_birth";
   }
   // Not gated on role, deliberately. Guardianship is a relationship, so any

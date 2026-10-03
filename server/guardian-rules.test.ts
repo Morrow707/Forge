@@ -135,7 +135,7 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     expect(section).not.toContain("updateProfileSchema");
   });
 
-  it("leaves exactly seven guardian writes, all deliberate", () => {
+  it("leaves exactly eight guardian writes, all deliberate", () => {
     // Camera tracking off, which is prospective and is the parental control the feature exists
     // for; asking for a removal, which somebody else answers; and signing off a research-consent
     // change the ATHLETE asked for.
@@ -193,11 +193,18 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     // originate (recordBiometricRelease refuses a minor) and the server refuses an adult, so the
     // only thing this route can record is the one consent only a guardian can give.
     //
+    // The eighth starts the CARD VERIFICATION for an athlete under 13 (counsel, 2026-10-03: the
+    // emailed claim alone is not verifiable parental consent under COPPA for Forge's data). Same
+    // reasoning as the seventh: the permission the account stands on, only a linked guardian can
+    // give it, refused for anyone 13 or over, and the record itself is written by Stripe's
+    // webhook rather than by this route.
+    //
     // Anything else appearing here is a regression.
     const guardianWrites = [...routes.matchAll(/app\.(post|patch|put|delete)\(\s*\n?\s*"\/api\/guardian\/[^"]*"/g)];
     const paths = guardianWrites.map((m) => m[0].split('"')[1]);
     expect(paths.sort()).toEqual([
       "/api/guardian/athletes/:athleteId/biometric-consent",
+      "/api/guardian/athletes/:athleteId/parental-verification",
       "/api/guardian/athletes/:athleteId/removal-requests",
       "/api/guardian/athletes/:athleteId/tracking-opt-out",
       "/api/guardian/athletes/:athleteId/withdraw-consent",

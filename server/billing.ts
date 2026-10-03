@@ -337,6 +337,55 @@ async function baseSessionParams(userId: number, userEmail: string) {
  * to go through StoreKit, which apple-iap.ts already implements for exactly
  * these three tiers. This is the web equivalent, and the route that calls it
  * refuses a request coming from the native app. */
+/** THE CHARGE THAT MAKES AN UNDER-13 CONSENT VERIFIABLE. Counsel, 2026-10-03: email-plus is not
+ * enough for Forge's data; a monetary transaction on the parent's card is one of the FTC's
+ * approved methods, because a child cannot hold an adult's card and its statement for long.
+ *
+ * Fifty cents, charged to the LINKED GUARDIAN (never the athlete's account), refunded the moment
+ * the webhook records it. NOT behind chargingClosed(): this is not something for sale, it is an
+ * identity step the account stands on, and it has to work while billing is off. The record it
+ * produces is a guardian_payment_verification consent row written by the webhook, which is what
+ * athleteGateStatus reads to release the account. */
+export const GUARDIAN_VERIFICATION_CHARGE_CENTS = 50;
+
+export async function createGuardianVerificationCheckout(
+  guardianId: number,
+  guardianEmail: string,
+  athleteId: number,
+  athleteFirstName: string,
+  successUrl: string,
+  cancelUrl: string,
+): Promise<CheckoutResult> {
+  const stripe = getStripeClient();
+  if (!stripe) return { error: "Card verification isn't available yet. We'll email you when it is." };
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    ...(await baseSessionParams(guardianId, guardianEmail)),
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: GUARDIAN_VERIFICATION_CHARGE_CENTS,
+          product_data: {
+            name: `Parental consent verification for ${athleteFirstName}`,
+            description: "A one-time card check required by law for an athlete under 13. Refunded automatically.",
+          },
+        },
+      },
+    ],
+    payment_intent_data: {
+      description: `Forge parental consent verification (athlete ${athleteId}); refunded`,
+      metadata: { kind: "guardian_verification", userId: String(guardianId), athleteId: String(athleteId) },
+    },
+    metadata: { kind: "guardian_verification", userId: String(guardianId), athleteId: String(athleteId) },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+  if (!session.url) return { error: "Stripe didn't return a checkout URL." };
+  return { url: session.url };
+}
+
 export async function createFreeAgentTierCheckout(
   userId: number,
   userEmail: string,
@@ -697,6 +746,31 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       // it. The enrolment is what scopes the purchase to a single athlete --
       // see markLessonPurchased and the classes table's own comment on why a
       // priced lesson is bought per athlete and never shared.
+      // THE GUARDIAN'S CARD, CHARGED ONCE AND REFUNDED. The record is written first: the refund
+      // is a courtesy, the record is the point, and a refund that fails must not cost the child
+      // their account. The refund is best-effort and logged; an operator can finish it by hand.
+      if (kind === "guardian_verification") {
+        if (session.payment_status !== "paid") break;
+        const athleteId = Number(session.metadata?.athleteId);
+        const paymentIntent = typeof session.payment_intent === "string" ? session.payment_intent : null;
+        await recordPaymentVerification(userId, paymentIntent ?? session.id, session.amount_total, "stripe");
+        await storage.logBillingEvent(
+          userId,
+          event.type,
+          { sessionId: session.id, kind, athleteId: Number.isInteger(athleteId) ? athleteId : null, paymentIntent },
+          event.id,
+        );
+        const stripe = getStripeClient();
+        if (stripe && paymentIntent) {
+          try {
+            await stripe.refunds.create({ payment_intent: paymentIntent });
+          } catch (err) {
+            console.error(`guardian verification ${paymentIntent}: recorded, refund failed and needs a hand:`, err);
+          }
+        }
+        break;
+      }
+
       if (kind === "class_lesson") {
         const enrollmentId = Number(session.metadata?.enrollmentId);
         const lessonId = Number(session.metadata?.lessonId);

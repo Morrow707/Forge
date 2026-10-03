@@ -352,6 +352,9 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
+- **Queued, not yet in a build:** the under-13 card verification's client half (the guardian
+  dashboard card, the athlete holding screen's second message, `guardianVerificationRequired`)
+  and the Apple Health switch reading counsel's disclosure. Server halves are live on Render.
 - Build **595** is the newest TestFlight build, cut 2026-10-02 from set 2 beside OVR
   (docs/camera-tracking-notes.md "Set 2 beside OVR, 2026-10-02"): the row's pickup is not a rep
   (`EDGE_OVERSIZED_AMPLITUDE_RATIO`), the live path thins the 3D pose and hand pose at the same
@@ -1407,9 +1410,11 @@ rewrite with their five answers folded in, live 2026-09-19, question 10) were re
 2026-09-19; the Privacy Policy, the EULA, the Notice to Parent or Guardian and the
 Institutional Service Agreement were confirmed reviewed by Scott on 2026-09-20 ("yes the
 others are attorney reviewed"). Counsel's second round of answers (2026-10-03, questions 1, 2, 3, 5, 6 and 11) is folded in
-verbatim and registered in `shipped-versions.ts`; the one thing still open is the under-13
-MECHANISM (question 5): a card-transaction verification that needs billing on, or under-13
-sign-ups closed until then. Changing any of these is
+verbatim and registered in `shipped-versions.ts`; question 5's mechanism is built the same day: an
+under-13 account is held after the guardian claim until a linked guardian's card is charged 50
+cents and refunded (`createGuardianVerificationCheckout`, `needs_guardian_verification`),
+which is not a sale and does not sit behind `BILLING_LIVE`. The Stripe webhook on Render is
+what writes the record, so a Stripe outage holds a child's account, never releases one. Changing any of these is
 changing a reviewed document: register a version, never edit in place.
 A change to the research consent text re-asks everyone; the deletion-retention gate
 recognises the disclosure under the current heading and every prior one

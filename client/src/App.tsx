@@ -257,7 +257,7 @@ function ProtectedRoute({
   if (user.role === "athlete" && user.dateOfBirthRequired) {
     return <DateOfBirthRequiredPage />;
   }
-  if (user.role === "athlete" && user.guardianLinkRequired) {
+  if (user.role === "athlete" && (user.guardianLinkRequired || user.guardianVerificationRequired)) {
     return <GuardianPendingPage />;
   }
   return <Component />;

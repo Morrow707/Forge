@@ -18,6 +18,7 @@ import { ForgeMark } from "@/components/forge-mark";
 import {
   LogOut,
   CheckCircle2,
+  ShieldCheck,
   Circle,
   Video,
   VideoOff,
@@ -408,6 +409,7 @@ export default function GuardianDashboardPage() {
                   </CardContent>
                 </Card>
 
+                <GuardianParentalVerificationCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianAgreementsCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianBiometricConsentCard athleteId={athlete.id} athleteName={athlete.name} />
 
@@ -1170,6 +1172,108 @@ type BiometricConsentStatus = {
  * is the athlete's own question and the card says so rather than offering a button the server
  * will refuse. The document is fetched only when the card is about to ask for it.
  */
+type ParentalVerificationStatus = {
+  required: boolean;
+  verified: boolean;
+  verifiedAt: string | null;
+  chargeCents: number;
+};
+
+/** THE CARD CHECK FOR AN ATHLETE UNDER 13. Counsel, 2026-10-03: the emailed claim is not
+ * verifiable parental consent under COPPA for what Forge does with the data; a transaction on
+ * the parent's own card is. Fifty cents, refunded automatically; the account stays held until
+ * it is done. Drawn only when the law asks it of this athlete. The record arrives from Stripe's
+ * webhook, so after the return from checkout this polls until it lands. */
+function GuardianParentalVerificationCard({
+  athleteId,
+  athleteName,
+}: {
+  athleteId: number;
+  athleteName: string;
+}) {
+  const qc = useQueryClient();
+  const statusKey = ["/api/guardian/athletes", athleteId, "parental-verification"];
+  const returned = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("checkout") === "success";
+  const {
+    data: status,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<ParentalVerificationStatus>({
+    queryKey: statusKey,
+    queryFn: () => getJson(`/api/guardian/athletes/${athleteId}/parental-verification`),
+    refetchInterval: (query) => {
+      const s = query.state.data;
+      return returned && s?.required && !s.verified ? 4000 : false;
+    },
+  });
+  const start = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/guardian/athletes/${athleteId}/parental-verification`);
+      return (await res.json()) as { url: string };
+    },
+    onSuccess: ({ url }) => {
+      window.location.href = url;
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't start the verification"),
+  });
+  useEffect(() => {
+    if (status?.verified) qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+  }, [status?.verified, qc]);
+
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <ReadFailed what="the verification status" onRetry={() => void refetch()} />
+        </CardContent>
+      </Card>
+    );
+  }
+  if (isLoading || !status || !status.required) return null;
+  const dollars = (status.chargeCents / 100).toFixed(2);
+  return (
+    <Card className={status.verified ? undefined : "border-amber-500/50"}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          Parental consent verification
+        </CardTitle>
+        <CardDescription>
+          {athleteName} is under 13. Federal law (COPPA) asks us to confirm a parent's consent
+          with a card transaction, not just an email. The ${dollars} charge is refunded
+          automatically.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {status.verified ? (
+          <p className="flex items-start gap-2 text-sm">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+            <span>
+              Verified on {status.verifiedAt ? new Date(status.verifiedAt).toLocaleDateString() : "record"}.
+              {athleteName}'s account is open.
+            </span>
+          </p>
+        ) : (
+          <>
+            <p className="text-sm">
+              <span className="font-semibold">{athleteName}'s account is on hold</span> until this
+              is done. It takes about a minute on Stripe's secure page, and the charge comes
+              straight back to your card.
+            </p>
+            {returned && (
+              <p className="text-sm text-muted-foreground">Checking with the card processor…</p>
+            )}
+            <Button type="button" disabled={start.isPending} onClick={() => start.mutate()}>
+              {start.isPending ? "Opening…" : `Verify with a card (${dollars}, refunded)`}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function GuardianBiometricConsentCard({
   athleteId,
   athleteName,

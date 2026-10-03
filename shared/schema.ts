@@ -9775,6 +9775,10 @@ export type PublicUser = Omit<
   // refuses everything they try. The client uses it to show them why rather
   // than a screen of controls that all fail.
   guardianLinkRequired?: boolean;
+  // Athletes only, under 13: the guardian has claimed the link and the account is still held,
+  // because a linked guardian's card has not yet been charged once (counsel, 2026-10-03: the
+  // emailed claim alone is not verifiable parental consent under COPPA for Forge's data).
+  guardianVerificationRequired?: boolean;
   // Athletes only, and the OTHER reason the same gate holds someone: no date of birth on file, so
   // their tier cannot be derived and nobody can say whether they need a guardian at all. Separate
   // from guardianLinkRequired because the two need different screens -- waiting on a parent is

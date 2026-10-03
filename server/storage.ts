@@ -29401,12 +29401,50 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
 
   async athleteGateStatus(
     athleteId: number,
-  ): Promise<"ok" | "needs_date_of_birth" | "needs_guardian"> {
+  ): Promise<"ok" | "needs_date_of_birth" | "needs_guardian" | "needs_guardian_verification"> {
     const athlete = await this.getUser(athleteId);
     if (!athlete) return "ok";
     if (!athlete.dateOfBirth) return "needs_date_of_birth";
-    if (derivePrivacyTier(athlete.dateOfBirth) === "tier3_adult_18plus") return "ok";
-    return (await this.getGuardianLinkForAthlete(athleteId)) === null ? "needs_guardian" : "ok";
+    const tier = derivePrivacyTier(athlete.dateOfBirth);
+    if (tier === "tier3_adult_18plus") return "ok";
+    const link = await this.getGuardianLinkForAthlete(athleteId);
+    if (link === null) return "needs_guardian";
+    // UNDER 13, THE CLAIM IS NOT ENOUGH ON ITS OWN. Counsel, 2026-10-03 (open question 5):
+    // an emailed claim link is not verifiable parental consent under COPPA for Forge's data,
+    // because a check-in can reach a third-party AI provider and video and biometric records
+    // are stored. A card transaction on the guardian's own card is. So a tier-1 account stays
+    // held after the claim until a linked guardian's card has been charged once -- see
+    // createGuardianVerificationCheckout in billing.ts for the charge, and
+    // recordPaymentAsParentalVerification for the record this reads.
+    if (tier === "tier1_under13" && !(await this.hasGuardianPaymentVerification(athleteId))) {
+      return "needs_guardian_verification";
+    }
+    return "ok";
+  },
+
+  /** True when a LINKED GUARDIAN's card was charged on this athlete's behalf. Deliberately not
+   *  the weaker record (a card used on the minor's own account, givenByUserId = the athlete):
+   *  counsel's answer names the parent's payment instrument, not any adult's. */
+  async hasGuardianPaymentVerification(athleteId: number): Promise<boolean> {
+    return (await this.getGuardianPaymentVerification(athleteId)) !== null;
+  },
+
+  async getGuardianPaymentVerification(athleteId: number): Promise<{ verifiedAt: Date; guardianId: number } | null> {
+    const rows = await db
+      .select({ createdAt: consentRecords.createdAt, givenByUserId: consentRecords.givenByUserId })
+      .from(consentRecords)
+      .innerJoin(guardianLinks, eq(guardianLinks.athleteId, consentRecords.userId))
+      .where(
+        and(
+          eq(consentRecords.userId, athleteId),
+          eq(consentRecords.consentType, "guardian_payment_verification"),
+          eq(consentRecords.givenByUserId, guardianLinks.guardianId),
+        ),
+      )
+      .orderBy(desc(consentRecords.createdAt))
+      .limit(1);
+    const row = rows[0];
+    return row && row.givenByUserId != null ? { verifiedAt: row.createdAt, guardianId: row.givenByUserId } : null;
   },
 
   async isAthleteBlockedPendingGuardian(athleteId: number): Promise<boolean> {

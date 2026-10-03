@@ -73,6 +73,8 @@ import {
   createCoachSubscriptionCheckout,
   createFreeAgentAddOnCheckout,
   createFreeAgentTierCheckout,
+  createGuardianVerificationCheckout,
+  GUARDIAN_VERIFICATION_CHARGE_CENTS,
   createLessonCheckout,
 } from "./billing";
 import { missingPriceEnvVars } from "./stripe-prices";
@@ -13272,6 +13274,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   guardianRead("/biometric-consent", async (athleteId, _req, res) => {
     res.json(await storage.getBiometricConsentStatus(athleteId));
   });
+
+  /** Whether this athlete needs the card verification (under 13) and whether a linked guardian
+   * has done it. The dashboard card and the athlete's holding screen both read the same gate. */
+  guardianRead("/parental-verification", async (athleteId, _req, res) => {
+    const athlete = await storage.getUser(athleteId);
+    const required =
+      athlete?.dateOfBirth != null && derivePrivacyTier(athlete.dateOfBirth) === "tier1_under13";
+    const record = required ? await storage.getGuardianPaymentVerification(athleteId) : null;
+    res.json({
+      required,
+      verified: record !== null,
+      verifiedAt: record?.verifiedAt ?? null,
+      chargeCents: GUARDIAN_VERIFICATION_CHARGE_CENTS,
+    });
+  });
+
+  // THE EIGHTH GUARDIAN WRITE (see guardian-rules.test.ts): starting the card check that makes an
+  // under-13 consent verifiable. Not information about the child (rule 3): it is the permission
+  // the account stands on, counsel's answer of 2026-10-03 to open question 5, and only a linked
+  // guardian can give it. The write itself lands from Stripe's webhook, not from here -- this
+  // route only opens the session. Refused for an athlete who is not under 13, so there is nothing
+  // here a guardian could originate for a child the law does not ask it of.
+  app.post(
+    "/api/guardian/athletes/:athleteId/parental-verification",
+    requireGuardianAccess,
+    async (req, res) => {
+      const user = currentUser(req);
+      const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
+      if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+      if (!athlete.dateOfBirth || derivePrivacyTier(athlete.dateOfBirth) !== "tier1_under13") {
+        return res.status(400).json({ message: "Card verification is only asked for an athlete under 13." });
+      }
+      if (await storage.hasGuardianPaymentVerification(athlete.id)) {
+        return res.status(400).json({ message: "Already verified." });
+      }
+      const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/guardian");
+      const result = await createGuardianVerificationCheckout(
+        user.id,
+        user.email,
+        athlete.id,
+        (athlete.name ?? "your athlete").split(" ")[0],
+        successUrl,
+        cancelUrl,
+      );
+      if ("error" in result) return res.status(503).json({ message: result.error });
+      res.json({ url: result.url });
+    },
+  );
 
   // THE GUARDIAN GIVES THE VIDEO AND BIOMETRIC CONSENT AFTER THE CLAIM. The seventh guardian
   // write (see guardian-rules.test.ts). It is the consent logGuardianConsents writes at claim

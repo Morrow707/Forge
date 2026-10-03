@@ -25,8 +25,10 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
  * one promise this screen makes is the one it could not keep.
  */
 export default function GuardianPendingPage() {
-  const { logoutMutation } = useAuth();
+  const { user, logoutMutation } = useAuth();
   const qc = useQueryClient();
+  // The second hold, under 13 only: the parent has claimed and still has one step to do.
+  const verifying = user?.guardianVerificationRequired === true;
   const [sent, setSent] = useState(false);
 
   // Cheap (one row, no joins) and only ever runs while an athlete is actually being held here,
@@ -63,16 +65,32 @@ export default function GuardianPendingPage() {
           <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide">
             One more step
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Because you're under 18, a parent or guardian has to set up their own linked account
-            before you can start training on Forge. We emailed them when you signed up.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Ask them to open that email and follow the link. As soon as they finish, everything
-            here unlocks for you.
-          </p>
+          {verifying ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Your parent or guardian has set up their account. Because you're under 13, the law
+                asks them to confirm it's really them with a quick card check on their Forge
+                guardian page. It costs nothing: the 50 cents is refunded straight away.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                As soon as they finish, everything here unlocks for you.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Because you're under 18, a parent or guardian has to set up their own linked account
+                before you can start training on Forge. We emailed them when you signed up.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Ask them to open that email and follow the link. As soon as they finish, everything
+                here unlocks for you.
+              </p>
+            </>
+          )}
         </div>
 
+        {!verifying && (
         <div className="space-y-3 rounded-xl border border-border bg-surface p-5 text-left">
           <div className="flex items-start gap-3">
             <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -89,6 +107,7 @@ export default function GuardianPendingPage() {
             {resend.isPending ? "Sending..." : sent ? "Send it one more time" : "Resend the email"}
           </Button>
         </div>
+        )}
 
         <Button
           type="button"

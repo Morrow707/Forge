@@ -81,10 +81,13 @@ data to a third-party AI provider and stores video and biometric records; full v
 parental consent is required, and they recommend a card transaction (a $0.50 to $1.00
 verification charge) or not accepting under-13s until a billing method is attached. Their
 sentence is in the Privacy Policy (section 1) and the Notice to Parent or Guardian verbatim.
-The MECHANISM is not built: a card step needs billing on. Until it exists, the honest state
-is `ACCEPT_UNDER_13_SIGNUPS=false` on Render (closes under-13 self-signup; see
-`server/age-policy.ts`), and the coach-provisioned path for an under-13 needs the same
-decision. Scott's call.
+BUILT the same day (Scott: "yes accept under 13, build the card, they need the guardian
+account anyways"): an under-13 account stays held after the guardian claim until a linked
+guardian's card is charged 50 cents through Stripe Checkout and refunded
+(`createGuardianVerificationCheckout`, the `guardian_verification` webhook branch,
+`athleteGateStatus` -> `needs_guardian_verification`, the dashboard card, the holding screen;
+`server/guardian-parental-verification.itest.ts`). Not behind `BILLING_LIVE`: it is not a
+sale. `ACCEPT_UNDER_13_SIGNUPS` stays unset.
 
 **The one question here that is about a MECHANISM rather than wording**, which is why it
 was missing from this file until now: everything else on this list is a clause somebody
