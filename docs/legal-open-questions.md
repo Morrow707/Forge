@@ -154,8 +154,9 @@ Two follow-ups from the answers, both decided by Scott 2026-09-19: the public Te
 Service was MERGED into this document the same day ("just one less document that gets in the
 way"): six of its clauses were carried over verbatim, the precedence sentence was dropped
 because there is nothing left to take precedence over, /terms now serves this document, and
-`TERMS_OF_SERVICE_DRAFT` is retired. The DMCA agent is still to be registered
-(`docs/app-store-launch-notes.md`).
+`TERMS_OF_SERVICE_DRAFT` is retired. The DMCA agent was registered 2026-10-03: registration
+number DMCA-1081791, agent "Copyright Agent", Forge Performance Systems LLC, notices to the
+email section 19 names. Renew by 2029-10-03; a lapsed registration is the same as none.
 
 ## 11. The launch email list and the Privacy Policy -- OPEN, 2026-10-02
 
