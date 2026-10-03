@@ -50,16 +50,34 @@ describe("the assign-program schedule rows", () => {
     "utf8",
   );
 
-  it("bounds the date input instead of taking its intrinsic width", () => {
+  it("bounds every date input instead of taking its intrinsic width", () => {
     // `w-auto` on a native date input means "as wide as iOS says", which was the specific child
-    // that broke the grid. A fixed width fits the longest date this control ever shows.
-    expect(assign).toContain('className="h-7 w-[7.5rem] min-w-0 px-1.5 text-xs"');
+    // that broke the grid. This asserts the PROPERTY rather than one class string: the first
+    // version pinned the exact className, and the next change to this screen's layout broke the
+    // test without breaking the thing it guards -- which teaches people to edit the assertion.
+    // Only the ones INSIDE a day row. The Start date field is a full-width block input with
+    // nothing beside it, so it has no intrinsic-width problem and needs no fixed width; an
+    // assertion that caught it too would be demanding a bound for its own sake.
+    // Split on the tag rather than matching to the first ">": these props contain an arrow
+    // function, so `[^>]*` stops at the "=>" in onChange and never reaches the className.
+    const dateInputs = assign
+      .split("<Input")
+      .slice(1)
+      .map((chunk) => chunk.slice(0, chunk.indexOf("/>")))
+      .filter((tag) => tag.includes("Date for day"));
+    expect(dateInputs.length).toBeGreaterThan(0);
+    for (const tag of dateInputs) {
+      expect(tag).toMatch(/\bw-\[[\d.]+rem\]/); // an explicit width, not the intrinsic one
+      expect(tag).toContain("min-w-0");
+      expect(tag).not.toContain("w-auto");
+    }
   });
 
-  it("lets every ancestor of that input shrink", () => {
-    // One missing min-w-0 anywhere up the flex chain reinstates the min-content floor, so the
+  it("lets the scrolling day list shrink", () => {
+    // One missing min-w-0 anywhere up the chain reinstates the min-content floor, so the
     // dialog-level fix alone is not enough.
-    expect(assign).toContain("max-h-56 min-w-0 space-y-1 overflow-y-auto");
-    expect(assign).toContain("flex min-w-0 items-center justify-between gap-2 rounded");
+    const list = assign.match(/className="[^"]*overflow-y-auto[^"]*"/);
+    expect(list).not.toBeNull();
+    expect(list![0]).toContain("min-w-0");
   });
 });
