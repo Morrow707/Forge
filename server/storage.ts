@@ -101,6 +101,7 @@ import {
   academyTracks,
   academyLessons,
   academyLessonCompletions,
+  academyQuizAttempts,
   academyQuizQuestions,
   academyQuizAnswers,
   aiKnowledgeMessages,
@@ -350,6 +351,7 @@ import type { CoachSection } from "@shared/coach-sections";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import type { RosterGroup } from "@shared/roster-groups";
 import { findVerbatimLesson } from "./academy-draft-guard";
+import { academyQuizPassed } from "@shared/academy-quiz";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
 import { learnFromTake, type BodyModelWithHistory } from "./body-model-learning";
@@ -13589,6 +13591,60 @@ Hard rules, no exceptions:
     }
   },
 
+  /** Grade a coach's quiz attempt against the stored answers and keep it. The client sends
+   * which answer it picked per question; the server decides what was right. A question
+   * left unanswered counts wrong. Returns the per-question result and the best attempt. */
+  async recordAcademyQuizAttempt(
+    coachId: number,
+    trackId: number,
+    picks: { questionId: number; answerId: number }[],
+  ) {
+    const track = await this.getAcademyTrackFull(trackId);
+    if (!track) return null;
+    const total = track.quizQuestions.length;
+    if (total === 0) return null;
+    const pickFor = new Map(picks.map((p) => [p.questionId, p.answerId]));
+    const results = track.quizQuestions.map((q) => {
+      const picked = pickFor.get(q.id) ?? null;
+      const correctAnswer = q.answers.find((a) => a.isCorrect);
+      return {
+        questionId: q.id,
+        pickedAnswerId: picked,
+        correctAnswerId: correctAnswer?.id ?? null,
+        correct: picked != null && correctAnswer != null && picked === correctAnswer.id,
+      };
+    });
+    const correct = results.filter((r) => r.correct).length;
+    const passed = academyQuizPassed(correct, total);
+    await db.insert(academyQuizAttempts).values({ coachId, trackId, correct, total, passed });
+    const best = await this.getBestAcademyQuizAttempt(coachId, trackId);
+    return { correct, total, passed, results, best };
+  },
+
+  async getBestAcademyQuizAttempt(coachId: number, trackId: number) {
+    const rows = await db.query.academyQuizAttempts.findMany({
+      where: and(eq(academyQuizAttempts.coachId, coachId), eq(academyQuizAttempts.trackId, trackId)),
+      orderBy: [desc(academyQuizAttempts.correct), asc(academyQuizAttempts.completedAt)],
+      limit: 1,
+    });
+    const best = rows[0];
+    if (!best) return null;
+    return { correct: best.correct, total: best.total, passed: best.passed, completedAt: best.completedAt };
+  },
+
+  /** Best attempt per track for one coach, for the catalog's badges. */
+  async getBestAcademyQuizAttemptsForCoach(coachId: number) {
+    const rows = await db.query.academyQuizAttempts.findMany({
+      where: eq(academyQuizAttempts.coachId, coachId),
+      orderBy: [desc(academyQuizAttempts.correct), asc(academyQuizAttempts.completedAt)],
+    });
+    const best = new Map<number, { correct: number; total: number; passed: boolean; completedAt: Date }>();
+    for (const r of rows) {
+      if (!best.has(r.trackId)) best.set(r.trackId, { correct: r.correct, total: r.total, passed: r.passed, completedAt: r.completedAt });
+    }
+    return best;
+  },
+
   async getAcademyCompletionsForCoach(coachId: number): Promise<Set<number>> {
     const rows = await db.query.academyLessonCompletions.findMany({
       where: eq(academyLessonCompletions.coachId, coachId),
@@ -13815,6 +13871,99 @@ Hard rules, no exceptions:
   // answerNutritionQuestion) -- never replacing them. Kept separate from the
   // full lesson content a coach reads, which would be far too large to
   // spend tokens on for every single chat turn.
+  /** "Ask Forge's coaching library" (2026-10-03): a coach's question answered from Forge's own
+   * Coaches Corner tracks and nothing else. Counsel (docs/legal-open-questions.md, question 12)
+   * closed the door on retrieval over an outside textbook for a paying subscriber; this reads
+   * only academyTracks and academyLessons, which Forge wrote. The answer names the lessons it
+   * drew on so the coach can open them, and says plainly when the library does not cover the
+   * question rather than answering from nowhere. Stateless: the client sends the last few
+   * turns and nothing is stored. */
+  async askCoachesCornerLibrary(input: {
+    question: string;
+    history?: { role: "user" | "assistant"; content: string }[];
+  }): Promise<{
+    answer: string;
+    citations: { trackId: number; trackTitle: string; lessonId: number; lessonNumber: number; lessonTitle: string }[];
+  } | null> {
+    if (!aiEnabled) return null;
+    const tracks = await this.getAllAcademyTracks();
+    const lessons = tracks.flatMap((t) =>
+      t.lessons.map((l) => ({
+        trackId: t.id,
+        trackTitle: t.title,
+        lessonId: l.id,
+        lessonNumber: l.lessonNumber,
+        lessonTitle: l.title,
+        content: l.content,
+      })),
+    );
+    if (lessons.length === 0) return { answer: "Coaches Corner has no lessons yet.", citations: [] };
+
+    // Rank lessons by overlap with the question: a small catalog, scored in memory. Title
+    // words count double because a lesson title is its subject.
+    const terms = Array.from(
+      new Set(
+        input.question
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, " ")
+          .split(/\s+/)
+          .filter((w) => w.length > 3),
+      ),
+    );
+    const scored = lessons
+      .map((l) => {
+        const title = l.lessonTitle.toLowerCase();
+        const body = l.content.toLowerCase();
+        let score = 0;
+        for (const t of terms) {
+          if (title.includes(t)) score += 2;
+          const n = body.split(t).length - 1;
+          score += Math.min(n, 5) * 0.5;
+        }
+        return { ...l, score };
+      })
+      .filter((l) => l.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    const principles = await this.getCoachesCornerPrinciplesForAi();
+    const reference = scored
+      .map(
+        (l, i) =>
+          `[${i + 1}] ${l.trackTitle} / Lesson ${l.lessonNumber}: ${l.lessonTitle}\n${l.content.slice(0, 2400)}`,
+      )
+      .join("\n\n");
+    const system = [
+      "You are Forge's coaching library. You answer a coach's question FROM FORGE'S OWN COACHES CORNER LESSONS, given below, and from Forge's coaching principles. Nothing else.",
+      "Rules:",
+      "- Ground every claim in the lessons or principles. Cite a lesson by its bracketed number at the end of the sentence that uses it, like [2].",
+      "- If the lessons do not cover the question, say so in one sentence and offer the nearest lesson, or say there is none. Never answer from general knowledge as if the library said it.",
+      "- Write for a coach with a roster to run tomorrow: short paragraphs, plain words, what to do and why. No headers, no bullet lists, no markdown.",
+      "- Nothing here is medical advice. An injury, pain or illness question gets the one-line answer that it is for a clinician, then whatever the lessons say about returning to training.",
+      "- Never name a certification body or a certification.",
+      "",
+      "Forge's coaching principles:",
+      principles || "(none recorded)",
+      "",
+      "Lessons that may be relevant:",
+      reference || "(nothing in the library matched the question)",
+    ].join("\n");
+    const history = (input.history ?? []).slice(-6).map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+    const text = await askClaude(
+      system,
+      [...history, { role: "user", content: input.question }],
+      { maxTokens: 900, feature: "coaches_corner_library_chat" },
+    );
+    if (!text) return null;
+    // Only the lessons the answer actually cited travel back, in the order they were given.
+    const cited = new Set(Array.from(text.matchAll(/\[(\d+)\]/g)).map((m) => Number(m[1])));
+    const citations = scored
+      .map((l, i) => ({ ...l, index: i + 1 }))
+      .filter((l) => cited.has(l.index))
+      .map(({ trackId, trackTitle, lessonId, lessonNumber, lessonTitle }) => ({ trackId, trackTitle, lessonId, lessonNumber, lessonTitle }));
+    return { answer: text.trim(), citations };
+  },
+
   async getCoachesCornerPrinciplesForAi(): Promise<string> {
     const tracks = await db.query.academyTracks.findMany({ orderBy: asc(academyTracks.orderIndex) });
     if (tracks.length === 0) return "";

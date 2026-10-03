@@ -2420,14 +2420,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const unlocked = await hasCoachesCornerAccess(user);
     const tracks = await storage.getAllAcademyTracks();
+    // Progress rides on the catalog so a card can say "3/4 read" and "Completed" without a
+    // read per track. Completed means every lesson read and the quiz passed (or no quiz).
+    const [completions, bestAttempts] = unlocked
+      ? await Promise.all([storage.getAcademyCompletionsForCoach(user.id), storage.getBestAcademyQuizAttemptsForCoach(user.id)])
+      : [new Set<number>(), new Map()];
     res.json(
-      tracks.map((t) => ({
-        id: t.id,
-        title: t.title,
-        description: t.description,
-        lessonCount: t.lessons.length,
-        unlocked,
-      })),
+      tracks.map((t) => {
+        const read = t.lessons.filter((l) => completions.has(l.id)).length;
+        const best = bestAttempts.get(t.id) ?? null;
+        const quizPassed = t.quizQuestions.length === 0 ? true : Boolean(best?.passed);
+        return {
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          lessonCount: t.lessons.length,
+          unlocked,
+          lessonsRead: read,
+          quizQuestionCount: t.quizQuestions.length,
+          bestAttempt: best,
+          completed: unlocked && t.lessons.length > 0 && read === t.lessons.length && quizPassed,
+        };
+      }),
     );
   });
 
@@ -2446,7 +2460,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lessons: track.lessons.map((l) => ({ id: l.id, lessonNumber: l.lessonNumber, title: l.title })),
       });
     }
-    const completions = await storage.getAcademyCompletionsForCoach(user.id);
+    const [completions, bestAttempt] = await Promise.all([
+      storage.getAcademyCompletionsForCoach(user.id),
+      storage.getBestAcademyQuizAttempt(user.id, id),
+    ]);
     res.json({
       id: track.id,
       title: track.title,
@@ -2454,6 +2471,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       unlocked: true,
       lessons: track.lessons.map((l) => ({ ...l, completed: completions.has(l.id) })),
       quizQuestions: track.quizQuestions,
+      bestAttempt,
     });
   });
 
@@ -2475,6 +2493,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).end();
     },
   );
+
+  // A scored quiz attempt. The client sends picks; the server grades against the stored
+  // answers and keeps every attempt. See academyQuizAttempts.
+  app.post("/api/coach/academy/tracks/:id/quiz-attempt", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    if (!(await hasCoachesCornerAccess(user))) {
+      return res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
+    }
+    const parsed = z
+      .object({
+        picks: z.array(z.object({ questionId: z.number().int(), answerId: z.number().int() })).max(50),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.recordAcademyQuizAttempt(user.id, Number(req.params.id), parsed.data.picks);
+    if (!result) return res.status(404).json({ message: "No quiz on that track." });
+    res.json(result);
+  });
+
+  // The certificate's facts, from the server: the track, the coach's name, every lesson read
+  // and the best passing attempt. A track not completed gets a 409 and no certificate.
+  app.get("/api/coach/academy/tracks/:id/certificate", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    if (!(await hasCoachesCornerAccess(user))) {
+      return res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
+    }
+    const id = Number(req.params.id);
+    const track = await storage.getAcademyTrackFull(id);
+    if (!track) return res.status(404).json({ message: "Track not found" });
+    const [completions, best] = await Promise.all([
+      storage.getAcademyCompletionsForCoach(user.id),
+      storage.getBestAcademyQuizAttempt(user.id, id),
+    ]);
+    const allRead = track.lessons.length > 0 && track.lessons.every((l) => completions.has(l.id));
+    const quizPassed = track.quizQuestions.length === 0 || Boolean(best?.passed);
+    if (!allRead || !quizPassed) {
+      return res.status(409).json({ message: "Finish every lesson and pass the quiz to earn the certificate." });
+    }
+    res.json({
+      trackTitle: track.title,
+      coachName: user.name,
+      lessonCount: track.lessons.length,
+      quiz: best ? { correct: best.correct, total: best.total } : null,
+      completedAt: best?.completedAt ?? new Date(),
+      // Minutes of reading, from the lessons' own estimates: what a director would ask.
+      estimatedMinutes: track.lessons.reduce((sum, l) => sum + (l.estMinutes ?? 0), 0),
+    });
+  });
+
+  // Ask Forge's coaching library: grounded in the Corner's own lessons, nothing outside Forge.
+  // See askCoachesCornerLibrary. Same gate as the lessons themselves.
+  app.post("/api/coach/academy/ask", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    if (!(await hasCoachesCornerAccess(user))) {
+      return res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
+    }
+    const parsed = z
+      .object({
+        question: z.string().trim().min(3).max(1000),
+        history: z
+          .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(4000) }))
+          .max(10)
+          .optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const result = await storage.askCoachesCornerLibrary(parsed.data);
+    if (!result) return res.status(503).json({ message: "The library can't answer right now. Try again in a minute." });
+    res.json(result);
+  });
 
   // The Corner is priced as a standalone monthly add-on, but nothing can
   // record the purchase yet -- see hasCoachesCornerAccess's own comment. A

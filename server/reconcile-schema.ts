@@ -1275,6 +1275,17 @@ CREATE TABLE IF NOT EXISTS "academy_lesson_completions" (
   "completed_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "academy_lesson_completions_coach_lesson_idx" ON "academy_lesson_completions" ("coach_id", "lesson_id");
+-- Scored quiz attempts (2026-10-03); the certificate is printed from the best one.
+CREATE TABLE IF NOT EXISTS "academy_quiz_attempts" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "track_id" integer NOT NULL REFERENCES "academy_tracks"("id") ON DELETE CASCADE,
+  "correct" integer NOT NULL,
+  "total" integer NOT NULL,
+  "passed" boolean NOT NULL,
+  "completed_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "academy_quiz_attempts_coach_track_idx" ON "academy_quiz_attempts" ("coach_id", "track_id");
 
 CREATE TABLE IF NOT EXISTS "academy_quiz_questions" (
   "id" serial PRIMARY KEY,

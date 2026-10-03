@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle, Unlock } from "lucide-react";
+import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle, Unlock, Award } from "lucide-react";
+import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
-import { AcademyQuiz } from "@/components/academy-quiz";
+import { AcademyQuiz, type QuizAttemptSummary } from "@/components/academy-quiz";
+import { CoachesCornerAsk } from "@/components/coaches-corner-ask";
 import { formatCents } from "@shared/billing-tiers";
 
 /** The Coaches Corner half of GET /api/coach/entitlements. `unlocked` is the same
@@ -33,6 +35,10 @@ type TrackSummary = {
   description: string;
   lessonCount: number;
   unlocked: boolean;
+  lessonsRead?: number;
+  quizQuestionCount?: number;
+  bestAttempt?: QuizAttemptSummary | null;
+  completed?: boolean;
 };
 
 type LessonSource = {
@@ -61,6 +67,7 @@ type TrackDetail = {
   unlocked: boolean;
   lessons: LessonDetail[];
   quizQuestions?: QuizQuestionDetail[];
+  bestAttempt?: QuizAttemptSummary | null;
 };
 
 /** Admin-authored coach education -- a single paywalled bundle (see
@@ -123,6 +130,7 @@ export default function CoachesCorner() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`/api/coach/academy/tracks/${selectedTrackId}`] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/academy/tracks"] });
     },
     onError: (err: ApiError) => {
       toast.error(err.message || "Could not update lesson");
@@ -233,6 +241,8 @@ export default function CoachesCorner() {
 
   if (selectedTrackId && trackDetail) {
     const completedCount = trackDetail.lessons.filter((l) => l.completed).length;
+    const summary = tracks.find((t) => t.id === selectedTrackId);
+    const trackDone = Boolean(summary?.completed);
     return (
       <AppShell
         title={trackDetail.title}
@@ -244,9 +254,24 @@ export default function CoachesCorner() {
         }
       >
         <p className="mb-4 max-w-2xl text-sm text-muted-foreground">{trackDetail.description}</p>
-        <p className="mb-4 text-xs font-semibold uppercase text-muted-foreground">
-          {completedCount}/{trackDetail.lessons.length} read
-        </p>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">
+            {completedCount}/{trackDetail.lessons.length} read
+          </p>
+          {trackDone ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/coach/coaches-corner/certificate/${trackDetail.id}`}>
+                <Award className="h-4 w-4" />
+                Certificate
+              </Link>
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Read every lesson{(trackDetail.quizQuestions?.length ?? 0) > 0 ? " and pass the quiz" : ""} to earn a
+              certificate.
+            </p>
+          )}
+        </div>
         <div className="space-y-2">
           {trackDetail.lessons.map((lesson) => (
             <button
@@ -271,7 +296,15 @@ export default function CoachesCorner() {
             </button>
           ))}
         </div>
-        <AcademyQuiz questions={trackDetail.quizQuestions ?? []} />
+        <AcademyQuiz
+          trackId={trackDetail.id}
+          questions={trackDetail.quizQuestions ?? []}
+          bestAttempt={trackDetail.bestAttempt ?? null}
+          onAttempt={() => {
+            qc.invalidateQueries({ queryKey: [`/api/coach/academy/tracks/${selectedTrackId}`] });
+            qc.invalidateQueries({ queryKey: ["/api/coach/academy/tracks"] });
+          }}
+        />
       </AppShell>
     );
   }
@@ -317,6 +350,14 @@ export default function CoachesCorner() {
             )}
           </CardContent>
         </Card>
+      )}
+      {anyUnlocked && (
+        <CoachesCornerAsk
+          onOpenLesson={(trackId, lessonId) => {
+            setSelectedTrackId(trackId);
+            setSelectedLessonId(lessonId);
+          }}
+        />
       )}
       {tracks.length > 1 && (
         <div className="mb-4 flex items-center gap-1 rounded-md bg-secondary p-1">
@@ -370,9 +411,22 @@ export default function CoachesCorner() {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">{track.description}</p>
-              <Badge variant="secondary" className="w-fit">
-                {track.lessonCount} lessons
-              </Badge>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge variant="secondary" className="w-fit">
+                  {track.lessonCount} lessons
+                </Badge>
+                {track.unlocked && track.completed && (
+                  <Badge variant="success" className="gap-1">
+                    <Award className="h-3 w-3" />
+                    Completed
+                  </Badge>
+                )}
+                {track.unlocked && !track.completed && (track.lessonsRead ?? 0) > 0 && (
+                  <Badge variant="outline">
+                    {track.lessonsRead}/{track.lessonCount} read
+                  </Badge>
+                )}
+              </div>
             </CardContent>
           </Card>
         ))}

@@ -82,6 +82,7 @@ const CoachBranding = lazy(withLoadTimeout(() => import("@/pages/coach/branding"
 const CoachClasses = lazy(withLoadTimeout(() => import("@/pages/coach/classes")));
 const CoachClassBuilder = lazy(withLoadTimeout(() => import("@/pages/coach/class-builder")));
 const CoachCoachesCorner = lazy(withLoadTimeout(() => import("@/pages/coach/coaches-corner")));
+const CoachCoachesCornerCertificate = lazy(withLoadTimeout(() => import("@/pages/coach/coaches-corner-certificate")));
 const CoachRoster = lazy(withLoadTimeout(() => import("@/pages/coach/roster")));
 const CoachAthleteDetail = lazy(withLoadTimeout(() => import("@/pages/coach/athlete-detail")));
 const CoachMovementScreens = lazy(withLoadTimeout(() => import("@/pages/coach/movement-screens")));
@@ -473,6 +474,9 @@ function Router() {
         </Route>
         <Route path="/coach/classes">
           <ProtectedRoute role="coach" component={CoachClasses} />
+        </Route>
+        <Route path="/coach/coaches-corner/certificate/:trackId">
+          <ProtectedRoute role="coach" component={CoachCoachesCornerCertificate} />
         </Route>
         <Route path="/coach/coaches-corner">
           <ProtectedRoute role="coach" component={CoachCoachesCorner} />

@@ -163,7 +163,7 @@ export default function AdminCoachesCorner() {
             </button>
           ))}
         </div>
-        <AcademyQuiz questions={selectedTrack.quizQuestions} />
+        <AcademyQuiz trackId={selectedTrack.id} questions={selectedTrack.quizQuestions} bestAttempt={null} preview />
       </AppShell>
     );
   }

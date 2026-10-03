@@ -5108,8 +5108,33 @@ export const academyLessonCompletions = pgTable(
   }),
 );
 
-// One quiz per track, shown after the lesson list -- a self-check, not a
-// scored exam (no attempt/score persistence). Every answer carries its own
+// A coach's scored attempt at a track's quiz (2026-10-03). The quiz was an ungraded
+// self-check; a record is what lets a coach show an athletic director they finished a
+// track, and what the certificate is printed from. Graded on the server against the
+// stored answers, never trusting a score the client sent. PASS_MARK lives in
+// shared/academy-quiz.ts. Every attempt is kept: the best one is what counts.
+export const academyQuizAttempts = pgTable(
+  "academy_quiz_attempts",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    trackId: integer("track_id")
+      .notNull()
+      .references(() => academyTracks.id, { onDelete: "cascade" }),
+    correct: integer("correct").notNull(),
+    total: integer("total").notNull(),
+    passed: boolean("passed").notNull(),
+    completedAt: timestamp("completed_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachTrackIdx: index("academy_quiz_attempts_coach_track_idx").on(table.coachId, table.trackId),
+  }),
+);
+
+// One quiz per track, shown after the lesson list. Since 2026-10-03 it is also scored (see
+// academyQuizAttempts); the explanations stay, every answer's, after the attempt. Every answer carries its own
 // explanation, correct or not, so a coach can expand any answer at any
 // time to see why it's right or wrong, not just the one they picked.
 export const academyQuizQuestions = pgTable(
