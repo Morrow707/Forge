@@ -1406,8 +1406,10 @@ counsel's approval 2026-09-20, version 2026-09-20) and the signup Terms of Use (
 rewrite with their five answers folded in, live 2026-09-19, question 10) were reviewed
 2026-09-19; the Privacy Policy, the EULA, the Notice to Parent or Guardian and the
 Institutional Service Agreement were confirmed reviewed by Scott on 2026-09-20 ("yes the
-others are attorney reviewed"). What remains in `docs/legal-open-questions.md` (1 to 6)
-are wording and enforceability questions, not unreviewed text. Changing any of these is
+others are attorney reviewed"). Counsel's second round of answers (2026-10-03, questions 1, 2, 3, 5, 6 and 11) is folded in
+verbatim and registered in `shipped-versions.ts`; the one thing still open is the under-13
+MECHANISM (question 5): a card-transaction verification that needs billing on, or under-13
+sign-ups closed until then. Changing any of these is
 changing a reviewed document: register a version, never edit in place.
 A change to the research consent text re-asks everyone; the deletion-retention gate
 recognises the disclosure under the current heading and every prior one

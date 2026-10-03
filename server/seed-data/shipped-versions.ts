@@ -72,6 +72,9 @@ export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
   // This is a TEXT change to a live clickwrap, so it re-asks every account to accept once --
   // the designed behaviour of getTermsAcceptanceStatus, not a side effect to avoid.
   "9394f4dcc0e4bbcfb81d23af9b8c3d814bd14fae4d6b73ea3d5102c7504e3276",
+  // 2026-10-03, counsel's answer to open question 1: s16 gained the minors sentence (a parent
+  // indemnifies only for their own acts; a minor incurs no indemnity).
+  "68cf3176429335312b49d38ad193a34806df3a33e316b49da5f7a4e323bd1c95",
 ] as const;
 
 /** Character length of each entry in SIGNUP_AGREEMENT_PRIOR_SHIPPED, same order.
@@ -81,7 +84,7 @@ export const SIGNUP_AGREEMENT_PRIOR_SHIPPED = [
  * than derived, since deriving it would mean keeping the full prior texts -- which is the thing
  * hashes exist to avoid. A wrong length simply fails to match and the document is left alone,
  * which is the safe direction. */
-export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274, 11937, 12126, 12114, 19178] as const;
+export const SIGNUP_AGREEMENT_PRIOR_LENGTHS = [11274, 11937, 12126, 12114, 19178, 20804] as const;
 
 /** PREVIOUS versions of the video and biometric release, oldest first. See above. */
 export const BIOMETRIC_RELEASE_PRIOR_SHIPPED = [
@@ -114,6 +117,9 @@ export const PARENTAL_NOTICE_PRIOR_SHIPPED = [
   // 2026-09-19, later the same day: s1 gained the sentence saying the claim is the federally
   // required consent for an under-13 and that a confirming email follows. Scott's decision.
   "9589612c71d41d988fca862a5f1379aa5d79519285f1eff10cb018e647dffb0b",
+  // 2026-10-03, counsel's answer to open question 5: under-13 consent must be verified by a card
+  // transaction or another COPPA-compliant step before activation.
+  "9d1daabfad4224bc61f4baf36694857d350eb966f10a0c7156f018696662647c",
 ] as const;
 
 /** EVERY stored shape of the privacy policy Forge ever shipped, current one excluded.
@@ -141,6 +147,10 @@ export const PRIVACY_POLICY_PRIOR_SHIPPED = [
   // 2026-09-19, later the same day: s4's 'not yet finalized by counsel' sentence replaced with the
   // biometric-consent statement, s5 gained the COPPA sentence. Scott's decision, pending review.
   "ffd2e131d663bcee3b3d89ffba251b995343fdf2e2f4f14c5891f5ea8afa5b74",
+  // 2026-10-03, counsel's answers to open questions 5, 6 and 11: the launch email list under
+  // "Information we collect", the Apple Health to AI provider disclosure verbatim, and the
+  // under-13 verification sentence.
+  "651fb59d1f569f871068466e59996deda1803aeef00f3ff076257c13d8634d2b",
 ] as const;
 /** EVERY stored shape of the terms of service Forge ever shipped, current one excluded.
 

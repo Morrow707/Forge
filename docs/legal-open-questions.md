@@ -9,7 +9,13 @@ questions live here and the clauses stand on their own.
 Nothing here is resolved unless it says so. They move out of this file when counsel
 answers them, and the answer changes the clause rather than this list.
 
-## 1. Terms of Use, s16 Indemnification -- OPEN
+## 1. Terms of Use, s16 Indemnification -- ANSWERED 2026-10-03
+
+Counsel: no, an indemnity cannot be enforced against a minor, and a parent indemnifying
+against their own child's claims is void in many states (Arizona and California among them).
+Their sentence is in s16 verbatim (the parent indemnifies only for their own acts and for
+third-party claims arising from authorising the minor's use; a minor incurs none). Registered
+as a new version in `shipped-versions.ts`; every existing user is asked to accept once.
 
 Confirm with counsel whether and how this section can apply where the person being
 asked to indemnify is a minor athlete or their parent/guardian; several states limit
@@ -25,7 +31,11 @@ minors sentence and all. Nothing about the question changed with the move; what
 changed is that the clause is now in a document every account accepts, rather than
 one nobody did.
 
-## 2. Service Agreement: who obtains guardian consent -- OPEN, and re-pointed
+## 2. Service Agreement: who obtains guardian consent -- ANSWERED 2026-10-03
+
+Counsel: enforceable, provided Forge holds an affirmative written warranty from the school
+and keeps the executed agreement on file (it does: `institutional_agreement_signatures`).
+Their clause is ISA section 4.4 verbatim.
 
 Counsel should confirm exactly what allocation of this responsibility is enforceable,
 and whether any additional Forge-side mechanism is needed to support it, rather than
@@ -37,7 +47,12 @@ because it was never about that document's wording -- it is about whether a cont
 can put this obligation on a school at all. It now applies to the Rocket Lawyer
 Service Agreement, which is what a school actually signs.
 
-## 3. Service Agreement: indemnity for a consent failure -- OPEN, and re-pointed
+## 3. Service Agreement: indemnity for a consent failure -- ANSWERED 2026-10-03
+
+Counsel: the clause works as a B2B indemnity and is independent of question 1; keep the
+"to the extent permitted by law" carve-out for public bodies (13.4 already had it). Their
+clause is ISA section 13.5 verbatim. The ISA text hash changes with it, which is the point of
+storing one per signature.
 
 The core liability-shifting mechanism of the Agreement, and the clause most in need of
 real counsel drafting. Note that moving the obligation onto the Institution does not
@@ -59,7 +74,17 @@ advance. See CLAUDE.md, "Settled questions that keep getting re-litigated".
 Kept rather than deleted because it has been raised as a gap more than once. The
 record of the answer is what stops it being raised a third time.
 
-## 5. Verifiable parental consent for under-13s -- OPEN, and not a document
+## 5. Verifiable parental consent for under-13s -- ANSWERED 2026-10-03, MECHANISM OPEN
+
+Counsel: no, email-only is insufficient under COPPA (16 C.F.R. 312.5) because Forge sends
+data to a third-party AI provider and stores video and biometric records; full verifiable
+parental consent is required, and they recommend a card transaction (a $0.50 to $1.00
+verification charge) or not accepting under-13s until a billing method is attached. Their
+sentence is in the Privacy Policy (section 1) and the Notice to Parent or Guardian verbatim.
+The MECHANISM is not built: a card step needs billing on. Until it exists, the honest state
+is `ACCEPT_UNDER_13_SIGNUPS=false` on Render (closes under-13 self-signup; see
+`server/age-policy.ts`), and the coach-provisioned path for an under-13 needs the same
+decision. Scott's call.
 
 **The one question here that is about a MECHANISM rather than wording**, which is why it
 was missing from this file until now: everything else on this list is a clause somebody
@@ -92,7 +117,13 @@ confirmation step, a small authorising card transaction, or not accepting under-
 all until it is settled. The third is a product decision, not a technicality:
 `tier1_under13` is a live tier and an under-13 can sign up today.
 
-## 6. Apple Health data reaching the AI provider -- OPEN
+## 6. Apple Health data reaching the AI provider -- ANSWERED 2026-10-03
+
+Counsel: yes, tailored training adjustments are a permitted health and fitness purpose
+(App Store Review Guidelines 5.1.3) provided the AI provider acts as a processor, the data
+is encrypted in transit and never retained to train models. Their disclosure sentence is
+now the Apple Health switch text (`notification-settings-dialog.tsx`) and the Privacy
+Policy's service-provider bullet, verbatim.
 
 Added 2026-09-19 during the launch-readiness pass on the four documents. The app pre-fills an
 athlete's daily check-in from Apple Health (sleep, resting heart rate, HRV, VO2 max, respiratory
@@ -158,7 +189,11 @@ because there is nothing left to take precedence over, /terms now serves this do
 number DMCA-1081791, agent "Copyright Agent", Forge Performance Systems LLC, notices to the
 email section 19 names. Renew by 2029-10-03; a lapsed registration is the same as none.
 
-## 11. The launch email list and the Privacy Policy -- OPEN, 2026-10-02
+## 11. The launch email list and the Privacy Policy -- ANSWERED 2026-10-03
+
+Counsel: yes, CAN-SPAM and CCPA/CPRA need the collection, the limited purpose and the
+unsubscribe disclosed. Their paragraph is under "Information we collect" in the Privacy
+Policy verbatim.
 
 Since 2026-10-02 the website takes an email address from anyone who wants to hear when
 sign-ups open ("Notify me" on the coming-soon card and in the footer), and an admin can mail

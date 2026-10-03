@@ -21,7 +21,7 @@ import { BIOMETRIC_RELEASE, nextBiometricRelease } from "./biometric-release";
 describe("the pinned current versions", () => {
   it("signup agreement", () => {
     expect(sha256(SIGNUP_AGREEMENT)).toBe(
-      "68cf3176429335312b49d38ad193a34806df3a33e316b49da5f7a4e323bd1c95",
+      "4a8f6cffbecad75ee21c1242bb911053461af21cebf3398e2252dec134742713",
     );
   });
 

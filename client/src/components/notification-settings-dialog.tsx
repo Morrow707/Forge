@@ -293,9 +293,13 @@ export function NotificationSettingsDialog({
                 <span className="text-xs text-muted-foreground">
                   Pre-fills sleep, resting heart rate, and heart rate variability on
                   your daily check-in from your watch or tracker, always editable
-                  before you submit. The AI coach reads your check-in when it adjusts
-                  your training, so a synced value can reach the AI provider as part
-                  of that request. Never sold, never used for ads.
+                  before you submit. When Apple Health sync is enabled, Forge transmits
+                  pre-filled daily check-in metrics (including sleep, heart rate, HRV,
+                  VO2 max, respiratory rate, weight, and session heart rate) to our
+                  third-party AI provider strictly to generate real-time training
+                  recommendations. This data is processed securely, is never sold or
+                  used for advertising, and is never retained to train third-party AI
+                  models.
                 </span>
               </span>
             </label>
