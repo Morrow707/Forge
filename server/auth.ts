@@ -893,6 +893,7 @@ export function setupAuth(app: Express) {
           to: user.email,
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, coach?.name ?? null),
+          brandForUserId: user.id,
         });
         sendVerificationEmail(req, user);
         issueGuardianInviteIfNeeded(req, user, guardianEmail, tier);
@@ -986,6 +987,7 @@ export function setupAuth(app: Express) {
           to: user.email,
           subject: "Welcome to Forge",
           html: buildWelcomeEmail(user, null),
+          brandForUserId: user.id,
         });
         sendVerificationEmail(req, user);
         issueGuardianInviteIfNeeded(req, user, parsed.data.guardianEmail, tier);
@@ -1104,6 +1106,7 @@ export function setupAuth(app: Express) {
         return sendEmail({
           to: guardian.email,
           subject: `You approved ${athleteName}'s Forge account`,
+          brandForUserId: athleteId,
           html: buildGuardianConsentConfirmationEmail(
             athleteName,
             guardian.email,
@@ -1127,6 +1130,7 @@ export function setupAuth(app: Express) {
           to: user.email,
           subject: "Confirm your Forge email",
           html: buildVerifyEmailEmail(verifyLink),
+          brandForUserId: user.id,
         });
       })
       .catch((err) => console.error("sendVerificationEmail failed:", err));
@@ -1191,6 +1195,7 @@ export function setupAuth(app: Express) {
           to: guardianEmail,
           subject: `You've been listed as ${athlete.name}'s guardian on Forge`,
           html: buildGuardianInviteEmail(athlete.name, claimLink, parentalNotice?.content ?? ""),
+          brandForUserId: athlete.id,
         });
         // sendEmail reports a refusal by returning, not by throwing, so the
         // .catch below never saw one -- an unconfigured key, a provider
@@ -1238,6 +1243,7 @@ export function setupAuth(app: Express) {
             await sendEmail({
               to: user.email,
               subject: "New login to your Forge account",
+              brandForUserId: user.id,
               html: buildNewDeviceLoginEmail({
                 name: user.name,
                 deviceLabel: record.deviceLabel ?? "Unknown device",
@@ -1301,7 +1307,7 @@ export function setupAuth(app: Express) {
 
   async function sendDeviceApprovalEmail(
     req: any,
-    user: { email: string; name: string },
+    user: { id: number; email: string; name: string },
     approval: { id: number; deviceLabel: string | null; location: string | null; createdAt: Date },
     actionToken: string,
   ): Promise<boolean> {
@@ -1309,6 +1315,7 @@ export function setupAuth(app: Express) {
     const { sent } = await sendEmail({
       to: user.email,
       subject: "Was this you? New device signing in to Forge",
+      brandForUserId: user.id,
       html: buildDeviceApprovalEmail({
         name: user.name,
         deviceLabel: approval.deviceLabel ?? "Unknown device",
@@ -1811,6 +1818,7 @@ export function setupAuth(app: Express) {
           to: user.email,
           subject: "Reset your Forge password",
           html: buildPasswordResetEmail(resetLink),
+          brandForUserId: user.id,
         });
       }
       res.json({ ok: true });
@@ -1851,6 +1859,7 @@ export function setupAuth(app: Express) {
           to: user.email,
           subject: "Your Forge password was changed",
           html: buildPasswordChangedEmail(user.name),
+          brandForUserId: user.id,
         });
       }
       res.status(204).end();
@@ -1887,6 +1896,7 @@ export function setupAuth(app: Express) {
         to: user.email,
         subject: "Your Forge password was changed",
         html: buildPasswordChangedEmail(user.name),
+        brandForUserId: user.id,
       });
       res.status(204).end();
     } catch (err) {

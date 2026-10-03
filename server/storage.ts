@@ -19198,6 +19198,13 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       brandMission: orgBranding?.brandMission ?? null,
       brandContactEmail: orgBranding?.brandContactEmail ?? null,
       brandWelcomeMessage: orgBranding?.brandWelcomeMessage ?? null,
+      // The rest of the look (background hue and strength, heading font, the program's
+      // address and the name its emails come from) is org-only too.
+      brandBackgroundHue: orgBranding?.brandBackgroundHue ?? null,
+      brandBackgroundStrength: orgBranding?.brandBackgroundStrength ?? null,
+      brandHeadingFont: orgBranding?.brandHeadingFont ?? null,
+      brandSlug: orgBranding?.brandSlug ?? null,
+      brandSenderName: orgBranding?.brandSenderName ?? null,
       navLabelOverrides: navPrefs.navLabelOverrides,
       features,
       exercisePageTheme,
@@ -28765,6 +28772,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       const result = await sendEmail({
         to: t.email,
         subject: t.athleteName ? `Documents needed for ${t.athleteName}` : "Documents needed",
+        brandForUserId: input.athleteId,
         html: buildDocumentsRequestEmail({
           recipientName: t.name,
           athleteName: t.athleteName,

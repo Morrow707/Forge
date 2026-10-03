@@ -94,6 +94,7 @@ export async function notifyUser(
     const result = await sendEmail({
       to: user.email,
       subject: title,
+      brandForUserId: userId,
       html: `<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;">${escapeHtml(body)}</p><p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#777;">Open Forge to see more.</p>`,
     });
     emailDelivered = result.sent;

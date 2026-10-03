@@ -70,6 +70,7 @@ export async function notifyGuardiansOfTermsChange(): Promise<{
       await sendEmail({
         to: guardian.email,
         subject: "Forge's terms have changed, please review",
+        brandForUserId: guardianId,
         html: buildTermsChangeEmail(
           guardian.name,
           athletes.map((a) => a.athleteName),

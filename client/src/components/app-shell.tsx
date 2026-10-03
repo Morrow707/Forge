@@ -80,7 +80,6 @@ const ActiveSessionsDialog = lazyDialog(() => import("@/components/active-sessio
 const ChangePasswordDialog = lazyDialog(() => import("@/components/change-password-dialog").then((m) => ({ default: m.ChangePasswordDialog })));
 const NotificationSettingsDialog = lazyDialog(() => import("@/components/notification-settings-dialog").then((m) => ({ default: m.NotificationSettingsDialog })));
 const CoachingStaffDialog = lazyDialog(() => import("@/components/coaching-staff-dialog").then((m) => ({ default: m.CoachingStaffDialog })));
-const TeamBrandingDialog = lazyDialog(() => import("@/components/team-branding-dialog").then((m) => ({ default: m.TeamBrandingDialog })));
 const ExercisePageThemeDialog = lazyDialog(() => import("@/components/exercise-page-theme-dialog").then((m) => ({ default: m.ExercisePageThemeDialog })));
 const NavCustomizeDialog = lazyDialog(() => import("@/components/nav-customize-dialog").then((m) => ({ default: m.NavCustomizeDialog })));
 const AccountSettingsDialog = lazyDialog(() => import("@/components/account-settings-dialog").then((m) => ({ default: m.AccountSettingsDialog })));
@@ -133,6 +132,8 @@ const coachNav: NavItem[] = [
   { href: "/coach/my", label: "My Training", icon: UserCircle, overflow: true },
   { href: "/coach/video-bank", label: "My Video Bank", icon: Video, overflow: true },
   { href: "/coach/billing", label: "Billing", icon: CreditCard, overflow: true },
+  // The whole look of the app for this program, in the order an athlete meets it (2026-10-03).
+  { href: "/coach/branding", label: "Branding", icon: Palette, overflow: true },
   // Same page for every role, different checklist -- see shared/required-documents.ts. A coach
   // is asked for credentials (background check, certification, CPR), not for a waiver.
   { href: "/documents", label: "Documents", icon: FileCheck2, overflow: true },
@@ -279,7 +280,7 @@ export function AppShell({
   showWatermark?: boolean;
 }) {
   const { user, logoutMutation } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   // Measured height of the sticky brand/nav/title/subheader bar just below,
   // published as a CSS var on the root element -- lets a page nest its own
   // sticky element (e.g. a sticky table header) underneath this bar without
@@ -304,7 +305,6 @@ export function AppShell({
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
   const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
-  const [brandingOpen, setBrandingOpen] = useState(false);
   const [exerciseThemeOpen, setExerciseThemeOpen] = useState(false);
   const [navCustomizeOpen, setNavCustomizeOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
@@ -930,7 +930,7 @@ export function AppShell({
                       type="button"
                       role="menuitem"
                       onClick={() => {
-                        setBrandingOpen(true);
+                        navigate("/coach/branding");
                         setAccountMenuOpen(false);
                       }}
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
@@ -1276,7 +1276,7 @@ export function AppShell({
                   <button
                     type="button"
                     onClick={() => {
-                      setBrandingOpen(true);
+                      navigate("/coach/branding");
                       setMobileNavOpen(false);
                     }}
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
@@ -1412,9 +1412,6 @@ export function AppShell({
       )}
       {user?.role === "coach" && (
         <CoachingStaffDialog open={coachingStaffOpen} onOpenChange={setCoachingStaffOpen} />
-      )}
-      {user?.role === "coach" && user.isPrimaryCoach && (
-        <TeamBrandingDialog open={brandingOpen} onOpenChange={setBrandingOpen} scope={{ type: "org" }} />
       )}
       {user?.role === "coach" && user.isPrimaryCoach && (
         <ExercisePageThemeDialog open={exerciseThemeOpen} onOpenChange={setExerciseThemeOpen} />

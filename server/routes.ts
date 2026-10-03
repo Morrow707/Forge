@@ -40,7 +40,8 @@ import { getVapidPublicKey, pushEnabled, sendTestPushToSelf } from "./push";
 import { registerNumericParamGuards } from "./numeric-route-params";
 import { apnsEnabled } from "./apns";
 import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
-import { sendEmail, emailEnabled } from "./email";
+import { sendEmail, emailEnabled, isEmailConfigured } from "./email";
+import { buildWelcomeEmail } from "./welcome-email";
 import { buildRosterDocumentEmail } from "./email-roster-documents";
 import { aiEnabled } from "./ai";
 import { usdaFoodLookupEnabled } from "./food-lookup";
@@ -7585,6 +7586,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         to: athlete.email,
         subject: "Your Progress Report from Forge",
         html,
+        brandForUserId: user.id,
       });
       res.json(result);
     },
@@ -8026,6 +8028,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // "Send me a test": the welcome email, dressed in the program's current brand, to the
+  // coach's own inbox. The one way to see what an athlete's inbox will show without inviting
+  // one. Reads the saved row, not the page's draft -- save first, then send.
+  app.post("/api/coach/branding/test-email", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
+    const user = currentUser(req);
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ message: "Email isn't configured on this server." });
+    }
+    const result = await sendEmail({
+      to: user.email,
+      subject: "Welcome to Forge",
+      html: buildWelcomeEmail(user, user.name),
+      brandForUserId: user.id,
+    });
+    if (!result.sent) return res.status(502).json({ message: "The email provider refused the send." });
+    res.json({ ok: true });
+  });
+
   app.delete("/api/coach/branding/logo", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
     const coachIds = await storage.getEffectiveCoachIds(user.id);
@@ -8410,6 +8430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const result = await sendEmail({
             to: email,
             subject: `Forge ${title}${who.athleteName ? ` for ${who.athleteName}` : ""}`,
+            brandForUserId: user.id,
             html: buildRosterDocumentEmail({
               recipientName: who.name,
               athleteName: who.athleteName,

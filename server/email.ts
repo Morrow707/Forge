@@ -1,4 +1,5 @@
 import { recordSystemFailure, recordSystemSuccess } from "./system-events";
+import { applyEmailBranding, brandedFromAddress, type EmailBrand } from "./email-branding";
 
 // The HTML email builders (welcome-email.ts, progress-report.ts, etc)
 // interpolate free-text fields a coach or athlete entered themselves --
@@ -46,7 +47,7 @@ if (!emailEnabled) {
 }
 
 /** Only populated under vitest (NODE_ENV=test) with no Resend key -- see sendEmail. */
-export const testOutbox: { to: string; subject: string; html: string }[] = [];
+export const testOutbox: { to: string; subject: string; html: string; from?: string }[] = [];
 
 export function isEmailConfigured(): boolean {
   return emailEnabled || process.env.NODE_ENV === "test";
@@ -55,12 +56,32 @@ export function isEmailConfigured(): boolean {
 export async function sendEmail({
   to,
   subject,
-  html,
+  html: rawHtml,
+  brandForUserId,
+  brand: brandOverride,
 }: {
   to: string;
   subject: string;
   html: string;
+  /** The email wears the program this user belongs to (see email-branding.ts). An athlete's
+   * coach, a guardian's child's coach, a coach's own org. Looked up here so a call site names
+   * the person and nothing else; a lookup that fails sends the plain email rather than none. */
+  brandForUserId?: number | null;
+  /** The brand itself, for a caller that already has it (the Branding page's test send). */
+  brand?: EmailBrand | null;
 }): Promise<{ sent: boolean; error?: string }> {
+  let brand: EmailBrand | null = brandOverride ?? null;
+  if (!brand && brandForUserId != null) {
+    try {
+      // Dynamic: storage imports sendEmail, so a static import here would be a cycle.
+      const { storage } = await import("./storage");
+      brand = (await storage.getEffectiveBrandingForUser(brandForUserId)) as EmailBrand | null;
+    } catch (err) {
+      console.warn("Email branding lookup failed; sending unbranded:", (err as Error)?.message);
+    }
+  }
+  const html = applyEmailBranding(rawHtml, brand);
+  const from = brandedFromAddress(fromAddress, brand);
   if (!emailEnabled) {
     // Under vitest nothing is configured and nothing should leave the
     // process -- but a test of a flow that RUNS on an email (the
@@ -68,7 +89,7 @@ export async function sendEmail({
     // have been sent. Captured as if delivered, so the code under test
     // takes its real "sent" branch.
     if (process.env.NODE_ENV === "test") {
-      testOutbox.push({ to, subject, html });
+      testOutbox.push({ to, subject, html, from });
       if (testOutbox.length > 50) testOutbox.shift();
       return { sent: true };
     }
@@ -82,7 +103,7 @@ export async function sendEmail({
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from: fromAddress, to, subject, html }),
+      body: JSON.stringify({ from, to, subject, html }),
     });
     if (!res.ok) {
       const body = await res.text();
