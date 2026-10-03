@@ -3660,6 +3660,8 @@ CREATE TABLE IF NOT EXISTS "email_list_campaigns" (
   "started_at" timestamp NOT NULL DEFAULT now(),
   "finished_at" timestamp
 );
+-- The monthly Coaches Corner digest reuses the campaign table with an audience (2026-10-03).
+ALTER TABLE "email_list_campaigns" ADD COLUMN IF NOT EXISTS "audience" text NOT NULL DEFAULT 'launch_list';
 `;
 
 async function main() {

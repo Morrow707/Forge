@@ -6132,6 +6132,10 @@ export type EmailListSubscriber = typeof emailListSubscribers.$inferSelect;
 export const emailListCampaigns = pgTable("email_list_campaigns", {
   id: serial("id").primaryKey(),
   sentByUserId: integer("sent_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  // Who it went to: the public launch list ("launch_list"), or every coach with Coaches
+  // Corner ("coaches_corner", the monthly digest, 2026-10-03). The audience is resolved when
+  // the send starts, never stored as a list.
+  audience: text("audience").notNull().default("launch_list"),
   subject: text("subject").notNull(),
   // Plain text as typed; rendered to HTML at send time (paragraphs, line breaks, bare URLs).
   body: text("body").notNull(),

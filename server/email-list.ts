@@ -7,7 +7,7 @@ import { db } from "./db";
 import { emailListCampaigns, emailListSubscribers } from "@shared/schema";
 import { requireRole } from "./auth";
 import { isEmailConfigured, sendEmail } from "./email";
-import { buildCampaignEmail, unsubscribeUrl } from "./email-list-render";
+import { type CampaignRecipient, buildCampaignEmail, unsubscribeUrl } from "./email-list-render";
 import { publicOrigin } from "./public-origin";
 
 /** THE LAUNCH EMAIL LIST.
@@ -105,9 +105,15 @@ async function activeSubscribers() {
     .orderBy(emailListSubscribers.id);
 }
 
-/** The delivery loop. Exported so the test can await it; the route does not. */
-export async function runCampaign(campaignId: number, args: { subject: string; body: string; origin: string }): Promise<void> {
-  const recipients = await activeSubscribers();
+/** The delivery loop. Exported so the test can await it; the route does not. With no
+ * `recipients`, the active launch list; the Coaches Corner digest passes its own. */
+export async function runCampaign(
+  campaignId: number,
+  args: { subject: string; body: string; origin: string; recipients?: CampaignRecipient[] },
+): Promise<void> {
+  const recipients: CampaignRecipient[] =
+    args.recipients ??
+    (await activeSubscribers()).map((r) => ({ email: r.email, unsubscribeUrl: unsubscribeUrl(args.origin, r.token) }));
   await db
     .update(emailListCampaigns)
     .set({ recipientCount: recipients.length })
@@ -116,10 +122,10 @@ export async function runCampaign(campaignId: number, args: { subject: string; b
   let failed = 0;
   for (const [i, r] of recipients.entries()) {
     if (i > 0 && process.env.NODE_ENV !== "test") await sleep(SEND_SPACING_MS);
-    const html = buildCampaignEmail({ body: args.body, unsubscribeUrl: unsubscribeUrl(args.origin, r.token) });
+    const html = buildCampaignEmail({ body: args.body, unsubscribeUrl: r.unsubscribeUrl });
     let ok = false;
     try {
-      ok = (await sendEmail({ to: r.email, subject: args.subject, html })).sent;
+      ok = (await sendEmail({ to: r.email, subject: args.subject, html, brandForUserId: r.brandForUserId ?? null })).sent;
     } catch {
       ok = false;
     }
@@ -176,9 +182,12 @@ export function registerEmailListRoutes(app: Express) {
       .from(emailListSubscribers)
       .orderBy(desc(emailListSubscribers.subscribedAt))
       .limit(50);
+    // Only the launch list's own mailings; the Coaches Corner digest shares the table under
+    // its own audience and is listed on the Coaches Corner admin page.
     const campaigns = await db
       .select()
       .from(emailListCampaigns)
+      .where(eq(emailListCampaigns.audience, "launch_list"))
       .orderBy(desc(emailListCampaigns.startedAt))
       .limit(20);
     res.json({ active: counts?.active ?? 0, unsubscribed: counts?.unsubscribed ?? 0, recent, campaigns, emailConfigured: isEmailConfigured() });

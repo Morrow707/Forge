@@ -21,7 +21,21 @@ export function renderCampaignBody(body: string): string {
     .join("");
 }
 
-export function buildCampaignEmail(args: { body: string; unsubscribeUrl: string }): string {
+/** One recipient of a mailing: an address, and how they stop getting it. The launch list has a
+ * token link; a coach with Coaches Corner turns off email notifications in the app, so their
+ * footer says that instead and the email wears their program (brandForUserId). */
+export type CampaignRecipient = {
+  email: string;
+  unsubscribeUrl: string | null;
+  brandForUserId?: number | null;
+};
+
+export function buildCampaignEmail(args: { body: string; unsubscribeUrl: string | null }): string {
+  const footer = args.unsubscribeUrl
+    ? `You're getting this because you asked Forge Performance Systems for launch updates.
+          <a href="${escapeHtml(args.unsubscribeUrl)}" style="color:#999;">Unsubscribe</a> at any time.`
+    : `You're getting this because your Forge account has Coaches Corner. Turn off email
+          notifications in the app's notification settings to stop these.`;
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;">
       <div style="background:#F65B23;padding:20px 24px;">
@@ -30,8 +44,7 @@ export function buildCampaignEmail(args: { body: string; unsubscribeUrl: string 
       <div style="padding:24px;">
         ${renderCampaignBody(args.body)}
         <p style="color:#999;font-size:12px;margin-top:24px;line-height:1.5;">
-          You're getting this because you asked Forge Performance Systems for launch updates.
-          <a href="${escapeHtml(args.unsubscribeUrl)}" style="color:#999;">Unsubscribe</a> at any time.
+          ${footer}
         </p>
       </div>
     </div>

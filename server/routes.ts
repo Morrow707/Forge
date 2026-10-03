@@ -28,7 +28,7 @@ import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { setupAuth, requireAuth, requireRole, toPublicUser } from "./auth";
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
-import { registerEmailListRoutes } from "./email-list";
+import { registerEmailListRoutes, runCampaign } from "./email-list";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
@@ -43,6 +43,7 @@ import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail, emailEnabled, isEmailConfigured } from "./email";
 import { KNOWLEDGE_DOMAIN_KEYS } from "@shared/knowledge-domains";
 import { buildWelcomeEmail } from "./welcome-email";
+import { buildCampaignEmail } from "./email-list-render";
 import { buildRosterDocumentEmail } from "./email-roster-documents";
 import { aiEnabled } from "./ai";
 import { usdaFoodLookupEnabled } from "./food-lookup";
@@ -2508,6 +2509,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
       completedAt: latest ?? new Date(),
       estimatedMinutes: inPath.reduce((n, t) => n + t.lessons.reduce((m, l) => m + (l.estMinutes ?? 0), 0), 0),
     });
+  });
+
+  // ---------- The monthly Coaches Corner digest (2026-10-03) ----------
+  // "What's new" to every coach who has the add-on and email notifications on. Reuses the
+  // launch list's campaign table and runner with its own audience; the recipients are
+  // resolved when the send starts, through the same gate the lessons use.
+  async function coachesCornerDigestRecipients() {
+    const coaches = await storage.listCoachesForDigest();
+    const out: { email: string; unsubscribeUrl: null; brandForUserId: number }[] = [];
+    for (const c of coaches) {
+      if (await hasCoachesCornerAccess(c)) out.push({ email: c.email, unsubscribeUrl: null, brandForUserId: c.id });
+    }
+    return out;
+  }
+
+  app.get("/api/admin/coaches-corner/digest-draft", requireRole("admin"), async (_req, res) => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [tracks, paths, threads] = await Promise.all([
+      storage.getAllAcademyTracks(),
+      storage.listAcademyPaths(),
+      storage.listDiscussionThreads({ limit: 100 }),
+    ]);
+    const newTracks = tracks.filter((t) => t.createdAt >= since);
+    const activeThreads = threads.filter((t) => t.lastActivityAt >= since);
+    const month = new Date().toLocaleString("en-US", { month: "long" });
+    const lines: string[] = [];
+    lines.push(`Here's what's new in Coaches Corner this month.`);
+    if (newTracks.length > 0) {
+      lines.push("");
+      lines.push(`New tracks:`);
+      for (const t of newTracks) lines.push(`- ${t.title}: ${t.description}`);
+    }
+    if (paths.length > 0) {
+      lines.push("");
+      lines.push(`Learning paths: ${paths.map((p) => p.title).join(", ")}. Each one is a checklist of tracks in order, with a certificate at the end.`);
+    }
+    if (activeThreads.length > 0) {
+      lines.push("");
+      lines.push(`On the board, ${activeThreads.length} thread${activeThreads.length === 1 ? "" : "s"} had activity this month. The busiest:`);
+      for (const t of activeThreads.slice(0, 3)) lines.push(`- ${t.title} (${t.replyCount} repl${t.replyCount === 1 ? "y" : "ies"})`);
+    }
+    lines.push("");
+    lines.push(`Open Coaches Corner in Forge to pick up where you left off.`);
+    res.json({
+      subject: `Coaches Corner, ${month}: what's new`,
+      body: lines.join("\n"),
+      recipientCount: (await coachesCornerDigestRecipients()).length,
+      newTrackCount: newTracks.length,
+    });
+  });
+
+  app.post("/api/admin/coaches-corner/digest/send-test", requireRole("admin"), async (req, res) => {
+    const parsed = z.object({ subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(20000) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "A subject and a body are both needed." });
+    if (!isEmailConfigured()) return res.status(503).json({ message: "Email sending isn't configured on this server." });
+    const me = currentUser(req);
+    const html = buildCampaignEmail({ body: parsed.data.body, unsubscribeUrl: null });
+    const result = await sendEmail({ to: me.email, subject: `[TEST] ${parsed.data.subject}`, html });
+    if (!result.sent) return res.status(502).json({ message: result.error ?? "The test email didn't send." });
+    res.json({ ok: true, to: me.email });
+  });
+
+  app.post("/api/admin/coaches-corner/digest/send", requireRole("admin"), async (req, res) => {
+    const parsed = z.object({ subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(20000) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "A subject and a body are both needed." });
+    if (!isEmailConfigured()) return res.status(503).json({ message: "Email sending isn't configured on this server." });
+    const running = await storage.findRunningCampaign();
+    if (running) return res.status(409).json({ message: "A mailing is still going out. Wait for it to finish." });
+    const me = currentUser(req);
+    const recipients = await coachesCornerDigestRecipients();
+    const campaignId = await storage.createCampaign({ sentByUserId: me.id, audience: "coaches_corner", subject: parsed.data.subject, body: parsed.data.body });
+    const run = runCampaign(campaignId, { subject: parsed.data.subject, body: parsed.data.body, origin: publicOrigin(req), recipients });
+    if (process.env.NODE_ENV === "test") await run;
+    else void run.catch((err) => console.error("coaches corner digest failed", err));
+    res.json({ ok: true, campaignId, recipientCount: recipients.length });
+  });
+
+  app.get("/api/admin/coaches-corner/digests", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listCampaigns("coaches_corner"));
   });
 
   app.get("/api/admin/academy/paths", requireRole("admin"), async (_req, res) => {
