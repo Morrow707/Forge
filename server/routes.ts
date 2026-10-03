@@ -7910,13 +7910,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const ownerId = coach?.role === "coach" ? coach.id : (team?.coachId ?? null);
     if (ownerId == null) return res.status(404).json({ message: "No program with that code." });
 
-    const branding = await storage.getCoachBrandingByCode(code);
+    // By the coach already resolved above, so a program reached by its slug (which the
+    // code-based lookup does not know) gets its branding and not an empty page.
+    const branding = coach ? await storage.getCoachBranding(ownerId) : await storage.getCoachBrandingByCode(code);
     const entitlements = await getEntitlementsForCoach(ownerId);
     res.json({
       teamName: branding?.brandTeamName ?? null,
       logoUrl: team?.brandLogoUrl ?? branding?.brandLogoUrl ?? null,
       primaryColor: team?.brandPrimaryColor ?? branding?.brandPrimaryColor ?? null,
       secondaryColor: team?.brandSecondaryColor ?? branding?.brandSecondaryColor ?? null,
+      // The rest of the look rides with the colours (hasCustomColors): a visitor sees the
+      // page the way an athlete on the program sees the app.
+      backgroundHue: entitlements.hasCustomColors ? (branding?.brandBackgroundHue ?? null) : null,
+      backgroundStrength: entitlements.hasCustomColors ? (branding?.brandBackgroundStrength ?? null) : null,
+      headingFont: entitlements.hasCustomColors ? (branding?.brandHeadingFont ?? null) : null,
       motto: entitlements.hasTeamIdentity ? (branding?.brandMotto ?? null) : null,
       mission: entitlements.hasTeamIdentity ? (branding?.brandMission ?? null) : null,
       contactEmail: entitlements.hasTeamIdentity ? (branding?.brandContactEmail ?? null) : null,

@@ -75,6 +75,9 @@ export default function LoginPage() {
     if (nativeShowing && loginMutation.isError) present();
   }, [nativeShowing, loginMutation.isError, present]);
 
+  const brand = useRememberedBrand();
+  useEffect(() => ensureBrandFontLoaded(brand?.brandHeadingFont), [brand?.brandHeadingFont]);
+
   if (!isLoading && user) {
     return (
       <Redirect
@@ -115,8 +118,6 @@ export default function LoginPage() {
   const devicePending =
     !mfaPending && loginMutation.data && "deviceApprovalRequired" in loginMutation.data ? loginMutation.data : null;
 
-  const brand = useRememberedBrand();
-  useEffect(() => ensureBrandFontLoaded(brand?.brandHeadingFont), [brand?.brandHeadingFont]);
   return (
     <div
       className="flex min-h-screen items-center justify-center bg-background px-4"

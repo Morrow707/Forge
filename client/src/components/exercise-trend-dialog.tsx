@@ -112,7 +112,7 @@ export function ExerciseTrendDialog({
                   type="monotone"
                   dataKey="estimatedOneRm"
                   name="Est. 1RM"
-                  stroke="#3b82f6"
+                  stroke="hsl(var(--chart-2))"
                   strokeWidth={1.5}
                   strokeDasharray="4 3"
                   connectNulls

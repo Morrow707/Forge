@@ -1299,7 +1299,7 @@ export default function CoachAnalytics() {
                           type="monotone"
                           dataKey="estimatedOneRm"
                           name="Est. 1RM"
-                          stroke="#3b82f6"
+                          stroke="hsl(var(--chart-2))"
                           strokeWidth={1.5}
                           strokeDasharray="4 3"
                           connectNulls
@@ -1309,7 +1309,7 @@ export default function CoachAnalytics() {
                     ) : (
                       <>
                         <Bar dataKey="weight" name="Weight" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
-                        <Bar dataKey="estimatedOneRm" name="Est. 1RM" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="estimatedOneRm" name="Est. 1RM" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
                       </>
                     )}
                   </ComposedChart>
@@ -1347,7 +1347,7 @@ export default function CoachAnalytics() {
                       chartType={chartType}
                       dataKey="meanVelocityMps"
                       name="Mean velocity"
-                      color="#3b82f6"
+                      color="hsl(var(--chart-2))"
                     />
                     <TrendSeries
                       chartType={chartType}
@@ -1552,7 +1552,7 @@ export default function CoachAnalytics() {
                       chartType={chartType}
                       dataKey="meanPowerWatts"
                       name="Mean power"
-                      color="#3b82f6"
+                      color="hsl(var(--chart-2))"
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -1652,7 +1652,7 @@ export default function CoachAnalytics() {
                       chartType={chartType}
                       dataKey="jumpDistanceCm"
                       name="Broad jump distance"
-                      color="#3b82f6"
+                      color="hsl(var(--chart-2))"
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -1832,7 +1832,7 @@ export default function CoachAnalytics() {
                       yAxisId="right"
                       dataKey="medBallReleaseHeightCm"
                       name="Release height"
-                      color="#3b82f6"
+                      color="hsl(var(--chart-2))"
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -1881,7 +1881,7 @@ export default function CoachAnalytics() {
                       yAxisId="right"
                       dataKey="kbSwingPeakHeightCm"
                       name="Peak height"
-                      color="#3b82f6"
+                      color="hsl(var(--chart-2))"
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -3209,7 +3209,7 @@ type TrendPoint = { athleteId: number; athleteName: string; date: string; value:
 
 const TREND_COLORS = [
   "hsl(var(--primary))",
-  "#3b82f6",
+  "hsl(var(--chart-2))",
   "#f59e0b",
   "#a855f7",
   "#22c55e",

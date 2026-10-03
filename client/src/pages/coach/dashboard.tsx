@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { BrandedMark } from "@/components/branded-mark";
+import type { EffectiveBranding } from "@/lib/branding-style";
 import { Link } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -33,7 +35,7 @@ import {
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { Pencil, Check } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -481,6 +483,14 @@ function TeamInviteCard({
   teams: TeamSummary[];
   coachCode: string | null;
 }) {
+  // The invite carries the program's name and mark, not just Forge's: an athlete or a parent
+  // who scans the code sees who they are joining. Same query the shell uses.
+  const { data: brand } = useQuery<EffectiveBranding>({
+    queryKey: ["/api/branding/me"],
+    queryFn: () => getJson("/api/branding/me"),
+    staleTime: 5 * 60_000,
+  });
+  const programName = brand?.brandTeamName?.trim() || null;
   const codeOptions = [
     ...(coachCode ? [{ label: "All teams (personal code)", code: coachCode }] : []),
     ...teams.filter((t) => t.code).map((t) => ({ label: t.name, code: t.code as string })),
@@ -500,8 +510,8 @@ function TeamInviteCard({
       toast.error("Add at least one email");
       return;
     }
-    const subject = "Join our team on Forge";
-    const body = `Hey! Join our training program on Forge:\n\n1. Sign up at ${window.location.origin}/signup\n2. Choose "Athlete" and enter this invite code: ${effectiveCode}\n\nSee you there!`;
+    const subject = programName ? `Join ${programName} on Forge` : "Join our team on Forge";
+    const body = `Hey! Join ${programName ?? "our training program"} on Forge:\n\n1. Sign up at ${window.location.origin}/signup?code=${effectiveCode}\n2. Choose "Athlete" and enter this invite code: ${effectiveCode}\n\nSee you there!`;
     const mailto = `mailto:?bcc=${encodeURIComponent(recipients.join(","))}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.location.href = mailto;
   }
@@ -615,6 +625,7 @@ function TeamInviteCard({
           </DialogHeader>
           {qrOption && (
             <div className="flex flex-col items-center gap-3 py-2">
+              <BrandedMark brand={brand ?? null} size="md" />
               <div className="rounded-md bg-white p-3">
                 <QRCodeSVG
                   value={`${window.location.origin}/signup?code=${qrOption.code}`}

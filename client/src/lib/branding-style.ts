@@ -81,7 +81,12 @@ export function computeBrandingStyle(
   }
   if (branding?.brandSecondaryColor) {
     const hsl = hexToHslTriplet(branding.brandSecondaryColor);
-    if (hsl) vars["--secondary"] = hsl;
+    if (hsl) {
+      vars["--secondary"] = hsl;
+      // The second series on every chart. Blue by default (index.css); the program's
+      // second colour when it has one, so a Cal chart is blue and gold, not blue and blue.
+      vars["--chart-2"] = hsl;
+    }
   }
   if (typeof branding?.brandBackgroundHue === "number") {
     vars["--neutral-hue"] = String(branding.brandBackgroundHue);
@@ -106,7 +111,10 @@ export function computeBrandingStyle(
   }
   if (personal?.secondaryColor) {
     const hsl = hexToHslTriplet(personal.secondaryColor);
-    if (hsl) vars["--secondary"] = hsl;
+    if (hsl) {
+      vars["--secondary"] = hsl;
+      vars["--chart-2"] = hsl;
+    }
   }
   if (typeof personal?.backgroundHue === "number") {
     vars["--neutral-hue"] = String(personal.backgroundHue);

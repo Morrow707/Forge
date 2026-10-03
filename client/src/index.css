@@ -107,6 +107,10 @@
      second accent (e.g. a program's actual gold), independent of the
      neutral tint. */
   --secondary: var(--neutral-hue) calc(15% * var(--neutral-sat)) 20%;
+  /* The second series on a chart (the first is --primary). A program's secondary colour
+     takes it over in branding-style.ts; otherwise this blue, which is what the charts drew
+     as a literal before 2026-10-03. */
+  --chart-2: 217 91% 60%;
   --secondary-foreground: 0 0% 92%;
 
   --muted: var(--neutral-hue) calc(13% * var(--neutral-sat)) 19%;

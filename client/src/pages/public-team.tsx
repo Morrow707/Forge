@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
+import { computeBrandingStyle, ensureBrandFontLoaded } from "@/lib/branding-style";
 import { usePageMeta } from "@/lib/page-meta";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +14,9 @@ type PublicTeam = {
   logoUrl: string | null;
   primaryColor: string | null;
   secondaryColor: string | null;
+  backgroundHue: number | null;
+  backgroundStrength: number | null;
+  headingFont: string | null;
   motto: string | null;
   mission: string | null;
   contactEmail: string | null;
@@ -63,6 +68,23 @@ export default function PublicTeamPage() {
     noindex: isError || !data,
   });
 
+  // The page wears the program the way the app does (2026-10-03): colours, background hue
+  // and strength, heading font. Same function as every branded screen, so they cannot drift.
+  const brandStyle = computeBrandingStyle(
+    data
+      ? {
+          brandTeamName: data.teamName,
+          brandLogoUrl: data.logoUrl,
+          brandPrimaryColor: data.primaryColor,
+          brandSecondaryColor: data.secondaryColor,
+          brandBackgroundHue: data.backgroundHue,
+          brandBackgroundStrength: data.backgroundStrength,
+          brandHeadingFont: data.headingFont,
+        }
+      : null,
+  );
+  useEffect(() => ensureBrandFontLoaded(data?.headingFont), [data?.headingFont]);
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -93,8 +115,8 @@ export default function PublicTeamPage() {
   return (
     <div
       className="min-h-screen bg-background px-4 py-10"
-      // The program's own colour, when it has one -- the whole point of the add-on.
-      style={data.primaryColor ? { borderTop: `4px solid ${data.primaryColor}` } : undefined}
+      // The program's own look, when it has one -- the whole point of the add-on.
+      style={{ ...brandStyle, ...(data.primaryColor ? { borderTop: `4px solid ${data.primaryColor}` } : {}) }}
     >
       <div className="mx-auto max-w-xl space-y-4">
         <Card>

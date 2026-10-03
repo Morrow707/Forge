@@ -112,8 +112,12 @@ describe("admin", () => {
     });
     expect(sent.status).toBe(200);
 
-    expect(testOutbox.map((m) => m.to)).toEqual(["a@example.test"]);
-    const [mail] = testOutbox;
+    // The sign-in notice is fire-and-forget behind a geolocation lookup and, since emails
+    // started wearing the program's brand, a branding read too -- so it can land after the
+    // clear above. Only the mailing is under test; leave the admin's own notice out.
+    const mailing = testOutbox.filter((m) => m.to !== admin.email);
+    expect(mailing.map((m) => m.to)).toEqual(["a@example.test"]);
+    const [mail] = mailing;
     expect(mail.subject).toBe("Forge opens next month");
     const [a] = await db.select().from(emailListSubscribers).where(eq(emailListSubscribers.email, "a@example.test"));
     expect(mail.html).toContain(`/unsubscribe?token=${a.unsubscribeToken}`);
@@ -140,8 +144,10 @@ describe("admin", () => {
     testOutbox.length = 0;
     const res = await client.post("/api/admin/email-list/send-test", { subject: "Hello", body: "Body" });
     expect(res.status).toBe(200);
-    expect(testOutbox.map((m) => m.to)).toEqual([admin.email]);
-    expect(testOutbox[0].subject).toBe("[TEST] Hello");
+    // Same late sign-in notice as above: match on the subject, not the count.
+    const tests = testOutbox.filter((m) => m.subject.startsWith("[TEST]"));
+    expect(tests.map((m) => m.to)).toEqual([admin.email]);
+    expect(tests[0].subject).toBe("[TEST] Hello");
     const list = await client.get("/api/admin/email-list");
     expect(list.body.campaigns).toHaveLength(0);
   });

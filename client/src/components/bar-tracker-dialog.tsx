@@ -2522,7 +2522,7 @@ export function BarTrackerDialog({
                         tickFormatter={(v: number) => String(Math.round(v))}
                       />
                       <YAxis dataKey="velocityMps" tick={{ fontSize: 9 }} unit="m/s" width={40} />
-                      <Line type="monotone" dataKey="velocityMps" stroke="#f97316" dot={false} strokeWidth={2} />
+                      <Line type="monotone" dataKey="velocityMps" stroke="hsl(var(--primary))" dot={false} strokeWidth={2} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
