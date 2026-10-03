@@ -390,10 +390,18 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- **Queued, not yet in a build:** the under-13 card verification's client half (the guardian
+- Build **598** is the newest TestFlight build, cut 2026-10-03 from `5338c7aa`: every program
+  day picks its own date with its workout on screen (the weekday picker is gone from both
+  Assign Program and the builder's self-assign, and each day's date is sent explicitly rather
+  than inferred), every Free Agent gets the Exercise Bank in their Library (the Skill Bank
+  stays behind the skills entitlement), and the superset Link chip no longer touches the card
+  above it -- that was structural, one wrapper per exercise holding card, chip and Rest chips
+  with only the wrappers spaced. Also RULE #3 in this file. Build **597** was the previous
+  build, cut the same day from `eb11c72b` (Coaches Corner sold in the app), and it carried the
+  queue that had been waiting: the under-13 card verification's client half (the guardian
   dashboard card, the athlete holding screen's second message, `guardianVerificationRequired`)
-  and the Apple Health switch reading counsel's disclosure. Server halves are live on Render.
-- Build **595** is the newest TestFlight build, cut 2026-10-02 from set 2 beside OVR
+  and the Apple Health switch reading counsel's disclosure.
+- Build **595** was cut 2026-10-02 from set 2 beside OVR
   (docs/camera-tracking-notes.md "Set 2 beside OVR, 2026-10-02"): the row's pickup is not a rep
   (`EDGE_OVERSIZED_AMPLITUDE_RATIO`), the live path thins the 3D pose and hand pose at the same
   rate as the file path (`strideIndex`), a wrist under the visibility floor is used at its own
