@@ -1,20 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Clapperboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { VideoCompareDialog } from "@/components/video-compare";
 import { SessionRecorderControls } from "@/components/session-recorder-controls";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
-import { getJson } from "@/lib/queryClient";
-import type { FreeAgentAddOnId } from "@shared/free-agent-tiers";
+import { useCameraAccess } from "@/hooks/use-camera-access";
 import type { CompareSubject } from "@/components/clip-picker";
-
-type AthleteEntitlements = {
-  addOns: Record<FreeAgentAddOnId, boolean>;
-  ownedAddOns: Record<FreeAgentAddOnId, boolean>;
-  billingOpen: boolean;
-};
 
 /** WHAT A FREE AGENT CAN DO WITH THEIR OWN FOOTAGE, now that the coach cards are gone.
  *
@@ -26,20 +18,18 @@ type AthleteEntitlements = {
  * Their lift against a reference clip they supply, side by side, with the skeleton, the
  * drawings and a voice-over -- then recorded and exported. Forge stores none of it.
  *
- * ACCESS COMES FROM THE SERVER (see sport-coaches.tsx for why this is a fix rather than a
- * refactor): `addOns.video_analysis` is "may I open this", which beta, a trial or enforcement
- * being off all answer yes to, and none of which the client can work out for itself.
+ * ACCESS IS THE CAMERA'S (Scott, 2026-10-03: "there are 3 tiers, built on purpose, and
+ * anyone being coached gets it already"). It was its own $14.99 add-on until then. The
+ * workbench rides with the camera entitlement, which the server answers through
+ * useCameraAccess: a coached athlete, a coach, an admin, or a Free Agent on AI Coach + Video.
  */
 export function VideoWorkbenchCard() {
   const [open, setOpen] = useState(false);
-  const { data } = useQuery<AthleteEntitlements>({
-    queryKey: ["/api/athlete/entitlements"],
-    queryFn: () => getJson("/api/athlete/entitlements"),
-  });
+  const camera = useCameraAccess();
 
-  // Unknown is not yes. Same convention as useCameraAccess: drawing this before the answer
-  // lands flashes a bought feature at somebody who has not bought it.
-  if (data?.addOns?.video_analysis !== true) return null;
+  // Unknown is not yes. Drawing this before the answer lands flashes a bought feature at
+  // somebody who has not bought it.
+  if (camera.allowed !== true) return null;
   return <WorkbenchBody open={open} setOpen={setOpen} subject={{ kind: "self" }} />;
 }
 

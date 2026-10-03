@@ -202,11 +202,17 @@ export function appleProductIdForFreeAgentTier(tier: FreeAgentTierId): string {
  */
 export type SportCoachAddOnId = "golf_swing" | "hitting" | "pitching";
 
-/** Everything a Free Agent can buy ON TOP of their tier. The sport coaches, plus add-ons that
- * are not coaches at all. Two names rather than one for the same reason FREE_AGENT_TIER_ORDER
- * and ALL_FREE_AGENT_TIER_IDS are two lists: they answer different questions, and the day they
- * stop being identical is the day conflating them breaks something. */
-export type FreeAgentAddOnId = SportCoachAddOnId | "video_analysis";
+/** Everything a Free Agent can buy ON TOP of their tier. Today that is the sport coaches and
+ * nothing else; the type stays separate from SportCoachAddOnId for the same reason
+ * FREE_AGENT_TIER_ORDER and ALL_FREE_AGENT_TIER_IDS are two lists: they answer different
+ * questions, and the day they stop being identical is the day conflating them breaks something.
+ *
+ * THE VIDEO WORKBENCH IS NOT AN ADD-ON. It was one ("video_analysis", $14.99) until 2026-10-03.
+ * Scott: "there are 3 tiers, built on purpose, and anyone being coached gets it already." The
+ * workbench now rides with the camera entitlement: AI Coach + Video has it, every coached
+ * athlete and every coach has it, and nothing is sold on top of a tier for it. The gate is
+ * useCameraAccess, the same server answer the record button reads. */
+export type FreeAgentAddOnId = SportCoachAddOnId;
 
 export const SPORT_COACH_ADD_ON_IDS: SportCoachAddOnId[] = ["golf_swing", "hitting", "pitching"];
 
@@ -222,8 +228,8 @@ export interface FreeAgentAddOnDef {
 }
 
 // PRICES CONFIRMED 2026-10-03 (Scott: "keep them"). $7.99 for each sport coach, below the
-// $9.99 AI Coach it sits on; Video Analysis $14.99, between AI Coach and AI Coach + Video.
-// These are the numbers the Stripe Prices and the App Store products are created to match.
+// $9.99 AI Coach it sits on. These are the numbers the Stripe Prices and the App Store
+// products are created to match.
 //
 // All three sport-specialist coaches are live -- see requireFreeAgentAddOn
 // in routes.ts (which gates /api/athlete/coach/:addOnId/chat on
@@ -250,31 +256,6 @@ export const FREE_AGENT_ADD_ONS: Record<FreeAgentAddOnId, FreeAgentAddOnDef> = {
     monthlyPriceCents: 799,
     description: "AI pitching mechanics analysis and drills.",
   },
-  // THE VIDEO WORKBENCH, AND IT IS SOLD ON THE VIDEO RATHER THAN THE NUMBERS.
-  //
-  // Side-by-side comparison of the athlete's own lift against a reference clip they supply,
-  // with angle lines and a recorded voice-over, exported to their phone. Nothing about it is
-  // stored in Forge (Scott, 2026-09-22: "I don't want to save this in forge ... make them
-  // download the video to their phones"), which is also why it can be priced as its own thing
-  // rather than as more storage.
-  //
-  // $14.99/mo on top of the tier that has the camera. Reference point: Inform charges $9.99
-  // standard and $14.99 premium. Free through beta like every other add-on -- the short-circuit
-  // in getEntitlements unlocks all of them while enforcement is off, which is how it gets
-  // tested before anybody is charged.
-  //
-  // What it must NOT claim: the CAMERA-derived numbers are still uncalibrated and still carry
-  // CAMERA_ACCURACY_PURCHASE_WARNING. A squat's ROM currently reads about 9% under a bar
-  // sensor (see docs/camera-tracking-notes.md). What is being sold here is the video work --
-  // watching two lifts together, drawing on them, talking over them -- which is real and
-  // correct today.
-  video_analysis: {
-    id: "video_analysis",
-    label: "Video Analysis",
-    monthlyPriceCents: 1499,
-    description:
-      "Compare your lift against a reference clip side by side, mark angles, record a voice-over, and export it to your phone.",
-  },
 };
 
 // Which of the three above have an actual feature behind them -- same
@@ -289,10 +270,6 @@ export const BUILT_FREE_AGENT_ADD_ONS: Set<FreeAgentAddOnId> = new Set([
   "golf_swing",
   "hitting",
   "pitching",
-  // video_analysis is deliberately absent until the workbench actually ships. This Set is the
-  // "don't sell what doesn't exist" gate, and the price above being real code is the whole
-  // point of declaring it before the feature lands -- same order billing-tiers.ts followed
-  // before Stripe existed.
 ]);
 
 /**
@@ -322,12 +299,7 @@ export function addOnIsOffered(id: FreeAgentAddOnId): boolean {
   return !WITHDRAWN_ADD_ONS.includes(id);
 }
 
-export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = [
-  "golf_swing",
-  "hitting",
-  "pitching",
-  "video_analysis",
-];
+export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching"];
 
 /** The App Store Connect Product id for a sport-coach add-on.
  *

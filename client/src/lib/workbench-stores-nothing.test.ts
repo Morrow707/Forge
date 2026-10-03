@@ -84,7 +84,8 @@ describe("the session recorder", () => {
     expect(workbench).toContain("footer={<SessionRecorderControls />}");
     // Access comes from the server, and unknown is not yes -- drawing this before the answer
     // lands flashes a bought feature at somebody who has not bought it.
-    expect(workbench).toContain('data?.addOns?.video_analysis !== true) return null');
+    expect(workbench).toContain("if (camera.allowed !== true) return null;");
+    expect(workbench).toContain("const camera = useCameraAccess();");
     expect(progress).toContain("{isFreeAgent && <VideoWorkbenchCard />}");
   });
 

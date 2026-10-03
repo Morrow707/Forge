@@ -940,7 +940,9 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   verify as "unrecognized product": money taken, nothing granted). Add-on products must NOT go
   in the tier subscription group at App Store Connect: add-ons combine, tiers are exclusive.
 - **Prices confirmed 2026-10-03** (Scott: "keep them"): Coaches Corner $19.99/mo, sport coaches
-  $7.99/mo each, Video Analysis $14.99/mo, in the shared constants. The Stripe Prices and the
+  $7.99/mo each, in the shared constants. The video workbench is NOT an add-on any more (same
+  day: "there are 3 tiers, built on purpose, and anyone being coached gets it already"); it
+  rides with the camera entitlement through `useCameraAccess`. The Stripe Prices and the
   App Store products are created to match on launch day; `missingPriceEnvVars()` names the
   env vars.
 - **The locked state for a non-comped account says "not available yet"**, never "free in beta":
