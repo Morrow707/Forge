@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
 import { Award, CheckCircle2, Circle, Route } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 import { cn } from "@/lib/utils";
 
 type PathTrack = { id: number; title: string; completed: boolean };
@@ -22,10 +23,19 @@ type Path = {
 /** Learning paths (2026-10-03): ordered sets of tracks for a kind of coach, each a checklist
  * with a certificate at the end. Tapping a track opens it in the catalog. */
 export function CoachesCornerPaths({ onOpenTrack }: { onOpenTrack: (trackId: number) => void }) {
-  const { data: paths = [] } = useQuery<Path[]>({
+  const { data, isError, refetch } = useQuery<Path[]>({
     queryKey: ["/api/coach/academy/paths"],
     queryFn: () => getJson("/api/coach/academy/paths"),
   });
+  // A failed read is shown as one, not as "there are no paths".
+  if (isError) {
+    return (
+      <div className="mb-6">
+        <ReadFailed what="the learning paths" onRetry={() => void refetch()} />
+      </div>
+    );
+  }
+  const paths = data ?? [];
   if (paths.length === 0) return null;
   return (
     <div className="mb-6">

@@ -5133,6 +5133,47 @@ export const academyQuizAttempts = pgTable(
   }),
 );
 
+// Per-question results of a quiz attempt (2026-10-03), so the admin analytics can say which
+// questions everyone misses: a missed question is a bad question or a lesson that did not
+// teach it, and either way the admin wants to know.
+export const academyQuizAttemptAnswers = pgTable(
+  "academy_quiz_attempt_answers",
+  {
+    id: serial("id").primaryKey(),
+    attemptId: integer("attempt_id")
+      .notNull()
+      .references(() => academyQuizAttempts.id, { onDelete: "cascade" }),
+    questionId: integer("question_id")
+      .notNull()
+      .references(() => academyQuizQuestions.id, { onDelete: "cascade" }),
+    correct: boolean("correct").notNull(),
+  },
+  (table) => ({
+    questionIdx: index("academy_quiz_attempt_answers_question_idx").on(table.questionId),
+  }),
+);
+
+// A question "Ask the library" could not answer well, filed by the coach who asked it
+// (2026-10-03). The next track is written from these. The answer the library gave travels
+// with it so the admin can see what was wrong with it.
+export const coachesCornerQuestions = pgTable(
+  "coaches_corner_questions",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    answerGiven: text("answer_given"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+    adminNote: text("admin_note"),
+  },
+  (table) => ({
+    openIdx: index("coaches_corner_questions_open_idx").on(table.resolvedAt),
+  }),
+);
+
 // ---------- Coaches Corner learning paths (2026-10-03) ----------
 // An ordered set of tracks for a kind of coach: "New to strength coaching", "Running an
 // in-season program", "Youth and middle school". A path is complete when every track in it is

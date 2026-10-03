@@ -1360,6 +1360,24 @@ CREATE TABLE IF NOT EXISTS "academy_quiz_answers" (
   "explanation" text NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "academy_quiz_answers_question_idx" ON "academy_quiz_answers" ("question_id");
+-- Per-question quiz results and coach-submitted questions (2026-10-03).
+CREATE TABLE IF NOT EXISTS "academy_quiz_attempt_answers" (
+  "id" serial PRIMARY KEY,
+  "attempt_id" integer NOT NULL REFERENCES "academy_quiz_attempts"("id") ON DELETE CASCADE,
+  "question_id" integer NOT NULL REFERENCES "academy_quiz_questions"("id") ON DELETE CASCADE,
+  "correct" boolean NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "academy_quiz_attempt_answers_question_idx" ON "academy_quiz_attempt_answers" ("question_id");
+CREATE TABLE IF NOT EXISTS "coaches_corner_questions" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "question" text NOT NULL,
+  "answer_given" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "resolved_at" timestamp,
+  "admin_note" text
+);
+CREATE INDEX IF NOT EXISTS "coaches_corner_questions_open_idx" ON "coaches_corner_questions" ("resolved_at");
 
 DO $$ BEGIN
   CREATE TYPE "nutrition_goal" AS ENUM ('build_muscle', 'lose_fat', 'improve_performance', 'general_health');

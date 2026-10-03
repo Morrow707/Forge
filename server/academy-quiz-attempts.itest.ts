@@ -97,3 +97,40 @@ describe("a scored quiz", () => {
     expect((await cc.get(`/api/coach/academy/tracks/${created.body.id}/certificate`)).status).toBe(200);
   });
 });
+
+describe("analytics and flagged questions", () => {
+  it("count per question misses and list what the library couldn't answer, naming nobody", async () => {
+    const admin = await makeLoginableUser({ role: "admin" });
+    const c1 = await makeLoginableUser({ role: "coach" });
+    const c2 = await makeLoginableUser({ role: "coach" });
+    const c3 = await makeLoginableUser({ role: "coach" });
+    const ca = await loginAs(server.baseUrl, admin);
+    const track = await makeTrack(ca);
+    const rightOf = (q: (typeof track.quizQuestions)[number]) => q.answers.find((a) => a.isCorrect)!.id;
+    const wrongOf = (q: (typeof track.quizQuestions)[number]) => q.answers.find((a) => !a.isCorrect)!.id;
+    // Everyone misses question 0; everyone gets the rest.
+    for (const coach of [c1, c2, c3]) {
+      const cc = await loginAs(server.baseUrl, coach);
+      await cc.post(`/api/coach/academy/tracks/${track.id}/quiz-attempt`, {
+        picks: track.quizQuestions.map((q, i) => ({ questionId: q.id, answerId: i === 0 ? wrongOf(q) : rightOf(q) })),
+      });
+      await cc.post(`/api/coach/academy/lessons/${track.lessons[0].id}/complete`, { completed: true });
+    }
+    const cc1 = await loginAs(server.baseUrl, c1);
+    expect((await cc1.post("/api/coach/academy/ask/flag", { question: "How do I periodize for wrestling?", answerGiven: "The library has nothing on wrestling." })).status).toBe(201);
+
+    const a = await ca.get("/api/admin/coaches-corner/analytics");
+    expect(a.status).toBe(200);
+    const row = a.body.tracks.find((t: any) => t.trackId === track.id);
+    expect(row).toMatchObject({ started: 3, allLessonsRead: 0, quizAttempts: 3, quizPasses: 3, quizCoaches: 3 });
+    expect(row.lessons[0].readBy).toBe(3);
+    expect(a.body.hardestQuestions[0]).toMatchObject({ questionText: "Q0?", answered: 3, missed: 3, missRate: 1 });
+    expect(a.body.openQuestions).toBe(1);
+    expect(JSON.stringify(a.body)).not.toContain("Test User");
+
+    const qs = await ca.get("/api/admin/coaches-corner/questions");
+    expect(qs.body[0]).toMatchObject({ question: "How do I periodize for wrestling?" });
+    expect((await ca.post(`/api/admin/coaches-corner/questions/${qs.body[0].id}/resolve`, { adminNote: "Wrote the wrestling track" })).status).toBe(200);
+    expect((await ca.get("/api/admin/coaches-corner/questions")).body).toHaveLength(0);
+  });
+});

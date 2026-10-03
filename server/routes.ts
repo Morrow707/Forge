@@ -2848,12 +2848,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(4000) }))
           .max(10)
           .optional(),
+        // The coach opts in per question; aggregates only (getRosterContextForCoach).
+        includeRoster: z.boolean().optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const result = await storage.askCoachesCornerLibrary(parsed.data);
+    const rosterContext = parsed.data.includeRoster ? await storage.getRosterContextForCoach(user.id) : null;
+    const result = await storage.askCoachesCornerLibrary({ ...parsed.data, rosterContext });
     if (!result) return res.status(503).json({ message: "The library can't answer right now. Try again in a minute." });
     res.json(result);
+  });
+
+  // "This didn't answer my question": the coach files it, with the answer the library gave,
+  // and the admin reads the list when deciding what to write next.
+  app.post("/api/coach/academy/ask/flag", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    if (!(await hasCoachesCornerAccess(user))) {
+      return res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
+    }
+    const parsed = z
+      .object({ question: z.string().trim().min(3).max(1000), answerGiven: z.string().trim().max(6000).nullable().optional() })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    await storage.fileCoachesCornerQuestion(user.id, parsed.data.question, parsed.data.answerGiven ?? null);
+    res.status(201).json({ ok: true });
+  });
+
+  app.get("/api/admin/coaches-corner/questions", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listOpenCoachesCornerQuestions());
+  });
+  app.post("/api/admin/coaches-corner/questions/:id/resolve", requireRole("admin"), async (req, res) => {
+    const parsed = z.object({ adminNote: z.string().trim().max(500).nullable().optional() }).safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const ok = await storage.resolveCoachesCornerQuestion(Number(req.params.id), parsed.data.adminNote ?? null);
+    if (!ok) return res.status(404).json({ message: "Question not found or already resolved" });
+    res.json({ ok: true });
+  });
+
+  // Completion analytics: counts per track, lesson and question. No coach is named.
+  app.get("/api/admin/coaches-corner/analytics", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.getCoachesCornerAnalytics());
   });
 
   // The Corner is priced as a standalone monthly add-on, but nothing can

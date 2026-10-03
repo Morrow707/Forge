@@ -102,6 +102,8 @@ import {
   academyLessons,
   academyLessonCompletions,
   academyQuizAttempts,
+  academyQuizAttemptAnswers,
+  coachesCornerQuestions,
   academyPaths,
   academyPathTracks,
   emailListCampaigns,
@@ -13623,7 +13625,8 @@ Hard rules, no exceptions:
     });
     const correct = results.filter((r) => r.correct).length;
     const passed = academyQuizPassed(correct, total);
-    await db.insert(academyQuizAttempts).values({ coachId, trackId, correct, total, passed });
+    const [attempt] = await db.insert(academyQuizAttempts).values({ coachId, trackId, correct, total, passed }).returning({ id: academyQuizAttempts.id });
+    await db.insert(academyQuizAttemptAnswers).values(results.map((r) => ({ attemptId: attempt.id, questionId: r.questionId, correct: r.correct })));
     const best = await this.getBestAcademyQuizAttempt(coachId, trackId);
     return { correct, total, passed, results, best };
   },
@@ -13888,6 +13891,8 @@ Hard rules, no exceptions:
   async askCoachesCornerLibrary(input: {
     question: string;
     history?: { role: "user" | "assistant"; content: string }[];
+    /** Aggregates about the asking coach's roster (getRosterContextForCoach), when they opted in. */
+    rosterContext?: string | null;
   }): Promise<{
     answer: string;
     citations: { trackId: number; trackTitle: string; lessonId: number; lessonNumber: number; lessonTitle: string }[];
@@ -13949,6 +13954,10 @@ Hard rules, no exceptions:
       "- Nothing here is medical advice. An injury, pain or illness question gets the one-line answer that it is for a clinician, then whatever the lessons say about returning to training.",
       "- Never name a certification body or a certification.",
       "",
+      ...(input.rosterContext
+        ? ["", "About the coach's own roster (aggregates, no names). Use it to make the answer specific to them:", input.rosterContext]
+        : []),
+      "",
       "Forge's coaching principles:",
       principles || "(none recorded)",
       "",
@@ -13969,6 +13978,132 @@ Hard rules, no exceptions:
       .filter((l) => cited.has(l.index))
       .map(({ trackId, trackTitle, lessonId, lessonNumber, lessonTitle }) => ({ trackId, trackTitle, lessonId, lessonNumber, lessonTitle }));
     return { answer: text.trim(), citations };
+  },
+
+  // ---------- The coach's roster, as context for "Ask the library" (2026-10-03) ----------
+  // Aggregates only: how many athletes, which sports and positions, the age range, the teams.
+  // The question a coach types already carries whatever specifics they want answered; the
+  // model does not need names, and so it does not get them.
+  async getRosterContextForCoach(coachId: number): Promise<string> {
+    const roster = await this.getRosterForCoach(coachId);
+    if (roster.length === 0) return "The coach has no athletes on their roster yet.";
+    const countBy = (key: (a: (typeof roster)[number]) => string | null | undefined) => {
+      const m = new Map<string, number>();
+      for (const a of roster) {
+        const k = (key(a) ?? "").trim();
+        if (k) m.set(k, (m.get(k) ?? 0) + 1);
+      }
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} (${n})`).join(", ");
+    };
+    const ages = roster.map((a) => a.age).filter((n): n is number => typeof n === "number" && n > 0);
+    const teams = await this.getTeamsForCoach(coachId);
+    const lines = [
+      `Roster: ${roster.length} athlete${roster.length === 1 ? "" : "s"}.`,
+      ages.length ? `Ages ${Math.min(...ages)} to ${Math.max(...ages)}.` : "",
+      countBy((a) => a.sport) ? `Sports: ${countBy((a) => a.sport)}.` : "",
+      countBy((a) => a.position) ? `Positions: ${countBy((a) => a.position)}.` : "",
+      countBy((a) => a.seasonPhase) ? `Season phase: ${countBy((a) => a.seasonPhase)}.` : "",
+      teams.length ? `Teams: ${teams.map((t: any) => `${t.name}${Array.isArray(t.members) ? ` (${t.members.length})` : ""}`).join(", ")}.` : "",
+    ].filter(Boolean);
+    return lines.join(" ");
+  },
+
+  // ---------- Coach-submitted questions (2026-10-03) ----------
+  async fileCoachesCornerQuestion(coachId: number, question: string, answerGiven: string | null) {
+    const [row] = await db.insert(coachesCornerQuestions).values({ coachId, question, answerGiven }).returning();
+    return row;
+  },
+  async listOpenCoachesCornerQuestions() {
+    const rows = await db.query.coachesCornerQuestions.findMany({
+      where: isNull(coachesCornerQuestions.resolvedAt),
+      orderBy: desc(coachesCornerQuestions.createdAt),
+      limit: 200,
+    });
+    return rows;
+  },
+  async resolveCoachesCornerQuestion(id: number, adminNote: string | null) {
+    const [row] = await db
+      .update(coachesCornerQuestions)
+      .set({ resolvedAt: new Date(), adminNote })
+      .where(and(eq(coachesCornerQuestions.id, id), isNull(coachesCornerQuestions.resolvedAt)))
+      .returning({ id: coachesCornerQuestions.id });
+    return Boolean(row);
+  },
+
+  // ---------- Completion analytics for the admin (2026-10-03) ----------
+  // Per track: how many coaches started (read any lesson), how many completed every lesson,
+  // quiz attempts and the pass rate, and per question how often it is missed. Counts only,
+  // never a coach's name.
+  async getCoachesCornerAnalytics() {
+    const tracks = await this.getAllAcademyTracks();
+    const completions = await db
+      .select({ lessonId: academyLessonCompletions.lessonId, coaches: count(academyLessonCompletions.coachId) })
+      .from(academyLessonCompletions)
+      .groupBy(academyLessonCompletions.lessonId);
+    const readBy = new Map(completions.map((c) => [c.lessonId, Number(c.coaches)]));
+    const coachLessons = await db
+      .select({ coachId: academyLessonCompletions.coachId, lessonId: academyLessonCompletions.lessonId })
+      .from(academyLessonCompletions);
+    const attempts = await db
+      .select({
+        trackId: academyQuizAttempts.trackId,
+        attempts: count(academyQuizAttempts.id),
+        passed: sql<number>`count(*) filter (where ${academyQuizAttempts.passed})`.mapWith(Number),
+        coaches: sql<number>`count(distinct ${academyQuizAttempts.coachId})`.mapWith(Number),
+      })
+      .from(academyQuizAttempts)
+      .groupBy(academyQuizAttempts.trackId);
+    const attemptsBy = new Map(attempts.map((a) => [a.trackId, a]));
+    const perQuestion = await db
+      .select({
+        questionId: academyQuizAttemptAnswers.questionId,
+        answered: count(academyQuizAttemptAnswers.id),
+        missed: sql<number>`count(*) filter (where not ${academyQuizAttemptAnswers.correct})`.mapWith(Number),
+      })
+      .from(academyQuizAttemptAnswers)
+      .groupBy(academyQuizAttemptAnswers.questionId);
+    const questionStats = new Map(perQuestion.map((q) => [q.questionId, q]));
+
+    const trackRows = tracks.map((t) => {
+      const lessonIds = new Set(t.lessons.map((l) => l.id));
+      const byCoach = new Map<number, number>();
+      for (const cl of coachLessons) if (lessonIds.has(cl.lessonId)) byCoach.set(cl.coachId, (byCoach.get(cl.coachId) ?? 0) + 1);
+      const started = byCoach.size;
+      const allRead = [...byCoach.values()].filter((n) => n === t.lessons.length).length;
+      const a = attemptsBy.get(t.id);
+      return {
+        trackId: t.id,
+        title: t.title,
+        lessonCount: t.lessons.length,
+        started,
+        allLessonsRead: allRead,
+        lessons: t.lessons.map((l) => ({ lessonId: l.id, lessonNumber: l.lessonNumber, title: l.title, readBy: readBy.get(l.id) ?? 0 })),
+        quizAttempts: a ? Number(a.attempts) : 0,
+        quizPasses: a ? Number(a.passed) : 0,
+        quizCoaches: a ? Number(a.coaches) : 0,
+        questions: t.quizQuestions.map((q) => {
+          const s = questionStats.get(q.id);
+          const answered = s ? Number(s.answered) : 0;
+          const missed = s ? Number(s.missed) : 0;
+          return { questionId: q.id, questionText: q.questionText, answered, missed, missRate: answered ? missed / answered : null };
+        }),
+      };
+    });
+    const [threadCount] = await db.select({ n: count() }).from(coachDiscussionThreads).where(isNull(coachDiscussionThreads.hiddenAt));
+    const [openQuestions] = await db.select({ n: count() }).from(coachesCornerQuestions).where(isNull(coachesCornerQuestions.resolvedAt));
+    const [openReports] = await db.select({ n: count() }).from(coachDiscussionReports).where(isNull(coachDiscussionReports.resolvedAt));
+    const hardest = trackRows
+      .flatMap((t) => t.questions.map((q) => ({ ...q, trackTitle: t.title })))
+      .filter((q) => q.answered >= 3 && q.missRate != null)
+      .sort((a, b) => (b.missRate ?? 0) - (a.missRate ?? 0))
+      .slice(0, 10);
+    return {
+      tracks: trackRows,
+      hardestQuestions: hardest,
+      discussionThreads: Number(threadCount?.n ?? 0),
+      openQuestions: Number(openQuestions?.n ?? 0),
+      openReports: Number(openReports?.n ?? 0),
+    };
   },
 
   // ---------- Campaigns and the Coaches Corner digest (2026-10-03) ----------

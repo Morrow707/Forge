@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, Plus, Route, Save, Trash2, X } from "lucide-react";
+import { ReadFailed } from "@/components/read-failed";
 
 type PathTrack = { id: number; title: string };
 type Path = { id: number; title: string; description: string; audience: string; orderIndex: number; tracks: PathTrack[] };
@@ -15,10 +16,11 @@ type Draft = { id?: number; title: string; description: string; audience: string
 /** Admin editor for learning paths: title, who it is for, and the tracks in order. */
 export function AdminAcademyPathsEditor({ tracks }: { tracks: { id: number; title: string }[] }) {
   const qc = useQueryClient();
-  const { data: paths = [] } = useQuery<Path[]>({
+  const { data, isError, refetch } = useQuery<Path[]>({
     queryKey: ["/api/admin/academy/paths"],
     queryFn: () => getJson("/api/admin/academy/paths"),
   });
+  const paths = data ?? [];
   const [draft, setDraft] = useState<Draft | null>(null);
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["/api/admin/academy/paths"] });
@@ -70,6 +72,7 @@ export function AdminAcademyPathsEditor({ tracks }: { tracks: { id: number; titl
         <CardDescription>Tracks in the order a kind of coach should take them. A path earns its own certificate.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {isError && <ReadFailed what="the learning paths" onRetry={() => void refetch()} />}
         {paths.map((p) => (
           <div key={p.id} className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-border px-3 py-2">
             <div className="min-w-0 flex-1">

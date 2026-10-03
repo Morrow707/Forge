@@ -175,6 +175,9 @@ export default function AdminCoachesCorner() {
       title="Coaches Corner"
       actions={
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => navigate("/admin/coaches-corner/analytics")}>
+            Analytics
+          </Button>
           <Button variant="outline" onClick={() => navigate("/admin/coaches-corner/reports")}>
             Discussion reports
           </Button>

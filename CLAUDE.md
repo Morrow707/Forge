@@ -556,10 +556,11 @@ can install. Delete entries as a `beta` ships them.
   opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
 - Build **553** (`48505970`, #167 + #168): the 720p upload copy encoded during the recording, the
   sensor-fitted concentric window, the jump-decision and live-fallback diagnostics.
-- **Queued, not yet in a build:** Coaches Corner (Ask the library, scored quizzes and the
-  certificate page, Further reading under lessons, the admin builder's library draft and Find
-  citations, the Knowledge Library licence switch). Server halves (routes, the six new tracks)
-  ship on Render.
+- **Queued, not yet in a build:** Coaches Corner (Ask the library with the roster toggle and
+  "this didn't answer my question", scored quizzes and the certificate pages, Further reading
+  under lessons, learning paths, the peer discussion board, the admin builder's library draft and
+  Find citations, the Knowledge Library licence switch, the admin analytics, reports and digest
+  pages). Server halves (routes, the six new tracks, the three paths) ship on Render.
 - **Nothing else on `main` is waiting on an upload.**
 
 Two things worth saying out loud when someone tests this:
@@ -615,6 +616,42 @@ questions 12 and 13), and the answers shape everything below.
 - **No certification mark on any surface.** "CSCS-aligned" is gone from the upsell card and
   `client/src/lib/no-certification-marks.test.ts` refuses CSCS and NSCA in client pages and
   components. A coach's own credential in their bio is theirs to state.
+
+Later the same day, Scott: "what else can we build/add for the coaches corner?" and then "build
+it all in order" less office hours, session plans, printable handouts, program templates and
+lesson video. What landed:
+
+- **Peer discussion** (`coach_discussion_threads`, `_replies`, `_reports`): the App Store
+  listing promised it. Coaches with the add-on post by name, optionally against a track; a
+  coach removes only their own (hidden, never deleted); anything can be reported; an admin
+  works `/admin/coaches-corner/reports` and can hide, unhide, pin and lock. There is NO athlete
+  column anywhere in it, on purpose, and the on-screen rule says never to name one. Hidden rows
+  are never served to a coach. Global by design in the scoping scan: one board, gated by the
+  entitlement, not by tenancy.
+- **Learning paths** (`academy_paths`, `academy_path_tracks`): ordered sets of tracks for a kind
+  of coach, three seeded (`COACHES_CORNER_PATHS_2026_10`, by track title, created once), edited
+  on the admin Coaches Corner page. A path is complete when every track in it is, and earns its
+  own certificate (`/coach/coaches-corner/path-certificate/:id`). `academyProgressForCoach` in
+  routes.ts is the one progress computation the catalog, the paths and both certificates read.
+- **The monthly digest** reuses the launch list's campaign table under `audience =
+  "coaches_corner"`: drafted from the last thirty days, tested on the admin, sent to every
+  coach who has the add-on and `notifyEmail`, with a coach footer and no unsubscribe token, each
+  wearing the coach's program. Recipients are resolved at send time through
+  `hasCoachesCornerAccess`. The launch-list screen lists only its own audience.
+- **Ask the library takes the roster, opt in per question** (`getRosterContextForCoach`):
+  aggregates only (count, ages, sports, positions, season phase, teams), never a name. The model
+  does not need the names and so does not get them.
+- **Completion analytics** at `/admin/coaches-corner/analytics`: per track started, finished,
+  quiz attempts and pass rate, per lesson read-by, and the questions most coaches miss
+  (`academy_quiz_attempt_answers`, written with every attempt). Counts only; no coach is named
+  and the test asserts it.
+- **Coach-submitted questions** (`coaches_corner_questions`): "This didn't answer my question"
+  on any chat answer files the question and the answer that fell short; the admin reads the open
+  list on the analytics page and resolves each. The next track is written from this list.
+- **Migration order matters in `reconcile-schema.ts`.** Twice in this batch a new CREATE or
+  ALTER referenced a table created later in the file and only a fresh `db:reconcile` caught it
+  (the integration harness runs the file on an empty database). Run it against a throwaway
+  database before pushing any migration edit, as the Tests section says.
 
 ## Full Personalization: the Branding page, and what it reaches
 
