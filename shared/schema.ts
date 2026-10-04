@@ -1720,6 +1720,10 @@ export const skillProgramExercises = pgTable(
     perSetReps: json("per_set_reps").$type<(number | null)[] | null>(),
     restSeconds: integer("rest_seconds"),
     notes: text("notes"),
+    // A clip of THIS day's use of the drill (2026-10-04): a coach's own demo, a YouTube or
+    // Vimeo link, or an upload. Null falls back to the drill's library video. The drill day
+    // plays it inline.
+    videoUrl: text("video_url"),
     // Only "none", "sprint", or "mechanics" are meaningful here -- "bar_path"/
     // "full"/"jump" are strength-side camera pipelines with no skill-drill
     // equivalent.
@@ -4982,6 +4986,7 @@ export const classLessonExerciseInputSchema = z.object({
   reps: z.string().trim().min(1).default("10"),
   restSeconds: z.number().int().nullable().optional(),
   notes: z.string().trim().max(500).nullable().optional(),
+  videoUrl: z.string().trim().max(1000).nullable().optional(),
   trackingLevel: z.enum(["none", "sprint", "mechanics"]).default("none"),
 });
 
@@ -8644,6 +8649,7 @@ export const skillProgramExerciseInputSchema = z.object({
   perSetReps: z.array(z.number().int().min(0).max(999).nullable()).max(50).optional().nullable(),
   restSeconds: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
+  videoUrl: z.string().trim().max(1000).optional().nullable(),
   trackingLevel: z.enum(["none", "sprint", "mechanics"]).optional(),
 });
 

@@ -424,6 +424,7 @@ CREATE TABLE IF NOT EXISTS "skill_program_exercises" (
 CREATE INDEX IF NOT EXISTS "skill_program_exercises_day_idx" ON "skill_program_exercises" ("day_id");
 ALTER TABLE "skill_program_exercises" ADD COLUMN IF NOT EXISTS "tracking_level" tracking_level NOT NULL DEFAULT 'none';
 ALTER TABLE "skill_program_exercises" ADD COLUMN IF NOT EXISTS "per_set_reps" json;
+ALTER TABLE "skill_program_exercises" ADD COLUMN IF NOT EXISTS "video_url" text;
 
 CREATE TABLE IF NOT EXISTS "skill_assignments" (
   "id" serial PRIMARY KEY,

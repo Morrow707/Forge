@@ -65,6 +65,8 @@ type LocalExercise = {
   reps: string;
   restSeconds: string;
   notes: string;
+  /** A clip of this drill for this lesson: YouTube, Vimeo or an upload. Empty uses the drill's own. */
+  videoUrl: string;
   trackingLevel: SkillTrackingLevel;
   // Admin-editable per-drill gate on TrackingToggle -- see
   // skillExercises.videoEligible's own comment in shared/schema.ts.
@@ -274,6 +276,7 @@ function stateFromClass(cls: any) {
         reps: pe.reps,
         restSeconds: pe.restSeconds != null ? String(pe.restSeconds) : "",
         notes: pe.notes ?? "",
+        videoUrl: pe.videoUrl ?? "",
         trackingLevel: (pe.trackingLevel ?? "none") as SkillTrackingLevel,
         videoEligible: pe.skillExercise.videoEligible ?? null,
       })),
@@ -582,6 +585,7 @@ export function ClassBuilderPage({
           reps: ex.reps || "10",
           restSeconds: ex.restSeconds ? Number(ex.restSeconds) : null,
           notes: ex.notes || null,
+          videoUrl: ex.videoUrl.trim() || null,
           trackingLevel: ex.trackingLevel,
         })),
         content: l.content
@@ -1022,6 +1026,7 @@ export function ClassBuilderPage({
                 reps: "10",
                 restSeconds: "",
                 notes: "",
+                videoUrl: "",
                 trackingLevel: "none",
                 videoEligible: skill.videoEligible ?? null,
               },
@@ -1676,6 +1681,18 @@ function LessonCard({
                   }
                 />
               </div>
+              <Input
+                value={ex.videoUrl}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onChange((l) => ({
+                    ...l,
+                    exercises: l.exercises.map((x) => (x.key === ex.key ? { ...x, videoUrl: val } : x)),
+                  }));
+                }}
+                placeholder="Demo clip for this drill (YouTube or Vimeo link), plays on the drill day. Blank uses the drill's own video."
+                className="h-8 text-xs"
+              />
               {/* Hidden entirely for an admin-restricted drill -- unless it's
                   already on, so a coach can still turn OFF a capture that
                   predates the restriction. See videoEligible's own comment. */}

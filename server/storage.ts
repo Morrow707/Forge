@@ -11092,6 +11092,7 @@ Hard rules, no exceptions:
               perSetReps: ex.perSetReps ?? null,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
+              videoUrl: ex.videoUrl ?? null,
               trackingLevel: trackingMap.get(ex) ?? "none",
             });
           }
@@ -11259,6 +11260,7 @@ Hard rules, no exceptions:
               perSetReps: ex.perSetReps ?? null,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
+              videoUrl: ex.videoUrl ?? null,
               trackingLevel: trackingMap.get(ex) ?? "none",
             };
             const priorExercise = takeSkillRow(ex.skillExerciseId);
@@ -11903,6 +11905,7 @@ Hard rules, no exceptions:
             reps: ex.reps,
             restSeconds: ex.restSeconds ?? null,
             notes: ex.notes ?? null,
+            videoUrl: ex.videoUrl ?? null,
             trackingLevel: trackingMap.get(ex) ?? "none",
           });
         }
@@ -12120,6 +12123,7 @@ Hard rules, no exceptions:
                 reps: ex.reps,
                 restSeconds: ex.restSeconds ?? null,
                 notes: ex.notes ?? null,
+                videoUrl: ex.videoUrl ?? null,
                 trackingLevel: trackingMap.get(ex) ?? "none",
               };
               const slot = takeDrillRow(ex.skillExerciseId);
@@ -12162,6 +12166,7 @@ Hard rules, no exceptions:
               reps: ex.reps,
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
+              videoUrl: ex.videoUrl ?? null,
               trackingLevel: trackingMap.get(ex) ?? "none",
             });
           }
@@ -20761,7 +20766,8 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         // usually absent.
         instructions: ex.skillExercise.instructions,
         equipment: ex.skillExercise.equipment,
-        videoUrl: ex.skillExercise.videoUrl,
+        // This day's own clip first, the drill's library video otherwise.
+        videoUrl: ex.videoUrl ?? ex.skillExercise.videoUrl,
         trackingLevel: ex.trackingLevel,
         // One row per planned set regardless of whether it's been touched
         // yet -- exact parallel of how a strength exercise's sets[] always

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest, getJson, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { externalLinkClick } from "@/lib/open-external";
+import { getEmbedUrl, isUploadedVideo } from "@/lib/video-embed";
 import { extractVideoFrames } from "@/lib/video-frames";
 import { cn } from "@/lib/utils";
 import { colorForLabel, borderTintForLabel } from "@/lib/supersets";
@@ -415,17 +416,39 @@ function SkillWorkoutPageInner() {
                             Coach note: {ex.notes}
                           </p>
                         )}
-                        {ex.videoUrl && (
-                          <a
-                            href={ex.videoUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={externalLinkClick(ex.videoUrl)}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                          >
-                            <Film className="h-3 w-3" /> Watch demo
-                          </a>
-                        )}
+                        {/* The drill's demo plays here on the drill day (2026-10-04): an
+                            uploaded clip or a YouTube/Vimeo link inline, anything else
+                            (a search page, an unknown host) as the link it always was. */}
+                        {ex.videoUrl &&
+                          (isUploadedVideo(ex.videoUrl) ? (
+                            <video
+                              controls
+                              preload="metadata"
+                              playsInline
+                              src={ex.videoUrl}
+                              className="w-full rounded-md border border-border bg-black"
+                            />
+                          ) : getEmbedUrl(ex.videoUrl) ? (
+                            <div className="aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
+                              <iframe
+                                src={getEmbedUrl(ex.videoUrl)!}
+                                title={`${ex.name} demo`}
+                                className="h-full w-full"
+                                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                          ) : (
+                            <a
+                              href={ex.videoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={externalLinkClick(ex.videoUrl)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                            >
+                              <Film className="h-3 w-3" /> Watch demo
+                            </a>
+                          ))}
 
                         {ex.trackingLevel !== "none" && cameraAccess.failed && (
                           <ReadFailed what="whether the camera is available to you" onRetry={cameraAccess.retry} className="flex flex-col items-start gap-2 py-2" />
