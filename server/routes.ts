@@ -42,6 +42,7 @@ import { apnsEnabled } from "./apns";
 import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail, emailEnabled, isEmailConfigured } from "./email";
 import { KNOWLEDGE_DOMAIN_KEYS } from "@shared/knowledge-domains";
+import { CLASS_READING_LEVELS } from "@shared/class-reading-level";
 import { buildWelcomeEmail } from "./welcome-email";
 import { buildCampaignEmail } from "./email-list-render";
 import { buildRosterDocumentEmail } from "./email-roster-documents";
@@ -2216,6 +2217,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(roster);
   });
 
+  // Quiz attempts per athlete and per question, and each athlete's notes, for this coach's
+  // enrollments in the class (2026-10-04). Same scope as the roster.
+  app.get("/api/coach/classes/:id/insights", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const usable = await storage.getClassIfUsableByCoach(user.id, id);
+    if (!usable) return res.status(404).json({ message: "Class not found" });
+    res.json(await storage.getClassInsightsForCoach(user.id, id));
+  });
+
   // Reset an athlete's Classes-specific completion gating (per lesson, or
   // the whole class when lessonId is omitted) so they have to re-read/
   // re-pass to be marked done again. Never touches their calendar
@@ -2382,10 +2393,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .object({
         pages: z.array(z.object({ title: z.string().trim().max(200).optional(), body: z.string().trim().min(1).max(20000) })).min(1).max(30),
         count: z.number().int().min(2).max(12).optional(),
+        readingLevel: z.enum(CLASS_READING_LEVELS).nullable().optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const questions = await storage.generateQuizFromLessonText(parsed.data.pages, parsed.data.count ?? 6);
+    const questions = await storage.generateQuizFromLessonText(parsed.data.pages, parsed.data.count ?? 6, parsed.data.readingLevel);
     if (questions === null) return res.status(503).json({ message: "Couldn't draft a quiz right now. Try again, or write it." });
     res.json({ questions });
   });
@@ -2397,10 +2409,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .object({
         pages: z.array(z.object({ title: z.string().trim().max(200).optional(), body: z.string().trim().min(1).max(20000) })).min(1).max(30),
         count: z.number().int().min(3).max(25).optional(),
+        readingLevel: z.enum(CLASS_READING_LEVELS).nullable().optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const cards = await storage.generateFlashcardsFromLessonText(parsed.data.pages, parsed.data.count ?? 10);
+    const cards = await storage.generateFlashcardsFromLessonText(parsed.data.pages, parsed.data.count ?? 10, parsed.data.readingLevel);
     if (cards === null) return res.status(503).json({ message: "Couldn't draft cards right now. Try again, or type them." });
     res.json({ cards });
   });
@@ -3282,6 +3295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Ingested domains this course may also draw on. Omitted means the
         // pasted material is the only source, which is the default.
         retrievalDomains: z.array(z.string().trim().min(1)).max(10).optional(),
+        readingLevel: z.enum(CLASS_READING_LEVELS).nullable().optional(),
         images: z
           .array(z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }))
           .max(6)
@@ -3298,6 +3312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.documentText,
       parsed.data.images,
       parsed.data.retrievalDomains,
+      parsed.data.readingLevel,
     );
     if (!draft) {
       return res.status(422).json({
@@ -12990,7 +13005,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!progress || (!enrollment && !progress.class.isForgeOfficial)) {
       return res.status(404).json({ message: "Class not found" });
     }
-    res.json(progress);
+    const streak = enrollment ? await storage.getLearningStreakForAthlete(user.id) : null;
+    res.json({ ...progress, streak });
+  });
+
+  // The class certificate's facts, from the server; 409 until the class is finished.
+  app.get("/api/athlete/classes/:id/certificate", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const cert = await storage.getClassCertificateForAthlete(user.id, Number(req.params.id));
+    if (!cert) return res.status(404).json({ message: "Class not found" });
+    if (!cert.completedAt) return res.status(409).json({ message: "Finish every lesson to earn the certificate." });
+    res.json(cert);
+  });
+
+  // An athlete's own notes on a lesson, one per page. The coach who enrolled them reads them
+  // on the class roster; nobody else does.
+  app.get("/api/athlete/classes/:id/lessons/:lessonId/notes", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const enrollment = await requireReadableClassLesson(user.id, Number(req.params.id), Number(req.params.lessonId));
+    if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
+    res.json({ notes: await storage.getClassLessonNotes(enrollment.id, Number(req.params.lessonId)) });
+  });
+  app.put("/api/athlete/classes/:id/lessons/:lessonId/notes", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const enrollment = await requireReadableClassLesson(user.id, Number(req.params.id), Number(req.params.lessonId));
+    if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
+    const parsed = z.object({ pageIndex: z.number().int().min(0).max(200), body: z.string().max(4000) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    await storage.saveClassLessonNote(enrollment.id, Number(req.params.lessonId), parsed.data.pageIndex, parsed.data.body);
+    res.json({ ok: true });
   });
 
   app.post(

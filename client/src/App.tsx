@@ -127,6 +127,7 @@ const AthleteSkillPrograms = lazy(withLoadTimeout(() => import("@/pages/athlete/
 const AthleteSkillProgramBuilder = lazy(withLoadTimeout(() => import("@/pages/athlete/skill-program-builder")));
 const AthleteClasses = lazy(withLoadTimeout(() => import("@/pages/athlete/classes")));
 const AthleteClassDetail = lazy(withLoadTimeout(() => import("@/pages/athlete/class-detail")));
+const AthleteClassCertificate = lazy(withLoadTimeout(() => import("@/pages/athlete/class-certificate")));
 const AdminDashboard = lazy(withLoadTimeout(() => import("@/pages/admin/dashboard")));
 const AdminExercises = lazy(withLoadTimeout(() => import("@/pages/admin/exercises")));
 const AdminCoachExercises = lazy(withLoadTimeout(() => import("@/pages/admin/coach-exercises")));
@@ -600,6 +601,9 @@ function Router() {
         </Route>
         <Route path="/athlete/skills">
           <ProtectedRoute role="athlete" component={AthleteSkills} />
+        </Route>
+        <Route path="/athlete/classes/:id/certificate">
+          <ProtectedRoute role="athlete" component={AthleteClassCertificate} />
         </Route>
         <Route path="/athlete/classes/:id">
           <ProtectedRoute role="athlete" component={AthleteClassDetail} />

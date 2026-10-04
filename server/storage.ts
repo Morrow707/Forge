@@ -95,6 +95,8 @@ import {
   classLessons,
   classEnrollments,
   classLessonProgress,
+  classLessonNotes,
+  classLessonQuizAttempts,
   classLessonQuizQuestions,
   classLessonQuizAnswers,
   classCoachSettings,
@@ -364,6 +366,8 @@ import type { RosterGroup } from "@shared/roster-groups";
 import { findVerbatimLesson } from "./academy-draft-guard";
 import { academyQuizPassed } from "@shared/academy-quiz";
 import { gradeQuestion, athleteFacingPayload, type QuizSubmission } from "@shared/class-quiz-grading";
+import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-reading-level";
+import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
 import { learnFromTake, type BodyModelWithHistory } from "./body-model-learning";
@@ -11590,6 +11594,7 @@ Hard rules, no exceptions:
       name: cls.name,
       description: cls.description,
       category: cls.category,
+      readingLevel: cls.readingLevel,
       coverImageUrl: cls.coverImageUrl,
       prerequisiteClassId: cls.prerequisiteClassId,
       isDraft: cls.isDraft,
@@ -11616,11 +11621,12 @@ Hard rules, no exceptions:
 
   /** A quiz drafted from a lesson's own pages (2026-10-04): a mix of the four shapes, every
    * answer in the text. The coach reads and edits before saving. */
-  async generateQuizFromLessonText(pages: { title?: string; body: string }[], count = 6) {
+  async generateQuizFromLessonText(pages: { title?: string; body: string }[], count = 6, readingLevel?: ClassReadingLevel | null) {
     if (!aiEnabled) return null;
     const text = pages.map((p, i) => `Page ${i + 1}${p.title ? `: ${p.title}` : ""}\n${p.body}`).join("\n\n");
     if (text.trim().length < 80) return [];
     const system = [
+      readingLevelInstruction(readingLevel),
       "You write an end-of-lesson quiz for athletes from the lesson text given. Use ONLY that text; every answer must be stated in it.",
       "Mix the shapes: multiple_choice (4 answers, exactly one correct, each with a one-sentence explanation), fill_blank (the question text contains one blank written as ___ ; accepted lists every wording that counts), ordering (3 to 5 items in the correct order; only when the lesson actually gives an order), matching (2 to 5 term/definition pairs).",
       "Questions test understanding, not trivia. Keep every string short and plain. Every non-multiple-choice question carries an explanation.",
@@ -11674,11 +11680,12 @@ Hard rules, no exceptions:
   /** Flashcards drafted from a lesson's own reading pages (2026-10-04). The pages are the
    * only thing in context, so a card can only test what the lesson taught; the coach edits
    * before saving. Ten cards, front a prompt, back a short answer. */
-  async generateFlashcardsFromLessonText(pages: { title?: string; body: string }[], count = 10) {
+  async generateFlashcardsFromLessonText(pages: { title?: string; body: string }[], count = 10, readingLevel?: ClassReadingLevel | null) {
     if (!aiEnabled) return null;
     const text = pages.map((p, i) => `Page ${i + 1}${p.title ? `: ${p.title}` : ""}\n${p.body}`).join("\n\n");
     if (text.trim().length < 80) return [];
     const system = [
+      readingLevelInstruction(readingLevel),
       "You write study flashcards for athletes from a lesson they have just read. Use ONLY the lesson text given; never add facts from outside it.",
       "Each card: FRONT is a short prompt or question an athlete can answer from the lesson (under 25 words); BACK is the answer in one or two plain sentences (under 60 words), in the lesson's own terms.",
       "Cover the lesson's main ideas in order, favour the concepts over trivia, and never write a card whose answer is not in the text.",
@@ -11731,6 +11738,7 @@ Hard rules, no exceptions:
     // -- a course is grounded in what the admin handed it unless they say
     // otherwise.
     retrievalDomains?: string[],
+    readingLevel?: ClassReadingLevel | null,
   ): Promise<ClassAiDraft | null> {
     const system: SystemPrompt =
       "You turn a coach's raw teaching material -- an article, a set of notes, scanned pages of a " +
@@ -11750,7 +11758,9 @@ Hard rules, no exceptions:
       "paragraphs; **double asterisks** bold a phrase, a block of lines starting with \"- \" is a " +
       "bulleted list, a line reading \"Key points:\" followed by \"- \" lines is drawn as a boxed " +
       "summary (end each lesson's last page with one), and a block of lines starting with \"> \" is " +
-      "a pull-quote for a sentence worth remembering. If the material is too thin or unclear to organize " +
+      "a pull-quote for a sentence worth remembering. " +
+      readingLevelInstruction(readingLevel) +
+      " If the material is too thin or unclear to organize " +
       "confidently, say so by returning a single lesson with a short description explaining what's " +
       "missing rather than inventing structure that isn't there.";
 
@@ -11871,6 +11881,7 @@ Hard rules, no exceptions:
           name: structure.name,
           description: structure.description ?? null,
           category: structure.category ?? null,
+          readingLevel: structure.readingLevel ?? null,
           coverImageUrl: structure.coverImageUrl ?? null,
           prerequisiteClassId: structure.prerequisiteClassId ?? null,
           // Every freshly created class starts as a draft regardless of
@@ -11980,6 +11991,7 @@ Hard rules, no exceptions:
           name: structure.name,
           description: structure.description ?? null,
           category: structure.category ?? null,
+          readingLevel: structure.readingLevel === undefined ? cls.readingLevel : structure.readingLevel,
           coverImageUrl: structure.coverImageUrl ?? null,
           prerequisiteClassId: structure.prerequisiteClassId ?? null,
           // Falls back to the row's current value (not a hardcoded
@@ -12341,6 +12353,7 @@ Hard rules, no exceptions:
       name: c.name,
       description: c.description,
       category: c.category,
+      readingLevel: c.readingLevel,
       coverImageUrl: c.coverImageUrl,
       lessonCount: c.lessons.length,
       isForgeOfficial: true as const,
@@ -13131,6 +13144,17 @@ Hard rules, no exceptions:
     const passed = score >= CLASS_QUIZ_PASS_THRESHOLD;
     const perfect = correctCount === questions.length;
 
+    // Every attempt is kept, pass or fail, one right/wrong per question: the coach's view of
+    // which questions an athlete misses and the learning streak both read it.
+    await db.insert(classLessonQuizAttempts).values({
+      enrollmentId,
+      classLessonId,
+      correctCount,
+      totalQuestions: questions.length,
+      passed,
+      answers: results.map((r) => ({ questionId: r.questionId, isCorrect: r.isCorrect })),
+    });
+
     // Surfaced to the route handler so it can decide whether to notify the
     // owning coach -- kept out of this function so storage stays free of
     // notify.ts (routes.ts is where every other class notification, e.g.
@@ -13362,6 +13386,156 @@ Hard rules, no exceptions:
   // Coach-facing roster view for a Class's detail page -- who's enrolled
   // and how far along they are, without the full per-lesson breakdown
   // getClassProgressForAthlete gives the athlete themself.
+  /** An athlete's notes on one lesson, by page. */
+  async getClassLessonNotes(enrollmentId: number, classLessonId: number) {
+    const rows = await db.query.classLessonNotes.findMany({
+      where: and(eq(classLessonNotes.enrollmentId, enrollmentId), eq(classLessonNotes.classLessonId, classLessonId)),
+      orderBy: asc(classLessonNotes.pageIndex),
+    });
+    return rows.map((r) => ({ pageIndex: r.pageIndex, body: r.body, updatedAt: r.updatedAt }));
+  },
+
+  /** Saves one page's note; an empty body deletes it. */
+  async saveClassLessonNote(enrollmentId: number, classLessonId: number, pageIndex: number, body: string) {
+    const trimmed = body.trim();
+    const where = and(
+      eq(classLessonNotes.enrollmentId, enrollmentId),
+      eq(classLessonNotes.classLessonId, classLessonId),
+      eq(classLessonNotes.pageIndex, pageIndex),
+    );
+    if (!trimmed) {
+      await db.delete(classLessonNotes).where(where);
+      return;
+    }
+    await db
+      .insert(classLessonNotes)
+      .values({ enrollmentId, classLessonId, pageIndex, body: trimmed })
+      .onConflictDoUpdate({
+        target: [classLessonNotes.enrollmentId, classLessonNotes.classLessonId, classLessonNotes.pageIndex],
+        set: { body: trimmed, updatedAt: new Date() },
+      });
+  },
+
+  /** The coach's view of a class (2026-10-04): every quiz attempt by every athlete this coach
+   * enrolled, which questions each one missed, which questions the roster as a whole misses,
+   * and each athlete's notes. Scoped exactly as the roster is: this coach's enrollments. */
+  async getClassInsightsForCoach(coachId: number, classId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const enrollments = await db.query.classEnrollments.findMany({
+      where: and(eq(classEnrollments.classId, classId), inArray(classEnrollments.coachId, coachIds)),
+      with: { athlete: true },
+    });
+    const lessons = await db.query.classLessons.findMany({
+      where: eq(classLessons.classId, classId),
+      orderBy: asc(classLessons.lessonNumber),
+      with: { quizQuestions: { orderBy: asc(classLessonQuizQuestions.orderIndex) } },
+    });
+    const lessonById = new Map(lessons.map((l) => [l.id, l]));
+    const enrollmentIds = enrollments.map((e) => e.id);
+    const attempts = enrollmentIds.length
+      ? await db.query.classLessonQuizAttempts.findMany({
+          where: inArray(classLessonQuizAttempts.enrollmentId, enrollmentIds),
+          orderBy: desc(classLessonQuizAttempts.createdAt),
+        })
+      : [];
+    const notes = enrollmentIds.length
+      ? await db.query.classLessonNotes.findMany({
+          where: inArray(classLessonNotes.enrollmentId, enrollmentIds),
+          orderBy: [asc(classLessonNotes.classLessonId), asc(classLessonNotes.pageIndex)],
+        })
+      : [];
+
+    const perQuestion = new Map<number, { attempts: number; missed: number }>();
+    for (const a of attempts) {
+      for (const ans of a.answers) {
+        const q = perQuestion.get(ans.questionId) ?? { attempts: 0, missed: 0 };
+        q.attempts += 1;
+        if (!ans.isCorrect) q.missed += 1;
+        perQuestion.set(ans.questionId, q);
+      }
+    }
+    const questions = lessons.flatMap((l) =>
+      l.quizQuestions.map((q) => ({
+        lessonId: l.id,
+        lessonNumber: l.lessonNumber,
+        questionId: q.id,
+        questionText: q.questionText,
+        questionType: q.questionType,
+        attempts: perQuestion.get(q.id)?.attempts ?? 0,
+        missed: perQuestion.get(q.id)?.missed ?? 0,
+      })),
+    );
+    const questionText = new Map(questions.map((q) => [q.questionId, q.questionText]));
+
+    const athletes = enrollments.map((e) => ({
+      athleteId: e.athleteId,
+      athleteName: e.athlete.name,
+      attempts: attempts
+        .filter((a) => a.enrollmentId === e.id)
+        .map((a) => ({
+          lessonId: a.classLessonId,
+          lessonNumber: lessonById.get(a.classLessonId)?.lessonNumber ?? null,
+          correctCount: a.correctCount,
+          totalQuestions: a.totalQuestions,
+          passed: a.passed,
+          createdAt: a.createdAt,
+          missed: a.answers
+            .filter((x) => !x.isCorrect)
+            .map((x) => ({ questionId: x.questionId, questionText: questionText.get(x.questionId) ?? "(question no longer in the quiz)" })),
+        })),
+      notes: notes
+        .filter((n) => n.enrollmentId === e.id)
+        .map((n) => ({
+          lessonId: n.classLessonId,
+          lessonNumber: lessonById.get(n.classLessonId)?.lessonNumber ?? null,
+          lessonTitle: lessonById.get(n.classLessonId)?.title ?? "",
+          pageIndex: n.pageIndex,
+          body: n.body,
+          updatedAt: n.updatedAt,
+        })),
+    }));
+    return { questions, athletes };
+  },
+
+  /** The learning streak (2026-10-04): consecutive calendar days, UTC, on which the athlete
+   * finished a lesson's reading or sat a quiz, in any class. Current counts only if the last
+   * such day is today or yesterday. */
+  async getLearningStreakForAthlete(athleteId: number) {
+    const enrollments = await db.query.classEnrollments.findMany({ where: eq(classEnrollments.athleteId, athleteId) });
+    const ids = enrollments.map((e) => e.id);
+    if (ids.length === 0) return { current: 0, longest: 0, activeToday: false };
+    const progress = await db.query.classLessonProgress.findMany({ where: inArray(classLessonProgress.enrollmentId, ids) });
+    const attempts = await db.query.classLessonQuizAttempts.findMany({ where: inArray(classLessonQuizAttempts.enrollmentId, ids) });
+    const days = new Set<string>();
+    for (const p of progress) if (p.contentCompletedAt) days.add(p.contentCompletedAt.toISOString().slice(0, 10));
+    for (const a of attempts) days.add(a.createdAt.toISOString().slice(0, 10));
+    return learningStreakFromDays(days, new Date());
+  },
+
+  /** The facts on an athlete's class certificate. Null when not enrolled; `completedAt` null
+   * when the class is not finished, which the route turns into a 409. */
+  async getClassCertificateForAthlete(athleteId: number, classId: number) {
+    const enrollment = await db.query.classEnrollments.findFirst({
+      where: and(eq(classEnrollments.athleteId, athleteId), eq(classEnrollments.classId, classId)),
+      with: { athlete: true, class: { with: { lessons: true } } },
+    });
+    if (!enrollment) return null;
+    const lessonIds = enrollment.class.lessons.map((l) => l.id);
+    const lessonsWithQuiz = await this.getClassLessonIdsWithQuiz(lessonIds);
+    const words = enrollment.class.lessons.reduce(
+      (n, l) => n + ((l.content ?? []) as { body?: string }[]).reduce((m, p) => m + (p.body ?? "").split(/\s+/).filter(Boolean).length, 0),
+      0,
+    );
+    return {
+      className: enrollment.class.name,
+      athleteName: enrollment.athlete.name,
+      lessonCount: enrollment.class.lessons.length,
+      quizCount: lessonsWithQuiz.size,
+      estimatedMinutes: Math.max(1, Math.round(words / 200)),
+      completedAt: enrollment.completedAt,
+    };
+  },
+
   async getClassRosterForCoach(coachId: number, classId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db.query.classEnrollments.findMany({

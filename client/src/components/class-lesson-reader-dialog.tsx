@@ -25,6 +25,7 @@ import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { ReadFailed } from "@/components/read-failed";
 import { getEmbedUrl } from "@/lib/video-embed";
 import { estimateReadingMinutes } from "@/lib/lesson-reading";
+import { LessonPageNotes } from "@/components/lesson-page-notes";
 import { LessonFlashcards, type Flashcard } from "@/components/lesson-flashcards";
 import { FillBlankInput, OrderingInput, MatchingInput } from "@/components/quiz-question-inputs";
 import {
@@ -596,6 +597,7 @@ export function ClassLessonReaderDialog({
                   <div className="space-y-3 text-sm leading-relaxed text-foreground/90">
                     {pages[pageIndex]?.body ? renderFormattedBody(pages[pageIndex].body) : null}
                   </div>
+                  {!isPreview && <LessonPageNotes classId={classId} lessonId={lesson.id} pageIndex={pageIndex} />}
                   {pages[pageIndex]?.attachmentUrl && (
                     <a
                       href={pages[pageIndex].attachmentUrl!}

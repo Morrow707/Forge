@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CLASS_READING_LEVEL_LABELS, type ClassReadingLevel } from "@shared/class-reading-level";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
@@ -39,6 +40,7 @@ type BrowsableClass = {
   description: string | null;
   coverImageUrl: string | null;
   category: string | null;
+  readingLevel: ClassReadingLevel | null;
   lessonCount: number;
   isForgeOfficial: true;
   ownerLabel: string;
@@ -314,9 +316,11 @@ export default function AthleteClasses() {
                         </Badge>
                       )}
                     </div>
-                    {c.category && (
+                    {(c.category || c.readingLevel) && (
                       <p className="label-xs -mt-2 text-primary">
                         {c.category}
+                        {c.category && c.readingLevel && " · "}
+                        {c.readingLevel && <span className="text-muted-foreground">{CLASS_READING_LEVEL_LABELS[c.readingLevel]}</span>}
                       </p>
                     )}
                     {c.description && (

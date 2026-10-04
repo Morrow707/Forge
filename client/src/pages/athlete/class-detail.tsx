@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, Lock, CheckCircle2, PlayCircle, BookOpen, ListChecks, Star, Trophy } from "lucide-react";
+import { ArrowLeft, Lock, CheckCircle2, PlayCircle, BookOpen, ListChecks, Star, Trophy, Flame, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClassLessonReaderDialog } from "@/components/class-lesson-reader-dialog";
 import { ReadFailed } from "@/components/read-failed";
@@ -34,6 +34,8 @@ type ClassProgress = {
   startDate?: string;
   completedAt?: string | null;
   lessons: LessonProgress[];
+  /** Consecutive days with a lesson read or a quiz sat, in any class. Null when not enrolled. */
+  streak?: { current: number; longest: number; activeToday: boolean } | null;
 };
 
 export default function AthleteClassDetail() {
@@ -141,6 +143,19 @@ export default function AthleteClassDetail() {
         <p className="mb-6 max-w-2xl text-sm text-muted-foreground">{data.class.description}</p>
       )}
 
+      {/* The learning streak (2026-10-04): days in a row with a lesson read or a quiz sat.
+          Drawn only once there is one; a zero is not a thing to show an athlete. */}
+      {data.streak && data.streak.current > 0 && (
+        <p className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+          <Flame className="h-3.5 w-3.5" />
+          {data.streak.current}-day learning streak
+          {data.streak.longest > data.streak.current && (
+            <span className="font-normal text-muted-foreground">· best {data.streak.longest}</span>
+          )}
+          {!data.streak.activeToday && <span className="font-normal text-muted-foreground">· read today to keep it</span>}
+        </p>
+      )}
+
       {/* Not enrolled: this is the syllabus, reached from the catalog's Syllabus
           button. Every lesson comes back state "locked" by construction here, so the
           per-lesson action buttons below are all correctly absent -- what this adds is
@@ -171,6 +186,10 @@ export default function AthleteClassDetail() {
                 You've finished every lesson in {data.class.name}.
               </p>
             </div>
+            <Button size="sm" variant="outline" className="ml-auto shrink-0" onClick={() => navigate(`/athlete/classes/${classId}/certificate`)}>
+              <Award className="h-4 w-4" />
+              Certificate
+            </Button>
           </CardContent>
         </Card>
       )}

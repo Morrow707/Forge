@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { QUIZ_QUESTION_TYPES, type QuizQuestionType, type QuizQuestionPayload } from "@shared/class-quiz-grading";
+import { CLASS_READING_LEVELS, CLASS_READING_LEVEL_LABELS, type ClassReadingLevel } from "@shared/class-reading-level";
 import { SkillPickerDialog } from "@/components/skill-picker-dialog";
 import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
 import { ClassLessonReaderDialog, type LessonContent } from "@/components/class-lesson-reader-dialog";
@@ -257,6 +258,7 @@ function stateFromClass(cls: any) {
     name: cls.name as string,
     description: (cls.description as string) ?? "",
     category: (cls.category as string | null) ?? "",
+    readingLevel: (cls.readingLevel as ClassReadingLevel | null) ?? null,
     coverImageUrl: (cls.coverImageUrl as string | null) ?? "",
     prerequisiteClassId: (cls.prerequisiteClassId as number | null) ?? null,
     isDraft: (cls.isDraft as boolean) ?? true,
@@ -416,6 +418,7 @@ export function ClassBuilderPage({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
+  const [readingLevel, setReadingLevel] = useState<ClassReadingLevel | null>(null);
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [prerequisiteClassId, setPrerequisiteClassId] = useState<number | null>(null);
   const [isDraft, setIsDraft] = useState(true);
@@ -451,6 +454,7 @@ export function ClassBuilderPage({
       setName(state.name);
       setDescription(state.description);
       setCategory(state.category);
+      setReadingLevel(state.readingLevel);
       setCoverImageUrl(state.coverImageUrl);
       setPrerequisiteClassId(state.prerequisiteClassId);
       setIsDraft(state.isDraft);
@@ -561,6 +565,7 @@ export function ClassBuilderPage({
       name,
       description,
       category: category.trim() || null,
+      readingLevel,
       coverImageUrl: coverImageUrl.trim() || null,
       prerequisiteClassId,
       isDraft,
@@ -938,6 +943,23 @@ export function ClassBuilderPage({
                 placeholder="e.g. Hitting, Pitching, Strength"
               />
             </div>
+            <div className="space-y-1.5">
+              <Label>Written for</Label>
+              <Select value={readingLevel ?? "unset"} onValueChange={(v) => setReadingLevel(v === "unset" ? null : (v as ClassReadingLevel))}>
+                <SelectTrigger aria-label="Reading level">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">Not set (drafts read as high school)</SelectItem>
+                  {CLASS_READING_LEVELS.map((lvl) => (
+                    <SelectItem key={lvl} value={lvl}>
+                      {CLASS_READING_LEVEL_LABELS[lvl]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">Shown on the catalog card. Every AI draft for this class writes at this level.</p>
+            </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Description</Label>
               <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={1} />
@@ -984,6 +1006,7 @@ export function ClassBuilderPage({
               <LessonCard
                 key={lesson.key}
                 lesson={lesson}
+                readingLevel={readingLevel}
                 lessonNumber={i + 1}
                 isFirst={i === 0}
                 showPricing={showPricing}
@@ -1405,6 +1428,8 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
         </CardContent>
       </Card>
 
+      {canUnlock && <ClassInsights classId={classId} />}
+
       <ConfirmDialog
         open={unlockTarget !== null}
         onOpenChange={(o) => !o && setUnlockTarget(null)}
@@ -1461,6 +1486,7 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
 
 function LessonCard({
   lesson,
+  readingLevel,
   lessonNumber,
   isFirst,
   showPricing,
@@ -1474,6 +1500,7 @@ function LessonCard({
   onPreview,
 }: {
   lesson: LocalLesson;
+  readingLevel: ClassReadingLevel | null;
   lessonNumber: number;
   isFirst: boolean;
   showPricing: boolean;
@@ -1720,7 +1747,7 @@ function LessonCard({
           Add Drill
         </Button>
 
-        <LessonContentAndQuiz lesson={lesson} onChange={onChange} />
+        <LessonContentAndQuiz lesson={lesson} readingLevel={readingLevel} onChange={onChange} />
       </CardContent>
     </Card>
   );
@@ -1731,9 +1758,11 @@ function LessonCard({
 // (any that aren't a Forge-authored curriculum chapter) never use this.
 function LessonContentAndQuiz({
   lesson,
+  readingLevel,
   onChange,
 }: {
   lesson: LocalLesson;
+  readingLevel: ClassReadingLevel | null;
   onChange: (updater: (lesson: LocalLesson) => LocalLesson) => void;
 }) {
   const [open, setOpen] = useState(
@@ -1780,6 +1809,7 @@ function LessonContentAndQuiz({
               enabled={lesson.flashcardsEnabled}
               cards={lesson.flashcards}
               pages={lesson.content}
+              readingLevel={readingLevel}
               onToggle={(enabled) => onChange((l) => ({ ...l, flashcardsEnabled: enabled }))}
               onChange={(updater) => onChange((l) => ({ ...l, flashcards: updater(l.flashcards) }))}
             />
@@ -1792,6 +1822,7 @@ function LessonContentAndQuiz({
             <QuizEditor
               questions={lesson.quizQuestions}
               pages={lesson.content}
+              readingLevel={readingLevel}
               onChange={(updater) => onChange((l) => ({ ...l, quizQuestions: updater(l.quizQuestions) }))}
             />
           </div>
@@ -2082,12 +2113,14 @@ function FlashcardsEditor({
   enabled,
   cards,
   pages,
+  readingLevel,
   onToggle,
   onChange,
 }: {
   enabled: boolean;
   cards: LocalFlashcard[];
   pages: LocalContentPage[];
+  readingLevel: ClassReadingLevel | null;
   onToggle: (enabled: boolean) => void;
   onChange: (updater: (cards: LocalFlashcard[]) => LocalFlashcard[]) => void;
 }) {
@@ -2096,6 +2129,7 @@ function FlashcardsEditor({
       const res = await apiRequest("POST", "/api/classes/lesson-flashcards/draft", {
         pages: pages.filter((p) => p.body.trim()).map((p) => ({ title: p.title.trim() || undefined, body: p.body })),
         count: 10,
+        readingLevel,
       });
       return res.json() as Promise<{ cards: { front: string; back: string }[] }>;
     },
@@ -2189,10 +2223,12 @@ const QUIZ_TYPE_LABELS: Record<QuizQuestionType, string> = {
 function QuizEditor({
   questions,
   pages,
+  readingLevel,
   onChange,
 }: {
   questions: LocalQuizQuestion[];
   pages: LocalContentPage[];
+  readingLevel: ClassReadingLevel | null;
   onChange: (updater: (questions: LocalQuizQuestion[]) => LocalQuizQuestion[]) => void;
 }) {
   const patch = (key: string, p: Partial<LocalQuizQuestion>) =>
@@ -2202,6 +2238,7 @@ function QuizEditor({
       const res = await apiRequest("POST", "/api/classes/lesson-quiz/draft", {
         pages: pages.filter((p) => p.body.trim()).map((p) => ({ title: p.title.trim() || undefined, body: p.body })),
         count: 6,
+        readingLevel,
       });
       return res.json() as Promise<{ questions: any[] }>;
     },
@@ -2437,6 +2474,121 @@ function QuizEditor({
         </Button>
       </div>
     </div>
+  );
+}
+
+type ClassInsightsPayload = {
+  questions: { lessonId: number; lessonNumber: number; questionId: number; questionText: string; attempts: number; missed: number }[];
+  athletes: {
+    athleteId: number;
+    athleteName: string;
+    attempts: { lessonId: number; lessonNumber: number | null; correctCount: number; totalQuestions: number; passed: boolean; createdAt: string; missed: { questionId: number; questionText: string }[] }[];
+    notes: { lessonId: number; lessonNumber: number | null; lessonTitle: string; pageIndex: number; body: string; updatedAt: string }[];
+  }[];
+};
+
+/** Quiz results per athlete and per question, and each athlete's notes (2026-10-04). Coach
+ * only, same scope as the roster. Drawn only once somebody has sat a quiz or written a note. */
+function ClassInsights({ classId }: { classId: number }) {
+  const url = `/api/coach/classes/${classId}/insights`;
+  const { data, isError, refetch } = useQuery<ClassInsightsPayload>({ queryKey: [url], queryFn: () => getJson(url) });
+  const [openAthlete, setOpenAthlete] = useState<number | null>(null);
+  if (isError) {
+    return (
+      <Card className="mb-6">
+        <CardContent className="p-5">
+          <ReadFailed what="quiz results and notes" onRetry={() => void refetch()} />
+        </CardContent>
+      </Card>
+    );
+  }
+  if (!data) return null;
+  const anyAttempt = data.athletes.some((a) => a.attempts.length > 0);
+  const anyNote = data.athletes.some((a) => a.notes.length > 0);
+  if (!anyAttempt && !anyNote) return null;
+  const hardest = [...data.questions].filter((q) => q.missed > 0).sort((a, b) => b.missed / b.attempts - a.missed / a.attempts).slice(0, 5);
+  return (
+    <Card className="mb-6">
+      <CardContent className="space-y-4 p-5">
+        <div className="flex items-center gap-1.5">
+          <HelpCircle className="h-4 w-4 text-muted-foreground" />
+          <p className="text-sm font-semibold">Quiz results and notes</p>
+        </div>
+        {hardest.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Questions the roster misses most</p>
+            {hardest.map((q) => (
+              <div key={q.questionId} className="flex items-start justify-between gap-3 rounded-md border border-border p-2 text-xs">
+                <p>
+                  <span className="font-semibold">Lesson {q.lessonNumber}:</span> {q.questionText}
+                </p>
+                <span className="shrink-0 text-muted-foreground">
+                  missed {q.missed} of {q.attempts}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="space-y-2">
+          {data.athletes
+            .filter((a) => a.attempts.length > 0 || a.notes.length > 0)
+            .map((a) => {
+              const open = openAthlete === a.athleteId;
+              return (
+                <div key={a.athleteId} className="rounded-md border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setOpenAthlete(open ? null : a.athleteId)}
+                    className="flex w-full items-center justify-between gap-2 p-3 text-left text-sm"
+                    aria-expanded={open}
+                  >
+                    <span className="font-semibold">{a.athleteName}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {a.attempts.length} attempt{a.attempts.length === 1 ? "" : "s"} · {a.notes.length} note{a.notes.length === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="space-y-3 border-t border-border p-3 text-xs">
+                      {a.attempts.length > 0 && (
+                        <div className="space-y-1.5">
+                          {a.attempts.map((t, i) => (
+                            <div key={i} className="rounded border border-border/60 p-2">
+                              <p className={cn("font-semibold", t.passed ? "text-success" : "text-destructive")}>
+                                Lesson {t.lessonNumber ?? "?"}: {t.correctCount}/{t.totalQuestions} {t.passed ? "passed" : "not yet"}
+                                <span className="ml-2 font-normal text-muted-foreground">{new Date(t.createdAt).toLocaleDateString()}</span>
+                              </p>
+                              {t.missed.length > 0 && (
+                                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+                                  {t.missed.map((m) => (
+                                    <li key={m.questionId}>{m.questionText}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {a.notes.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="font-semibold uppercase text-muted-foreground">Notes</p>
+                          {a.notes.map((n, i) => (
+                            <div key={i} className="rounded border border-border/60 p-2">
+                              <p className="text-muted-foreground">
+                                Lesson {n.lessonNumber ?? "?"}, page {n.pageIndex + 1}
+                              </p>
+                              <p className="whitespace-pre-wrap">{n.body}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

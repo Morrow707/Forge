@@ -1168,6 +1168,7 @@ ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "category" text;
 ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "prerequisite_class_id" integer REFERENCES "classes"("id") ON DELETE SET NULL;
 ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "is_draft" boolean NOT NULL DEFAULT false;
 ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "cover_image_url" text;
+ALTER TABLE "classes" ADD COLUMN IF NOT EXISTS "reading_level" text;
 
 DO $$ BEGIN
   CREATE TYPE "class_unlock_rule" AS ENUM ('immediate', 'time_elapsed', 'sessions_logged', 'reps_logged', 'manual');
@@ -1250,6 +1251,27 @@ CREATE INDEX IF NOT EXISTS "class_lesson_progress_enrollment_idx" ON "class_less
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "content_completed_at" timestamp;
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_passed_at" timestamp;
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_perfect_at" timestamp;
+CREATE TABLE IF NOT EXISTS "class_lesson_notes" (
+  "id" serial PRIMARY KEY,
+  "enrollment_id" integer NOT NULL REFERENCES "class_enrollments"("id") ON DELETE CASCADE,
+  "class_lesson_id" integer NOT NULL REFERENCES "class_lessons"("id") ON DELETE CASCADE,
+  "page_index" integer NOT NULL,
+  "body" text NOT NULL,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "class_lesson_notes_page_idx" ON "class_lesson_notes" ("enrollment_id", "class_lesson_id", "page_index");
+CREATE TABLE IF NOT EXISTS "class_lesson_quiz_attempts" (
+  "id" serial PRIMARY KEY,
+  "enrollment_id" integer NOT NULL REFERENCES "class_enrollments"("id") ON DELETE CASCADE,
+  "class_lesson_id" integer NOT NULL REFERENCES "class_lessons"("id") ON DELETE CASCADE,
+  "correct_count" integer NOT NULL,
+  "total_questions" integer NOT NULL,
+  "passed" boolean NOT NULL,
+  "answers" json NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "class_lesson_quiz_attempts_enrollment_idx" ON "class_lesson_quiz_attempts" ("enrollment_id");
+CREATE INDEX IF NOT EXISTS "class_lesson_quiz_attempts_lesson_idx" ON "class_lesson_quiz_attempts" ("class_lesson_id");
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "quiz_fail_count" integer NOT NULL DEFAULT 0;
 ALTER TABLE "class_lesson_progress" ADD COLUMN IF NOT EXISTS "coach_notified_stuck_at" timestamp;
 

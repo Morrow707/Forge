@@ -21,6 +21,7 @@ import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { QUIZ_QUESTION_TYPES, type QuizQuestionType, type QuizQuestionPayload } from "./class-quiz-grading";
+import { CLASS_READING_LEVELS, type ClassReadingLevel } from "./class-reading-level";
 import { reviewEventPayloadSchema } from "./video-review";
 import { PASSWORD_RULES } from "./password-rules";
 import { BODY_PAIN_PARTS } from "./wellness";
@@ -4550,6 +4551,9 @@ export const classes = pgTable("classes", {
   // their filter chips from whatever categories actually exist rather than
   // a hardcoded list.
   category: text("category"),
+  // Who the class is written for (shared/class-reading-level.ts). Every AI draft for the
+  // class reads it; null is treated as high school.
+  readingLevel: text("reading_level").$type<ClassReadingLevel | null>(),
   // A relative /uploads/lesson-images/... path (reuses the per-page lesson
   // image upload) or a full URL. Shown at the top of the class's card on
   // both "My Classes" and the Free Agent browse catalog -- optional, a card
@@ -4777,6 +4781,54 @@ export const classEnrollments = pgTable(
       table.classId,
       table.athleteId,
     ),
+  }),
+);
+
+/** An athlete's own notes on a lesson page (2026-10-04). One row per page, written from the
+ * reader, visible to the athlete and to the coach who enrolled them (a coach reads them on the
+ * class roster), never to another athlete. An empty save deletes the row. */
+export const classLessonNotes = pgTable(
+  "class_lesson_notes",
+  {
+    id: serial("id").primaryKey(),
+    enrollmentId: integer("enrollment_id")
+      .notNull()
+      .references(() => classEnrollments.id, { onDelete: "cascade" }),
+    classLessonId: integer("class_lesson_id")
+      .notNull()
+      .references(() => classLessons.id, { onDelete: "cascade" }),
+    pageIndex: integer("page_index").notNull(),
+    body: text("body").notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pageIdx: uniqueIndex("class_lesson_notes_page_idx").on(table.enrollmentId, table.classLessonId, table.pageIndex),
+  }),
+);
+
+/** Every quiz attempt, pass or fail (2026-10-04). class_lesson_progress keeps only the eventual
+ * pass; this is what lets a coach see which questions an athlete missed and which questions
+ * the whole roster misses. `answers` is one entry per question, right or wrong, never the
+ * athlete's text. Also the second half of the learning streak. */
+export const classLessonQuizAttempts = pgTable(
+  "class_lesson_quiz_attempts",
+  {
+    id: serial("id").primaryKey(),
+    enrollmentId: integer("enrollment_id")
+      .notNull()
+      .references(() => classEnrollments.id, { onDelete: "cascade" }),
+    classLessonId: integer("class_lesson_id")
+      .notNull()
+      .references(() => classLessons.id, { onDelete: "cascade" }),
+    correctCount: integer("correct_count").notNull(),
+    totalQuestions: integer("total_questions").notNull(),
+    passed: boolean("passed").notNull(),
+    answers: json("answers").$type<{ questionId: number; isCorrect: boolean }[]>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    enrollmentIdx: index("class_lesson_quiz_attempts_enrollment_idx").on(table.enrollmentId),
+    lessonIdx: index("class_lesson_quiz_attempts_lesson_idx").on(table.classLessonId),
   }),
 );
 
@@ -5013,6 +5065,7 @@ export const classStructureSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).nullable().optional(),
   category: z.string().trim().max(60).nullable().optional(),
+  readingLevel: z.enum(CLASS_READING_LEVELS).nullable().optional(),
   coverImageUrl: z.string().trim().min(1).max(500).nullable().optional(),
   prerequisiteClassId: z.number().int().positive().nullable().optional(),
   isDraft: z.boolean().optional(),
