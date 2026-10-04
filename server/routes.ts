@@ -2377,6 +2377,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Shared by both a coach (their own class) and an admin (a Forge class);
   // ownership of the class itself is still enforced by the classes PUT
   // route that actually persists this URL onto a content page.
+  app.post("/api/classes/lesson-quiz/draft", requireRole(["coach", "admin"]), async (req, res) => {
+    const parsed = z
+      .object({
+        pages: z.array(z.object({ title: z.string().trim().max(200).optional(), body: z.string().trim().min(1).max(20000) })).min(1).max(30),
+        count: z.number().int().min(2).max(12).optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const questions = await storage.generateQuizFromLessonText(parsed.data.pages, parsed.data.count ?? 6);
+    if (questions === null) return res.status(503).json({ message: "Couldn't draft a quiz right now. Try again, or write it." });
+    res.json({ questions });
+  });
+
   // Flashcards drafted from a lesson's pages, for the class builder (coach or admin). The
   // pages are sent as typed, saved or not, so an unsaved lesson can be drafted too.
   app.post("/api/classes/lesson-flashcards/draft", requireRole(["coach", "admin"]), async (req, res) => {
@@ -13091,8 +13104,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lessonId = Number(req.params.lessonId);
       const enrollment = await requireReadableClassLesson(user.id, id, lessonId);
       if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
+      // One submission per question, of the question's own kind (shared/class-quiz-grading.ts).
       const schema = z.object({
-        answers: z.array(z.object({ questionId: z.number(), answerId: z.number() })),
+        answers: z.array(
+          z.object({
+            questionId: z.number(),
+            answerId: z.number().nullable().optional(),
+            text: z.string().max(300).nullable().optional(),
+            order: z.array(z.string().max(200)).max(10).nullable().optional(),
+            matches: z.record(z.string().max(200), z.string().max(200)).nullable().optional(),
+          }),
+        ),
       });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {

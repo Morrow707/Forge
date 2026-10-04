@@ -107,6 +107,7 @@ import {
   academyPaths,
   academyPathTracks,
   classLessonFlashcardSchema,
+  classLessonQuizQuestionInputSchema,
   emailListCampaigns,
   coachDiscussionThreads,
   coachDiscussionReplies,
@@ -362,6 +363,7 @@ import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import type { RosterGroup } from "@shared/roster-groups";
 import { findVerbatimLesson } from "./academy-draft-guard";
 import { academyQuizPassed } from "@shared/academy-quiz";
+import { gradeQuestion, athleteFacingPayload, type QuizSubmission } from "@shared/class-quiz-grading";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
 import { learnFromTake, type BodyModelWithHistory } from "./body-model-learning";
@@ -11610,6 +11612,63 @@ Hard rules, no exceptions:
     };
   },
 
+  /** A quiz drafted from a lesson's own pages (2026-10-04): a mix of the four shapes, every
+   * answer in the text. The coach reads and edits before saving. */
+  async generateQuizFromLessonText(pages: { title?: string; body: string }[], count = 6) {
+    if (!aiEnabled) return null;
+    const text = pages.map((p, i) => `Page ${i + 1}${p.title ? `: ${p.title}` : ""}\n${p.body}`).join("\n\n");
+    if (text.trim().length < 80) return [];
+    const system = [
+      "You write an end-of-lesson quiz for athletes from the lesson text given. Use ONLY that text; every answer must be stated in it.",
+      "Mix the shapes: multiple_choice (4 answers, exactly one correct, each with a one-sentence explanation), fill_blank (the question text contains one blank written as ___ ; accepted lists every wording that counts), ordering (3 to 5 items in the correct order; only when the lesson actually gives an order), matching (2 to 5 term/definition pairs).",
+      "Questions test understanding, not trivia. Keep every string short and plain. Every non-multiple-choice question carries an explanation.",
+      `Write ${count} questions.`,
+    ].join("\n");
+    const tool = {
+      name: "report_quiz",
+      description: "Quiz questions drafted from the lesson text.",
+      input_schema: {
+        type: "object",
+        properties: {
+          questions: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                questionType: { type: "string", enum: ["multiple_choice", "fill_blank", "ordering", "matching"] },
+                questionText: { type: "string" },
+                answers: {
+                  type: "array",
+                  items: { type: "object", properties: { answerText: { type: "string" }, isCorrect: { type: "boolean" }, explanation: { type: "string" } }, required: ["answerText", "isCorrect", "explanation"] },
+                },
+                accepted: { type: "array", items: { type: "string" } },
+                items: { type: "array", items: { type: "string" } },
+                pairs: { type: "array", items: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] } },
+                explanation: { type: "string" },
+              },
+              required: ["questionType", "questionText"],
+            },
+          },
+        },
+        required: ["questions"],
+      },
+    };
+    const raw = await askClaudeStructured<{ questions: any[] }>(system, text, tool, { maxTokens: 4000, feature: "class_quiz_draft" });
+    const out: ClassStructureInput["lessons"][number]["quizQuestions"] = [];
+    for (const [i, q] of (raw?.questions ?? []).entries()) {
+      const candidate = {
+        orderIndex: i,
+        questionText: String(q.questionText ?? ""),
+        questionType: q.questionType,
+        payload: q.questionType === "multiple_choice" ? null : { accepted: q.accepted, items: q.items, pairs: q.pairs, explanation: q.explanation },
+        answers: q.questionType === "multiple_choice" ? (q.answers ?? []).map((a: any, ai: number) => ({ orderIndex: ai, answerText: a.answerText, isCorrect: Boolean(a.isCorrect), explanation: a.explanation })) : [],
+      };
+      const parsed = classLessonQuizQuestionInputSchema.safeParse(candidate);
+      if (parsed.success) out.push(parsed.data);
+    }
+    return out;
+  },
+
   /** Flashcards drafted from a lesson's own reading pages (2026-10-04). The pages are the
    * only thing in context, so a card can only test what the lesson taught; the coach edits
    * before saving. Ten cards, front a prompt, back a short answer. */
@@ -11866,17 +11925,19 @@ Hard rules, no exceptions:
         for (const q of lesson.quizQuestions) {
           const [question] = await tx
             .insert(classLessonQuizQuestions)
-            .values({ classLessonId: newLesson.id, orderIndex: q.orderIndex, questionText: q.questionText })
+            .values({ classLessonId: newLesson.id, orderIndex: q.orderIndex, questionText: q.questionText, questionType: q.questionType ?? "multiple_choice", payload: q.payload ?? null })
             .returning();
-          await tx.insert(classLessonQuizAnswers).values(
-            q.answers.map((a) => ({
-              questionId: question.id,
-              orderIndex: a.orderIndex,
-              answerText: a.answerText,
-              isCorrect: a.isCorrect,
-              explanation: a.explanation,
-            })),
-          );
+          if (q.answers.length > 0) {
+            await tx.insert(classLessonQuizAnswers).values(
+              q.answers.map((a) => ({
+                questionId: question.id,
+                orderIndex: a.orderIndex,
+                answerText: a.answerText,
+                isCorrect: a.isCorrect,
+                explanation: a.explanation,
+              })),
+            );
+          }
         }
       }
       return cls;
@@ -11958,17 +12019,19 @@ Hard rules, no exceptions:
           for (const q of lesson.quizQuestions) {
             const [question] = await tx
               .insert(classLessonQuizQuestions)
-              .values({ classLessonId: existing.id, orderIndex: q.orderIndex, questionText: q.questionText })
+              .values({ classLessonId: existing.id, orderIndex: q.orderIndex, questionText: q.questionText, questionType: q.questionType ?? "multiple_choice", payload: q.payload ?? null })
               .returning();
-            await tx.insert(classLessonQuizAnswers).values(
-              q.answers.map((a) => ({
-                questionId: question.id,
-                orderIndex: a.orderIndex,
-                answerText: a.answerText,
-                isCorrect: a.isCorrect,
-                explanation: a.explanation,
-              })),
-            );
+            if (q.answers.length > 0) {
+              await tx.insert(classLessonQuizAnswers).values(
+                q.answers.map((a) => ({
+                  questionId: question.id,
+                  orderIndex: a.orderIndex,
+                  answerText: a.answerText,
+                  isCorrect: a.isCorrect,
+                  explanation: a.explanation,
+                })),
+              );
+            }
           }
 
           // Same "wipe and rebuild the day/exercise tree" approach
@@ -12120,17 +12183,19 @@ Hard rules, no exceptions:
           for (const q of lesson.quizQuestions) {
             const [question] = await tx
               .insert(classLessonQuizQuestions)
-              .values({ classLessonId: newLesson.id, orderIndex: q.orderIndex, questionText: q.questionText })
+              .values({ classLessonId: newLesson.id, orderIndex: q.orderIndex, questionText: q.questionText, questionType: q.questionType ?? "multiple_choice", payload: q.payload ?? null })
               .returning();
-            await tx.insert(classLessonQuizAnswers).values(
-              q.answers.map((a) => ({
-                questionId: question.id,
-                orderIndex: a.orderIndex,
-                answerText: a.answerText,
-                isCorrect: a.isCorrect,
-                explanation: a.explanation,
-              })),
-            );
+            if (q.answers.length > 0) {
+              await tx.insert(classLessonQuizAnswers).values(
+                q.answers.map((a) => ({
+                  questionId: question.id,
+                  orderIndex: a.orderIndex,
+                  answerText: a.answerText,
+                  isCorrect: a.isCorrect,
+                  explanation: a.explanation,
+                })),
+              );
+            }
           }
         }
       }
@@ -12926,6 +12991,8 @@ Hard rules, no exceptions:
         id: q.id,
         orderIndex: q.orderIndex,
         questionText: q.questionText,
+        questionType: q.questionType,
+        payload: athleteFacingPayload(q.questionType, q.payload ?? null),
         answers: q.answers.map((a) => ({ id: a.id, orderIndex: a.orderIndex, answerText: a.answerText })),
       })),
     };
@@ -13013,7 +13080,7 @@ Hard rules, no exceptions:
   async submitClassLessonQuiz(
     enrollmentId: number,
     classLessonId: number,
-    submittedAnswers: Array<{ questionId: number; answerId: number }>,
+    submittedAnswers: QuizSubmission[],
   ) {
     const questions = await db.query.classLessonQuizQuestions.findMany({
       where: eq(classLessonQuizQuestions.classLessonId, classLessonId),
@@ -13022,17 +13089,25 @@ Hard rules, no exceptions:
     });
     if (questions.length === 0) throw new Error("This lesson has no quiz.");
 
-    const submittedByQuestion = new Map(submittedAnswers.map((a) => [a.questionId, a.answerId]));
+    // One grader for every shape (shared/class-quiz-grading.ts); the builder's preview runs
+    // the same function in the browser.
+    const submittedByQuestion = new Map(submittedAnswers.map((a) => [a.questionId, a]));
     let correctCount = 0;
     const results = questions.map((q) => {
-      const submittedAnswerId = submittedByQuestion.get(q.id) ?? null;
-      const submitted = q.answers.find((a) => a.id === submittedAnswerId) ?? null;
-      const isCorrect = submitted?.isCorrect ?? false;
+      const sub = submittedByQuestion.get(q.id);
+      const isCorrect = gradeQuestion(
+        { id: q.id, questionType: q.questionType, payload: q.payload ?? null, answers: q.answers.map((a) => ({ id: a.id, isCorrect: a.isCorrect })) },
+        sub,
+      );
       if (isCorrect) correctCount++;
       return {
         questionId: q.id,
         questionText: q.questionText,
-        submittedAnswerId,
+        questionType: q.questionType,
+        // The key travels back AFTER grading, so the result can show what was right.
+        payload: q.payload ?? null,
+        submitted: sub ?? null,
+        submittedAnswerId: sub?.answerId ?? null,
         isCorrect,
         answers: q.answers.map((a) => ({
           id: a.id,

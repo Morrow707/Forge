@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { QUIZ_QUESTION_TYPES, type QuizQuestionType, type QuizQuestionPayload } from "@shared/class-quiz-grading";
 import { SkillPickerDialog } from "@/components/skill-picker-dialog";
 import { EnrollInClassDialog } from "@/components/enroll-in-class-dialog";
 import { ClassLessonReaderDialog, type LessonContent } from "@/components/class-lesson-reader-dialog";
@@ -93,7 +94,58 @@ type LocalQuizAnswer = {
   isCorrect: boolean;
   explanation: string;
 };
-type LocalQuizQuestion = { key: string; id?: number; questionText: string; answers: LocalQuizAnswer[] };
+type LocalQuizQuestion = {
+  key: string;
+  id?: number;
+  questionText: string;
+  questionType: QuizQuestionType;
+  answers: LocalQuizAnswer[];
+  /** fill_blank: accepted answers, one per line. */
+  acceptedText: string;
+  /** ordering: the items in the correct order, one per line. */
+  itemsText: string;
+  /** matching: the pairs in order. */
+  pairs: { key: string; left: string; right: string }[];
+  /** Shown after grading on the three non-multiple-choice shapes. */
+  explanation: string;
+};
+
+/** The builder keeps the typed lists as text; this is the one conversion to the wire shape. */
+function quizPayloadFromLocal(q: LocalQuizQuestion): QuizQuestionPayload | null {
+  const lines = (t: string) => t.split("\n").map((x) => x.trim()).filter(Boolean);
+  const explanation = q.explanation.trim() || undefined;
+  switch (q.questionType) {
+    case "fill_blank":
+      return { accepted: lines(q.acceptedText), explanation };
+    case "ordering":
+      return { items: lines(q.itemsText), explanation };
+    case "matching":
+      return { pairs: q.pairs.map((p) => ({ left: p.left.trim(), right: p.right.trim() })).filter((p) => p.left && p.right), explanation };
+    default:
+      return null;
+  }
+}
+
+function localQuizQuestionFrom(q: any): LocalQuizQuestion {
+  const payload = (q.payload ?? null) as QuizQuestionPayload | null;
+  return {
+    key: uid(),
+    id: q.id,
+    questionText: q.questionText,
+    questionType: (q.questionType ?? "multiple_choice") as QuizQuestionType,
+    answers: ((q.answers ?? []) as any[]).map((a: any) => ({
+      key: uid(),
+      id: a.id,
+      answerText: a.answerText,
+      isCorrect: Boolean(a.isCorrect),
+      explanation: a.explanation ?? "",
+    })),
+    acceptedText: (payload?.accepted ?? []).join("\n"),
+    itemsText: (payload?.items ?? []).join("\n"),
+    pairs: (payload?.pairs ?? []).map((p) => ({ key: uid(), left: p.left, right: p.right })),
+    explanation: payload?.explanation ?? "",
+  };
+}
 type LocalFlashcard = { key: string; front: string; back: string };
 
 type LocalLesson = {
@@ -167,6 +219,8 @@ function localLessonToPreviewContent(lesson: LocalLesson): LessonContent {
         id: q.id ?? nextId++,
         orderIndex: qi,
         questionText: q.questionText,
+        questionType: q.questionType,
+        payload: quizPayloadFromLocal(q),
         answers: q.answers
           .filter((a) => a.answerText.trim())
           .map((a, ai) => ({
@@ -180,11 +234,19 @@ function localLessonToPreviewContent(lesson: LocalLesson): LessonContent {
   };
 }
 
-function makeQuizQuestion(): LocalQuizQuestion {
+function makeQuizQuestion(questionType: QuizQuestionType = "multiple_choice"): LocalQuizQuestion {
   return {
     key: uid(),
     questionText: "",
-    answers: [0, 1, 2, 3].map((i) => ({ key: uid(), answerText: "", isCorrect: i === 0, explanation: "" })),
+    questionType,
+    answers:
+      questionType === "multiple_choice"
+        ? [0, 1, 2, 3].map((i) => ({ key: uid(), answerText: "", isCorrect: i === 0, explanation: "" }))
+        : [],
+    acceptedText: "",
+    itemsText: "",
+    pairs: questionType === "matching" ? [0, 1, 2].map(() => ({ key: uid(), left: "", right: "" })) : [],
+    explanation: "",
   };
 }
 
@@ -233,18 +295,7 @@ function stateFromClass(cls: any) {
         attachmentUrl: p.attachmentUrl ?? "",
         attachmentName: p.attachmentName ?? "",
       })),
-      quizQuestions: ((l.quizQuestions ?? []) as any[]).map((q) => ({
-        key: uid(),
-        id: q.id,
-        questionText: q.questionText,
-        answers: q.answers.map((a: any) => ({
-          key: uid(),
-          id: a.id,
-          answerText: a.answerText,
-          isCorrect: a.isCorrect,
-          explanation: a.explanation,
-        })),
-      })),
+      quizQuestions: ((l.quizQuestions ?? []) as any[]).map(localQuizQuestionFrom),
       flashcardsEnabled: Boolean(l.flashcardsEnabled),
       flashcards: ((l.flashcards ?? []) as { front: string; back: string }[]).map((c) => ({ key: uid(), front: c.front, back: c.back })),
     })),
@@ -470,13 +521,32 @@ export function ClassBuilderPage({
     for (const l of lessons) {
       for (const q of l.quizQuestions) {
         if (!q.questionText.trim()) continue;
-        const answers = q.answers.filter((a) => a.answerText.trim());
-        if (answers.length < 2) return `"${l.title}": every quiz question needs at least 2 answers.`;
-        if (answers.filter((a) => a.isCorrect).length !== 1) {
-          return `"${l.title}": every quiz question needs exactly one correct answer marked.`;
-        }
-        if (answers.some((a) => !a.explanation.trim())) {
-          return `"${l.title}": every answer needs an explanation.`;
+        const payload = quizPayloadFromLocal(q);
+        switch (q.questionType) {
+          case "multiple_choice": {
+            const answers = q.answers.filter((a) => a.answerText.trim());
+            if (answers.length < 2) return `"${l.title}": every multiple-choice question needs at least 2 answers.`;
+            if (answers.filter((a) => a.isCorrect).length !== 1) {
+              return `"${l.title}": every multiple-choice question needs exactly one correct answer marked.`;
+            }
+            if (answers.some((a) => !a.explanation.trim())) {
+              return `"${l.title}": every answer needs an explanation.`;
+            }
+            break;
+          }
+          case "fill_blank":
+            if (!q.questionText.includes("___")) return `"${l.title}": a fill-in-the-blank question needs its blank written as ___ in the text.`;
+            if (!payload?.accepted?.length) return `"${l.title}": a fill-in-the-blank question needs at least one accepted answer.`;
+            break;
+          case "ordering":
+            if ((payload?.items?.length ?? 0) < 3) return `"${l.title}": an ordering question needs at least 3 items.`;
+            if (new Set(payload?.items).size !== payload?.items?.length) return `"${l.title}": ordering items must all be different.`;
+            break;
+          case "matching":
+            if ((payload?.pairs?.length ?? 0) < 2) return `"${l.title}": a matching question needs at least 2 complete pairs.`;
+            if (new Set(payload?.pairs?.map((p) => p.left)).size !== payload?.pairs?.length)
+              return `"${l.title}": the left side of each pair must be different.`;
+            break;
         }
       }
     }
@@ -533,7 +603,9 @@ export function ClassBuilderPage({
             id: q.id,
             orderIndex: qi,
             questionText: q.questionText,
-            answers: q.answers
+            questionType: q.questionType,
+            payload: quizPayloadFromLocal(q),
+            answers: (q.questionType === "multiple_choice" ? q.answers : [])
               .filter((a) => a.answerText.trim())
               .map((a, ai) => ({
                 id: a.id,
@@ -1702,6 +1774,7 @@ function LessonContentAndQuiz({
             </Label>
             <QuizEditor
               questions={lesson.quizQuestions}
+              pages={lesson.content}
               onChange={(updater) => onChange((l) => ({ ...l, quizQuestions: updater(l.quizQuestions) }))}
             />
           </div>
@@ -2088,13 +2161,43 @@ function FlashcardsEditor({
   );
 }
 
+const QUIZ_TYPE_LABELS: Record<QuizQuestionType, string> = {
+  multiple_choice: "Multiple choice",
+  fill_blank: "Fill in the blank",
+  ordering: "Put in order",
+  matching: "Match the pairs",
+};
+
 function QuizEditor({
   questions,
+  pages,
   onChange,
 }: {
   questions: LocalQuizQuestion[];
+  pages: LocalContentPage[];
   onChange: (updater: (questions: LocalQuizQuestion[]) => LocalQuizQuestion[]) => void;
 }) {
+  const patch = (key: string, p: Partial<LocalQuizQuestion>) =>
+    onChange((prev) => prev.map((x) => (x.key === key ? { ...x, ...p } : x)));
+  const draft = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/classes/lesson-quiz/draft", {
+        pages: pages.filter((p) => p.body.trim()).map((p) => ({ title: p.title.trim() || undefined, body: p.body })),
+        count: 6,
+      });
+      return res.json() as Promise<{ questions: any[] }>;
+    },
+    onSuccess: ({ questions: drafted }) => {
+      if (drafted.length === 0) {
+        toast.info("The pages are too short to draft a quiz from. Write the lesson first.");
+        return;
+      }
+      onChange((prev) => [...prev, ...drafted.map((q) => ({ ...localQuizQuestionFrom(q), id: undefined }))]);
+      toast.success(`${drafted.length} questions drafted from this lesson. Check every answer key before saving.`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't draft a quiz"),
+  });
+  const hasPages = pages.some((p) => p.body.trim().length > 0);
   return (
     <div className="space-y-3">
       {questions.map((q, qi) => (
@@ -2103,6 +2206,36 @@ function QuizEditor({
             <span className="text-[10px] font-semibold uppercase text-muted-foreground">
               Question {qi + 1}
             </span>
+            <div className="flex items-center gap-2">
+              <Select
+                value={q.questionType}
+                onValueChange={(v) => {
+                  const questionType = v as QuizQuestionType;
+                  onChange((prev) =>
+                    prev.map((x) => {
+                      if (x.key !== q.key) return x;
+                      const fresh = makeQuizQuestion(questionType);
+                      return {
+                        ...x,
+                        questionType,
+                        answers: questionType === "multiple_choice" && x.answers.length === 0 ? fresh.answers : x.answers,
+                        pairs: questionType === "matching" && x.pairs.length === 0 ? fresh.pairs : x.pairs,
+                      };
+                    }),
+                  );
+                }}
+              >
+                <SelectTrigger className="h-7 w-[150px] text-xs" aria-label="Question type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUIZ_QUESTION_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {QUIZ_TYPE_LABELS[t]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             <button
               type="button"
               aria-label={`Remove question ${qi + 1}`}
@@ -2111,6 +2244,7 @@ function QuizEditor({
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
+            </div>
           </div>
           <Textarea
             value={q.questionText}
@@ -2119,10 +2253,80 @@ function QuizEditor({
               onChange((prev) => prev.map((x) => (x.key === q.key ? { ...x, questionText: val } : x)));
             }}
             rows={2}
-            placeholder="Question text"
+            placeholder={q.questionType === "fill_blank" ? "Question text, with the blank written as ___" : "Question text"}
             className="text-sm"
           />
-          <div className="space-y-1.5">
+          {q.questionType === "fill_blank" && (
+            <Textarea
+              value={q.acceptedText}
+              onChange={(e) => patch(q.key, { acceptedText: e.target.value })}
+              rows={2}
+              placeholder={"Accepted answers, one per line (case and punctuation don't matter)"}
+              className="text-xs"
+            />
+          )}
+          {q.questionType === "ordering" && (
+            <Textarea
+              value={q.itemsText}
+              onChange={(e) => patch(q.key, { itemsText: e.target.value })}
+              rows={4}
+              placeholder={"The steps in the CORRECT order, one per line. The athlete sees them shuffled."}
+              className="text-xs"
+            />
+          )}
+          {q.questionType === "matching" && (
+            <div className="space-y-1.5">
+              {q.pairs.map((p, pi) => (
+                <div key={p.key} className="flex items-center gap-1.5">
+                  <Input
+                    value={p.left}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      patch(q.key, { pairs: q.pairs.map((y) => (y.key === p.key ? { ...y, left: val } : y)) });
+                    }}
+                    placeholder="Left"
+                    className="h-8 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground">→</span>
+                  <Input
+                    value={p.right}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      patch(q.key, { pairs: q.pairs.map((y) => (y.key === p.key ? { ...y, right: val } : y)) });
+                    }}
+                    placeholder="Right"
+                    className="h-8 text-xs"
+                  />
+                  <button
+                    type="button"
+                    aria-label={`Remove pair ${pi + 1}`}
+                    onClick={() => patch(q.key, { pairs: q.pairs.filter((y) => y.key !== p.key) })}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => patch(q.key, { pairs: [...q.pairs, { key: uid(), left: "", right: "" }] })}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add pair
+              </Button>
+            </div>
+          )}
+          {q.questionType !== "multiple_choice" && (
+            <Input
+              value={q.explanation}
+              onChange={(e) => patch(q.key, { explanation: e.target.value })}
+              placeholder="Explanation shown after the athlete answers (optional)"
+              className="h-8 text-xs"
+            />
+          )}
+          <div className={cn("space-y-1.5", q.questionType !== "multiple_choice" && "hidden")}>
             {q.answers.map((a) => (
               <div key={a.key} className="flex items-start gap-2 rounded border border-border/60 p-1.5">
                 <button
@@ -2190,16 +2394,30 @@ function QuizEditor({
           </div>
         </div>
       ))}
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        className="w-full"
-        onClick={() => onChange((prev) => [...prev, makeQuizQuestion()])}
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Add Question
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="flex-1"
+          onClick={() => onChange((prev) => [...prev, makeQuizQuestion()])}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add Question
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          disabled={!hasPages || draft.isPending}
+          onClick={() => draft.mutate()}
+          title={hasPages ? undefined : "Write the lesson's pages first"}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          {draft.isPending ? "Drafting..." : "Draft quiz from this lesson"}
+        </Button>
+      </div>
     </div>
   );
 }

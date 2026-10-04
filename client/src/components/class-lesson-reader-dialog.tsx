@@ -22,6 +22,14 @@ import { cn } from "@/lib/utils";
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { ReadFailed } from "@/components/read-failed";
 import { LessonFlashcards, type Flashcard } from "@/components/lesson-flashcards";
+import { FillBlankInput, OrderingInput, MatchingInput } from "@/components/quiz-question-inputs";
+import {
+  gradeQuestion,
+  isAnswered,
+  type QuizQuestionPayload,
+  type QuizQuestionType,
+  type QuizSubmission,
+} from "@shared/class-quiz-grading";
 
 export type ContentPage = {
   title?: string;
@@ -47,6 +55,11 @@ export type QuizQuestion = {
   id: number;
   orderIndex: number;
   questionText: string;
+  /** multiple_choice | fill_blank | ordering | matching (shared/class-quiz-grading.ts).
+   * Absent on an older payload means multiple choice. */
+  questionType?: QuizQuestionType;
+  /** For an athlete: the shuffled items or pairs, never the key. For a preview: the key. */
+  payload?: QuizQuestionPayload | null;
   answers: QuizAnswerOption[];
 };
 export type LessonContent = {
@@ -61,6 +74,10 @@ export type LessonContent = {
 type QuizAnswerResult = {
   questionId: number;
   questionText: string;
+  questionType?: QuizQuestionType;
+  /** The key, handed back only after grading. */
+  payload?: QuizQuestionPayload | null;
+  submitted?: QuizSubmission | null;
   submittedAnswerId: number | null;
   isCorrect: boolean;
   answers: { id: number; answerText: string; isCorrect: boolean; explanation: string }[];
@@ -225,7 +242,7 @@ export function ClassLessonReaderDialog({
   const contentFailed = isPreview ? false : isError;
 
   const [pageIndex, setPageIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, QuizSubmission>>({});
   const [quizResult, setQuizResult] = useState<QuizSubmitResult | null>(null);
   const [failLine, setFailLine] = useState("");
   // Driven directly by which button opened the dialog (startAt), not
@@ -299,14 +316,24 @@ export function ClassLessonReaderDialog({
         // real athlete would pass, not just whether the dialog advances.
         let correctCount = 0;
         const results: QuizAnswerResult[] = questions.map((q) => {
-          const submittedAnswerId = selectedAnswers[q.id] ?? null;
-          const submitted = q.answers.find((a) => a.id === submittedAnswerId) ?? null;
-          const isCorrect = submitted?.isCorrect ?? false;
+          const sub = selectedAnswers[q.id];
+          const isCorrect = gradeQuestion(
+            {
+              id: q.id,
+              questionType: q.questionType ?? "multiple_choice",
+              payload: q.payload ?? null,
+              answers: q.answers.map((a) => ({ id: a.id, isCorrect: !!a.isCorrect })),
+            },
+            sub,
+          );
           if (isCorrect) correctCount++;
           return {
             questionId: q.id,
             questionText: q.questionText,
-            submittedAnswerId,
+            questionType: q.questionType ?? "multiple_choice",
+            payload: q.payload ?? null,
+            submitted: sub ?? null,
+            submittedAnswerId: sub?.answerId ?? null,
             isCorrect,
             answers: q.answers.map((a) => ({
               id: a.id,
@@ -328,10 +355,7 @@ export function ClassLessonReaderDialog({
         };
         return result;
       }
-      const answers = Object.entries(selectedAnswers).map(([questionId, answerId]) => ({
-        questionId: Number(questionId),
-        answerId,
-      }));
+      const answers = Object.values(selectedAnswers);
       const res = await apiRequest(
         "POST",
         `/api/athlete/classes/${classId}/lessons/${lesson.id}/quiz/submit`,
@@ -372,7 +396,11 @@ export function ClassLessonReaderDialog({
 
   const pages = lessonContent?.content ?? [];
   const questions = lessonContent?.quizQuestions ?? [];
-  const allAnswered = questions.length > 0 && questions.every((q) => selectedAnswers[q.id] != null);
+  const allAnswered =
+    questions.length > 0 &&
+    questions.every((q) => isAnswered({ questionType: q.questionType ?? "multiple_choice", payload: q.payload ?? null }, selectedAnswers[q.id]));
+  const setSubmission = (questionId: number, patch: Partial<QuizSubmission>) =>
+    setSelectedAnswers((prev) => ({ ...prev, [questionId]: { ...(prev[questionId] ?? { questionId }), questionId, ...patch } }));
 
   // Reset scroll to the top of the new page/phase -- without this, a page
   // that scrolls further than the next one keeps the old scroll offset,
@@ -579,38 +607,61 @@ export function ClassLessonReaderDialog({
                   <p className="text-sm text-muted-foreground">
                     Answer every question, then submit. You can retry as many times as you need.
                   </p>
-                  {questions.map((q, qi) => (
-                    <div key={q.id} className="space-y-2 rounded-md border border-border p-3">
-                      <p className="text-sm font-semibold">
-                        {qi + 1}. {q.questionText}
-                      </p>
-                      <div className="space-y-1.5">
-                        {q.answers.map((a) => (
-                          <button
-                            key={a.id}
-                            type="button"
-                            onClick={() => setSelectedAnswers((prev) => ({ ...prev, [q.id]: a.id }))}
-                            className={cn(
-                              "flex w-full items-center gap-2 rounded-md border p-2.5 text-left text-sm transition-colors",
-                              selectedAnswers[q.id] === a.id
-                                ? "border-primary bg-primary/10"
-                                : "border-border hover:bg-surface-elevated",
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "h-3.5 w-3.5 shrink-0 rounded-full border-2",
-                                selectedAnswers[q.id] === a.id
-                                  ? "border-primary bg-primary"
-                                  : "border-muted-foreground",
-                              )}
-                            />
-                            {a.answerText}
-                          </button>
-                        ))}
+                  {questions.map((q, qi) => {
+                    const type = q.questionType ?? "multiple_choice";
+                    const sub = selectedAnswers[q.id];
+                    return (
+                      <div key={q.id} className="space-y-2 rounded-md border border-border p-3">
+                        {type === "fill_blank" ? (
+                          <div className="flex gap-1 text-sm font-semibold">
+                            <span>{qi + 1}.</span>
+                            <div className="min-w-0 flex-1 font-normal">
+                              <FillBlankInput
+                                questionText={q.questionText}
+                                value={sub?.text ?? ""}
+                                onChange={(text) => setSubmission(q.id, { text })}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-semibold">
+                            {qi + 1}. {q.questionText}
+                          </p>
+                        )}
+                        {type === "multiple_choice" && (
+                          <div className="space-y-1.5">
+                            {q.answers.map((a) => (
+                              <button
+                                key={a.id}
+                                type="button"
+                                onClick={() => setSubmission(q.id, { answerId: a.id })}
+                                className={cn(
+                                  "flex w-full items-center gap-2 rounded-md border p-2.5 text-left text-sm transition-colors",
+                                  sub?.answerId === a.id
+                                    ? "border-primary bg-primary/10"
+                                    : "border-border hover:bg-surface-elevated",
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    "h-3.5 w-3.5 shrink-0 rounded-full border-2",
+                                    sub?.answerId === a.id ? "border-primary bg-primary" : "border-muted-foreground",
+                                  )}
+                                />
+                                {a.answerText}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {type === "ordering" && (
+                          <OrderingInput payload={q.payload ?? null} value={sub?.order} onChange={(order) => setSubmission(q.id, { order })} />
+                        )}
+                        {type === "matching" && (
+                          <MatchingInput payload={q.payload ?? null} value={sub?.matches} onChange={(matches) => setSubmission(q.id, { matches })} />
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
             </div>
@@ -652,24 +703,28 @@ export function ClassLessonReaderDialog({
                     )}
                     {ri + 1}. {r.questionText}
                   </p>
-                  <div className="space-y-1.5 pl-6">
-                    {r.answers.map((a) => (
-                      <div
-                        key={a.id}
-                        className={cn(
-                          "rounded-md border p-2 text-xs",
-                          a.isCorrect
-                            ? "border-success/40 bg-success/10"
-                            : a.id === r.submittedAnswerId
-                              ? "border-destructive/40 bg-destructive/10"
-                              : "border-border/60",
-                        )}
-                      >
-                        <p className="font-medium">{a.answerText}</p>
-                        <p className="mt-0.5 text-muted-foreground">{a.explanation}</p>
-                      </div>
-                    ))}
-                  </div>
+                  {(r.questionType ?? "multiple_choice") === "multiple_choice" ? (
+                    <div className="space-y-1.5 pl-6">
+                      {r.answers.map((a) => (
+                        <div
+                          key={a.id}
+                          className={cn(
+                            "rounded-md border p-2 text-xs",
+                            a.isCorrect
+                              ? "border-success/40 bg-success/10"
+                              : a.id === r.submittedAnswerId
+                                ? "border-destructive/40 bg-destructive/10"
+                                : "border-border/60",
+                          )}
+                        >
+                          <p className="font-medium">{a.answerText}</p>
+                          <p className="mt-0.5 text-muted-foreground">{a.explanation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <QuizKeyResult result={r} />
+                  )}
                 </div>
               ))}
             </div>
@@ -824,5 +879,76 @@ export function ClassLessonReaderDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+
+/** What the right answer was, for the three non-multiple-choice shapes, beside what the
+ * athlete gave. The key only exists on a graded result. */
+function QuizKeyResult({ result: r }: { result: QuizAnswerResult }) {
+  const payload = r.payload ?? null;
+  const sub = r.submitted ?? null;
+  const explanation = payload?.explanation?.trim();
+  return (
+    <div className="space-y-2 pl-6 text-xs">
+      {r.questionType === "fill_blank" && (
+        <>
+          <p>
+            <span className="text-muted-foreground">Your answer: </span>
+            <span className={cn("font-medium", r.isCorrect ? "text-success" : "text-destructive")}>{sub?.text?.trim() || "(blank)"}</span>
+          </p>
+          {!r.isCorrect && (payload?.accepted?.length ?? 0) > 0 && (
+            <p>
+              <span className="text-muted-foreground">Accepted: </span>
+              <span className="font-medium">{payload!.accepted!.join(", ")}</span>
+            </p>
+          )}
+        </>
+      )}
+      {r.questionType === "ordering" && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <p className="mb-1 text-muted-foreground">Your order</p>
+            <ol className="list-decimal space-y-0.5 pl-4">
+              {(sub?.order ?? []).map((it, i) => (
+                <li key={i} className={cn(payload?.items?.[i] === it ? "text-success" : "text-destructive")}>{it}</li>
+              ))}
+            </ol>
+          </div>
+          {!r.isCorrect && (
+            <div>
+              <p className="mb-1 text-muted-foreground">Correct order</p>
+              <ol className="list-decimal space-y-0.5 pl-4">
+                {(payload?.items ?? []).map((it, i) => (
+                  <li key={i}>{it}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
+      {r.questionType === "matching" && (
+        <div className="space-y-1">
+          {(payload?.pairs ?? []).map((p) => {
+            const given = sub?.matches?.[p.left];
+            const ok = given === p.right;
+            return (
+              <p key={p.left}>
+                <span className="font-medium">{p.left}</span>
+                <span className="text-muted-foreground"> → </span>
+                <span className={cn(ok ? "text-success" : "text-destructive")}>{given ?? "(none)"}</span>
+                {!ok && (
+                  <>
+                    <span className="text-muted-foreground"> · correct: </span>
+                    <span>{p.right}</span>
+                  </>
+                )}
+              </p>
+            );
+          })}
+        </div>
+      )}
+      {explanation && <p className="text-muted-foreground">{explanation}</p>}
+    </div>
   );
 }

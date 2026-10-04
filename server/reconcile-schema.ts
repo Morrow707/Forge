@@ -1198,6 +1198,9 @@ CREATE TABLE IF NOT EXISTS "class_lesson_quiz_questions" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "class_lesson_quiz_questions_lesson_idx" ON "class_lesson_quiz_questions" ("class_lesson_id");
+-- Four question shapes (2026-10-04); existing rows stay multiple choice.
+ALTER TABLE "class_lesson_quiz_questions" ADD COLUMN IF NOT EXISTS "question_type" text NOT NULL DEFAULT 'multiple_choice';
+ALTER TABLE "class_lesson_quiz_questions" ADD COLUMN IF NOT EXISTS "payload" json;
 
 CREATE TABLE IF NOT EXISTS "class_lesson_quiz_answers" (
   "id" serial PRIMARY KEY,

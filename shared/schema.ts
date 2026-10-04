@@ -20,6 +20,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { QUIZ_QUESTION_TYPES, type QuizQuestionType, type QuizQuestionPayload } from "./class-quiz-grading";
 import { reviewEventPayloadSchema } from "./video-review";
 import { PASSWORD_RULES } from "./password-rules";
 import { BODY_PAIN_PARTS } from "./wellness";
@@ -4660,6 +4661,11 @@ export const classLessonQuizQuestions = pgTable(
       .references(() => classLessons.id, { onDelete: "cascade" }),
     orderIndex: integer("order_index").notNull().default(0),
     questionText: text("question_text").notNull(),
+    // Four shapes since 2026-10-04 (shared/class-quiz-grading.ts): multiple_choice keeps its
+    // answer rows; fill_blank, ordering and matching keep their key in payload and have no
+    // answer rows. One grader serves all four.
+    questionType: text("question_type").$type<QuizQuestionType>().notNull().default("multiple_choice"),
+    payload: json("payload").$type<QuizQuestionPayload | null>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -4922,12 +4928,52 @@ export const classLessonQuizAnswerInputSchema = z.object({
   explanation: z.string().trim().min(1).max(1000),
 });
 
-export const classLessonQuizQuestionInputSchema = z.object({
-  id: z.number().optional(),
-  orderIndex: z.number().int().default(0),
-  questionText: z.string().trim().min(1).max(1000),
-  answers: z.array(classLessonQuizAnswerInputSchema).min(2).max(8),
+export const quizQuestionPayloadSchema = z.object({
+  accepted: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
+  items: z.array(z.string().trim().min(1).max(200)).max(10).optional(),
+  pairs: z.array(z.object({ left: z.string().trim().min(1).max(200), right: z.string().trim().min(1).max(200) })).max(10).optional(),
+  explanation: z.string().trim().max(1000).optional(),
 });
+
+export const classLessonQuizQuestionInputSchema = z
+  .object({
+    id: z.number().optional(),
+    orderIndex: z.number().int().default(0),
+    questionText: z.string().trim().min(1).max(1000),
+    questionType: z.enum(QUIZ_QUESTION_TYPES).default("multiple_choice"),
+    payload: quizQuestionPayloadSchema.nullable().optional(),
+    answers: z.array(classLessonQuizAnswerInputSchema).max(8).default([]),
+  })
+  .superRefine((raw, ctx) => {
+    // Typed explicitly: zod infers an all-optional object as {} under this tsconfig.
+    const q = raw as {
+      questionType: QuizQuestionType;
+      questionText: string;
+      answers: { isCorrect: boolean }[];
+      payload?: QuizQuestionPayload | null;
+    };
+    switch (q.questionType) {
+      case "multiple_choice":
+        if (q.answers.length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A multiple-choice question needs at least 2 answers." });
+        if (q.answers.filter((a) => a.isCorrect).length !== 1)
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A multiple-choice question needs exactly one correct answer." });
+        break;
+      case "fill_blank":
+        if (!q.questionText.includes("___")) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A fill-in-the-blank question needs a blank written as ___ in the text." });
+        if (!q.payload?.accepted?.length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A fill-in-the-blank question needs at least one accepted answer." });
+        break;
+      case "ordering":
+        if ((q.payload?.items?.length ?? 0) < 3) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "An ordering question needs at least 3 items." });
+        if (new Set(q.payload?.items ?? []).size !== (q.payload?.items?.length ?? 0))
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ordering items must be distinct." });
+        break;
+      case "matching":
+        if ((q.payload?.pairs?.length ?? 0) < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A matching question needs at least 2 pairs." });
+        if (new Set((q.payload?.pairs ?? []).map((p) => p.left)).size !== (q.payload?.pairs?.length ?? 0))
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Matching lefts must be distinct." });
+        break;
+    }
+  });
 
 export const classLessonExerciseInputSchema = z.object({
   skillExerciseId: z.number(),
