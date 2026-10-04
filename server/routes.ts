@@ -2377,6 +2377,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Shared by both a coach (their own class) and an admin (a Forge class);
   // ownership of the class itself is still enforced by the classes PUT
   // route that actually persists this URL onto a content page.
+  // Flashcards drafted from a lesson's pages, for the class builder (coach or admin). The
+  // pages are sent as typed, saved or not, so an unsaved lesson can be drafted too.
+  app.post("/api/classes/lesson-flashcards/draft", requireRole(["coach", "admin"]), async (req, res) => {
+    const parsed = z
+      .object({
+        pages: z.array(z.object({ title: z.string().trim().max(200).optional(), body: z.string().trim().min(1).max(20000) })).min(1).max(30),
+        count: z.number().int().min(3).max(25).optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const cards = await storage.generateFlashcardsFromLessonText(parsed.data.pages, parsed.data.count ?? 10);
+    if (cards === null) return res.status(503).json({ message: "Couldn't draft cards right now. Try again, or type them." });
+    res.json({ cards });
+  });
+
   app.post("/api/classes/lesson-media/video", requireRole(["coach", "admin"]), requireDiskSpace, (req, res) => {
     uploadLessonVideo.single("video")(req, res, (err: unknown) => {
       if (err) {

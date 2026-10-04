@@ -4630,12 +4630,23 @@ export const classLessons = pgTable(
       >()
       .notNull()
       .default([]),
+    // Flashcards (2026-10-04): a review step between the reading and the quiz, off by
+    // default because not every lesson wants one (Scott: "Every lesson doesn't need them").
+    // Front is the prompt, back is the answer. Typed by the coach, or drafted from the
+    // lesson's own pages and edited before saving; never from anything outside the lesson.
+    flashcardsEnabled: boolean("flashcards_enabled").notNull().default(false),
+    flashcards: json("flashcards").$type<{ front: string; back: string }[]>().notNull().default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
     classIdx: index("class_lessons_class_idx").on(table.classId),
   }),
 );
+
+export const classLessonFlashcardSchema = z.object({
+  front: z.string().trim().min(1).max(300),
+  back: z.string().trim().min(1).max(600),
+});
 
 // One quiz per lesson, taken after its content pages -- unlike Coaches
 // Corner's ungraded self-check (academyQuizQuestions), this one gates
@@ -4943,6 +4954,8 @@ export const classLessonInputSchema = z.object({
   exercises: z.array(classLessonExerciseInputSchema).default([]),
   content: z.array(classLessonContentPageSchema).default([]),
   quizQuestions: z.array(classLessonQuizQuestionInputSchema).default([]),
+  flashcardsEnabled: z.boolean().optional(),
+  flashcards: z.array(classLessonFlashcardSchema).max(40).optional(),
 });
 
 export const classStructureSchema = z.object({

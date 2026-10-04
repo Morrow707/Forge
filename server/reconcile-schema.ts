@@ -1186,6 +1186,9 @@ CREATE TABLE IF NOT EXISTS "class_lessons" (
 );
 CREATE INDEX IF NOT EXISTS "class_lessons_class_idx" ON "class_lessons" ("class_id");
 ALTER TABLE "class_lessons" ADD COLUMN IF NOT EXISTS "content" json NOT NULL DEFAULT '[]';
+-- Flashcards (2026-10-04), off by default.
+ALTER TABLE "class_lessons" ADD COLUMN IF NOT EXISTS "flashcards_enabled" boolean NOT NULL DEFAULT false;
+ALTER TABLE "class_lessons" ADD COLUMN IF NOT EXISTS "flashcards" json NOT NULL DEFAULT '[]';
 
 CREATE TABLE IF NOT EXISTS "class_lesson_quiz_questions" (
   "id" serial PRIMARY KEY,

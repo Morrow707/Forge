@@ -44,7 +44,10 @@ import {
   ImagePlus,
   RotateCcw,
   Medal,
+  Layers,
+  Sparkles,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { SkillExercise } from "@shared/schema";
 import { ReadFailed } from "@/components/read-failed";
@@ -91,6 +94,7 @@ type LocalQuizAnswer = {
   explanation: string;
 };
 type LocalQuizQuestion = { key: string; id?: number; questionText: string; answers: LocalQuizAnswer[] };
+type LocalFlashcard = { key: string; front: string; back: string };
 
 type LocalLesson = {
   key: string;
@@ -103,6 +107,8 @@ type LocalLesson = {
   exercises: LocalExercise[];
   content: LocalContentPage[];
   quizQuestions: LocalQuizQuestion[];
+  flashcardsEnabled: boolean;
+  flashcards: LocalFlashcard[];
 };
 
 function uid() {
@@ -120,6 +126,8 @@ function makeLesson(n: number): LocalLesson {
     exercises: [],
     content: [],
     quizQuestions: [],
+    flashcardsEnabled: false,
+    flashcards: [],
   };
 }
 
@@ -150,6 +158,9 @@ function localLessonToPreviewContent(lesson: LocalLesson): LessonContent {
         attachmentUrl: p.attachmentUrl.trim() || undefined,
         attachmentName: p.attachmentName.trim() || undefined,
       })),
+    flashcards: lesson.flashcardsEnabled
+      ? lesson.flashcards.filter((c) => c.front.trim() && c.back.trim()).map((c) => ({ front: c.front.trim(), back: c.back.trim() }))
+      : [],
     quizQuestions: lesson.quizQuestions
       .filter((q) => q.questionText.trim())
       .map((q, qi) => ({
@@ -234,6 +245,8 @@ function stateFromClass(cls: any) {
           explanation: a.explanation,
         })),
       })),
+      flashcardsEnabled: Boolean(l.flashcardsEnabled),
+      flashcards: ((l.flashcards ?? []) as { front: string; back: string }[]).map((c) => ({ key: uid(), front: c.front, back: c.back })),
     })),
   };
 }
@@ -530,6 +543,8 @@ export function ClassBuilderPage({
                 explanation: a.explanation,
               })),
           })),
+        flashcardsEnabled: l.flashcardsEnabled,
+        flashcards: l.flashcards.filter((c) => c.front.trim() && c.back.trim()).map((c) => ({ front: c.front.trim(), back: c.back.trim() })),
       })),
     };
   }
@@ -1669,6 +1684,19 @@ function LessonContentAndQuiz({
           </div>
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5 text-xs">
+              <Layers className="h-3.5 w-3.5" />
+              Flashcards (a review step between the reading and the quiz)
+            </Label>
+            <FlashcardsEditor
+              enabled={lesson.flashcardsEnabled}
+              cards={lesson.flashcards}
+              pages={lesson.content}
+              onToggle={(enabled) => onChange((l) => ({ ...l, flashcardsEnabled: enabled }))}
+              onChange={(updater) => onChange((l) => ({ ...l, flashcards: updater(l.flashcards) }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5 text-xs">
               <HelpCircle className="h-3.5 w-3.5" />
               End-of-chapter quiz
             </Label>
@@ -1953,6 +1981,109 @@ function ContentPageRow({
           }}
         />
       </div>
+    </div>
+  );
+}
+
+/** Off by default. When on, cards are typed here or drafted from this lesson's own pages
+ * (the only thing the draft reads), then edited before saving. */
+function FlashcardsEditor({
+  enabled,
+  cards,
+  pages,
+  onToggle,
+  onChange,
+}: {
+  enabled: boolean;
+  cards: LocalFlashcard[];
+  pages: LocalContentPage[];
+  onToggle: (enabled: boolean) => void;
+  onChange: (updater: (cards: LocalFlashcard[]) => LocalFlashcard[]) => void;
+}) {
+  const draft = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/classes/lesson-flashcards/draft", {
+        pages: pages.filter((p) => p.body.trim()).map((p) => ({ title: p.title.trim() || undefined, body: p.body })),
+        count: 10,
+      });
+      return res.json() as Promise<{ cards: { front: string; back: string }[] }>;
+    },
+    onSuccess: ({ cards: drafted }) => {
+      if (drafted.length === 0) {
+        toast.info("The pages are too short to draft cards from. Write the lesson first.");
+        return;
+      }
+      onChange((prev) => [...prev, ...drafted.map((c) => ({ key: uid(), front: c.front, back: c.back }))]);
+      toast.success(`${drafted.length} cards drafted from this lesson. Read them before saving.`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't draft cards"),
+  });
+  const hasPages = pages.some((p) => p.body.trim().length > 0);
+  return (
+    <div className="space-y-2 rounded-md border border-border p-2.5">
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <Checkbox checked={enabled} onCheckedChange={(c) => onToggle(Boolean(c))} />
+        Give this lesson flashcards
+      </label>
+      {enabled && (
+        <>
+          {cards.map((c, i) => (
+            <div key={c.key} className="flex items-start gap-2 rounded border border-border/60 p-1.5">
+              <span className="mt-2 w-5 shrink-0 text-[10px] font-semibold text-muted-foreground">{i + 1}</span>
+              <div className="flex-1 space-y-1">
+                <Input
+                  value={c.front}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onChange((prev) => prev.map((x) => (x.key === c.key ? { ...x, front: val } : x)));
+                  }}
+                  placeholder="Front: the prompt or question"
+                  className="h-8 text-sm"
+                  maxLength={300}
+                />
+                <Textarea
+                  value={c.back}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onChange((prev) => prev.map((x) => (x.key === c.key ? { ...x, back: val } : x)));
+                  }}
+                  placeholder="Back: the answer, a sentence or two"
+                  rows={2}
+                  className="text-xs"
+                  maxLength={600}
+                />
+              </div>
+              <button
+                type="button"
+                aria-label={`Remove card ${i + 1}`}
+                onClick={() => onChange((prev) => prev.filter((x) => x.key !== c.key))}
+                className="mt-2 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={() => onChange((prev) => [...prev, { key: uid(), front: "", back: "" }])}>
+              <Plus className="h-3.5 w-3.5" />
+              Add card
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => draft.mutate()}
+              disabled={draft.isPending || !hasPages}
+              title={hasPages ? "Ten cards from this lesson's pages, for you to edit" : "Write the reading pages first"}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {draft.isPending ? "Drafting..." : "Draft from this lesson"}
+            </Button>
+          </div>
+          {cards.length === 0 && <p className="text-[11px] text-muted-foreground">No cards yet. The athlete sees no review step until there is at least one.</p>}
+        </>
+      )}
     </div>
   );
 }

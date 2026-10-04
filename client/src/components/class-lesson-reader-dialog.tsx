@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { ReadFailed } from "@/components/read-failed";
+import { LessonFlashcards, type Flashcard } from "@/components/lesson-flashcards";
 
 export type ContentPage = {
   title?: string;
@@ -48,7 +49,14 @@ export type QuizQuestion = {
   questionText: string;
   answers: QuizAnswerOption[];
 };
-export type LessonContent = { id: number; title: string; content: ContentPage[]; quizQuestions: QuizQuestion[] };
+export type LessonContent = {
+  id: number;
+  title: string;
+  content: ContentPage[];
+  quizQuestions: QuizQuestion[];
+  /** Present only when the lesson has flashcards turned on. */
+  flashcards?: Flashcard[];
+};
 
 type QuizAnswerResult = {
   questionId: number;
@@ -225,7 +233,7 @@ export function ClassLessonReaderDialog({
   // "completed at least once," but "Take Test" needs to land on the quiz
   // even when they're already both true, and "Take Lesson Again" needs to
   // restart at page one even though they're already both true too.
-  const [phase, setPhase] = useState<"reading" | "quiz" | "ready">(startAt === "quiz" ? "quiz" : "reading");
+  const [phase, setPhase] = useState<"reading" | "cards" | "quiz" | "ready">(startAt === "quiz" ? "quiz" : "reading");
 
   useEffect(() => {
     if (open) {
@@ -258,16 +266,29 @@ export function ClassLessonReaderDialog({
     },
     onSuccess: () => {
       if (!isPreview) invalidateProgress();
-      if (questions.length > 0) {
-        setPhase("quiz");
-      } else if (alreadyActive) {
-        onOpenChange(false);
-      } else {
-        setPhase("ready");
-      }
+      afterReading();
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save your progress"),
   });
+
+  const flashcards = lessonContent?.flashcards ?? [];
+  // After the last page: the cards when the lesson has them, then the quiz, then done.
+  function afterReading() {
+    if (flashcards.length > 0) {
+      setPhase("cards");
+    } else {
+      afterCards();
+    }
+  }
+  function afterCards() {
+    if (questions.length > 0) {
+      setPhase("quiz");
+    } else if (alreadyActive) {
+      onOpenChange(false);
+    } else {
+      setPhase("ready");
+    }
+  }
 
   const submitQuizMutation = useMutation({
     mutationFn: async () => {
@@ -545,6 +566,10 @@ export function ClassLessonReaderDialog({
             </div>
           )}
 
+          {!contentLoading && phase === "cards" && (
+            <LessonFlashcards cards={flashcards} onDone={afterCards} />
+          )}
+
           {!contentLoading && phase === "quiz" && !quizResult && (
             <div className="mx-auto max-w-2xl space-y-5">
               {questions.length === 0 ? (
@@ -711,12 +736,27 @@ export function ClassLessonReaderDialog({
                     {questions.length === 0 && <BookOpen className="h-5 w-5" />}
                     {completeContentMutation.isPending
                       ? "Saving…"
-                      : questions.length > 0
-                        ? "View Quiz"
-                        : "Finish Reading"}
-                    {questions.length > 0 && <ArrowRight className="h-5 w-5" />}
+                      : flashcards.length > 0
+                        ? "Review Cards"
+                        : questions.length > 0
+                          ? "View Quiz"
+                          : "Finish Reading"}
+                    {(questions.length > 0 || flashcards.length > 0) && <ArrowRight className="h-5 w-5" />}
                   </Button>
                 )}
+              </>
+            )}
+
+            {phase === "cards" && (
+              <>
+                <Button size="lg" variant="outline" onClick={() => setPhase("reading")}>
+                  <ArrowLeft className="h-5 w-5" />
+                  Back to reading
+                </Button>
+                <Button size="lg" variant="ghost" className="ml-auto" onClick={afterCards}>
+                  Skip cards
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
               </>
             )}
 

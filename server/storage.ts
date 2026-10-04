@@ -106,6 +106,7 @@ import {
   coachesCornerQuestions,
   academyPaths,
   academyPathTracks,
+  classLessonFlashcardSchema,
   emailListCampaigns,
   coachDiscussionThreads,
   coachDiscussionReplies,
@@ -11600,11 +11601,49 @@ Hard rules, no exceptions:
           unlockThreshold: l.unlockThreshold,
           priceCents: l.priceCents,
           content: l.content,
+          flashcardsEnabled: l.flashcardsEnabled,
+          flashcards: l.flashcards,
           quizQuestions: l.quizQuestions,
           exercises: day?.exercises ?? [],
         };
       }),
     };
+  },
+
+  /** Flashcards drafted from a lesson's own reading pages (2026-10-04). The pages are the
+   * only thing in context, so a card can only test what the lesson taught; the coach edits
+   * before saving. Ten cards, front a prompt, back a short answer. */
+  async generateFlashcardsFromLessonText(pages: { title?: string; body: string }[], count = 10) {
+    if (!aiEnabled) return null;
+    const text = pages.map((p, i) => `Page ${i + 1}${p.title ? `: ${p.title}` : ""}\n${p.body}`).join("\n\n");
+    if (text.trim().length < 80) return [];
+    const system = [
+      "You write study flashcards for athletes from a lesson they have just read. Use ONLY the lesson text given; never add facts from outside it.",
+      "Each card: FRONT is a short prompt or question an athlete can answer from the lesson (under 25 words); BACK is the answer in one or two plain sentences (under 60 words), in the lesson's own terms.",
+      "Cover the lesson's main ideas in order, favour the concepts over trivia, and never write a card whose answer is not in the text.",
+      `Write exactly ${count} cards, or fewer if the lesson is short.`,
+    ].join("\n");
+    const tool = {
+      name: "report_flashcards",
+      description: "Flashcards drafted from the lesson text.",
+      input_schema: {
+        type: "object",
+        properties: {
+          cards: {
+            type: "array",
+            items: { type: "object", properties: { front: { type: "string" }, back: { type: "string" } }, required: ["front", "back"] },
+          },
+        },
+        required: ["cards"],
+      },
+    };
+    const raw = await askClaudeStructured<{ cards: { front: string; back: string }[] }>(system, text, tool, {
+      maxTokens: 2500,
+      model: fastModel,
+      feature: "class_flashcards_draft",
+    });
+    const parsed = z.array(classLessonFlashcardSchema).max(40).safeParse(raw?.cards ?? []);
+    return parsed.success ? parsed.data : null;
   },
 
   // Turns a pasted document (and/or photos of pages) into a draft class
@@ -11820,6 +11859,8 @@ Hard rules, no exceptions:
             unlockThreshold: isFirst ? null : lesson.unlockThreshold ?? null,
             priceCents: lesson.priceCents ?? null,
             content: lesson.content,
+            flashcardsEnabled: lesson.flashcardsEnabled ?? false,
+            flashcards: lesson.flashcards ?? [],
           })
           .returning();
         for (const q of lesson.quizQuestions) {
@@ -11904,6 +11945,8 @@ Hard rules, no exceptions:
               unlockThreshold,
               priceCents: lesson.priceCents ?? null,
               content: lesson.content,
+              flashcardsEnabled: lesson.flashcardsEnabled ?? false,
+              flashcards: lesson.flashcards ?? [],
             })
             .where(eq(classLessons.id, existing.id));
 
@@ -12876,6 +12919,9 @@ Hard rules, no exceptions:
       id: lesson.id,
       title: lesson.title,
       content: lesson.content,
+      // Cards travel only when the lesson has them turned on; off means the reader never
+      // sees a review step, whatever is stored.
+      flashcards: lesson.flashcardsEnabled ? lesson.flashcards : [],
       quizQuestions: lesson.quizQuestions.map((q) => ({
         id: q.id,
         orderIndex: q.orderIndex,
