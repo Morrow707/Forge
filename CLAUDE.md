@@ -621,10 +621,16 @@ questions 12 and 13), and the answers shape everything below.
   best attempt counts); a track is complete when every lesson is read and the quiz passed, and
   only then does `GET /api/coach/academy/tracks/:id/certificate` issue a printable certificate
   that names Forge and no certifying body.
-- **Thirteen tracks.** The original seven plus six written 2026-10-03 in
-  `server/seed-data/coaches-corner/` (energy systems, speed and agility, plyometrics, warm-up and
-  recovery, testing, technique and safety), each four lessons and eight questions, added by title
-  on deploy. `tracks.test.ts` checks shape, the marks, and that no two lessons share a long run.
+- **Twenty-four tracks.** The original seven, six written 2026-10-03 (energy systems, speed and
+  agility, plyometrics, warm-up and recovery, testing, technique and safety) and eleven written
+  2026-10-04 on Scott's "All of them. Every chapter" (muscle and force, biomechanics, adaptation,
+  hormones and sleep, fueling, supplements and substances, writing a resistance program, aerobic
+  programming, the mind in performance, women/older/returning athletes, the facility and duty of
+  care), all in `server/seed-data/coaches-corner/`, each four lessons and eight questions, added
+  by title on deploy. The eleven are Forge's own syllabus of the field, written from general
+  knowledge with no book open (question 14); the topic list is the FIELD's, not any book's.
+  Five learning paths. `tracks.test.ts` checks shape, the marks, and that no two lessons across
+  all seventeen repo-written tracks share a long run.
 - **No certification mark on any surface.** "CSCS-aligned" is gone from the upsell card and
   `client/src/lib/no-certification-marks.test.ts` refuses CSCS and NSCA in client pages and
   components. A coach's own credential in their bio is theirs to state.
