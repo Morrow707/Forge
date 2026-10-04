@@ -18,7 +18,8 @@ describe("classCategoryMatchesSport", () => {
   it("reaches every repo-written class from at least one sport in the suggestions list", () => {
     // A class nobody's sport reaches would never be labelled, which is the silent kind of miss.
     const sports = ["Football", "Basketball", "Baseball", "Softball", "Soccer", "Volleyball", "Wrestling", "Track & Field"];
-    for (const cls of FORGE_CLASSES) {
+    // Fundamentals is for every athlete and belongs to no sport, which is the one allowed miss.
+    for (const cls of FORGE_CLASSES.filter((c) => c.category !== "Fundamentals")) {
       expect(sports.some((s) => classCategoryMatchesSport(cls.category, s)), `${cls.name} (${cls.category})`).toBe(true);
     }
   });
