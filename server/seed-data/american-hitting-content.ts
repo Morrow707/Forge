@@ -8,6 +8,9 @@
 // hand-picked video ID can go dead or turn out to be a bad match with no
 // way to verify it from here, so every chapter links to a real, always-
 // valid YouTube search instead of a single fabricated "the" video.
+// Every chapter ends on a "Key Points" page. The reader draws a block that starts with a
+// "Key points:" line and continues with "- " lines as a boxed summary (2026-10-04), so the
+// syntax is the lesson body's own and a coach can type the same thing in the builder.
 function videoSearchUrl(query: string): string {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
@@ -75,6 +78,11 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Establishing Your Baseline",
         body:
           "The final step in this chapter is building your baseline: a swing video and an Athletic Hitting Assessment, both taken before you start training the concepts in this program.\n\nThe baseline video should be recorded the same way you'll want to compare it later — same camera angle (down the line and from the pitcher's view are both useful), same type of pitch (front toss or a machine at a comfortable, competitive speed), and a handful of swings so you're not judging yourself off one single rep. This isn't about grading your swing as \"good\" or \"bad.\" It's a snapshot in time.\n\nThe Athletic Hitting Assessment looks beyond just the swing itself. It looks at things like your athletic position and balance, how well you track pitches, your timing and rhythm, and how you move to produce bat speed — a broad look across all Five Pillars, not just the shape of your swing.\n\nBe honest with yourself during this process. The whole value of a baseline is that it's real. A baseline that's inflated or coached-up to look better than it actually is only cheats you out of an accurate measurement of your own growth. At the end of this program, in Chapter 8, you'll come back to this exact video and assessment and compare it to where you've ended up. That comparison is one of the most valuable parts of the entire course."
+      },
+      {
+        title: "Key Points: What Every Hitter Must Know",
+        body:
+          "Key points:\n- Hitting is a chain of skills, not one swing: see it, decide, move, adjust and compete, all in fractions of a second.\n- There is no single perfect swing. Elite hitters share athletic qualities, not an identical shape.\n- The Five Pillars guide every chapter in this program.\n- Your baseline video and assessment are a snapshot, not a grade. Be honest, because Chapter 8 compares against it."
       }
     ],
     quizQuestions: [
@@ -298,6 +306,11 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         body:
           "Because the athletic position has to work as a moving, connected process — not a frozen pose — that's exactly how we train it: through a progression from stance, to movement, to load, to swing.\n\nWe start with the stance itself: getting balance, posture, hip and knee position, and head position feeling athletic and repeatable without a pitch involved yet. From there, we add movement — small, controlled shifts that get the body used to staying balanced while it's no longer standing still, similar to the pre-pitch movement a hitter uses in a real at-bat. Next comes the load — the backward gather of weight and energy that sets up the forward move — done specifically from that same balanced, dynamic stance, so the load doesn't disconnect from the athletic qualities we just built. Finally, we connect all of it into the full swing, so the athletic position isn't something a hitter has and then abandons once the pitch comes — it's something that carries all the way through contact.\n\nAs you go through these progressions, pay attention to where things tend to break down. Some hitters have a great stance but lose posture the moment they load. Others load well but lose balance in the stride. Identifying exactly where your own athletic position breaks down is far more useful than just being told \"good stance\" or \"bad stance\" — it tells you specifically what to train.",
         imageUrls: ["/lessons/athletic-position.svg"]
+      },
+      {
+        title: "Key Points: The Athletic Position",
+        body:
+          "Key points:\n- An athletic position is a ready, movable state, not a pose you freeze into.\n- Posture is the foundation; hip, knee, head and eye position are built on top of it.\n- Your center of mass and your interaction with the ground decide how well you can move.\n- The position has to stay dynamic all the way into the swing."
       }
     ],
     quizQuestions: [
@@ -517,6 +530,11 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Training Your Eyes to See It",
         body:
           "Like any other athletic skill, pitch recognition improves with focused, repeated training — not by hoping it improves on its own with more at-bats. This chapter's training component uses several specific tools to build the See It pillar directly.\n\nColored-ball recognition drills use balls marked with colors, numbers, or symbols that the hitter has to call out as early as possible during flight, forcing the eyes to gather detailed information quickly rather than just reacting to a blur. Front-toss recognition drills use a closer, controlled release point to isolate early ball-flight reading without the added complexity of a full pitching delivery. Velocity-variation training mixes pitch speeds so a hitter can't fall into a single fixed rhythm and has to actually read each pitch fresh. Take/swing decision drills train the DECIDE pillar directly on top of vision, asking the hitter to commit to swinging or taking based purely on what they see. Ball/strike recognition drills sharpen location judgment specifically, which matters both for plate discipline and for avoiding pitches that are difficult to drive well.\n\nNone of these drills are about hitting the ball hard. Many of them don't even involve a real swing. Their entire purpose is building the visual foundation that everything else in this program — timing, movement, power, and adjustability — depends on."
+      },
+      {
+        title: "Key Points: Seeing the Ball",
+        body:
+          "Key points:\n- You cannot hit what you do not see well. Seeing comes before everything else.\n- A still head and quiet eyes give you the clearest look at the pitch.\n- Read the pitch early: velocity, spin and location are recognised before the ball is halfway there.\n- Tracking is trainable. Set up a visual environment that makes seeing easier, then drill it."
       }
     ],
     quizQuestions: [
@@ -736,6 +754,11 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Training Component: Building Repeatable Timing",
         body:
           "Timing has to be trained against variety, not just against one comfortable, predictable pitch speed. If a hitter only ever sees the same speed in practice, their rhythm and tempo never get challenged to actually adjust — which means it hasn't really been trained at all.\n\nSlow/fast pitching variations mix speeds within the same practice session, forcing the hitter's tempo to actually shift rather than settle into one groove. Pause drills interrupt a pitcher's or machine's normal rhythm to see whether a hitter's timing depends on a fixed, memorized cadence or whether it can adapt to something unexpected. Timing-window training narrows the margin for error on purpose, sharpening a hitter's sense of exactly when their swing needs to start relative to the pitch. Rhythm-to-launch drills isolate the connection between the pre-swing rhythm and the actual launch of the swing, making sure that connection stays smooth and efficient rather than disconnected or delayed. Variable-speed batting practice combines all of this into realistic, game-like reps, mixing speeds and locations the way a real game would.\n\nThe common thread across all of these drills is unpredictability. Comfortable, same-speed repetition builds confidence, but it doesn't build adjustable timing. This chapter's training component is designed specifically to build a hitter's rhythm and tempo strong enough to hold up against whatever pace a real pitcher throws at them."
+      },
+      {
+        title: "Key Points: Timing, Rhythm and Tempo",
+        body:
+          "Key points:\n- \"Just start earlier\" is bad advice. Timing comes from organising your movement, not from guessing.\n- Rhythm, then tempo, then timing: the sequence that makes you ready on time pitch after pitch.\n- Movement creates timing, and that movement has to match the pitcher in front of you.\n- Tension is timing's silent killer. A tense hitter is late even when they started early."
       }
     ],
     quizQuestions: [
@@ -953,6 +976,11 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Training Power Athletically",
         body:
           "Because power comes from the ground up, through a well-sequenced chain, and depends on staying connected rather than tense, this chapter's training reflects all of that — it's about training athletic movement, not just swinging a bat over and over as hard as possible.\n\nMedicine-ball movements train explosive, whole-body rotational power in a way that closely mirrors the hip-to-torso sequence used in the swing, without the added complexity of also tracking and timing a pitch. Athletic rotation drills isolate and strengthen the specific movement pattern of the kinetic chain — hips leading, torso following, arms finishing. Explosive movement training builds the kind of fast-twitch, ground-based power described earlier in this chapter, often through jumps, throws, and other non-bat movements. Bat-speed development work then applies all of that trained power specifically to the bat itself, measuring and building actual swing speed. Finally, maximum-intent hitting rounds bring it all together — full-effort swings against a real or simulated pitch, where the hitter tries to apply everything they've built with real aggressive intent, while a coach watches for whether the sequencing holds up under that effort or breaks down.\n\nThe common goal across all of these is building a hitter who can be explosive and athletic and stay efficiently sequenced at the same time — not a hitter who has to choose between power and connection."
+      },
+      {
+        title: "Key Points: Athletic Power",
+        body:
+          "Key points:\n- Real power starts from the ground and moves up through the hips and torso in sequence.\n- Rotational speed becomes bat speed only when the energy transfers efficiently.\n- Maximum effort is not maximum production. Controlled, well-sequenced movement produces more.\n- Train power athletically, not by swinging as hard as you can."
       }
     ],
     quizQuestions: [
@@ -1173,6 +1201,11 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Training Component: Learning to Match the Pitch",
         body:
           "Because bat path and contact quality depend on adjusting to the specific pitch, this chapter's training is built entirely around location-based variety rather than repeating the same swing against the same pitch over and over.\n\nBall-location rounds mix pitch locations within a single practice session, so a hitter has to adjust their bat path pitch to pitch rather than settling into one repeated pattern. Deep/middle/front contact drills isolate contact depth specifically, training a hitter to make quality contact at different points relative to their body. High/low pitch training and inside/outside pitch training each isolate one specific dimension of location, letting a hitter build real comfort adjusting their bat path to that particular challenge before combining everything together. Variable-location batting practice then brings it all together in a realistic, game-like format, mixing locations unpredictably the way a real at-bat would.\n\nThe goal across all of these drills is the same: building a hitter who can produce a quality, matching bat path against a wide range of pitch locations, rather than a hitter who has one grooved swing that only really works when the pitch happens to arrive in exactly the right spot."
+      },
+      {
+        title: "Key Points: Bat Path and the Pitch",
+        body:
+          "Key points:\n- Good contact is the bat matching the pitch plane, not a manufactured launch angle.\n- Barrel direction and contact depth change with pitch location; your swing has to adjust with them.\n- Productive angles come from good athletic movement and quality interaction with the pitch.\n- Learn to match the pitch in training before you expect it in a game."
       }
     ],
     quizQuestions: [
@@ -1392,6 +1425,11 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Training Adjustability",
         body:
           "Adjustability can't be trained by always knowing what's coming — the entire point is preparing a hitter for situations where they don't know, and have to read and react in real time. This chapter's training component is built specifically around unpredictability and pressure.\n\nFastball/changeup rounds mix these two pitch types within the same round, directly training the shift in timing discussed earlier in this chapter. Random pitch sequences remove any predictable pattern at all, forcing a hitter to rely entirely on what they're seeing pitch to pitch rather than anticipating a rhythm. Breaking-ball recognition drills specifically sharpen a hitter's ability to identify spin and shape early, connecting back to the pitch-recognition skills from Chapter 3. Two-strike adjustments simulate the specific pressure and shortened margin for error of a two-strike count, where a hitter often has to prioritize contact and adjustability over pure power. And competitive decision-making drills add a scoring or competitive element on top of all of this, so the hitter is practicing adjustability under something closer to real game pressure, not just relaxed repetition.\n\nTaken together, this training reflects the chapter's Core Principle: \"The goal isn't simply to create the fastest possible swing. The goal is to develop a fast, powerful swing that remains controllable and adjustable.\" Speed and power without control and adjustability only work against predictable pitching — and very little pitching worth facing stays predictable for long."
+      },
+      {
+        title: "Key Points: Adjustability",
+        body:
+          "Key points:\n- Great hitters adjust. Pitchers will attack your timing with speed, spin and location.\n- Fastball timing and breaking-ball timing are different problems; train both.\n- Posture and body control are what let you adjust late without falling apart.\n- Do not commit early. The goal is a swing that is fast, powerful and still controllable."
       }
     ],
     quizQuestions: [
@@ -1622,6 +1660,11 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Developing Your Own Hitting Identity",
         body:
           "This program's goal was never to hand you a copied swing to memorize. It was to develop you as an athlete, educate you as a hitter, and build you into a competitor — the same three ideas from this program's tagline, all the way back at the start. The Program Goal behind all of it is simple: to develop hitters who understand themselves and can take greater ownership of their development.\n\nThat's the real point of everything covered across these eight chapters. You now understand what hitting actually requires, beyond just mechanics (Chapter 1). You understand your own athletic position and why it has to stay dynamic (Chapter 2). You understand how to see a pitch and gather real information early (Chapter 3). You understand how rhythm and tempo create timing (Chapter 4). You understand where real power comes from (Chapter 5) and how bat path should match the pitch rather than force an artificial angle (Chapter 6). You understand why adjustability matters more than raw swing speed (Chapter 7). And now, you have the tools to evaluate and coach yourself going forward, long after this specific program has ended.\n\nYour swing will keep changing as your body grows and the competition gets tougher — and that's exactly as it should be, because there was never one single perfect swing to lock into in the first place. What you carry forward from here isn't a fixed set of mechanics. It's the understanding to keep developing your own hitting identity, on your own, for as long as you keep playing."
+      },
+      {
+        title: "Key Points: Becoming Your Own Coach",
+        body:
+          "Key points:\n- Judge an at-bat by its process, not its outcome. A good decision can still end in an out.\n- Use video and statistics to find timing, movement and pitch-selection problems, not to grade yourself.\n- Productive practice means consistent work on a few things, not constant change.\n- Compare today against your Chapter 1 baseline, and build a hitting identity that is yours."
       }
     ],
     quizQuestions: [

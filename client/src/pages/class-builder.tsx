@@ -1952,7 +1952,8 @@ function ContentPageRow({
       />
       <p className="text-xs text-muted-foreground">
         Wrap text in **double asterisks** to bold it. A block of lines each starting with "- " becomes a
-        bulleted list. Leave a blank line between paragraphs.
+        bulleted list. A line reading "Key points:" followed by "- " lines becomes a boxed summary, and
+        lines starting with "&gt; " become a pull-quote. Leave a blank line between paragraphs.
       </p>
 
       <div className="space-y-1">

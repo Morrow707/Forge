@@ -14,6 +14,8 @@ import {
   CalendarPlus,
   BookOpen,
   PlayCircle,
+  Lightbulb,
+  Clock,
   Trophy,
   FileDown,
   X,
@@ -22,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { ReadFailed } from "@/components/read-failed";
 import { getEmbedUrl } from "@/lib/video-embed";
+import { estimateReadingMinutes } from "@/lib/lesson-reading";
 import { LessonFlashcards, type Flashcard } from "@/components/lesson-flashcards";
 import { FillBlankInput, OrderingInput, MatchingInput } from "@/components/quiz-question-inputs";
 import {
@@ -105,6 +108,37 @@ function renderFormattedBody(text: string): React.ReactNode {
   const blocks = text.split(/\n{2,}/);
   return blocks.map((block, bi) => {
     const lines = block.split("\n").filter((l) => l.trim().length > 0);
+    // "Key points:" on its own line, then "- " lines: a boxed summary (2026-10-04). The
+    // heading is matched loosely (Key takeaways, Remember) so a coach does not need the
+    // exact word. A block whose every line starts with "> " is a pull-quote.
+    const heading = lines[0]?.trim() ?? "";
+    const isKeyPoints =
+      lines.length > 1 && /^(key (points|takeaways)|takeaways|remember|summary):?$/i.test(heading) && lines.slice(1).every((l) => /^\s*-\s+/.test(l));
+    if (isKeyPoints) {
+      return (
+        <aside key={bi} className="rounded-md border border-primary/30 bg-primary/5 p-3">
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
+            <Lightbulb className="h-3.5 w-3.5" />
+            {heading.replace(/:$/, "")}
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            {lines.slice(1).map((l, li) => (
+              <li key={li}>{renderInline(l.replace(/^\s*-\s+/, ""))}</li>
+            ))}
+          </ul>
+        </aside>
+      );
+    }
+    const isQuote = lines.length > 0 && lines.every((l) => /^\s*>\s?/.test(l));
+    if (isQuote) {
+      return (
+        <blockquote key={bi} className="border-l-4 border-primary/60 pl-4 font-display text-lg italic leading-snug text-foreground">
+          {lines.map((l, li) => (
+            <p key={li}>{renderInline(l.replace(/^\s*>\s?/, ""))}</p>
+          ))}
+        </blockquote>
+      );
+    }
     const isList = lines.length > 0 && lines.every((l) => /^\s*-\s+/.test(l));
     if (isList) {
       return (
@@ -362,6 +396,7 @@ export function ClassLessonReaderDialog({
   });
 
   const pages = lessonContent?.content ?? [];
+  const readingMinutes = estimateReadingMinutes(pages);
   const questions = lessonContent?.quizQuestions ?? [];
   const allAnswered =
     questions.length > 0 &&
@@ -442,9 +477,20 @@ export function ClassLessonReaderDialog({
             </div>
           </DialogHeader>
           {phase === "reading" && pages.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Page {Math.min(pageIndex + 1, pages.length)} of {pages.length}
-            </p>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  Page {Math.min(pageIndex + 1, pages.length)} of {pages.length}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {readingMinutes} min read
+                </span>
+              </div>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={pages.length} aria-valuenow={pageIndex + 1}>
+                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${((pageIndex + 1) / pages.length) * 100}%` }} />
+              </div>
+            </div>
           )}
           {phase === "quiz" && !quizResult && questions.length > 0 && (
             <p className="text-xs text-muted-foreground">Chapter quiz, {questions.length} questions</p>
@@ -498,7 +544,13 @@ export function ClassLessonReaderDialog({
                           src={src}
                           alt=""
                           loading="lazy"
-                          className="w-full rounded-md border border-border bg-white"
+                          // One shape for every photo (2026-10-04): a page with a tall
+                          // phone screenshot and a page with a wide diagram used to
+                          // land at wildly different heights, so the text below jumped.
+                          className={cn(
+                            "w-full rounded-md border border-border bg-white object-cover",
+                            pages[pageIndex].imageUrls!.length > 1 ? "aspect-[4/3]" : "aspect-video",
+                          )}
                         />
                       ))}
                     </div>

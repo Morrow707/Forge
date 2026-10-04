@@ -11746,7 +11746,11 @@ Hard rules, no exceptions:
       "answer is explicitly stated in that lesson's own pages -- fewer questions is fine if the " +
       "material doesn't support more; never pad with a question the text doesn't actually answer. " +
       "Every quiz answer needs a one-sentence explanation, and every question needs exactly one " +
-      "correct answer among 3-4 options. If the material is too thin or unclear to organize " +
+      "correct answer among 3-4 options. Page bodies are plain text with a blank line between " +
+      "paragraphs; **double asterisks** bold a phrase, a block of lines starting with \"- \" is a " +
+      "bulleted list, a line reading \"Key points:\" followed by \"- \" lines is drawn as a boxed " +
+      "summary (end each lesson's last page with one), and a block of lines starting with \"> \" is " +
+      "a pull-quote for a sentence worth remembering. If the material is too thin or unclear to organize " +
       "confidently, say so by returning a single lesson with a short description explaining what's " +
       "missing rather than inventing structure that isn't there.";
 
