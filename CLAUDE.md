@@ -1025,9 +1025,10 @@ them will read as an arbitrary constraint to somebody who wasn't here:
    caveat; $4 an athlete in bands, not charging in beta; more than one coach per team; what
    deletion keeps). Scott reads the draft before it ships; `shared/structured-data.ts` has the
    place to emit the schema once the visible FAQ exists.
-3. **Barlow Condensed is named in `client/src/index.css` and never loaded**, so every heading
-   renders in the system font. If the brand wants it: self-host two woff2 files, `@font-face`
-   with `font-display: swap`, one `preload` in `index.html`. Not a bug, a decision.
+3. **Barlow Condensed is LOADED since 2026-10-04**: self-hosted at `client/public/fonts/`
+   (600 and 700, latin, ~15KB each), `@font-face` with swap in `index.css`, the 700 preloaded
+   in `index.html`. It is the "Forge (condensed)" choice on the Branding page and ships in the
+   native bundle so headings draw offline.
 
 **Video review work is planned in `docs/video-review-plan.md`** (2026-09-20). Read it before
 touching `video-analysis-dialog.tsx`, `video-annotation-dialog.tsx`, `set-video-review.tsx` or

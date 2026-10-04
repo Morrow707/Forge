@@ -55,6 +55,26 @@
   "Powered by Forge" mark (components/powered-by-footer.tsx, app-shell.tsx's
   header caption) -- re-skinning never removes that.
 */
+/* Barlow Condensed, self-hosted (2026-10-04). It was named on --font-display from the start and
+   never loaded, so every heading fell through to the system font. Two weights, latin only,
+   ~15KB each, swap so text never waits on them. The Branding page's other heading fonts load
+   from Google Fonts on demand; this one ships in the bundle because it is Forge's own look and
+   the native app must draw it offline. */
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/barlow-condensed-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/barlow-condensed-700.woff2") format("woff2");
+}
+
 :root {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Barlow Condensed", "Inter", ui-sans-serif, system-ui, sans-serif;
