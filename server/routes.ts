@@ -44,6 +44,7 @@ import { sendEmail, emailEnabled, isEmailConfigured } from "./email";
 import { KNOWLEDGE_DOMAIN_KEYS } from "@shared/knowledge-domains";
 import { CLASS_READING_LEVELS } from "@shared/class-reading-level";
 import { classCategoryMatchesSport } from "@shared/class-sport-match";
+import { getOrCreateNarration, readAloudProvider } from "./read-aloud";
 import { athleteFacingPayload, type QuizQuestionType } from "@shared/class-quiz-grading";
 import { buildWelcomeEmail } from "./welcome-email";
 import { buildCampaignEmail } from "./email-list-render";
@@ -2752,6 +2753,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const row = await storage.flagAcademyLesson(user.id, Number(req.params.id), parsed.data.reason);
     if (!row) return res.status(404).json({ message: "Lesson not found" });
     res.status(201).json({ ok: true });
+  });
+
+  // A Coaches Corner lesson, narrated once and cached (server/read-aloud.ts). Same gate as
+  // reading it. 204 when no provider is configured.
+  app.post("/api/coach/academy/lessons/:id/narration", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    if (!(await hasCoachesCornerAccess(user))) {
+      return res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
+    }
+    const lesson = await storage.getAcademyLesson(Number(req.params.id));
+    if (!lesson) return res.status(404).json({ message: "Lesson not found" });
+    try {
+      const url = await getOrCreateNarration(`${lesson.title}.\n\n${lesson.content}`);
+      if (!url) return res.status(204).end();
+      res.json({ url });
+    } catch (err) {
+      console.error("read-aloud failed", err);
+      res.status(503).json({ message: "The narrator isn't available right now." });
+    }
   });
 
   // A coach's private note on a lesson (2026-10-04). Read back on the track detail; written
@@ -13111,6 +13131,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // `fullAccess`: this athlete's plan opens every chapter (shared/class-pricing-rule.ts).
     const fullAccess = !(await classTierGated(user));
     res.json(list.map((c) => ({ ...c, forYourSport: classCategoryMatchesSport(c.category, user.sport), fullAccess })));
+  });
+
+  // ---------- Read-aloud (2026-10-04, server/read-aloud.ts) ----------
+  // Whether a real voice is configured. Any signed-in reader may ask; without one the client
+  // reads with the device's own voice and says so.
+  app.get("/api/read-aloud/status", requireAuth, (_req, res) => {
+    res.json({ available: readAloudProvider() != null });
+  });
+
+  // One page of a class lesson, narrated once and cached. The same gate as reading the page:
+  // an athlete who may not open the lesson gets nothing. 204 when no provider is configured.
+  app.post("/api/athlete/classes/:id/lessons/:lessonId/narration", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const lessonId = Number(req.params.lessonId);
+    const enrollment = await requireReadableClassLesson(user, Number(req.params.id), lessonId);
+    if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
+    const parsed = z.object({ pageIndex: z.number().int().min(0).max(200) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const content = await storage.getClassLessonContent(lessonId);
+    const page = content?.content?.[parsed.data.pageIndex];
+    if (!page) return res.status(404).json({ message: "Page not found" });
+    try {
+      const url = await getOrCreateNarration([page.title, page.body].filter(Boolean).join(".\n\n"));
+      if (!url) return res.status(204).end();
+      res.json({ url });
+    } catch (err) {
+      console.error("read-aloud failed", err);
+      res.status(503).json({ message: "The narrator isn't available right now." });
+    }
   });
 
   // The bottom of the Classes page (2026-10-04): the streak, every finished class, and

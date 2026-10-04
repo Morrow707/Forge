@@ -21,6 +21,7 @@ import { CoachesCornerDiscussion } from "@/components/coaches-corner-discussion"
 import { CoachesCornerPaths } from "@/components/coaches-corner-paths";
 import { LessonFlashcards } from "@/components/lesson-flashcards";
 import { DebouncedNote } from "@/components/lesson-page-notes";
+import { ReadAloud, fetchTrackLessonNarration } from "@/components/read-aloud";
 import { formatCents } from "@shared/billing-tiers";
 
 /** The Coaches Corner half of GET /api/coach/entitlements. `unlocked` is the same
@@ -247,6 +248,11 @@ export default function CoachesCorner() {
               ~{selectedLesson.estMinutes} min read
             </p>
           )}
+          <ReadAloud
+            key={selectedLesson.id}
+            text={`${selectedLesson.title}.\n\n${selectedLesson.content || ""}`}
+            fetchNarration={() => fetchTrackLessonNarration(selectedLesson.id)}
+          />
           <div className="space-y-4 text-sm leading-relaxed text-foreground">
             {(selectedLesson.content || "").split("\n\n").map((para, i) => (
               <p key={i}>{para}</p>

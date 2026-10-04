@@ -91,6 +91,10 @@ const GLOBAL_BY_DESIGN = new Set([
   // A learning path is platform-wide like a track; the progress on the certificate is read
   // by user.id inside academyProgressForCoach.
   "/api/coach/academy/paths/:id/certificate",
+  // A Coaches Corner lesson's narration: academy_lessons has no owner, the lesson is the same
+  // for every coach, and the audio is the lesson's own words. hasCoachesCornerAccess runs
+  // first, an entitlement gate; nothing personal is read or written.
+  "/api/coach/academy/lessons/:id/narration",
   // Terms and privacy policy, and only the types on a public allowlist.
   "/api/legal-documents/:type",
   // The same public document as a PDF, from the same public set; nothing about it is per-user.

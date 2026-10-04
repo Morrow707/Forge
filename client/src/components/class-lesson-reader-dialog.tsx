@@ -27,6 +27,7 @@ import { getEmbedUrl } from "@/lib/video-embed";
 import { estimateReadingMinutes } from "@/lib/lesson-reading";
 import { LessonPageNotes } from "@/components/lesson-page-notes";
 import { LessonFlashcards, type Flashcard } from "@/components/lesson-flashcards";
+import { ReadAloud, fetchClassPageNarration } from "@/components/read-aloud";
 import { FillBlankInput, OrderingInput, MatchingInput, QuizKeyResult } from "@/components/quiz-question-inputs";
 import {
   gradeQuestion,
@@ -552,6 +553,15 @@ export function ClassLessonReaderDialog({
                     <h3 className="font-display text-base font-bold uppercase tracking-wide">
                       {pages[pageIndex].title}
                     </h3>
+                  )}
+                  {/* Listen to the page (2026-10-04). A preview has no server page to narrate,
+                      so it gets the device voice only. */}
+                  {pages[pageIndex] && (
+                    <ReadAloud
+                      key={`${lesson.id}-${pageIndex}`}
+                      text={[pages[pageIndex].title, pages[pageIndex].body].filter(Boolean).join(".\n\n")}
+                      fetchNarration={isPreview ? undefined : () => fetchClassPageNarration(classId, lesson.id, pageIndex)}
+                    />
                   )}
                   {/* Media leads the page, text follows -- a photo or video is
                       what a page is "about" at a glance, same as a magazine

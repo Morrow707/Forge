@@ -14032,6 +14032,10 @@ Hard rules, no exceptions:
 
   /** The coach's own notes across every lesson, keyed by lesson id. Only ever read for the
    * coach who wrote them. */
+  async getAcademyLesson(lessonId: number) {
+    return db.query.academyLessons.findFirst({ where: eq(academyLessons.id, lessonId) });
+  },
+
   async getAcademyLessonNotesForCoach(coachId: number) {
     const rows = await db.query.academyLessonNotes.findMany({ where: eq(academyLessonNotes.coachId, coachId) });
     return new Map(rows.map((r) => [r.lessonId, { body: r.body, updatedAt: r.updatedAt }]));

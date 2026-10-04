@@ -561,6 +561,13 @@ can install. Delete entries as a `beta` ships them.
   progress bar and key points, the drill-day clip, the streak and the class certificate, the
   reading level). Server halves (attempts, insights, notes, the two new classes) ship on
   Render.
+- **Queued, not yet in a build:** Scott's fifteen-item list of 2026-10-04 ("Yes 1 ... yes 15"):
+  Coaches Corner flashcards and four quiz shapes, coach notes, flag-with-reason, Continue row,
+  progress and release dates, apply-to-roster, the certificate wall; the athlete side's sport
+  ordering, Continue into the reader, the review deck, streak and certificates at the bottom,
+  the Fundamentals class, the one pricing rule (chapter one free, the rest with the camera
+  plan), the coach AI class drafter, and read-aloud (device voice until a provider key is set).
+  Server halves ship on Render with the push.
 - **Queued, not yet in a build:** Coaches Corner (Ask the library with the roster toggle and
   "this didn't answer my question", scored quizzes and the certificate pages, Further reading
   under lessons, learning paths, the peer discussion board, the admin builder's library draft and
@@ -648,6 +655,15 @@ questions 12 and 13), and the answers shape everything below.
   on. The Continue row (in-progress tracks, most recently read first, opening at the first
   unread lesson) sits at the top of the library; the certificate wall (every finished track
   and path, dated) sits at the BOTTOM, on purpose.
+- **Read-aloud** (`server/read-aloud.ts`, `client/src/components/read-aloud.tsx`,
+  `shared/read-aloud-text.ts`): every class page and every track lesson has a Listen control.
+  With no provider it reads with the device's own voice and SAYS SO (Scott asked for a real
+  voice, and the device voice is not one). A natural voice needs `READ_ALOUD_PROVIDER=openai`
+  and `OPENAI_API_KEY` on Render, which are Scott's to set; then a page is narrated ONCE, cached
+  under `STORAGE_PATH/narration` keyed by provider, voice, model and text, and served public by
+  URL like a lesson video. `READ_ALOUD_VOICE` (default alloy) is the one narrator for the whole
+  library. The admin preview uses the device voice only. Anthropic offers no text-to-speech, so
+  this is a second provider and a second bill, logged to the console per narration.
 
 Later the same day, Scott: "what else can we build/add for the coaches corner?" and then "build
 it all in order" less office hours, session plans, printable handouts, program templates and
