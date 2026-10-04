@@ -213,7 +213,7 @@ export function ClassLessonReaderDialog({
    * starts from page one. "quiz" (the "Take Test" button) jumps straight to
    * the quiz -- lets an athlete who's already read the chapter retake it
    * without re-paging through every page first. */
-  startAt?: "reading" | "quiz";
+  startAt?: "reading" | "quiz" | "resume";
   /** True once this lesson's drills are already on the athlete's calendar
    * (state === "active"). Content/quiz are already done in that case, so
    * finishing either one here just closes the dialog instead of running
@@ -254,9 +254,30 @@ export function ClassLessonReaderDialog({
   // restart at page one even though they're already both true too.
   const [phase, setPhase] = useState<"reading" | "cards" | "quiz" | "ready">(startAt === "quiz" ? "quiz" : "reading");
 
+  // The last page read, per lesson, in this browser only (2026-10-04): "Continue" on the
+  // Classes page reopens the reader there. A convenience, never a record: clearing site
+  // data costs a page position and nothing else.
+  const pageKey = `forge:lesson-page:${lesson.id}`;
+  useEffect(() => {
+    if (!open || isPreview || phase !== "reading") return;
+    try {
+      localStorage.setItem(pageKey, String(pageIndex));
+    } catch {
+      /* private window or storage blocked: fine */
+    }
+  }, [open, isPreview, phase, pageIndex, pageKey]);
+
   useEffect(() => {
     if (open) {
-      setPageIndex(0);
+      let resumeAt = 0;
+      if (startAt === "resume") {
+        try {
+          resumeAt = Math.max(0, Number(localStorage.getItem(pageKey) ?? 0) || 0);
+        } catch {
+          resumeAt = 0;
+        }
+      }
+      setPageIndex(resumeAt);
       setSelectedAnswers({});
       setQuizResult(null);
       setFailLine("");
@@ -397,6 +418,10 @@ export function ClassLessonReaderDialog({
   });
 
   const pages = lessonContent?.content ?? [];
+  // A resumed page past the end (the lesson was shortened since) lands on the last page.
+  useEffect(() => {
+    if (pages.length > 0 && pageIndex > pages.length - 1) setPageIndex(pages.length - 1);
+  }, [pages.length, pageIndex]);
   const readingMinutes = estimateReadingMinutes(pages);
   const questions = lessonContent?.quizQuestions ?? [];
   const allAnswered =

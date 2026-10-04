@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, RotateCcw, Layers } from "lucide-react";
 
-export type Flashcard = { front: string; back: string };
+export type Flashcard = { front: string; back: string; /** Where the card is from, on the review deck. */ label?: string };
 
 /** The athlete's review step (2026-10-04): one card at a time, tap to flip, then "Got it" or
  * "Again". Cards marked Again come back around until every card has been got once; the
@@ -78,6 +78,7 @@ export function LessonFlashcards({ cards, onDone }: { cards: Flashcard[]; /** Om
           >
             <div className="space-y-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{flipped ? "Answer" : "Prompt"}</p>
+              {cards[current].label && <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{cards[current].label}</p>}
               <p className={cn("text-base leading-relaxed", !flipped && "font-semibold")}>{flipped ? cards[current].back : cards[current].front}</p>
               {!flipped && <p className="pt-2 text-xs text-muted-foreground">Tap to flip</p>}
             </div>

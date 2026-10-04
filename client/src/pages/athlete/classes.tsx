@@ -19,7 +19,8 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ReadFailed } from "@/components/read-failed";
-import { GraduationCap, ListOrdered, ArrowRight, Search, Trophy, Lock, Unlock } from "lucide-react";
+import { GraduationCap, ListOrdered, ArrowRight, Search, Trophy, Lock, Unlock, Play, Flame, Award, Layers } from "lucide-react";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { todayIso } from "@/lib/local-date";
 
@@ -32,6 +33,14 @@ type EnrolledClass = {
   lessonCount: number;
   lessonsStarted: number;
   completedAt: string | null;
+  /** Where Continue goes: the next lesson to read, or the next quiz to pass. */
+  next: { lessonId: number; startAt: "reading" | "quiz" } | null;
+};
+
+type LearningSummary = {
+  streak: { current: number; longest: number; activeToday: boolean };
+  certificates: { classId: number; name: string; completedAt: string }[];
+  reviewCardCount: number;
 };
 
 type BrowsableClass = {
@@ -50,6 +59,8 @@ type BrowsableClass = {
   // True when every lesson in the class is free -- see
   // storage.getVisibleClassesForFreeAgent.
   unlocked?: boolean;
+  /** The class's category held against the athlete's sport, on the server. */
+  forYourSport?: boolean;
 };
 
 type ClassSort = "unlocked" | "name" | "newest";
@@ -95,6 +106,14 @@ export default function AthleteClasses() {
     enabled: isFreeAgent,
   });
 
+  const {
+    data: summary,
+    isError: summaryFailed,
+    refetch: refetchSummary,
+  } = useQuery<LearningSummary>({
+    queryKey: ["/api/athlete/learning-summary"],
+  });
+
   const enrolledIds = new Set(myClasses.map((c) => c.classId));
   const [enrollTarget, setEnrollTarget] = useState<BrowsableClass | null>(null);
   const [startDate, setStartDate] = useState(() => todayIso());
@@ -114,6 +133,8 @@ export default function AthleteClasses() {
       return c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q);
     })
     .sort((a, b) => {
+      // The athlete's own sport first, whatever the sort (Scott, 2026-10-04).
+      if (!!a.forYourSport !== !!b.forYourSport) return a.forYourSport ? -1 : 1;
       if (sort === "unlocked") {
         if (!!a.unlocked !== !!b.unlocked) return a.unlocked ? -1 : 1;
         return b.id - a.id;
@@ -206,7 +227,22 @@ export default function AthleteClasses() {
                         ? "Completed"
                         : `Lesson ${Math.min(c.lessonsStarted, c.lessonCount) || 1} of ${c.lessonCount}`}
                     </span>
-                    <ArrowRight className="h-3.5 w-3.5" />
+                    {c.next ? (
+                      // Straight into the reader at the last page read, or the quiz that is
+                      // left (2026-10-04). The card itself still opens the class.
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/athlete/classes/${c.classId}?open=${c.next!.lessonId}&at=${c.next!.startAt === "quiz" ? "quiz" : "resume"}`);
+                        }}
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                        {c.next.startAt === "quiz" ? "Take the quiz" : "Continue"}
+                      </Button>
+                    ) : (
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -316,6 +352,11 @@ export default function AthleteClasses() {
                         </Badge>
                       )}
                     </div>
+                    {c.forYourSport && (
+                      <Badge variant="outline" className="-mt-1 w-fit border-primary/50 text-[10px] text-primary">
+                        For your sport
+                      </Badge>
+                    )}
                     {(c.category || c.readingLevel) && (
                       <p className="label-xs -mt-2 text-primary">
                         {c.category}
@@ -371,6 +412,61 @@ export default function AthleteClasses() {
                 </Card>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* At the bottom on purpose (Scott, 2026-10-04): the streak, every certificate, and
+            the review deck. Drawn once there is something to show. */}
+        {summaryFailed && (
+          <Card>
+            <CardContent className="py-8">
+              <ReadFailed what="your streak and certificates" onRetry={() => void refetchSummary()} />
+            </CardContent>
+          </Card>
+        )}
+        {summary && (summary.streak.current > 0 || summary.certificates.length > 0 || summary.reviewCardCount > 0) && (
+          <div>
+            <h2 className="mb-3 font-display text-lg font-bold uppercase tracking-wide text-muted-foreground">
+              Your learning
+            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              {summary.streak.current > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                  <Flame className="h-3.5 w-3.5" />
+                  {summary.streak.current}-day learning streak
+                  {summary.streak.longest > summary.streak.current && (
+                    <span className="font-normal text-muted-foreground">· best {summary.streak.longest}</span>
+                  )}
+                  {!summary.streak.activeToday && <span className="font-normal text-muted-foreground">· read today to keep it</span>}
+                </span>
+              )}
+              {summary.reviewCardCount > 0 && (
+                <Button size="sm" variant="outline" onClick={() => navigate("/athlete/classes/review")}>
+                  <Layers className="h-4 w-4" />
+                  Review deck ({summary.reviewCardCount} cards)
+                </Button>
+              )}
+            </div>
+            {summary.certificates.length > 0 && (
+              <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {summary.certificates.map((cert) => (
+                  <li key={cert.classId} className="flex items-center justify-between gap-3 rounded-lg border border-amber-400/40 bg-amber-400/5 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                        <Award className="h-4 w-4 shrink-0 text-amber-500" />
+                        {cert.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Completed {format(new Date(cert.completedAt), "MMM d, yyyy")}</p>
+                    </div>
+                    <Button asChild size="sm" variant="outline">
+                      <a href={`/athlete/classes/${cert.classId}/certificate`} onClick={(e) => { e.preventDefault(); navigate(`/athlete/classes/${cert.classId}/certificate`); }}>
+                        Certificate
+                      </a>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>

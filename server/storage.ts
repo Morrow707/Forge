@@ -12387,6 +12387,24 @@ Hard rules, no exceptions:
       const progressRows = await db.query.classLessonProgress.findMany({
         where: eq(classLessonProgress.enrollmentId, enrollment.id),
       });
+      // Where "Continue" goes (2026-10-04): the first lesson, in order, whose reading is not
+      // done, else the first whose quiz is not passed. Null once the class is complete. The
+      // detail page still decides whether that lesson is open; this only names it.
+      const lessonsInOrder = [...enrollment.class.lessons].sort((a, b) => a.lessonNumber - b.lessonNumber);
+      const withQuiz = await this.getClassLessonIdsWithQuiz(lessonsInOrder.map((l) => l.id));
+      const progressByLesson = new Map(progressRows.map((p) => [p.classLessonId, p]));
+      let next: { lessonId: number; startAt: "reading" | "quiz" } | null = null;
+      for (const l of lessonsInOrder) {
+        const p = progressByLesson.get(l.id);
+        if (!p?.contentCompletedAt) {
+          next = { lessonId: l.id, startAt: "reading" };
+          break;
+        }
+        if (withQuiz.has(l.id) && !p.quizPassedAt) {
+          next = { lessonId: l.id, startAt: "quiz" };
+          break;
+        }
+      }
       results.push({
         classId: enrollment.classId,
         name: enrollment.class.name,
@@ -12396,6 +12414,7 @@ Hard rules, no exceptions:
         lessonCount: enrollment.class.lessons.length,
         lessonsStarted: progressRows.filter((p) => p.skillAssignmentId).length,
         completedAt: enrollment.completedAt,
+        next: enrollment.completedAt ? null : next,
       });
     }
     return results;
@@ -13502,6 +13521,36 @@ Hard rules, no exceptions:
   /** The learning streak (2026-10-04): consecutive calendar days, UTC, on which the athlete
    * finished a lesson's reading or sat a quiz, in any class. Current counts only if the last
    * such day is today or yesterday. */
+  /** The cross-class review deck (2026-10-04): every card from every lesson this athlete has
+   * read at least once, in any class they are enrolled in, where the lesson has cards on. A
+   * lesson not yet read keeps its cards back, because a card is a review of a reading. Each
+   * card names its class and lesson. Shuffled here. */
+  async getFlashcardDeckForAthlete(athleteId: number) {
+    const enrollments = await db.query.classEnrollments.findMany({
+      where: eq(classEnrollments.athleteId, athleteId),
+      with: { class: { with: { lessons: true } } },
+    });
+    if (enrollments.length === 0) return [];
+    const progress = await db.query.classLessonProgress.findMany({
+      where: inArray(classLessonProgress.enrollmentId, enrollments.map((e) => e.id)),
+    });
+    const readLessonIds = new Set(progress.filter((p) => p.contentCompletedAt).map((p) => p.classLessonId));
+    const cards: { className: string; lessonNumber: number; lessonTitle: string; front: string; back: string }[] = [];
+    for (const e of enrollments) {
+      for (const l of e.class.lessons) {
+        if (!l.flashcardsEnabled || !readLessonIds.has(l.id)) continue;
+        for (const c of l.flashcards ?? []) {
+          cards.push({ className: e.class.name, lessonNumber: l.lessonNumber, lessonTitle: l.title, front: c.front, back: c.back });
+        }
+      }
+    }
+    for (let i = cards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cards[i], cards[j]] = [cards[j], cards[i]];
+    }
+    return cards;
+  },
+
   async getLearningStreakForAthlete(athleteId: number) {
     const enrollments = await db.query.classEnrollments.findMany({ where: eq(classEnrollments.athleteId, athleteId) });
     const ids = enrollments.map((e) => e.id);

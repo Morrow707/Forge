@@ -43,6 +43,7 @@ import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail, emailEnabled, isEmailConfigured } from "./email";
 import { KNOWLEDGE_DOMAIN_KEYS } from "@shared/knowledge-domains";
 import { CLASS_READING_LEVELS } from "@shared/class-reading-level";
+import { classCategoryMatchesSport } from "@shared/class-sport-match";
 import { athleteFacingPayload, type QuizQuestionType } from "@shared/class-quiz-grading";
 import { buildWelcomeEmail } from "./welcome-email";
 import { buildCampaignEmail } from "./email-list-render";
@@ -755,6 +756,7 @@ function currentUser(req: any) {
     role: "coach" | "athlete" | "admin" | "guardian";
     name: string;
     email: string;
+    sport?: string | null;
   };
 }
 
@@ -13059,11 +13061,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(list);
   });
 
-  // Free Agent only -- the Forge catalog to browse and self-enroll into.
+  // Free Agent only -- the Forge catalog to browse and self-enroll into. `forYourSport` is
+  // the athlete's sport held against the class's category (shared/class-sport-match.ts), so
+  // the catalog can put their sport first; decided here, once, not in the page.
   app.get("/api/athlete/classes", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getVisibleClassesForFreeAgent(user.id);
-    res.json(list);
+    res.json(list.map((c) => ({ ...c, forYourSport: classCategoryMatchesSport(c.category, user.sport) })));
+  });
+
+  // The bottom of the Classes page (2026-10-04): the streak, every finished class, and
+  // whether there are cards to review across classes.
+  app.get("/api/athlete/learning-summary", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const [streak, enrolled, deck] = await Promise.all([
+      storage.getLearningStreakForAthlete(user.id),
+      storage.getEnrolledClassesForAthlete(user.id),
+      storage.getFlashcardDeckForAthlete(user.id),
+    ]);
+    res.json({
+      streak,
+      certificates: enrolled
+        .filter((c) => c.completedAt)
+        .map((c) => ({ classId: c.classId, name: c.name, completedAt: c.completedAt }))
+        .sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime()),
+      reviewCardCount: deck.length,
+    });
+  });
+
+  // Every flashcard from every lesson this athlete has read, across their classes, shuffled
+  // on the server so a reload deals a new order. The review deck (2026-10-04).
+  app.get("/api/athlete/flashcards", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    res.json({ cards: await storage.getFlashcardDeckForAthlete(user.id) });
   });
 
   app.get("/api/athlete/classes/:id/progress", requireRole("athlete"), async (req, res) => {

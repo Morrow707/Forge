@@ -128,6 +128,7 @@ const AthleteSkillProgramBuilder = lazy(withLoadTimeout(() => import("@/pages/at
 const AthleteClasses = lazy(withLoadTimeout(() => import("@/pages/athlete/classes")));
 const AthleteClassDetail = lazy(withLoadTimeout(() => import("@/pages/athlete/class-detail")));
 const AthleteClassCertificate = lazy(withLoadTimeout(() => import("@/pages/athlete/class-certificate")));
+const AthleteFlashcardReview = lazy(withLoadTimeout(() => import("@/pages/athlete/flashcard-review")));
 const AdminDashboard = lazy(withLoadTimeout(() => import("@/pages/admin/dashboard")));
 const AdminExercises = lazy(withLoadTimeout(() => import("@/pages/admin/exercises")));
 const AdminCoachExercises = lazy(withLoadTimeout(() => import("@/pages/admin/coach-exercises")));
@@ -604,6 +605,10 @@ function Router() {
         </Route>
         <Route path="/athlete/classes/:id/certificate">
           <ProtectedRoute role="athlete" component={AthleteClassCertificate} />
+        </Route>
+        {/* Before /athlete/classes/:id, or "review" reads as a class id. */}
+        <Route path="/athlete/classes/review">
+          <ProtectedRoute role="athlete" component={AthleteFlashcardReview} />
         </Route>
         <Route path="/athlete/classes/:id">
           <ProtectedRoute role="athlete" component={AthleteClassDetail} />

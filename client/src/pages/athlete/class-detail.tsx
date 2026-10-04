@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { useParams, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -50,13 +50,29 @@ export default function AthleteClassDetail() {
   });
 
   const [readerLessonId, setReaderLessonId] = useState<number | null>(null);
-  const [readerStartAt, setReaderStartAt] = useState<"reading" | "quiz">("reading");
+  const [readerStartAt, setReaderStartAt] = useState<"reading" | "quiz" | "resume">("reading");
   const readerLesson = data?.lessons.find((l) => l.id === readerLessonId) ?? null;
 
-  function openReader(lessonId: number, startAt: "reading" | "quiz") {
+  function openReader(lessonId: number, startAt: "reading" | "quiz" | "resume") {
     setReaderLessonId(lessonId);
     setReaderStartAt(startAt);
   }
+
+  // "Continue" from the Classes page (2026-10-04): ?open=<lessonId>&at=resume|quiz opens the
+  // reader on that lesson once the progress arrives, only if the lesson is one the athlete
+  // may open. A locked lesson leaves them on this page, which says why.
+  const search = useSearch();
+  const [autoOpened, setAutoOpened] = useState(false);
+  useEffect(() => {
+    if (autoOpened || !data) return;
+    const params = new URLSearchParams(search);
+    const openId = Number(params.get("open"));
+    if (!openId) return;
+    setAutoOpened(true);
+    const lesson = data.lessons.find((l) => l.id === openId);
+    if (!lesson || (lesson.state !== "active" && lesson.state !== "ready")) return;
+    openReader(openId, params.get("at") === "quiz" ? "quiz" : "resume");
+  }, [autoOpened, data, search]);
 
   // Two payment paths, because Apple requires an in-app digital purchase to
   // go through StoreKit. On the web this hands off to Stripe Checkout and
