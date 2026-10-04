@@ -1,19 +1,10 @@
-// American Hitting: Athletic Hitting Development Program
-// Original instructional content written for the 8-chapter curriculum, grounded in
-// the program's transcribed outline, core principles, and Five Pillars philosophy
-// (See It -> Decide -> Move -> Adjust -> Compete). This is original prose written
-// for this course, not a verbatim reproduction of any outside source.
-
-// Same reasoning as skillVideoSearchUrl in server/seed.ts: a specific
-// hand-picked video ID can go dead or turn out to be a bad match with no
-// way to verify it from here, so every chapter links to a real, always-
-// valid YouTube search instead of a single fabricated "the" video.
+// Chapter pages carry no video today (Scott, 2026-10-04: "remove the links in the search,
+// since the videos are empty ... gives us the opportunity to add them in later"). The slot is
+// `videoUrl` on a page; a real clip link goes there when he sends one, and the seed re-syncs
+// pages on deploy, so an empty slot here clears the old search link from the stored class.
 // Every chapter ends on a "Key Points" page. The reader draws a block that starts with a
 // "Key points:" line and continues with "- " lines as a boxed summary (2026-10-04), so the
 // syntax is the lesson body's own and a coach can type the same thing in the builder.
-function videoSearchUrl(query: string): string {
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-}
 
 export interface AmericanHittingChapterContent {
   lessonNumber: number; // 1 through 8
@@ -46,7 +37,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "What Successful Hitting Actually Requires",
         body:
           "Most young hitters think of hitting as one skill: the swing. Coaches say \"work on your swing\" and players picture tee work, front toss, and mechanics. But the swing itself is only the last piece of a much longer chain of skills that all have to work together in real time, against a moving target, under a strict deadline measured in fractions of a second.\n\nSuccessful hitting requires a hitter to see the pitch clearly, decide quickly and correctly whether and where to swing, move their body athletically to get the barrel to the ball, stay adjustable if something about the pitch changes late, and do all of that under the pressure of a real at-bat that counts. Miss any one of those links and it doesn't matter how good the mechanics look in the mirror — the swing will not produce the result you want.\n\nThis is the foundation of everything in this program. We are not just training a swing. We are training a hitter — someone who can see it, decide, move, adjust, and compete, at game speed, against a real pitcher who is actively trying to beat them. Keep that bigger picture in mind as you go through each chapter. Every drill and every concept exists to build one piece of that chain.",
-        videoUrl: videoSearchUrl("athletic hitting philosophy no perfect swing baseball softball")
       },
       {
         title: "Athleticism Versus Mechanical Perfection",
@@ -279,7 +269,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Balance Versus Athletic Balance",
         body:
           "When most people hear the word \"balance,\" they picture standing still without falling over — like balancing on one foot. That's real, but it's not the kind of balance a hitter actually needs. A hitter needs athletic balance: the ability to stay controlled and centered while moving explosively in multiple directions, often changing plans in the middle of that movement.\n\nThink about a defensive back backpedaling who has to plant and drive forward the instant the receiver breaks his route, or a shortstop moving toward one side who has to redirect when the ball takes a bad hop. Neither athlete is standing still. Both are balanced while moving, which is a completely different skill than standing balanced on a beam.\n\nA hitter needs the same thing. Between the moment the pitcher releases the ball and the moment of contact, a hitter is loading, striding, rotating, and swinging — all while needing to stay controlled enough to adjust if the pitch isn't what they expected. Static balance won't get you there. Athletic balance — trained through movement, not stillness — is what allows a hitter to be explosive and adjustable at the same time. Every drill in this program that involves movement, tempo changes, or off-balance recovery is, in part, training this exact skill.",
-        videoUrl: videoSearchUrl("athletic hitting stance and balance baseball softball")
       },
       {
         title: "Posture: The Foundation Everything Is Built On",
@@ -504,7 +493,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "See It Before You Can Hit It",
         body:
           "It's easy to spend all of your practice time on the swing and none of it on your eyes — but vision is the very first pillar in this program for a reason. Every decision you make and every movement you produce during an at-bat is only as good as the visual information it's based on. A mechanically great swing aimed at the wrong pitch, or started at the wrong time because it was seen late, still results in a miss.\n\nSeeing the ball well is a trainable skill, not just a natural gift. Hitters can genuinely get better at tracking pitches, picking up spin, and recognizing location earlier — the same way they can get better at any other athletic skill, through deliberate, repeated practice.\n\nIn this chapter, we'll break \"seeing it\" down into its real components: where your head and eyes should be, how to read the pitch as early as possible, and how to specifically recognize velocity, spin, and location. Then we'll connect it back to the athletic position from Chapter 2, because your stance either helps or hurts your ability to see clearly before the swing has even started. Everything that follows in this program — timing in Chapter 4, movement in Chapters 5 and 6, adjustability in Chapter 7 — depends on the quality of information you gather here first.",
-        videoUrl: videoSearchUrl("pitch recognition tracking drills baseball softball hitting")
       },
       {
         title: "Head Position and Quiet Eyes",
@@ -727,7 +715,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Why \"Just Start Earlier\" Doesn't Work",
         body:
           "When a hitter is consistently late on the fastball, the most common advice they hear is simple: \"start your swing earlier.\" It sounds logical, but it usually doesn't fix the actual problem — and it can even make things worse.\n\nHere's why. Timing problems are rarely about the swing itself being too slow. They're almost always about when the hitter's movement begins relative to the pitcher's delivery. If a hitter just moves their existing guess earlier without changing anything else, they haven't actually built better timing — they've just shifted the same guess to an earlier point, and now they're guessing with even less visual information available, since less of the pitch's flight has happened by the time they commit.\n\nThe real fix is almost never \"earlier.\" It's usually \"more organized.\" A hitter with a repeatable rhythm and tempo that's properly synced to the pitcher's delivery doesn't need to guess early — their body is already moving on a natural, trained schedule that leaves room to gather information and adjust. This chapter is about building that organized movement, rather than teaching you to just move the same guess earlier and hope it works out more often.",
-        videoUrl: videoSearchUrl("hitting timing rhythm tempo baseball softball drills")
       },
       {
         title: "Rhythm, Tempo, and Timing",
@@ -950,7 +937,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Where Power Really Comes From",
         body:
           "Ask a young hitter how to hit the ball harder, and the answer is usually some version of \"swing harder.\" But real power in a swing doesn't start with the arms or even the torso — it starts with the ground.\n\nEvery time a hitter pushes down and back into the ground with their feet, the ground pushes back with equal force — this is often called ground reaction force, and it's the true starting point of the kinetic chain that eventually produces bat speed. A hitter with strong, well-timed ground interaction has a foundation of force to build on before their hips or torso ever begin rotating. A hitter who doesn't use the ground well — staying too passive or flat-footed through the load and swing — is trying to generate all of their power from the upper body alone, which is a much smaller, weaker source of force.\n\nThis connects directly back to the athletic position from Chapter 2. Soft, athletic knee flex and good weight distribution aren't just for balance — they're what allow a hitter to actually load into the ground and then push off it explosively. Power, in other words, starts well before the bat ever begins moving. It starts in the legs and the ground beneath them.",
-        videoUrl: videoSearchUrl("rotational power hitting drills baseball softball ground force")
       },
       {
         title: "Hip and Torso Interaction: The Sequence",
@@ -1174,7 +1160,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Understanding Pitch Plane",
         body:
           "Every pitch travels on an angled path from the pitcher's release point down to home plate — this is called the pitch plane. Because of gravity and the release point being well above the ground, the ball is always traveling on some downward angle by the time it reaches the hitting zone, even on a pitch that looks relatively flat.\n\nThe pitch plane isn't identical on every pitch. A high pitch and a low pitch travel through the zone on different angles. A pitch with heavy topspin, like some breaking balls, can drop more steeply than a fastball. This means the bat doesn't need to match one single fixed angle on every swing — it needs to match whatever plane that specific pitch is actually traveling on.\n\nThis is the foundation for everything else in this chapter. Barrel direction, attack angle, and contact point all exist in relation to the pitch plane, not as fixed numbers a hitter tries to hit regardless of the pitch. A hitter who understands pitch plane starts to see their job less as \"swing the same way every time\" and more as \"get the bat to match the angle of this specific pitch,\" which is a much more accurate description of what quality contact actually requires.",
-        videoUrl: videoSearchUrl("bat path attack angle pitch plane baseball softball hitting")
       },
       {
         title: "Barrel Direction and Contact Depth",
@@ -1399,7 +1384,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Great Hitters Adjust",
         body:
           "At every level of baseball and softball, pitchers have the same basic goal: disrupt the hitter's timing. They do this by changing speeds, changing locations, and changing spin from pitch to pitch, specifically so a hitter can never get too comfortable or too grooved into one single rhythm.\n\nThis is why the ADJUST pillar exists as its own dedicated part of this program. A hitter can see the ball well (Chapter 3), have great rhythm and timing against one specific look (Chapter 4), and produce real power with a good bat path (Chapters 5 and 6) — and still struggle in games if they can't adjust once the pitcher starts mixing things up. Adjustability is what allows all of those other skills to actually hold up against a pitcher who is actively working against them.\n\nAs players move up in competition level, this becomes more true, not less. Younger or less experienced pitchers tend to be more predictable — similar speed, similar location, pitch after pitch. As pitching gets more advanced, hitters face more deliberate speed changes, more movement, and more located pitches specifically designed to beat a rigid, non-adjustable swing. This chapter is about building the kind of swing and mindset that holds up as that challenge increases.",
-        videoUrl: videoSearchUrl("hitting adjustability off-speed recognition baseball softball drills")
       },
       {
         title: "Fastball Versus Breaking-Ball Timing",
@@ -1624,7 +1608,6 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
         title: "Process Versus Outcome",
         body:
           "One of the hardest habits for any hitter to build is judging an at-bat by the quality of the process, not just the outcome. A hard line drive right at a fielder is an out on the scoreboard, but it was often a genuinely good at-bat. A weak, mishit ground ball that happens to find a gap is a hit on the scoreboard, but it often wasn't.\n\nOutcomes in hitting are noisy, especially over small samples — a single game, or even a full week, isn't a large enough sample for results to reliably reflect the quality of decisions and execution behind them. A hitter who only evaluates themselves by results — hits and outs — will end up chasing outcomes they can't fully control and missing the actual lessons available in each at-bat.\n\nProcess, by contrast, is something a hitter has much more direct control over: did I see the pitch well? Did I make a good decision about whether to swing? Did I move athletically and stay on time? Did I adjust when I needed to? These are the Five Pillars from Chapter 1, and they're a far more useful lens for self-evaluation than the box score alone. This chapter is about building the habit of evaluating through that lens, on your own, without needing a coach to point it out every time.",
-        videoUrl: videoSearchUrl("self-scouting hitting evaluation baseball softball at-bat process")
       },
       {
         title: "How to Evaluate an At-Bat",

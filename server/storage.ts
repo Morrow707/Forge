@@ -2925,7 +2925,9 @@ async function referenceBlock(query: string, domains: string[], limit = 6): Prom
   if (!trimmed) return "";
   try {
     return renderPassagesForPrompt(
-      await searchKnowledgePassages({ query: trimmed, domains, limit }),
+      // Licensed sources only (2026-10-04, Scott: "remove it"): an outside textbook never
+      // reaches an assistant. See docs/legal-open-questions.md, question 12.
+      await searchKnowledgePassages({ query: trimmed, domains, limit, licensedOnly: true }),
     );
   } catch (err) {
     // A retrieval failure must never take down the answer it was meant to
@@ -11835,6 +11837,7 @@ Hard rules, no exceptions:
             query: documentText?.slice(0, 300) || "course material",
             domains: retrievalDomains,
             limit: 10,
+            licensedOnly: true,
           })
         : [];
     const retrievedBlock = renderPassagesForPrompt(retrieved);
@@ -15356,6 +15359,7 @@ Hard rules, no exceptions:
       query: retrievalQuery,
       domains: ["strength", "rehab", "sport"],
       limit: 8,
+      licensedOnly: true,
     });
     const validIds = visibleExercises.map((e) => e.id);
     const catalog = visibleExercises
@@ -16781,6 +16785,7 @@ Hard rules, no exceptions -- these exist because you are not a registered dietit
       query: question,
       domains: ["nutrition"],
       limit: 6,
+      licensedOnly: true,
     });
     const nutritionReference = renderPassagesForPrompt(nutritionPassages);
 
@@ -17447,6 +17452,7 @@ Respond to the admin's latest message by calling ask_question or propose_guideli
       query,
       domains: ["strength", "sport", "rehab", "movement"],
       limit: 12,
+      licensedOnly: true,
     });
 
     if (passages.length === 0) {

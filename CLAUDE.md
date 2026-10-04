@@ -605,10 +605,13 @@ questions 12 and 13), and the answers shape everything below.
   the publisher's EULA forbids ingestion; without an express licence, no retrieval over the book
   reaches a subscriber. `knowledge_sources.derivedContentLicensed` is the gate: false by default,
   set by an admin only with the licence written into `licenceNote`, and
-  `searchKnowledgePassages({ licensedOnly: true })` is what the Coaches Corner draft and the
-  citation pass read. The book still feeds the AI assistants through the unflagged path; that
-  exposure is OPEN in question 12 and is Scott's call (remove the source, narrow every retrieval
-  to licensed sources, or get a licence).
+  `searchKnowledgePassages({ licensedOnly: true })` is what EVERY retrieval reads since
+  2026-10-04 (Scott, closing question 12: "thats ok for the other stuff, remove it"): the chat
+  coach, both program-builder paths, nutrition, readiness, the class drafter and Coaches
+  Corner. `server/assistants-read-licensed-only.test.ts` scans storage.ts for it. The admin's
+  own library search is the one unfiltered read, so an admin can see what a source holds before
+  licensing or deleting it. The book itself is still a row in the Knowledge Library until Scott
+  deletes it on `/admin/knowledge-library`; inert either way.
 - **Paraphrasing the book is NOT the loophole** (counsel, 2026-10-04, question 14, on Scott's
   "there is no plagiarism for paraphrase"): a chapter-by-chapter paraphrase sold as a course
   copies the book's selection and arrangement and is market substitution. What IS allowed is
@@ -772,9 +775,10 @@ then "Build it all in order and what you suggested". Coaches already create clas
   (`my-classes.next`); the review deck at `/athlete/classes/review` deals every card from
   every lesson read, across classes, shuffled on the server; the streak and every certificate
   sit at the BOTTOM of the page on purpose (Scott: "yes 11 at the bottom").
-- **The hitting class's eight page videos are still YouTube SEARCH links.** YouTube is not
-  reachable from the sandbox, so no clip id could be verified, and an unverified id is an
-  invented screen (Rule #3). Scott picks the clips; the slot for them is `videoUrl` on the page.
+- **The hitting class's chapter pages carry no video** (Scott, 2026-10-04: "remove the links
+  in the search, since the videos are empty"). The YouTube search links are gone; the slot is
+  `videoUrl` on the page and a real clip goes in when he sends one. An unverified id is an
+  invented screen (Rule #3), so none is guessed.
 
 ## Full Personalization: the Branding page, and what it reaches
 
