@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { formatCents } from "@shared/billing-tiers";
 import { ALL_CLASSES_ADD_ON_ID, FREE_AGENT_ADD_ONS, type FreeAgentAddOnId } from "@shared/free-agent-tiers";
-import { CLASS_PRICING_LINE } from "@shared/class-pricing-rule";
 import {
   isAppleIapSupported,
   fetchFreeAgentAddOnProducts,
@@ -137,7 +136,6 @@ export function AllClassesCard({ compact = false }: { compact?: boolean }) {
         </div>
         <p className="font-display text-xl font-bold uppercase tracking-wide">{addOn.label}</p>
         <p className="text-sm text-muted-foreground">{addOn.description}</p>
-        <p className="text-xs text-muted-foreground">{CLASS_PRICING_LINE}</p>
         {unlocked ? (
           <Button size="sm" className="mt-auto w-full" onClick={() => navigate("/athlete/classes")}>
             Open classes
