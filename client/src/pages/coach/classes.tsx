@@ -11,7 +11,8 @@ export default function CoachClasses() {
         apiBase="/api/coach"
         routeBase="/coach/classes"
         title="Classes"
-        emptyStateText="No Classes yet. Build a self-guided curriculum your athletes work through lesson by lesson."
+        showAiDraft
+        emptyStateText="No Classes yet. Build a self-guided curriculum your athletes work through lesson by lesson, or draft one from your own notes."
         libraryTabs={
           <LibraryTabs
             active="classes"

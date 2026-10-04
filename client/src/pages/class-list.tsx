@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ClassAiDraft } from "@shared/schema";
+import { CLASS_READING_LEVELS, CLASS_READING_LEVEL_LABELS, type ClassReadingLevel } from "@shared/class-reading-level";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ReadFailed } from "@/components/read-failed";
 
 type ClassSummary = {
@@ -66,11 +68,11 @@ type RosterEntry = { id: number; name: string; email: string };
 
 /** Classes list -- coach ("your Classes + Forge Classes to enroll your
  * roster into") and admin ("your Forge Classes only") share this, same as
- * every other Library list page. Per-lesson unlock rules and pricing stay
- * hand-authored either way, but admin gets one AI-assist path a coach
- * doesn't: generate a full draft (lessons, reading pages, quiz) from a
- * pasted document or photos of pages, then review/edit it in the normal
- * builder before it's ever published -- see showAiDraft below. */
+ * every other Library list page. Per-lesson unlock rules stay hand-authored
+ * either way. Both get the AI draft (since 2026-10-04 the coach too, from
+ * their own notes): a full draft (lessons, reading pages, quiz) from pasted
+ * text or photos of pages, at a chosen reading level, reviewed in the normal
+ * builder before it is ever published -- see showAiDraft below. */
 export function ClassListPage({
   apiBase,
   routeBase,
@@ -87,8 +89,8 @@ export function ClassListPage({
   /** Hidden for admin -- a Forge Class isn't enrolled straight from here,
    * a coach enrolls their own roster into it from their own Classes list. */
   showEnroll?: boolean;
-  /** Admin only -- a coach's own Class is their own material already,
-   * nothing to auto-organize from a document. */
+  /** Draft a class with AI from pasted notes or photos. Admin on the Forge classes, and the
+   * coach on their own (2026-10-04): the coach route reads nothing but what is pasted. */
   showAiDraft?: boolean;
   libraryTabs?: ReactNode;
 }) {
@@ -108,6 +110,7 @@ export function ClassListPage({
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [aiText, setAiText] = useState("");
   const [aiImages, setAiImages] = useState<CapturedPhoto[]>([]);
+  const [aiReadingLevel, setAiReadingLevel] = useState<ClassReadingLevel>("high_school");
   const [enrollClassId, setEnrollClassId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ClassSummary | null>(null);
   const [search, setSearch] = useState("");
@@ -168,12 +171,14 @@ export function ClassListPage({
       const draftRes = await apiRequest("POST", `${apiBase}/classes/ai-draft`, {
         documentText: aiText.trim() || undefined,
         images: aiImages.length > 0 ? aiImages : undefined,
+        readingLevel: aiReadingLevel,
       });
       const draft = (await draftRes.json()) as ClassAiDraft;
       const payload = {
         name: draft.name,
         description: draft.description ?? null,
         category: draft.category ?? null,
+        readingLevel: aiReadingLevel,
         lessons: draft.lessons.map((l, i) => ({
           lessonNumber: i + 1,
           title: l.title,
@@ -505,10 +510,26 @@ export function ClassListPage({
                 <Label>Or attach photos of pages</Label>
                 <PhotoUploadField images={aiImages} onChange={setAiImages} maxImages={6} />
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ai-reading-level">Written for</Label>
+                <Select value={aiReadingLevel} onValueChange={(v) => setAiReadingLevel(v as ClassReadingLevel)}>
+                  <SelectTrigger id="ai-reading-level" className="w-56">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLASS_READING_LEVELS.map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {CLASS_READING_LEVEL_LABELS[level]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <p className="text-xs text-muted-foreground">
-                Claude organizes this into lessons, reading pages, and a quiz per lesson, every fact and
-                every quiz answer comes only from what's provided here, nothing invented. Created as a draft,
-                invisible to everyone else, so you can review and edit everything before publishing.
+                Forge organizes this into lessons, reading pages, and a quiz per lesson, at that reading level.
+                Every fact and every quiz answer comes only from what's provided here, nothing invented and
+                nothing from anywhere else. Created as a draft, invisible to everyone else, so you can review
+                and edit everything before publishing.
               </p>
               <DialogFooter>
                 <Button

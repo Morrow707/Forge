@@ -3414,6 +3414,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(draft);
   });
 
+  // The same drafter for a coach, from their OWN notes (2026-10-04, Scott: "yes 15"). Same
+  // reading levels and the same rules as the admin's: every fact and every answer comes from
+  // the material pasted here, nothing from outside it. Deliberately NO retrievalDomains: the
+  // knowledge library is not a source a coach's class may draw on (docs/legal-open-questions.md,
+  // question 12). The result is a draft the coach reviews in their own builder; nothing is
+  // created here.
+  app.post("/api/coach/classes/ai-draft", requireRole("coach"), async (req, res) => {
+    const schema = z
+      .object({
+        documentText: z.string().trim().min(1).max(60000).optional(),
+        readingLevel: z.enum(CLASS_READING_LEVELS).nullable().optional(),
+        images: z
+          .array(z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }))
+          .max(6)
+          .optional(),
+      })
+      .refine((v) => !!v.documentText?.trim() || (v.images && v.images.length > 0), {
+        message: "Paste some notes or attach at least one photo",
+      });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const draft = await storage.generateClassDraftFromDocument(parsed.data.documentText, parsed.data.images, undefined, parsed.data.readingLevel);
+    if (!draft) {
+      return res.status(422).json({
+        message: "Couldn't organize that into a class, try pasting more of your notes or a clearer photo.",
+      });
+    }
+    res.json(draft);
+  });
+
   app.post("/api/admin/classes", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const parsed = classStructureSchema.safeParse(req.body);
