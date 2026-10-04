@@ -254,6 +254,42 @@ What the code does with that: the upsell card no longer names it (2026-10-03), a
 components. A coach typing their own credentials into a free-text bio is their statement, not
 Forge's, and is not scanned.
 
+## 14. Paraphrasing the textbook into paid course content -- ANSWERED 2026-10-04
+
+Scott's argument (2026-10-04): facts are public, paraphrase is not plagiarism, so a summary
+of the book could be sold in Coaches Corner. Put to counsel as four questions the same day.
+
+Counsel, verbatim:
+
+1. A chapter-by-chapter paraphrase or summary of one book, sold as a course, "carries a high
+   risk of copyright infringement. While copyright does not protect underlying facts,
+   scientific principles, or ideas, it strictly protects an author's original 'selection,
+   coordination, and arrangement' of those facts. A chapter-by-chapter summary that mirrors
+   the book's sequence, narrative flow, and structural organization appropriates the author's
+   protected expression. Furthermore, selling this as a paid commercial course directly
+   triggers the market-substitution problem."
+2. Lessons that cover the same topics in Forge's own structure, drawing on several sources
+   with the book as one reference among many: "this fundamentally shifts the analysis in your
+   favor. Extracting unprotectable facts, data, and scientific concepts from a textbook and
+   synthesizing them with other sources into an entirely new, original structure is standard
+   research and authorship."
+3. The publisher's EULA "governs software actions and the digital duplication or processing of
+   the file itself. It does not restrict a human being from reading the text, comprehending
+   the facts, and expressing those underlying concepts in their own words."
+4. The line: "You may freely extract the biomechanical principles, historical data, and
+   established training methodologies. You must completely abandon the book's table of
+   contents, chapter progression, specific hypothetical examples, unique pedagogical analogies,
+   and proprietary charts. Build Forge's course outline and syllabus first, independently of
+   the textbook, and subsequently use the book strictly as a factual reference repository to
+   populate your original structure."
+
+What the code does with that: nothing changes. The thirteen Coaches Corner tracks and the
+seven athlete classes are written in Forge's own structure from general coaching knowledge,
+which is answer 2. The AI draft path stays gated by `derivedContentLicensed` (answer 3 is about
+a HUMAN reading the book; machine retrieval over the file is the EULA's own subject, and the
+question 12 open item on the AI assistants stands). New tracks are written by hand to the
+line in answer 4: outline first, never the book's.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and

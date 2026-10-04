@@ -602,6 +602,13 @@ questions 12 and 13), and the answers shape everything below.
   citation pass read. The book still feeds the AI assistants through the unflagged path; that
   exposure is OPEN in question 12 and is Scott's call (remove the source, narrow every retrieval
   to licensed sources, or get a licence).
+- **Paraphrasing the book is NOT the loophole** (counsel, 2026-10-04, question 14, on Scott's
+  "there is no plagiarism for paraphrase"): a chapter-by-chapter paraphrase sold as a course
+  copies the book's selection and arrangement and is market substitution. What IS allowed is
+  what every track and class already does: Forge's own outline first, written from general
+  knowledge across sources, the book used only as a fact reference. Never start a track from
+  the book's table of contents, its examples, analogies or charts. The EULA point is about
+  machine ingestion of the file, which is why the AI draft gate stays.
 - **"Ask the library"** (`askCoachesCornerLibrary`, `POST /api/coach/academy/ask`) answers from
   Forge's own tracks and principles only, cites the lessons it used as chips that open them, and
   says when the library does not cover a question. Stateless.
