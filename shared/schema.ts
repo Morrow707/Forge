@@ -5211,6 +5211,27 @@ export type AcademyLessonSource = {
   pageEnd: number;
 };
 
+/** A coach's private note on a Coaches Corner lesson (2026-10-04). Theirs alone: no admin
+ * view, no roster view, never served to anyone but the coach who wrote it. One per coach per
+ * lesson; an empty save deletes it. */
+export const academyLessonNotes = pgTable(
+  "academy_lesson_notes",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lessonId: integer("lesson_id")
+      .notNull()
+      .references(() => academyLessons.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachLessonUnique: uniqueIndex("academy_lesson_notes_coach_lesson_idx").on(table.coachId, table.lessonId),
+  }),
+);
+
 // A coach's own "read this" checkbox -- purely a personal progress marker
 // (drives a completion count on the track catalog), never gates access to
 // later lessons the way Class lesson progress does.

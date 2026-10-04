@@ -18,6 +18,39 @@ export function LessonPageNotes({ classId, lessonId, pageIndex }: { classId: num
 }
 
 function PageNote({ url, pageIndex, initial, onSaved }: { url: string; pageIndex: number; initial: string; onSaved: () => void }) {
+  return (
+    <DebouncedNote
+      initial={initial}
+      title="My notes on this page"
+      placeholder="What stood out, a question for your coach, a cue to remember…"
+      savedLine="Saved. Your coach can read your notes."
+      emptyLine="Only you and your coach can see these."
+      save={async (text) => {
+        await apiRequest("PUT", url, { pageIndex, body: text });
+        onSaved();
+      }}
+    />
+  );
+}
+
+/** The note box itself: saved a second after typing stops, on blur, and when unmounted.
+ * Shared by the athlete's page notes and the coach's Coaches Corner lesson note, which differ
+ * only in where the save goes and who else can read it. */
+export function DebouncedNote({
+  initial,
+  title,
+  placeholder,
+  savedLine,
+  emptyLine,
+  save,
+}: {
+  initial: string;
+  title: string;
+  placeholder: string;
+  savedLine: string;
+  emptyLine: string;
+  save: (text: string) => Promise<void>;
+}) {
   const [body, setBody] = useState(initial);
   const [open, setOpen] = useState(initial.trim().length > 0);
   const latest = useRef(body);
@@ -25,16 +58,15 @@ function PageNote({ url, pageIndex, initial, onSaved }: { url: string; pageIndex
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   latest.current = body;
 
-  const save = useMutation({
+  const mutation = useMutation({
     mutationFn: async (text: string) => {
-      await apiRequest("PUT", url, { pageIndex, body: text });
+      await save(text);
       saved.current = text;
     },
-    onSuccess: onSaved,
   });
   const flush = () => {
     if (timer.current) clearTimeout(timer.current);
-    if (latest.current !== saved.current) save.mutate(latest.current);
+    if (latest.current !== saved.current) mutation.mutate(latest.current);
   };
   useEffect(() => {
     if (body === saved.current) return;
@@ -58,7 +90,7 @@ function PageNote({ url, pageIndex, initial, onSaved }: { url: string; pageIndex
         aria-expanded={open}
       >
         <NotebookPen className="h-3.5 w-3.5" />
-        My notes on this page
+        {title}
         {!open && body.trim() && <span className="ml-auto font-normal">saved</span>}
       </button>
       {open && (
@@ -68,11 +100,11 @@ function PageNote({ url, pageIndex, initial, onSaved }: { url: string; pageIndex
             onChange={(e) => setBody(e.target.value)}
             onBlur={flush}
             rows={3}
-            placeholder="What stood out, a question for your coach, a cue to remember…"
+            placeholder={placeholder}
             className="text-sm"
           />
           <p className="text-[11px] text-muted-foreground">
-            {save.isPending ? "Saving…" : body !== saved.current ? "Unsaved" : body.trim() ? "Saved. Your coach can read your notes." : "Only you and your coach can see these."}
+            {mutation.isPending ? "Saving…" : body !== saved.current ? "Unsaved" : body.trim() ? savedLine : emptyLine}
           </p>
         </div>
       )}

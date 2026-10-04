@@ -2669,16 +2669,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lessons: track.lessons.map((l) => ({ id: l.id, lessonNumber: l.lessonNumber, title: l.title })),
       });
     }
-    const [completions, bestAttempt] = await Promise.all([
+    const [completions, bestAttempt, notes] = await Promise.all([
       storage.getAcademyCompletionsForCoach(user.id),
       storage.getBestAcademyQuizAttempt(user.id, id),
+      storage.getAcademyLessonNotesForCoach(user.id),
     ]);
     res.json({
       id: track.id,
       title: track.title,
       description: track.description,
       unlocked: true,
-      lessons: track.lessons.map((l) => ({ ...l, completed: completions.has(l.id) })),
+      // `note` is this coach's own and nobody else's (academyLessonNotes).
+      lessons: track.lessons.map((l) => ({ ...l, completed: completions.has(l.id), note: notes.get(l.id)?.body ?? "" })),
       // Never the key before grading: ordering and matching go out shuffled, fill-in-the-blank
       // bare (shared/class-quiz-grading.ts). Multiple choice keeps its answer rows, whose
       // isCorrect flag the quiz has always carried so a coach can expand any answer after.
@@ -2709,6 +2711,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).end();
     },
   );
+
+  // A coach's private note on a lesson (2026-10-04). Read back on the track detail; written
+  // here. Nobody else, admin included, has a route to it.
+  app.put("/api/coach/academy/lessons/:id/note", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    if (!(await hasCoachesCornerAccess(user))) {
+      return res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
+    }
+    const parsed = z.object({ body: z.string().max(4000) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    await storage.saveAcademyLessonNote(user.id, Number(req.params.id), parsed.data.body);
+    res.json({ ok: true });
+  });
 
   // A scored quiz attempt. The client sends picks; the server grades against the stored
   // answers and keeps every attempt. See academyQuizAttempts.

@@ -16,6 +16,7 @@ import { CoachesCornerAsk } from "@/components/coaches-corner-ask";
 import { CoachesCornerDiscussion } from "@/components/coaches-corner-discussion";
 import { CoachesCornerPaths } from "@/components/coaches-corner-paths";
 import { LessonFlashcards } from "@/components/lesson-flashcards";
+import { DebouncedNote } from "@/components/lesson-page-notes";
 import { formatCents } from "@shared/billing-tiers";
 
 /** The Coaches Corner half of GET /api/coach/entitlements. `unlocked` is the same
@@ -59,6 +60,8 @@ type LessonDetail = {
   completed?: boolean;
   sources?: LessonSource[];
   flashcards?: { front: string; back: string }[];
+  /** This coach's own note on the lesson; nobody else reads it. */
+  note?: string;
 };
 
 type QuizAnswerDetail = { id: number; answerText: string; isCorrect: boolean; explanation: string };
@@ -237,6 +240,19 @@ export default function CoachesCorner() {
               <LessonFlashcards cards={selectedLesson.flashcards!} />
             </div>
           )}
+          {/* Private (2026-10-04): no admin screen and no roster screen reads it. */}
+          <DebouncedNote
+            key={selectedLesson.id}
+            initial={selectedLesson.note ?? ""}
+            title="My notes on this lesson"
+            placeholder="How this applies to your program, a cue to try, a question for the discussion board…"
+            savedLine="Saved. Only you can see this."
+            emptyLine="Private to you. No one else, Forge included, reads these."
+            save={async (text) => {
+              await apiRequest("PUT", `/api/coach/academy/lessons/${selectedLesson.id}/note`, { body: text });
+              qc.invalidateQueries({ queryKey: [`/api/coach/academy/tracks/${selectedTrackId}`] });
+            }}
+          />
           <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold">
             <Checkbox
               checked={!!selectedLesson.completed}

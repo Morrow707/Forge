@@ -105,6 +105,7 @@ import {
   academyLessonCompletions,
   academyQuizAttempts,
   academyQuizAttemptAnswers,
+  academyLessonNotes,
   coachesCornerQuestions,
   academyPaths,
   academyPathTracks,
@@ -13962,6 +13963,27 @@ Hard rules, no exceptions:
       if (!best.has(r.trackId)) best.set(r.trackId, { correct: r.correct, total: r.total, passed: r.passed, completedAt: r.completedAt });
     }
     return best;
+  },
+
+  /** The coach's own notes across every lesson, keyed by lesson id. Only ever read for the
+   * coach who wrote them. */
+  async getAcademyLessonNotesForCoach(coachId: number) {
+    const rows = await db.query.academyLessonNotes.findMany({ where: eq(academyLessonNotes.coachId, coachId) });
+    return new Map(rows.map((r) => [r.lessonId, { body: r.body, updatedAt: r.updatedAt }]));
+  },
+
+  /** Saves the coach's note on one lesson; an empty body deletes it. */
+  async saveAcademyLessonNote(coachId: number, lessonId: number, body: string) {
+    const trimmed = body.trim();
+    const where = and(eq(academyLessonNotes.coachId, coachId), eq(academyLessonNotes.lessonId, lessonId));
+    if (!trimmed) {
+      await db.delete(academyLessonNotes).where(where);
+      return;
+    }
+    await db
+      .insert(academyLessonNotes)
+      .values({ coachId, lessonId, body: trimmed })
+      .onConflictDoUpdate({ target: [academyLessonNotes.coachId, academyLessonNotes.lessonId], set: { body: trimmed, updatedAt: new Date() } });
   },
 
   async getAcademyCompletionsForCoach(coachId: number): Promise<Set<number>> {

@@ -1373,6 +1373,16 @@ CREATE TABLE IF NOT EXISTS "coach_discussion_reports" (
 );
 CREATE INDEX IF NOT EXISTS "coach_discussion_reports_open_idx" ON "coach_discussion_reports" ("resolved_at");
 
+-- A coach's private note on a lesson (2026-10-04).
+CREATE TABLE IF NOT EXISTS "academy_lesson_notes" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "lesson_id" integer NOT NULL REFERENCES "academy_lessons"("id") ON DELETE CASCADE,
+  "body" text NOT NULL,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "academy_lesson_notes_coach_lesson_idx" ON "academy_lesson_notes" ("coach_id", "lesson_id");
+
 CREATE TABLE IF NOT EXISTS "academy_quiz_questions" (
   "id" serial PRIMARY KEY,
   "track_id" integer NOT NULL REFERENCES "academy_tracks"("id") ON DELETE CASCADE,
