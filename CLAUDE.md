@@ -659,8 +659,11 @@ questions 12 and 13), and the answers shape everything below.
   on. The Continue row (in-progress tracks, most recently read first, opening at the first
   unread lesson) sits at the top of the library; the certificate wall (every finished track
   and path, dated) sits at the BOTTOM, on purpose.
-- **Read-aloud** (`server/read-aloud.ts`, `client/src/components/read-aloud.tsx`,
-  `shared/read-aloud-text.ts`): every class page and every track lesson has a Listen control.
+- **Read-aloud is BUILT AND SWITCHED OFF** (`READ_ALOUD_ENABLED = false` in
+  `client/src/components/read-aloud.tsx`; Scott, 2026-10-04: "remove the option, we don't know
+  if anyones going to even use it, so once it becomes a need we will add it"). The code stays:
+  `server/read-aloud.ts`, `shared/read-aloud-text.ts`, the routes. With the flag on, every
+  class page and every track lesson has a Listen control.
   With no provider it reads with the device's own voice and SAYS SO (Scott asked for a real
   voice, and the device voice is not one). A natural voice needs `READ_ALOUD_PROVIDER=openai`
   and `OPENAI_API_KEY` on Render, which are Scott's to set; then a page is narrated ONCE, cached

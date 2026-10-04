@@ -10,6 +10,11 @@ import { Pause, Play, Square, Volume2 } from "lucide-react";
  * and played as audio; when it has not, the device's own speech engine reads the same text
  * and the control says so, because the two sound nothing alike and a reader should know
  * which one they are getting. The text is shaped by speakableText either way. */
+/** OFF (Scott, 2026-10-04): "leave everything unable to be read, keep the code in case we add
+ * it later, but remove the option, we don't know if anyone's going to even use it". Flip this
+ * to true and every Listen button comes back; the server routes stay as they are. */
+export const READ_ALOUD_ENABLED = false;
+
 export function ReadAloud({
   text,
   fetchNarration,
@@ -22,6 +27,7 @@ export function ReadAloud({
     queryKey: ["/api/read-aloud/status"],
     queryFn: () => getJson("/api/read-aloud/status"),
     staleTime: 10 * 60 * 1000,
+    enabled: READ_ALOUD_ENABLED,
   });
   const narrated = Boolean(status?.available && fetchNarration);
   const [state, setState] = useState<"idle" | "loading" | "playing" | "paused">("idle");
@@ -91,6 +97,7 @@ export function ReadAloud({
     setState("paused");
   }
 
+  if (!READ_ALOUD_ENABLED) return null;
   if (!narrated && !canSpeak) return null;
 
   return (
