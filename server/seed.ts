@@ -4450,7 +4450,8 @@ async function main() {
           description: chapter.description,
           unlockRule: "immediate" as const,
           unlockThreshold: null,
-          priceCents: chapter.lessonNumber === 2 ? 4999 : null,
+          // No chapter carries a price any more (shared/class-pricing-rule.ts).
+          priceCents: null,
           exercises: (CHAPTER_DRILLS[chapter.lessonNumber] ?? []).map((name, i) => drillEx(name, i)),
           content: chapter.content,
           quizQuestions: chapter.quizQuestions,
@@ -4479,6 +4480,12 @@ async function main() {
   // those exercise ids (see the onDelete: "cascade" FKs on
   // skillSessionLogs.skillProgramDayId/skillProgramExerciseId).
   if (americanHittingClassId != null) {
+    // The one pricing rule (2026-10-04, shared/class-pricing-rule.ts): the $49.99 second
+    // chapter this class shipped with is cleared, once, on the installation that has it.
+    await db
+      .update(classLessons)
+      .set({ priceCents: null })
+      .where(and(eq(classLessons.classId, americanHittingClassId), eq(classLessons.priceCents, 4999)));
     const lessonsWithDrills = await db.query.classLessons.findMany({
       where: eq(classLessons.classId, americanHittingClassId),
       with: {

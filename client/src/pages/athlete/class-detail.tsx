@@ -20,7 +20,7 @@ type LessonProgress = {
   description: string | null;
   priceCents: number | null;
   hasQuiz: boolean;
-  state: "active" | "ready" | "locked_preview" | "locked";
+  state: "active" | "ready" | "locked_preview" | "locked_tier" | "locked";
   skillAssignmentId: number | null;
   purchasedAt: string | null;
   contentCompletedAt: string | null;
@@ -295,6 +295,19 @@ export default function AthleteClassDetail() {
                       Unlock
                       {lesson.priceCents != null && ` — $${(lesson.priceCents / 100).toFixed(2)}`}
                     </Button>
+                  )}
+                  {/* The one pricing rule (shared/class-pricing-rule.ts): chapter one is free,
+                      the rest come with the camera plan. */}
+                  {lesson.state === "locked_tier" && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Lock className="h-3.5 w-3.5 shrink-0" />
+                        Comes with the AI Coach + Video plan
+                      </span>
+                      <Button size="sm" variant="outline" onClick={() => navigate("/athlete/upgrade")}>
+                        See plans
+                      </Button>
+                    </div>
                   )}
                   {lesson.state === "locked" && (
                     <span className="text-xs text-muted-foreground">

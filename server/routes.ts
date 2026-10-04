@@ -1328,10 +1328,19 @@ async function assertAdminOwnsForgeClass(classId: number) {
 // "locked_preview" lessonId 404s exactly like it doesn't exist, so a client
 // can't jump ahead of the progression/payment gate by guessing a later
 // lesson's id.
-async function requireReadableClassLesson(userId: number, classId: number, lessonId: number) {
+// The one pricing rule (shared/class-pricing-rule.ts): an athlete whose plan lacks the camera
+// reads chapter one of a Forge class and nothing after it. A coach's own class is never gated
+// this way; a coached athlete and a Free Agent on AI Coach + Video have the camera.
+async function classTierGated(user: { id: number; email: string; role: string }): Promise<boolean> {
+  if (user.role !== "athlete") return false;
+  return !(await skillsAccessFor(user)).allowed;
+}
+
+async function requireReadableClassLesson(user: { id: number; email: string; role: string }, classId: number, lessonId: number) {
+  const userId = user.id;
   const enrollment = await storage.getClassEnrollmentForAthlete(userId, classId);
   if (!enrollment) return null;
-  const progress = await storage.getClassProgressForAthlete(userId, classId);
+  const progress = await storage.getClassProgressForAthlete(userId, classId, undefined, await classTierGated(user));
   const lesson = progress?.lessons.find((l) => l.id === lessonId);
   if (!lesson || (lesson.state !== "ready" && lesson.state !== "active")) return null;
   return enrollment;
@@ -13057,7 +13066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/athlete/my-classes", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getEnrolledClassesForAthlete(user.id);
+    const list = await storage.getEnrolledClassesForAthlete(user.id, await classTierGated(user));
     res.json(list);
   });
 
@@ -13067,7 +13076,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/athlete/classes", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const user = currentUser(req);
     const list = await storage.getVisibleClassesForFreeAgent(user.id);
-    res.json(list.map((c) => ({ ...c, forYourSport: classCategoryMatchesSport(c.category, user.sport) })));
+    // `fullAccess`: this athlete's plan opens every chapter (shared/class-pricing-rule.ts).
+    const fullAccess = !(await classTierGated(user));
+    res.json(list.map((c) => ({ ...c, forYourSport: classCategoryMatchesSport(c.category, user.sport), fullAccess })));
   });
 
   // The bottom of the Classes page (2026-10-04): the streak, every finished class, and
@@ -13076,7 +13087,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const [streak, enrolled, deck] = await Promise.all([
       storage.getLearningStreakForAthlete(user.id),
-      storage.getEnrolledClassesForAthlete(user.id),
+      storage.getEnrolledClassesForAthlete(user.id, await classTierGated(user)),
       storage.getFlashcardDeckForAthlete(user.id),
     ]);
     res.json({
@@ -13109,10 +13120,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // This is the one place an automatic (time/reps/sessions) unlock
       // actually gets detected, since nothing runs on a schedule -- the
       // athlete opening their own progress page IS the trigger.
-      const newlyUnlocked = await storage.recomputeClassProgress(enrollment.id);
+      const newlyUnlocked = await storage.recomputeClassProgress(enrollment.id, undefined, await classTierGated(user));
       await notifyNewlyUnlockedLessons(newlyUnlocked);
     }
-    const progress = await storage.getClassProgressForAthlete(user.id, id);
+    const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classTierGated(user));
     if (!progress || (!enrollment && !progress.class.isForgeOfficial)) {
       return res.status(404).json({ message: "Class not found" });
     }
@@ -13133,13 +13144,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // on the class roster; nobody else does.
   app.get("/api/athlete/classes/:id/lessons/:lessonId/notes", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
-    const enrollment = await requireReadableClassLesson(user.id, Number(req.params.id), Number(req.params.lessonId));
+    const enrollment = await requireReadableClassLesson(user, Number(req.params.id), Number(req.params.lessonId));
     if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
     res.json({ notes: await storage.getClassLessonNotes(enrollment.id, Number(req.params.lessonId)) });
   });
   app.put("/api/athlete/classes/:id/lessons/:lessonId/notes", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
-    const enrollment = await requireReadableClassLesson(user.id, Number(req.params.id), Number(req.params.lessonId));
+    const enrollment = await requireReadableClassLesson(user, Number(req.params.id), Number(req.params.lessonId));
     if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
     const parsed = z.object({ pageIndex: z.number().int().min(0).max(200), body: z.string().max(4000) }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -13175,6 +13186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.id,
         id,
         parsed.data.startDate,
+        await classTierGated(user),
       );
       await notifyNewlyUnlockedLessons(newlyUnlocked);
       res.status(201).json(enrollment);
@@ -13217,7 +13229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = currentUser(req);
       const id = Number(req.params.id);
       const lessonId = Number(req.params.lessonId);
-      const enrollment = await requireReadableClassLesson(user.id, id, lessonId);
+      const enrollment = await requireReadableClassLesson(user, id, lessonId);
       if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
       const content = await storage.getClassLessonContent(lessonId);
       if (!content) return res.status(404).json({ message: "Lesson not found" });
@@ -13232,7 +13244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = currentUser(req);
       const id = Number(req.params.id);
       const lessonId = Number(req.params.lessonId);
-      const enrollment = await requireReadableClassLesson(user.id, id, lessonId);
+      const enrollment = await requireReadableClassLesson(user, id, lessonId);
       if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
       const { notifyCoach } = await storage.markClassLessonContentCompleted(enrollment.id, lessonId);
       if (notifyCoach) {
@@ -13256,7 +13268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = currentUser(req);
       const id = Number(req.params.id);
       const lessonId = Number(req.params.lessonId);
-      const enrollment = await requireReadableClassLesson(user.id, id, lessonId);
+      const enrollment = await requireReadableClassLesson(user, id, lessonId);
       if (!enrollment) return res.status(404).json({ message: "Lesson not found" });
       // One submission per question, of the question's own kind (shared/class-quiz-grading.ts).
       const schema = z.object({

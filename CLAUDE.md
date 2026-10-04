@@ -634,6 +634,20 @@ questions 12 and 13), and the answers shape everything below.
 - **No certification mark on any surface.** "CSCS-aligned" is gone from the upsell card and
   `client/src/lib/no-certification-marks.test.ts` refuses CSCS and NSCA in client pages and
   components. A coach's own credential in their bio is theirs to state.
+- **Added 2026-10-04, Scott's list ("Yes 1 ... yes 15"):** every track lesson can carry
+  flashcards (`academyLessons.flashcards`, no on/off switch, an empty list is off) and the
+  track quiz takes the same four shapes as the class quizzes (`academyQuizQuestions.questionType`
+  / `payload`, graded by `shared/class-quiz-grading.ts`; the key never leaves the server before
+  grading, and the old `picks` body still grades). The quiz and flashcard editors live in
+  `client/src/components/lesson-quiz-editor.tsx` and BOTH builders draw them. A coach's private
+  note per lesson (`academy_lesson_notes`, nobody else's route reads it). "Flag this lesson"
+  needs a reason of at least ten characters (`academy_lesson_flags`; Scott: "flagging is
+  useless if they can't say why"), worked on the admin analytics page. Every track shows its
+  release date and wears New for thirty days; the digest names new tracks with the date.
+  "Apply this to my roster" at the end of a track seeds Ask the library with the roster toggle
+  on. The Continue row (in-progress tracks, most recently read first, opening at the first
+  unread lesson) sits at the top of the library; the certificate wall (every finished track
+  and path, dated) sits at the BOTTOM, on purpose.
 
 Later the same day, Scott: "what else can we build/add for the coaches corner?" and then "build
 it all in order" less office hours, session plans, printable handouts, program templates and
@@ -715,12 +729,33 @@ then "Build it all in order and what you suggested". Coaches already create clas
   drills by NAME from the skill library (the seed throws on a missing one), six chapters each
   with pages, a Key Points page, cards and a mixed quiz. `server/seed-forge-classes.ts` creates
   each once by name and re-syncs pages, cards, level and quiz every deploy; the drill tree is
-  left alone because session logs hang off it. Seven classes (Scott read the first two,
-  2026-10-04: "Those two classes look good, build the rest"): Pitching, Basketball shooting,
-  Football receiving, Soccer attacking, Volleyball, Wrestling, Track sprinting. `classes.test.ts`
-  pins the shape, the drill names against seed.ts, every question against the input schema,
-  that no two pages share a twelve-word run, and no camera accuracy claim. Wrestling's top
-  chapter defers every turn to the coach on the mat; keep that line.
+  left alone because session logs hang off it. Eight classes (Scott read the first two,
+  2026-10-04: "Those two classes look good, build the rest"): Fundamentals for Every Athlete
+  (first in the catalog, middle-school level, category "Fundamentals" and so no sport's),
+  Pitching, Basketball shooting, Football receiving, Soccer attacking, Volleyball, Wrestling,
+  Track sprinting. `classes.test.ts` pins the shape, the drill names against seed.ts, every
+  question against the input schema, that no two pages share a twelve-word run, and no camera
+  accuracy claim. Wrestling's top chapter defers every turn to the coach on the mat; keep that
+  line. The Fundamentals camera chapter says exactly what `camera-accuracy-copy.ts` says and
+  never where to stand (Rule #1); keep both.
+- **ONE PRICING RULE FOR EVERY FORGE CLASS** (2026-10-04, Scott: "yes 14"):
+  `shared/class-pricing-rule.ts`. Chapter one is free to any athlete; the rest come with the
+  plan that has the camera, which is the skills entitlement (`skillsAccessFor`): a coached
+  athlete has it through their coach, a Free Agent through AI Coach + Video. No seeded chapter
+  carries a price any more (the hitting class's $49.99 chapter two is cleared on deploy); the
+  per-lesson purchase machinery stays, unused. The gate is `classTierGated` in routes.ts, passed
+  into `getClassProgressForAthlete`, `recomputeClassProgress` and the enrol path as `tierGated`,
+  so a gated chapter is state `locked_tier`, unreadable through the content route, and never
+  activated onto the calendar. `server/class-pricing-rule.itest.ts` proves it. Consequence
+  worth saying out loud: with `BILLING_LIVE` off (beta), a Free Agent who is not comped has no
+  skills access, so they read chapter one only, exactly as the skill sessions are gated today.
+- **The Classes landing and the catalog** (2026-10-04): the athlete's sport first with a "For
+  your sport" label (`shared/class-sport-match.ts`, decided on the server as `forYourSport`);
+  Continue on every enrolled class opens the reader at the last page read (the page index is a
+  per-browser convenience in localStorage, `startAt: "resume"`) or at the quiz that is left
+  (`my-classes.next`); the review deck at `/athlete/classes/review` deals every card from
+  every lesson read, across classes, shuffled on the server; the streak and every certificate
+  sit at the BOTTOM of the page on purpose (Scott: "yes 11 at the bottom").
 - **The hitting class's eight page videos are still YouTube SEARCH links.** YouTube is not
   reachable from the sandbox, so no clip id could be verified, and an unverified id is an
   invented screen (Rule #3). Scott picks the clips; the slot for them is `videoUrl` on the page.

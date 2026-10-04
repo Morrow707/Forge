@@ -23,6 +23,7 @@ import { GraduationCap, ListOrdered, ArrowRight, Search, Trophy, Lock, Unlock, P
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { todayIso } from "@/lib/local-date";
+import { CLASS_PRICING_LINE } from "@shared/class-pricing-rule";
 
 type EnrolledClass = {
   classId: number;
@@ -61,6 +62,8 @@ type BrowsableClass = {
   unlocked?: boolean;
   /** The class's category held against the athlete's sport, on the server. */
   forYourSport?: boolean;
+  /** This athlete's plan opens every chapter (shared/class-pricing-rule.ts). */
+  fullAccess?: boolean;
 };
 
 type ClassSort = "unlocked" | "name" | "newest";
@@ -252,9 +255,10 @@ export default function AthleteClasses() {
 
         {!coachesLoading && isFreeAgent && (
           <div>
-            <h2 className="mb-3 font-display text-lg font-bold uppercase tracking-wide text-muted-foreground">
+            <h2 className="mb-1 font-display text-lg font-bold uppercase tracking-wide text-muted-foreground">
               Browse Forge Classes
             </h2>
+            <p className="mb-3 text-sm text-muted-foreground">{CLASS_PRICING_LINE}</p>
             {catalogFailed && (
               <ReadFailed
                 what="the Forge Classes catalog"
@@ -345,10 +349,14 @@ export default function AthleteClasses() {
                   <CardContent className="flex flex-1 flex-col gap-3 p-5">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
-                      {c.unlocked && (
+                      {c.fullAccess ? (
                         <Badge variant="success" className="shrink-0 gap-1 text-[10px]">
                           <Unlock className="h-2.5 w-2.5" />
-                          UNLOCKED
+                          FULL ACCESS
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="shrink-0 text-[10px]">
+                          CHAPTER 1 FREE
                         </Badge>
                       )}
                     </div>

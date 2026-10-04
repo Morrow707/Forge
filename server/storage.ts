@@ -368,6 +368,7 @@ import type { RosterGroup } from "@shared/roster-groups";
 import { findVerbatimLesson } from "./academy-draft-guard";
 import { academyQuizPassed } from "@shared/academy-quiz";
 import { gradeQuestion, athleteFacingPayload, type QuizSubmission, type QuizQuestionType } from "@shared/class-quiz-grading";
+import { chapterNeedsCameraTier } from "@shared/class-pricing-rule";
 import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-reading-level";
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
@@ -12375,7 +12376,7 @@ Hard rules, no exceptions:
   // them -- their own coach (the common case for a coached athlete) or
   // themself (a Free Agent's self-enrollment into a Forge Class). Not
   // gated to Free Agents at all, unlike getVisibleClassesForFreeAgent.
-  async getEnrolledClassesForAthlete(athleteId: number) {
+  async getEnrolledClassesForAthlete(athleteId: number, tierGated = false) {
     const rows = await db.query.classEnrollments.findMany({
       where: eq(classEnrollments.athleteId, athleteId),
       with: { class: { with: { lessons: true } } },
@@ -12383,7 +12384,7 @@ Hard rules, no exceptions:
     });
     const results = [];
     for (const enrollment of rows) {
-      await this.recomputeClassProgress(enrollment.id);
+      await this.recomputeClassProgress(enrollment.id, undefined, tierGated);
       const progressRows = await db.query.classLessonProgress.findMany({
         where: eq(classLessonProgress.enrollmentId, enrollment.id),
       });
@@ -12445,7 +12446,7 @@ Hard rules, no exceptions:
     return { satisfied: !!prereqEnrollment?.completedAt, prerequisiteName: prereq.name };
   },
 
-  async enrollAthleteInClass(coachId: number, classId: number, athleteId: number, startDate: string) {
+  async enrollAthleteInClass(coachId: number, classId: number, athleteId: number, startDate: string, tierGated = false) {
     // onConflictDoNothing against the (classId, athleteId) unique index,
     // not a check-then-insert -- see that index's own comment for the race
     // this used to allow.
@@ -12458,14 +12459,15 @@ Hard rules, no exceptions:
       const existing = await this.getClassEnrollmentForAthlete(athleteId, classId);
       return { enrollment: existing!, newlyUnlocked: [] };
     }
-    const newlyUnlocked = await this.recomputeClassProgress(enrollment.id);
+    const newlyUnlocked = await this.recomputeClassProgress(enrollment.id, undefined, tierGated);
     return { enrollment, newlyUnlocked };
   },
 
   // Only a Forge-official class can ever be self-enrolled -- a coach's own
-  // Class has no self-service path, same as skill programs/programs.
-  async enrollSelfInClass(athleteId: number, classId: number, startDate: string) {
-    return this.enrollAthleteInClass(athleteId, classId, athleteId, startDate);
+  // Class has no self-service path, same as skill programs/programs. `tierGated` is the
+  // one pricing rule (shared/class-pricing-rule.ts), decided by the route.
+  async enrollSelfInClass(athleteId: number, classId: number, startDate: string, tierGated = false) {
+    return this.enrollAthleteInClass(athleteId, classId, athleteId, startDate, tierGated);
   },
 
   // Admin/ops escape hatch -- enrolls (if not already) and fully activates
@@ -12662,6 +12664,10 @@ Hard rules, no exceptions:
       lessonsWithQuiz: Set<number>;
       coachSettings: typeof classCoachSettings.$inferSelect | undefined;
     },
+    // True for a Free Agent whose plan lacks the camera (shared/class-pricing-rule.ts): no
+    // chapter after the first is activated for them, so nothing lands on their calendar that
+    // they cannot open. The routes decide it (skillsAccessFor); storage only honours it.
+    tierGated = false,
   ): Promise<
     Array<{ lessonId: number; lessonNumber: number; title: string; classId: number; className: string; athleteId: number }>
   > {
@@ -12722,6 +12728,7 @@ Hard rules, no exceptions:
         (previousProgress != null &&
           (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
       if (!reachable) break;
+      if (tierGated && chapterNeedsCameraTier(lesson.lessonNumber, cls.isForgeOfficial)) break;
 
       // A priced lesson is an INDIVIDUAL purchase. Every athlete buys it for
       // themselves; a coach buying it does not grant it to their roster, and
@@ -12804,6 +12811,9 @@ Hard rules, no exceptions:
       coachSettings: typeof classCoachSettings.$inferSelect | undefined;
       enrollment: typeof classEnrollments.$inferSelect | undefined;
     },
+    // See recomputeClassProgress: a Free Agent without the camera plan sees every chapter
+    // after the first as "locked_tier".
+    tierGated = false,
   ) {
     const cls = ctx?.cls ?? (await db.query.classes.findFirst({ where: eq(classes.id, classId) }));
     if (!cls) return null;
@@ -12846,6 +12856,7 @@ Hard rules, no exceptions:
     await this.recomputeClassProgress(
       enrollment.id,
       ctx && { enrollment, cls, lessons, lessonsWithQuiz, coachSettings: ctx.coachSettings },
+      tierGated,
     );
     const progressRows = await db.query.classLessonProgress.findMany({
       where: eq(classLessonProgress.enrollmentId, enrollment.id),
@@ -12864,7 +12875,7 @@ Hard rules, no exceptions:
       description: string | null;
       priceCents: number | null;
       hasQuiz: boolean;
-      state: "active" | "ready" | "locked_preview" | "locked";
+      state: "active" | "ready" | "locked_preview" | "locked_tier" | "locked";
       skillAssignmentId: number | null;
       purchasedAt: Date | null;
       contentCompletedAt: Date | null;
@@ -12876,9 +12887,13 @@ Hard rules, no exceptions:
 
     for (const lesson of lessons) {
       const progress = progressByLesson.get(lesson.id) ?? null;
-      let state: "active" | "ready" | "locked_preview" | "locked";
+      let state: "active" | "ready" | "locked_preview" | "locked_tier" | "locked";
 
-      if (progress?.skillAssignmentId) {
+      if (tierGated && chapterNeedsCameraTier(lesson.lessonNumber, cls.isForgeOfficial)) {
+        // The one pricing rule (shared/class-pricing-rule.ts), checked before anything else so
+        // a chapter activated before the rule, or before a downgrade, is gated the same way.
+        state = "locked_tier";
+      } else if (progress?.skillAssignmentId) {
         state = "active";
       } else if (frontierPassed) {
         state = "locked";
