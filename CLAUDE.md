@@ -605,13 +605,14 @@ questions 12 and 13), and the answers shape everything below.
   the publisher's EULA forbids ingestion; without an express licence, no retrieval over the book
   reaches a subscriber. `knowledge_sources.derivedContentLicensed` is the gate: false by default,
   set by an admin only with the licence written into `licenceNote`, and
-  `searchKnowledgePassages({ licensedOnly: true })` is what EVERY retrieval reads since
-  2026-10-04 (Scott, closing question 12: "thats ok for the other stuff, remove it"): the chat
-  coach, both program-builder paths, nutrition, readiness, the class drafter and Coaches
-  Corner. `server/assistants-read-licensed-only.test.ts` scans storage.ts for it. The admin's
-  own library search is the one unfiltered read, so an admin can see what a source holds before
-  licensing or deleting it. The book itself is still a row in the Knowledge Library until Scott
-  deletes it on `/admin/knowledge-library`; inert either way.
+  `searchKnowledgePassages({ licensedOnly: true })` is what the Coaches Corner draft and the
+  citation pass read. **The AI assistants READ THE WHOLE LIBRARY, book included, by Scott's
+  decision** (2026-10-04, reverting a same-day change that had narrowed them to licensed
+  sources: "i want everything to read the book, we will be uploading others materials, and as
+  long as we are summarizing we are fine"). The chat coach, both program-builder paths,
+  nutrition, readiness and the class drafter retrieve across every source. Counsel's position
+  (question 12) is recorded and was put to him; this is his call and it stands until he changes
+  it. Do not re-narrow the assistants on counsel's note alone.
 - **Paraphrasing the book is NOT the loophole** (counsel, 2026-10-04, question 14, on Scott's
   "there is no plagiarism for paraphrase"): a chapter-by-chapter paraphrase sold as a course
   copies the book's selection and arrangement and is market substitution. What IS allowed is
