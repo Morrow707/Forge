@@ -19,6 +19,7 @@ import {
 import { eq, isNull, and, asc } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
+import { seedForgeClasses } from "./seed-forge-classes";
 import { COACHES_CORNER_TRACKS_2026_10, COACHES_CORNER_PATHS_2026_10 } from "./seed-data/coaches-corner";
 // BIOMETRIC_WAIVER_DRAFT is deliberately not imported: the seed never writes it. A fresh
 // install gets the real document straight from nextBiometricRelease(null), and an install still
@@ -4552,6 +4553,10 @@ async function main() {
       }
     }
   }
+
+  // The repo-written Forge classes (server/seed-data/forge-classes): created once by name,
+  // content re-synced every deploy. Same owner as the hitting class.
+  await seedForgeClasses((scott ?? demoAdmin).id);
 
   // Demo Free Agent gets full, ungated access to the American Hitting
   // class -- every lesson active on their calendar, no payment/content/

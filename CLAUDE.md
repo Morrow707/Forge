@@ -556,6 +556,11 @@ can install. Delete entries as a `beta` ships them.
   opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
 - Build **553** (`48505970`, #167 + #168): the 720p upload copy encoded during the recording, the
   sensor-fitted concentric window, the jump-decision and live-fallback diagnostics.
+- **Queued, not yet in a build:** the athlete classes work of 2026-10-04 (flashcards, the
+  four quiz shapes with drag-and-drop ordering and matching, per-page notes, the reader's
+  progress bar and key points, the drill-day clip, the streak and the class certificate, the
+  reading level). Server halves (attempts, insights, notes, the two new classes) ship on
+  Render.
 - **Queued, not yet in a build:** Coaches Corner (Ask the library with the roster toggle and
   "this didn't answer my question", scored quizzes and the certificate pages, Further reading
   under lessons, learning paths, the peer discussion board, the admin builder's library draft and
@@ -652,6 +657,58 @@ lesson video. What landed:
   ALTER referenced a table created later in the file and only a fresh `db:reconcile` caught it
   (the integration harness runs the file on an empty database). Run it against a throwaway
   database before pushing any migration edit, as the Tests section says.
+
+## Classes for athletes: flashcards, four quiz shapes, notes, the coach's view, two new classes
+
+Added 2026-10-04. Scott: "is there a way for us to make ai flashcards? Or have the coach set the
+flashcards? Can we turn that on/off? ... Can we add like a drag and drop quiz? Or fill in the
+blanks? ... we only have the one lesson, let's add some more, we cater to multiple sports" and
+then "Build it all in order and what you suggested". Coaches already create classes
+(`POST /api/coach/classes`); Forge-official classes stay admin-only. Nothing changed there.
+
+- **Flashcards are per lesson and off by default** (`classLessons.flashcardsEnabled`,
+  `flashcards`). Typed in the builder or drafted from the lesson's pages
+  (`POST /api/classes/lesson-flashcards/draft`). The reader runs them between the reading and
+  the quiz; a lesson with them off serves none, and the cards stay stored.
+- **Four quiz shapes, one grader.** `shared/class-quiz-grading.ts` grades multiple choice,
+  fill-in-the-blank (`___` in the text, `payload.accepted`, compared after normalising), ordering
+  (`payload.items`) and matching (`payload.pairs`) on the server AND in the builder's preview.
+  `athleteFacingPayload` shuffles ordering items and matching rights ON THE SERVER, so the wire
+  order never carries the key. The key comes back only on the graded result. "Draft quiz from
+  this lesson" (`POST /api/classes/lesson-quiz/draft`) mixes the shapes.
+- **Every quiz attempt is kept** (`class_lesson_quiz_attempts`, one right/wrong per question,
+  never the athlete's text). `GET /api/coach/classes/:id/insights` is the coach's view: which
+  questions each athlete missed, which the roster misses most, and each athlete's notes.
+  Scoped exactly as the roster is. Admin has no twin; the builder shows it under
+  `/api/coach` only.
+- **Notes are the athlete's, per page** (`class_lesson_notes`), written from the reader, read
+  by the athlete and by the coach who enrolled them, never by another athlete. The panel says
+  so. An empty save deletes the row.
+- **A class carries a reading level** (`classes.readingLevel`, `shared/class-reading-level.ts`)
+  that every AI draft for it reads (pages, cards, quiz) and the catalog card shows. Null reads
+  as high school.
+- **The reader** shows a progress bar and a minutes estimate (`client/src/lib/lesson-reading.ts`,
+  200 words a minute), draws a "Key points:" block as a boxed summary and "> " lines as a
+  pull-quote (syntax in the builder's hint and the AI drafter's prompt), and sizes every photo
+  the same. Every hitting chapter now ends on a Key Points page.
+- **A drill can carry its own clip** (`skill_program_exercises.videoUrl`, set in the class
+  builder) which the drill day plays inline ahead of the drill's library video.
+  `client/src/lib/video-embed.ts` is the one embed helper, shared with the reader.
+- **The learning streak** (`shared/learning-streak.ts`): consecutive UTC days with a lesson read
+  or a quiz sat, in any class, on the athlete's progress payload. **The class certificate**
+  (`/athlete/classes/:id/certificate`) issues only once the enrollment is complete, names Forge
+  and no certifying body.
+- **Repo-written classes** live in `server/seed-data/forge-classes/` (`ForgeClassContent`):
+  drills by NAME from the skill library (the seed throws on a missing one), six chapters each
+  with pages, a Key Points page, cards and a mixed quiz. `server/seed-forge-classes.ts` creates
+  each once by name and re-syncs pages, cards, level and quiz every deploy; the drill tree is
+  left alone because session logs hang off it. Two written so far for Scott to read: Pitching
+  and Basketball shooting. `classes.test.ts` pins the shape, the drill names against seed.ts,
+  every question against the input schema, and no camera accuracy claim. Football, soccer,
+  volleyball, wrestling and track are next, in the same shape, once Scott has read these two.
+- **The hitting class's eight page videos are still YouTube SEARCH links.** YouTube is not
+  reachable from the sandbox, so no clip id could be verified, and an unverified id is an
+  invented screen (Rule #3). Scott picks the clips; the slot for them is `videoUrl` on the page.
 
 ## Full Personalization: the Branding page, and what it reaches
 
