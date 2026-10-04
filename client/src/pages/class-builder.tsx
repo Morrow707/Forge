@@ -923,6 +923,13 @@ export function ClassBuilderPage({
           </CardContent>
         </Card>
 
+        {/* The one pricing rule (shared/class-pricing-rule.ts), said where the chapters are
+            written so nobody is surprised by it after publishing. */}
+        <p className="mb-4 rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          {apiBase === "/api/coach"
+            ? "Your roster reads every chapter of your own classes. If you enroll athletes in a Forge class, chapter 1 is free to them and the rest comes with the camera plan, which a coached athlete already has."
+            : "Every Forge class: chapter 1 is free to any athlete; every chapter after it comes with the plan that has the camera. Lead with the chapter you want someone to read before they pay."}
+        </p>
         {lessons.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
             <GraduationCap className="h-8 w-8" />

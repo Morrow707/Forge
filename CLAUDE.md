@@ -761,7 +761,9 @@ then "Build it all in order and what you suggested". Coaches already create clas
   accuracy claim. Wrestling's top chapter defers every turn to the coach on the mat; keep that
   line. The Fundamentals camera chapter says exactly what `camera-accuracy-copy.ts` says and
   never where to stand (Rule #1); keep both.
-- **ONE PRICING RULE FOR EVERY FORGE CLASS** (2026-10-04, Scott: "yes 14"):
+- **ONE PRICING RULE FOR EVERY FORGE CLASS** (2026-10-04, Scott: "yes 14", confirmed the same
+  evening after seeing the counts: "sure keep it ... all new classes first chapter is free".
+  The class builder says so above the lessons, for admins and for coaches):
   `shared/class-pricing-rule.ts`. Chapter one is free to any athlete; the rest come with the
   plan that has the camera, which is the skills entitlement (`skillsAccessFor`): a coached
   athlete has it through their coach, a Free Agent through AI Coach + Video. No seeded chapter
