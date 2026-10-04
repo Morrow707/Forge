@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,20 @@ type Turn = { role: "user" | "assistant"; content: string; citations?: Citation[
  * each answer naming the lessons it drew on so they can be opened. Nothing outside Forge is
  * read (docs/legal-open-questions.md, question 12). The thread lives in this component and
  * nowhere else. */
-export function CoachesCornerAsk({ onOpenLesson }: { onOpenLesson: (trackId: number, lessonId: number) => void }) {
+export function CoachesCornerAsk({
+  onOpenLesson,
+  seed,
+}: {
+  onOpenLesson: (trackId: number, lessonId: number) => void;
+  /** "Apply this to my roster" at the end of a track (2026-10-04): the first question is asked
+   * on mount, with the roster toggle on. The button that mounts this is the coach's intent. */
+  seed?: { question: string; includeRoster: boolean };
+}) {
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   // Opt in per session: the server sends aggregates about the roster (count, sports,
   // positions, ages, teams), never a name, so the answer can be about this program.
-  const [includeRoster, setIncludeRoster] = useState(false);
+  const [includeRoster, setIncludeRoster] = useState(seed?.includeRoster ?? false);
 
   const ask = useMutation({
     mutationFn: async (q: string) => {
@@ -62,6 +70,15 @@ export function CoachesCornerAsk({ onOpenLesson }: { onOpenLesson: (trackId: num
     if (q.length < 3 || ask.isPending) return;
     ask.mutate(q);
   }
+
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seed && !seeded.current) {
+      seeded.current = true;
+      ask.mutate(seed.question);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Card className="mb-6">

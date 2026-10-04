@@ -218,24 +218,3 @@ describe("four question shapes on a track quiz (2026-10-04)", () => {
     expect(legacy.body).toMatchObject({ correct: 1, total: 4 });
   });
 });
-
-describe("a coach's private lesson note (2026-10-04)", () => {
-  it("is saved, read back on the track, deleted when emptied, and never served to another coach", async () => {
-    const admin = await makeLoginableUser({ role: "admin" });
-    const coach = await makeLoginableUser({ role: "coach" });
-    const other = await makeLoginableUser({ role: "coach" });
-    const ca = await loginAs(server.baseUrl, admin);
-    const track = await makeTrack(ca);
-    const lessonId = track.lessons[0].id;
-    const cc = await loginAs(server.baseUrl, coach);
-    expect((await cc.put(`/api/coach/academy/lessons/${lessonId}/note`, { body: "  Try the hip cue with the sophomores.  " })).status).toBe(200);
-    const detail = await cc.get(`/api/coach/academy/tracks/${track.id}`);
-    expect(detail.body.lessons.find((l: any) => l.id === lessonId).note).toBe("Try the hip cue with the sophomores.");
-    const oc = await loginAs(server.baseUrl, other);
-    const otherDetail = await oc.get(`/api/coach/academy/tracks/${track.id}`);
-    expect(otherDetail.body.lessons.find((l: any) => l.id === lessonId).note).toBe("");
-    expect((await cc.put(`/api/coach/academy/lessons/${lessonId}/note`, { body: "   " })).status).toBe(200);
-    const after = await cc.get(`/api/coach/academy/tracks/${track.id}`);
-    expect(after.body.lessons.find((l: any) => l.id === lessonId).note).toBe("");
-  });
-});

@@ -106,6 +106,7 @@ import {
   academyQuizAttempts,
   academyQuizAttemptAnswers,
   academyLessonNotes,
+  academyLessonFlags,
   coachesCornerQuestions,
   academyPaths,
   academyPathTracks,
@@ -13984,6 +13985,44 @@ Hard rules, no exceptions:
       .insert(academyLessonNotes)
       .values({ coachId, lessonId, body: trimmed })
       .onConflictDoUpdate({ target: [academyLessonNotes.coachId, academyLessonNotes.lessonId], set: { body: trimmed, updatedAt: new Date() } });
+  },
+
+  /** When the coach read each lesson, keyed by lesson id: what orders the Continue row and
+   * dates the certificate wall. */
+  async getAcademyCompletionDatesForCoach(coachId: number): Promise<Map<number, Date>> {
+    const rows = await db.query.academyLessonCompletions.findMany({
+      where: eq(academyLessonCompletions.coachId, coachId),
+      columns: { lessonId: true, completedAt: true },
+    });
+    return new Map(rows.map((r) => [r.lessonId, r.completedAt]));
+  },
+
+  async flagAcademyLesson(coachId: number, lessonId: number, reason: string) {
+    const lesson = await db.query.academyLessons.findFirst({ where: eq(academyLessons.id, lessonId), columns: { id: true } });
+    if (!lesson) return null;
+    const [row] = await db.insert(academyLessonFlags).values({ coachId, lessonId, reason }).returning();
+    return row;
+  },
+  /** Open flags with the lesson and track they point at. The coach is not in the result. */
+  async listOpenAcademyLessonFlags() {
+    const rows = await db.query.academyLessonFlags.findMany({
+      where: isNull(academyLessonFlags.resolvedAt),
+      orderBy: desc(academyLessonFlags.createdAt),
+      limit: 200,
+    });
+    if (rows.length === 0) return [];
+    const tracks = await this.getAllAcademyTracks();
+    const lessonInfo = new Map<number, { trackId: number; trackTitle: string; lessonNumber: number; lessonTitle: string }>();
+    for (const t of tracks) for (const l of t.lessons) lessonInfo.set(l.id, { trackId: t.id, trackTitle: t.title, lessonNumber: l.lessonNumber, lessonTitle: l.title });
+    return rows.map((r) => ({ id: r.id, lessonId: r.lessonId, reason: r.reason, createdAt: r.createdAt, ...(lessonInfo.get(r.lessonId) ?? { trackId: null, trackTitle: "(track no longer exists)", lessonNumber: null, lessonTitle: "(lesson no longer exists)" }) }));
+  },
+  async resolveAcademyLessonFlag(id: number, adminNote: string | null) {
+    const [row] = await db
+      .update(academyLessonFlags)
+      .set({ resolvedAt: new Date(), adminNote })
+      .where(and(eq(academyLessonFlags.id, id), isNull(academyLessonFlags.resolvedAt)))
+      .returning({ id: academyLessonFlags.id });
+    return Boolean(row);
   },
 
   async getAcademyCompletionsForCoach(coachId: number): Promise<Set<number>> {

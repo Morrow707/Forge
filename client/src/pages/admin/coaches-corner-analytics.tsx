@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ReadFailed } from "@/components/read-failed";
+import { Link } from "wouter";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Check } from "lucide-react";
@@ -27,6 +28,7 @@ type Analytics = {
   openReports: number;
 };
 type CoachQuestion = { id: number; question: string; answerGiven: string | null; createdAt: string };
+type LessonFlag = { id: number; lessonId: number; reason: string; createdAt: string; trackId: number | null; trackTitle: string; lessonNumber: number | null; lessonTitle: string };
 
 /** Completion analytics and the coach-submitted questions. Counts only; no coach is named.
  * A question most coaches miss is a bad question or a lesson that did not teach it. */
@@ -34,6 +36,14 @@ export default function AdminCoachesCornerAnalytics() {
   const qc = useQueryClient();
   const a = useQuery<Analytics>({ queryKey: ["/api/admin/coaches-corner/analytics"], queryFn: () => getJson("/api/admin/coaches-corner/analytics") });
   const q = useQuery<CoachQuestion[]>({ queryKey: ["/api/admin/coaches-corner/questions"], queryFn: () => getJson("/api/admin/coaches-corner/questions") });
+  const flags = useQuery<LessonFlag[]>({ queryKey: ["/api/admin/coaches-corner/lesson-flags"], queryFn: () => getJson("/api/admin/coaches-corner/lesson-flags") });
+  const resolveFlag = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("POST", `/api/admin/coaches-corner/lesson-flags/${id}/resolve`, {});
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/coaches-corner/lesson-flags"] }),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't resolve"),
+  });
   const resolve = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest("POST", `/api/admin/coaches-corner/questions/${id}/resolve`, {});
@@ -122,6 +132,47 @@ export default function AdminCoachesCornerAnalytics() {
                   {a.data.hardestQuestions.map((h) => (
                     <li key={h.questionId} className="text-sm">
                       <span className="font-semibold">{pct(h.missed, h.answered)} missed</span> ({h.answered} answers), {h.trackTitle}: {h.questionText}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Flagged lessons</CardTitle>
+              <CardDescription>A coach said a lesson is wrong, out of date or unclear, and why. Fix the lesson in the builder, then mark it done.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {flags.isError ? (
+                <ReadFailed what="the flags" onRetry={() => void flags.refetch()} />
+              ) : (flags.data ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nothing flagged.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {flags.data!.map((f) => (
+                    <li key={f.id} className="rounded-md border border-border p-3">
+                      <p className="text-sm font-semibold">
+                        {f.trackTitle}
+                        {f.lessonNumber != null ? `, ${f.lessonNumber}. ` : ": "}
+                        {f.lessonTitle}
+                      </p>
+                      <p className="mt-1 text-sm">{f.reason}</p>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(f.createdAt), { addSuffix: true })}</span>
+                        <div className="flex gap-2">
+                          {f.trackId != null && (
+                            <Button asChild size="sm" variant="ghost">
+                              <Link href={`/admin/academy-tracks/${f.trackId}`}>Open in builder</Link>
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => resolveFlag.mutate(f.id)} disabled={resolveFlag.isPending}>
+                            <Check className="h-4 w-4" />
+                            Done
+                          </Button>
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>

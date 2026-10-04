@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle, Unlock, Award } from "lucide-react";
+import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle, Unlock, Award, Flag, Users, Play } from "lucide-react";
+import { format, differenceInDays } from "date-fns";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CoachesCornerCertificates } from "@/components/coaches-corner-certificates";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
@@ -43,7 +47,14 @@ type TrackSummary = {
   quizQuestionCount?: number;
   bestAttempt?: QuizAttemptSummary | null;
   completed?: boolean;
+  /** When the track was released; what tells a coach new content has arrived. */
+  releasedAt?: string;
+  lastReadAt?: string | null;
+  completedAt?: string | null;
 };
+
+/** A track released in the last thirty days wears a New badge. */
+const NEW_TRACK_DAYS = 30;
 
 type LessonSource = {
   sourceTitle: string;
@@ -93,6 +104,12 @@ export default function CoachesCorner() {
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [sort, setSort] = useState<TrackSort>("unlocked");
   const [view, setView] = useState<"library" | "discussion">("library");
+  // "Continue" opens a track at its first unread lesson once the detail arrives.
+  const [openFirstUnread, setOpenFirstUnread] = useState(false);
+  // "Apply this to my roster" at the end of a track mounts the library chat, seeded.
+  const [applyTrackId, setApplyTrackId] = useState<number | null>(null);
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
 
   const { data: tracks = [], isLoading, isError, refetch } = useQuery<TrackSummary[]>({
     queryKey: ["/api/coach/academy/tracks"],
@@ -143,6 +160,25 @@ export default function CoachesCorner() {
     onError: (err: ApiError) => {
       toast.error(err.message || "Could not update lesson");
     },
+  });
+
+  useEffect(() => {
+    if (!openFirstUnread || !trackDetail || trackDetail.id !== selectedTrackId) return;
+    const next = trackDetail.lessons.find((l) => !l.completed) ?? trackDetail.lessons[0];
+    if (next) setSelectedLessonId(next.id);
+    setOpenFirstUnread(false);
+  }, [openFirstUnread, trackDetail, selectedTrackId]);
+
+  const flagMutation = useMutation({
+    mutationFn: async ({ lessonId, reason }: { lessonId: number; reason: string }) => {
+      await apiRequest("POST", `/api/coach/academy/lessons/${lessonId}/flag`, { reason });
+    },
+    onSuccess: () => {
+      setFlagOpen(false);
+      setFlagReason("");
+      toast.success("Sent to Forge with your reason. Thank you.");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that"),
   });
 
   if (isLoading) {
@@ -253,15 +289,51 @@ export default function CoachesCorner() {
               qc.invalidateQueries({ queryKey: [`/api/coach/academy/tracks/${selectedTrackId}`] });
             }}
           />
-          <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold">
-            <Checkbox
-              checked={!!selectedLesson.completed}
-              onCheckedChange={(checked) =>
-                completeMutation.mutate({ lessonId: selectedLesson.id, completed: !!checked })
-              }
-            />
-            Mark as read
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold">
+              <Checkbox
+                checked={!!selectedLesson.completed}
+                onCheckedChange={(checked) =>
+                  completeMutation.mutate({ lessonId: selectedLesson.id, completed: !!checked })
+                }
+              />
+              Mark as read
+            </label>
+            {/* A flag needs a reason (Scott, 2026-10-04: "flagging is useless if they can't say why"). */}
+            <Button variant="ghost" size="sm" onClick={() => setFlagOpen(true)}>
+              <Flag className="h-4 w-4" />
+              Flag this lesson
+            </Button>
+          </div>
+          <Dialog open={flagOpen} onOpenChange={setFlagOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Flag this lesson</DialogTitle>
+                <DialogDescription>
+                  Wrong, out of date, unclear, or missing something? Say what, and Forge reads it. A flag without a
+                  reason can't be acted on, so the reason is required.
+                </DialogDescription>
+              </DialogHeader>
+              <Textarea
+                value={flagReason}
+                onChange={(e) => setFlagReason(e.target.value)}
+                rows={4}
+                maxLength={2000}
+                placeholder="What's wrong with it, and what would make it right?"
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setFlagOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => flagMutation.mutate({ lessonId: selectedLesson.id, reason: flagReason.trim() })}
+                  disabled={flagMutation.isPending || flagReason.trim().length < 10}
+                >
+                  {flagMutation.isPending ? "Sending..." : "Send"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </AppShell>
     );
@@ -333,6 +405,33 @@ export default function CoachesCorner() {
             qc.invalidateQueries({ queryKey: ["/api/coach/academy/tracks"] });
           }}
         />
+        {/* The track, applied (2026-10-04): the library chat with the roster toggle on, asked
+            about this track. Aggregates only, never a name (getRosterContextForCoach). */}
+        <div className="mt-8 border-t border-border pt-6">
+          {applyTrackId === trackDetail.id ? (
+            <CoachesCornerAsk
+              seed={{
+                question: `How do I apply "${trackDetail.title}" to my roster this season? Be specific to the athletes I have.`,
+                includeRoster: true,
+              }}
+              onOpenLesson={(trackId, lessonId) => {
+                setSelectedTrackId(trackId);
+                setSelectedLessonId(lessonId);
+              }}
+            />
+          ) : (
+            <div className="flex flex-col items-start gap-2">
+              <Button onClick={() => setApplyTrackId(trackDetail.id)}>
+                <Users className="h-4 w-4" />
+                Apply this to my roster
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Asks the library how this track fits the athletes you actually have. Sends counts, sports, positions and
+                ages, never a name.
+              </p>
+            </div>
+          )}
+        </div>
       </AppShell>
     );
   }
@@ -399,6 +498,40 @@ export default function CoachesCorner() {
       {anyUnlocked && view === "discussion" && (
         <CoachesCornerDiscussion tracks={tracks.map((t) => ({ id: t.id, title: t.title }))} />
       )}
+      {view === "library" && anyUnlocked && (() => {
+        const inProgress = tracks
+          .filter((t) => t.unlocked && !t.completed && (t.lessonsRead ?? 0) > 0)
+          .sort((a, b) => new Date(b.lastReadAt ?? 0).getTime() - new Date(a.lastReadAt ?? 0).getTime());
+        if (inProgress.length === 0) return null;
+        return (
+          <div className="mb-6">
+            <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-bold uppercase tracking-wide">
+              <Play className="h-5 w-5 text-primary" />
+              Continue
+            </h2>
+            <p className="mb-3 text-sm text-muted-foreground">Where you left off, most recent first.</p>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {inProgress.slice(0, 6).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTrackId(t.id);
+                    setOpenFirstUnread(true);
+                  }}
+                  className="w-64 shrink-0 rounded-lg border border-border bg-surface p-4 text-left hover:border-primary/50"
+                >
+                  <p className="truncate text-sm font-semibold">{t.title}</p>
+                  <ProgressBar value={t.lessonsRead ?? 0} max={t.lessonCount} className="my-2" />
+                  <p className="text-xs text-muted-foreground">
+                    {t.lessonsRead}/{t.lessonCount} read · next: lesson {(t.lessonsRead ?? 0) + 1}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       {view === "library" && <CoachesCornerPaths onOpenTrack={(id) => setSelectedTrackId(id)} />}
       {anyUnlocked && view === "library" && (
         <CoachesCornerAsk
@@ -460,10 +593,16 @@ export default function CoachesCorner() {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">{track.description}</p>
+              {track.unlocked && !track.completed && (track.lessonsRead ?? 0) > 0 && (
+                <ProgressBar value={track.lessonsRead ?? 0} max={track.lessonCount} />
+              )}
               <div className="flex flex-wrap items-center gap-1.5">
                 <Badge variant="secondary" className="w-fit">
                   {track.lessonCount} lessons
                 </Badge>
+                {track.releasedAt && differenceInDays(new Date(), new Date(track.releasedAt)) <= NEW_TRACK_DAYS && (
+                  <Badge className="w-fit">New</Badge>
+                )}
                 {track.unlocked && track.completed && (
                   <Badge variant="success" className="gap-1">
                     <Award className="h-3 w-3" />
@@ -476,10 +615,30 @@ export default function CoachesCorner() {
                   </Badge>
                 )}
               </div>
+              {track.releasedAt && (
+                <p className="text-[11px] text-muted-foreground">Released {format(new Date(track.releasedAt), "MMM d, yyyy")}</p>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>}
+      {view === "library" && tracks.length > 0 && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Every track shows the date it was released. New tracks wear a New badge for a month, and the monthly Coaches
+          Corner email names each one.
+        </p>
+      )}
+      {/* The certificate wall, at the bottom on purpose (Scott, 2026-10-04). */}
+      {view === "library" && anyUnlocked && <CoachesCornerCertificates tracks={tracks} />}
     </AppShell>
+  );
+}
+
+function ProgressBar({ value, max, className }: { value: number; max: number; className?: string }) {
+  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+  return (
+    <div className={cn("h-1.5 w-full overflow-hidden rounded-full bg-secondary", className)} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+      <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${pct}%` }} />
+    </div>
   );
 }

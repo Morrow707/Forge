@@ -2466,22 +2466,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // A coach's standing on every track, computed once for the catalog, the paths and the
   // certificates: "completed" is every lesson read and the quiz passed (or no quiz).
   async function academyProgressForCoach(coachId: number) {
-    const [tracks, completions, bestAttempts] = await Promise.all([
+    const [tracks, completionDates, bestAttempts] = await Promise.all([
       storage.getAllAcademyTracks(),
-      storage.getAcademyCompletionsForCoach(coachId),
+      storage.getAcademyCompletionDatesForCoach(coachId),
       storage.getBestAcademyQuizAttemptsForCoach(coachId),
     ]);
-    const byTrack = new Map<number, { lessonsRead: number; lessonCount: number; quizQuestionCount: number; bestAttempt: any; completed: boolean }>();
+    const byTrack = new Map<
+      number,
+      { lessonsRead: number; lessonCount: number; quizQuestionCount: number; bestAttempt: any; completed: boolean; lastReadAt: Date | null; completedAt: Date | null }
+    >();
     for (const t of tracks) {
-      const read = t.lessons.filter((l) => completions.has(l.id)).length;
+      const readDates = t.lessons.map((l) => completionDates.get(l.id)).filter((d): d is Date => d instanceof Date);
+      const read = readDates.length;
       const best = bestAttempts.get(t.id) ?? null;
       const quizPassed = t.quizQuestions.length === 0 ? true : Boolean(best?.passed);
+      const completed = t.lessons.length > 0 && read === t.lessons.length && quizPassed;
+      const lastReadAt = readDates.length > 0 ? new Date(Math.max(...readDates.map((d) => d.getTime()))) : null;
+      // Done when the later of the last lesson read and the passing attempt happened.
+      const completedAt = completed
+        ? new Date(Math.max(lastReadAt?.getTime() ?? 0, best?.passed ? best.completedAt.getTime() : 0))
+        : null;
       byTrack.set(t.id, {
         lessonsRead: read,
         lessonCount: t.lessons.length,
         quizQuestionCount: t.quizQuestions.length,
         bestAttempt: best,
-        completed: t.lessons.length > 0 && read === t.lessons.length && quizPassed,
+        completed,
+        lastReadAt,
+        completedAt,
       });
     }
     return { tracks, byTrack };
@@ -2506,6 +2518,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quizQuestionCount: t.quizQuestions.length,
           bestAttempt: p?.bestAttempt ?? null,
           completed: unlocked && Boolean(p?.completed),
+          // The date the track was released (2026-10-04): what tells a coach when new content
+          // arrived, beside the monthly digest that names it.
+          releasedAt: t.createdAt,
+          lastReadAt: p?.lastReadAt ?? null,
+          completedAt: p?.completedAt ?? null,
         };
       }),
     );
@@ -2581,7 +2598,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (newTracks.length > 0) {
       lines.push("");
       lines.push(`New tracks:`);
-      for (const t of newTracks) lines.push(`- ${t.title}: ${t.description}`);
+      for (const t of newTracks) lines.push(`- ${t.title} (released ${t.createdAt.toLocaleDateString("en-US", { month: "long", day: "numeric" })}): ${t.description}`);
     }
     if (paths.length > 0) {
       lines.push("");
@@ -2711,6 +2728,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).end();
     },
   );
+
+  // "Flag this lesson", with a required reason (2026-10-04). Filed for the admin's analytics
+  // page, where the open list is worked and each flag resolved.
+  app.post("/api/coach/academy/lessons/:id/flag", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    if (!(await hasCoachesCornerAccess(user))) {
+      return res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
+    }
+    const parsed = z.object({ reason: z.string().trim().min(10, "Say what's wrong in at least a sentence.").max(2000) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const row = await storage.flagAcademyLesson(user.id, Number(req.params.id), parsed.data.reason);
+    if (!row) return res.status(404).json({ message: "Lesson not found" });
+    res.status(201).json({ ok: true });
+  });
 
   // A coach's private note on a lesson (2026-10-04). Read back on the track detail; written
   // here. Nobody else, admin included, has a route to it.
@@ -2962,6 +2993,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const ok = await storage.resolveCoachesCornerQuestion(Number(req.params.id), parsed.data.adminNote ?? null);
     if (!ok) return res.status(404).json({ message: "Question not found or already resolved" });
+    res.json({ ok: true });
+  });
+
+  app.get("/api/admin/coaches-corner/lesson-flags", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listOpenAcademyLessonFlags());
+  });
+  app.post("/api/admin/coaches-corner/lesson-flags/:id/resolve", requireRole("admin"), async (req, res) => {
+    const parsed = z.object({ adminNote: z.string().trim().max(500).nullable().optional() }).safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const ok = await storage.resolveAcademyLessonFlag(Number(req.params.id), parsed.data.adminNote ?? null);
+    if (!ok) return res.status(404).json({ message: "Flag not found or already resolved" });
     res.json({ ok: true });
   });
 

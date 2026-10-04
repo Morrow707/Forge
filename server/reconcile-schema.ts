@@ -1383,6 +1383,18 @@ CREATE TABLE IF NOT EXISTS "academy_lesson_notes" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "academy_lesson_notes_coach_lesson_idx" ON "academy_lesson_notes" ("coach_id", "lesson_id");
 
+-- Flagged lessons, with the reason (2026-10-04).
+CREATE TABLE IF NOT EXISTS "academy_lesson_flags" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "lesson_id" integer NOT NULL REFERENCES "academy_lessons"("id") ON DELETE CASCADE,
+  "reason" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "resolved_at" timestamp,
+  "admin_note" text
+);
+CREATE INDEX IF NOT EXISTS "academy_lesson_flags_open_idx" ON "academy_lesson_flags" ("resolved_at");
+
 CREATE TABLE IF NOT EXISTS "academy_quiz_questions" (
   "id" serial PRIMARY KEY,
   "track_id" integer NOT NULL REFERENCES "academy_tracks"("id") ON DELETE CASCADE,

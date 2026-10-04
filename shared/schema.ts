@@ -5321,6 +5321,30 @@ export const coachesCornerQuestions = pgTable(
   }),
 );
 
+/** "Flag this lesson" (2026-10-04), with a reason, because Scott: "flagging is useless if they
+ * can't say why". A coach flags a lesson that is wrong, out of date or unclear and says what;
+ * the admin reads the open list on the analytics page and resolves each. The coach is
+ * recorded so the admin can follow up through the discussion board, never shown there. */
+export const academyLessonFlags = pgTable(
+  "academy_lesson_flags",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lessonId: integer("lesson_id")
+      .notNull()
+      .references(() => academyLessons.id, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+    adminNote: text("admin_note"),
+  },
+  (table) => ({
+    openIdx: index("academy_lesson_flags_open_idx").on(table.resolvedAt),
+  }),
+);
+
 // ---------- Coaches Corner learning paths (2026-10-03) ----------
 // An ordered set of tracks for a kind of coach: "New to strength coaching", "Running an
 // in-season program", "Youth and middle school". A path is complete when every track in it is
