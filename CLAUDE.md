@@ -702,10 +702,12 @@ then "Build it all in order and what you suggested". Coaches already create clas
   drills by NAME from the skill library (the seed throws on a missing one), six chapters each
   with pages, a Key Points page, cards and a mixed quiz. `server/seed-forge-classes.ts` creates
   each once by name and re-syncs pages, cards, level and quiz every deploy; the drill tree is
-  left alone because session logs hang off it. Two written so far for Scott to read: Pitching
-  and Basketball shooting. `classes.test.ts` pins the shape, the drill names against seed.ts,
-  every question against the input schema, and no camera accuracy claim. Football, soccer,
-  volleyball, wrestling and track are next, in the same shape, once Scott has read these two.
+  left alone because session logs hang off it. Seven classes (Scott read the first two,
+  2026-10-04: "Those two classes look good, build the rest"): Pitching, Basketball shooting,
+  Football receiving, Soccer attacking, Volleyball, Wrestling, Track sprinting. `classes.test.ts`
+  pins the shape, the drill names against seed.ts, every question against the input schema,
+  that no two pages share a twelve-word run, and no camera accuracy claim. Wrestling's top
+  chapter defers every turn to the coach on the mat; keep that line.
 - **The hitting class's eight page videos are still YouTube SEARCH links.** YouTube is not
   reachable from the sandbox, so no clip id could be verified, and an unverified id is an
   invented screen (Rule #3). Scott picks the clips; the slot for them is `videoUrl` on the page.
