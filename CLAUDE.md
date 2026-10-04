@@ -390,7 +390,17 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **600** is the newest TestFlight build, cut 2026-10-03 from `24c984a3` (599 was the
+- Build **609** is the newest TestFlight build, cut 2026-10-04 from `9503d966` (608 was the
+  verify_build run) on Scott's "lets launch what we have so far": twenty-nine commits since
+  600. Coaches Corner (Ask the library, scored quizzes, paths, the board, the digest, analytics,
+  the eleven new tracks), the whole athlete classes batch (flashcards, four quiz shapes, notes,
+  the coach's view, reading level, streak, certificate, eight repo classes), Scott's fifteen-item
+  list (Coaches Corner cards and shapes, coach notes, flag-with-reason, Continue rows, release
+  dates, apply-to-roster, certificate wall; the catalog by sport, Continue into the reader, the
+  review deck, Fundamentals), Barlow Condensed loaded, read-aloud built and switched off. NOT in
+  609: the All Classes add-on (`4eafc80a`), the builder's pricing notice, the assistants reading
+  the whole library again (server-side anyway). Server halves ship on Render.
+- Build **600** was the previous build, cut 2026-10-03 from `24c984a3` (599 was the
   verify_build run): Full Personalization end to end -- the Branding page at `/coach/branding`,
   the background hue/strength and heading font, the remembered brand on the login screens, the
   branded invite and public page, `--chart-2`. Server halves (branded emails, the slug, the
@@ -556,24 +566,9 @@ can install. Delete entries as a `beta` ships them.
   opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
 - Build **553** (`48505970`, #167 + #168): the 720p upload copy encoded during the recording, the
   sensor-fitted concentric window, the jump-decision and live-fallback diagnostics.
-- **Queued, not yet in a build:** the athlete classes work of 2026-10-04 (flashcards, the
-  four quiz shapes with drag-and-drop ordering and matching, per-page notes, the reader's
-  progress bar and key points, the drill-day clip, the streak and the class certificate, the
-  reading level). Server halves (attempts, insights, notes, the two new classes) ship on
-  Render.
-- **Queued, not yet in a build:** Scott's fifteen-item list of 2026-10-04 ("Yes 1 ... yes 15"):
-  Coaches Corner flashcards and four quiz shapes, coach notes, flag-with-reason, Continue row,
-  progress and release dates, apply-to-roster, the certificate wall; the athlete side's sport
-  ordering, Continue into the reader, the review deck, streak and certificates at the bottom,
-  the Fundamentals class, the one pricing rule (chapter one free, the rest with the camera
-  plan), the coach AI class drafter, and read-aloud (device voice until a provider key is set).
-  Server halves ship on Render with the push.
-- **Queued, not yet in a build:** Coaches Corner (Ask the library with the roster toggle and
-  "this didn't answer my question", scored quizzes and the certificate pages, Further reading
-  under lessons, learning paths, the peer discussion board, the admin builder's library draft and
-  Find citations, the Knowledge Library licence switch, the admin analytics, reports and digest
-  pages). Server halves (routes, the six new tracks, the three paths) ship on Render.
-- **Nothing else on `main` is waiting on an upload.**
+- **Queued, not yet in a build:** the All Classes add-on (`AllClassesCard`, the locked chapter
+  offering it, the sport-coach surfaces listing only sport coaches, the pricing page line) and
+  the class builder's pricing notice. Nothing else on `main` is waiting on an upload.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
