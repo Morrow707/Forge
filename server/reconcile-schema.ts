@@ -1296,6 +1296,8 @@ CREATE TABLE IF NOT EXISTS "academy_lessons" (
 CREATE INDEX IF NOT EXISTS "academy_lessons_track_idx" ON "academy_lessons" ("track_id");
 -- Further reading (2026-10-03): the library sources a lesson draws on, as page pointers.
 ALTER TABLE "academy_lessons" ADD COLUMN IF NOT EXISTS "sources" jsonb NOT NULL DEFAULT '[]'::jsonb;
+-- Flashcards on a Coaches Corner lesson (2026-10-04).
+ALTER TABLE "academy_lessons" ADD COLUMN IF NOT EXISTS "flashcards" json NOT NULL DEFAULT '[]'::json;
 
 CREATE TABLE IF NOT EXISTS "academy_lesson_completions" (
   "id" serial PRIMARY KEY,
@@ -1379,6 +1381,9 @@ CREATE TABLE IF NOT EXISTS "academy_quiz_questions" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS "academy_quiz_questions_track_idx" ON "academy_quiz_questions" ("track_id");
+-- Four question shapes on the track quiz (2026-10-04), same as the class quizzes.
+ALTER TABLE "academy_quiz_questions" ADD COLUMN IF NOT EXISTS "question_type" text NOT NULL DEFAULT 'multiple_choice';
+ALTER TABLE "academy_quiz_questions" ADD COLUMN IF NOT EXISTS "payload" json;
 
 CREATE TABLE IF NOT EXISTS "academy_quiz_answers" (
   "id" serial PRIMARY KEY,

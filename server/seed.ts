@@ -21,6 +21,7 @@ import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { seedForgeClasses } from "./seed-forge-classes";
 import { COACHES_CORNER_TRACKS_2026_10, COACHES_CORNER_TRACKS_2026_10_04, COACHES_CORNER_PATHS_2026_10 } from "./seed-data/coaches-corner";
+import type { SeedAcademyTrack } from "./seed-data/coaches-corner/types";
 // BIOMETRIC_WAIVER_DRAFT is deliberately not imported: the seed never writes it. A fresh
 // install gets the real document straight from nextBiometricRelease(null), and an install still
 // carrying the draft is recognised by BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX, which is its own
@@ -4576,17 +4577,7 @@ async function main() {
     const existingTrackIdByTitle = new Map(existingTracks.map((t) => [t.title, t.id]));
 
     let seedAcademyPathsAfterTracks = false;
-    const seedAcademyTracks: Array<{
-      title: string;
-      description: string;
-      keyPrinciplesForAi: string;
-      lessons: Array<{ lessonNumber: number; title: string; content: string; estMinutes: number }>;
-      quizQuestions: Array<{
-        orderIndex: number;
-        questionText: string;
-        answers: Array<{ orderIndex: number; answerText: string; isCorrect: boolean; explanation: string }>;
-      }>;
-    }> = [
+    const seedAcademyTracks: SeedAcademyTrack[] = [
       {
         title: "Strength & Conditioning Fundamentals",
         description:
@@ -5507,15 +5498,18 @@ async function main() {
           description: track.description,
           keyPrinciplesForAi: track.keyPrinciplesForAi,
           orderIndex: seedAcademyTracks.indexOf(track),
-          lessons: track.lessons.map((l) => ({ ...l, sources: [] })),
-          quizQuestions: track.quizQuestions,
+          lessons: track.lessons.map((l) => ({ ...l, sources: [], flashcards: l.flashcards ?? [] })),
+          quizQuestions: track.quizQuestions.map((q) => ({ ...q, questionType: q.questionType ?? "multiple_choice", payload: q.payload ?? null })),
         });
       } else {
         // Track already exists from an earlier deploy (lessons already
         // seeded) -- just backfill its quiz if it doesn't have one yet,
         // without touching lessons (see addQuizQuestionsToTrackIfNone's
         // comment on why this can't reuse updateAcademyTrackStructure).
-        await storage.addQuizQuestionsToTrackIfNone(existingId, track.quizQuestions);
+        await storage.addQuizQuestionsToTrackIfNone(
+          existingId,
+          track.quizQuestions.map((q) => ({ ...q, questionType: q.questionType ?? "multiple_choice", payload: q.payload ?? null })),
+        );
       }
     }
 

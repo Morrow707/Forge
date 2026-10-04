@@ -27,7 +27,7 @@ import { getEmbedUrl } from "@/lib/video-embed";
 import { estimateReadingMinutes } from "@/lib/lesson-reading";
 import { LessonPageNotes } from "@/components/lesson-page-notes";
 import { LessonFlashcards, type Flashcard } from "@/components/lesson-flashcards";
-import { FillBlankInput, OrderingInput, MatchingInput } from "@/components/quiz-question-inputs";
+import { FillBlankInput, OrderingInput, MatchingInput, QuizKeyResult } from "@/components/quiz-question-inputs";
 import {
   gradeQuestion,
   isAnswered,
@@ -900,76 +900,5 @@ export function ClassLessonReaderDialog({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-
-/** What the right answer was, for the three non-multiple-choice shapes, beside what the
- * athlete gave. The key only exists on a graded result. */
-function QuizKeyResult({ result: r }: { result: QuizAnswerResult }) {
-  const payload = r.payload ?? null;
-  const sub = r.submitted ?? null;
-  const explanation = payload?.explanation?.trim();
-  return (
-    <div className="space-y-2 pl-6 text-xs">
-      {r.questionType === "fill_blank" && (
-        <>
-          <p>
-            <span className="text-muted-foreground">Your answer: </span>
-            <span className={cn("font-medium", r.isCorrect ? "text-success" : "text-destructive")}>{sub?.text?.trim() || "(blank)"}</span>
-          </p>
-          {!r.isCorrect && (payload?.accepted?.length ?? 0) > 0 && (
-            <p>
-              <span className="text-muted-foreground">Accepted: </span>
-              <span className="font-medium">{payload!.accepted!.join(", ")}</span>
-            </p>
-          )}
-        </>
-      )}
-      {r.questionType === "ordering" && (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div>
-            <p className="mb-1 text-muted-foreground">Your order</p>
-            <ol className="list-decimal space-y-0.5 pl-4">
-              {(sub?.order ?? []).map((it, i) => (
-                <li key={i} className={cn(payload?.items?.[i] === it ? "text-success" : "text-destructive")}>{it}</li>
-              ))}
-            </ol>
-          </div>
-          {!r.isCorrect && (
-            <div>
-              <p className="mb-1 text-muted-foreground">Correct order</p>
-              <ol className="list-decimal space-y-0.5 pl-4">
-                {(payload?.items ?? []).map((it, i) => (
-                  <li key={i}>{it}</li>
-                ))}
-              </ol>
-            </div>
-          )}
-        </div>
-      )}
-      {r.questionType === "matching" && (
-        <div className="space-y-1">
-          {(payload?.pairs ?? []).map((p) => {
-            const given = sub?.matches?.[p.left];
-            const ok = given === p.right;
-            return (
-              <p key={p.left}>
-                <span className="font-medium">{p.left}</span>
-                <span className="text-muted-foreground"> → </span>
-                <span className={cn(ok ? "text-success" : "text-destructive")}>{given ?? "(none)"}</span>
-                {!ok && (
-                  <>
-                    <span className="text-muted-foreground"> · correct: </span>
-                    <span>{p.right}</span>
-                  </>
-                )}
-              </p>
-            );
-          })}
-        </div>
-      )}
-      {explanation && <p className="text-muted-foreground">{explanation}</p>}
-    </div>
   );
 }

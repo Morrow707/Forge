@@ -43,6 +43,7 @@ import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail, emailEnabled, isEmailConfigured } from "./email";
 import { KNOWLEDGE_DOMAIN_KEYS } from "@shared/knowledge-domains";
 import { CLASS_READING_LEVELS } from "@shared/class-reading-level";
+import { athleteFacingPayload, type QuizQuestionType } from "@shared/class-quiz-grading";
 import { buildWelcomeEmail } from "./welcome-email";
 import { buildCampaignEmail } from "./email-list-render";
 import { buildRosterDocumentEmail } from "./email-roster-documents";
@@ -2678,7 +2679,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       description: track.description,
       unlocked: true,
       lessons: track.lessons.map((l) => ({ ...l, completed: completions.has(l.id) })),
-      quizQuestions: track.quizQuestions,
+      // Never the key before grading: ordering and matching go out shuffled, fill-in-the-blank
+      // bare (shared/class-quiz-grading.ts). Multiple choice keeps its answer rows, whose
+      // isCorrect flag the quiz has always carried so a coach can expand any answer after.
+      quizQuestions: track.quizQuestions.map((q) => ({
+        ...q,
+        questionType: q.questionType ?? "multiple_choice",
+        payload: athleteFacingPayload((q.questionType ?? "multiple_choice") as QuizQuestionType, q.payload ?? null),
+      })),
       bestAttempt,
     });
   });
@@ -2709,13 +2717,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!(await hasCoachesCornerAccess(user))) {
       return res.status(402).json({ message: "Coaches Corner isn't unlocked on this account." });
     }
+    // One submission per question, of the question's own kind (shared/class-quiz-grading.ts).
+    // `picks` is the shape the multiple-choice-only client sent before 2026-10-04; a build
+    // still carrying it keeps working.
     const parsed = z
       .object({
-        picks: z.array(z.object({ questionId: z.number().int(), answerId: z.number().int() })).max(50),
+        answers: z
+          .array(
+            z.object({
+              questionId: z.number().int(),
+              answerId: z.number().int().nullable().optional(),
+              text: z.string().max(300).nullable().optional(),
+              order: z.array(z.string().max(200)).max(10).nullable().optional(),
+              matches: z.record(z.string().max(200), z.string().max(200)).nullable().optional(),
+            }),
+          )
+          .max(50)
+          .optional(),
+        picks: z.array(z.object({ questionId: z.number().int(), answerId: z.number().int() })).max(50).optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const result = await storage.recordAcademyQuizAttempt(user.id, Number(req.params.id), parsed.data.picks);
+    const submissions = parsed.data.answers ?? parsed.data.picks ?? [];
+    const result = await storage.recordAcademyQuizAttempt(user.id, Number(req.params.id), submissions);
     if (!result) return res.status(404).json({ message: "No quiz on that track." });
     res.json(result);
   });

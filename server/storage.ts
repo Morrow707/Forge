@@ -365,7 +365,7 @@ import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import type { RosterGroup } from "@shared/roster-groups";
 import { findVerbatimLesson } from "./academy-draft-guard";
 import { academyQuizPassed } from "@shared/academy-quiz";
-import { gradeQuestion, athleteFacingPayload, type QuizSubmission } from "@shared/class-quiz-grading";
+import { gradeQuestion, athleteFacingPayload, type QuizSubmission, type QuizQuestionType } from "@shared/class-quiz-grading";
 import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-reading-level";
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
@@ -13890,8 +13890,9 @@ Hard rules, no exceptions:
     for (const q of questions) {
       const [question] = await db
         .insert(academyQuizQuestions)
-        .values({ trackId, orderIndex: q.orderIndex, questionText: q.questionText })
+        .values({ trackId, orderIndex: q.orderIndex, questionText: q.questionText, questionType: q.questionType ?? "multiple_choice", payload: q.payload ?? null })
         .returning();
+      if (q.answers.length === 0) continue;
       await db.insert(academyQuizAnswers).values(
         q.answers.map((a) => ({
           questionId: question.id,
@@ -13904,27 +13905,31 @@ Hard rules, no exceptions:
     }
   },
 
-  /** Grade a coach's quiz attempt against the stored answers and keep it. The client sends
-   * which answer it picked per question; the server decides what was right. A question
-   * left unanswered counts wrong. Returns the per-question result and the best attempt. */
-  async recordAcademyQuizAttempt(
-    coachId: number,
-    trackId: number,
-    picks: { questionId: number; answerId: number }[],
-  ) {
+  /** Grade a coach's quiz attempt against the stored key and keep it. The client sends one
+   * submission per question, of the question's own kind (shared/class-quiz-grading.ts, the
+   * same grader the class quizzes use); the server decides what was right. A question left
+   * unanswered counts wrong. Returns the per-question result, with the key for the three
+   * non-multiple-choice shapes (it only ever leaves the server on a graded result), and the
+   * best attempt. */
+  async recordAcademyQuizAttempt(coachId: number, trackId: number, submissions: QuizSubmission[]) {
     const track = await this.getAcademyTrackFull(trackId);
     if (!track) return null;
     const total = track.quizQuestions.length;
     if (total === 0) return null;
-    const pickFor = new Map(picks.map((p) => [p.questionId, p.answerId]));
+    const subFor = new Map(submissions.map((s) => [s.questionId, s]));
     const results = track.quizQuestions.map((q) => {
-      const picked = pickFor.get(q.id) ?? null;
+      const sub = subFor.get(q.id);
+      const questionType = (q.questionType ?? "multiple_choice") as QuizQuestionType;
       const correctAnswer = q.answers.find((a) => a.isCorrect);
+      const correct = gradeQuestion({ id: q.id, questionType, payload: q.payload ?? null, answers: q.answers }, sub);
       return {
         questionId: q.id,
-        pickedAnswerId: picked,
+        questionType,
+        pickedAnswerId: sub?.answerId ?? null,
         correctAnswerId: correctAnswer?.id ?? null,
-        correct: picked != null && correctAnswer != null && picked === correctAnswer.id,
+        submitted: sub ?? null,
+        payload: questionType === "multiple_choice" ? null : (q.payload ?? null),
+        correct,
       };
     });
     const correct = results.filter((r) => r.correct).length;
@@ -13995,13 +14000,14 @@ Hard rules, no exceptions:
             content: l.content,
             estMinutes: l.estMinutes ?? null,
             sources: l.sources ?? [],
+            flashcards: l.flashcards ?? [],
           })),
         );
       }
       for (const q of structure.quizQuestions) {
         const [question] = await tx
           .insert(academyQuizQuestions)
-          .values({ trackId: track.id, orderIndex: q.orderIndex, questionText: q.questionText })
+          .values({ trackId: track.id, orderIndex: q.orderIndex, questionText: q.questionText, questionType: q.questionType, payload: q.payload ?? null })
           .returning();
         // A question with no answers is not a question -- the input schema
         // already requires at least two (see academyQuizQuestionInputSchema),
@@ -14074,6 +14080,7 @@ Hard rules, no exceptions:
               content: lesson.content,
               estMinutes: lesson.estMinutes ?? null,
               sources: lesson.sources ?? [],
+              flashcards: lesson.flashcards ?? [],
             })
             // trackId is in the predicate, not just the id. An id is taken
             // straight from the submitted payload, and without this a
@@ -14092,6 +14099,7 @@ Hard rules, no exceptions:
             content: lesson.content,
             estMinutes: lesson.estMinutes ?? null,
             sources: lesson.sources ?? [],
+            flashcards: lesson.flashcards ?? [],
           });
         }
       }
@@ -14126,7 +14134,7 @@ Hard rules, no exceptions:
         if (questionId != null) {
           await tx
             .update(academyQuizQuestions)
-            .set({ orderIndex: q.orderIndex, questionText: q.questionText })
+            .set({ orderIndex: q.orderIndex, questionText: q.questionText, questionType: q.questionType, payload: q.payload ?? null })
             .where(
               and(eq(academyQuizQuestions.id, questionId), eq(academyQuizQuestions.trackId, trackId)),
             );
@@ -14134,7 +14142,7 @@ Hard rules, no exceptions:
         } else {
           const [inserted] = await tx
             .insert(academyQuizQuestions)
-            .values({ trackId, orderIndex: q.orderIndex, questionText: q.questionText })
+            .values({ trackId, orderIndex: q.orderIndex, questionText: q.questionText, questionType: q.questionType, payload: q.payload ?? null })
             .returning();
           questionId = inserted.id;
         }
@@ -31693,6 +31701,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         lessonNumber: l.lessonNumber ?? i + 1,
         title: l.title,
         content: l.content,
+        flashcards: [],
         estMinutes: l.estMinutes ?? null,
         sources: [],
       })),
@@ -31859,10 +31868,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         content: l.content,
         estMinutes: l.estMinutes ?? Math.max(3, Math.round(l.content.split(/\s+/).length / 180)),
         sources: sourcesFor(l.sourceIndexes ?? []),
+        flashcards: [],
       })),
       quizQuestions: draft.quizQuestions.map((q, qi) => ({
         orderIndex: qi,
         questionText: q.questionText,
+        questionType: "multiple_choice" as const,
         answers: q.answers.map((a, ai) => ({
           orderIndex: ai,
           answerText: a.answerText,

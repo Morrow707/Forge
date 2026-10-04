@@ -134,3 +134,87 @@ describe("analytics and flagged questions", () => {
     expect((await ca.get("/api/admin/coaches-corner/questions")).body).toHaveLength(0);
   });
 });
+
+describe("four question shapes on a track quiz (2026-10-04)", () => {
+  it("never sends the key before grading, grades every shape on the server, and keeps a lesson's flashcards", async () => {
+    const admin = await makeLoginableUser({ role: "admin" });
+    const coach = await makeLoginableUser({ role: "coach" });
+    const ca = await loginAs(server.baseUrl, admin);
+    const created = await ca.post("/api/admin/academy/tracks", {
+      title: "Shapes",
+      description: "Every shape once.",
+      keyPrinciplesForAi: "Shapes.",
+      lessons: [
+        {
+          lessonNumber: 1,
+          title: "One",
+          content: "Read.",
+          estMinutes: 3,
+          sources: [],
+          flashcards: [{ front: "What is the pass mark?", back: "Eighty percent." }],
+        },
+      ],
+      quizQuestions: [
+        {
+          orderIndex: 0,
+          questionText: "Pick one?",
+          questionType: "multiple_choice",
+          answers: [0, 1].map((i) => ({ orderIndex: i, answerText: `A${i}`, isCorrect: i === 0, explanation: `Because ${i}.` })),
+        },
+        { orderIndex: 1, questionText: "The cycle is the ___ cycle.", questionType: "fill_blank", payload: { accepted: ["stretch-shortening", "SSC"], explanation: "SSC." }, answers: [] },
+        { orderIndex: 2, questionText: "Order the session.", questionType: "ordering", payload: { items: ["warm up", "lift", "cool down"] }, answers: [] },
+        { orderIndex: 3, questionText: "Match them.", questionType: "matching", payload: { pairs: [{ left: "squat", right: "knee" }, { left: "deadlift", right: "hip" }] }, answers: [] },
+      ],
+    });
+    expect(created.status).toBe(201);
+    const track = created.body as { id: number; lessons: { id: number; flashcards: unknown[] }[]; quizQuestions: { id: number; questionType: string; payload: any; answers: { id: number }[] }[] };
+    expect(track.lessons[0].flashcards).toEqual([{ front: "What is the pass mark?", back: "Eighty percent." }]);
+
+    // A malformed shape is refused by the shared rule, not stored.
+    const bad = await ca.post("/api/admin/academy/tracks", {
+      title: "Bad",
+      description: "x",
+      keyPrinciplesForAi: "x",
+      lessons: [],
+      quizQuestions: [{ orderIndex: 0, questionText: "No blank here", questionType: "fill_blank", payload: { accepted: ["x"] }, answers: [] }],
+    });
+    expect(bad.status).toBe(400);
+
+    const cc = await loginAs(server.baseUrl, coach);
+    const detail = await cc.get(`/api/coach/academy/tracks/${track.id}`);
+    expect(detail.status).toBe(200);
+    const byType = Object.fromEntries(detail.body.quizQuestions.map((q: any) => [q.questionType, q]));
+    // The key stays on the server: no accepted answers, items shuffled, rights shuffled.
+    expect(byType.fill_blank.payload ?? {}).toEqual({});
+    expect([...byType.ordering.payload.items].sort()).toEqual(["cool down", "lift", "warm up"]);
+    expect(byType.ordering.payload.items).not.toEqual(["warm up", "lift", "cool down"]);
+    expect(byType.matching.payload.pairs.map((p: any) => p.left)).toEqual(["squat", "deadlift"]);
+    expect(byType.matching.payload.pairs.map((p: any) => p.right).sort()).toEqual(["hip", "knee"]);
+    expect(byType.matching.payload.pairs).not.toEqual([{ left: "squat", right: "knee" }, { left: "deadlift", right: "hip" }]);
+    expect(detail.body.lessons[0].flashcards).toHaveLength(1);
+
+    // Three right of four: case and punctuation do not decide the blank; the key comes back
+    // only on the graded result.
+    const attempt = await cc.post(`/api/coach/academy/tracks/${track.id}/quiz-attempt`, {
+      answers: [
+        { questionId: byType.multiple_choice.id, answerId: byType.multiple_choice.answers[0].id },
+        { questionId: byType.fill_blank.id, text: "Stretch shortening" },
+        { questionId: byType.ordering.id, order: ["warm up", "lift", "cool down"] },
+        { questionId: byType.matching.id, matches: { squat: "hip", deadlift: "knee" } },
+      ],
+    });
+    expect(attempt.status).toBe(200);
+    expect(attempt.body).toMatchObject({ correct: 3, total: 4, passed: false });
+    const graded = Object.fromEntries(attempt.body.results.map((r: any) => [r.questionType, r]));
+    expect(graded.fill_blank).toMatchObject({ correct: true, payload: { accepted: ["stretch-shortening", "SSC"] } });
+    expect(graded.ordering.correct).toBe(true);
+    expect(graded.matching).toMatchObject({ correct: false, payload: { pairs: [{ left: "squat", right: "knee" }, { left: "deadlift", right: "hip" }] } });
+    expect(graded.multiple_choice.payload).toBeNull();
+
+    // The pre-2026-10-04 client shape still grades.
+    const legacy = await cc.post(`/api/coach/academy/tracks/${track.id}/quiz-attempt`, {
+      picks: [{ questionId: byType.multiple_choice.id, answerId: byType.multiple_choice.answers[0].id }],
+    });
+    expect(legacy.body).toMatchObject({ correct: 1, total: 4 });
+  });
+});

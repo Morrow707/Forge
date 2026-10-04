@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
   AcademyTrackPhotoImportPanel,
@@ -23,6 +22,15 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Save, Eye, BookMarked, X } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import {
+  FlashcardsEditor,
+  QuizEditor,
+  localQuizQuestionFrom,
+  quizPayloadFromLocal,
+  uid,
+  type LocalFlashcard,
+  type LocalQuizQuestion,
+} from "@/components/lesson-quiz-editor";
 
 type LessonForm = {
   id?: number;
@@ -31,9 +39,8 @@ type LessonForm = {
   content: string;
   estMinutes: number | null;
   sources: LessonSource[];
+  flashcards: LocalFlashcard[];
 };
-type AnswerForm = { id?: number; orderIndex: number; answerText: string; isCorrect: boolean; explanation: string };
-type QuestionForm = { id?: number; orderIndex: number; questionText: string; answers: AnswerForm[] };
 
 type TrackFull = {
   id: number;
@@ -41,22 +48,12 @@ type TrackFull = {
   description: string;
   keyPrinciplesForAi: string;
   orderIndex: number;
-  lessons: LessonForm[];
-  quizQuestions: QuestionForm[];
+  lessons: (Omit<LessonForm, "flashcards"> & { flashcards?: { front: string; back: string }[] })[];
+  quizQuestions: any[];
 };
 
-function emptyAnswer(orderIndex: number): AnswerForm {
-  return { orderIndex, answerText: "", isCorrect: false, explanation: "" };
-}
-function emptyQuestion(orderIndex: number): QuestionForm {
-  return {
-    orderIndex,
-    questionText: "",
-    answers: [emptyAnswer(0), emptyAnswer(1), emptyAnswer(2), emptyAnswer(3)],
-  };
-}
 function emptyLesson(lessonNumber: number): LessonForm {
-  return { lessonNumber, title: "", content: "", estMinutes: null, sources: [] };
+  return { lessonNumber, title: "", content: "", estMinutes: null, sources: [], flashcards: [] };
 }
 
 /** One row in the live preview -- collapsed it's just the read-view list
@@ -118,7 +115,7 @@ export default function AdminAcademyTrackBuilder() {
   const [keyPrinciplesForAi, setKeyPrinciplesForAi] = useState("");
   const [orderIndex, setOrderIndex] = useState(0);
   const [lessons, setLessons] = useState<LessonForm[]>([]);
-  const [questions, setQuestions] = useState<QuestionForm[]>([]);
+  const [questions, setQuestions] = useState<LocalQuizQuestion[]>([]);
 
   useEffect(() => {
     if (existing) {
@@ -126,8 +123,14 @@ export default function AdminAcademyTrackBuilder() {
       setDescription(existing.description);
       setKeyPrinciplesForAi(existing.keyPrinciplesForAi);
       setOrderIndex(existing.orderIndex);
-      setLessons(existing.lessons.map((l) => ({ ...l, sources: l.sources ?? [] })));
-      setQuestions(existing.quizQuestions);
+      setLessons(
+        existing.lessons.map((l) => ({
+          ...l,
+          sources: l.sources ?? [],
+          flashcards: (l.flashcards ?? []).map((c) => ({ key: uid(), front: c.front, back: c.back })),
+        })),
+      );
+      setQuestions(existing.quizQuestions.map(localQuizQuestionFrom));
     }
   }, [existing]);
 
@@ -138,11 +141,23 @@ export default function AdminAcademyTrackBuilder() {
         description,
         keyPrinciplesForAi,
         orderIndex,
-        lessons: lessons.map((l, i) => ({ ...l, lessonNumber: i + 1 })),
+        lessons: lessons.map((l, i) => ({
+          ...l,
+          lessonNumber: i + 1,
+          flashcards: l.flashcards.map((c) => ({ front: c.front.trim(), back: c.back.trim() })).filter((c) => c.front && c.back),
+        })),
+        // The one conversion from the editor's typed lists to the wire shape, shared with the
+        // class builder (lesson-quiz-editor.tsx).
         quizQuestions: questions.map((q, i) => ({
-          ...q,
+          id: q.id,
           orderIndex: i,
-          answers: q.answers.map((a, ai) => ({ ...a, orderIndex: ai })),
+          questionText: q.questionText,
+          questionType: q.questionType,
+          payload: quizPayloadFromLocal(q),
+          answers:
+            q.questionType === "multiple_choice"
+              ? q.answers.map((a, ai) => ({ id: a.id, orderIndex: ai, answerText: a.answerText, isCorrect: a.isCorrect, explanation: a.explanation }))
+              : [],
         })),
       };
       const res = isNew
@@ -232,15 +247,6 @@ export default function AdminAcademyTrackBuilder() {
     });
   }
 
-  function moveQuestion(index: number, dir: -1 | 1) {
-    setQuestions((prev) => {
-      const next = [...prev];
-      const target = index + dir;
-      if (target < 0 || target >= next.length) return prev;
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  }
 
   // Only fills title/description/principles if the admin hasn't already
   // typed something -- but always appends the transcribed lessons, so a
@@ -258,6 +264,7 @@ export default function AdminAcademyTrackBuilder() {
         content: l.content,
         estMinutes: l.estMinutes,
         sources: [],
+        flashcards: [],
       })),
     ]);
     if (note) toast.info(note, { duration: 10000 });
@@ -276,16 +283,10 @@ export default function AdminAcademyTrackBuilder() {
         content: l.content,
         estMinutes: l.estMinutes,
         sources: l.sources ?? [],
+        flashcards: [],
       })),
     ]);
-    setQuestions((prev) => [
-      ...prev,
-      ...structure.quizQuestions.map((q, qi) => ({
-        orderIndex: prev.length + qi,
-        questionText: q.questionText,
-        answers: q.answers.map((a, ai) => ({ orderIndex: ai, ...a })),
-      })),
-    ]);
+    setQuestions((prev) => [...prev, ...structure.quizQuestions.map((q) => ({ ...localQuizQuestionFrom(q), id: undefined }))]);
     if (note) toast.info(note, { duration: 15000 });
   }
 
@@ -457,6 +458,14 @@ export default function AdminAcademyTrackBuilder() {
                     rows={6}
                     placeholder="Lesson content, separate paragraphs with a blank line."
                   />
+                  <FlashcardsEditor
+                    cards={lesson.flashcards}
+                    pages={[{ title: lesson.title, body: lesson.content }]}
+                    readingLevel={null}
+                    onChange={(updater) =>
+                      setLessons((prev) => prev.map((l, li) => (li === i ? { ...l, flashcards: updater(l.flashcards) } : l)))
+                    }
+                  />
                   {lesson.sources.length > 0 && (
                     <div className="space-y-1">
                       <p className="text-[10px] font-semibold uppercase text-muted-foreground">Further reading</p>
@@ -493,162 +502,16 @@ export default function AdminAcademyTrackBuilder() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-lg font-bold uppercase tracking-wide">Quiz</h2>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setQuestions((prev) => [...prev, emptyQuestion(prev.length)])}
-            >
-              <Plus className="h-4 w-4" />
-              Add Question
-            </Button>
+            <p className="text-xs text-muted-foreground">Four shapes: multiple choice, fill in the blank, put in order, match the pairs.</p>
           </div>
-          <div className="space-y-3">
-            {questions.map((q, qi) => (
-              <Card key={q.id ?? `new-${qi}`}>
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="shrink-0 text-sm font-semibold text-muted-foreground">Q{qi + 1}</span>
-                    <Input
-                      value={q.questionText}
-                      onChange={(e) =>
-                        setQuestions((prev) =>
-                          prev.map((qq, qqi) => (qqi === qi ? { ...qq, questionText: e.target.value } : qq)),
-                        )
-                      }
-                      placeholder="Question text"
-                      className="flex-1"
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Move question up"
-                      onClick={() => moveQuestion(qi, -1)}
-                      disabled={qi === 0}
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Move question down"
-                      onClick={() => moveQuestion(qi, 1)}
-                      disabled={qi === questions.length - 1}
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="text-destructive"
-                      aria-label="Remove question"
-                      onClick={() => setQuestions((prev) => prev.filter((_, qqi) => qqi !== qi))}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="space-y-2 pl-4">
-                    {q.answers.map((a, ai) => (
-                      <div key={a.id ?? `new-${ai}`} className="space-y-1.5 rounded-md border border-border p-2.5">
-                        <div className="flex items-center gap-2">
-                          <label className="flex shrink-0 items-center gap-1.5 text-xs font-semibold">
-                            <Checkbox
-                              checked={a.isCorrect}
-                              onCheckedChange={(checked) =>
-                                setQuestions((prev) =>
-                                  prev.map((qq, qqi) =>
-                                    qqi === qi
-                                      ? {
-                                          ...qq,
-                                          answers: qq.answers.map((aa, aai) => ({
-                                            ...aa,
-                                            isCorrect: aai === ai ? !!checked : aa.isCorrect,
-                                          })),
-                                        }
-                                      : qq,
-                                  ),
-                                )
-                              }
-                            />
-                            Correct
-                          </label>
-                          <Input
-                            value={a.answerText}
-                            onChange={(e) =>
-                              setQuestions((prev) =>
-                                prev.map((qq, qqi) =>
-                                  qqi === qi
-                                    ? {
-                                        ...qq,
-                                        answers: qq.answers.map((aa, aai) =>
-                                          aai === ai ? { ...aa, answerText: e.target.value } : aa,
-                                        ),
-                                      }
-                                    : qq,
-                                ),
-                              )
-                            }
-                            placeholder="Answer text"
-                            className="flex-1"
-                          />
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="shrink-0 text-destructive"
-                            aria-label="Remove answer option"
-                            onClick={() =>
-                              setQuestions((prev) =>
-                                prev.map((qq, qqi) =>
-                                  qqi === qi ? { ...qq, answers: qq.answers.filter((_, aai) => aai !== ai) } : qq,
-                                ),
-                              )
-                            }
-                            disabled={q.answers.length <= 2}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <Textarea
-                          value={a.explanation}
-                          onChange={(e) =>
-                            setQuestions((prev) =>
-                              prev.map((qq, qqi) =>
-                                qqi === qi
-                                  ? {
-                                      ...qq,
-                                      answers: qq.answers.map((aa, aai) =>
-                                        aai === ai ? { ...aa, explanation: e.target.value } : aa,
-                                      ),
-                                    }
-                                  : qq,
-                              ),
-                            )
-                          }
-                          rows={2}
-                          placeholder="Explanation shown when this answer is expanded, why it's right or wrong."
-                        />
-                      </div>
-                    ))}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        setQuestions((prev) =>
-                          prev.map((qq, qqi) =>
-                            qqi === qi ? { ...qq, answers: [...qq.answers, emptyAnswer(qq.answers.length)] } : qq,
-                          ),
-                        )
-                      }
-                      disabled={q.answers.length >= 6}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Answer
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            {questions.length === 0 && <p className="text-sm text-muted-foreground">No quiz questions yet.</p>}
-          </div>
+          {/* The same editor the class builder uses, drafting against this track's own lessons. */}
+          <QuizEditor
+            questions={questions}
+            pages={lessons.map((l) => ({ title: l.title, body: l.content }))}
+            readingLevel={null}
+            onChange={(updater) => setQuestions(updater)}
+          />
+          {questions.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No quiz questions yet.</p>}
         </div>
       </div>
 

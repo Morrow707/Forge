@@ -15,6 +15,7 @@ import { AcademyQuiz, type QuizAttemptSummary } from "@/components/academy-quiz"
 import { CoachesCornerAsk } from "@/components/coaches-corner-ask";
 import { CoachesCornerDiscussion } from "@/components/coaches-corner-discussion";
 import { CoachesCornerPaths } from "@/components/coaches-corner-paths";
+import { LessonFlashcards } from "@/components/lesson-flashcards";
 import { formatCents } from "@shared/billing-tiers";
 
 /** The Coaches Corner half of GET /api/coach/entitlements. `unlocked` is the same
@@ -57,6 +58,7 @@ type LessonDetail = {
   estMinutes?: number | null;
   completed?: boolean;
   sources?: LessonSource[];
+  flashcards?: { front: string; back: string }[];
 };
 
 type QuizAnswerDetail = { id: number; answerText: string; isCorrect: boolean; explanation: string };
@@ -226,6 +228,13 @@ export default function CoachesCorner() {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+          {(selectedLesson.flashcards?.length ?? 0) > 0 && (
+            // The same review step the athlete classes have (2026-10-04): between the reading
+            // and "Mark as read", nothing saved, cards marked Again come back around.
+            <div className="rounded-md border border-border bg-surface p-4">
+              <LessonFlashcards cards={selectedLesson.flashcards!} />
             </div>
           )}
           <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold">

@@ -5,6 +5,14 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { ACADEMY_QUIZ_PASS_MARK } from "@shared/academy-quiz";
+import {
+  gradeQuestion,
+  isAnswered,
+  type QuizQuestionPayload,
+  type QuizQuestionType,
+  type QuizSubmission,
+} from "@shared/class-quiz-grading";
+import { FillBlankInput, OrderingInput, MatchingInput, QuizKeyResult } from "@/components/quiz-question-inputs";
 import { toast } from "sonner";
 
 type QuizAnswer = {
@@ -17,23 +25,39 @@ type QuizAnswer = {
 type QuizQuestion = {
   id: number;
   questionText: string;
+  questionType?: QuizQuestionType;
+  /** Before grading: the shuffled, key-free payload the server sends. In the admin preview the
+   * full key, which is what lets the preview grade in the browser. */
+  payload?: QuizQuestionPayload | null;
   answers: QuizAnswer[];
 };
 
 export type QuizAttemptSummary = { correct: number; total: number; passed: boolean; completedAt: string | Date };
 
+type QuestionResult = {
+  questionId: number;
+  questionType?: QuizQuestionType;
+  pickedAnswerId: number | null;
+  correctAnswerId: number | null;
+  submitted?: QuizSubmission | null;
+  /** The key, handed back only after grading, for the three non-multiple-choice shapes. */
+  payload?: QuizQuestionPayload | null;
+  correct: boolean;
+};
+
 type AttemptResult = {
   correct: number;
   total: number;
   passed: boolean;
-  results: { questionId: number; pickedAnswerId: number | null; correctAnswerId: number | null; correct: boolean }[];
+  results: QuestionResult[];
   best: QuizAttemptSummary | null;
 };
 
-/** The track quiz, scored (2026-10-03). A coach picks one answer per question and submits;
- * the SERVER grades against the stored answers and keeps the attempt, so a score is a record
- * and not a claim. After submitting, every answer's explanation opens on tap, as before, so
- * the quiz still teaches. Retake as often as wanted; the best attempt is what counts. */
+/** The track quiz, scored (2026-10-03), in four shapes (2026-10-04, the same four the class
+ * quizzes have). A coach answers each question in its own kind and submits; the SERVER grades
+ * against the stored key and keeps the attempt, so a score is a record and not a claim. After
+ * submitting, a multiple-choice answer's explanation opens on tap, as before, and the other
+ * shapes show the key beside what was given. Retake as often as wanted; the best counts. */
 export function AcademyQuiz({
   trackId,
   questions,
@@ -45,25 +69,34 @@ export function AcademyQuiz({
   questions: QuizQuestion[];
   bestAttempt: QuizAttemptSummary | null;
   onAttempt?: () => void;
-  /** The admin's own preview of a track: graded here, nothing recorded, so an admin checking
-   * their questions does not write attempts against their account. */
+  /** The admin's own preview of a track: graded here against the key the admin already holds,
+   * nothing recorded, so an admin checking their questions does not write attempts against
+   * their account. */
   preview?: boolean;
 }) {
-  const [picks, setPicks] = useState<Record<number, number>>({});
+  const [subs, setSubs] = useState<Record<number, QuizSubmission>>({});
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  function setSubmission(questionId: number, patch: Partial<QuizSubmission>) {
+    setSubs((prev) => ({ ...prev, [questionId]: { ...(prev[questionId] ?? { questionId }), questionId, ...patch } }));
+  }
 
   const submit = useMutation({
     mutationFn: async () => {
       if (preview) {
-        const results = questions.map((q) => {
-          const picked = picks[q.id] ?? null;
+        const results: QuestionResult[] = questions.map((q) => {
+          const sub = subs[q.id];
+          const questionType = q.questionType ?? "multiple_choice";
           const correctAnswer = q.answers.find((a) => a.isCorrect) ?? null;
           return {
             questionId: q.id,
-            pickedAnswerId: picked,
+            questionType,
+            pickedAnswerId: sub?.answerId ?? null,
             correctAnswerId: correctAnswer?.id ?? null,
-            correct: picked != null && correctAnswer != null && picked === correctAnswer.id,
+            submitted: sub ?? null,
+            payload: questionType === "multiple_choice" ? null : (q.payload ?? null),
+            correct: gradeQuestion({ id: q.id, questionType, payload: q.payload ?? null, answers: q.answers }, sub),
           };
         });
         const correct = results.filter((r) => r.correct).length;
@@ -71,7 +104,7 @@ export function AcademyQuiz({
         return { correct, total, passed: total > 0 && correct / total >= ACADEMY_QUIZ_PASS_MARK, results, best: null } satisfies AttemptResult;
       }
       const res = await apiRequest("POST", `/api/coach/academy/tracks/${trackId}/quiz-attempt`, {
-        picks: Object.entries(picks).map(([questionId, answerId]) => ({ questionId: Number(questionId), answerId })),
+        answers: Object.values(subs),
       });
       return res.json() as Promise<AttemptResult>;
     },
@@ -94,7 +127,7 @@ export function AcademyQuiz({
     });
   }
 
-  const answered = Object.keys(picks).length;
+  const answered = questions.filter((q) => isAnswered({ questionType: q.questionType ?? "multiple_choice", payload: q.payload ?? null }, subs[q.id])).length;
   const passMarkPct = Math.round(ACADEMY_QUIZ_PASS_MARK * 100);
 
   return (
@@ -115,78 +148,100 @@ export function AcademyQuiz({
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
         {result
-          ? `You scored ${result.correct} of ${result.total}${result.passed ? ", which passes." : `. ${passMarkPct}% passes; retake when you're ready.`} Tap any answer to see why.`
-          : `Pick one answer per question and submit. ${passMarkPct}% passes, and your best score is kept.`}
+          ? `You scored ${result.correct} of ${result.total}${result.passed ? ", which passes." : `. ${passMarkPct}% passes; retake when you're ready.`} Tap a multiple-choice answer to see why.`
+          : `Answer every question and submit. ${passMarkPct}% passes, and your best score is kept.`}
       </p>
       <div className="space-y-6">
         {questions.map((q, qi) => {
           const r = result?.results.find((x) => x.questionId === q.id);
+          const type = q.questionType ?? "multiple_choice";
+          const sub = subs[q.id];
           return (
             <div key={q.id}>
-              <p className="mb-2 flex items-start gap-2 font-semibold">
-                {r && (r.correct ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />)}
-                <span>
-                  {qi + 1}. {q.questionText}
-                </span>
-              </p>
-              <div className="space-y-1.5">
-                {q.answers.map((a) => {
-                  const isOpen = expanded.has(a.id);
-                  const picked = picks[q.id] === a.id;
-                  return (
-                    <div
-                      key={a.id}
-                      className={cn(
-                        "overflow-hidden rounded-md border",
-                        !result && picked ? "border-primary" : "border-border",
-                        result && a.isCorrect && "border-success/60",
-                        result && picked && !a.isCorrect && "border-destructive/60",
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => (result ? toggle(a.id) : setPicks((prev) => ({ ...prev, [q.id]: a.id })))}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-elevated"
+              {type === "fill_blank" && !result ? (
+                <div className="mb-2 flex gap-2 font-semibold">
+                  <span>{qi + 1}.</span>
+                  <div className="min-w-0 flex-1 font-normal">
+                    <FillBlankInput questionText={q.questionText} value={sub?.text ?? ""} onChange={(text) => setSubmission(q.id, { text })} />
+                  </div>
+                </div>
+              ) : (
+                <p className="mb-2 flex items-start gap-2 font-semibold">
+                  {r && (r.correct ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />)}
+                  <span>
+                    {qi + 1}. {q.questionText}
+                  </span>
+                </p>
+              )}
+              {type === "multiple_choice" && (
+                <div className="space-y-1.5">
+                  {q.answers.map((a) => {
+                    const isOpen = expanded.has(a.id);
+                    const picked = (result ? r?.pickedAnswerId : sub?.answerId) === a.id;
+                    return (
+                      <div
+                        key={a.id}
+                        className={cn(
+                          "overflow-hidden rounded-md border",
+                          !result && picked ? "border-primary" : "border-border",
+                          result && a.isCorrect && "border-success/60",
+                          result && picked && !a.isCorrect && "border-destructive/60",
+                        )}
                       >
-                        {result ? (
-                          a.isCorrect ? (
-                            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                        <button
+                          type="button"
+                          onClick={() => (result ? toggle(a.id) : setSubmission(q.id, { answerId: a.id }))}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-elevated"
+                        >
+                          {result ? (
+                            a.isCorrect ? (
+                              <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                            ) : picked ? (
+                              <XCircle className="h-4 w-4 shrink-0 text-destructive" />
+                            ) : (
+                              <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            )
                           ) : picked ? (
-                            <XCircle className="h-4 w-4 shrink-0 text-destructive" />
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
                           ) : (
                             <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          )
-                        ) : picked ? (
-                          <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                        ) : (
-                          <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        )}
-                        <span className="flex-1">{a.answerText}</span>
-                        {result && (
-                          <ChevronDown
-                            className={cn(
-                              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                              isOpen && "rotate-180",
-                            )}
-                          />
-                        )}
-                      </button>
-                      {result && isOpen && (
-                        <div
-                          className={cn(
-                            "border-t px-3 py-2 text-sm",
-                            a.isCorrect
-                              ? "border-success/30 bg-success/5 text-success"
-                              : "border-destructive/30 bg-destructive/5 text-destructive",
                           )}
-                        >
-                          {a.explanation}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                          <span className="flex-1">{a.answerText}</span>
+                          {result && (
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                                isOpen && "rotate-180",
+                              )}
+                            />
+                          )}
+                        </button>
+                        {result && isOpen && (
+                          <div
+                            className={cn(
+                              "border-t px-3 py-2 text-sm",
+                              a.isCorrect
+                                ? "border-success/30 bg-success/5 text-success"
+                                : "border-destructive/30 bg-destructive/5 text-destructive",
+                            )}
+                          >
+                            {a.explanation}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {type === "ordering" && !result && (
+                <OrderingInput payload={q.payload ?? null} value={sub?.order} onChange={(order) => setSubmission(q.id, { order })} />
+              )}
+              {type === "matching" && !result && (
+                <MatchingInput payload={q.payload ?? null} value={sub?.matches} onChange={(matches) => setSubmission(q.id, { matches })} />
+              )}
+              {type !== "multiple_choice" && result && r && (
+                <QuizKeyResult result={{ questionType: type, payload: r.payload ?? null, submitted: r.submitted ?? null, isCorrect: r.correct }} />
+              )}
             </div>
           );
         })}
@@ -197,7 +252,7 @@ export function AcademyQuiz({
             variant="outline"
             onClick={() => {
               setResult(null);
-              setPicks({});
+              setSubs({});
               setExpanded(new Set());
             }}
           >

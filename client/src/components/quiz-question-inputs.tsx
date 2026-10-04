@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, GripVertical, X } from "lucide-react";
-import { shuffled, type QuizQuestionPayload } from "@shared/class-quiz-grading";
+import { shuffled, type QuizQuestionPayload, type QuizQuestionType, type QuizSubmission } from "@shared/class-quiz-grading";
 
 /** The three non-multiple-choice question inputs (2026-10-04). Each one works by touch and by
  * pointer: ordering and matching drag with dnd-kit and also take taps and buttons, because a
@@ -225,5 +225,83 @@ export function MatchingInput({ payload, value, onChange, disabled }: { payload:
         </div>
       </div>
     </DndContext>
+  );
+}
+
+/** What the right answer was, for the three non-multiple-choice shapes, beside what the
+ * reader gave. The key only exists on a graded result. Shared by the class reader and the
+ * Coaches Corner track quiz. */
+export type QuizKeyResultProps = {
+  questionType?: QuizQuestionType;
+  /** The key, handed back only after grading. */
+  payload?: QuizQuestionPayload | null;
+  submitted?: QuizSubmission | null;
+  isCorrect: boolean;
+};
+export function QuizKeyResult({ result: r }: { result: QuizKeyResultProps }) {
+  const payload = r.payload ?? null;
+  const sub = r.submitted ?? null;
+  const explanation = payload?.explanation?.trim();
+  return (
+    <div className="space-y-2 pl-6 text-xs">
+      {r.questionType === "fill_blank" && (
+        <>
+          <p>
+            <span className="text-muted-foreground">Your answer: </span>
+            <span className={cn("font-medium", r.isCorrect ? "text-success" : "text-destructive")}>{sub?.text?.trim() || "(blank)"}</span>
+          </p>
+          {!r.isCorrect && (payload?.accepted?.length ?? 0) > 0 && (
+            <p>
+              <span className="text-muted-foreground">Accepted: </span>
+              <span className="font-medium">{payload!.accepted!.join(", ")}</span>
+            </p>
+          )}
+        </>
+      )}
+      {r.questionType === "ordering" && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <p className="mb-1 text-muted-foreground">Your order</p>
+            <ol className="list-decimal space-y-0.5 pl-4">
+              {(sub?.order ?? []).map((it, i) => (
+                <li key={i} className={cn(payload?.items?.[i] === it ? "text-success" : "text-destructive")}>{it}</li>
+              ))}
+            </ol>
+          </div>
+          {!r.isCorrect && (
+            <div>
+              <p className="mb-1 text-muted-foreground">Correct order</p>
+              <ol className="list-decimal space-y-0.5 pl-4">
+                {(payload?.items ?? []).map((it, i) => (
+                  <li key={i}>{it}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
+      {r.questionType === "matching" && (
+        <div className="space-y-1">
+          {(payload?.pairs ?? []).map((p) => {
+            const given = sub?.matches?.[p.left];
+            const ok = given === p.right;
+            return (
+              <p key={p.left}>
+                <span className="font-medium">{p.left}</span>
+                <span className="text-muted-foreground"> → </span>
+                <span className={cn(ok ? "text-success" : "text-destructive")}>{given ?? "(none)"}</span>
+                {!ok && (
+                  <>
+                    <span className="text-muted-foreground"> · correct: </span>
+                    <span>{p.right}</span>
+                  </>
+                )}
+              </p>
+            );
+          })}
+        </div>
+      )}
+      {explanation && <p className="text-muted-foreground">{explanation}</p>}
+    </div>
   );
 }

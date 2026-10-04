@@ -9,6 +9,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AcademyQuiz } from "@/components/academy-quiz";
+import { LessonFlashcards } from "@/components/lesson-flashcards";
+import type { QuizQuestionPayload, QuizQuestionType } from "@shared/class-quiz-grading";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, Circle, Pencil, Plus } from "lucide-react";
@@ -21,10 +23,18 @@ type Lesson = {
   content: string;
   estMinutes: number | null;
   completed: boolean;
+  flashcards?: { front: string; back: string }[];
 };
 
 type QuizAnswer = { id: number; answerText: string; isCorrect: boolean; explanation: string };
-type QuizQuestion = { id: number; questionText: string; answers: QuizAnswer[] };
+type QuizQuestion = {
+  id: number;
+  questionText: string;
+  questionType?: QuizQuestionType;
+  /** The admin route sends the full key; the preview grades against it in the browser. */
+  payload?: QuizQuestionPayload | null;
+  answers: QuizAnswer[];
+};
 
 type Track = {
   id: number;
@@ -97,6 +107,11 @@ export default function AdminCoachesCorner() {
               <p key={i}>{para}</p>
             ))}
           </div>
+          {(selectedLesson.flashcards?.length ?? 0) > 0 && (
+            <div className="rounded-md border border-border bg-surface p-4">
+              <LessonFlashcards cards={selectedLesson.flashcards!} />
+            </div>
+          )}
           <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold">
             <Checkbox
               checked={selectedLesson.completed}

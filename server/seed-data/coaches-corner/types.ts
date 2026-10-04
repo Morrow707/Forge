@@ -1,3 +1,5 @@
+import type { QuizQuestionPayload, QuizQuestionType } from "@shared/class-quiz-grading";
+
 /** The shape the seed's Coaches Corner tracks take (server/seed.ts, seedAcademyTracks). The
  * 2026-10-03 tracks live one per file in this folder, written by Forge in its own words --
  * general strength and conditioning practice, no outside source reproduced and none cited
@@ -7,10 +9,20 @@ export type SeedAcademyTrack = {
   title: string;
   description: string;
   keyPrinciplesForAi: string;
-  lessons: Array<{ lessonNumber: number; title: string; content: string; estMinutes: number }>;
+  lessons: Array<{
+    lessonNumber: number;
+    title: string;
+    content: string;
+    estMinutes: number;
+    /** Optional review cards (2026-10-04); a lesson without them has no review step. */
+    flashcards?: Array<{ front: string; back: string }>;
+  }>;
   quizQuestions: Array<{
     orderIndex: number;
     questionText: string;
+    /** multiple_choice when absent; the other three shapes carry their key in payload. */
+    questionType?: QuizQuestionType;
+    payload?: QuizQuestionPayload | null;
     answers: Array<{ orderIndex: number; answerText: string; isCorrect: boolean; explanation: string }>;
   }>;
 };

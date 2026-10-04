@@ -4991,6 +4991,40 @@ export const quizQuestionPayloadSchema = z.object({
   explanation: z.string().trim().max(1000).optional(),
 });
 
+/** The shape rule every quiz question meets, whichever table it lives in: the class lessons'
+ * quizzes and the Coaches Corner track quizzes (2026-10-04) share the four question types and
+ * this one check, so the two builders cannot drift on what a valid question is. */
+export function refineQuizQuestionShape(raw: unknown, ctx: z.RefinementCtx) {
+  // Typed explicitly: zod infers an all-optional object as {} under this tsconfig.
+  const q = raw as {
+    questionType: QuizQuestionType;
+    questionText: string;
+    answers: { isCorrect: boolean }[];
+    payload?: QuizQuestionPayload | null;
+  };
+  switch (q.questionType) {
+    case "multiple_choice":
+      if (q.answers.length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A multiple-choice question needs at least 2 answers." });
+      if (q.answers.filter((a) => a.isCorrect).length !== 1)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A multiple-choice question needs exactly one correct answer." });
+      break;
+    case "fill_blank":
+      if (!q.questionText.includes("___")) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A fill-in-the-blank question needs a blank written as ___ in the text." });
+      if (!q.payload?.accepted?.length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A fill-in-the-blank question needs at least one accepted answer." });
+      break;
+    case "ordering":
+      if ((q.payload?.items?.length ?? 0) < 3) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "An ordering question needs at least 3 items." });
+      if (new Set(q.payload?.items ?? []).size !== (q.payload?.items?.length ?? 0))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ordering items must be distinct." });
+      break;
+    case "matching":
+      if ((q.payload?.pairs?.length ?? 0) < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A matching question needs at least 2 pairs." });
+      if (new Set((q.payload?.pairs ?? []).map((p) => p.left)).size !== (q.payload?.pairs?.length ?? 0))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Matching lefts must be distinct." });
+      break;
+  }
+}
+
 export const classLessonQuizQuestionInputSchema = z
   .object({
     id: z.number().optional(),
@@ -5000,36 +5034,7 @@ export const classLessonQuizQuestionInputSchema = z
     payload: quizQuestionPayloadSchema.nullable().optional(),
     answers: z.array(classLessonQuizAnswerInputSchema).max(8).default([]),
   })
-  .superRefine((raw, ctx) => {
-    // Typed explicitly: zod infers an all-optional object as {} under this tsconfig.
-    const q = raw as {
-      questionType: QuizQuestionType;
-      questionText: string;
-      answers: { isCorrect: boolean }[];
-      payload?: QuizQuestionPayload | null;
-    };
-    switch (q.questionType) {
-      case "multiple_choice":
-        if (q.answers.length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A multiple-choice question needs at least 2 answers." });
-        if (q.answers.filter((a) => a.isCorrect).length !== 1)
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A multiple-choice question needs exactly one correct answer." });
-        break;
-      case "fill_blank":
-        if (!q.questionText.includes("___")) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A fill-in-the-blank question needs a blank written as ___ in the text." });
-        if (!q.payload?.accepted?.length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A fill-in-the-blank question needs at least one accepted answer." });
-        break;
-      case "ordering":
-        if ((q.payload?.items?.length ?? 0) < 3) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "An ordering question needs at least 3 items." });
-        if (new Set(q.payload?.items ?? []).size !== (q.payload?.items?.length ?? 0))
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ordering items must be distinct." });
-        break;
-      case "matching":
-        if ((q.payload?.pairs?.length ?? 0) < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A matching question needs at least 2 pairs." });
-        if (new Set((q.payload?.pairs ?? []).map((p) => p.left)).size !== (q.payload?.pairs?.length ?? 0))
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Matching lefts must be distinct." });
-        break;
-    }
-  });
+  .superRefine(refineQuizQuestionShape);
 
 export const classLessonExerciseInputSchema = z.object({
   skillExerciseId: z.number(),
@@ -5187,6 +5192,10 @@ export const academyLessons = pgTable(
     // docs/legal-open-questions.md question 12. Written by the library draft and the
     // citation pass, editable in the builder, shown to the coach.
     sources: json("sources").$type<AcademyLessonSource[]>().notNull().default([]),
+    // Flashcards (2026-10-04), the same review step the athlete classes have: shown between
+    // the reading and "Mark as read" when the lesson has any. Typed in the builder or drafted
+    // from this lesson's own text. No on/off switch: an empty list is the off state.
+    flashcards: json("flashcards").$type<{ front: string; back: string }[]>().notNull().default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -5449,6 +5458,10 @@ export const academyQuizQuestions = pgTable(
       .references(() => academyTracks.id, { onDelete: "cascade" }),
     orderIndex: integer("order_index").notNull().default(0),
     questionText: text("question_text").notNull(),
+    // The same four shapes as the class quizzes (2026-10-04, shared/class-quiz-grading.ts):
+    // multiple_choice keeps its answer rows; the other three keep their key in payload.
+    questionType: text("question_type").$type<QuizQuestionType>().notNull().default("multiple_choice"),
+    payload: json("payload").$type<QuizQuestionPayload | null>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -5540,6 +5553,7 @@ export const academyLessonInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
   content: z.string().trim().min(1),
   estMinutes: z.number().int().min(1).nullable().optional(),
+  flashcards: z.array(classLessonFlashcardSchema).max(40).default([]),
   sources: z
     .array(
       z.object({
@@ -5562,12 +5576,16 @@ export const academyQuizAnswerInputSchema = z.object({
   explanation: z.string().trim().min(1).max(1000),
 });
 
-export const academyQuizQuestionInputSchema = z.object({
-  id: z.number().optional(),
-  orderIndex: z.number().int().default(0),
-  questionText: z.string().trim().min(1).max(500),
-  answers: z.array(academyQuizAnswerInputSchema).min(2).max(6),
-});
+export const academyQuizQuestionInputSchema = z
+  .object({
+    id: z.number().optional(),
+    orderIndex: z.number().int().default(0),
+    questionText: z.string().trim().min(1).max(1000),
+    questionType: z.enum(QUIZ_QUESTION_TYPES).default("multiple_choice"),
+    payload: quizQuestionPayloadSchema.nullable().optional(),
+    answers: z.array(academyQuizAnswerInputSchema).max(6).default([]),
+  })
+  .superRefine(refineQuizQuestionShape);
 
 export const academyTrackStructureSchema = z.object({
   title: z.string().trim().min(1).max(200),

@@ -8,7 +8,7 @@ export type Flashcard = { front: string; back: string };
 /** The athlete's review step (2026-10-04): one card at a time, tap to flip, then "Got it" or
  * "Again". Cards marked Again come back around until every card has been got once; the
  * round count and the pile are the only state, nothing is saved. */
-export function LessonFlashcards({ cards, onDone }: { cards: Flashcard[]; onDone: () => void }) {
+export function LessonFlashcards({ cards, onDone }: { cards: Flashcard[]; /** Omitted where the cards are not a step on the way to something (a Coaches Corner lesson). */ onDone?: () => void }) {
   const [queue, setQueue] = useState<number[]>(() => cards.map((_, i) => i));
   const [flipped, setFlipped] = useState(false);
   const [got, setGot] = useState(0);
@@ -62,7 +62,7 @@ export function LessonFlashcards({ cards, onDone }: { cards: Flashcard[]; onDone
               <RotateCcw className="h-4 w-4" />
               Go again
             </Button>
-            <Button onClick={onDone}>Continue</Button>
+            {onDone && <Button onClick={onDone}>Continue</Button>}
           </div>
         </div>
       ) : (
