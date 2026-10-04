@@ -1016,9 +1016,8 @@ them will read as an arbitrary constraint to somebody who wasn't here:
   Open: whether to SSR the six marketing pages.
 
 **Three things parked by Scott, 2026-09-20 ("flag those 3 needs, we can do those later"):**
-1. **Smart App Banner** on the website needs the App Store id. One line in
-   `client/index.html`: `<meta name="apple-itunes-app" content="app-id=XXXXXXXXX">`. Nobody
-   has the id in the repo; Scott supplies it.
+1. **Smart App Banner: done.** `VITE_APP_STORE_ID` is set on Render (Scott, 2026-10-04); the
+   banner is injected from it and shows in Safari once the app is released in the store.
 2. **FAQ on /for-high-schools with FAQPage JSON-LD.** Highest search payoff of the SEO
    proposals. Questions come from facts in this file (FERPA does not apply; a minor's account is
    inert until a guardian claims it; where data lives; the four validated movements and the
