@@ -11,7 +11,7 @@ import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import {
   FREE_AGENT_ADD_ONS,
-  FREE_AGENT_ADD_ON_ORDER,
+  SPORT_COACH_ADD_ON_IDS,
   type FreeAgentAddOnId,
 } from "@shared/free-agent-tiers";
 import { formatCents } from "@shared/billing-tiers";
@@ -112,7 +112,7 @@ export default function AthleteSportCoaches() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FREE_AGENT_ADD_ON_ORDER.map((id) => {
+            {SPORT_COACH_ADD_ON_IDS.map((id) => {
               const addOn = FREE_AGENT_ADD_ONS[id];
               // Explicit true, never truthiness: undefined is "not answered yet",
               // which is neither yes nor no.

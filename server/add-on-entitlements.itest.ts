@@ -84,13 +84,15 @@ describe("a Free Agent's add-ons", () => {
    * harmlessly, because this test is what says why, so nothing is silently passing. The live
    * version of that contract ("beta opens what is offered, and does not claim it was bought") is
    * pinned on the coach side, where Coaches Corner really is sold. */
-  it("offers no Free Agent add-on today, with the machinery intact behind it", () => {
-    expect(offered).toEqual([]);
+  it("offers exactly All Classes today, with the sport coaches withdrawn behind it", () => {
+    // All Classes (2026-10-04) is the one add-on on sale; the three sport coaches stay
+    // withdrawn, which is the difference between unsellable and gone.
+    expect(offered).toEqual(["all_classes"]);
     // The ids still exist and are still withdrawn, which is the difference between an add-on
     // being unsellable and the add-on framework being gone. Same reasoning as
     // WITHDRAWN_FREE_AGENT_TIERS being kept while empty.
     expect(FREE_AGENT_ADD_ON_ORDER.length).toBeGreaterThan(0);
-    expect(WITHDRAWN_ADD_ONS.length).toBe(FREE_AGENT_ADD_ON_ORDER.length);
+    expect(WITHDRAWN_ADD_ONS.length).toBe(FREE_AGENT_ADD_ON_ORDER.length - 1);
   });
 
   it("gives a beta account the offered add-ons, without anybody having bought one", async () => {

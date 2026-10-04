@@ -11,6 +11,7 @@ import { ArrowLeft, Lock, CheckCircle2, PlayCircle, BookOpen, ListChecks, Star, 
 import { cn } from "@/lib/utils";
 import { ClassLessonReaderDialog } from "@/components/class-lesson-reader-dialog";
 import { ReadFailed } from "@/components/read-failed";
+import { AllClassesCard } from "@/components/all-classes-card";
 import { Capacitor } from "@capacitor/core";
 
 type LessonProgress = {
@@ -297,18 +298,8 @@ export default function AthleteClassDetail() {
                     </Button>
                   )}
                   {/* The one pricing rule (shared/class-pricing-rule.ts): chapter one is free,
-                      the rest come with the camera plan. */}
-                  {lesson.state === "locked_tier" && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Lock className="h-3.5 w-3.5 shrink-0" />
-                        Comes with the AI Coach + Video plan
-                      </span>
-                      <Button size="sm" variant="outline" onClick={() => navigate("/athlete/upgrade")}>
-                        See plans
-                      </Button>
-                    </div>
-                  )}
+                      the rest come with All Classes. */}
+                  {lesson.state === "locked_tier" && <AllClassesCard compact />}
                   {lesson.state === "locked" && (
                     <span className="text-xs text-muted-foreground">
                       Complete Lesson {lesson.lessonNumber - 1} to unlock

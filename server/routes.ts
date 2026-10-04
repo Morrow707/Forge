@@ -135,6 +135,8 @@ import { NOTIFICATION_CATEGORIES } from "@shared/notification-categories";
 import {
   FREE_AGENT_ADD_ONS,
   BUILT_FREE_AGENT_ADD_ONS,
+  ALL_CLASSES_ADD_ON_ID,
+  SPORT_COACH_ADD_ON_IDS,
   FREE_AGENT_ADD_ON_ORDER,
   type FreeAgentAddOnId,
   isSportCoachAddOn,
@@ -1158,7 +1160,7 @@ async function sportCoachAccessFor(user: {
 
 async function requireFreeAgentAddOn(req: any, res: any, next: any) {
   const addOnId = req.params.addOnId as string;
-  if (!FREE_AGENT_ADD_ON_ORDER.includes(addOnId as FreeAgentAddOnId)) {
+  if (!(SPORT_COACH_ADD_ON_IDS as string[]).includes(addOnId)) {
     return res.status(404).json({ message: "No such sport coach" });
   }
   const sessionUser = currentUser(req);
@@ -1329,12 +1331,18 @@ async function assertAdminOwnsForgeClass(classId: number) {
 // "locked_preview" lessonId 404s exactly like it doesn't exist, so a client
 // can't jump ahead of the progression/payment gate by guessing a later
 // lesson's id.
-// The one pricing rule (shared/class-pricing-rule.ts): an athlete whose plan lacks the camera
-// reads chapter one of a Forge class and nothing after it. A coach's own class is never gated
-// this way; a coached athlete and a Free Agent on AI Coach + Video have the camera.
+// The one pricing rule (shared/class-pricing-rule.ts): a Free Agent without the All Classes
+// add-on reads chapter one of a Forge class and nothing after it, whatever their tier. A
+// coach's own class is never gated this way. Beta, a trial and enforcement-off open it like every add-on
+// (getFreeAgentEntitlements), so nobody meets this wall while nothing is charged.
 async function classTierGated(user: { id: number; email: string; role: string }): Promise<boolean> {
   if (user.role !== "athlete") return false;
-  return !(await skillsAccessFor(user)).allowed;
+  // A coached athlete reads the classes their coach enrolled them in, every chapter; the
+  // add-on is a Free Agent thing and is refused to them (Scott: "they have access to the
+  // classes, but only the ones their coach gives to them").
+  if (await athleteHasCoach(user.id)) return false;
+  const access = await sportCoachAccessFor(user);
+  return access.addOns[ALL_CLASSES_ADD_ON_ID] !== true;
 }
 
 async function requireReadableClassLesson(user: { id: number; email: string; role: string }, classId: number, lessonId: number) {
@@ -13742,6 +13750,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/billing/checkout/free-agent-add-on",
     requireRole("athlete"),
+    requireFreeAgent,
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
@@ -13754,9 +13763,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ message: "Pick a sport coach first." });
+        return res.status(400).json({ message: "Pick an add-on first." });
       }
-      const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/athlete/sport-coaches");
+      const { successUrl, cancelUrl } = checkoutReturnUrls(
+        req,
+        parsed.data.addOnId === ALL_CLASSES_ADD_ON_ID ? "/athlete/classes" : "/athlete/sport-coaches",
+      );
       const result = await createFreeAgentAddOnCheckout(
         user.id,
         user.email,

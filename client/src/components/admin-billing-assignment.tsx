@@ -268,7 +268,7 @@ function AthleteBillingForm({ userId, email }: { userId: number; email: string }
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-xs">Sport coaches</Label>
+        <Label className="text-xs">Add-ons</Label>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5">
           {FREE_AGENT_ADD_ON_ORDER.map((id) => (
             <label key={id} className="flex items-center gap-1.5 text-xs">

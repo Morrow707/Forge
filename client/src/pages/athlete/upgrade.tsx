@@ -31,8 +31,9 @@ import type { FreeAgentTierId, FreeAgentAddOnId } from "@shared/free-agent-tiers
 import {
   addOnIsOffered,
   FREE_AGENT_ADD_ONS,
-  FREE_AGENT_ADD_ON_ORDER,
+  SPORT_COACH_ADD_ON_IDS,
 } from "@shared/free-agent-tiers";
+import { AllClassesCard } from "@/components/all-classes-card";
 import { Sparkles, Video, RotateCcw, CreditCard } from "lucide-react";
 import {
   FREE_AGENT_TIERS,
@@ -69,7 +70,7 @@ function SportCoachAddOns({ webCheckout }: { webCheckout: boolean }) {
    * A card saying "$7.99, coming soon" is still an offer, and this section's whole heading was
    * an offer of three things nobody has tested. The heading goes with them: with the sport
    * coaches withheld, "Sport coaches -- bought one at a time" describes an empty shelf. */
-  const offered = FREE_AGENT_ADD_ON_ORDER.filter(addOnIsOffered);
+  const offered = SPORT_COACH_ADD_ON_IDS.filter(addOnIsOffered);
   if (offered.length === 0) return null;
 
   return (
@@ -334,6 +335,10 @@ export default function AthleteUpgrade() {
             })}
           </div>
         )}
+        {/* All Classes (2026-10-04): the one add-on on sale, on top of any tier. */}
+        <div className="mt-6">
+          <AllClassesCard />
+        </div>
         <SportCoachAddOns webCheckout={!supported && !androidNative} />
         {supported && !live && (
           <Card className="mt-6">

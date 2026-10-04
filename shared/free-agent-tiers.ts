@@ -212,7 +212,12 @@ export type SportCoachAddOnId = "golf_swing" | "hitting" | "pitching";
  * workbench now rides with the camera entitlement: AI Coach + Video has it, every coached
  * athlete and every coach has it, and nothing is sold on top of a tier for it. The gate is
  * useCameraAccess, the same server answer the record button reads. */
-export type FreeAgentAddOnId = SportCoachAddOnId;
+/** ALL CLASSES (2026-10-04). Scott: "make it a monthly purchase of $19.99", every class, every
+ * chapter, for any athlete on any plan or with any coach ("for all ranks"). Chapter 1 of every
+ * Forge class stays the free preview (shared/class-pricing-rule.ts). The only add-on an athlete
+ * can buy today; the three sport coaches are withdrawn. */
+export const ALL_CLASSES_ADD_ON_ID = "all_classes" as const;
+export type FreeAgentAddOnId = SportCoachAddOnId | typeof ALL_CLASSES_ADD_ON_ID;
 
 export const SPORT_COACH_ADD_ON_IDS: SportCoachAddOnId[] = ["golf_swing", "hitting", "pitching"];
 
@@ -256,6 +261,12 @@ export const FREE_AGENT_ADD_ONS: Record<FreeAgentAddOnId, FreeAgentAddOnDef> = {
     monthlyPriceCents: 799,
     description: "AI pitching mechanics analysis and drills.",
   },
+  all_classes: {
+    id: "all_classes",
+    label: "All Classes",
+    monthlyPriceCents: 1999,
+    description: "Every chapter of every Forge class, current and future. Chapter 1 of each is free to try.",
+  },
 };
 
 // Which of the three above have an actual feature behind them -- same
@@ -270,6 +281,7 @@ export const BUILT_FREE_AGENT_ADD_ONS: Set<FreeAgentAddOnId> = new Set([
   "golf_swing",
   "hitting",
   "pitching",
+  "all_classes",
 ]);
 
 /**
@@ -299,7 +311,7 @@ export function addOnIsOffered(id: FreeAgentAddOnId): boolean {
   return !WITHDRAWN_ADD_ONS.includes(id);
 }
 
-export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching"];
+export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching", "all_classes"];
 
 /** The App Store Connect Product id for a sport-coach add-on.
  *

@@ -19,11 +19,13 @@ import {
   FREE_AGENT_TIER_ORDER,
   FREE_AGENT_TIER_GRID_COLS,
   FREE_AGENT_ADD_ONS,
-  FREE_AGENT_ADD_ON_ORDER,
+  SPORT_COACH_ADD_ON_IDS,
+  ALL_CLASSES_ADD_ON_ID,
 } from "@shared/free-agent-tiers";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
 import { Flame, Check, Video, AlertTriangle } from "lucide-react";
 import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
+import { CLASS_PRICING_LINE } from "@shared/class-pricing-rule";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 
 const ALL_BANDS = BILLING_TIER_ORDER.map((id) => BILLING_TIERS[id]);
@@ -252,11 +254,19 @@ export default function PricingPage() {
             })}
           </div>
 
+          {/* All Classes (2026-10-04): the one add-on on sale, on top of any Free Agent tier. */}
+          <div className="mx-auto mt-8 max-w-lg rounded-md border border-border p-4 text-center text-sm">
+            <p className="font-semibold">
+              {FREE_AGENT_ADD_ONS[ALL_CLASSES_ADD_ON_ID].label},{" "}
+              {formatCents(FREE_AGENT_ADD_ONS[ALL_CLASSES_ADD_ON_ID].monthlyPriceCents)}/mo on any Free Agent tier
+            </p>
+            <p className="mt-1 text-muted-foreground">{CLASS_PRICING_LINE}</p>
+          </div>
           <p className="mb-4 mt-8 text-center text-sm text-muted-foreground">
             Sport-specialist coaches, available as add-ons on any Free Agent tier:
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
-            {FREE_AGENT_ADD_ON_ORDER.map((id) => {
+            {SPORT_COACH_ADD_ON_IDS.map((id) => {
               const addOn = FREE_AGENT_ADD_ONS[id];
               return (
                 <div key={id} className="rounded-md border border-border p-3 text-center text-sm">

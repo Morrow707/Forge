@@ -368,7 +368,7 @@ import type { RosterGroup } from "@shared/roster-groups";
 import { findVerbatimLesson } from "./academy-draft-guard";
 import { academyQuizPassed } from "@shared/academy-quiz";
 import { gradeQuestion, athleteFacingPayload, type QuizSubmission, type QuizQuestionType } from "@shared/class-quiz-grading";
-import { chapterNeedsCameraTier } from "@shared/class-pricing-rule";
+import { chapterNeedsClassPass } from "@shared/class-pricing-rule";
 import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-reading-level";
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
@@ -12664,9 +12664,9 @@ Hard rules, no exceptions:
       lessonsWithQuiz: Set<number>;
       coachSettings: typeof classCoachSettings.$inferSelect | undefined;
     },
-    // True for a Free Agent whose plan lacks the camera (shared/class-pricing-rule.ts): no
-    // chapter after the first is activated for them, so nothing lands on their calendar that
-    // they cannot open. The routes decide it (skillsAccessFor); storage only honours it.
+    // True for an athlete without All Classes (shared/class-pricing-rule.ts): no chapter after
+    // the first is activated for them, so nothing lands on their calendar that they cannot
+    // open. The routes decide it (allClassesAccessFor); storage only honours it.
     tierGated = false,
   ): Promise<
     Array<{ lessonId: number; lessonNumber: number; title: string; classId: number; className: string; athleteId: number }>
@@ -12728,7 +12728,7 @@ Hard rules, no exceptions:
         (previousProgress != null &&
           (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
       if (!reachable) break;
-      if (tierGated && chapterNeedsCameraTier(lesson.lessonNumber, cls.isForgeOfficial)) break;
+      if (tierGated && chapterNeedsClassPass(lesson.lessonNumber, cls.isForgeOfficial)) break;
 
       // A priced lesson is an INDIVIDUAL purchase. Every athlete buys it for
       // themselves; a coach buying it does not grant it to their roster, and
@@ -12811,8 +12811,8 @@ Hard rules, no exceptions:
       coachSettings: typeof classCoachSettings.$inferSelect | undefined;
       enrollment: typeof classEnrollments.$inferSelect | undefined;
     },
-    // See recomputeClassProgress: a Free Agent without the camera plan sees every chapter
-    // after the first as "locked_tier".
+    // See recomputeClassProgress: an athlete without All Classes sees every chapter after
+    // the first as "locked_tier".
     tierGated = false,
   ) {
     const cls = ctx?.cls ?? (await db.query.classes.findFirst({ where: eq(classes.id, classId) }));
@@ -12889,7 +12889,7 @@ Hard rules, no exceptions:
       const progress = progressByLesson.get(lesson.id) ?? null;
       let state: "active" | "ready" | "locked_preview" | "locked_tier" | "locked";
 
-      if (tierGated && chapterNeedsCameraTier(lesson.lessonNumber, cls.isForgeOfficial)) {
+      if (tierGated && chapterNeedsClassPass(lesson.lessonNumber, cls.isForgeOfficial)) {
         // The one pricing rule (shared/class-pricing-rule.ts), checked before anything else so
         // a chapter activated before the rule, or before a downgrade, is gated the same way.
         state = "locked_tier";

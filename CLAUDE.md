@@ -761,19 +761,25 @@ then "Build it all in order and what you suggested". Coaches already create clas
   accuracy claim. Wrestling's top chapter defers every turn to the coach on the mat; keep that
   line. The Fundamentals camera chapter says exactly what `camera-accuracy-copy.ts` says and
   never where to stand (Rule #1); keep both.
-- **ONE PRICING RULE FOR EVERY FORGE CLASS** (2026-10-04, Scott: "yes 14", confirmed the same
-  evening after seeing the counts: "sure keep it ... all new classes first chapter is free".
-  The class builder says so above the lessons, for admins and for coaches):
-  `shared/class-pricing-rule.ts`. Chapter one is free to any athlete; the rest come with the
-  plan that has the camera, which is the skills entitlement (`skillsAccessFor`): a coached
-  athlete has it through their coach, a Free Agent through AI Coach + Video. No seeded chapter
-  carries a price any more (the hitting class's $49.99 chapter two is cleared on deploy); the
-  per-lesson purchase machinery stays, unused. The gate is `classTierGated` in routes.ts, passed
-  into `getClassProgressForAthlete`, `recomputeClassProgress` and the enrol path as `tierGated`,
-  so a gated chapter is state `locked_tier`, unreadable through the content route, and never
-  activated onto the calendar. `server/class-pricing-rule.itest.ts` proves it. Consequence
-  worth saying out loud: with `BILLING_LIVE` off (beta), a Free Agent who is not comped has no
-  skills access, so they read chapter one only, exactly as the skill sessions are gated today.
+- **ONE PRICING RULE FOR EVERY FORGE CLASS: ALL CLASSES, $19.99 A MONTH** (2026-10-04, in
+  three steps the same day: "yes 14" (chapter one free, the rest with the camera plan), then
+  after seeing the catalog's size "make it a monthly purchase of $19.99", then "for all free
+  agents ... i want to bar athletes from it, they have access to the classes, but only the
+  ones their coach gives to them"). `shared/class-pricing-rule.ts` and `ALL_CLASSES_ADD_ON_ID`
+  in `shared/free-agent-tiers.ts`: a Free Agent add-on on top of any tier, Apple product
+  `...addon.all_classes_v1` (its own group, never the tier group), Stripe
+  `STRIPE_PRICE_FREE_AGENT_ADDON_ALL_CLASSES`. Chapter one of every Forge class is the free
+  preview; every chapter after it needs the add-on. A COACHED athlete never buys it and never
+  meets the wall: they read every chapter of the classes their coach enrolled them in, and
+  nothing else (the catalog is Free-Agent-only already). No tier includes classes. No seeded
+  chapter carries a price (the hitting class's $49.99 chapter two is cleared on deploy); the
+  per-lesson purchase machinery stays, unused. The gate is `classTierGated` in routes.ts,
+  passed into `getClassProgressForAthlete`, `recomputeClassProgress` and the enrol path as
+  `tierGated`: a gated chapter is `locked_tier`, unreadable through the content route, never
+  on the calendar, and the chapter row offers the add-on (`AllClassesCard`). Beta, a trial and
+  enforcement-off open it like every add-on, so nobody meets the wall while nothing is
+  charged. `server/class-pricing-rule.itest.ts` proves the gate; the class builder says the
+  rule above the lessons.
 - **The Classes landing and the catalog** (2026-10-04): the athlete's sport first with a "For
   your sport" label (`shared/class-sport-match.ts`, decided on the server as `forYourSport`);
   Continue on every enrolled class opens the reader at the last page read (the page index is a
@@ -1247,11 +1253,10 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   verify route for any signed-in buyer; it scopes `applyAppleIapVerification` by role so a
   coach's receipt grants `billingAddOns` and an athlete's grants a tier, never the other way.
   The review notes say a coach can buy exactly this one thing.
-  **The three ATHLETE tier products are NOT in App Store Connect yet** (Scott, 2026-10-04:
-  "what we don't have is the billing subscription for the players side yet on apple"). The ids
-  the code verifies are `appleProductIdForFreeAgentTier`: `...freeagent.basic_v2` $4.99,
-  `...freeagent.ai_coach_v2` $9.99, `...freeagent.ai_coach_video_v2` $19.99, one subscription
-  group. On the launch checklist as Scott's.
+  **The ATHLETE products in App Store Connect** (2026-10-04): `...freeagent.basic_v2` exists
+  in "Prepare for Submission"; `...freeagent.ai_coach_v2` $9.99 and
+  `...freeagent.ai_coach_video_v2` $19.99 still to create IN THE SAME GROUP; and the All
+  Classes add-on `...addon.all_classes_v1` $19.99 in its own group. On the launch checklist.
 - **Prices confirmed 2026-10-03** (Scott: "keep them"): Coaches Corner $19.99/mo, sport coaches
   $7.99/mo each, in the shared constants. The video workbench is NOT an add-on any more (same
   day: "there are 3 tiers, built on purpose, and anyone being coached gets it already"); it
