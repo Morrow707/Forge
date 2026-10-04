@@ -1338,6 +1338,11 @@ branch through the real login route and the real email.
   Matching is exact and `server/trusted-devices.test.ts` pins the three against the addresses
   `seed.ts` really creates, so a rename cannot leave a stale literal reading as covered.
   `admin@forge.app` is deliberately NOT exempt -- the admin account is Scott's, on a real inbox.
+  **DECIDED 2026-10-04, to do AFTER App Review approves 1.0** (Scott: "delete them, i will
+  keep using the admin role, so flag for later"): delete the three demo accounts, stop
+  `seed.ts` recreating them (`DEMO_ACCOUNT_PASSWORD` and the seed block go with them), and
+  remove them from `DEMO_ACCOUNT_EMAILS` and the review notes. Not before approval: the
+  reviewer may still be signed in to one.
   `DEVICE_VERIFICATION_DISABLED=true` is the kill switch for an email-provider outage. With no
   email provider configured at all (a dev box) the gate stands down and says so once.
 - **The test harness pre-trusts its client.** `loginAs` calls `trustClientDevice` first, so the
