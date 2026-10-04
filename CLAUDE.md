@@ -1247,6 +1247,11 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   verify route for any signed-in buyer; it scopes `applyAppleIapVerification` by role so a
   coach's receipt grants `billingAddOns` and an athlete's grants a tier, never the other way.
   The review notes say a coach can buy exactly this one thing.
+  **The three ATHLETE tier products are NOT in App Store Connect yet** (Scott, 2026-10-04:
+  "what we don't have is the billing subscription for the players side yet on apple"). The ids
+  the code verifies are `appleProductIdForFreeAgentTier`: `...freeagent.basic_v2` $4.99,
+  `...freeagent.ai_coach_v2` $9.99, `...freeagent.ai_coach_video_v2` $19.99, one subscription
+  group. On the launch checklist as Scott's.
 - **Prices confirmed 2026-10-03** (Scott: "keep them"): Coaches Corner $19.99/mo, sport coaches
   $7.99/mo each, in the shared constants. The video workbench is NOT an add-on any more (same
   day: "there are 3 tiers, built on purpose, and anyone being coached gets it already"); it
