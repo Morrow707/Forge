@@ -577,6 +577,17 @@ can install. Delete entries as a `beta` ships them.
   the All Classes add-on, the builder's pricing notice, the card fix, and the coach plan band
   following the plan onto the Stripe subscription (`syncCoachSubscriptionBand` in
   `server/billing.ts`, up prorates, down waits for the next invoice).
+- **The first sandbox purchase on 611 read, off the debug console:** `server verify refused
+  ...basic_v2: 422 No subscription found for this account.` Apple had confirmed the purchase and
+  `applyAppleIapVerification` updated a `subscriptions` row the athlete never had (the row is
+  only created by `createTrialSubscription`, which a Free Agent who never trialled never meets).
+  Behind it a second gap: the Apple and Google Play paths wrote the subscriptions row only, and
+  the entitlements read `users.freeAgentTier` (`hasAthletePaidForAiAccess`), which the Stripe
+  webhook has written since that bug was found there and the store paths never did. Both fixed
+  server-side (`upsertSubscriptionByUserId`; `updateFreeAgentBilling({ freeAgentTier })` on
+  verify and on an Apple renewal), proven by `server/apple-iap-grant.itest.ts`, shipped on
+  Render, no build needed. Note for the audit: with `BILLING_LIVE` off, `cameraAccessFor`
+  answers false for EVERY Free Agent except the comped demo address, whatever they hold.
 - **Queued, not yet in a build:** nothing. Everything on `main` is in 611.
 
 Two things worth saying out loud when someone tests this:

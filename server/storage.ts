@@ -4869,6 +4869,25 @@ export const storage = {
   // since the row doesn't have it yet. This matches by userId instead,
   // via client_reference_id, which is set at checkout-session creation
   // specifically so this first event has a way back to a Forge account.
+  /** A store purchase (Apple, Google Play) lands on an account that may have no subscriptions
+   * row at all: the row is created at signup only on the paths that call createTrialSubscription,
+   * and a Free Agent who never trialled has none. updateSubscriptionByUserId updated nothing for
+   * that athlete and the verify route answered "No subscription found for this account" after
+   * Apple had confirmed the purchase (the first sandbox run, 2026-10-05, build 611). The store's
+   * receipt IS the subscription; this creates the row when there is none and patches it when
+   * there is. */
+  async upsertSubscriptionByUserId(
+    userId: number,
+    values: Omit<typeof subscriptions.$inferInsert, "userId" | "id" | "createdAt" | "updatedAt">,
+  ) {
+    const [row] = await db
+      .insert(subscriptions)
+      .values({ userId, ...values })
+      .onConflictDoUpdate({ target: subscriptions.userId, set: { ...values, updatedAt: new Date() } })
+      .returning();
+    return row;
+  },
+
   async updateSubscriptionByUserId(userId: number, patch: Partial<typeof subscriptions.$inferInsert>) {
     const [row] = await db
       .update(subscriptions)
@@ -4928,14 +4947,18 @@ export const storage = {
     }
     const freeAgentTier = tierForAppleProductId(verified.productId);
     if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
-    const updated = await this.updateSubscriptionByUserId(userId, {
+    await this.upsertSubscriptionByUserId(userId, {
       accountType: "free_agent",
       tier: entitlementTierForFreeAgentTier(freeAgentTier),
       status: "active",
       appleOriginalTransactionId: verified.originalTransactionId,
       currentPeriodEnd: verified.expiresAt,
     });
-    if (!updated) return { ok: false, error: "No subscription found for this account." };
+    // The SKU the entitlements read is users.freeAgentTier (see hasPaidFreeAgentEntitlement in
+    // routes.ts); the subscriptions row only ever holds base/pro. The Stripe webhook has written
+    // both since the day that was found; this path wrote only the row, so a verified Apple
+    // purchase granted nothing the athlete could use.
+    await this.updateFreeAgentBilling(userId, { freeAgentTier });
     await this.logBillingEvent(userId, "apple_iap.verified", {
       originalTransactionId: verified.originalTransactionId,
       productId: verified.productId,
@@ -4991,7 +5014,7 @@ export const storage = {
     }
     const freeAgentTier = tierForGooglePlayProductId(verified.productId);
     if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
-    const updated = await this.updateSubscriptionByUserId(userId, {
+    await this.upsertSubscriptionByUserId(userId, {
       accountType: "free_agent",
       tier: entitlementTierForFreeAgentTier(freeAgentTier),
       status: "active",
@@ -4999,7 +5022,8 @@ export const storage = {
       currentPeriodEnd: verified.expiresAt,
       cancelAtPeriodEnd: verified.state === "canceled",
     });
-    if (!updated) return { ok: false, error: "No subscription found for this account." };
+    // Same as the Apple path: the entitlements read users.freeAgentTier.
+    await this.updateFreeAgentBilling(userId, { freeAgentTier });
     await this.logBillingEvent(userId, "google_play.verified", {
       purchaseToken: verified.purchaseToken,
       orderId: verified.orderId,
@@ -5119,6 +5143,8 @@ export const storage = {
       currentPeriodEnd: expiresAt,
     });
     if (!updated) return { ok: false, error: "No subscription found for this transaction." };
+    // A renewal after an upgrade or downgrade carries the NEW product; the SKU column follows it.
+    await this.updateFreeAgentBilling(updated.userId, { freeAgentTier });
     await this.logBillingEvent(updated.userId, `apple_iap.${notification.notificationType.toLowerCase()}`, {
       originalTransactionId,
       productId,
