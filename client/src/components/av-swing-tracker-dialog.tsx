@@ -1,4 +1,6 @@
 import type { MovementProfile } from "@shared/schema";
+import { bodyScaleFallbacks } from "@/lib/body-scale-fallback";
+import { separationFrom3D, twoDSeparationIsDegenerate } from "@/lib/rotation-3d";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,8 @@ import { AvCameraChrome } from "@/components/av-camera-chrome";
 import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import {
   calibrateFromFrames,
+  reconcileScaleEstimates,
+  HEIGHT_RULER_UNCERTAINTY,
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
   type PoseFrame,
@@ -37,12 +41,34 @@ import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracki
 // is gone.
 export type SwingSetMetrics = {
   peakSeparationDeg: number | null;
+
+
   tempoRatio: number | null;
   backswingMs: number | null;
   downswingMs: number | null;
   headSwayCm: number | null;
   rotationTrace: RotationSample[];
 };
+
+/* THE SENSOR STRIDES THIS TRACKER NEVER SET, AND THE OBJECT CLASS ITS LIVE PATH NEVER ASKED FOR.
+ *
+ * Audit 2026-10-05 against Rule #4 (all three camera systems, every lift). Two gaps, both of
+ * them silent:
+ *
+ *   - startRecording() was called with no trackingMode, so AvCoreMlImplementDetector.targetLabel
+ *     returned nil and the LIVE path ran no object detection at all -- the class was named only
+ *     on analyzeRecording, which is the fallback path. A take that stayed live therefore had one
+ *     witness and nothing for overwatch to arbitrate, which is the same hole the 2026-10-04 box
+ *     jump fell into.
+ *   - no strides were passed, so the native defaults applied: the 3D pose every 9th frame and
+ *     HAND POSE ON EVERY FRAME. That is the most expensive possible setting, chosen by omission
+ *     rather than on purpose, on a tracker whose output reads neither sensor densely.
+ *
+ * 120 and 12 are the bar tracker's numbers (BAR_SENSOR_STRIDES), in raw frames: the 3D pose
+ * about once a second at 120fps, hand pose ten times a second for the grip. Rule #2 -- these
+ * THIN the sensors, they do not switch anything off, and body3DPhaseOffset keeps the two off the
+ * same frame. */
+const SWING_SENSOR_STRIDES = { body3DStride: 120, handPoseStride: 12 } as const;
 
 export type AvSwingSetMetrics = SwingSetMetrics & {
   trust: SetTrustScore | null;
@@ -274,8 +300,29 @@ export function AvSwingTrackerDialog({
     },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
   ) {
-    const scaleFactor = calibrateFromFrames(rawFrames, heightIn);
+    // THE SHARED RULERS THIS DIALOG NEVER HAD. Audit 2026-10-05 against Rule #4: every other AV
+    // tracker reconciles several scale candidates and this one had exactly ONE -- the athlete's
+    // standing height -- with no reconcile, no 3D ruler and no shoulder ruler. A golf or baseball
+    // swing is filmed from the side with the feet often out of frame, which is precisely the
+    // framing that single ruler fails on, and when it failed there was nothing behind it.
+    // bodyScaleFallbacks is the piece the 2026-09-29 audit already built for exactly this.
+    const heightScale = calibrateFromFrames(rawFrames, heightIn);
+    const bodyFallbacks = bodyScaleFallbacks(nativeRawFrames, rawFrames, heightIn, undefined);
+    const scaleVerdict = reconcileScaleEstimates([
+      ...(heightScale != null
+        ? [{ source: "height" as const, scale: heightScale, uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY }]
+        : []),
+      ...bodyFallbacks.candidates,
+    ]);
+    const scaleFactor = scaleVerdict.scale ?? heightScale;
     const calibrationFrames = calibrationMethodBreakdown(rawFrames);
+
+    // HIP-SHOULDER SEPARATION FROM REAL DEPTH -- see rotation-3d.ts. This dialog's own comment
+    // has warned since it was written that the metric needs genuine z, and on the native path
+    // every 2D landmark carries z: 0, so rotation-tracking.ts's atan2(0, dx) is exactly 0 or 180
+    // on every frame: the headline number has not been measuring rotation on iPhone at all.
+    // RECORDED AS A PEER, not substituted (Rule #2): the next sensor-paired swing decides.
+    const rotation3D = separationFrom3D(nativeRawFrames);
 
     // Phase B: real depth when a frame has it -- see av-bar-tracker-dialog.tsx's own identical
     // comment for the full reasoning. This is the highest-value dialog for this swap: without
@@ -315,7 +362,19 @@ export function AvSwingTrackerDialog({
               recording: recordingStats,
               objectLock: recordingStats.objectLock ?? null,
               objectLockSecondary: recordingStats.objectLockSecondary ?? null,
-              calibration: { scaleFactor, ...calibrationFrames },
+              calibration: {
+                scaleFactor,
+                ...calibrationFrames,
+                scaleSource: scaleVerdict.agreedSources.length > 1 ? "both" : (scaleVerdict.agreedSources[0] ?? null),
+                scaleCandidates: bodyFallbacks.diagnostics,
+                scaleCorroborated: scaleVerdict.corroborated,
+                body3DRuler: bodyFallbacks.body3DRuler,
+              },
+              rotation3D: {
+                ...rotation3D,
+                twoDWasDegenerate: twoDSeparationIsDegenerate((rotation?.trace ?? []).map((p) => p.separationDeg ?? null)),
+                twoDPeakSeparationDeg: rotation?.peakSeparationDeg ?? null,
+              },
             }),
           }
         : null;
@@ -328,7 +387,9 @@ export function AvSwingTrackerDialog({
         recording: recordingStats,
         objectLock: recordingStats.objectLock ?? null,
         objectLockSecondary: recordingStats.objectLockSecondary ?? null,
-        calibration: { scaleFactor, ...calibrationFrames },
+        calibration: { scaleFactor, ...calibrationFrames, body3DRuler: bodyFallbacks.body3DRuler },
+        // A take with no clean read is the take whose diagnostics matter most (Rule #1).
+        rotation3D: { ...rotation3D, twoDWasDegenerate: false, twoDPeakSeparationDeg: null },
       });
       const emptyMetrics: AvSwingSetMetrics = { ...EMPTY_SWING_METRICS, captureDeviceInfo, trackingDiagnostics: diagnostics };
       if (recordVideo && uploadPromise) {
@@ -481,7 +542,7 @@ export function AvSwingTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({});
+                  startRecording({ trackingMode: sport === "golf" ? "golf_ball" : "baseball", ...SWING_SENSOR_STRIDES });
                 }}
                 disabled={!supported}
               >

@@ -14,10 +14,47 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# SUPERSEDED RUNS ARE CANCELLED, NOT QUEUED BEHIND EACH OTHER.
+#
+# Added 2026-10-05 after a run of red checks that were not test failures at all. Five commits
+# went to main in quick succession; each fired this workflow plus CodeQL, two iOS TestFlight
+# builds were dispatched alongside them, and with no concurrency group every one of those runs
+# queued for a runner at the same time. Run 1648's `deploy` job -- which is ONE curl, with
+# timeout-minutes: 2 -- recorded 15 minutes and 3 seconds before being cancelled. That is not
+# slow work, it is a job that never got a runner. Run 1649's build job really did consume its
+# 15-minute limit, and a job sitting on its own ceiling tips over on exactly this kind of
+# contention.
+#
+# Grouped per ref so two branches never fight, and cancel-in-progress only OFF main: on a
+# feature branch the newest commit is the only one anybody cares about, so killing the older run
+# frees the runner immediately. On main it has to stay off, because `deploy` hangs off
+# `build-and-migrate` -- cancelling main's in-flight run would cancel the deploy with it and the
+# commit would silently never reach Render, which is the exact gap this workflow was written to
+# close.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   build-and-migrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 25, RAISED FROM 15 ON 2026-10-05 BECAUSE THE JOB WAS FAILING ON THE CEILING, NOT ON A TEST.
+    #
+    # Run 1649 ran 19:29:34 to 19:44:35 -- exactly 15:01 -- and GitHub cancelled it, which
+    # surfaces as a red check with no failing test and no step log, so it reads as a mystery
+    # failure. The run on the very next commit passed. That is the signature of a job sitting on
+    # its own limit: a slower runner, a cold npm cache or a slow Postgres pull tips it over, and
+    # the result is a red CI that says nothing and blocks the deploy (deploy `needs` this job).
+    #
+    # The work itself is not pathological -- fetch-depth: 0 for the document-history test, npm
+    # ci, typecheck, the unit suite, the vite build, db:reconcile and the integration suite -- it
+    # is simply more than it was when 15 was chosen, and it grows with every test file added. The
+    # honest fix is headroom: a timeout is a runaway-job guard, not a performance target, and
+    # setting it near the real duration converts ordinary variance into intermittent red.
+    #
+    # If this ever needs raising again, speed the job up instead (the suite is ~30s locally, so
+    # the time is in install and build) -- that is the Rule #2 instinct applied to CI.
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16

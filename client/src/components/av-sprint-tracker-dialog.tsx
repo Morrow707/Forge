@@ -153,6 +153,20 @@ function buildManualResult(startTime: number, finishTime: number, checkpoints: S
  * tracker dialog) -- what's left here is purely sprint-specific: the checkpoint-tap
  * calibration UI, the MAX_RECORDING_MS safety timeout, checkpoint-crossing detection, the
  * manual scrub-and-pin fallback, and the review/save flow. */
+/* THE SENSOR STRIDES, SET ON PURPOSE RATHER THAN INHERITED.
+ *
+ * Audit 2026-10-05 against Rule #4 (Scott: "every camera we have in this app should follow our
+ * rule, and have 3d"). This tracker passed no strides, so the native defaults applied -- the 3D
+ * pose every 9th frame and HAND POSE ON EVERY FRAME. That is the most expensive setting the
+ * plugin offers, arrived at by omission, on a tracker that reads neither sensor densely.
+ *
+ * Rule #2: these THIN, they switch nothing off. The 3D pose stays on at about once a second
+ * (120 raw frames at 120fps) so the mode has a metre-measured witness at all, and
+ * body3DPhaseOffset keeps it off the same frame as the hand pose. Hand pose is thinner here than
+ * on the barbell trackers (24, not 12) because no number in this mode is read off the fingers;
+ * it is kept because a sensor that is present can be read later and one that is absent cannot. */
+const SPRINT_SENSOR_STRIDES = { body3DStride: 120, handPoseStride: 24 } as const;
+
 export function AvSprintTrackerDialog({
   open,
   onOpenChange,
@@ -343,7 +357,7 @@ export function AvSprintTrackerDialog({
 
   function startCapture() {
     changeStep("capture");
-    startRecording({});
+    startRecording({ ...SPRINT_SENSOR_STRIDES });
     recordingTimeoutRef.current = setTimeout(() => {
       if (stepRef.current === "capture") void stopCaptureAndAnalyze();
     }, MAX_RECORDING_MS);

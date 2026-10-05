@@ -9603,6 +9603,21 @@ export const trackingDiagnosticsSchema = z.object({
     })
     .nullable()
     .optional(),
+  // HIP-SHOULDER SEPARATION FROM REAL DEPTH -- see client/src/lib/rotation-3d.ts. Declared key
+  // by key because zod strips what it does not declare, silently, which has cost three takes.
+  rotation3D: z
+    .object({
+      outcome: z.string().max(40),
+      peakSeparationDeg: z.number().nullable().optional(),
+      // One sample per 3D frame, so a stride of 9 on a long take is tens of values.
+      separationsDeg: z.array(z.number()).max(256).optional(),
+      framesUsed: z.number().optional(),
+      framesWithoutExtent: z.number().optional(),
+      twoDWasDegenerate: z.boolean().optional(),
+      twoDPeakSeparationDeg: z.number().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
   // THE 3D ANKLE RULER -- see client/src/lib/ankle-3d-ruler.ts and the type in
   // tracking-diagnostics.ts. A field the client sends and the schema does not declare is
   // stripped SILENTLY by zod, which has cost three takes already, so every key is here.

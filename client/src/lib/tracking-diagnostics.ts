@@ -468,6 +468,23 @@ export type TrackingDiagnostics = {
     twoDRiseCm?: number | null;
     typedBoxHeightCm?: number | null;
   } | null;
+  /** HIP-SHOULDER SEPARATION FROM REAL DEPTH -- see client/src/lib/rotation-3d.ts.
+   *
+   *  Added 2026-10-05. The native 2D landmarks carry z: 0 for every joint, so the 2D separation
+   *  is exactly 0 or 180 degrees on every frame and the swing tracker's headline number has not
+   *  been measuring rotation on iPhone at all. `twoDWasDegenerate` records that fact per take, so
+   *  the claim is evidence rather than an assertion in a comment, and reads false on the web path
+   *  whose pose does carry depth. A PEER: recorded beside the 2D number, substituted for nothing,
+   *  until a sensor-paired swing says it is the better measurement. */
+  rotation3D?: {
+    outcome: string;
+    peakSeparationDeg?: number | null;
+    separationsDeg?: number[];
+    framesUsed?: number;
+    framesWithoutExtent?: number;
+    twoDWasDegenerate?: boolean;
+    twoDPeakSeparationDeg?: number | null;
+  } | null;
   boxRise?: {
     scaleErrorRatio: number | null;
     repsUsed: number;
@@ -706,6 +723,7 @@ export function buildTrackingDiagnostics(args: {
   gravity?: TrackingDiagnostics["gravity"];
   boxRise?: TrackingDiagnostics["boxRise"];
   ankle3D?: TrackingDiagnostics["ankle3D"];
+  rotation3D?: TrackingDiagnostics["rotation3D"];
   limbMeasurementsM?: TrackingDiagnostics["limbMeasurementsM"];
   repConsistency?: TrackingDiagnostics["repConsistency"];
   cameraView?: TrackingDiagnostics["cameraView"];
@@ -720,6 +738,7 @@ export function buildTrackingDiagnostics(args: {
     gravity: args.gravity ?? null,
     boxRise: args.boxRise ?? null,
     ankle3D: args.ankle3D ?? null,
+    rotation3D: args.rotation3D ?? null,
     limbMeasurementsM: args.limbMeasurementsM ?? null,
     repConsistency: args.repConsistency ?? null,
     cameraView: args.cameraView ?? null,

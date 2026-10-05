@@ -128,6 +128,24 @@ const MIN_BALL_SPEED_SAMPLES = 4;
 
 type OnCaptureFn = (metrics: MedballSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
 
+/* THE SENSOR STRIDES THIS TRACKER NEVER SET, AND THE OBJECT CLASS ITS LIVE PATH NEVER ASKED FOR.
+ *
+ * Audit 2026-10-05 against Rule #4 (all three camera systems, every lift). Two silent gaps:
+ *
+ *   - startRecording() was called with no trackingMode, so AvCoreMlImplementDetector.targetLabel
+ *     returned nil and the LIVE path ran no object detection at all -- the class was named only
+ *     on analyzeRecording, which is the fallback path. A take that stayed live therefore had one
+ *     witness and nothing for overwatch to arbitrate, the same hole the 2026-10-04 box jump fell
+ *     into.
+ *   - no strides were passed, so the native defaults applied: the 3D pose every 9th frame and
+ *     HAND POSE ON EVERY FRAME. The most expensive possible setting, chosen by omission rather
+ *     than on purpose.
+ *
+ * 120 and 12 are the bar tracker's numbers (BAR_SENSOR_STRIDES), in raw frames: the 3D pose about
+ * once a second at 120fps, hand pose ten times a second for the grip. Rule #2 -- these THIN the
+ * sensors, they switch nothing off, and body3DPhaseOffset keeps the two off the same frame. */
+const MEDBALL_SENSOR_STRIDES = { body3DStride: 120, handPoseStride: 12 } as const;
+
 export function AvMedballTrackerDialog({
   open,
   onOpenChange,
@@ -766,7 +784,7 @@ export function AvMedballTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ trackingMode: "med_ball" });
+                  startRecording({ trackingMode: "med_ball", ...MEDBALL_SENSOR_STRIDES });
                 }}
                 disabled={!supported || !heightIn}
               >
