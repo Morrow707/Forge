@@ -101,6 +101,17 @@ type TrackingDiagnostics = {
     liveMissRate?: number;
     liveSkippedForCadence?: number;
   } | null;
+  ankle3D?: {
+    outcome: string;
+    stepM?: number | null;
+    framesAtFloor?: number;
+    framesAtBox?: number;
+    framesUsed?: number;
+    scaleErrorRatio?: number | null;
+    twoDRiseCm?: number | null;
+    typedBoxHeightCm?: number | null;
+    heightSource?: string | null;
+  } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence?: number | null };
   // See ObjectLockDiagnostics in client/src/lib/tracking-diagnostics.ts.
   objectLock?: ObjectLockLine | null;
@@ -452,6 +463,27 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
         (d.outcome === "empty_calibration_failed" ? "Calibration failed." : "Couldn't get a clean read."),
     });
   }
+  // THE 3D ANKLE RULER. The one witness on a box jump that measures in metres rather than in
+  // pixels times a ruler, so it is the one that can say a scale is wrong without needing a
+  // second opinion about the scale. scaleErrorRatio is what to read: 1.0 is agreement, and the
+  // 2026-10-04 box jump -- which read 44cm onto a 61cm box and had nothing to catch it -- would
+  // have read about 0.72. `outcome` says why on a take with no step; it is never a bare null.
+  if (d.ankle3D) {
+    const a = d.ankle3D;
+    lines.push({
+      label: "3D ankle ruler",
+      value:
+        a.outcome === "measured" && a.stepM != null
+          ? `floor to box top ${Math.round(a.stepM * 1000) / 10}cm by the body's own metres`
+            + (a.typedBoxHeightCm != null ? ` against ${a.typedBoxHeightCm}cm typed` : "")
+            + (a.twoDRiseCm != null ? `, 2D trace said ${Math.round(a.twoDRiseCm * 10) / 10}cm` : "")
+            + (a.scaleErrorRatio != null ? ` -- scale error ${a.scaleErrorRatio}x` : "")
+            + ` (${a.framesAtFloor ?? 0} frames on the floor, ${a.framesAtBox ?? 0} on the box`
+            + `, ${a.framesUsed ?? 0} 3D frames, ${a.heightSource ?? "unknown"} skeleton)`
+          : `no step measured: ${a.outcome} (${a.framesUsed ?? 0} 3D frames with an ankle)`,
+    });
+  }
+
   if (d.recording) {
     lines.push({
       label: "Frames analyzed",

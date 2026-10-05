@@ -443,6 +443,31 @@ export type TrackingDiagnostics = {
    *  applyBoxRiseCorrection in jump-tracking.ts. */
   // Never a bare null since 2026-10-05 -- `outcome` names which of the four situations produced
   // it and the rises it saw travel with it. See BoxRiseVerdict in jump-tracking.ts.
+  /** THE 3D ANKLE RULER -- see client/src/lib/ankle-3d-ruler.ts.
+   *
+   *  Added 2026-10-05 on Scott's question: "We have apples 3d built in, is it detecting the
+   *  difference between the floor and box? The change in height?" It was not. The step between
+   *  standing on the floor and standing on the box, in metres from Apple's camera-space 3D
+   *  joints, needs no pixel scale -- and its ratio to the 2D trace's own rise is the scale error
+   *  on the take, which is the number the 2026-10-04 box jump could not produce. A PEER: this is
+   *  recorded and offered, it decides nothing. `outcome` says why when there is no step. */
+  ankle3D?: {
+    outcome: string;
+    stepM?: number | null;
+    floorLevelM?: number | null;
+    boxLevelM?: number | null;
+    framesAtFloor?: number;
+    framesAtBox?: number;
+    framesUsed?: number;
+    heightSource?: string | null;
+    correction?: number;
+    uncertaintyFraction?: number;
+    /** (2D median net rise in cm) / (the 3D step in cm). 1.0 is agreement; the 10-04 take would
+     *  have read about 0.72. Null when either witness is missing -- never a fabricated 1.0. */
+    scaleErrorRatio?: number | null;
+    twoDRiseCm?: number | null;
+    typedBoxHeightCm?: number | null;
+  } | null;
   boxRise?: {
     scaleErrorRatio: number | null;
     repsUsed: number;
@@ -680,6 +705,7 @@ export function buildTrackingDiagnostics(args: {
   trace?: TrackingDiagnostics["trace"];
   gravity?: TrackingDiagnostics["gravity"];
   boxRise?: TrackingDiagnostics["boxRise"];
+  ankle3D?: TrackingDiagnostics["ankle3D"];
   limbMeasurementsM?: TrackingDiagnostics["limbMeasurementsM"];
   repConsistency?: TrackingDiagnostics["repConsistency"];
   cameraView?: TrackingDiagnostics["cameraView"];
@@ -693,6 +719,7 @@ export function buildTrackingDiagnostics(args: {
     trace: args.trace ?? null,
     gravity: args.gravity ?? null,
     boxRise: args.boxRise ?? null,
+    ankle3D: args.ankle3D ?? null,
     limbMeasurementsM: args.limbMeasurementsM ?? null,
     repConsistency: args.repConsistency ?? null,
     cameraView: args.cameraView ?? null,

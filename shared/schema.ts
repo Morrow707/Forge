@@ -9603,6 +9603,27 @@ export const trackingDiagnosticsSchema = z.object({
     })
     .nullable()
     .optional(),
+  // THE 3D ANKLE RULER -- see client/src/lib/ankle-3d-ruler.ts and the type in
+  // tracking-diagnostics.ts. A field the client sends and the schema does not declare is
+  // stripped SILENTLY by zod, which has cost three takes already, so every key is here.
+  ankle3D: z
+    .object({
+      outcome: z.string().max(40),
+      stepM: z.number().nullable().optional(),
+      floorLevelM: z.number().nullable().optional(),
+      boxLevelM: z.number().nullable().optional(),
+      framesAtFloor: z.number().optional(),
+      framesAtBox: z.number().optional(),
+      framesUsed: z.number().optional(),
+      heightSource: z.string().max(40).nullable().optional(),
+      correction: z.number().optional(),
+      uncertaintyFraction: z.number().optional(),
+      scaleErrorRatio: z.number().nullable().optional(),
+      twoDRiseCm: z.number().nullable().optional(),
+      typedBoxHeightCm: z.number().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
   // The box as a ruler -- see applyBoxRiseCorrection in jump-tracking.ts.
   boxRise: z
     .object({

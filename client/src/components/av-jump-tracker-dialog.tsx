@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ankleRiseFrom3D, ankle3DScaleErrorRatio } from "@/lib/ankle-3d-ruler";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/queryClient";
@@ -606,6 +607,17 @@ export function AvJumpTrackerDialog({
       jumpEvents,
       { usesBox: usesBox === true, boxHeightCm: boxHeightIn && boxHeightIn > 0 ? boxHeightIn * 2.54 : null, hipTrace },
     );
+    // THE 3D ANKLE RULER, READ FROM THE SAME TAKE. Computed from nativeRawFrames, which carry the
+    // camera-space 3D joints the native plugin emits (cx/cy/cz, metres in the lens's frame) --
+    // nothing here touches the 2D trace or the numbers summarizeJumpSet just produced. The 2D
+    // rise it is held against is the set's median net rise, which is the same quantity the box
+    // ruler measures, so the ratio of the two is directly the scale error on this take.
+    const ankle3DReading = ankleRiseFrom3D(nativeRawFrames, heightIn);
+    const netRises = (metrics?.repBreakdown ?? [])
+      .map((r) => r.netRiseCm)
+      .filter((v): v is number => typeof v === "number" && v > 0)
+      .sort((a, b) => a - b);
+    const twoDRiseCm = netRises.length > 0 ? netRises[Math.floor(netRises.length / 2)] : null;
     if (metrics?.bestEffort) {
       // RULE #1. The state machine found no clean rep; the number on screen is the best read the
       // trace supports, and the athlete is told exactly that instead of nothing.
@@ -687,6 +699,20 @@ export function AvJumpTrackerDialog({
       // scale is, with no sensor anywhere.
       gravity: metrics.gravityVerdict,
       boxRise: metrics.boxRiseVerdict ?? null,
+      // THE ANKLE'S OWN HEIGHT IN METRES, FROM APPLE'S 3D POSE. Scott, 2026-10-05: "We have
+      // apples 3d built in, is it detecting the difference between the floor and box? The
+      // change in height?" It was not -- jump-tracking.ts read the 3D pose nowhere, and the
+      // 2026-10-04 box jump read 28% low with no witness that could say so. See
+      // ankle-3d-ruler.ts: a once-a-second sensor cannot catch a 400ms flight, but the step
+      // between standing on the floor and standing on the box is a static measurement in
+      // metres that needs no pixel scale at all, and its ratio to the 2D rise IS the scale
+      // error. A PEER (Rule #2/#4): recorded and offered, never in charge of anything.
+      ankle3D: {
+        ...ankle3DReading,
+        scaleErrorRatio: ankle3DScaleErrorRatio(ankle3DReading, twoDRiseCm),
+        twoDRiseCm,
+        typedBoxHeightCm: boxHeightIn && boxHeightIn > 0 ? Math.round(boxHeightIn * 2.54 * 10) / 10 : null,
+      },
       jumpEvents,
     });
 
