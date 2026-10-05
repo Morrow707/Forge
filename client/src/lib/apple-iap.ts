@@ -109,6 +109,30 @@ export async function fetchFreeAgentAddOnProducts(): Promise<FreeAgentAddOnProdu
   });
 }
 
+/* ONE VERIFY PER TRANSACTION, however many paths see it.
+ *
+ * A direct purchase is delivered TWICE: purchase() returns the transaction, and
+ * Transaction.updates fires for the same one a moment later. Both call verifyAndFinish, so the
+ * console on 2026-10-05 showed every sandbox purchase verified twice a second apart -- the same
+ * transactionId POSTed to the server, recorded, and finished, then POSTed again:
+ *
+ *   34:38 StoreKit transaction 2000001246169392 for ...ai_coach_v3, verifying with the server
+ *   34:38 server recorded ...ai_coach_v3, finishing with StoreKit
+ *   34:39 StoreKit transaction 2000001246169392 for ...ai_coach_v3, verifying with the server
+ *   34:39 server recorded ...ai_coach_v3, finishing with StoreKit
+ *
+ * The grant is idempotent so nothing was wrong in the end, but it doubles the verify calls, lets
+ * two read-modify-writes of the same row interleave, and -- worst of the three -- doubles the
+ * debug console, which is the ONLY instrument on an iPhone and the thing every one of these bugs
+ * has been found with. Keyed by transactionId: a second caller awaits the first's promise rather
+ * than issuing its own request.
+ *
+ * A FAILURE IS NOT REMEMBERED, deliberately. The 401-before-sign-in path replays held
+ * transactions after login and has to be able to try the very same id again, so only a verify
+ * that actually succeeded is recorded as done. */
+const verifyInFlight = new Map<string, Promise<void>>();
+const verifiedTransactionIds = new Set<string>();
+
 // Shared by every path that ends up with a real signed transaction
 // (an explicit purchase, a restore, or the background transactionUpdated
 // listener below) -- verifies it server-side, and only tells StoreKit the
@@ -116,6 +140,25 @@ export async function fetchFreeAgentAddOnProducts(): Promise<FreeAgentAddOnProdu
 // AppleIapPlugin.swift's own comment on why finishTransaction is never
 // called eagerly.
 async function verifyAndFinish(transaction: AppleIapTransaction): Promise<void> {
+  const id = transaction.transactionId;
+  if (verifiedTransactionIds.has(id)) {
+    logDebug("IAP", `${transaction.productId}: transaction ${id} already recorded, skipping`);
+    return;
+  }
+  const running = verifyInFlight.get(id);
+  if (running) return running;
+  const attempt = verifyAndFinishOnce(transaction)
+    .then(() => {
+      verifiedTransactionIds.add(id);
+    })
+    .finally(() => {
+      verifyInFlight.delete(id);
+    });
+  verifyInFlight.set(id, attempt);
+  return attempt;
+}
+
+async function verifyAndFinishOnce(transaction: AppleIapTransaction): Promise<void> {
   // The account-scoped route: the server reads the role and applies the receipt to the right
   // kind of purchase (a Free Agent's tier or add-on, a coach's Coaches Corner).
   logDebug("IAP", `StoreKit transaction ${transaction.transactionId} for ${transaction.productId}, verifying with the server`);
