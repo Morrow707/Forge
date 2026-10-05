@@ -62,10 +62,20 @@ describe("postureForExercise", () => {
   // (hinged for the whole set, ankles behind the plates) and the height ruler came out 37%
   // low. A row done hinged is "bent_over" now, with no height ruler and no stature check. An
   // RDL and a deadlift still start and finish upright, so they stay.
+  // 2026-10-05: THE ROMANIAN DEADLIFT LEFT THIS LIST TOO, on the sensor rather than on the
+  // reasoning above. Build 620 beside the OVR: the RDL's range of motion read 60.0cm against
+  // 64.5 -- 7.0% low -- with its height ruler 16% below the scale the sensor requires and
+  // carrying 44.4% of the blend's weight. Driving reconcileScaleEstimates with that take's real
+  // candidate list and the height ruler dropped lands it at 0.0%. The upright-frames argument
+  // was wrong for a hinge for a reason the row's own note missed: calibrateFromFrames corrects
+  // one-sided COMPRESSION, and a hinge rotates the torso OUT OF PLANE, which LENGTHENS the
+  // apparent nose-to-ankle span. The correction is fitted in the wrong direction for it.
+  // A conventional deadlift stays: it finishes standing tall under load, and dropping the squat's
+  // height ruler as a control reads 25% HIGH, so the ruler plainly belongs on a standing lift.
+  // See client/src/lib/four-lifts-beside-ovr-2026-10-05.test.ts for the measured figures.
   it.each([
     "Back Squat",
     "Deadlift",
-    "Romanian Deadlift",
     "Overhead Press",
     "Push Press",
     "Power Clean",
@@ -76,7 +86,7 @@ describe("postureForExercise", () => {
     expect(heightCalibrationUnreliable(name)).toBe(false);
   });
 
-  it.each(["Pendlay Row", "Bent-Over Row", "T-Bar Row", "Good Morning"])("%s is bent over and not height-calibrated", (name) => {
+  it.each(["Pendlay Row", "Bent-Over Row", "T-Bar Row", "Good Morning", "Romanian Deadlift", "Stiff-Leg Deadlift"])("%s is bent over and not height-calibrated", (name) => {
     expect(postureForExercise(name)).toBe("bent_over");
     expect(heightCalibrationUnreliable(name)).toBe(true);
   });

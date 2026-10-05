@@ -113,7 +113,35 @@ const POSTURE_BY_NAME = new Map<string, CameraPosture>([
   ["Good Morning", "bent_over"],
   ["Kroc Row", "bent_over"],
   ["Meadows Row", "bent_over"],
-  ["Yates Row", "bent_over"],]);
+  ["Yates Row", "bent_over"],
+  /* THE HIP HINGE IS A BENT-OVER POSTURE TOO, AND ONLY THE ROWS WERE ON THIS LIST.
+   *
+   * Added 2026-10-05 from the RDL beside the OVR (docs/camera-tracking-notes.md, "Four lifts
+   * beside OVR, 2026-10-05"). Range of motion read 60.0cm against the sensor's 64.5 -- 7.0%
+   * low -- and the height ruler was 16% below the scale the sensor requires (3.430e-3 against
+   * 4.071e-3) while carrying 44.4% of the blend's weight. Driving reconcileScaleEstimates with
+   * that take's real candidate list and the height ruler removed lands the RDL at 0.0% of the
+   * sensor, and leaves the Back Squat -- a standing lift, which keeps its height ruler --
+   * untouched.
+   *
+   * Why a hinge beats the tenth-percentile correction that a squat does not: calibrateFromFrames
+   * fits one-sided COMPRESSION along the image vertical, which is what a squat does. A hinge
+   * rotates the torso OUT OF PLANE, carrying the nose forward and toward the lens, so the
+   * apparent nose-to-ankle span gets LONGER than stature rather than shorter, and a longer span
+   * is a smaller scale. The correction is fitted in the wrong direction for it.
+   *
+   * These are the lifts where the torso passes through horizontal under load. A conventional
+   * deadlift is deliberately NOT here: it starts hinged and finishes standing tall, and the
+   * tenth-percentile correction reads exactly those standing frames. */
+  ["Romanian Deadlift", "bent_over"],
+  ["Barbell Romanian Deadlift", "bent_over"],
+  ["Dumbbell Romanian Deadlift", "bent_over"],
+  ["Single-Leg Romanian Deadlift", "bent_over"],
+  ["Stiff-Leg Deadlift", "bent_over"],
+  ["Stiff-Legged Deadlift", "bent_over"],
+  ["Hip Hinge", "bent_over"],
+  ["Barbell Hip Hinge", "bent_over"],
+]);
 
 // For the ~300 library exercises the manual does not cover. Ordered: first match wins.
 //
@@ -146,6 +174,12 @@ const POSTURE_PATTERNS: [RegExp, CameraPosture][] = [
   // earlier (lying, seated) or are standing; everything else called a row is bent over.
   [/\b(?:bent[-\s]*over|pendlay|t-?bar|kroc|meadows|yates|dumbbell|barbell)\s+row\b/i, "bent_over"],
   [/\bgood\s+morning\b/i, "bent_over"],
+  // The hip hinge, for the library names the map above does not spell out. "Romanian" and
+  // "stiff-leg" are the two names a hinge goes by; a conventional or sumo deadlift is standing
+  // and is not matched here. See the comment on the Romanian Deadlift entry above.
+  [/\bromanian\b/i, "bent_over"],
+  [/\bstiff[-\s]*leg(?:ged)?\s+deadlift\b/i, "bent_over"],
+  [/\bhip\s+hinge\b/i, "bent_over"],
   [/\bassisted\s+pull-?up\b/i, "supported"],
   // Floor and quadruped work. A plank, bird dog, bear crawl, ab-wheel rollout, superman hold,
   // glute-ham raise and neck bridge all put the body somewhere that head-to-ankle means nothing.

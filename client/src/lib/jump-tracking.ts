@@ -392,6 +392,16 @@ export type JumpSegmentationEvent = {
   value?: number;
 };
 
+/**
+ * The reps a SET-LEVEL best is allowed to be drawn from: the ones not already flagged as
+ * tracking glitches, or -- when every rep is flagged, so there is nothing to prefer -- all of
+ * them. Rule #1: a filmed set always produces a number. See the comment at the call site.
+ */
+export function repsForSetBest<T>(reps: T[], flagged: boolean[]): T[] {
+  const trusted = reps.filter((_, i) => !flagged[i]);
+  return trusted.length ? trusted : reps;
+}
+
 export function summarizeJumpSet(
   rawPoints: TrackedPoint[],
   heightIn?: number | null,
@@ -861,8 +871,28 @@ export function summarizeJumpSet(
       }
     : boxRiseVerdict;
 
-  const bestJumpHeightCm = Math.max(...reps.map((r) => r.jumpHeightCm));
-  const distances = reps.map((r) => r.horizontalDistanceCm).filter((d): d is number => d != null);
+  /* THE SET'S NUMBER IS THE BEST REP THAT IS NOT ALREADY FLAGGED AS A GLITCH.
+   *
+   * Build 620 beside the OVR, 2026-10-05 (docs/camera-tracking-notes.md). A box jump onto a
+   * 61cm box reported 238.4cm. Its seven reps were [70.6, 71.5, 2.4, 71.7, 70.3, 67.5, 265.5]:
+   * five of them inside 1.6cm of each other -- a 2.3% spread, the box ruler working -- plus a
+   * 2.4 and a 265.5, each immediately preceded by a baseline_reanchored event of -42cm and
+   * -70cm respectively, so both were measured from a baseline that had walked off. Both were
+   * ALREADY flagged by outlierAgainstSet above (276% and 97% off the median against a 35%
+   * threshold); this line simply did not read the flag, and Math.max then handed the set the
+   * single worst rep it had. With the flagged reps out, the set reads 71.7 before the box-rise
+   * correction and 61.1cm after it, against the 61cm box it was jumped onto.
+   *
+   * RULE #1: A NUMBER ALWAYS COMES OUT. If every rep is flagged there is nothing to prefer, so
+   * the fall-back is the max over all of them -- the number this line produced before. Nothing
+   * is withheld and no rep is discarded: every rep keeps its row in repBreakdown with its
+   * likelyTrackingGlitch flag, and the set-level diagnostics carry the whole rise list. This is
+   * choosing a representative statistic, which is the same thing build 577 did for the bar's
+   * peak velocity (MAX_PEAK_TO_MEAN_RATIO) after one rep's spike became the set's headline.
+   */
+  const forBest = repsForSetBest(reps, outlierAgainstSet);
+  const bestJumpHeightCm = Math.max(...forBest.map((r) => r.jumpHeightCm));
+  const distances = forBest.map((r) => r.horizontalDistanceCm).filter((d): d is number => d != null);
   const bestHorizontalDistanceCm = distances.length ? Math.max(...distances) : null;
   const contactTimes = reps
     .map((r) => r.groundContactSeconds)
@@ -875,9 +905,9 @@ export function summarizeJumpSet(
     contactTimes.length && !groundContactIsBoxReset
       ? Math.round((contactTimes.reduce((a, c) => a + c, 0) / contactTimes.length) * 1000) / 1000
       : null;
-  const reactiveStrengthIndex = groundContactIsBoxReset ? null : bestReactiveStrengthIndex(reps);
+  const reactiveStrengthIndex = groundContactIsBoxReset ? null : bestReactiveStrengthIndex(forBest);
 
-  const boxClearances = reps.map((r) => r.boxClearanceCm).filter((c): c is number => c != null);
+  const boxClearances = forBest.map((r) => r.boxClearanceCm).filter((c): c is number => c != null);
   const bestBoxClearanceCm = boxClearances.length ? Math.max(...boxClearances) : null;
 
   // ARC-1: jump mode cross-checks something and records what it found.

@@ -778,7 +778,40 @@ can install. Delete entries as a `beta` ships them.
   claimed, and a held entry on its slow clock -- each legitimate, each indistinguishable from the
   others and from a crash. All three name themselves now and the held one says how long until its
   next retry. Calibration work: uploaded on commit.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 620.
+- Build **621** was cut 2026-10-05 from the four lifts filmed on 620 beside the OVR
+  (docs/camera-tracking-notes.md, "Four lifts beside OVR, build 620, 2026-10-05"). Two fixes, each
+  measured against the sensor:
+  **THE ROMANIAN DEADLIFT WAS CLASSIFIED AS A STANDING LIFT.** It is the textbook hip hinge, and
+  `bent_over` (2026-10-02) got the eleven rows and Good Morning and not the hinge. Its height
+  ruler read 16% below the scale the sensor requires while carrying 44.4% of the blend weight;
+  dropping it takes the RDL from **-7.0% to 0.0%** of the OVR, and the Back Squat -- a standing
+  lift, which keeps its ruler -- is untouched (dropping the squat's reads 25% HIGH, which is the
+  control). The 10-02 note's "it starts and finishes upright so the median carries it" argument
+  was wrong for a hinge for a reason it missed: `calibrateFromFrames` corrects one-sided
+  COMPRESSION, and a hinge rotates the torso OUT OF PLANE, lengthening the apparent nose-to-ankle
+  span. A conventional deadlift stays standing on purpose.
+  **A 61CM BOX JUMP REPORTED 238.4CM.** Its seven reps were
+  `[70.6, 71.5, 2.4, 71.7, 70.3, 67.5, 265.5]` -- five inside 1.6cm of each other (the box ruler
+  working), plus two measured from a baseline that had walked off, each following a
+  `baseline_reanchored` event. **Both were already flagged** by `outlierAgainstSet`;
+  `bestJumpHeightCm` was a bare `Math.max` over every rep and did not read the flag, so the set's
+  headline number was the worst rep it had. `repsForSetBest` now prefers the unflagged reps and
+  the set reads **61.1cm against the 61cm box**; it falls back to every rep when every rep is
+  flagged, so nothing is withheld (Rule #1) and every rep keeps its row and its flag. Same shape
+  as build 577's `MAX_PEAK_TO_MEAN_RATIO` for the bar; the next place to look for it is any other
+  set-level `Math.max` over reps.
+  **NOT changed, and the notes say why at length:** the `shoulder_width` ruler is the highest
+  candidate on 19 of 19 captures (median 1.29x) and the cause is measurable --
+  `BIACROMIAL_HEIGHT_FRACTION` is 0.23, the anatomical breadth, but the span it divides is
+  between Vision's shoulder LANDMARKS, which the 3D skeleton puts at 0.1934 of stature. Refitting
+  it takes the RDL from -7.0% to -13.8%, because that bias was COMPENSATING for the hinge bug
+  above. It is refittable only once a standing lift is read against the sensor with the hinge fix
+  in -- the thing to look for in the next export.
+  Also confirmed working on the phone from this export: the 3D pose is back (24/17/25 frames
+  against 618's 0), the 13MB autosave is fixed (134KB per save after the first), and the barbell
+  detector now finds its object on 124/51/16 frames where 10-04 had 18 of 840. Calibration work:
+  uploaded on commit.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 621.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
