@@ -611,7 +611,18 @@ can install. Delete entries as a `beta` ships them.
   the web checkout on `BILLING_LIVE`. The Coaches Corner upsell card on `/coach/coaches-corner`
   had only the web checkout (refused from a native platform) and now buys through StoreKit on
   iOS like the coach billing page does.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 614.
+- Build **617** was cut 2026-10-05 from `ed540193`, from the four lifts filmed beside the OVR on
+  2026-10-04 (docs/camera-tracking-notes.md, "Four lifts beside OVR, 2026-10-04"): scale
+  candidates carry `uncertainty` and `weightPct` so the 8% low range of motion on both barbell
+  lifts can be attributed to a ruler (`reconcileScaleEstimates` returns the per-voter weights;
+  the report prints them -- server-side half ships on Render), the box jump no longer tells the
+  athlete "Did not clear the box" (Rule #1: a performance claim from a number 28% low), and a
+  unilateral prescription reads "3 × 5 each side" (`shared/prescription-laterality.ts`).
+  **NO correction constant was applied**, and the evidence says not to: range of motion, the
+  whole RDL and the box jump all read LOW, so "calibrate these numbers down" would make three
+  of the four comparisons worse. Calibration work: uploaded on commit.
+  Also build **616** was the All Classes / Coaches Corner sandbox build.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 617.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
