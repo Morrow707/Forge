@@ -2457,3 +2457,76 @@ a finding of this kind belongs and nowhere else.
 them, `shared/schema.ts` declares them so the zod parse cannot strip them, and
 `server/tracking-report.ts` prints them on the "Scale sources" line). Without them Finding 1
 cannot be attributed to a ruler, and the next pairing would hit the same wall.
+
+## Four lifts beside OVR on build 618, 2026-10-05 (OVR side recorded; Forge side pending)
+
+Scott refilmed the same four lifts on build 618 (`aba3cdf0`). The OVR screenshots are below as
+ground truth. **The Forge side of this comparison is not in yet** -- it needs the diagnostics
+export (`/api/admin/tracking-report/captures/recent`), and nothing here is a comparison until
+it arrives.
+
+**What build 618 actually carries**, because it decides what this pairing can and cannot test.
+618 was cut from `aba3cdf0`, which is BEFORE the Rule #4 tracker audit (`40a49804`) and before
+the accuracy batch (`cff85511`). So 618 has:
+
+- the height ruler refit, `HEIGHT_RULER_UNCERTAINTY` 0.05 -> 0.1 (the one thing this pairing is
+  really a test of: range of motion should move from -8% to about +1%);
+- the box ruler always running and reporting an `outcome` instead of a bare null;
+- the 3D ankle ruler (`ankle3D` in the jump's diagnostics);
+- the 3D/hand-pose frame collision fix and `liveMissRate`;
+- trace shedding and the 413 rules.
+
+618 does NOT have: the lowered detection confidence floor, the static-decoy rule, the source-gap
+verdict, scale drift, the per-tracker strides, the swing's rulers or `rotation3D`. **So this
+pairing cannot say anything about the object detector.** It tests the scale refit and the two
+new jump witnesses, and nothing else.
+
+### OVR ground truth, Oct 05
+
+Scott's exclusions, in his words: "Disregard set 2, I recorded the whole thing on 616 not 618,
+also disregard the very small numbers, those are setup numbers on the OVR, also disregard the
+.85 on the deadlifts, also a setup number."
+
+**BACK SQUAT, 135lb x 5** (ROM in inches as the OVR reports it; cm converted)
+
+| | Avg m/s | Peak m/s | ROM in | ROM cm | Avg W | Peak W | TPV s |
+|---|---|---|---|---|---|---|---|
+| Set 1 | 0.83 | 1.23 | 29.1 | 73.9 | 503 | 741 | 0.59 |
+| Set 3 | 0.89 | 1.34 | 29.1 | 73.9 | 535 | 804 | 0.56 |
+
+Set 3's per-rep ROM: 27.9, 28.7, 29.1, 28.9, 31.0 in. Set 3 EAI 2.40.
+**29.1 in / 73.9 cm on both sets, and the same 73.9 the 2026-10-04 squat gave** -- the sensor is
+repeatable across days, which is what makes it usable as ground truth at all.
+
+**JUMP SQUAT (Scott's stand-in for the box jump), 1lb x 6**
+
+Set 3's rows, with the 0.39 / 0.63 / 36.0 opening row excluded as an OVR setup number:
+1.45/2.85/27.2, 1.38/2.82/27.0, 1.40/2.42/25.7, 1.37/2.56/25.8, 1.33/2.42/25.4.
+Excluding that setup row the five real jumps average **1.39 m/s, peak 2.61 m/s, ROM 26.2 in
+(66.6 cm)**. The on-screen set summary of 1.22 / 2.27 / 27.8 INCLUDES the setup row and is
+therefore not the number to compare against.
+
+**CLEAN (Scott's stand-in for the med ball throw), 12lb x 12**
+
+Set 3 summary 2.29 / 5.82 / 53.0 in / 122 W / 310 W / 0.38, over twelve rows of which two are
+setup (0.83/1.76/49.5 and 0.68/1.02/18.7). The ten real throws run 2.17-3.02 m/s average and
+5.91-7.27 m/s peak, ROM 53.0-59.8 in.
+
+**RDL:** Scott excluded a 0.85 as a setup number; the deadlift screenshot is not in this batch.
+
+### What to check the moment the export lands
+
+1. **Range of motion on the squat.** The sensor says 73.9 cm. On 10-04 Forge said 68.0 (0.920).
+   `HEIGHT_RULER_UNCERTAINTY` 0.1 predicts about 74.8 (+1.2%). If it lands there the refit is
+   confirmed; if it is still near 68 the refit did not reach the build or the blend is being
+   driven by something the 10-04 candidate list did not contain.
+2. **`trackingDiagnostics.calibration.scaleCandidates[].weightPct`.** New in 617 and the whole
+   point of it: it says which ruler the blend actually followed, which 10-04 could not.
+3. **`trackingDiagnostics.ankle3D` on the jump.** `outcome: "measured"` with a `stepM` near the
+   box height is the first evidence the 3D ankle ruler works at all; any other `outcome` names
+   which branch it took.
+4. **`trackingDiagnostics.boxRise.outcome` on the jump.** The 10-04 take returned a bare null.
+   `too_few_box_reps` with the per-rep `netRisesCm` would confirm the landing is being assigned
+   to the floor rather than the box top -- Scott's "it thinks I'm doing a broad jump".
+5. **Whether the med ball throw saved this time.** It was destroyed by its own size on 10-04;
+   618 carries the trace shedding and the 413 rules that should make that impossible.
