@@ -105,6 +105,34 @@ flag and a caveat instead, and let the number through.
   reading files for research, not just before committing -- so stale state gets
   caught before it feeds conclusions, not just before it feeds a push.
 
+## CI red that is not a test failure
+
+Added 2026-10-05, after six of them in one evening. **Check the REF and the SHA before reading a
+red CI run as a broken build.** Three separate causes, none of them a failing test, all of them
+caused by how this repo is pushed to:
+
+- **One commit, two refs, two runs.** Every commit goes to `main` AND to the development branch,
+  so GitHub starts two identical runs of the same SHA. On `b9f0f6d3`, run 1666 on main SUCCEEDED
+  and deployed while run 1667 -- the same commit on the branch -- was cancelled at 15:02. The
+  concurrency group in `ci.yml` is keyed on `github.sha` now, so the two share a group and the
+  second waits instead of competing. `cancel-in-progress` stays FALSE on purpose: true would let
+  a branch push cancel main's in-flight run, and `deploy` hangs off that job, so the commit would
+  silently never reach Render.
+  **The cheaper cure is not to mirror the branch on every commit.** Push it when it has actually
+  diverged, not after every merge to main.
+- **A run cancelled at exactly 15:0x is not a timeout.** `build-and-migrate`'s limit is 25
+  minutes (raised from 15 the same day, for a real timeout). A cancellation at 15:01 is runner
+  contention or a superseding run; a cancellation with NO steps recorded is a job that never got
+  a runner at all. Read `started_at` / `completed_at` on the JOB, not the run's wall clock, which
+  includes queue time.
+- **CodeQL goes red when a newer push supersedes it.** It runs only on `main` pushes with
+  `cancel-in-progress: true`, so several pushes in a few minutes leave half its matrix legs
+  cancelled and the check reads failure. That is the setting working; the fix is fewer rapid
+  pushes to main, not a workflow change.
+
+How to tell in one command: list the recent runs with their `head_branch` and conclusion. If the
+same SHA shows a success on `main` and a failure elsewhere, nothing is broken.
+
 ## Tests
 
 - Two suites, deliberately separate. `npm test` needs no database and must stay

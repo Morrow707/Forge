@@ -31,9 +31,27 @@ on:
 # `build-and-migrate` -- cancelling main's in-flight run would cancel the deploy with it and the
 # commit would silently never reach Render, which is the exact gap this workflow was written to
 # close.
+# KEYED ON THE COMMIT, NOT THE REF, BECAUSE ONE COMMIT LIVES ON TWO REFS HERE.
+#
+# Revised 2026-10-05 after three more red checks that were not test failures. Every commit in
+# this repo is pushed to `main` AND to the development branch, so GitHub starts TWO identical
+# runs of the same SHA. Grouped by ref they were in different groups, both ran, they competed
+# for runners, and the loser was cancelled at 15:01 and 15:02 -- which reads as a 15-minute
+# timeout and is not one (the limit below is 25). On commit b9f0f6d3 the evidence is plain:
+# run 1666 on main SUCCEEDED and deployed; run 1667, the same SHA on the branch, was cancelled.
+#
+# Keyed on the SHA, those two are one group: the first runs and the second waits for it rather
+# than fighting it. One commit, one set of runners, no phantom red.
+#
+# cancel-in-progress stays FALSE, and that is the safety-over-minutes choice. True would make
+# whichever push arrives second kill the first -- and if the branch push landed while main's run
+# was in flight, it would cancel the job the `deploy` below hangs off, and the commit would
+# silently never reach Render. That is the exact gap this workflow exists to close, so it is not
+# worth the saved minutes. The cost is that one SHA may run CI twice in sequence; the cure for
+# that is to stop mirroring the branch on every commit, not to risk the deploy.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ci-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   build-and-migrate:
