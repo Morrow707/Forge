@@ -1734,6 +1734,20 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
         let coverage = Double(run.state.processedCount) / expectedFrames
         let dropRate = Double(run.droppedFrames) / max(1.0, expectedFrames)
+        // WHAT WAS ACTUALLY LOST, as opposed to what liveDropRate measures.
+        //
+        // liveDropRate is droppedFrames over EXPECTED frames, and expected is already divided by
+        // the stride -- so at 120fps with stride 4 the pipeline intends about 30 frames a second
+        // and the capture necessarily discards the other 90. A drop rate near 3.0 is that
+        // arithmetic (120/30 - 1), not a fault, and all three takes of 2026-10-04 sat on it:
+        // 2.98, 2.05, 3.00. Read as a percentage it says "298% of frames lost", which is how it
+        // came to be read as the thing to fix.
+        //
+        // The frames that matter are the ones the pipeline WANTED and did not get, which is
+        // exactly the shortfall in coverage. Recorded as its own number so the two can never be
+        // confused again, and clamped at 0 because the time-based sampler can legitimately run
+        // slightly ahead of the nominal rate (the box jump came in at coverage 1.07).
+        let missRate = max(0.0, 1.0 - coverage)
         lastLiveCoverage = coverage
         lastLiveDropRate = dropRate
         // COMPLETE ENOUGH IS A GAP, NOT A COUNT. The old gate wanted 90% of the target frames and
@@ -1785,6 +1799,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             "liveAttempted": true,
             "liveCoverage": coverage,
             "liveDropRate": dropRate,
+            "liveMissRate": missRate,
             "liveSkippedForCadence": run.skippedForCadence,
             "liveMaxGapSeconds": maxGapSeconds,
         ]
@@ -2274,6 +2289,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 if let dropRate = self.lastLiveDropRate {
                     result["liveDropRate"] = dropRate
                 }
+                // The honest "how much of what we wanted did we lose" on a take that FELL BACK,
+                // which is the take whose live attempt is worth reading. See missRate's own
+                // comment in liveAnalysisResult.
+                if let coverage = self.lastLiveCoverage {
+                    result["liveMissRate"] = max(0.0, 1.0 - coverage)
+                }
                 if let error = reader.error {
                     result["readerErrorMessage"] = error.localizedDescription
                 }
@@ -2513,7 +2534,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // the 3D request, omit-when-nil like everything else here.
         var body3DHeightM: Double? = nil
         var body3DHeightSource: String? = nil
-        if let body3DRequest = ctx.body3DRequest, strideIndex % ctx.body3DDetectionStride == 0 {
+        if let body3DRequest = ctx.body3DRequest, strideIndex % ctx.body3DDetectionStride == ctx.body3DPhaseOffset {
             let body3DStart = Date()
             do {
                 try handler.perform([body3DRequest])
@@ -3284,6 +3305,28 @@ private final class AvFrameContext {
     // save another 4 and take a capability with it, which is the trade rule #1 exists to refuse.
     // One number to move back if a mode turns out to need the density.
     let body3DDetectionStride: Int
+    // THE TWO EXPENSIVE SENSORS MUST NOT LAND ON THE SAME FRAME, AND THEY ALWAYS DID.
+    //
+    // Both gates were `strideIndex % stride == 0`, and every stride pair the app actually ships
+    // has one stride dividing the other: the bar tracker runs body3DStride 120 with
+    // handPoseStride 12, the jump tracker 120 with 24. So EVERY 3D-pose frame was also a
+    // hand-pose frame, and frame 0 -- the one that sets the live path's cadence baseline -- ran
+    // body pose, hand pose and the 3D pose together.
+    //
+    // The cost is in the 2026-10-04 diagnostics: the 3D pose was 3.6s over 28 frames, about
+    // 129ms each, on top of a ~40ms body pose. A frame carrying both is a ~200ms stall on a
+    // SERIAL queue whose target interval is 33ms, and AVCaptureVideoDataOutput discards
+    // everything that arrives while it stalls. That is what the Back Squat's
+    // maxInterFrameGap of 0.48s is, and a 0.48s hole is most of a rep -- it is why that take
+    // failed the gap gate and paid for a second full read of the clip.
+    //
+    // Offsetting the phase removes the collision and NOTHING ELSE: both sensors run at exactly
+    // the rate they ran at before, on exactly as many frames, which is what Rule #2 requires
+    // (thin, never switch off; speed up, never cut). Offset 1 rather than stride/2 because the
+    // strides divide each other -- 60 % 12 is 0, so half of 120 would collide just as reliably.
+    // 1 cannot be a multiple of any handPoseStride above 1. When hand pose runs on every frame
+    // there is no phase that avoids it, so the offset goes back to 0 and nothing is pretended.
+    var body3DPhaseOffset: Int { handPoseStride > 1 ? 1 % body3DDetectionStride : 0 }
     // Box jump's own object-detection signal. Every frame would be needless extra Vision work
     // for a signal that is checking a STATIONARY object, so a sparse sample across the whole
     // clip is exactly as informative as every frame, for a fraction of the cost.

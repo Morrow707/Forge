@@ -39,8 +39,11 @@ describe("a fetch that never reached the server", () => {
   it("leaves the autosave's permanent-rejection test able to tell the difference", () => {
     // Pinned so the classifier and the error type stay in the same conversation: if this
     // condition is ever rewritten, whoever does it has to come back here.
+    // 413 joined the exclusions 2026-10-05: express.json answers an oversized body before any
+    // route runs, and calling that permanent destroyed a filmed set outright (the Medicine Ball
+    // Rotational Throw of 2026-10-04). See shared/a-filmed-set-is-never-too-big-to-save.test.ts.
     expect(workout).toMatch(
-      /err instanceof ApiError\s*\n?\s*&& err\.status !== 400\s*\n?\s*&& err\.status !== 401\s*\n?\s*&& err\.status !== 409\s*\n?\s*&& err\.status < 500/,
+      /err instanceof ApiError\s*\n?\s*&& err\.status !== 400\s*\n?\s*&& err\.status !== 401\s*\n?\s*&& err\.status !== 409\s*\n?\s*&& err\.status !== 413\s*\n?\s*&& err\.status < 500/,
     );
   });
 

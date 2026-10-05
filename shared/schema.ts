@@ -9498,6 +9498,10 @@ export const trackingDiagnosticsSchema = z.object({
       liveFallbackReason: z.string().optional(),
       liveCoverage: z.number().optional(),
       liveDropRate: z.number().optional(),
+      // The shortfall in coverage: the frames the pipeline MEANT to process and did not get.
+      // liveDropRate beside it counts every frame the capture discarded, most of which the
+      // stride was going to skip anyway -- see the Swift side's missRate comment.
+      liveMissRate: z.number().optional(),
       // How the phone was held, from CoreMotion -- see tracking-diagnostics.ts.
       cameraPitchDeg: z.number().optional(),
       cameraRollDeg: z.number().optional(),

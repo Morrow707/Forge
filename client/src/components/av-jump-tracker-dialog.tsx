@@ -22,6 +22,7 @@ import {
   impliedBodyLengthUnits,
   rejectImplausibleScales,
   reconcileScaleEstimates,
+  HEIGHT_RULER_UNCERTAINTY,
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
   POSE_LANDMARKS,
@@ -344,7 +345,7 @@ export function AvJumpTrackerDialog({
         ? [{ source: "plate" as const, scale: boxScale, uncertaintyFraction: 0.05 }]
         : []),
       ...(bodyScale != null
-        ? [{ source: "height" as const, scale: bodyScale, uncertaintyFraction: 0.05 }]
+        ? [{ source: "height" as const, scale: bodyScale, uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY }]
         : []),
       ...bodyFallbacks.candidates,
     ];

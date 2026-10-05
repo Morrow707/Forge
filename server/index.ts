@@ -316,6 +316,34 @@ app.post(
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: false }));
 
+// A 413 FROM HERE USED TO DESTROY A FILMED SET, AND IT HAS TO SAY SO.
+//
+// This parser answers an oversized body BEFORE any route, any validator and any
+// trackingDiagnostics blob, with a bare 413 and body-parser's own message. 413 is a 4xx, and
+// both the live classifier in workout.tsx and the offline queue called a 4xx permanent -- so a
+// workout day whose takes were too big was thrown away on the phone with no row, no number and
+// nothing on the admin tracking report to say a capture had ever happened. That is what took
+// the Medicine Ball Rotational Throw of 2026-10-04 (Scott: "nothing should reject ... the
+// rejected med ball throw is unacceptable"). Both of those now hold a 413, and the client sheds
+// its replay traces before sending so one should not arrive at all
+// (shared/shed-traces-to-fit.ts).
+//
+// What this handler adds is the sentence. body-parser says "request entity too large", which
+// reads on the debug console as a server problem rather than as "your replay data did not fit",
+// and the whole diagnosis of that med ball throw turned on telling those apart.
+app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+  const typed = err as { type?: string; status?: number; length?: number; limit?: number } | null;
+  if (typed?.type !== "entity.too.large") return next(err);
+  const mb = (n: number | undefined) => (n == null ? "?" : `${Math.round(n / (1024 * 1024) * 10) / 10}MB`);
+  log(`413 body too large on ${req.method} ${req.path}: ${mb(typed.length)} against a ${mb(typed.limit)} limit`);
+  return res.status(413).json({
+    message:
+      `That save is ${mb(typed.length)} and the limit is ${mb(typed.limit)}. `
+      + "It is kept on this device and retried -- nothing logged is lost.",
+    code: "body_too_large",
+  });
+});
+
 // One memo per API request for the rows every layer re-reads (the signed-in user, a coach's
 // staff). Mounted before the session middleware so the scope is open when passport loads the
 // user -- see server/request-cache.ts for why it survives that callback and what clears it.

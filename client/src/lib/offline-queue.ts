@@ -1,6 +1,7 @@
 import { isPermanentUploadRejection } from "@/lib/upload-rejection";
 import { logDebug } from "@/lib/debug-console";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
+import { shedTracesToFit, describeShed } from "@shared/shed-traces-to-fit";
 import { toast } from "sonner";
 // Pure, and kept that way so it can be unit-tested with no DOM -- see its own comment.
 import { dropHeavyFields } from "@/lib/log-payload-trim";
@@ -477,6 +478,13 @@ async function runFlush() {
         writeQueue(readQueue().filter((p) => p.id !== entry.id));
         continue;
       }
+      // THE REPLAY SHEDS ITS REPLAY DATA TOO. A queued day that was refused with a 413 for
+      // being over express.json's 25MB limit would be re-POSTed at exactly the same size on
+      // every flush forever, and before 2026-10-05 it was DROPPED outright by
+      // isPermanentUploadRejection -- the set destroyed in the queue instead of in the save.
+      // See shared/shed-traces-to-fit.ts: the numbers and the diagnostics are never shed.
+      const shedResult = shedTracesToFit(payload as { entries?: { sets?: Record<string, unknown>[] }[] });
+      if (shedResult.shed.length > 0) logDebug("SAVE", `flush (${entry.dayKey}): ${describeShed(shedResult)}`);
       await apiRequest("POST", entry.url, payload);
       logDebug("SAVE", `flush ok (${entry.dayKey})`);
       if (entry.payloadFile) void deletePendingLogFile(entry.payloadFile);
@@ -507,9 +515,15 @@ async function runFlush() {
       // server. Deleting the set here would have made that fix rescue nothing. Kept for
       // HELD_MAX_AGE_MS, retried every HELD_RETRY_INTERVAL_MS (above), then given up on with
       // the same words as any other rejection.
-      if (status === 400) {
+      // A 413 IS HELD FOR THE SAME REASON A 400 IS, and this one was DROPPING filmed sets.
+      // express.json answers an oversized body with a 413 before any route runs, and
+      // isPermanentUploadRejection called that permanent -- so a day whose takes were too big
+      // was deleted off the phone with a toast telling the athlete to re-enter a set they
+      // cannot re-film. shedTracesToFit above means a 413 should now be unreachable; if one
+      // still arrives, the payload is the device's own record and nothing else has it.
+      if (status === 400 || status === 413) {
         const now = new Date().toISOString();
-        logDebug("SAVE", `flush HELD (${entry.dayKey}): 400, kept on this phone, retried on a slowing clock, never dropped`);
+        logDebug("SAVE", `flush HELD (${entry.dayKey}): ${status}, kept on this phone, retried on a slowing clock, never dropped`);
         writeQueue(
           readQueue().map((p) =>
             p.id === entry.id ? { ...p, heldSince: p.heldSince ?? now, lastHeldAttemptAt: now } : p,

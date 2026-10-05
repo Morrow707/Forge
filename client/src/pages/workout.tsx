@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { eachSideSuffix } from "@shared/prescription-laterality";
+import { shedTracesToFit, describeShed } from "@shared/shed-traces-to-fit";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -1462,6 +1463,20 @@ export function WorkoutPage({
           "SAVE",
           `log POST sending ${Math.round(bytes / 1024)}KB (traces ${Math.round(skeletonBytes / 1024)}KB)`,
         );
+        // AND IF IT IS TOO BIG TO BE ACCEPTED, THE REPLAY GOES AND THE NUMBERS STAY.
+        //
+        // express.json's 25MB limit answers an oversized body with a bare 413 before any route
+        // or validator runs, and 413 is a 4xx -- so the classifier below called it permanent and
+        // a filmed set was destroyed with no row and no diagnostics. That is what happened to
+        // the Medicine Ball Rotational Throw of 2026-10-04 (Scott: "nothing should reject ... the
+        // rejected med ball throw is unacceptable"), and a both-sides set is long enough to do it
+        // on its own once the day's other takes are in the same payload.
+        //
+        // Shedding here rather than only reacting to a 413: the 413 costs a round trip of a
+        // 25MB upload on cellular before anything is learned. See shared/shed-traces-to-fit.ts
+        // for what is given up and in what order -- never the metrics, never the diagnostics.
+        const shedResult = shedTracesToFit(payload);
+        if (shedResult.shed.length > 0) logDebug("SAVE", describeShed(shedResult));
         const startedAt = Date.now();
         const res = await apiRequest("POST", `${apiBase}/log`, payload);
         lostResponsePossibleRef.current = false;
@@ -1563,11 +1578,20 @@ export function WorkoutPage({
         // the SCHEMA more often than in the set; the payload is the device's own record and
         // nothing else has it. It is queued and HELD (see flushPendingLogs), retried on a slow
         // clock for a week so a server fix rescues it, and only then given up on.
+        // A 413 IS "THIS BODY IS TOO BIG", WHICH IS A FACT ABOUT THE REPLAY, NOT ABOUT THE SET.
+        //
+        // shedTracesToFit above is meant to stop this ever being asked, and it still has to be
+        // in the list: the budget is measured in JSON.stringify units against a limit measured
+        // in encoded bytes, so a payload full of non-ASCII can clear the budget and fail the
+        // limit. Thrown, it destroys a filmed set outright -- which is exactly what it did to
+        // the 2026-10-04 med ball throw. Queued and held, the replay runs through
+        // shedTracesToFit again (runQueuedSave) and lands the numbers.
         const isPermanentRejection =
           err instanceof ApiError
           && err.status !== 400
           && err.status !== 401
           && err.status !== 409
+          && err.status !== 413
           && err.status < 500;
         // Remembered for the unmount handler below, which used to re-queue this exact
         // payload unconditionally. That turned a visible error into silent data loss: the

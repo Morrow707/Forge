@@ -45,6 +45,7 @@ import {
   worldVerticalSign,
   shoulderWidthScaleFromFrames,
   reconcileScaleEstimates,
+  HEIGHT_RULER_UNCERTAINTY,
   rejectImplausibleScales,
   plateReadIsPlausibleAgainstGrip,
   impliedBodyLengthUnits,
@@ -1284,7 +1285,7 @@ export function AvBarTrackerDialog({
       ...(depthEstimate ? [depthEstimate] : []),
       ...(bodyModelScale != null ? [bodyModelScale] : []),
       ...(heightScaleFactor != null
-        ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: 0.05 }]
+        ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY }]
         : []),
       ...(shoulderScaleValue != null
         ? [

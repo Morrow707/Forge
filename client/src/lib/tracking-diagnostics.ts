@@ -174,6 +174,7 @@ export type TrackingDiagnostics = {
     liveFallbackReason?: string;
     liveCoverage?: number;
     liveDropRate?: number;
+    liveMissRate?: number;
     // HOW THE PHONE WAS HELD. Median gravity read from CoreMotion over the recording: pitch is
     // positive when the lens tilts down toward the floor, roll is a sideways lean, both in
     // degrees from a phone held upright in portrait. Recorded, not yet corrected for -- the
@@ -637,6 +638,7 @@ export function buildTrackingDiagnostics(args: {
     liveFallbackReason?: string;
     liveCoverage?: number;
     liveDropRate?: number;
+    liveMissRate?: number;
     // HOW THE PHONE WAS HELD. Median gravity read from CoreMotion over the recording: pitch is
     // positive when the lens tilts down toward the floor, roll is a sideways lean, both in
     // degrees from a phone held upright in portrait. Recorded, not yet corrected for -- the

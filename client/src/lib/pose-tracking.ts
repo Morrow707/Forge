@@ -725,6 +725,62 @@ const SHOULDER_TO_ANKLE_FRACTION = SHOULDER_HEIGHT_FRACTION - ANKLE_HEIGHT_FRACT
 const BIACROMIAL_HEIGHT_FRACTION = 0.23;
 const BIACROMIAL_TOLERANCE_FRACTION = 0.1;
 
+/* THE HEIGHT RULER IS NOT THE MOST RELIABLE RULER IN THE SYSTEM, AND 0.05 CLAIMED IT WAS.
+ *
+ * Fitted 2026-10-05 from the four lifts beside the OVR on 2026-10-04
+ * (docs/camera-tracking-notes.md). Range of motion came back 8% LOW on BOTH barbell lifts --
+ * 0.920 on the Back Squat and 0.921 on the RDL, agreeing to one part in a thousand, which is
+ * one scale error rather than two. Reconstructing the blend from the exported candidates
+ * reproduces the shipped number to within 0.8% on the squat and EXACTLY on the box jump, so the
+ * mechanism is not in doubt:
+ *
+ *   reconcileScaleEstimates weights inverse-variance, so 0.05 gave the height ruler 1/0.05^2 =
+ *   400 against the 3D ruler's 25 (BODY_3D_CORRECTED_UNCERTAINTY 0.2) and the shoulder ruler's
+ *   100. The blend WAS the height ruler. And on both lifts the height ruler was the lowest
+ *   candidate present (3.381e-3 and 3.275e-3) while the candidate that matched the sensor sat
+ *   well above it -- on the squat, body_3d:upperArm read 3.970e-3 against the 3.973e-3 the
+ *   sensor requires, and was outvoted 16 to 1.
+ *
+ * The claim behind 0.05 was never measurable. calibrateFromFrames divides a known stature by a
+ * SHOULDER-TO-ANKLE OR NOSE-TO-ANKLE SPAN -- the function's own comment says the span is "not a
+ * stature, and it shortens legitimately with posture" -- and corrects the one-sided compression
+ * error by taking the tenth-percentile scale rather than the median. That correction is fitted,
+ * and a fitted correction cannot leave the result four times tighter than every other ruler.
+ *
+ * 0.1, fitted jointly against both lifts rather than picked. Figures are from
+ * reconcileScaleEstimates itself, driven with each take's real exported candidate list, not from
+ * a hand-rolled weighted mean -- and 0.05 reproduces the -8% that was actually observed, which
+ * is what makes the rest of the column trustworthy:
+ *
+ *   height u    squat vs sensor    RDL vs sensor    worst
+ *   0.05        -8.0%              -7.9%            8.0%   <- shipped through build 617
+ *   0.08        -2.0%              -4.2%            4.2%
+ *   0.1         +1.2%              -2.3%            2.3%   <- chosen, best worst-case
+ *   0.12        +3.7%              -0.7%            3.7%
+ *   0.15        +6.5%              +1.0%            6.5%
+ *   0.2         +9.3%              +2.7%            9.3%
+ *
+ * Chosen on the WORST of the two rather than the average: a constant that fixes one lift by
+ * overshooting the other has not improved the pipeline, it has moved the error. Two lifts is
+ * also a thin fit and this number should be refitted as pairings accumulate -- the weightPct
+ * field added to the export in the same change is what makes that possible.
+ *
+ * This is NOT a correction factor applied to the output. Nothing is multiplied, no ruler is
+ * appointed, and the blend still decides from agreement -- one ruler's stated confidence is
+ * brought into line with its measured error, which is how DEPTH_RULER_BIAS and
+ * BODY_3D_CORRECTED_UNCERTAINTY were each set. 0.1 is also exactly
+ * BIACROMIAL_TOLERANCE_FRACTION above, which is right: both are body-span rulers built from the
+ * same landmark set, and neither has a reason to be more certain than the other.
+ *
+ * ONE CONSTANT FOR BOTH DIALOGS, which is why it lives here. The bar tracker and the jump
+ * tracker each hardcoded 0.05 separately. It costs the box jump about 1% (44.0cm to 43.5cm,
+ * because the box ruler sits lower and gains relative weight) and that is accepted knowingly:
+ * the box jump's 28% error is NOT a scale error at all -- getting 44cm to the 61cm it cleared
+ * needs a scale of 4.88e-3, which is above EVERY candidate that take produced, box and
+ * shoulder included. That one is in the jump-height computation and is open work.
+ */
+export const HEIGHT_RULER_UNCERTAINTY = 0.1;
+
 // Below this the shoulders are turned away from the lens rather than square to it, and their
 // apparent width is foreshortened by an unknown amount -- the same failure the length read hits,
 // in the other axis. Refusing here is right; there is nothing to measure.

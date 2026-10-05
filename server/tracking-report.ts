@@ -93,6 +93,13 @@ type TrackingDiagnostics = {
     freeDiskSpaceBytes?: number;
     maxInterFrameGapSeconds?: number;
     boxTopNormalizedY?: number;
+    analysisPath?: string;
+    liveAttempted?: boolean;
+    liveFallbackReason?: string;
+    liveCoverage?: number;
+    liveDropRate?: number;
+    liveMissRate?: number;
+    liveSkippedForCadence?: number;
   } | null;
   bodyPose: { framesTotal: number; framesWithBody: number; avgWristConfidence?: number | null };
   // See ObjectLockDiagnostics in client/src/lib/tracking-diagnostics.ts.
@@ -455,6 +462,31 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
     // assetDurationSeconds/readerStatus are what the recorded FILE's own metadata says vs what
     // the native read loop actually stopped on -- the one signal that can tell "the athlete's
     // take was genuinely short" apart from "the analysis loop stopped early on a long
+    // WHICH PATH MEASURED THIS TAKE, AND WHAT IT MISSED.
+    //
+    // There are two analysers and they are not interchangeable: a take on the live path was
+    // measured at whatever cadence the phone could sustain while filming, a take on the file
+    // path was re-read from the clip afterwards. On 2026-10-04 the Back Squat fell back and the
+    // RDL did not, over a coverage difference of 0.02, and the RDL is the one whose per-rep
+    // ranges came out scattered. That is not readable from the page without this line.
+    //
+    // missRate, not dropRate, is the number to read. See the Swift side: dropRate counts every
+    // frame the capture discarded, and at 120fps with stride 4 the pipeline only ever wanted one
+    // in four, so a dropRate near 3.0 is arithmetic rather than loss.
+    if (d.recording.analysisPath != null || d.recording.liveAttempted) {
+      const pct = (n: number | undefined) => (n == null ? "?" : `${Math.round(n * 1000) / 10}%`);
+      lines.push({
+        label: "Analysis path",
+        value:
+          `${d.recording.analysisPath ?? "file"}`
+          + (d.recording.liveCoverage != null
+            ? ` -- live coverage ${pct(d.recording.liveCoverage)}, missed ${pct(d.recording.liveMissRate)}`
+            : "")
+          + (d.recording.liveFallbackReason != null
+            ? `; fell back because ${d.recording.liveFallbackReason}`
+            : ""),
+      });
+    }
     // recording." frameCount/elapsedSeconds alone read identically either way (both a small
     // frame count and a fast elapsed time); this line is what actually distinguishes them.
     // Missing entirely on diagnostics persisted before this field existed.

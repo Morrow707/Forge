@@ -29,7 +29,16 @@ describe("sensors are thinned, never cut", () => {
     // is scaled back up by the sample stride before a sensor's stride reads it (2026-10-02, the
     // row that went live ran the 3D pose once every four seconds instead of once a second).
     expect(swift).toMatch(/let strideIndex = bypassStrideGuard \? thisFrameIndex \* ctx\.sampleEveryNthFrame : thisFrameIndex/);
-    expect(swift).toMatch(/strideIndex % ctx\.body3DDetectionStride == 0/);
+    // == body3DPhaseOffset, not == 0, since 2026-10-05. Still "runs on its stride", which is
+    // what this test is for: the offset changes WHICH frames, never HOW MANY. It exists because
+    // every shipped stride pair has one stride dividing the other (120 and 12, 120 and 24), so
+    // sharing phase 0 put the 3D pose and the hand pose on the same frame every single time --
+    // a ~200ms stall on a queue whose target interval is 33ms, which is the Back Squat's 0.48s
+    // inter-frame gap. See expensive-sensors-never-collide.test.ts.
+    expect(swift).toMatch(/strideIndex % ctx\.body3DDetectionStride == ctx\.body3DPhaseOffset/);
+    // And the offset is a phase, not a thinning: it must stay smaller than the stride, or it
+    // would silently reduce how often the sensor runs, which IS a cut.
+    expect(swift).toMatch(/var body3DPhaseOffset: Int \{ handPoseStride > 1 \? 1 % body3DDetectionStride : 0 \}/);
   });
 
   it("the live path scales the frame before any sensor sees it, and the detector re-searches on a cadence", () => {

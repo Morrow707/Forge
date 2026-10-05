@@ -169,6 +169,85 @@ flag and a caveat instead, and let the number through.
   sections are written from; when a fix needs a number the export does not carry, add the field
   to the export in the same change, or the next comparison cannot be made.
 
+## RULE #4: ALL THREE CAMERA SYSTEMS RUN ON EVERY SINGLE LIFT. NO EXCEPTIONS.
+
+Scott, 2026-10-05, after the fourth calibration session in a row where the object witness was
+thrown away and the scale fell back to body rulers alone:
+
+> "it should also be detecting the barbell in the barbell and exercises. And in the medball
+> throw it needs to be detecting the medball along with the body, we need to be detecting both
+> object and body in every single lift, make that rule in Claude.md. Camera system has two
+> systems, object and body detector, they need to work in unison always to produce a truly
+> trusted number. And never reject. We have talked about this at least 100 times now."
+
+And immediately after, correcting the count:
+
+> "That's what the ai overwatch is for too, so rule should be 3 camera systems, all working
+> hand in hand for the most trusted numbers, or something like that, but for every single lift."
+
+**BODY TRACKER, OBJECT TRACKER, OVERWATCH. ALL THREE, EVERY LIFT, EVERY TAKE.** He has said this
+at least a hundred times and it keeps being lost, so it gets its own number. Rule #2 says no
+sensor is ever switched OFF and the architecture section says what the three parts are; this
+says the quieter thing that keeps happening instead -- a system that is nominally part of the
+design is simply not asked for on a given tracker, or runs and has its reading discarded on
+every take, which is indistinguishable from being off and is worse, because the diagnostics
+read as though it was there.
+
+**A number corroborated by one system is not a trusted number, it is an assertion.** Body
+rulers agree with each other by construction -- they are built from the same landmarks -- so a
+blend of body rulers alone can return `scaleCorroborated: true` and be 8% wrong, which is
+exactly what the 2026-10-04 pairing did. The object is the only ruler in the scene whose real
+size is KNOWN, and overwatch is the only thing that can hold the two against each other. Take
+either away and the remaining system has nothing to be checked by.
+
+### What the 2026-10-04 pairing actually showed
+
+Read off `trackingDiagnostics.objectDetection` and `.objectLock`:
+
+| Take | Object detected | Lock held | Secondary lock | Overwatch |
+|---|---|---|---|---|
+| Back Squat | **18 of 840 frames (2%)** | 32/840 (4%) | **0 frames** | ran |
+| RDL | 391 of 585 (67%) | 390/585 (67%) | **0 frames** | ran |
+| Box Jump | **0 frames** | `objectLock: null` | n/a | **never ran** |
+| Med ball throw | never reached the server | | | |
+
+- **The box jump had NO object system and NO overwatch.** `av-jump-tracker-dialog.tsx` passes no
+  `trackingMode`, so `AvCoreMlImplementDetector.targetLabel` returns nil, the detector is inert,
+  `objectLock` comes back null and overwatch has one witness and nothing to arbitrate. Scott
+  jumped onto a box and the system that is supposed to find the box was not running. This is the
+  clearest violation of this rule in the repo.
+- **The squat found its barbell on 2% of frames**, with 90 candidates rejected on confidence and
+  39 on size. The plate scale that did emerge was then rejected outright
+  (`plateRejectedReasons: ["size_vs_grip", "aspect_ratio", "too_large_for_a_plate"]`).
+- **The secondary barbell witness has never once held a lock** on either barbell take --
+  `framesLockHeld: 0` on both. The second class exists precisely so a take with unrecognised
+  plates still has an object, and it is contributing nothing.
+- So on both barbell lifts the scale was decided by body rulers ONLY. **The 0.05 -> 0.1 refit of
+  `HEIGHT_RULER_UNCERTAINTY` is a stopgap over this, not a fix for it**, and is to be read that
+  way: it makes today's numbers land while the object system is failing to produce a usable
+  reading. The real work is the detector.
+
+### What this means for any change
+
+- **A tracker that does not ask for an object class is broken, not simple.** Every capture mode
+  names the object it expects, and if the scene genuinely has no implement (jump, sprint,
+  mechanics, horizontal_load) it names what it DOES have -- a box, a ground plane -- or records
+  explicitly that it has none, so overwatch's silence is a recorded fact and not an absence.
+- **A rejected object read is a BUG REPORT, not a successful guard.** Three rejection reasons
+  firing on one squat plate, 90 candidates refused on confidence, a secondary that never locks:
+  those are detector problems. A guard that fires on every take has replaced the sensor it was
+  meant to check.
+- **"The object was rejected" is never a finished answer to a wrong number.** The next question
+  is what the detector was looking at. `referenceObject`, `plateMeasuredPx` and the
+  `candidatesRejectedBy*` counters exist for that and are to be read, not skipped.
+- **Never fit a body-ruler constant without first saying what the object system produced.** If
+  the answer is "nothing", the work is the detector, not the constant.
+- **AND IT STILL NEVER REJECTS THE TAKE** (Rule #1). All three failing is a take with a number,
+  a caveat and a `trackingDiagnostics` blob -- never a withheld number. Mandatory means
+  mandatory to RUN and to RECORD, never mandatory to succeed.
+- **Neither detector leads** (Rule #2). This rule adds no hierarchy. It says all three must be
+  PRESENT so overwatch has something to arbitrate. One witness is not unison.
+
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
 Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever
