@@ -442,14 +442,39 @@ async function runFlush() {
   // close that gap; they are the other half of the same instrument, same tag on purpose.
   logDebug("SAVE", `flush: ${pending.length} queued day(s)`);
   let syncedAny = false;
+  /* EVERY SKIP SAYS SO. A SILENT `continue` IS A LOST SET WITH NO RECORD.
+   *
+   * Scott's debug console, 2026-10-05: "flush: 1 queued day(s)" at 21:37, 21:47, 23:46, 24:02,
+   * 24:05 and 39:2x, and NOT ONE "flush ok", "flush retry", "flush HELD" or "flush DROPPED"
+   * after any of them. A day sat in the queue all night and the only instrument on the phone
+   * could not say whether it was being tried and failing, or skipped and never tried at all.
+   * The Back Squat and the med ball throw he filmed that night never reached the server, and
+   * this is where they went.
+   *
+   * All three of these branches were bare `continue`s. Each one is a legitimate reason to skip
+   * -- another account's workout, a day the owning page has claimed, a held entry on its slow
+   * clock -- and every one of them is indistinguishable from the others, and from a crash, when
+   * nothing is written down. This file's own comment about the object lock says it: a guard that
+   * cannot be shown to have fired is a guard nobody can tune.
+   *
+   * Logged once per flush per entry rather than suppressed, on purpose. The flush runs on
+   * reconnect and on resume, not in a tight loop, and a repeating line that names the SAME
+   * reason is itself the diagnosis -- that is exactly how the 409 catch-up bug was found.
+   */
   for (const entry of pending) {
     // Queued by a different account on this device -- leave it alone. It is
     // their workout and it flushes when they sign back in. See
     // queue-owner.ts for why this is not simply cleared at logout.
-    if (!belongsToCurrentUser(entry.ownerId)) continue;
+    if (!belongsToCurrentUser(entry.ownerId)) {
+      logDebug("SAVE", `flush SKIPPED (${entry.dayKey}): queued by another account on this device, waiting for them to sign in`);
+      continue;
+    }
     // Left for the owning page's own queue to resolve -- see
     // claimDayKeyForFlush's own comment.
-    if (claimedDayKeys.has(entry.dayKey)) continue;
+    if (claimedDayKeys.has(entry.dayKey)) {
+      logDebug("SAVE", `flush SKIPPED (${entry.dayKey}): the open workout screen has claimed this day`);
+      continue;
+    }
     try {
       // An inline body is read synchronously on purpose: the first flush after a reconnect
       // has to reach apiRequest before the second one is scheduled, and an await here would
@@ -468,7 +493,14 @@ async function runFlush() {
             { duration: 20000 },
           );
         }
-        if (sinceAttemptMs < heldRetryIntervalMs(heldMs)) continue;
+        if (sinceAttemptMs < heldRetryIntervalMs(heldMs)) {
+          const waitS = Math.round((heldRetryIntervalMs(heldMs) - sinceAttemptMs) / 1000);
+          logDebug(
+            "SAVE",
+            `flush SKIPPED (${entry.dayKey}): HELD since ${entry.heldSince}, next retry in ~${waitS}s`,
+          );
+          continue;
+        }
       }
       const payload = entry.payloadFile ? await loadPayload(entry) : entry.payload;
       if (payload == null) {

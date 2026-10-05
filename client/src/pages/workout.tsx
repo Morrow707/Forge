@@ -1979,9 +1979,9 @@ export function WorkoutPage({
         completed: dayCompletedRef.current,
         itemsSnapshot: nextItems,
         silent: true,
-        // The only caller that omits. This is the keystroke path -- typing a rep count cannot
-        // change capture data. autosaveNow below, which is what a finished camera set goes
-        // through, always sends it in full.
+        // The keystroke path: typing a rep count cannot change capture data. autosaveNow below
+        // omits too, since 2026-10-05 -- it carries the capture that is NEW (never persisted,
+        // so never omitted) without re-uploading every earlier set's frames with it.
         omitPersistedCapture: true,
       });
     }, 1200);
@@ -1999,6 +1999,26 @@ export function WorkoutPage({
       completed: dayCompletedRef.current,
       itemsSnapshot: nextItems,
       silent: true,
+      // OMITS THE CAPTURES THE SERVER HAS ALREADY CONFIRMED, AND SENDS THIS ONE IN FULL.
+      //
+      // This used to send every set's traces on every call, and Scott's console, 2026-10-05,
+      // is what that costs on a real session: 10472KB, then 11961KB, then 13340KB, then
+      // 13383KB, each taking 7 to 11 seconds, because every finished camera set re-uploaded
+      // the skeleton frames of every set before it. Two of those saves died with
+      // "NetworkError: Can't reach Forge" and one with a 409, and the Back Squat and med ball
+      // throw he filmed that night never reached the server. A 13MB upload from a phone is not
+      // a network problem, it is a payload problem.
+      //
+      // The safety is in capturePersistedRef: a set only joins it inside `if (synced)` in
+      // onSuccess, so "omitted" means the server told us it has the data. The set just
+      // finished is NOT in it -- it has never been saved -- so its capture goes in full, which
+      // is the entire reason this path bypasses the debounce. A failed save leaves the set
+      // unmarked and the next attempt carries it again.
+      //
+      // The keystroke path has omitted for this reason since it was written (the 118KB saves
+      // in the same log, beside the 13MB ones). This is the same argument: a finished set adds
+      // ONE capture, and re-sending the other four is not what makes it durable.
+      omitPersistedCapture: true,
     });
   }
 
