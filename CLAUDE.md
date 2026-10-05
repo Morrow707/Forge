@@ -1311,6 +1311,20 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   as ids because full_bundle resolves to them and an account granted one earlier keeps it;
   `BILLING_ADD_ON_ORDER` is what is offered, `ALL_ADD_ON_IDS` what can be owned. Admin-assigned,
   no checkout, no Apple product.
+  **FLAGGED 2026-10-05 (Scott): Full Personalization still has to be ADDED TO APPLE before a
+  coach can buy it themselves.** There are exactly TWO coach add-ons -- Full Personalization
+  ($24.99) and Coaches Corner ($19.99) -- and only Coaches Corner is sellable today:
+  `COACH_PURCHASABLE_ADD_ON_ORDER` is `["coaches_corner"]` alone, so Full Personalization has
+  no checkout on either rail and `appleProductIdForCoachAddOn` is never asked for it. Making it
+  buyable is four things, none of them done: an App Store Connect auto-renewable product in the
+  **Coach Add-ons** group (never the tier group -- add-ons combine, tiers are exclusive), a
+  Stripe Price in `STRIPE_PRICE_COACH_ADDON_FULL_BUNDLE`, `full_bundle` added to
+  `COACH_PURCHASABLE_ADD_ON_ORDER` (which is what puts it in `missingPriceEnvVars()` and in
+  both checkout enums, since every one of those derives from the list rather than naming ids),
+  and the coach billing page's StoreKit button offering it the way it offers Coaches Corner.
+  Until all four exist it stays admin-assigned, which is a working state, not a broken one.
+  NOT the same as the three sport coaches: those are FREE AGENT (athlete) add-ons, not coach
+  ones -- see FREE_AGENT_ADD_ON_ORDER -- and they are withdrawn and refused at checkout.
 - **The locked state for a non-comped account says "not available yet"**, never "free in beta":
   that branch is reached only by an account that is not comped.
 
