@@ -519,3 +519,201 @@ export function arbitrate(opts: {
     bodyDeviationRatio: null,
   };
 }
+
+/* A RACK DOES NOT MOVE. A BARBELL DOES. OVERWATCH CAN TELL THEM APART.
+ *
+ * Fitted 2026-10-05 from the Back Squat filmed beside the OVR on 2026-10-04. Its object lock
+ * held on 32 of 840 frames and the detector ran 135 full-frame re-searches, against the RDL's
+ * single detection holding 390 of 585. Of 130 plate-class candidates on that squat, 39 were
+ * thrown out as too large for a plate -- the signature of a detector finding the RACK, which in
+ * a squat take is loaded with plates, sits in frame the whole time, and is better lit and more
+ * side-on than the bar on the athlete's back.
+ *
+ * The size gate catches a rack plate that reads TOO BIG. It cannot catch one that reads exactly
+ * plate-sized, because at the rack's distance it is plate-sized. What separates them is not size
+ * and not confidence, it is MOTION: across a set the athlete's own anchor sweeps through a squat's
+ * full range, and anything on the bar sweeps with it. A fixture does not move at all.
+ *
+ * THIS IS AN OVERWATCH DECISION AND THAT IS WHY IT LIVES HERE. It judges the object using a
+ * signal the object tracker has no hand in producing -- how far the BODY travelled over the same
+ * frames -- which is the independence property every check in this file is built on. It owns no
+ * sensor and it reads no classifier.
+ *
+ * IT DEPRIORITISES, IT DOES NOT REJECT (Rule #1 and Rule #2). A candidate judged static is
+ * ranked BELOW every moving candidate, not discarded: on a take where the only thing the detector
+ * ever finds is the rack, the rack is still the only object witness there is, and a wrong object
+ * with a flag beats no object at all. It is also never allowed to convict on a frame where the
+ * body did not move -- between reps, at a pause, or on a take the athlete stood still through,
+ * every candidate is legitimately static and this says nothing.
+ */
+
+/** How far the body's anchor must have travelled, in yardsticks, before "the candidate did not
+ *  move" means anything. Below this the athlete was standing still and a static object is not
+ *  evidence of anything. One yardstick is a grip width, so this is a real excursion, not jitter. */
+export const MIN_BODY_TRAVEL_FOR_DECOY_YARDSTICKS = 1.0;
+
+/** How little a candidate may move, in yardsticks, across a window in which the body moved more
+ *  than the threshold above, before it is treated as a fixture. A plate on a moving bar travels
+ *  essentially as far as the body does; a rack travels zero. 0.25 leaves generous room for
+ *  landmark noise and for a bar that genuinely moves less than the hips (a press). */
+export const MAX_DECOY_TRAVEL_YARDSTICKS = 0.25;
+
+/** How many (candidate, body) position pairs are needed before a travel comparison is a
+ *  comparison. Five, the same floor MIN_YARDSTICK_SAMPLES_FOR_STABILITY uses, and for the same
+ *  reason: fewer is one bad landmark frame away from a verdict. */
+export const MIN_DECOY_SAMPLES = 5;
+
+export type DecoyVerdict = {
+  /** True only on a positive finding: the body moved and this candidate did not. */
+  isStaticDecoy: boolean;
+  /** Why, for the telemetry. "cannot_judge" is the pass case and must stay a pass. */
+  reason: "static_while_body_moved" | "moved_with_body" | "body_did_not_move" | "too_few_samples";
+  candidateTravelYardsticks: number | null;
+  bodyTravelYardsticks: number | null;
+};
+
+/**
+ * Whether a candidate position looks like a fixture rather than the implement.
+ *
+ * Both histories are oldest-first and index-aligned: entry i of each is the same frame. Travel is
+ * the span (max minus min) of each along BOTH axes combined, taken as the diagonal, rather than a
+ * sum of per-frame steps -- a sum of steps accumulates landmark jitter into a large number for a
+ * box that never actually went anywhere, which would make a rack look like it moved.
+ *
+ * A frame overwatch cannot judge PASSES, the same rule the rest of this file follows: every exit
+ * that is not a positive finding returns isStaticDecoy false.
+ */
+export function staticDecoyVerdict(opts: {
+  candidateCenters: ArbiterPoint[];
+  bodyAnchors: ArbiterPoint[];
+  yardstickPx: number | null;
+}): DecoyVerdict {
+  const { candidateCenters, bodyAnchors, yardstickPx } = opts;
+  const n = Math.min(candidateCenters.length, bodyAnchors.length);
+  const none = { isStaticDecoy: false, candidateTravelYardsticks: null, bodyTravelYardsticks: null };
+  if (n < MIN_DECOY_SAMPLES || yardstickPx == null || !(yardstickPx >= MIN_YARDSTICK_PX)) {
+    return { ...none, reason: "too_few_samples" };
+  }
+  const span = (pts: ArbiterPoint[]) => {
+    const xs = pts.slice(0, n).map((p) => p.x);
+    const ys = pts.slice(0, n).map((p) => p.y);
+    return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  };
+  const candidateTravelYardsticks = Math.round((span(candidateCenters) / yardstickPx) * 1000) / 1000;
+  const bodyTravelYardsticks = Math.round((span(bodyAnchors) / yardstickPx) * 1000) / 1000;
+  const travels = { candidateTravelYardsticks, bodyTravelYardsticks };
+  // The athlete stood still, so nothing moving is expected and nothing is concluded.
+  if (bodyTravelYardsticks < MIN_BODY_TRAVEL_FOR_DECOY_YARDSTICKS) {
+    return { ...travels, isStaticDecoy: false, reason: "body_did_not_move" };
+  }
+  if (candidateTravelYardsticks <= MAX_DECOY_TRAVEL_YARDSTICKS) {
+    return { ...travels, isStaticDecoy: true, reason: "static_while_body_moved" };
+  }
+  return { ...travels, isStaticDecoy: false, reason: "moved_with_body" };
+}
+
+/* THE TWO WITNESSES DISAGREED BY 120 PIXELS AND NOTHING READ IT.
+ *
+ * `trackingDiagnostics.objectDetection.sourceAgreement.medianGapPx` was 119.2 on the RDL and
+ * 122.4 on the Back Squat of 2026-10-04 -- the median distance between where the POSE thought the
+ * implement was and where the CoreML detector did, on frames where both answered. It is recorded
+ * on every take and, before this, read by nothing at all.
+ *
+ * That is exactly the quantity overwatch exists to arbitrate: two independent witnesses to one
+ * position, neither of which influenced the other. A large steady gap means one of them is on the
+ * wrong object -- which, on a squat, is the rack. Expressed in yardsticks so it needs no
+ * per-setup tuning, the same rule every threshold in this file follows.
+ *
+ * REPORTED, NOT ACTED ON YET, and deliberately so: it is a new reading of an existing number and
+ * nothing has been checked against a sensor. It becomes a gate when a pairing says what a real
+ * gap looks like. Shipping it as a gate on the strength of two takes is how the object tracker
+ * grew three checks of its own the first time.
+ */
+
+/** Above this many yardsticks between the pose's implement position and the detector's, the two
+ *  are not looking at the same object. A grip width is the unit; one full grip width of
+ *  disagreement is far more than parallax or landmark noise accounts for. */
+export const MAX_SOURCE_GAP_YARDSTICKS = 1.0;
+
+export type SourceAgreementVerdict = {
+  gapYardsticks: number | null;
+  /** True on a positive finding only. Null yardstick or no gap recorded reads as agreement. */
+  witnessesDisagree: boolean;
+};
+
+export function sourceAgreementVerdict(opts: {
+  medianGapPx: number | null | undefined;
+  yardstickPx: number | null;
+}): SourceAgreementVerdict {
+  const { medianGapPx, yardstickPx } = opts;
+  if (medianGapPx == null || yardstickPx == null || !(yardstickPx >= MIN_YARDSTICK_PX)) {
+    return { gapYardsticks: null, witnessesDisagree: false };
+  }
+  const gapYardsticks = Math.round((medianGapPx / yardstickPx) * 1000) / 1000;
+  return { gapYardsticks, witnessesDisagree: gapYardsticks > MAX_SOURCE_GAP_YARDSTICKS };
+}
+
+/* A TAKE HAS ONE SCALE AND NOBODY EVER CHECKED WHETHER THAT WAS TRUE.
+ *
+ * reconcileScaleEstimates runs once, over the whole set, and every distance, velocity and power
+ * number on every rep is multiplied by its answer. That is correct only if the scene's scale held
+ * still for the set. If the athlete stepped toward the lens between reps, or the phone was nudged,
+ * or the plate detector locked onto the rack for the back half of the take, the true scale moved
+ * and NOTHING NOTICES -- the reps simply come back with a consistent-looking spread around a
+ * number that drifted.
+ *
+ * The 2026-10-04 RDL is what this is for. Its per-rep ranges came back 56, 53.2, 69, 59.1 and 36
+ * centimetres against the OVR's steady 58-61. That was read as a segmentation fault, and it may
+ * be one, but a drifting scale produces the same picture and the two were not separable from the
+ * evidence. A per-rep scale would have said which.
+ *
+ * REPORTED, NEVER APPLIED (Rule #1 and Rule #2). This computes nothing new and corrects nothing:
+ * it takes the per-rep scales the caller already has and says how far apart they sit. A spread is
+ * a CONFIDENCE number the pipeline has never had -- the difference between "five reps that agree"
+ * and "five reps measured with five different rulers" -- and it belongs in trackingDiagnostics
+ * and in the trust score, not in a correction. Picking one rep's scale over another's would be
+ * appointing a leader among frames.
+ */
+
+/** Above this fractional spread the reps were not measured with the same ruler. 0.1 because the
+ *  rulers themselves carry 0.2 uncertainty (BODY_3D_CORRECTED_UNCERTAINTY and friends), so two
+ *  honest reads of one unchanged scene can legitimately differ by less than this; more than a
+ *  tenth across a single set is the SCENE moving, not the estimator wobbling. An admitted guess,
+ *  like every untuned constant in this file, and the recorded spread is how it gets revised. */
+export const MAX_SCALE_DRIFT_FRACTION = 0.1;
+
+/** Two reps is a difference, not a spread. */
+export const MIN_REPS_FOR_DRIFT = 3;
+
+export type ScaleDriftVerdict = {
+  /** (max - min) / median across the per-rep scales. Null when there are too few. */
+  spreadFraction: number | null;
+  medianScale: number | null;
+  repsMeasured: number;
+  /** True on a positive finding only: the spread exceeded the threshold. */
+  scaleDrifted: boolean;
+  /** Which rep sat furthest from the median, 0-based -- where to look first. */
+  worstRepIndex: number | null;
+};
+
+export function scaleDriftVerdict(perRepScales: (number | null | undefined)[]): ScaleDriftVerdict {
+  const usable: { scale: number; index: number }[] = [];
+  perRepScales.forEach((s, index) => {
+    if (typeof s === "number" && Number.isFinite(s) && s > 0) usable.push({ scale: s, index });
+  });
+  if (usable.length < MIN_REPS_FOR_DRIFT) {
+    return { spreadFraction: null, medianScale: null, repsMeasured: usable.length, scaleDrifted: false, worstRepIndex: null };
+  }
+  const sorted = [...usable].sort((a, b) => a.scale - b.scale);
+  const mid = Math.floor(sorted.length / 2);
+  const medianScale = sorted.length % 2 ? sorted[mid].scale : (sorted[mid - 1].scale + sorted[mid].scale) / 2;
+  const spreadFraction = Math.round(((sorted[sorted.length - 1].scale - sorted[0].scale) / medianScale) * 1000) / 1000;
+  const worst = usable.reduce((a, b) => (Math.abs(b.scale - medianScale) > Math.abs(a.scale - medianScale) ? b : a));
+  return {
+    spreadFraction,
+    medianScale,
+    repsMeasured: usable.length,
+    scaleDrifted: spreadFraction > MAX_SCALE_DRIFT_FRACTION,
+    worstRepIndex: worst.index,
+  };
+}

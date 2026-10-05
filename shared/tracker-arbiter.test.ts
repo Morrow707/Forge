@@ -15,6 +15,9 @@ import {
   MIN_YARDSTICK_PX,
   MAX_PLATE_ASPECT_RATIO,
   MAX_PLATE_SIZE_IN_YARDSTICKS,
+  MIN_BODY_TRAVEL_FOR_DECOY_YARDSTICKS,
+  MAX_DECOY_TRAVEL_YARDSTICKS,
+  MIN_DECOY_SAMPLES,
 } from "./tracker-arbiter";
 
 // A 1080p frame, and a bench grip 0.55m wide filling a plausible slice of it. Working in a real
@@ -545,5 +548,37 @@ describe("arbitrate: one call, both trackers, asymmetric response", () => {
     });
     expect(a.outcome).toBe("cannot_judge");
     expect(a.breakLock).toBe(false);
+  });
+});
+
+describe("the static-decoy rule's Swift port cannot drift from the TS one", () => {
+  const swift = readFileSync(join(__dirname, "..", "ios", "App", "App", "AvBodyTrackingPlugin.swift"), "utf8");
+
+  // Same contract as every other constant in this file: overwatch has to act mid-clip, there is
+  // no Swift test target, so the constants live twice and this is what keeps them equal.
+  it("pins the three decoy constants against AvTrackerArbiter", () => {
+    expect(swift).toContain(`static let minBodyTravelForDecoyYardsticks = ${MIN_BODY_TRAVEL_FOR_DECOY_YARDSTICKS}`);
+    expect(swift).toContain(`static let maxDecoyTravelYardsticks = ${MAX_DECOY_TRAVEL_YARDSTICKS}`);
+    expect(swift).toContain(`static let minDecoySamples = ${MIN_DECOY_SAMPLES}`);
+  });
+
+  it("keeps the Swift port measuring travel as a span, not a sum of steps", () => {
+    // The one implementation choice that decides whether the rule works: a sum of per-frame steps
+    // turns landmark jitter into travel and a rack stops looking static. Pinned in both copies.
+    const fn = swift.slice(swift.indexOf("static func isStaticDecoy"));
+    const body = fn.slice(0, fn.indexOf("\n    }\n") + 7);
+    expect(body).toContain("xs.min()");
+    expect(body).toContain("xs.max()");
+    // And the body-moved guard precedes the verdict, so a pause can never convict.
+    expect(body.indexOf("minBodyTravelForDecoyYardsticks")).toBeLessThan(
+      body.indexOf("maxDecoyTravelYardsticks"),
+    );
+  });
+
+  it("returns false on every path it cannot judge, like the TS copy", () => {
+    const fn = swift.slice(swift.indexOf("static func isStaticDecoy"));
+    const body = fn.slice(0, fn.indexOf("\n    }\n") + 7);
+    // Two guards, both bailing to false -- never to true, which would convict on no evidence.
+    expect((body.match(/else \{ return false \}/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 });

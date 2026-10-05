@@ -3514,6 +3514,44 @@ private enum AvTrackerArbiter {
     static let maxPlateSizeInYardsticks = 2.0
     static let candidateEdgeTolerance = 0.005
 
+    /// A RACK DOES NOT MOVE AND A BARBELL DOES -- the port of shared/tracker-arbiter.ts's
+    /// staticDecoyVerdict. See that function's comment for the full reasoning and for the
+    /// 2026-10-04 Back Squat it was fitted from (32 of 840 frames locked, 135 full-frame
+    /// re-searches, 39 of 130 candidates too large for a plate: a detector finding the rack).
+    ///
+    /// THE PORT IS A PORT. These live twice because overwatch has to act mid-clip and there is no
+    /// Swift test target; shared/tracker-arbiter.test.ts reads this file and fails when the
+    /// constants diverge. Change one, change both.
+    static let minBodyTravelForDecoyYardsticks = 1.0
+    static let maxDecoyTravelYardsticks = 0.25
+    static let minDecoySamples = 5
+
+    /// Whether a candidate position looks like a fixture rather than the implement.
+    ///
+    /// Travel is the SPAN of each history, not a sum of per-frame steps: a sum accumulates
+    /// landmark jitter into a large number for a box that never went anywhere, which would make a
+    /// rack look like it moved. Deprioritises, never rejects (Rule #1): on a take whose only
+    /// detection is the rack, the rack is still the only object witness there is. And it never
+    /// convicts on a window the body did not move through -- at a pause every candidate is
+    /// legitimately static and this says nothing.
+    static func isStaticDecoy(
+        candidateCenters: [(x: Double, y: Double)],
+        bodyAnchors: [(x: Double, y: Double)],
+        yardstickPx: Double?
+    ) -> Bool {
+        let n = min(candidateCenters.count, bodyAnchors.count)
+        guard n >= minDecoySamples, let yardstickPx, yardstickPx >= minYardstickPx else { return false }
+        func span(_ pts: [(x: Double, y: Double)]) -> Double {
+            let xs = pts.prefix(n).map { $0.x }
+            let ys = pts.prefix(n).map { $0.y }
+            guard let xMin = xs.min(), let xMax = xs.max(), let yMin = ys.min(), let yMax = ys.max() else { return 0 }
+            return (((xMax - xMin) * (xMax - xMin)) + ((yMax - yMin) * (yMax - yMin))).squareRoot()
+        }
+        let bodyTravel = span(bodyAnchors) / yardstickPx
+        guard bodyTravel >= minBodyTravelForDecoyYardsticks else { return false }
+        return span(candidateCenters) / yardstickPx <= maxDecoyTravelYardsticks
+    }
+
     struct Yardstick {
         var px: Double
         /// "grip" or "shoulders" -- which span supplied it, for telemetry.
@@ -4186,12 +4224,38 @@ private final class AvCoreMlImplementDetector {
             frameHeight: body.frameHeight
         ).plausible
     }
-    // A detection this weak is more likely a false positive (a shadow, a
-    // teammate's shirt) than a real med ball -- untuned starting value, same
-    // "no real footage to calibrate against yet" caveat every other
-    // heuristic constant in this file carries until real device testing
-    // gives actual numbers to react to.
-    private let minDetectionConfidence: VNConfidence = 0.4
+    // FITTED 2026-10-05 FROM THE FIRST REAL FOOTAGE. Was 0.4, described in this very comment as
+    // an "untuned starting value ... until real device testing gives actual numbers to react to".
+    // The numbers arrived, off the four lifts filmed beside the OVR on 2026-10-04:
+    //
+    //   Back Squat: 130 candidates of the target class seen, 90 REJECTED BY THIS FLOOR, best
+    //     confidence seen 0.754 -- and the lock held on 32 of 840 frames with 135 full-frame
+    //     re-searches, because almost nothing survived to lock onto.
+    //   RDL: 7 seen, 6 rejected by this floor, best 0.523. The single survivor carried the whole
+    //     take (390 of 585 frames held), which is how close that take came to having no object
+    //     witness at all.
+    //
+    // So the detector IS finding the implement and this floor is discarding two thirds to six
+    // sevenths of it. Lowering it is unusually safe here, and the reason is ORDER: this filter
+    // runs FIRST, and every candidate that passes it still has to clear
+    // AvTrackerArbiter.candidateBoxIsUsable (size and frame bounds, in grip widths) and then
+    // objectIsPlausible (the wrist gate) before it can be picked. A shadow or a teammate's shirt
+    // that sneaks past a lower floor meets two geometric gates it cannot satisfy; a real plate at
+    // 0.3 confidence currently meets nothing at all because it is already gone.
+    //
+    // 0.25 rather than lower: far enough down to admit the 0.3-0.4 band the squat was throwing
+    // away, not so far that the gates behind it are doing all the work. The counters that measured
+    // this -- candidatesSeenOfClass, candidatesRejectedByConfidence, candidatesRejectedBySize,
+    // candidatesRejectedByWristGate, bestCandidateConfidence -- are how the next pairing says
+    // whether 0.25 was right, and they are why this could be fitted at all.
+    //
+    // NOTE THE LIMIT OF THIS CHANGE. It cannot help a class with no training data: the bundled
+    // model was trained on 43 labelled boxes across 41 images, of which BARBELL HAS THREE, and
+    // the barbell class has never produced a single detection on any take
+    // (candidatesSeenOfClass: 0 on both barbell lifts, across 60 full-frame searches). No
+    // threshold fixes that -- see scripts/med-ball-detector/README.md and the 225 unlabelled
+    // images already sitting in training-data/med-ball/raw.
+    private let minDetectionConfidence: VNConfidence = 0.25
 
     // Camera overlord: recent boxes VNTrackObjectRequest has reported while actively locked
     // on, oldest first -- lets a fresh observation be checked against the recent trend before
