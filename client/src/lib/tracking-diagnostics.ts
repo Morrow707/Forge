@@ -441,7 +441,18 @@ export type TrackingDiagnostics = {
   } | null;
   /** THE BOX RULER: median net rise on box reps over the typed box height. See
    *  applyBoxRiseCorrection in jump-tracking.ts. */
-  boxRise?: { scaleErrorRatio: number; repsUsed: number; applied: boolean } | null;
+  // Never a bare null since 2026-10-05 -- `outcome` names which of the four situations produced
+  // it and the rises it saw travel with it. See BoxRiseVerdict in jump-tracking.ts.
+  boxRise?: {
+    scaleErrorRatio: number | null;
+    repsUsed: number;
+    applied: boolean;
+    outcome?: string;
+    boxHeightCm?: number | null;
+    netRisesCm?: number[];
+    minRiseCm?: number | null;
+    repsRejected?: number;
+  } | null;
   /** THE ATHLETE'S OWN BONES, IN METRES, from a take whose ruler the body had no hand in.
    *
    *  Travels in the diagnostics blob rather than as its own column because it is EVIDENCE about

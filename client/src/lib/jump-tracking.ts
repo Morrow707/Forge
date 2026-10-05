@@ -265,9 +265,10 @@ export type JumpSetMetrics = {
   } | null;
   /** True when no rep passed the state machine and the set is the best-effort read instead. */
   bestEffort?: boolean;
-  /** The box as a ruler -- see applyBoxRiseCorrection. Null when no box height was typed or
-   *  too few box reps; applied false when the scale already agreed within 5%. */
-  boxRiseVerdict?: { scaleErrorRatio: number; repsUsed: number; applied: boolean } | null;
+  /** The box as a ruler -- see applyBoxRiseCorrection and BoxRiseVerdict. Never a bare null
+   *  since 2026-10-05: `outcome` says which of the four situations produced it, and the rises it
+   *  saw travel with it. The 10-04 box jump returned null and the export could not say why. */
+  boxRiseVerdict?: BoxRiseVerdict | null;
   /** A box jump's "ground contact" is the athlete stepping down and resetting, not a reactive
    *  contact, so the set-level average and the RSI built on it are withheld as not applicable.
    *  The per-rep contact times stay in repBreakdown; only the comparative numbers go. */
@@ -814,7 +815,22 @@ export function summarizeJumpSet(
   // athlete typed. Set 3 read 73-77cm of rise onto a 61cm box, so the take's scale was about a
   // quarter high and the 32in height with it. The gravity ruler needs a flat jump and a box
   // set has none; this needs a box and nothing else. Applied only when gravity did not.
-  const boxRiseVerdict = applied ? null : applyBoxRiseCorrection(reps, options?.usesBox ? options?.boxHeightCm ?? null : null);
+  // BOTH RULERS ALWAYS RUN. RULE #2: no ruler is appointed by an if-statement.
+  //
+  // This was `applied ? null : applyBoxRiseCorrection(...)` -- so a gravity correction switched
+  // the box ruler off entirely, and the box is the BETTER ruler of the two: it is a physical
+  // object of a height the athlete measured, where gravity is inferred from flight time. Worse,
+  // the short-circuit also erased the box ruler's own diagnosis of the take, which is the thing
+  // that would have explained the 2026-10-04 box jump. The box ruler now always runs and always
+  // reports; it only CORRECTS when gravity has not already, which is the one part of the old
+  // behaviour worth keeping (two corrections applied in series would double-count).
+  const boxRiseVerdict = applyBoxRiseCorrection(
+    applied ? [] : reps,
+    options?.usesBox ? options?.boxHeightCm ?? null : null,
+  );
+  const boxRiseReport: BoxRiseVerdict = applied
+    ? { ...applyBoxRiseCorrection(reps.map((r) => ({ ...r })), options?.usesBox ? options?.boxHeightCm ?? null : null), applied: false }
+    : boxRiseVerdict;
 
   const bestJumpHeightCm = Math.max(...reps.map((r) => r.jumpHeightCm));
   const distances = reps.map((r) => r.horizontalDistanceCm).filter((d): d is number => d != null);
@@ -859,7 +875,7 @@ export function summarizeJumpSet(
     gravityVerdict,
     bestEffort,
     groundContactIsBoxReset,
-    boxRiseVerdict,
+    boxRiseVerdict: boxRiseReport,
   };
 }
 
@@ -867,17 +883,61 @@ export function summarizeJumpSet(
 export const BOX_RISE_MIN_SHARE = 0.5;
 export const BOX_RISE_MIN_REPS = 2;
 
+/** WHY THE BOX RULER DID NOT CORRECT ANYTHING. Never a bare null again.
+ *
+ *  The 2026-10-04 box jump read 28% low -- 44cm of rise onto a 24 inch (61cm) box -- and
+ *  `trackingDiagnostics.boxRise` came back `null`. Null is produced by four different situations
+ *  here and they call for four different fixes, so the one number that could have said which was
+ *  the one number the export did not carry. Scott, on the consequence: "if the object detector
+ *  doesn't know where the box is then it thinks I'm doing a broad jump, which is not the case."
+ *
+ *  `no_box_height` -- nothing typed, so there is no ruler. (NOT the 10-04 take: a `box` scale
+ *     candidate was present, so the 24 inches were there.)
+ *  `too_few_box_reps` -- reps were found but their net rises came in under half the box, which on
+ *     a set the athlete really did jump onto a box means the LANDING was assigned to the floor
+ *     rather than the box top. This is the suspected 10-04 cause and the counters below are how
+ *     the next take confirms it.
+ *  `within_tolerance` -- the ruler ran and agreed with the scale already in hand.
+ *  `applied` -- it corrected the set.
+ *
+ *  Every branch now carries the rises it saw and the threshold it held them against, because
+ *  "two reps, rises 3.1 and 2.8 against a 30.5 floor" is a diagnosis and "null" is not. */
+export type BoxRiseVerdict = {
+  scaleErrorRatio: number | null;
+  repsUsed: number;
+  applied: boolean;
+  outcome: "no_box_height" | "too_few_box_reps" | "within_tolerance" | "applied";
+  boxHeightCm: number | null;
+  /** Every rep's net rise, rounded, in the order they happened -- the evidence for the outcome. */
+  netRisesCm: number[];
+  /** The floor a rise had to clear to count as a box rep. */
+  minRiseCm: number | null;
+  repsRejected: number;
+};
+
 /** Divides every scaled number by (median net rise / box height) when the set has enough box
  *  reps and the ratio is more than 5% from 1.0. Mutates the reps; returns the verdict. */
 export function applyBoxRiseCorrection(
   reps: JumpRep[],
   boxHeightCm: number | null,
-): { scaleErrorRatio: number; repsUsed: number; applied: boolean } | null {
-  if (!boxHeightCm || !(boxHeightCm > 0)) return null;
+): BoxRiseVerdict {
+  const netRisesCm = reps.map((r) => Math.round(r.netRiseCm * 10) / 10);
+  if (!boxHeightCm || !(boxHeightCm > 0)) {
+    return {
+      scaleErrorRatio: null, repsUsed: 0, applied: false, outcome: "no_box_height",
+      boxHeightCm: null, netRisesCm, minRiseCm: null, repsRejected: 0,
+    };
+  }
+  const minRiseCm = Math.round(boxHeightCm * BOX_RISE_MIN_SHARE * 10) / 10;
   const rises = reps.map((r) => r.netRiseCm).filter((v) => v >= boxHeightCm * BOX_RISE_MIN_SHARE).sort((a, b) => a - b);
-  if (rises.length < BOX_RISE_MIN_REPS) return null;
+  const base = { boxHeightCm: Math.round(boxHeightCm * 10) / 10, netRisesCm, minRiseCm, repsRejected: reps.length - rises.length };
+  if (rises.length < BOX_RISE_MIN_REPS) {
+    return { scaleErrorRatio: null, repsUsed: rises.length, applied: false, outcome: "too_few_box_reps", ...base };
+  }
   const ratio = Math.round((rises[Math.floor(rises.length / 2)] / boxHeightCm) * 1000) / 1000;
-  if (Math.abs(ratio - 1) <= GRAVITY_CORRECTION_MIN_ERROR) return { scaleErrorRatio: ratio, repsUsed: rises.length, applied: false };
+  if (Math.abs(ratio - 1) <= GRAVITY_CORRECTION_MIN_ERROR) {
+    return { scaleErrorRatio: ratio, repsUsed: rises.length, applied: false, outcome: "within_tolerance", ...base };
+  }
   for (const rep of reps) {
     rep.uncorrectedJumpHeightCm = rep.jumpHeightCm;
     rep.netRiseCm = Math.round((rep.netRiseCm / ratio) * 10) / 10;
@@ -892,7 +952,7 @@ export function applyBoxRiseCorrection(
       rep.takeoffVelocityMps = Math.round(Math.max(0, v0) * 100) / 100;
     }
   }
-  return { scaleErrorRatio: ratio, repsUsed: rises.length, applied: true };
+  return { scaleErrorRatio: ratio, repsUsed: rises.length, applied: true, outcome: "applied", ...base };
 }
 
 /** How confident the gravity ruler has to be before it is allowed to correct anything, and how

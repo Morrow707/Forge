@@ -9605,7 +9605,22 @@ export const trackingDiagnosticsSchema = z.object({
     .optional(),
   // The box as a ruler -- see applyBoxRiseCorrection in jump-tracking.ts.
   boxRise: z
-    .object({ scaleErrorRatio: z.number(), repsUsed: z.number(), applied: z.boolean() })
+    .object({
+      // Nullable since 2026-10-05: a ruler that stood down has no ratio, and it used to say so
+      // by being absent entirely. `outcome` is which of the four situations it was, and the
+      // rises it measured are the evidence for it -- the 10-04 box jump returned a bare null
+      // and nothing in the export could say which branch produced it.
+      scaleErrorRatio: z.number().nullable().optional(),
+      repsUsed: z.number(),
+      applied: z.boolean(),
+      outcome: z.string().max(40).optional(),
+      boxHeightCm: z.number().nullable().optional(),
+      // Capped generously: a jump set is a handful of reps and this is a diagnostics field, but
+      // a cap that refuses a save is the bug build 569 already paid for, so it is well clear.
+      netRisesCm: z.array(z.number()).max(64).optional(),
+      minRiseCm: z.number().nullable().optional(),
+      repsRejected: z.number().optional(),
+    })
     .nullable()
     .optional(),
   // Values only -- the keys are limb names from shared/athlete-body-model.ts and a record is the
