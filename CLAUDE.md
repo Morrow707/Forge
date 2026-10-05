@@ -566,8 +566,8 @@ can install. Delete entries as a `beta` ships them.
   opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
 - Build **553** (`48505970`, #167 + #168): the 720p upload copy encoded during the recording, the
   sensor-fitted concentric window, the jump-decision and live-fallback diagnostics.
-- Build **612** was cut 2026-10-05 from the first sandbox purchase run (611 was a verify_build
-  run earlier). Basic on TestFlight showed "Couldn't complete that purchase, try again" with
+- Build **611** was cut 2026-10-05 from `ed3f57c9`, the first sandbox purchase run (610 was a
+  verify_build run). Basic on TestFlight showed "Couldn't complete that purchase, try again" with
   nothing in the debug console. Two fixes: every StoreKit step logs to the debug console
   (`logDebug("IAP", ...)` in `client/src/lib/apple-iap.ts`: request, transaction, the server's
   verify status and message, finish, restore count) and the upgrade page's toast carries the
@@ -577,7 +577,7 @@ can install. Delete entries as a `beta` ships them.
   the All Classes add-on, the builder's pricing notice, the card fix, and the coach plan band
   following the plan onto the Stripe subscription (`syncCoachSubscriptionBand` in
   `server/billing.ts`, up prorates, down waits for the next invoice).
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 612.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 611.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
