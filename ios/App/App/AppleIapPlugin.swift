@@ -53,10 +53,22 @@ public class AppleIapPlugin: CAPPlugin, CAPBridgedPlugin {
     // a tier retired when the Family plan was removed, and omitted basic_v2
     // entirely, so the $4.99 floor tier was unbuyable on iOS and the app
     // asked the App Store for a product nobody should ever create.
+    //
+    // THE ADD-ONS BELONG HERE TOO, and leaving them out is why All Classes read
+    // "Not available in the store yet." on a sandbox phone with APPLE_IAP_LIVE on
+    // (2026-10-05). Every card asks StoreKit for its own price and shows no buy
+    // button without one -- AllClassesCard via fetchFreeAgentAddOnProducts, the
+    // Coaches Corner card via fetchCoachAddOnPrice -- and both read the result of
+    // THIS array. The products existed in App Store Connect; the app simply never
+    // asked about them, so neither add-on could be bought on either side.
+    // Add-ons each sit in their own subscription group (tiers are exclusive,
+    // add-ons combine), which does not change what is requested here.
     private static let productIds = [
         "com.foreperformancesystems.forge.freeagent.basic_v2",
         "com.foreperformancesystems.forge.freeagent.ai_coach_v3",
-        "com.foreperformancesystems.forge.freeagent.ai_coach_video_v3"
+        "com.foreperformancesystems.forge.freeagent.ai_coach_video_v3",
+        "com.foreperformancesystems.forge.addon.all_classes_v1",
+        "com.foreperformancesystems.forge.addon.coaches_corner_v1"
     ]
 
     private var updateListenerTask: Task<Void, Never>?

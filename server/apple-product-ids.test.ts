@@ -2,10 +2,14 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  ALL_CLASSES_ADD_ON_ID,
   ALL_FREE_AGENT_TIER_IDS,
   FREE_AGENT_TIER_ORDER,
+  appleProductIdForFreeAgentAddOn,
+  appleProductIdForCoachAddOn,
   appleProductIdForFreeAgentTier,
 } from "@shared/free-agent-tiers";
+import { COACH_PURCHASABLE_ADD_ON_ORDER } from "@shared/billing-tiers";
 
 // The Swift plugin hardcodes the StoreKit product ids it asks the App Store
 // for, because Swift cannot import the TypeScript that defines them. Nothing
@@ -37,9 +41,32 @@ describe("StoreKit product ids", () => {
   // fetchFreeAgentTierProducts maps over FREE_AGENT_TIER_ORDER, so the withdrawn product is
   // fetched and never shown. Fetched-but-not-offered is the correct state for a tier somebody
   // may still own.
-  it("are exactly the ids the shared tier list generates, in the same order", () => {
-    const expected = ALL_FREE_AGENT_TIER_IDS.map(appleProductIdForFreeAgentTier);
+  /* THIS ASSERTION USED TO READ "exactly the tier ids", AND THAT IS WHAT KEPT THE ADD-ONS OUT.
+   * Found 2026-10-05 on a sandbox phone: All Classes showed "Not available in the store yet."
+   * with APPLE_IAP_LIVE on, because every card asks StoreKit for its own price and draws no buy
+   * button without one -- and the plugin never requested either add-on id, so neither
+   * fetchFreeAgentAddOnProducts nor fetchCoachAddOnPrice could ever return a price. The products
+   * were live in App Store Connect; the app just never asked. A `toEqual` against the tiers
+   * alone made adding them a test failure, so the list could not be fixed without changing this.
+   * The requirement is real and its SCOPE was wrong: what the plugin asks for is everything
+   * Forge sells at Apple, which is the tiers plus the add-ons that have a Product. */
+  it("are exactly the ids Forge sells at Apple: every tier, then the add-ons", () => {
+    const expected = [
+      ...ALL_FREE_AGENT_TIER_IDS.map(appleProductIdForFreeAgentTier),
+      appleProductIdForFreeAgentAddOn(ALL_CLASSES_ADD_ON_ID),
+      ...COACH_PURCHASABLE_ADD_ON_ORDER.map(appleProductIdForCoachAddOn),
+    ];
     expect(productIdsInSwift()).toEqual(expected);
+  });
+
+  it("asks for both add-ons, or neither card can show a price and neither can be bought", () => {
+    // Stated separately from the equality above because the equality is the thing somebody
+    // "tidies" back to the tier list, and this names what that costs on both sides at once.
+    const ids = productIdsInSwift();
+    expect(ids).toContain(appleProductIdForFreeAgentAddOn(ALL_CLASSES_ADD_ON_ID));
+    for (const addOn of COACH_PURCHASABLE_ADD_ON_ORDER) {
+      expect(ids).toContain(appleProductIdForCoachAddOn(addOn));
+    }
   });
 
   it("still asks StoreKit about every withdrawn tier, so subscribers can restore", () => {
@@ -63,6 +90,9 @@ describe("StoreKit product ids", () => {
     expect(ids.find((id) => id.includes(".basic"))).toMatch(/_v2$/);
     expect(ids.find((id) => id.includes(".ai_coach_v"))).toMatch(/_v3$/);
     expect(ids.find((id) => id.includes(".ai_coach_video"))).toMatch(/_v3$/);
+    // The two add-ons are _v1: neither has ever had to be recreated.
+    expect(ids.find((id) => id.includes(".addon.all_classes"))).toMatch(/_v1$/);
+    expect(ids.find((id) => id.includes(".addon.coaches_corner"))).toMatch(/_v1$/);
     for (const id of ids) expect(id).toMatch(/_v\d+$/);
   });
 });
