@@ -60,3 +60,26 @@ describe("StoreKit product ids", () => {
     for (const id of productIdsInSwift()) expect(id.endsWith("_v2")).toBe(true);
   });
 });
+
+describe("the verifier recognises every product Forge sells at Apple", () => {
+  // 2026-10-05: the first sandbox purchase run. verifyAppleTransaction asked
+  // tierForAppleProductId alone, so All Classes and Coaches Corner -- both on sale in App Store
+  // Connect -- would have been refused with "isn't set up yet" after Apple took the money.
+  it("includes the tiers, the Free Agent add-ons and the coach add-ons", async () => {
+    const { isKnownAppleProductId } = await import("./apple-iap");
+    const {
+      ALL_FREE_AGENT_TIER_IDS,
+      FREE_AGENT_ADD_ON_ORDER,
+      appleProductIdForFreeAgentTier,
+      appleProductIdForFreeAgentAddOn,
+      appleProductIdForCoachAddOn,
+    } = await import("@shared/free-agent-tiers");
+    const { COACH_PURCHASABLE_ADD_ON_ORDER } = await import("@shared/billing-tiers");
+    for (const tier of ALL_FREE_AGENT_TIER_IDS) expect(isKnownAppleProductId(appleProductIdForFreeAgentTier(tier))).toBe(true);
+    for (const addOn of FREE_AGENT_ADD_ON_ORDER) expect(isKnownAppleProductId(appleProductIdForFreeAgentAddOn(addOn))).toBe(true);
+    for (const addOn of COACH_PURCHASABLE_ADD_ON_ORDER) expect(isKnownAppleProductId(appleProductIdForCoachAddOn(addOn))).toBe(true);
+    expect(isKnownAppleProductId("com.foreperformancesystems.forge.addon.all_classes_v1")).toBe(true);
+    expect(isKnownAppleProductId("com.foreperformancesystems.forge.addon.coaches_corner_v1")).toBe(true);
+    expect(isKnownAppleProductId("com.foreperformancesystems.forge.freeagent.nothing_v2")).toBe(false);
+  });
+});

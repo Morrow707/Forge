@@ -566,9 +566,18 @@ can install. Delete entries as a `beta` ships them.
   opt-out for bar and jump. See docs/camera-tracking-notes.md, "Build 553 on the phone".
 - Build **553** (`48505970`, #167 + #168): the 720p upload copy encoded during the recording, the
   sensor-fitted concentric window, the jump-decision and live-fallback diagnostics.
-- **Queued, not yet in a build:** the All Classes add-on (`AllClassesCard`, the locked chapter
-  offering it, the sport-coach surfaces listing only sport coaches, the pricing page line) and
-  the class builder's pricing notice. Nothing else on `main` is waiting on an upload.
+- Build **612** was cut 2026-10-05 from the first sandbox purchase run (611 was a verify_build
+  run earlier). Basic on TestFlight showed "Couldn't complete that purchase, try again" with
+  nothing in the debug console. Two fixes: every StoreKit step logs to the debug console
+  (`logDebug("IAP", ...)` in `client/src/lib/apple-iap.ts`: request, transaction, the server's
+  verify status and message, finish, restore count) and the upgrade page's toast carries the
+  server's sentence; and `verifyAppleTransaction` recognises every product sold at Apple
+  (`KNOWN_APPLE_PRODUCT_IDS`), where it had asked `tierForAppleProductId` alone and so refused
+  All Classes and Coaches Corner with a 502 after Apple took the money. Also carries the queue:
+  the All Classes add-on, the builder's pricing notice, the card fix, and the coach plan band
+  following the plan onto the Stripe subscription (`syncCoachSubscriptionBand` in
+  `server/billing.ts`, up prorates, down waits for the next invoice).
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 612.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

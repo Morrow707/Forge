@@ -1,3 +1,4 @@
+import { logDebug } from "@/lib/debug-console";
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -116,10 +117,27 @@ export async function fetchFreeAgentAddOnProducts(): Promise<FreeAgentAddOnProdu
 async function verifyAndFinish(transaction: AppleIapTransaction): Promise<void> {
   // The account-scoped route: the server reads the role and applies the receipt to the right
   // kind of purchase (a Free Agent's tier or add-on, a coach's Coaches Corner).
-  await apiRequest("POST", "/api/account/apple-iap/verify", {
-    signedTransactionInfo: transaction.signedTransactionInfo,
-  });
+  logDebug("IAP", `StoreKit transaction ${transaction.transactionId} for ${transaction.productId}, verifying with the server`);
+  try {
+    await apiRequest("POST", "/api/account/apple-iap/verify", {
+      signedTransactionInfo: transaction.signedTransactionInfo,
+    });
+  } catch (err: any) {
+    // There is no console to read on an iPhone, and the toast above this used to say "try
+    // again" for every failure. The first sandbox purchase (2026-10-05) failed with no record
+    // anywhere of which step refused it.
+    logDebug("IAP", `server verify refused ${transaction.productId}: ${err?.status ?? "no status"} ${err?.message ?? String(err)}`);
+    throw err;
+  }
+  logDebug("IAP", `server recorded ${transaction.productId}, finishing with StoreKit`);
   await AppleIap.finishTransaction({ transactionId: transaction.transactionId });
+}
+
+function logPurchaseFailure(productId: string, err: any): void {
+  const msg = err?.message ?? String(err);
+  if (msg === "cancelled") logDebug("IAP", `${productId}: cancelled on the sheet`);
+  else if (msg === "pending") logDebug("IAP", `${productId}: pending approval (Ask to Buy)`);
+  else logDebug("IAP", `${productId}: purchase failed: ${msg}`);
 }
 
 /** StoreKit's live price for a coach add-on (Coaches Corner), or null until App Store Connect
@@ -132,10 +150,13 @@ export async function fetchCoachAddOnPrice(addOn: string): Promise<string | null
 /** A coach buying Coaches Corner through StoreKit. Same verify-then-finish contract and the
  * same two typed rejections as purchaseFreeAgentTier. */
 export async function purchaseCoachAddOn(addOn: string): Promise<void> {
+  const productId = appleProductIdForCoachAddOn(addOn);
+  logDebug("IAP", `purchase requested: ${productId}`);
   try {
-    const transaction = await AppleIap.purchase({ productId: appleProductIdForCoachAddOn(addOn) });
+    const transaction = await AppleIap.purchase({ productId });
     await verifyAndFinish(transaction);
   } catch (err: any) {
+    logPurchaseFailure(productId, err);
     if (err?.message === "cancelled") throw new ApplePurchaseCancelledError();
     if (err?.message === "pending") throw new ApplePurchasePendingError();
     throw err;
@@ -153,10 +174,13 @@ export class ApplePurchasePendingError extends Error {}
  * Apple-side holds (the eventual approval arrives through the
  * transactionUpdated listener, not this call). */
 export async function purchaseFreeAgentTier(tier: FreeAgentTierId): Promise<void> {
+  const productId = appleProductIdForFreeAgentTier(tier);
+  logDebug("IAP", `purchase requested: ${productId}`);
   try {
-    const transaction = await AppleIap.purchase({ productId: appleProductIdForFreeAgentTier(tier) });
+    const transaction = await AppleIap.purchase({ productId });
     await verifyAndFinish(transaction);
   } catch (err: any) {
+    logPurchaseFailure(productId, err);
     if (err?.message === "cancelled") throw new ApplePurchaseCancelledError();
     if (err?.message === "pending") throw new ApplePurchasePendingError();
     throw err;
@@ -172,10 +196,13 @@ export async function purchaseFreeAgentTier(tier: FreeAgentTierId): Promise<void
  * the app -- the three Products do not exist in App Store Connect yet, so
  * getProducts returns no price for them and the UI never offers the button. */
 export async function purchaseFreeAgentAddOn(addOn: FreeAgentAddOnId): Promise<void> {
+  const productId = appleProductIdForFreeAgentAddOn(addOn);
+  logDebug("IAP", `purchase requested: ${productId}`);
   try {
-    const transaction = await AppleIap.purchase({ productId: appleProductIdForFreeAgentAddOn(addOn) });
+    const transaction = await AppleIap.purchase({ productId });
     await verifyAndFinish(transaction);
   } catch (err: any) {
+    logPurchaseFailure(productId, err);
     if (err?.message === "cancelled") throw new ApplePurchaseCancelledError();
     if (err?.message === "pending") throw new ApplePurchasePendingError();
     throw err;
@@ -188,6 +215,7 @@ export async function purchaseFreeAgentAddOn(addOn: FreeAgentAddOnId): Promise<v
  * someone with nothing to restore, not an error. */
 export async function restoreFreeAgentPurchases(): Promise<void> {
   const { transactions } = await AppleIap.restorePurchases();
+  logDebug("IAP", `restore: StoreKit returned ${transactions.length} transaction(s)`);
   for (const transaction of transactions) {
     await verifyAndFinish(transaction);
   }

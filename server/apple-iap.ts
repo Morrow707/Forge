@@ -35,9 +35,13 @@ import {
   APPLE_BUNDLE_ID,
   ALL_FREE_AGENT_TIER_IDS,
   FREE_AGENT_TIERS,
+  FREE_AGENT_ADD_ON_ORDER,
   appleProductIdForFreeAgentTier,
+  appleProductIdForFreeAgentAddOn,
+  appleProductIdForCoachAddOn,
   type FreeAgentTierId,
 } from "@shared/free-agent-tiers";
+import { COACH_PURCHASABLE_ADD_ON_ORDER } from "@shared/billing-tiers";
 
 export const APPLE_IAP_LIVE = process.env.APPLE_IAP_LIVE === "true";
 
@@ -139,8 +143,24 @@ export async function verifyAppleTransaction(signedTransactionInfo: string): Pro
   if (!verifier) return null;
   try {
     const decoded = await verifier.verifyAndDecodeTransaction(signedTransactionInfo);
-    if (!decoded.originalTransactionId || !decoded.productId || decoded.expiresDate == null) return null;
-    if (!tierForAppleProductId(decoded.productId)) return null;
+    if (!decoded.originalTransactionId || !decoded.productId || decoded.expiresDate == null) {
+      console.error("Apple IAP: transaction decoded without an id, a product or an expiry", {
+        originalTransactionId: decoded.originalTransactionId,
+        productId: decoded.productId,
+        expiresDate: decoded.expiresDate,
+        environment: decoded.environment,
+      });
+      return null;
+    }
+    // Every product Forge sells at Apple, not only the tiers. The first version of this check
+    // asked tierForAppleProductId alone, which refused All Classes and Coaches Corner with a 502
+    // ("isn't set up yet") the moment they went on sale, Apple having already taken the money.
+    // Which KIND of product it is gets decided in applyAppleIapVerification; here the question
+    // is only whether it is ours.
+    if (!isKnownAppleProductId(decoded.productId)) {
+      console.error("Apple IAP: transaction for a product this app does not sell", decoded.productId, decoded.environment);
+      return null;
+    }
     return {
       originalTransactionId: decoded.originalTransactionId,
       productId: decoded.productId,
@@ -148,9 +168,26 @@ export async function verifyAppleTransaction(signedTransactionInfo: string): Pro
       environment: String(decoded.environment ?? "unknown"),
     };
   } catch (err) {
-    console.error("Apple IAP: transaction verification failed", err);
+    console.error(
+      "Apple IAP: transaction verification failed",
+      err instanceof Error ? err.message : err,
+      `(verifier environment ${APPLE_IAP_ENVIRONMENT}, bundle ${APPLE_BUNDLE_ID})`,
+    );
     return null;
   }
+}
+
+/** The product ids Forge sells at Apple: every tier ever sold, the Free Agent add-ons and the
+ * coach add-ons, each derived from the same shared lists the client and the storage layer
+ * read. */
+export const KNOWN_APPLE_PRODUCT_IDS: ReadonlySet<string> = new Set([
+  ...ALL_FREE_AGENT_TIER_IDS.map((tier) => appleProductIdForFreeAgentTier(tier)),
+  ...FREE_AGENT_ADD_ON_ORDER.map((addOn) => appleProductIdForFreeAgentAddOn(addOn)),
+  ...COACH_PURCHASABLE_ADD_ON_ORDER.map((addOn) => appleProductIdForCoachAddOn(addOn)),
+]);
+
+export function isKnownAppleProductId(productId: string): boolean {
+  return KNOWN_APPLE_PRODUCT_IDS.has(productId);
 }
 
 // Built from appleProductIdForFreeAgentTier rather than a second hand-typed

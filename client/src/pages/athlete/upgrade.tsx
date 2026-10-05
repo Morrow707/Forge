@@ -40,7 +40,7 @@ import {
   FREE_AGENT_TIER_ORDER,
   FREE_AGENT_TIER_GRID_COLS,
 } from "@shared/free-agent-tiers";
-import { apiRequest } from "@/lib/queryClient";
+import { ApiError, apiRequest } from "@/lib/queryClient";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { formatCents } from "@shared/billing-tiers";
 
@@ -246,7 +246,10 @@ export default function AthleteUpgrade() {
       } else if (err instanceof ApplePurchasePendingError || err instanceof GooglePlayPurchasePendingError) {
         toast("Purchase pending approval, you'll be upgraded once it's confirmed.");
       } else {
-        toast.error("Couldn't complete that purchase, try again");
+        // The server's own sentence when it refused the receipt (a 403 for a coached athlete, a
+        // 502 when verification is not configured, a 422 for a product it does not sell), so the
+        // screen says which step failed instead of "try again" for all of them.
+        toast.error(err instanceof ApiError && err.message ? err.message : "Couldn't complete that purchase, try again");
       }
     } finally {
       setPurchasingTier(null);
