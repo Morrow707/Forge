@@ -183,14 +183,25 @@ export const APPLE_BUNDLE_ID = "com.foreperformancesystems.forge";
  * monthlyPriceCents is what that configuration should match, not a value
  * the app needs to independently re-charge or display on iOS.
  *
- * The "_v2" suffix exists because the original unsuffixed ids
- * (...freeagent.ai_coach etc.) were briefly created in App Store Connect as
- * the wrong product type (Consumable) and deleted -- Apple permanently
- * reserves a Product ID the moment it's created, even after deletion, so
- * those exact strings can never be reused for the real subscription
- * Products. Don't drop the suffix later; the original ids are dead. */
+ * THE SUFFIX IS PER TIER, AND EACH ONE IS A GRAVESTONE. Apple permanently reserves a Product
+ * ID the moment it is created, even after deletion, so every id that was ever created wrong is
+ * dead and the next attempt needs a new suffix:
+ *   - the unsuffixed ids (...freeagent.ai_coach etc.) were created as the wrong product type
+ *     (Consumable) and deleted, hence "_v2";
+ *   - ai_coach_v2 and ai_coach_video_v2 were created 2026-10-04 each in a subscription group OF
+ *     ITS OWN rather than in Basic's. A subscription cannot be moved between groups, and three
+ *     groups are three unrelated products: the first sandbox run (2026-10-05) held Basic and
+ *     AI Coach + Video at once and Apple kept renewing Basic. Both were recreated as "_v3"
+ *     inside the Basic group (levels: ai_coach_video 1, ai_coach 2, basic 3).
+ * basic_v2 was always in that group and keeps its id. Never "tidy" these to one suffix. */
+export const APPLE_TIER_PRODUCT_SUFFIX: Record<FreeAgentTierId, string> = {
+  basic: "_v2",
+  ai_coach: "_v3",
+  ai_coach_video: "_v3",
+};
+
 export function appleProductIdForFreeAgentTier(tier: FreeAgentTierId): string {
-  return `${APPLE_BUNDLE_ID}.freeagent.${tier}_v2`;
+  return `${APPLE_BUNDLE_ID}.freeagent.${tier}${APPLE_TIER_PRODUCT_SUFFIX[tier]}`;
 }
 
 /** THE THREE SPORT COACHES, WHICH ARE ONE KIND OF THING.

@@ -56,8 +56,14 @@ describe("StoreKit product ids", () => {
     expect(productIdsInSwift().some((id) => id.includes("family"))).toBe(false);
   });
 
-  it("keep the _v2 suffix, since the unsuffixed ids are permanently burned", () => {
-    for (const id of productIdsInSwift()) expect(id.endsWith("_v2")).toBe(true);
+  it("carry the per-tier suffix, since every earlier id is permanently burned", () => {
+    // basic stays _v2 (always in the right group); the two AI tiers are _v3 after the 2026-10-04
+    // products landed in groups of their own. An unsuffixed id is the Consumable mistake.
+    const ids = productIdsInSwift();
+    expect(ids.find((id) => id.includes(".basic"))).toMatch(/_v2$/);
+    expect(ids.find((id) => id.includes(".ai_coach_v"))).toMatch(/_v3$/);
+    expect(ids.find((id) => id.includes(".ai_coach_video"))).toMatch(/_v3$/);
+    for (const id of ids) expect(id).toMatch(/_v\d+$/);
   });
 });
 

@@ -40,10 +40,11 @@ public class AppleIapPlugin: CAPPlugin, CAPBridgedPlugin {
     // Connect subscription group before getProducts can ever return
     // anything.
     //
-    // "_v2" suffix: the original unsuffixed ids were briefly created in App
-    // Store Connect as the wrong product type (Consumable) and deleted --
-    // Apple permanently reserves a Product ID once created, even after
-    // deletion, so those ids are dead and can never be reused.
+    // The suffix differs per tier and each one is a gravestone: see
+    // APPLE_TIER_PRODUCT_SUFFIX in shared/free-agent-tiers.ts. Apple
+    // permanently reserves a Product ID once created, even after deletion,
+    // so a product created wrong (the wrong type, or the wrong group) is
+    // dead and the next one needs a new suffix.
     //
     // MUST match appleProductIdForFreeAgentTier over FREE_AGENT_TIER_ORDER in
     // shared/free-agent-tiers.ts -- Swift cannot import that, so a test
@@ -54,8 +55,8 @@ public class AppleIapPlugin: CAPPlugin, CAPBridgedPlugin {
     // asked the App Store for a product nobody should ever create.
     private static let productIds = [
         "com.foreperformancesystems.forge.freeagent.basic_v2",
-        "com.foreperformancesystems.forge.freeagent.ai_coach_v2",
-        "com.foreperformancesystems.forge.freeagent.ai_coach_video_v2"
+        "com.foreperformancesystems.forge.freeagent.ai_coach_v3",
+        "com.foreperformancesystems.forge.freeagent.ai_coach_video_v3"
     ]
 
     private var updateListenerTask: Task<Void, Never>?

@@ -1268,10 +1268,15 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   verify route for any signed-in buyer; it scopes `applyAppleIapVerification` by role so a
   coach's receipt grants `billingAddOns` and an athlete's grants a tier, never the other way.
   The review notes say a coach can buy exactly this one thing.
-  **The ATHLETE products in App Store Connect** (2026-10-04): `...freeagent.basic_v2` exists
-  in "Prepare for Submission"; `...freeagent.ai_coach_v2` $9.99 and
-  `...freeagent.ai_coach_video_v2` $19.99 still to create IN THE SAME GROUP; and the All
-  Classes add-on `...addon.all_classes_v1` $19.99 in its own group. On the launch checklist.
+  **The ATHLETE products in App Store Connect** (2026-10-05): all three in ONE group ("Basic
+  Monthly Sub", levels ai_coach_video 1, ai_coach 2, basic 3): `...freeagent.basic_v2`,
+  `...freeagent.ai_coach_v3` $9.99 and `...freeagent.ai_coach_video_v3` $19.99. The two
+  `_v2` AI ids were created 2026-10-04 each in a group of its own, which made them unrelated
+  products (the sandbox held Basic and AI Coach + Video at once); a subscription cannot change
+  group and an id cannot be reused, so they were recreated as `_v3`
+  (`APPLE_TIER_PRODUCT_SUFFIX` in `shared/free-agent-tiers.ts`, mirrored in
+  `AppleIapPlugin.swift`, pinned by `apple-product-ids.test.ts`). The All Classes add-on
+  `...addon.all_classes_v1` $19.99 is in its own group, as every add-on must be.
 - **Prices confirmed 2026-10-03** (Scott: "keep them"): Coaches Corner $19.99/mo, sport coaches
   $7.99/mo each, in the shared constants. The video workbench is NOT an add-on any more (same
   day: "there are 3 tiers, built on purpose, and anyone being coached gets it already"); it
