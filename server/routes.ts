@@ -1147,15 +1147,24 @@ async function sportCoachAccessFor(user: {
     return out;
   };
 
-  if (testingUnlockAllPaywalls) return { addOns: closeWithdrawn(allOn), reason: "comped" };
+  /* The demo accounts' All Classes answer is the purchase record alone -- see
+   * DEMO_ACCOUNTS_ALWAYS_SOLD_TO. Applied last so neither comp branch can reopen it. */
+  const lockDemo = async (result: SportCoachAccess): Promise<SportCoachAccess> => {
+    if (!DEMO_ACCOUNTS_ALWAYS_SOLD_TO.has(user.email)) return result;
+    const account = await storage.getFreeAgentBillingAccount(user.id);
+    const owned = (account?.freeAgentAddOns ?? []).includes(ALL_CLASSES_ADD_ON_ID);
+    return { addOns: { ...result.addOns, [ALL_CLASSES_ADD_ON_ID]: owned }, reason: owned ? "entitlements" : result.reason };
+  };
+
+  if (testingUnlockAllPaywalls) return lockDemo({ addOns: closeWithdrawn(allOn), reason: "comped" });
   if (COMPED_FREE_AGENT_ENTITLEMENTS[user.email]) {
-    return { addOns: closeWithdrawn(allOn), reason: "comped" };
+    return lockDemo({ addOns: closeWithdrawn(allOn), reason: "comped" });
   }
   const account = await storage.getFreeAgentBillingAccount(user.id);
   const entitlements = getFreeAgentEntitlements(
     account ?? { freeAgentTier: null, freeAgentAddOns: null, isBetaAccount: false, trialExpiresAt: null },
   );
-  return { addOns: closeWithdrawn(entitlements.addOns), reason: "entitlements" };
+  return lockDemo({ addOns: closeWithdrawn(entitlements.addOns), reason: "entitlements" });
 }
 
 async function requireFreeAgentAddOn(req: any, res: any, next: any) {
@@ -1184,7 +1193,19 @@ const COMPED_FREE_AGENT_LESSON_BUYER = "freeagent@forge.app";
 // is a way (besides being an admin, or running a roster big enough to be
 // comped for real) to reach the unlocked Coaches Corner experience end to
 // end on a small test account.
-const COMPED_COACHES_CORNER_COACHES = new Set(["coach@forge.app"]);
+const COMPED_COACHES_CORNER_COACHES = new Set<string>([]);
+
+/** THE TWO DEMO ACCOUNTS ARE ALWAYS SOLD TO, for All Classes and Coaches Corner. Scott,
+ * 2026-10-05, mid sandbox run: "lock the classes and the coaches corner for both free agent and
+ * the coach, i know you can do it, you unlocked them, now lock them." Beta and enforcement-off
+ * comp every add-on for every account on the platform, which is right for the first schools and
+ * wrong for the two accounts whose job is to show the purchase: on them the All Classes card read
+ * Unlocked and the Coaches Corner upsell never appeared, so neither could be bought in sandbox.
+ * These two meet the wall whatever the switches say and open it only by a RECORDED purchase
+ * (users.freeAgentAddOns / users.billingAddOns, written by the Apple and Stripe paths). The
+ * camera comp on the Free Agent (COMPED_FREE_AGENT_ENTITLEMENTS) is untouched: App Review needs
+ * to reach the camera without buying. */
+const DEMO_ACCOUNTS_ALWAYS_SOLD_TO = new Set(["freeagent@forge.app", "coach@forge.app"]);
 
 // Coaches Corner (coach education) paywall. Every route below reads through
 // this, never a role check of its own. Admins bypass since they're the ones
@@ -1222,7 +1243,16 @@ const COMPED_COACHES_CORNER_COACHES = new Set(["coach@forge.app"]);
 //
 // The small-account testing comp stays as the last word, for a coach account too
 // small to be comped on an installation where enforcement has been turned on.
+/** Whether the coach's program has a recorded Coaches Corner purchase (users.billingAddOns on
+ * the primary coach), the one answer the demo coach is allowed. */
+async function ownsCoachesCorner(user: { id: number; role: string }): Promise<boolean> {
+  if (user.role !== "coach") return false;
+  const primary = await storage.getUser((await storage.getEffectiveCoachIds(user.id))[0]);
+  return (primary?.billingAddOns ?? []).includes("coaches_corner");
+}
+
 async function hasCoachesCornerAccess(user: { id: number; role: string; email: string }): Promise<boolean> {
+  if (DEMO_ACCOUNTS_ALWAYS_SOLD_TO.has(user.email)) return ownsCoachesCorner(user);
   if (testingUnlockAllPaywalls) return true;
   if (user.role === "admin") return true;
   if (user.role === "coach") {
@@ -1240,11 +1270,7 @@ async function hasCoachesCornerAccess(user: { id: number; role: string; email: s
 async function coachesCornerAccessFor(user: { id: number; role: string; email: string }) {
   const unlocked = await hasCoachesCornerAccess(user);
   const rosterSize = user.role === "coach" ? await storage.getRosterSeatCountForCoach(user.id) : 0;
-  const owned =
-    user.role === "coach"
-      ? ((await storage.getUser((await storage.getEffectiveCoachIds(user.id))[0]))?.billingAddOns ?? [])
-          .includes("coaches_corner")
-      : false;
+  const owned = await ownsCoachesCorner(user);
   return {
     unlocked,
     owned,
@@ -10945,6 +10971,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const account = await storage.getFreeAgentBillingAccount(user.id);
     const bought = new Set(account?.freeAgentAddOns ?? []);
     res.json({
+      // The SKU on file (users.freeAgentTier), so the upgrade screen can mark the current plan.
+      // Null for an athlete who has never bought one; beta and trials do not set it.
+      freeAgentTier: account?.freeAgentTier ?? null,
       addOns: access.addOns,
       // WHICH OF THOSE WERE PAID FOR. Beta, a live trial and enforcement being off
       // all turn an add-on on without anybody having bought it, and a surface that

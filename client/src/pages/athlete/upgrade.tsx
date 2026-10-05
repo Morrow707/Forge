@@ -10,7 +10,7 @@ import {
 } from "@/lib/google-play-billing";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { FreeAgentGate } from "@/components/free-agent-gate";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,6 +48,7 @@ import { formatCents } from "@shared/billing-tiers";
  * why `addOns` (may I open it) and `ownedAddOns` (did I pay for it) are two
  * different questions. */
 type AddOnEntitlements = {
+  freeAgentTier: FreeAgentTierId | null;
   addOns: Record<FreeAgentAddOnId, boolean>;
   ownedAddOns: Record<FreeAgentAddOnId, boolean>;
   billingOpen: boolean;
@@ -169,6 +170,12 @@ export default function AthleteUpgrade() {
   });
   const googleLive = googleSupported && !!googleLiveConfig?.enabled;
 
+  const qc = useQueryClient();
+  const { data: entitlements } = useQuery<AddOnEntitlements>({
+    queryKey: ["/api/athlete/entitlements"],
+    queryFn: () => getJson("/api/athlete/entitlements"),
+  });
+  const currentTier = entitlements?.freeAgentTier ?? null;
   const { data: liveConfig } = useQuery<{ enabled: boolean }>({
     queryKey: ["/api/billing/apple-iap-enabled"],
     queryFn: () => getJson("/api/billing/apple-iap-enabled"),
@@ -236,10 +243,21 @@ export default function AthleteUpgrade() {
   async function handlePurchase(tier: FreeAgentTierId) {
     setPurchasingTier(tier);
     try {
-      if (googleSupported) await purchaseFreeAgentTierOnGooglePlay(tier);
-      else await purchaseFreeAgentTier(tier);
-      toast.success("You're upgraded, welcome to the new tier.");
+      if (googleSupported) {
+        await purchaseFreeAgentTierOnGooglePlay(tier);
+        toast.success("You're upgraded, welcome to the new tier.");
+      } else {
+        const result = await purchaseFreeAgentTier(tier);
+        if (result.deferred && result.appliedTier) {
+          // Apple schedules a move to a lower tier for the next renewal and keeps the current one
+          // until then; saying "upgraded" here was wrong on 2026-10-05.
+          toast(`${FREE_AGENT_TIERS[tier].label} starts at your next renewal. ${FREE_AGENT_TIERS[result.appliedTier].label} stays until then.`);
+        } else {
+          toast.success(`You're on ${FREE_AGENT_TIERS[tier].label} now.`);
+        }
+      }
       refetch();
+      void qc.invalidateQueries({ queryKey: ["/api/athlete/entitlements"] });
     } catch (err) {
       if (err instanceof ApplePurchaseCancelledError || err instanceof GooglePlayPurchaseCancelledError) {
         // Athlete backed out of the store's purchase sheet -- not an error.
@@ -323,9 +341,13 @@ export default function AthleteUpgrade() {
                       {formatCents(tier.monthlyPriceCents)}
                       <span className="text-sm font-normal text-muted-foreground">/mo</span>
                     </p>
-                    {webBillingOpen ? (
+                    {currentTier === id ? (
+                      <p className="rounded-md border border-success/60 px-3 py-2 text-center text-xs font-semibold text-success">
+                        Your current plan
+                      </p>
+                    ) : webBillingOpen ? (
                       <Button onClick={() => startWebCheckout(id)} disabled={checkoutTier !== null}>
-                        {checkoutTier === id ? "Opening checkout..." : "Subscribe"}
+                        {checkoutTier === id ? "Opening checkout..." : currentTier ? "Switch to this plan" : "Subscribe"}
                       </Button>
                     ) : (
                       <p className="rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
@@ -378,12 +400,18 @@ export default function AthleteUpgrade() {
                     {p.displayPrice ?? "--"}
                     <span className="text-sm font-normal text-muted-foreground">/mo</span>
                   </p>
-                  <Button
-                    onClick={() => handlePurchase(p.tier)}
-                    disabled={purchasingTier !== null || !p.displayPrice}
-                  >
-                    {purchasingTier === p.tier ? "Purchasing..." : "Subscribe"}
-                  </Button>
+                  {currentTier === p.tier ? (
+                    <p className="rounded-md border border-success/60 px-3 py-2 text-center text-xs font-semibold text-success">
+                      Your current plan
+                    </p>
+                  ) : (
+                    <Button
+                      onClick={() => handlePurchase(p.tier)}
+                      disabled={purchasingTier !== null || !p.displayPrice}
+                    >
+                      {purchasingTier === p.tier ? "Purchasing..." : currentTier ? "Switch to this plan" : "Subscribe"}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ))}

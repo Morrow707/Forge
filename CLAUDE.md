@@ -588,7 +588,23 @@ can install. Delete entries as a `beta` ships them.
   verify and on an Apple renewal), proven by `server/apple-iap-grant.itest.ts`, shipped on
   Render, no build needed. Note for the audit: with `BILLING_LIVE` off, `cameraAccessFor`
   answers false for EVERY Free Agent except the comped demo address, whatever they hold.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 611.
+- Build **612** was cut 2026-10-05 from `18c033c9`: the two AI tiers on their `_v3` product ids,
+  all three tiers in one Apple subscription group. On it every tier bought, swapped and recorded
+  in sandbox.
+- Build **613** was cut 2026-10-05 from the end of that run, three things the console showed:
+  a StoreKit transaction replayed at cold start before the session was known met a 401 and is
+  now HELD and re-sent after sign-in (`flushAppleIapTransactionsHeldForSignIn`, called from
+  App.tsx); a downgrade comes back from Apple as the CURRENT product (a downgrade waits for the
+  renewal) and the toast now says so instead of "You're upgraded" (`TierPurchaseResult.deferred`);
+  and the upgrade screen marks the current plan (`freeAgentTier` on `/api/athlete/entitlements`).
+  Also, server-side: **THE TWO DEMO ACCOUNTS ARE ALWAYS SOLD TO** for All Classes and Coaches
+  Corner (`DEMO_ACCOUNTS_ALWAYS_SOLD_TO` in routes.ts; Scott: "lock the classes and the coaches
+  corner for both free agent and the coach"). Beta and enforcement-off comp every add-on for
+  every account, so these two could never show the wall or be bought in sandbox; now they answer
+  from the purchase record alone and nothing else. `coach@forge.app` left
+  `COMPED_COACHES_CORNER_COACHES` (now empty). The Free Agent's camera comp stays for App Review.
+  `server/demo-accounts-are-sold-to.itest.ts` proves both.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 613.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

@@ -14,7 +14,7 @@ import { BiometricLockGate } from "@/components/biometric-lock-gate";
 import { TermsReacceptanceGate } from "@/components/terms-reacceptance-gate";
 import { FirstRunDialogProvider } from "@/hooks/use-first-run-dialogs";
 import { RATE_LIMITED_MESSAGE, isRateLimited } from "@/lib/rate-limit-message";
-import { watchAppleIapTransactionUpdates } from "@/lib/apple-iap";
+import { watchAppleIapTransactionUpdates, flushAppleIapTransactionsHeldForSignIn } from "@/lib/apple-iap";
 import { watchGooglePlayPurchaseUpdates } from "@/lib/google-play-billing";
 import { DebugConsole } from "@/components/debug-console";
 import { withLoadTimeout } from "@/lib/lazy-load-recovery";
@@ -243,6 +243,13 @@ function ProtectedRoute({
   component: ComponentType;
 }) {
   const { user, isLoading, isError } = useAuth();
+
+  // A StoreKit transaction replayed before the session was known is held in apple-iap.ts;
+  // the moment this route sees a signed-in user it is sent again. No-op off iOS and when
+  // nothing is held.
+  useEffect(() => {
+    if (user && Capacitor.isNativePlatform()) void flushAppleIapTransactionsHeldForSignIn();
+  }, [user?.id]);
 
   if (isLoading) return <FullScreenSpinner />;
   // isError (couldn't check) is deliberately handled before the plain

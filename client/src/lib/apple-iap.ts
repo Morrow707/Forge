@@ -1,10 +1,11 @@
 import { logDebug } from "@/lib/debug-console";
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, ApiError } from "@/lib/queryClient";
 import {
   FREE_AGENT_ADD_ONS,
   FREE_AGENT_ADD_ON_ORDER,
   FREE_AGENT_TIER_ORDER,
+  ALL_FREE_AGENT_TIER_IDS,
   FREE_AGENT_TIERS,
   appleProductIdForCoachAddOn,
   appleProductIdForFreeAgentAddOn,
@@ -126,7 +127,11 @@ async function verifyAndFinish(transaction: AppleIapTransaction): Promise<void> 
     // There is no console to read on an iPhone, and the toast above this used to say "try
     // again" for every failure. The first sandbox purchase (2026-10-05) failed with no record
     // anywhere of which step refused it.
-    logDebug("IAP", `server verify refused ${transaction.productId}: ${err?.status ?? "no status"} ${err?.message ?? String(err)}`);
+    if (err instanceof ApiError && err.status === 401) {
+      logDebug("IAP", `${transaction.productId}: not signed in yet, will retry after sign-in`);
+    } else {
+      logDebug("IAP", `server verify refused ${transaction.productId}: ${err?.status ?? "no status"} ${err?.message ?? String(err)}`);
+    }
     throw err;
   }
   logDebug("IAP", `server recorded ${transaction.productId}, finishing with StoreKit`);
@@ -166,6 +171,18 @@ export async function purchaseCoachAddOn(addOn: string): Promise<void> {
 export class ApplePurchaseCancelledError extends Error {}
 export class ApplePurchasePendingError extends Error {}
 
+/** The tier a StoreKit product id names, or null for an add-on or an unknown id. */
+export function tierForAppleProductId(productId: string): FreeAgentTierId | null {
+  return ALL_FREE_AGENT_TIER_IDS.find((tier) => appleProductIdForFreeAgentTier(tier) === productId) ?? null;
+}
+
+/** What a tier purchase came back as. Apple applies an UPGRADE at once and hands back the new
+ * product; a DOWNGRADE is scheduled for the next renewal and the transaction it hands back is
+ * still the CURRENT product (seen 2026-10-05: tapping Basic while on AI Coach + Video returned
+ * an ai_coach_video transaction, and the toast said "You're upgraded"). `appliedTier` is what
+ * Forge recorded; `deferred` is true when it is not the tier that was asked for. */
+export type TierPurchaseResult = { requestedTier: FreeAgentTierId; appliedTier: FreeAgentTierId | null; deferred: boolean };
+
 /** Resolves once the purchase is both made AND verified/recorded
  * server-side -- a caller awaiting this can safely assume the entitlement
  * is live the moment it resolves. Rejects with ApplePurchaseCancelledError
@@ -173,12 +190,16 @@ export class ApplePurchasePendingError extends Error {}
  * not an error toast) and ApplePurchasePendingError for Ask to Buy/other
  * Apple-side holds (the eventual approval arrives through the
  * transactionUpdated listener, not this call). */
-export async function purchaseFreeAgentTier(tier: FreeAgentTierId): Promise<void> {
+export async function purchaseFreeAgentTier(tier: FreeAgentTierId): Promise<TierPurchaseResult> {
   const productId = appleProductIdForFreeAgentTier(tier);
   logDebug("IAP", `purchase requested: ${productId}`);
   try {
     const transaction = await AppleIap.purchase({ productId });
     await verifyAndFinish(transaction);
+    const appliedTier = tierForAppleProductId(transaction.productId);
+    const deferred = appliedTier !== tier;
+    if (deferred) logDebug("IAP", `${productId}: Apple returned ${transaction.productId}; the change applies at the next renewal`);
+    return { requestedTier: tier, appliedTier, deferred };
   } catch (err: any) {
     logPurchaseFailure(productId, err);
     if (err?.message === "cancelled") throw new ApplePurchaseCancelledError();
@@ -229,8 +250,36 @@ export async function restoreFreeAgentPurchases(): Promise<void> {
 export function watchAppleIapTransactionUpdates(): void {
   if (!isAppleIapSupported()) return;
   AppleIap.addListener("transactionUpdated", (transaction) => {
-    verifyAndFinish(transaction).catch((err) => {
-      console.error("Apple IAP: failed to verify a background transaction update", err);
-    });
+    void verifyBackgroundTransaction(transaction);
   });
+}
+
+/** StoreKit replays every unfinished transaction at launch, which on a cold start is BEFORE
+ * the session cookie has been checked, so the verify route answered 401 for all three on
+ * 2026-10-05 and the console showed three refusals that were not refusals. A transaction that
+ * meets a 401 is held here and sent again once a sign-in lands (flushAppleIapTransactionsHeldForSignIn,
+ * called from App.tsx when the user becomes known). StoreKit would replay it on the next launch
+ * anyway; this just makes it land in the same session, without a log line that reads as a bug. */
+const heldForSignIn = new Map<string, AppleIapTransaction>();
+
+async function verifyBackgroundTransaction(transaction: AppleIapTransaction): Promise<void> {
+  try {
+    await verifyAndFinish(transaction);
+    heldForSignIn.delete(transaction.transactionId);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      heldForSignIn.set(transaction.transactionId, transaction);
+      logDebug("IAP", `holding ${transaction.productId} until sign-in`);
+      return;
+    }
+    console.error("Apple IAP: failed to verify a background transaction update", err);
+  }
+}
+
+export async function flushAppleIapTransactionsHeldForSignIn(): Promise<void> {
+  if (heldForSignIn.size === 0) return;
+  const pending = [...heldForSignIn.values()];
+  heldForSignIn.clear();
+  logDebug("IAP", `signed in, re-sending ${pending.length} held transaction(s)`);
+  for (const transaction of pending) await verifyBackgroundTransaction(transaction);
 }
