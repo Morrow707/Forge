@@ -18,6 +18,13 @@ import { ReadFailed } from "@/components/read-failed";
 import { AcademyQuiz, type QuizAttemptSummary } from "@/components/academy-quiz";
 import { CoachesCornerAsk } from "@/components/coaches-corner-ask";
 import { CoachesCornerDiscussion } from "@/components/coaches-corner-discussion";
+import {
+  isAppleIapSupported,
+  fetchCoachAddOnPrice,
+  purchaseCoachAddOn,
+  ApplePurchaseCancelledError,
+  ApplePurchasePendingError,
+} from "@/lib/apple-iap";
 import { CoachesCornerPaths } from "@/components/coaches-corner-paths";
 import { LessonFlashcards } from "@/components/lesson-flashcards";
 import { DebouncedNote } from "@/components/lesson-page-notes";
@@ -136,16 +143,56 @@ export default function CoachesCorner() {
   });
   const corner = entitlements?.coachesCorner;
 
+  // ON iOS THE ADD-ON IS SOLD THROUGH STOREKIT, as on the coach billing page: the Stripe
+  // checkout is refused from a native platform, and the store's own switch (APPLE_IAP_LIVE)
+  // decides whether the sheet opens, not BILLING_LIVE. Until 2026-10-05 this card only knew
+  // the web checkout, so on the phone it read "purchasable once billing opens" with nothing to
+  // tap, and the demo coach could not buy in sandbox.
+  const appleSupported = isAppleIapSupported();
+  const { data: appleLive } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/billing/apple-iap-enabled"],
+    queryFn: () => getJson("/api/billing/apple-iap-enabled"),
+    enabled: appleSupported,
+  });
+  const [applePrice, setApplePrice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!appleSupported || !appleLive?.enabled) return;
+    let cancelled = false;
+    fetchCoachAddOnPrice("coaches_corner")
+      .then((price) => {
+        if (!cancelled) setApplePrice(price);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [appleSupported, appleLive?.enabled]);
+  const appleSellable = appleSupported && appleLive?.enabled === true && applePrice !== null;
+
   async function buyCoachesCorner() {
     setBuying(true);
     try {
+      if (appleSupported) {
+        await purchaseCoachAddOn("coaches_corner");
+        toast.success("Coaches Corner is open.");
+        qc.invalidateQueries({ queryKey: ["/api/coach/entitlements"] });
+        qc.invalidateQueries({ queryKey: ["/api/coach/academy/tracks"] });
+        setBuying(false);
+        return;
+      }
       const res = await apiRequest("POST", "/api/billing/checkout/coach-add-on", {
         addOnId: "coaches_corner",
       });
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
+      if (err instanceof ApplePurchaseCancelledError) {
+        // Backed out of the sheet: not an error.
+      } else if (err instanceof ApplePurchasePendingError) {
+        toast("Waiting on approval from the App Store. It unlocks on its own once approved.");
+      } else {
+        toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
+      }
       setBuying(false);
     }
   }
@@ -464,7 +511,16 @@ export default function CoachesCorner() {
                 to include anything in -- and nothing sold it either way. Coaches
                 Corner is a standalone add-on, so the card says that, and once
                 billing opens it says it with a button that actually buys it. */}
-            {corner?.billingOpen ? (
+            {appleSellable ? (
+              <div className="flex flex-col items-start gap-2">
+                <p className="text-sm font-semibold">
+                  {applePrice}/month, on top of your plan. Free for rosters of 100+ athletes.
+                </p>
+                <Button onClick={buyCoachesCorner} disabled={buying}>
+                  {buying ? "Purchasing..." : "Get Coaches Corner"}
+                </Button>
+              </div>
+            ) : !appleSupported && corner?.billingOpen ? (
               <div className="flex flex-col items-start gap-2">
                 <p className="text-sm font-semibold">
                   {formatCents(corner.monthlyPriceCents)}/month, on top of your plan. Free for

@@ -604,7 +604,14 @@ can install. Delete entries as a `beta` ships them.
   from the purchase record alone and nothing else. `coach@forge.app` left
   `COMPED_COACHES_CORNER_COACHES` (now empty). The Free Agent's camera comp stays for App Review.
   `server/demo-accounts-are-sold-to.itest.ts` proves both.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 613.
+- Build **614** was cut 2026-10-05 right after 613, from the locked demo Free Agent's screen:
+  the All Classes card read "Free while Forge is in beta" with nothing to tap, because it gated
+  the PHONE on `BILLING_LIVE` too. Both rails now follow their own switch, the split the tier
+  cards already had: the store sheet opens on `APPLE_IAP_LIVE` / `GOOGLE_PLAY_BILLING_LIVE`,
+  the web checkout on `BILLING_LIVE`. The Coaches Corner upsell card on `/coach/coaches-corner`
+  had only the web checkout (refused from a native platform) and now buys through StoreKit on
+  iOS like the coach billing page does.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 614.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

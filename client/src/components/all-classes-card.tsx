@@ -47,16 +47,33 @@ export function AllClassesCard({ compact = false }: { compact?: boolean }) {
     queryKey: ["/api/athlete/entitlements"],
     queryFn: () => getJson("/api/athlete/entitlements"),
   });
-  const billingOpen = entitlements?.billingOpen === true;
+  // TWO SWITCHES, ONE PER RAIL, the same split the tier cards on the upgrade page use. The web
+  // checkout opens with BILLING_LIVE (billingOpen); the store sheet opens with APPLE_IAP_LIVE
+  // or GOOGLE_PLAY_BILLING_LIVE, which is what lets a sandbox purchase run before launch day.
+  // Gating the phone on billingOpen too (2026-10-05) drew "Free while Forge is in beta" on a
+  // locked card and nothing could be bought.
+  const webBillingOpen = entitlements?.billingOpen === true;
+  const { data: appleLive } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/billing/apple-iap-enabled"],
+    queryFn: () => getJson("/api/billing/apple-iap-enabled"),
+    enabled: nativeIap,
+  });
+  const { data: playLive } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/billing/google-play-enabled"],
+    queryFn: () => getJson("/api/billing/google-play-enabled"),
+    enabled: androidNative,
+  });
+  const storeOpen = nativeIap ? appleLive?.enabled === true : androidNative ? playLive?.enabled === true : false;
+  const billingOpen = nativeIap || androidNative ? storeOpen : webBillingOpen;
   const { data: iosProducts } = useQuery<FreeAgentAddOnProduct[]>({
     queryKey: ["apple-iap-free-agent-add-ons"],
     queryFn: fetchFreeAgentAddOnProducts,
-    enabled: nativeIap && billingOpen,
+    enabled: nativeIap && storeOpen,
   });
   const { data: playProducts } = useQuery<FreeAgentAddOnProduct[]>({
     queryKey: ["google-play-free-agent-add-ons"],
     queryFn: fetchGooglePlayAddOnProducts,
-    enabled: androidNative && billingOpen,
+    enabled: androidNative && storeOpen,
   });
 
   const unlocked = entitlements?.addOns[ALL_CLASSES_ADD_ON_ID] === true;
