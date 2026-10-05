@@ -1364,9 +1364,25 @@ export function AvBarTrackerDialog({
           ]
         : []),
     ];
+    // WHAT EACH CANDIDATE WAS WORTH, beside what it said. The 2026-10-04 lifts beside the OVR
+    // read 8% low on range of motion on both barbell lifts while one candidate on each take sat
+    // within a percent of the scale the sensor required -- and the export carried no weights, so
+    // "which ruler pulled the blend down" was unanswerable from the evidence. Matched by prefix
+    // because the 3D ruler decorates its label with the bone and the correction path, while the
+    // estimate it came from is a bare "body_3d". A candidate that was rejected or outvoted gets
+    // weightPct 0, which is the true answer for it.
+    const scaleCandidatesWithWeights = scaleCandidates.map((c) => {
+      const raw = scaleCandidatesRaw.find((r) => c.source === r.source || c.source.startsWith(`${r.source}:`));
+      const voted = scaleVerdict.weights.find((w) => c.source === w.source || c.source.startsWith(`${w.source}:`));
+      return {
+        ...c,
+        ...(raw ? { uncertainty: Math.round(raw.uncertaintyFraction * 1000) / 1000 } : {}),
+        weightPct: voted?.weightPct ?? 0,
+      };
+    });
     const calibrationDiagnostics: {
       scaleSource: typeof scaleSource;
-      scaleCandidates: typeof scaleCandidates;
+      scaleCandidates: typeof scaleCandidatesWithWeights;
       scaleOutliers: { source: string; ratioToChosen: number }[];
       scaleCorroborated: boolean;
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
@@ -1403,7 +1419,7 @@ export function AvBarTrackerDialog({
       plateRejectedReasons?: string[];
     } = {
       scaleSource,
-      scaleCandidates,
+      scaleCandidates: scaleCandidatesWithWeights,
       scaleOutliers: scaleVerdict.outliers.map((o) => ({
         source: o.source,
         ratioToChosen: o.ratioToChosen,

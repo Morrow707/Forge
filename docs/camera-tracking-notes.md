@@ -2345,3 +2345,115 @@ and ends. Three changes, each fitted on the evidence in hand and none proven pas
 **Not done, and why:** the concentric window could also be defined the sensor's way outright
 (range over the window from leaving the bottom to reaching the top); with three sets the
 per-movement margin reaches the same place with fewer moving parts. Zero is not on the table.
+
+## Four lifts beside OVR, 2026-10-04 (read 2026-10-05)
+
+Scott filmed four sets with the OVR on the bar. His mapping, because the OVR has no entry for
+two of them: "Back squat is back squat, jump squat is box jump, clean is med ball throw, and
+deadlift is the rdl, ovr doesn't have those standard in their unit, so I just chose a
+different path."
+
+**Only three of the four reached the server.** The Medicine Ball Rotational Throw is absent
+from `/api/admin/tracking-report/captures/recent` entirely (the twenty-capture window holds
+seq 1-3 from that night and then jumps back to 2026-10-01). Scott's own guess was the length
+of the take. It is not a cap: `av-medball-tracker-dialog.tsx` has no `MAX_RECORDING_MS` (only
+sprint and horizontal load do), and all sixteen of its exits call `onCapture`, so the dialog
+did not refuse it. What length DOES do is make the body bigger, which is the case
+`client/src/lib/pending-log-files.ts` exists for. The answer is in the debug console's
+`logDebug("SAVE", ...)` lines for that take, and nowhere else.
+
+### What the three captures measured
+
+| | Forge | OVR | ratio |
+|---|---|---|---|
+| Back Squat 135x5, mean velocity | 0.93 | 0.83 m/s | **+12%** |
+| Back Squat, peak velocity | 1.26 | 1.23 m/s | +2% |
+| Back Squat, range of motion | 68.0 | 73.9 cm | **0.920** |
+| Back Squat, mean power | 556 | 503 W | +11% |
+| RDL 135x5, mean velocity | 0.71 | 0.92 m/s | **-23%** |
+| RDL, peak velocity | 1.21 | 1.60 m/s | -24% |
+| RDL, range of motion | 54.7 | 59.4 cm | **0.921** |
+| Box Jump, height | 44 cm | cleared a 24in (61cm) box | **-28%** |
+
+**Scott's instruction was "we need to calibrate these numbers down", and the evidence does not
+support it.** Range of motion reads LOW on both barbell lifts, the whole RDL reads low, and the
+box jump reads 28% low. The only thing reading high is squat mean velocity and the mean power
+derived from it, and that one is a definition difference rather than an error. A global
+downward correction would make three of the four comparisons worse.
+
+### Finding 1: range of motion is 8% low on both lifts, and it is one scale error
+
+0.920 and 0.921 agree to one part in a thousand. `reconcileScaleEstimates`
+(`client/src/lib/pose-tracking.ts`) returned a metres-per-unit about 8% small on both takes,
+and both reported `scaleCorroborated: true` -- the blend was agreeing with itself while being
+wrong together.
+
+The candidate lists say where it went. On the Back Squat the blend chose 3.655e-3 and the
+scale the sensor requires is 3.973e-3; the `body_3d:upperArm:reference_corrected:in_plane`
+candidate read **3.970e-3**, within 0.1% of the sensor. On the RDL the blend chose 3.433e-3
+against a required 3.728e-3, and the mean of its `body_3d:femur` (3.388e-3) and `depth`
+(4.113e-3) candidates is 3.751e-3, within 0.6%. On both takes `height` was the LOWEST
+candidate present (3.381e-3 and 3.275e-3) and the chosen number sits beside it.
+
+So the shape of the fault is that the blend is weighted toward a ruler that reads low --
+but **the weights were not in the export**, so which one cannot be stated from this session's
+evidence. That is fixed in the same change (see below) rather than guessed at here. Do not
+apply a x1.086 constant: it would paper over whichever ruler is biased and would be wrong
+again the moment the weights move.
+
+- `plateRejectedAgainstGrip` behaved correctly on both. The RDL's plate candidate was
+  1.693e-3, less than half every other witness, and `scalesRejectedAsImplausible` caught it
+  (`impliedHeightIn: 37.6`) before anything was ranked -- which is why `scaleOutliers` came
+  back `[]`. The squat's plate was rejected on `size_vs_grip`, `aspect_ratio` and
+  `too_large_for_a_plate`. Neither rejection is the 8%.
+
+### Finding 2: the squat's +12% mean velocity is `trimPhaseToDrive`, not an error
+
+A +12% mean against a +2% peak is the signature of `DRIVE_ONSET_FRACTION` (0.07, build 579):
+Forge reports the mean over the DRIVE and the OVR reports it over the whole concentric, so
+Forge's mean is higher by construction while the peaks agree. Leave it alone, and stop
+reading squat mean velocity as a disagreement with the sensor.
+
+### Finding 3: the RDL's -23% is the live path, undersampled, on a head-on take
+
+Two things in `trackingDiagnostics.recording` that were not being read before:
+
+- **The RDL ran on the live path and the squat fell back to the file path.** The squat's
+  `liveFallbackReason` is `coverage=0.84 dropRate=3.002 maxGap=0.48s`; the RDL's
+  `liveCoverage` was 0.864 and it passed. A hair's difference in coverage put the two lifts
+  through two different pipelines, and the one that stayed live is the one whose numbers are
+  wrong.
+- **`liveDropRate` was 2.98 on the RDL and 2.05 on the box jump.** Three frames dropped for
+  every frame processed: 585 frames over 22.6 seconds is about 26 retained from a ~104fps
+  capture. The RDL's per-rep ranges came back 56 / 53.2 / 69 / 59.1 / 36 cm against the OVR's
+  steady 58-61, which is what `splitMergedPhases` and `isImplausiblyFast`
+  (`client/src/lib/pose-tracking.ts`) produce when they are fed a quarter of the frames -- one
+  rep merged with its neighbour's tail, one cut short.
+- **The RDL was filmed head-on** (`cameraView.subjectFacing: "facing_camera"`, grip axis 40.5
+  degrees off the image vertical, against 4.4 on the squat). A hinge filmed head-on puts the
+  bar's forward travel straight down the lens. That is a known ceiling, not a fault, and it is
+  NOT a reason to say anything to the athlete about where he stood (Rule #1).
+
+The work this points at is the live path's drop rate, not a velocity constant. `axisSource`
+came back `gravity` on both barbell lifts, which is correct and is not the problem.
+
+### Finding 4: the box jump told him he missed the box. Fixed.
+
+`boxClearanceCm` came back -10.3 and -6.9 and `av-jump-tracker-dialog.tsx` said "Did not clear
+the box, feet peaked 6.9 cm below the top". He cleared a 24 inch box; the jump height on that
+same take read 44cm against the 61cm the box required, so the clearance was negative for the
+same reason the height was low. The existing plausibility guard cannot catch it, because 6.9cm
+IS physically possible -- it just is not what happened.
+
+"Cleared it by N" is a measurement; "did not clear it" is a statement about the athlete's
+performance, and this pipeline is not calibrated well enough to make one. The warning toast is
+removed. The number still rides on `repBreakdown` to the admin tracking report, which is where
+a finding of this kind belongs and nowhere else.
+
+### Added to the export in the same change
+
+`scaleCandidates` now carries `uncertainty` and `weightPct` per candidate
+(`reconcileScaleEstimates` returns the per-voter weights, `av-bar-tracker-dialog.tsx` attaches
+them, `shared/schema.ts` declares them so the zod parse cannot strip them, and
+`server/tracking-report.ts` prints them on the "Scale sources" line). Without them Finding 1
+cannot be attributed to a ruler, and the next pairing would hit the same wall.

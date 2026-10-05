@@ -9706,6 +9706,11 @@ export const trackingDiagnosticsSchema = z.object({
             scale: z.number(),
             measured: z.number().optional().nullable(),
             samples: z.number().optional().nullable(),
+            // The ruler's own stated uncertainty, and what it was actually worth in the blend.
+            // Added 2026-10-05: without these a blend 8% off its own best candidate cannot be
+            // attributed to a ruler. 0 is a real answer -- it means the candidate did not vote.
+            uncertainty: z.number().optional().nullable(),
+            weightPct: z.number().optional().nullable(),
           }),
         )
         .max(8)

@@ -763,6 +763,17 @@ export type ScaleVerdict = {
   /** True when two or more independent sources agreed -- the only case where anything here is
    *  corroborated rather than merely asserted. */
   corroborated: boolean;
+  /** WHAT EACH VOTER WAS ACTUALLY WORTH IN THE BLEND, as a percentage of the total weight.
+   *
+   *  Added 2026-10-05. The four lifts beside the OVR on 2026-10-04 came back 8% low on range of
+   *  motion on BOTH barbell lifts -- 0.920 and 0.921 of the sensor, one scale error, not two --
+   *  and the question "which ruler dragged the blend down" could not be asked of the export:
+   *  the candidates were recorded with their scales and nothing about their weights, so a
+   *  blend sitting 8% below the candidate that matched the sensor exactly was unattributable.
+   *  See docs/camera-tracking-notes.md, "Four lifts beside OVR, 2026-10-04".
+   *
+   *  Voters only -- a rejected or outlying candidate has no weight by definition. */
+  weights: { source: ScaleEstimate["source"]; weightPct: number }[];
 };
 
 // Two scale estimates count as agreeing when they are within the looser one's own stated
@@ -921,7 +932,7 @@ export function plateReadIsPlausibleAgainstGrip(
 export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdict {
   const usable = estimates.filter((e) => Number.isFinite(e.scale) && e.scale > 0);
   if (usable.length === 0) {
-    return { scale: null, agreedSources: [], outliers: [], corroborated: false };
+    return { scale: null, agreedSources: [], outliers: [], corroborated: false, weights: [] };
   }
 
   const TRUST: Record<ScaleEstimate["source"], number> = {
@@ -1066,7 +1077,12 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
       ratioToChosen: Math.round((e.scale / scale) * 100) / 100,
     }));
 
-  return { scale, agreedSources, outliers, corroborated: best.length > 1 && !blended, blended };
+  const totalWeight = best.reduce((sum, e) => sum + weightOf(e), 0);
+  const weights = best.map((e) => ({
+    source: e.source,
+    weightPct: Math.round((weightOf(e) / totalWeight) * 1000) / 10,
+  }));
+  return { scale, agreedSources, outliers, corroborated: best.length > 1 && !blended, blended, weights };
 }
 
 export type ShoulderScaleReading = {

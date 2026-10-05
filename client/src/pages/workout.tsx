@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
+import { eachSideSuffix } from "@shared/prescription-laterality";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -2749,7 +2750,7 @@ export function WorkoutPage({
                                     )}
                                   </button>
                                   <p className="text-xs font-semibold text-muted-foreground">
-                                    {item.prescribedSets} × {item.prescribedReps}
+                                    {item.prescribedSets} × {item.prescribedReps}{eachSideSuffix(item.laterality)}
                                     {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
                                   </p>
                                   {/* The set pager -- its own tap target (jumpToSet),
@@ -3438,7 +3439,7 @@ function ExerciseLogContent({
           </div>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Prescribed: {item.prescribedSets} × {item.prescribedReps}
+          Prescribed: {item.prescribedSets} × {item.prescribedReps}{eachSideSuffix(item.laterality)}
           {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
           {suggestedFromOneRm != null ? ` (≈ ${suggestedFromOneRm} ${unit})` : ""}
           {suggestedFromOneRm == null && suggestedFromProgression != null
