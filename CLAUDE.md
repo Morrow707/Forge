@@ -701,7 +701,38 @@ can install. Delete entries as a `beta` ships them.
   whole RDL and the box jump all read LOW, so "calibrate these numbers down" would make three
   of the four comparisons worse. Calibration work: uploaded on commit.
   Also build **616** was the All Classes / Coaches Corner sandbox build.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 617.
+- Build **619** was cut 2026-10-05 from `d3a6e205`. It clears the whole queue AND fixes a
+  regression 618 shipped.
+  **THE 3D POSE WAS SWITCHED OFF IN 618, BY ACCIDENT, BY THE CHANGE MEANT TO MAKE IT CHEAP.**
+  The phase offset that stops the 3D pose and the hand pose sharing a frame was `1`, and on the
+  live path `strideIndex = thisFrameIndex * sampleEveryNthFrame`, so with the sample stride of 4
+  it only ever takes multiples of 4 and `4k % 120 == 1` has no solution. Measured off the
+  2026-10-05 export: every capture before 618 carried 20-36 3D frames, both 618 takes carried
+  **0**, and with them went the body_3d ruler, the depth ruler and the 3D ankle ruler that same
+  build existed to test. The offset is now derived from the sample stride (the first multiple
+  that is not also a hand-pose frame), and
+  `expensive-sensors-never-collide.test.ts` proves REACHABILITY -- the old test passed
+  throughout, because a gate that never fires collides with nothing.
+  Also in 619: **the gravity ruler stands down on a box set** (it models a jump that lands where
+  it took off; the 618 box jump's box ruler had five clean reps and put the scale at 0.636 of
+  truth -- net rises of 38.1/37.2/39.6/39.3/38.8cm onto a 61cm box -- and was overruled), the
+  **Rule #4 audit** of all eight trackers (the kettlebell and swing live paths ran no object
+  detection at all; six trackers ran hand pose on EVERY frame by omission; the swing tracker had
+  one scale ruler), **`rotation3D`** (the native 2D landmarks carry `z: 0`, so hip-shoulder
+  separation has been exactly 0 or 180 degrees on every iPhone frame -- recorded as a peer, not
+  substituted), and the **accuracy batch** from the 10-04 telemetry: `minDetectionConfidence`
+  0.4 -> 0.25 (the squat had 90 of 130 candidates refused by that floor), the static-decoy rule
+  (a rack does not move and a barbell does), the source-agreement gap read at last, and
+  scale-drift-per-rep. Calibration work: uploaded on commit.
+- **KNOWN AND NOT FIXED: the CoreML model is undertrained, and no constant fixes it.** All eight
+  classes exist and the mapping is right, but it was trained on 43 labelled boxes across 41
+  images -- med_ball 10, plate 12, kettlebell 12, **barbell 3**, dumbbell 1. That is why the
+  barbell class has never produced a single detection on any take
+  (`candidatesSeenOfClass: 0` on both barbell lifts, across 60 full-frame searches) and why the
+  secondary witness has never held a lock. **225 of the 266 raw images are unlabelled** in
+  `training-data/med-ball/raw`. Labelling them is the fix; see
+  `scripts/med-ball-detector/README.md`.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 619.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
