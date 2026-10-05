@@ -732,7 +732,25 @@ can install. Delete entries as a `beta` ships them.
   secondary witness has never held a lock. **225 of the 266 raw images are unlabelled** in
   `training-data/med-ball/raw`. Labelling them is the fix; see
   `scripts/med-ball-detector/README.md`.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 619.
+- Build **620** was cut 2026-10-05 from `660b025d`, off Scott's debug console, and it is the one
+  to film on. **EVERY FINISHED CAMERA SET WAS RE-UPLOADING EVERY EARLIER SET'S SKELETON
+  FRAMES.** From one session's console: `sending 10472KB (traces 10362KB)` ok in 7712ms, then
+  `11961KB` ok in 10228ms, then `13340KB` ok in 10512ms, then `13383KB` FAILED 409, plus two
+  `NetworkError: Can't reach Forge`. Beside them, from the keystroke path that had omitted since
+  it was written: `sending 118KB (traces 0KB)` ok in 2460ms. The payload grew all session because
+  `autosaveNow` -- the path a finished camera set takes -- sent the whole day in full. A 13MB
+  upload from a phone is a payload problem, not a network one, and it is where that night's Back
+  Squat and med ball throw went. `autosaveNow` now omits the captures the server has CONFIRMED
+  and sends the new one in full; the safety is `capturePersistedRef`, which a set joins only
+  inside `if (synced)`, so the set just filmed is never omitted. Keys are omitted, never nulled
+  (the server reads an absent key as "keep what you have" and a null as "clear it").
+  **AND EVERY QUEUE SKIP NOW SAYS WHY.** The same console showed `flush: 1 queued day(s)` six
+  times and not one `flush ok`, `flush retry`, `flush HELD` or `flush DROPPED` after any of them.
+  Three bare `continue`s did it -- another account's entry, a day the open workout screen has
+  claimed, and a held entry on its slow clock -- each legitimate, each indistinguishable from the
+  others and from a crash. All three name themselves now and the held one says how long until its
+  next retry. Calibration work: uploaded on commit.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 620.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
