@@ -737,11 +737,20 @@ export function AvJumpTrackerDialog({
         toast.success(
           `Cleared the box, feet peaked ${metrics.bestBoxClearanceCm.toFixed(1)} cm above the top`,
         );
-      } else {
-        toast.warning(
-          `Did not clear the box, feet peaked ${Math.abs(metrics.bestBoxClearanceCm).toFixed(1)} cm below the top`,
-        );
       }
+      // AND NOTHING IS SAID WHEN THE READ SAYS HE MISSED IT. RULE #1.
+      //
+      // 2026-10-04, beside the OVR: a 24-inch box jump Scott plainly landed reported
+      // boxClearanceCm of -10.3 and -6.9 and the screen said "Did not clear the box, feet
+      // peaked 6.9 cm below the top". The jump height on that same take read 44cm against the
+      // 61cm the box required -- 28% low -- so the clearance was negative for the same reason
+      // the height was wrong, and the plausibility guard above cannot catch it because 6.9cm
+      // IS physically possible. It is just not what happened.
+      //
+      // "Cleared it by N" is a measurement. "Did not clear it" is a statement about the
+      // athlete's performance, and this pipeline is not calibrated well enough to make one.
+      // The number is still recorded -- it rides on repBreakdown and reaches the admin
+      // tracking report, which is where a finding of this kind belongs and nowhere else.
     }
 
     if (!recordVideo) {

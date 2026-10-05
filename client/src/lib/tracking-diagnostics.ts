@@ -293,6 +293,10 @@ export type TrackingDiagnostics = {
       // wrong when a detector locks onto the wrong object, and it was never visible.
       measured?: number | null;
       samples?: number | null;
+      /** The ruler's own stated uncertainty fraction. */
+      uncertainty?: number | null;
+      /** Its share of the blend's total weight, as a percentage. 0 means it did not vote. */
+      weightPct?: number | null;
     }[];
     // Named outliers from the reconciliation, with how far each sat from the chosen scale.
     scaleOutliers?: { source: string; ratioToChosen: number }[];

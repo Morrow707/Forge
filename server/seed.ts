@@ -2035,7 +2035,7 @@ async function main() {
         movementType: "Rotation",
         laterality: "unilateral" as const,
         sports: ["Baseball", "Softball", "Golf", "Tennis", "Lacrosse", "Boxing", "MMA"],
-        instructions: "Rotate away from a wall then explosively throw the ball into it, catch and repeat.",
+        instructions: "Rotate away from a wall then explosively throw the ball into it, catch and repeat. Do the full set on one side, then turn around and do the same number on the other -- the prescription is per side.",
       },
       {
         name: "Medicine Ball Scoop Toss",

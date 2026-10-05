@@ -152,6 +152,8 @@ type TrackingDiagnostics = {
       scale: number;
       measured?: number | null;
       samples?: number | null;
+      uncertainty?: number | null;
+      weightPct?: number | null;
     }[];
     scaleOutliers?: { source: string; ratioToChosen: number }[];
     scaleCorroborated?: boolean;
@@ -772,7 +774,17 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
                 ? ` from ${Math.round(candidate.measured * 100) / 100}px`
                 : "";
             const samples = candidate.samples != null ? ` over ${candidate.samples} frames` : "";
-            return `${candidate.source}: ${candidate.scale.toPrecision(3)} m/unit${measured}${samples}`;
+            // WHAT IT SAID, AND WHAT IT WAS WORTH. A blend is a weighted mean and reading one
+            // without the weights is reading half of it -- see docs/camera-tracking-notes.md,
+            // "Four lifts beside OVR, 2026-10-04", where the ruler that matched the sensor
+            // exactly was outweighed and the export could not show by what.
+            const worth =
+              candidate.weightPct != null
+                ? ` [${candidate.weightPct}% of the blend${
+                    candidate.uncertainty != null ? `, uncertainty ${candidate.uncertainty}` : ""
+                  }]`
+                : "";
+            return `${candidate.source}: ${candidate.scale.toPrecision(3)} m/unit${measured}${samples}${worth}`;
           })
           .join("; "),
       });
