@@ -3322,11 +3322,44 @@ private final class AvFrameContext {
     //
     // Offsetting the phase removes the collision and NOTHING ELSE: both sensors run at exactly
     // the rate they ran at before, on exactly as many frames, which is what Rule #2 requires
-    // (thin, never switch off; speed up, never cut). Offset 1 rather than stride/2 because the
-    // strides divide each other -- 60 % 12 is 0, so half of 120 would collide just as reliably.
-    // 1 cannot be a multiple of any handPoseStride above 1. When hand pose runs on every frame
-    // there is no phase that avoids it, so the offset goes back to 0 and nothing is pretended.
-    var body3DPhaseOffset: Int { handPoseStride > 1 ? 1 % body3DDetectionStride : 0 }
+    // (thin, never switch off; speed up, never cut). See body3DPhaseOffset below for WHICH
+    // offset, and for the build-618 bug that came of choosing one the frame index never reaches.
+    /// AN OFFSET THAT THE FRAME INDEX NEVER REACHES IS A SWITCHED-OFF SENSOR.
+    ///
+    /// This was `1 % body3DDetectionStride`, and build 618 shipped with it. On the LIVE path
+    /// `strideIndex = thisFrameIndex * ctx.sampleEveryNthFrame` (line ~2359), so with the
+    /// sample stride of 4 that every take uses it runs 0, 4, 8, 12 ... and `4k % 120 == 1` has
+    /// NO SOLUTION. The 3D pose could not fire on a single live frame.
+    ///
+    /// It is not a theory. Every capture before 618 carried 20 to 36 3D frames; both 618 takes
+    /// carried ZERO, and with them went the body_3d ruler, the depth ruler and the whole 3D
+    /// ankle ruler the same build was shipped to test (`ankle3D: "no_3d_frames"`). The RDL's
+    /// scale blend fell from five candidates to two.
+    ///
+    /// That is a sensor switched off by accident, which is the thing Rule #2 exists to prevent,
+    /// and it was introduced by the change that was meant to stop the 3D pose COLLIDING with
+    /// the hand pose. Both goals are real; the offset has to satisfy both.
+    ///
+    /// So the offset is chosen from the indices the frame counter actually produces: step
+    /// through the multiples of the sample stride and take the first that is not also a hand-pose
+    /// frame. With sample stride 4, hand pose 12 and 3D 120 that is 4 -- reachable on the live
+    /// path (k = 1, 31, 61 ...) and on the file path (where strideIndex counts every frame), and
+    /// 4 % 12 != 0 so the two sensors still never share a frame.
+    ///
+    /// Falls back to 0 when no such multiple exists (a sample stride that is itself a multiple of
+    /// the hand-pose stride). 0 is always reachable, so the sensor RUNS and merely shares a frame
+    /// -- the right way round: a collision costs milliseconds, an unreachable offset costs the
+    /// sensor.
+    var body3DPhaseOffset: Int {
+        let step = max(1, sampleEveryNthFrame)
+        guard handPoseStride > 1 else { return 0 }
+        var candidate = step
+        while candidate < body3DDetectionStride {
+            if candidate % handPoseStride != 0 { return candidate }
+            candidate += step
+        }
+        return 0
+    }
     // Box jump's own object-detection signal. Every frame would be needless extra Vision work
     // for a signal that is checking a STATIONARY object, so a sparse sample across the whole
     // clip is exactly as informative as every frame, for a fraction of the cost.

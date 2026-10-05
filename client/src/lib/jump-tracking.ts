@@ -808,8 +808,29 @@ export function summarizeJumpSet(
     }
   }
 
-  const applied = applyGravityCorrection(reps, gravityVerdictRaw);
-  const gravityVerdict = gravityVerdictRaw ? { ...gravityVerdictRaw, applied } : null;
+  // THE GRAVITY RULER'S PRECONDITION IS A FLAT JUMP, AND A BOX SET DOES NOT HAVE ONE.
+  //
+  // This is not "the box ruler wins" -- that would be a leader appointed by an if-statement,
+  // which Rule #2 refuses. It is that applyGravityCorrection measures flight time and infers a
+  // height from 9.81, which describes a jump that lands where it took off. On a box rep the
+  // athlete lands 61cm higher than they left, so the flight is cut short by the box and the
+  // ruler is reading a quantity that is not the one it models. A measurement taken outside its
+  // own stated preconditions is not a peer witness, it is a wrong number.
+  //
+  // The 2026-10-05 box jump on build 618 is what this is fitted from. The BOX ruler got five
+  // clean box reps and put the take's scale at 0.636 of truth -- net rises of 38.1, 37.2, 39.6,
+  // 39.3 and 38.8 cm onto a 61cm box, which is Scott's own reading of it ("if the object
+  // detector doesn't know where the box is then it thinks I'm doing a broad jump"). Gravity had
+  // already corrected the set, so the box ruler's verdict was recorded and discarded, and the
+  // reported jump height kept the 0.636.
+  //
+  // Both rulers still RUN and both are still RECORDED, every take. What changes is only which
+  // one is allowed to correct a set the other cannot validly measure.
+  const boxSet = options?.usesBox === true && (options?.boxHeightCm ?? 0) > 0;
+  const applied = boxSet ? false : applyGravityCorrection(reps, gravityVerdictRaw);
+  const gravityVerdict = gravityVerdictRaw
+    ? { ...gravityVerdictRaw, applied, ...(boxSet ? { standDownReason: "box_set_has_no_flat_jump" } : {}) }
+    : null;
   // THE BOX IS A RULER. Scott, 2026-09-28: "Be mindful, I am jumping to a 24 inch box." On a
   // box rep the ankle's net rise from takeoff to landing IS the box height, a distance the
   // athlete typed. Set 3 read 73-77cm of rise onto a 61cm box, so the take's scale was about a
@@ -828,8 +849,16 @@ export function summarizeJumpSet(
     applied ? [] : reps,
     options?.usesBox ? options?.boxHeightCm ?? null : null,
   );
+  // `outcome` describes what the RULER found; `applied` says whether it moved the numbers. The
+  // 618 export came back `{applied: false, outcome: "applied"}`, which reads as a contradiction
+  // -- it meant "the box ruler would have corrected, but gravity had already run". That case is
+  // gone on a box set, and the label is honest either way now.
   const boxRiseReport: BoxRiseVerdict = applied
-    ? { ...applyBoxRiseCorrection(reps.map((r) => ({ ...r })), options?.usesBox ? options?.boxHeightCm ?? null : null), applied: false }
+    ? {
+        ...applyBoxRiseCorrection(reps.map((r) => ({ ...r })), options?.usesBox ? options?.boxHeightCm ?? null : null),
+        applied: false,
+        outcome: "reported_only_gravity_corrected",
+      }
     : boxRiseVerdict;
 
   const bestJumpHeightCm = Math.max(...reps.map((r) => r.jumpHeightCm));
@@ -906,7 +935,14 @@ export type BoxRiseVerdict = {
   scaleErrorRatio: number | null;
   repsUsed: number;
   applied: boolean;
-  outcome: "no_box_height" | "too_few_box_reps" | "within_tolerance" | "applied";
+  outcome:
+    | "no_box_height"
+    | "too_few_box_reps"
+    | "within_tolerance"
+    | "applied"
+    // The ruler ran and found a correction, but gravity had already corrected the set. Only
+    // reachable on a NON-box set now -- see the gravity precondition in summarizeJumpSet.
+    | "reported_only_gravity_corrected";
   boxHeightCm: number | null;
   /** Every rep's net rise, rounded, in the order they happened -- the evidence for the outcome. */
   netRisesCm: number[];

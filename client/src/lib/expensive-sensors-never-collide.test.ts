@@ -33,9 +33,46 @@ function stridesFrom(file: string, constName: string) {
 describe("the two expensive Vision sensors never run on the same frame", () => {
   it("offsets the 3D pose's phase instead of sharing the hand pose's", () => {
     expect(swift).toContain("strideIndex % ctx.body3DDetectionStride == ctx.body3DPhaseOffset");
-    expect(swift).toContain("var body3DPhaseOffset: Int { handPoseStride > 1 ? 1 % body3DDetectionStride : 0 }");
+    // The offset is DERIVED from the sample stride, never a bare literal -- see the
+    // reachability test below for the build-618 bug that made that necessary.
+    expect(swift).toContain("let step = max(1, sampleEveryNthFrame)");
+    expect(swift).toContain("if candidate % handPoseStride != 0 { return candidate }");
+    expect(swift).not.toContain("1 % body3DDetectionStride : 0 }");
     // The hand pose keeps phase 0; if both ever became offsets they could collide again.
     expect(swift).toContain("let runHandPose = strideIndex % ctx.handPoseStride == 0");
+  });
+
+  it("THE OFFSET MUST BE REACHABLE, which is what build 618 got wrong", () => {
+    /* The bug this test exists for, because the collision test above passed while it shipped.
+     *
+     * The offset was `1 % body3DDetectionStride` = 1. On the LIVE path
+     * `strideIndex = thisFrameIndex * ctx.sampleEveryNthFrame`, so with the sample stride of 4
+     * every take uses, strideIndex runs 0, 4, 8, 12 ... and `4k % 120 == 1` has NO SOLUTION.
+     * The 3D pose fired on zero frames.
+     *
+     * Measured, not argued: every capture before 618 carried 20-36 3D frames and both 618 takes
+     * carried 0, taking the body_3d ruler, the depth ruler and the ankle ruler with them.
+     *
+     * "No collision" was true and useless. A gate that never fires collides with nothing.
+     */
+    const offset = (step: number, hand: number, body3D: number) => {
+      if (hand <= 1) return 0;
+      let candidate = step;
+      while (candidate < body3D) {
+        if (candidate % hand !== 0) return candidate;
+        candidate += step;
+      }
+      return 0;
+    };
+    // Every sample stride the app plausibly uses, against both shipped sensor-stride pairs.
+    for (const sampleStride of [1, 2, 3, 4, 6, 8, 12]) {
+      for (const [body3D, hand] of [[120, 12], [120, 24]] as const) {
+        const o = offset(sampleStride, hand, body3D);
+        // Reachable: some live-path strideIndex (a multiple of the sample stride) hits it.
+        const reachable = Array.from({ length: body3D * 4 }, (_, k) => (k * sampleStride) % body3D).includes(o);
+        expect(reachable, `offset ${o} unreachable at sampleStride ${sampleStride}`).toBe(true);
+      }
+    }
   });
 
   it.each([
