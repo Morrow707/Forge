@@ -30,7 +30,7 @@ import { setupAuth, requireAuth, requireRole, toPublicUser } from "./auth";
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
 import { registerEmailListRoutes, runCampaign } from "./email-list";
 import { hashPassword, comparePasswords } from "./auth-utils";
-import { getEntitlements, type Entitlements, getFreeAgentEntitlements } from "./billing";
+import { getEntitlements, type Entitlements, getFreeAgentEntitlements, syncCoachSubscriptionBand } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
 import { storage, CohortQueryBudgetExceeded, CohortQueryDifferencingRefused } from "./storage";
 import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
@@ -13892,8 +13892,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const user = currentUser(req);
     await storage.setPlannedAthleteCount(user.id, parsed.data.expectedAthletes);
+    // The band follows the plan onto the Stripe subscription (syncCoachSubscriptionBand): a
+    // bigger band is prorated now, a smaller one bills from the next invoice. A failure at
+    // Stripe does not undo the recorded number; it is logged and the coach's screen says so.
+    let stripeSync: Awaited<ReturnType<typeof syncCoachSubscriptionBand>>;
+    try {
+      stripeSync = await syncCoachSubscriptionBand(user.id, parsed.data.expectedAthletes);
+    } catch (err) {
+      console.error("coach plan: Stripe band sync failed", err);
+      stripeSync = { synced: false, reason: "stripe_error" };
+    }
     // Answers with the same shape the GET does, so a client never has to refetch to redraw.
-    res.json(await coachPlanPayload(user.id));
+    res.json({ ...(await coachPlanPayload(user.id)), stripeSync });
   });
 
   app.post(

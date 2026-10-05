@@ -456,6 +456,49 @@ export async function createFreeAgentAddOnCheckout(
   return { url: session.url };
 }
 
+/** THE BAND FOLLOWS THE PLAN ONTO THE STRIPE SUBSCRIPTION (2026-10-05). Before this, changing
+ * the plan on the coach billing page wrote plannedAthleteCount and nothing else: the Stripe
+ * subscription kept its old quantity, so the coach went on paying the old band and the only
+ * way to pay for the new one was a second checkout, which made a second subscription. Now a
+ * plan change updates the quantity on the per-athlete line of the existing subscription.
+ *
+ * Up: prorated by Stripe for the rest of the month, so the bigger roster is paid for from the
+ * day it is allowed. Down: no credit, the lower quantity simply bills from the next invoice,
+ * which is what "a band is a ceiling, not a count" means for money. A coach with no live
+ * Stripe subscription (beta, trial, Apple-less and card-less) gets the recorded number and
+ * nothing happens here; checkout picks the band up when they subscribe. Returns what it did,
+ * for the route's own answer and the log. */
+export async function syncCoachSubscriptionBand(
+  userId: number,
+  athleteCount: number,
+): Promise<{ synced: false; reason: string } | { synced: true; previousQuantity: number; quantity: number; prorated: boolean }> {
+  const stripe = getStripeClient();
+  if (!stripe) return { synced: false, reason: "stripe_not_configured" };
+  const perAthletePrice = coachPerAthletePriceId();
+  if (!perAthletePrice) return { synced: false, reason: "no_per_athlete_price" };
+  const sub = await storage.getSubscriptionForUser(userId);
+  if (!sub?.stripeSubscriptionId || sub.accountType !== "coach") return { synced: false, reason: "no_stripe_subscription" };
+  if (!["active", "trialing", "past_due"].includes(sub.status)) return { synced: false, reason: `status_${sub.status}` };
+  const band = bandForAthleteCount(athleteCount);
+  const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+  const item = stripeSub.items.data.find((i) => i.price.id === perAthletePrice);
+  if (!item) return { synced: false, reason: "no_per_athlete_item" };
+  const previousQuantity = item.quantity ?? 0;
+  const quantity = band.athleteCapIncluded;
+  if (quantity === previousQuantity) return { synced: true, previousQuantity, quantity, prorated: false };
+  const up = quantity > previousQuantity;
+  await stripe.subscriptionItems.update(item.id, {
+    quantity,
+    proration_behavior: up ? "create_prorations" : "none",
+  });
+  await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+    metadata: { band: band.id, bandAthleteCap: String(band.athleteCapIncluded), quotedMonthlyCents: String(band.monthlyPriceCents) },
+  });
+  await storage.applyCoachSubscriptionBand(userId, band.id, band.athleteCapIncluded);
+  await storage.logBillingEvent(userId, "coach.plan.band_synced", { previousQuantity, quantity, band: band.id, prorated: up });
+  return { synced: true, previousQuantity, quantity, prorated: up };
+}
+
 /** A coach add-on bought by the coach themselves -- Coaches Corner today.
  *
  * Refuses anything not on COACH_PURCHASABLE_ADD_ON_ORDER rather than anything not
