@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { missingPriceEnvVars, freeAgentPriceEnvVar, freeAgentPriceId } from "./stripe-prices";
-import { FREE_AGENT_ADD_ON_ORDER, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
+import {
+  FREE_AGENT_ADD_ON_ORDER,
+  FREE_AGENT_TIER_ORDER,
+  WITHDRAWN_ADD_ONS,
+  addOnIsOffered,
+} from "@shared/free-agent-tiers";
 import { ORG_BASE_CENTS } from "@shared/billing-tiers";
 
 const routes = readFileSync(join(__dirname, "routes.ts"), "utf8");
@@ -24,14 +29,26 @@ describe("Stripe price configuration", () => {
     // account fee -- which is ORG_BASE_CENTS, now 0: checkout looked configured and
     // charged nothing while /coach/billing quoted the band.
     expect(missing).toContain("STRIPE_PRICE_COACH_PER_ATHLETE");
-    // The sport-coach add-ons and Coaches Corner each need their own Price too --
-    // they have checkout routes now, so "configured" has to mean configured for
-    // them as well or the readiness check goes quiet while a purchase would fail.
-    for (const addOn of FREE_AGENT_ADD_ON_ORDER) {
+    // The add-ons on sale and Coaches Corner each need their own Price too -- they have
+    // checkout routes, so "configured" has to mean configured for them as well or the
+    // readiness check goes quiet while a purchase would fail.
+    //
+    // ON SALE, not merely existing: this looped over FREE_AGENT_ADD_ON_ORDER, which
+    // includes the three WITHDRAWN sport coaches. Asking for a Price for something nobody
+    // may buy kept the admin readiness panel permanently red, and the only way to clear it
+    // was to create those Prices -- which was the one thing standing between a withdrawn
+    // coach and a real Stripe session (see createFreeAgentAddOnCheckout, which now refuses
+    // a withdrawn add-on outright). Corrected in scope, not weakened.
+    const offeredAddOns = FREE_AGENT_ADD_ON_ORDER.filter(addOnIsOffered);
+    expect(offeredAddOns.length).toBeGreaterThan(0);
+    for (const addOn of offeredAddOns) {
       expect(missing).toContain(`STRIPE_PRICE_FREE_AGENT_ADDON_${addOn.toUpperCase()}`);
     }
+    for (const addOn of WITHDRAWN_ADD_ONS) {
+      expect(missing).not.toContain(`STRIPE_PRICE_FREE_AGENT_ADDON_${addOn.toUpperCase()}`);
+    }
     expect(missing).toContain("STRIPE_PRICE_COACH_ADDON_COACHES_CORNER");
-    expect(missing.length).toBe(FREE_AGENT_TIER_ORDER.length + FREE_AGENT_ADD_ON_ORDER.length + 2);
+    expect(missing.length).toBe(FREE_AGENT_TIER_ORDER.length + offeredAddOns.length + 2);
   });
 
   /** Every Price a checkout route needs, so a test about one of them does not have

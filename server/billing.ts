@@ -20,6 +20,7 @@ import {
   FREE_AGENT_ADD_ONS,
   FREE_AGENT_ADD_ON_ORDER,
   FREE_AGENT_TIERS,
+  addOnIsOffered,
   entitlementsForFreeAgentTier,
   type FreeAgentAddOnId,
   type FreeAgentTierId,
@@ -436,6 +437,13 @@ export async function createFreeAgentAddOnCheckout(
 ): Promise<CheckoutResult> {
   const closed = chargingClosed();
   if (closed) return closed;
+  // A WITHDRAWN ADD-ON IS NOT FOR SALE; this is the route that would take the money.
+  // The caller's enum is FREE_AGENT_ADD_ON_ORDER (every add-on that EXISTS, withdrawn
+  // ones included so an admin can test them), so without this the only thing stopping a
+  // sale was the absence of a Price. Refusing a sale never revokes what someone owns.
+  if (!addOnIsOffered(addOn)) {
+    return { error: `The ${FREE_AGENT_ADD_ONS[addOn].label} add-on isn't available yet.` };
+  }
   const stripe = getStripeClient();
   if (!stripe) return { error: "Billing isn't configured yet." };
   const priceId = freeAgentAddOnPriceId(addOn);

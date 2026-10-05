@@ -4,6 +4,8 @@ import { join } from "node:path";
 import {
   FREE_AGENT_ADD_ON_ORDER,
   FREE_AGENT_ADD_ONS,
+  WITHDRAWN_ADD_ONS,
+  addOnIsOffered,
   appleProductIdForFreeAgentAddOn,
 } from "@shared/free-agent-tiers";
 import {
@@ -51,8 +53,16 @@ describe("the add-on checkout routes derive their ids from the shared lists", ()
       expect(at).toBeGreaterThan(-1);
       // chargingClosed() FIRST, before the Stripe client is even asked for: the
       // beta guarantee is a switch somebody has to turn on, not a missing key.
-      const head = billing.slice(at, at + 600);
+      //
+      // Bounded by the FUNCTION, not by a fixed slice. This read `at + 600` and broke the
+      // day a documented guard was added between the two calls -- getStripeClient() fell
+      // outside the window, came back -1, and the ordering assertion failed on a file that
+      // was still correct. The claim being made is about order, so the text searched is the
+      // whole body and nothing about the guard is relaxed.
+      const end = billing.indexOf("\nexport ", at + 1);
+      const head = billing.slice(at, end === -1 ? billing.length : end);
       expect(head.indexOf("chargingClosed()")).toBeGreaterThan(-1);
+      expect(head.indexOf("getStripeClient()")).toBeGreaterThan(-1);
       expect(head.indexOf("chargingClosed()")).toBeLessThan(head.indexOf("getStripeClient()"));
     }
   });
@@ -159,12 +169,59 @@ describe("every add-on has somewhere to be bought", () => {
     }
   });
 
-  it("requires a Stripe Price for each one before billing can call itself ready", async () => {
+  /* THIS TEST USED TO LOOP OVER EVERY ADD-ON, WITHDRAWN ONES INCLUDED, and that was the
+   * bug rather than the guard. It was written before the three sport coaches were
+   * withdrawn and nothing revisited it, so it pinned "ask for a Stripe Price for a product
+   * nobody may buy" as if it were the contract. Two costs, found in the pre-launch audit:
+   * the admin billing readiness panel could never honestly go green, and the only way to
+   * clear it was to create the three Prices -- which was the single thing standing between
+   * a withdrawn sport coach and a real Stripe Checkout session, because the checkout
+   * never asked whether the add-on was on sale. Corrected rather than deleted: the
+   * requirement is real, its SCOPE was wrong. */
+  it("requires a Stripe Price for every add-on that is actually on sale", async () => {
     const { missingPriceEnvVars } = await import("./stripe-prices");
     const missing = missingPriceEnvVars();
-    for (const id of FREE_AGENT_ADD_ON_ORDER) {
+    const offered = FREE_AGENT_ADD_ON_ORDER.filter(addOnIsOffered);
+    expect(offered.length).toBeGreaterThan(0);
+    for (const id of offered) {
       expect(missing).toContain(`STRIPE_PRICE_FREE_AGENT_ADDON_${id.toUpperCase()}`);
     }
     expect(missing).toContain("STRIPE_PRICE_COACH_ADDON_COACHES_CORNER");
+  });
+
+  it("never asks for a Stripe Price for a withdrawn add-on", async () => {
+    const { missingPriceEnvVars } = await import("./stripe-prices");
+    const missing = missingPriceEnvVars();
+    expect(WITHDRAWN_ADD_ONS.length).toBeGreaterThan(0);
+    for (const id of WITHDRAWN_ADD_ONS) {
+      expect(missing).not.toContain(`STRIPE_PRICE_FREE_AGENT_ADDON_${id.toUpperCase()}`);
+    }
+  });
+});
+
+describe("a withdrawn add-on cannot be sold", () => {
+  /* The money path, not the drawing of a button. createFreeAgentAddOnCheckout takes an id
+   * straight from the route's zod enum, and that enum is FREE_AGENT_ADD_ON_ORDER -- every
+   * add-on that EXISTS, deliberately including the withdrawn ones so an admin can still
+   * reach them. Nothing between the enum and stripe.checkout.sessions.create asked whether
+   * this one may be sold. Scanned at the source because reaching the function needs a
+   * configured Stripe client and a charging window, neither of which exists in a unit run,
+   * and the assertion is about the ORDER of the guard: before the session is created. */
+  const billing = readFileSync(join(process.cwd(), "server/billing.ts"), "utf8");
+  const fn = billing.slice(billing.indexOf("export async function createFreeAgentAddOnCheckout"));
+  const body = fn.slice(0, fn.indexOf("\n}"));
+
+  it("refuses the checkout before Stripe is ever called", () => {
+    expect(body).toContain("addOnIsOffered(addOn)");
+    expect(body.indexOf("addOnIsOffered(addOn)")).toBeLessThan(
+      body.indexOf("stripe.checkout.sessions.create"),
+    );
+  });
+
+  it("asks the shared list rather than naming an id", () => {
+    for (const id of WITHDRAWN_ADD_ONS) {
+      expect(body).not.toContain(`"${id}"`);
+      expect(body).not.toContain(`'${id}'`);
+    }
   });
 });

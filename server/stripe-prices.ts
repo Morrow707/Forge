@@ -15,6 +15,7 @@
 import {
   FREE_AGENT_TIER_ORDER,
   FREE_AGENT_ADD_ON_ORDER,
+  addOnIsOffered,
   type FreeAgentTierId,
   type FreeAgentAddOnId,
 } from "@shared/free-agent-tiers";
@@ -96,7 +97,18 @@ export function missingPriceEnvVars(): string[] {
   // Every add-on that has a checkout route needs a Price the same way a tier does
   // -- derived from the on-sale lists, never restated, so adding an add-on cannot
   // leave this readiness check quietly saying "configured".
-  for (const addOn of FREE_AGENT_ADD_ON_ORDER) {
+  //
+  // A WITHDRAWN ADD-ON NEEDS NO PRICE, and asking for one is worse than noise.
+  // FREE_AGENT_ADD_ON_ORDER is every add-on that EXISTS, not the on-sale list the
+  // comment above means: the three sport coaches are in WITHDRAWN_ADD_ONS and cannot
+  // be bought. Before this, the readiness check named their three env vars, so the
+  // admin billing panel could never honestly go green -- and the only way to clear it
+  // was to create Stripe Prices for three products nobody is allowed to buy, which is
+  // exactly the condition that made createFreeAgentAddOnCheckout sell them (fixed in
+  // billing.ts in the same commit). addOnIsOffered is the question being asked here:
+  // its own doc comment is "may this add-on be shown or SOLD to an ordinary account
+  // today". Nothing is deleted -- a withdrawal reversed puts the row straight back.
+  for (const addOn of FREE_AGENT_ADD_ON_ORDER.filter(addOnIsOffered)) {
     if (!freeAgentAddOnPriceId(addOn)) missing.push(freeAgentAddOnPriceEnvVar(addOn));
   }
   for (const addOn of COACH_PURCHASABLE_ADD_ON_ORDER) {
