@@ -927,7 +927,32 @@ can install. Delete entries as a `beta` ships them.
   **The lesson worth keeping: a guard stated as "X happens only inside `if (synced)`" is about
   TIMING, not CONTENT.** Both bugs were a correct-looking guard that answered the wrong
   question -- was the save successful, rather than did this save contain this thing.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 624.
+- Build **625** carries the posture sweep (2026-10-06): all 413 library exercises run through
+  `postureForExercise`, and **twenty-two were resolving to the default, "standing", while being
+  done face-down on a bench, folded into a plank, hinged at the hip or hanging** (Seal Row, Spider
+  Curl, Frog Pump, Renegade Row, Stir the Pot, McGill Curl-Up, Machine Row, Pec Deck, Bent-Over
+  Rear Delt Raise, Cable Pull-Through, Jefferson Curl, both Kickbacks, the two deadlift-to-row
+  combinations, Toes-to-Bar, Nordic Curl, Adductor Rock Back, Dead Hang). Each offered the height
+  ruler a stature span measured across a torso that is not upright -- the Romanian deadlift bug
+  of 2026-10-05, which cost 7%. **NO constant moved**: these are labels, and the ten sensor-paired
+  lifts resolve exactly as before (`the-posture-sweep-2026-10-06.test.ts` pins both halves).
+- **ONE CODE PATH, PER-LIFT VALUES: a constant fitted on the squat MOVES the bench.** Asked
+  directly by Scott 2026-10-06 and worth keeping at hand. Bench, squat, row and press are all the
+  SAME tracker (the bar tracker). Only six things are looked up per exercise -- `postureForExercise`
+  (whether the height ruler may vote), `romBucketForExercise`, `TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M`,
+  `firstMoveForExercise`, the film guidance, and the `movementProfiles` DB row. **Everything else
+  is shared**: `reconcileScaleEstimates` and all eight ruler uncertainties, `HEIGHT_RULER_UNCERTAINTY`,
+  `BIACROMIAL_HEIGHT_FRACTION`, the count-trim scorer, `MAX_COUNT_TRIM_PER_EDGE`,
+  `MAX_PEAK_TO_MEAN_RATIO`, `DRIVE_ONSET_FRACTION`, the plausibility gates and the segmenter. So
+  the only safe way to make a lift its own is to make the thing that differs a LOOKUP, not a
+  constant -- posture is the model: the hinge fix took the RDL from -7.0% to 0.0% and left the Back
+  Squat bit-identical. Any constant fitted on one lift is checked against the others before it
+  ships, as the 10-06 `concSpeed` term was. See docs/camera-tracking-notes.md, "The posture sweep".
+- **Every library exercise can be filmed.** `VideoTrackingToggle` excludes nothing: of the 413
+  exercises in `server/seed.ts`, 377 resolve to the bar tracker, 20 to jump, 9 to med ball, 5 to
+  horizontal load and 2 to kettlebell swing. Sprint and mechanics are in the SKILL library and are
+  not among the 413.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 625.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
