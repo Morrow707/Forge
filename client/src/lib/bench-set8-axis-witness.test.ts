@@ -75,7 +75,12 @@ describe("the grip axis is a witness held against the image vertical", () => {
   it("reproduces the device's wrong answer under the grip axis, so the fault is the axis", () => {
     const m = segment(storedAxis)!;
     expect(m.meanVelocityMps).toBeGreaterThan(1.8);
-    expect(m.romCm).toBeGreaterThan(50);
+    // Still far past the sensor's 36.6cm, which is the point of this test -- the grip axis gives
+    // a wrong answer and the velocity shows it most. 50 -> 45 on 2026-10-06, when the set's range
+    // of motion stopped averaging in the fragments a wrong axis creates: the damage a bad axis
+    // does is smaller than it was, and this test exists to show the axis is the fault, not to pin
+    // how bad the fault used to look.
+    expect(m.romCm).toBeGreaterThan(45);
   });
 
   it("finds the sensor's ten at its range of motion under the reconciled axis", () => {

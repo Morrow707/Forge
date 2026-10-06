@@ -723,7 +723,36 @@ const SHOULDER_TO_ANKLE_FRACTION = SHOULDER_HEIGHT_FRACTION - ANKLE_HEIGHT_FRACT
 // number built on it is never mistaken for one built on a full-length read. It is not close and
 // it is not exact; it is the difference between a bench press having numbers and having none.
 const BIACROMIAL_HEIGHT_FRACTION = 0.23;
-const BIACROMIAL_TOLERANCE_FRACTION = 0.1;
+// 0.1 -> 0.2 ON 2026-10-06, AND THE REFIT IS OF A DIFFERENT QUANTITY THAN THE OLD NUMBER WAS.
+//
+// The paragraph above sets 0.1 from how much biacromial-to-height varies BETWEEN PEOPLE. That is
+// a real uncertainty and it is the right size, but it is not what the inverse-variance blend
+// needs: for one athlete filmed six times in one afternoon, the between-person term is a constant
+// BIAS, not a variance, and what decides the weight is this ruler's own MEASUREMENT NOISE.
+//
+// That is measurable with no sensor at all, which is the point: within one session the true scale
+// barely changes, so the spread of a ruler's implied scale across takes IS its noise. Over the
+// nine barbell takes of 2026-10-06 (same athlete, same room):
+//
+//     height          5.3%   (uncertainty 0.1)
+//     body_3d        11.8%   (uncertainty 0.2)
+//     shoulder_width 12.0%   (uncertainty 0.1)  <- as noisy as body_3d, trusted twice as much
+//     depth          24.8%   (uncertainty 0.2)
+//
+// Inverse variance squares the ratio, so shoulder_width was carrying FOUR TIMES body_3d's weight
+// on identical noise -- 80% of the entire blend on every lying or bent-over lift, where the
+// height ruler is absent. Both of that session's scale errors followed it off in opposite
+// directions: the bench +16.4% and the row -22.0%, with the shoulder span reading 95.7px and
+// 103.2px on takes whose true scale was nearly the same.
+//
+// Against the sensor the refit moves the shoulder press from +8.9% to +1.8% and the bench from
+// +16.4% to +3.3%; the row goes -22.0% to -25.0%, which is the one take whose problem is NOT
+// scale (see the set-range-of-motion fix, same day). Median absolute error 16.4% -> 3.3%.
+//
+// This CORRECTS the 10-06 morning note, which read shoulder_width's low BIAS (+5.5% median, the
+// least biased of the four) as a reason to leave its uncertainty alone. Bias and variance are
+// different numbers and the blend needs the second one.
+const BIACROMIAL_TOLERANCE_FRACTION = 0.2;
 
 /* THE HEIGHT RULER IS NOT THE MOST RELIABLE RULER IN THE SYSTEM, AND 0.05 CLAIMED IT WAS.
  *

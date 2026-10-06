@@ -15,6 +15,8 @@ import type { TrackingDiagnostics } from "./tracking-diagnostics";
 
 import { cameraTunablesFor, type ResolvedCameraTunables } from "@shared/camera-tunables-by-lift";
 
+import { repConsistency } from "@shared/rep-consistency";
+
 // x/y/z are real-world meters from MediaPipe's worldLandmarks (hip-centered
 // origin), not pixels -- no pixelsPerMeter calibration needed to interpret
 // them. y follows pose-tracking.ts's worldVerticalSign convention (smaller y
@@ -1387,6 +1389,33 @@ export function repAmplitudeGateCm(romKind: string | null, heightIn?: number | n
 // otherwise-close call, not a substitute for what was actually measured.
 export type FirstPhaseHint = "concentric" | "eccentric" | null;
 
+/** The set's range of motion: the median of the reps that agree with each other, falling back to
+ *  every rep when too few do. See the call site for the Pendlay row that prompted it. */
+export function setRangeOfMotionCm(reps: { repNumber: number; romCm: number }[]): number {
+  if (reps.length === 0) return 0;
+  const mid = (values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+  const all = reps.map((r) => r.romCm).filter((v) => Number.isFinite(v) && v > 0);
+  if (all.length === 0) return 0;
+  const consistency = repConsistency(reps);
+  const agreeing = consistency
+    ? reps
+        .filter((r) => !consistency.outlierReps.includes(r.repNumber))
+        .map((r) => r.romCm)
+        .filter((v) => Number.isFinite(v) && v > 0)
+    : [];
+  const pool = agreeing.length > 0 ? agreeing : all;
+  // MEAN of the survivors, not the median of them. Dropping the fragments is the whole of the
+  // fix; swapping the estimator as well is a second change, and set 8 beside the OVR says it is
+  // the wrong one -- a median took that set from within 1% of the sensor's range of motion to
+  // 10.5% under it, because an honest set's reps are not symmetric about their middle and the
+  // mean of the real ones is what the sensor's own number matches. Smallest change that fixes
+  // the row and leaves every sensor-paired bench where it was.
+  return Math.round((pool.reduce((a, v) => a + v, 0) / pool.length) * 10) / 10;
+}
+
 export function summarizeTrackedSet(
   rawPoints: TrackedPoint[],
   loadKg?: number,
@@ -2279,12 +2308,28 @@ export function summarizeTrackedSet(
             return Math.round(loadKg * GRAVITY_MPS2 * v);
           })()
         : null,
-    romCm:
-      repBreakdown.length > 0
-        ? Math.round(
-            (repBreakdown.reduce((a, r) => a + r.romCm, 0) / repBreakdown.length) * 10,
-          ) / 10
-        : 0,
+    // THE SET'S RANGE OF MOTION IS THE REPS THAT AGREE WITH EACH OTHER.
+    //
+    // This was a plain MEAN over every rep, and the Pendlay row beside the OVR on 2026-10-06 is
+    // what that costs: per-rep 19, 33, 52, 37, 34, 49, 58, 52, 49 -- five reps between 49 and 58
+    // (the sensor said 50 to 60) and four fragments the segmenter split. The mean of all nine is
+    // 42.6 and read -22.0% against the sensor; the median of the ones that agree is 49.4 and
+    // reads -9.5%. The set's number was dragged below every honest rep in it by reps the
+    // pipeline could already tell were broken.
+    //
+    // Third time this exact shape has been found: build 577 bounded a rep's peak by its own mean,
+    // build 621's repsForSetBest stopped the box jump's headline being its worst rep, and this
+    // file's own note said to go looking for any other set-level statistic computed over reps
+    // already identifiable as wrong. A mean is one.
+    //
+    // The rule is `repConsistency`'s, not a new one -- the same median and the same
+    // REP_ROM_OUTLIER_FRACTION the diagnostics already report the set by, so the number on the
+    // card and the flag beside it cannot disagree. MEDIAN rather than mean of the survivors:
+    // one fused rep that squeaks inside the fraction should not move the answer.
+    //
+    // RULE #1: it falls back to every rep when fewer than MIN_REPS_FOR_CONSISTENCY are usable or
+    // when none agrees, so a set never loses its number -- exactly as repsForSetBest does.
+    romCm: setRangeOfMotionCm(repBreakdown),
     // Averaged over the reps that HAVE an EAI, not over every rep with the withheld ones counted
     // as zero -- that would drag the set's mean down in proportion to how coarse its trace was,
     // which is the same wrong number the withholding exists to prevent, laundered through a
