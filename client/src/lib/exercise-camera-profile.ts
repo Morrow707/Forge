@@ -173,11 +173,33 @@ const POSTURE_PATTERNS: [RegExp, CameraPosture][] = [
   [/\b(?:sit-?up|crunch|dead\s*bug|hollow|russian\s+twist)\b/i, "lying"],
   [/\b(?:incline|decline)\b/i, "lying"],
   [/\bback\s+extension\b/i, "lying"],
+  // THE 2026-10-06 SWEEP of all 413 library exercises through this resolver (docs/
+  // camera-tracking-notes.md, "The posture sweep, 2026-10-06"). Every entry below was resolving
+  // to the DEFAULT, "standing", so the height ruler was offered a stature span measured across
+  // a torso that is face-down on a bench, folded into a plank, or hinged at the hip -- the
+  // exact failure the Romanian deadlift cost 7% to on 2026-10-05. No constant moved; these are
+  // labels, and a label that says "standing" about a lift that is not is a wrong input, not a
+  // tuning choice.
+  // Chest-down on a bench: a seal row, a spider curl, a frog pump.
+  [/\bseal\s+row\b/i, "lying"],
+  [/\bspider\s+curl\b/i, "lying"],
+  [/\bfrog\s+pump\b/i, "lying"],
+  // A renegade row and a stir-the-pot are planks with a limb moving; "plank" is in the floor
+  // pattern below but neither name says it.
+  [/\brenegade\s+row\b/i, "lying"],
+  [/\bstir\s+the\s+pot\b/i, "lying"],
+  // A McGill curl-up is a crunch under another name; the sit-up pattern above misses it.
+  [/\bcurl-?up\b/i, "lying"],
   [/\bseated\b/i, "seated"],
   [/\bleg\s+(?:press|extension)\b/i, "seated"],
   [/\blat\s+pulldown\b/i, "seated"],
   [/\bmachine\s+(?:chest|shoulder)\s+press\b/i, "seated"],
   [/\b(?:preacher|concentration)\s+curl\b/i, "seated"],
+  // A machine row and a pec deck are done from a seat with the chest against a pad. "Machine
+  // Row" is deliberately seated rather than bent_over: both refuse the height ruler, and the
+  // seat is what the athlete is actually in.
+  [/\bmachine\s+row\b/i, "seated"],
+  [/\bpec\s+deck\b/i, "seated"],
   [/\bdip\b/i, "supported"],
   // A row the athlete does hinged over. Inverted, seated, cable and upright rows are matched
   // earlier (lying, seated) or are standing; everything else called a row is bent over.
@@ -189,6 +211,16 @@ const POSTURE_PATTERNS: [RegExp, CameraPosture][] = [
   [/\bromanian\b/i, "bent_over"],
   [/\bstiff[-\s]*leg(?:ged)?\s+deadlift\b/i, "bent_over"],
   [/\bhip\s+hinge\b/i, "bent_over"],
+  // "Bent-Over" as its own word, not only in front of "row": the rear delt raise is the one in
+  // the library today and the next one will not be a row either.
+  [/\bbent[-\s]*over\b/i, "bent_over"],
+  // Hinges whose names say so without saying Romanian: a cable pull-through, a Jefferson curl,
+  // a tricep kickback (torso parallel to the floor), and the two combination lifts that row
+  // FROM a hinge.
+  [/\bpull[-\s]*through\b/i, "bent_over"],
+  [/\bjefferson\s+curl\b/i, "bent_over"],
+  [/\bkickback\b/i, "bent_over"],
+  [/\b(?:rdl|deadlift)\s+to\s+row\b/i, "bent_over"],
   [/\bassisted\s+pull-?up\b/i, "supported"],
   // Floor and quadruped work. A plank, bird dog, bear crawl, ab-wheel rollout, superman hold,
   // glute-ham raise and neck bridge all put the body somewhere that head-to-ankle means nothing.
@@ -198,7 +230,14 @@ const POSTURE_PATTERNS: [RegExp, CameraPosture][] = [
   // A pull-up hangs as one straight line and keeps its full length; a hanging leg raise or
   // windshield wiper folds the body to an L partway through the rep, so the same span means two
   // different things at two points in the same take.
+  // A dead hang IS the straight-line hang the pull-up entry describes.
+  [/\bdead\s+hang\b/i, "hanging"],
   [/\bhanging\b/i, "supported"],
+  // Toes-to-bar folds to an L from a hang, same as the hanging leg raise. A Nordic curl and an
+  // adductor rock back are both done from the knees, which the kneeling pattern above misses.
+  [/\btoes[-\s]*to[-\s]*bar\b/i, "supported"],
+  [/\bnordic\b/i, "supported"],
+  [/\brock\s+back\b/i, "supported"],
 ];
 
 // Movement types that never yield a trustworthy standing-height read, taken from the library's
