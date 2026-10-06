@@ -16,15 +16,22 @@ import capture from "./__fixtures__/bench-rerack-2026-09-29.json";
 const stored = capture as StoredCapture[];
 
 describe("the re-rack at the end of a bench set is not a rep", () => {
-  // OPEN, since build 575. Until then the harness rotated a stored trace onto its axis a second
-  // time (capture-replay.ts, STORED_TRACE_ALONG_AXIS) and this passed at ten. On the trace as
-  // the device saw it the re-rack at 20.1-21.6s (12.4cm, 0.13 m/s against a 18.7cm / 0.36
-  // median) is still counted: the edge rule's floor is stated in centimetres, and this take's
-  // scale is 1.8x too small, so 12.4cm here is the floor's 15.2cm read through the wrong ruler
-  // and the ratio tests do not catch it either. `it.fails` so the suite says the rule is not
-  // yet right on this take rather than pretending it is; the day it drops the re-rack this
-  // test fails the other way and gets rewritten as a plain assertion.
-  it.fails("counts the ten presses and drops the re-rack", () => {
+  /* CLOSED 2026-10-06, by the concentric-speed term in the count-trim's oddness score.
+   *
+   * This stood as `it.fails` from build 575, with the note "the day it drops the re-rack this
+   * test fails the other way and gets rewritten as a plain assertion". That day is today, and
+   * the fix is the one the old note was already describing without naming: the re-rack is
+   * 12.4cm at 0.13 m/s against a set median of 18.7cm at 0.36 -- an AMPLITUDE outlier the edge
+   * rule could not read (its floor is in centimetres and this take's scale is 1.8x too small,
+   * so 12.4cm here IS the floor's 15.2cm through the wrong ruler) and a SPEED outlier, which
+   * nothing scored. The oddness score weighed amplitude, the whole window and the eccentric's
+   * speed, and never the concentric's own. A ratio is scale-free, which is why it works on a
+   * take whose ruler is wrong by 1.8x where the centimetre floor does not.
+   *
+   * Found on the 10-06 bench beside the OVR, where the SAME blind spot let an un-rack at
+   * 2.48 m/s (3.5x the set median) stand as rep 1 and push the set mean 15.7% above the sensor.
+   * One term fixes both ends of the same set. */
+  it("counts the ten presses and drops the re-rack", () => {
     const result = replayCapture(stored[0]);
     expect(result.repCount).toBe(10);
     const reps = result.metrics!.repBreakdown;

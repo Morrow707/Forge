@@ -2346,6 +2346,124 @@ and ends. Three changes, each fitted on the evidence in hand and none proven pas
 (range over the window from leaving the bottom to reaching the top); with three sets the
 per-movement margin reaches the same place with fewer moving parts. Zero is not on the table.
 
+## Three lifts beside OVR, build 621, 2026-10-06
+
+Bench press, Pendlay row and push press, set 1 of each, filmed beside the sensor. Export of
+2026-10-06.
+
+| Lift | Forge ROM | OVR ROM | err | Forge mean | OVR mean | err | reps |
+|---|---|---|---|---|---|---|---|
+| Bench 135x10 | 37.4 cm | 37.1 cm | **+0.9%** | 0.81 | 0.70 | +15.7% | **12 / 10** |
+| Pendlay Row 135x10 | 46.1 cm | 56.6 cm | **-18.6%** | 1.11 | 0.97 | +14.4% | 10 / 10 |
+| Push Press 95x10 | 74.0 cm | 64.0 cm | **+15.6%** | 0.97 | 0.97 | **+0.0%** | 10 / 10 |
+
+The bench's range of motion is the best this pipeline has produced. Three ROM errors in three
+directions is scatter, not bias.
+
+### EVERY RULER MEASURED AGAINST THE SENSOR, AND THE BLEND BEATS ALL OF THEM
+
+With the two sensor-paired takes from 10-05 (squat, RDL) that makes five. Each candidate's own
+error against the scale the sensor requires, from `calibration.scaleCandidates`:
+
+| ruler | Push | Row | Bench | RDL | Squat | median | median abs |
+|---|---|---|---|---|---|---|---|
+| `shoulder_width` | +22.4% | -13.0% | +5.5% | +1.3% | +25.1% | +5.5% | 13.0% |
+| `body_3d` | -13.2% | -36.3% | -21.4% | -16.9% | +4.4% | -16.9% | 16.9% |
+| `depth` | -9.9% | -45.2% | -13.9% | +7.9% | +47.0% | -9.9% | 13.9% |
+| `height` | -- | -- | -- | -15.8% | -17.5% | -16.7% | 16.7% |
+| **BLEND** | +15.6% | -18.6% | +0.9% | -7.0% | +6.0% | **+0.9%** | **7.0%** |
+
+**The blend's median absolute error is 7.0% where every individual ruler is 13-17%.** That is
+inverse-variance weighting doing exactly what it is for, and it is the first direct evidence of
+it. Do not "simplify" the blend to a single best ruler; there isn't one.
+
+**AND IT CORRECTS THE 10-05 NOTE BELOW.** That section recorded `shoulder_width` as the highest
+candidate on 19 of 19 captures, median 1.29x, and said it was refittable once a lift was read
+against the sensor with the hinge fix in. This is that reading, and the answer is the opposite
+of what it looked like: that 1.29x was measured against the OTHER CANDIDATES, and against the
+SENSOR the shoulder ruler is the LEAST biased of the four (+5.5% median). The other rulers were
+low, not the shoulder high. **The 10-05 decision not to refit it was right**, and the reasoning
+offered there was wrong; this is the corrected reasoning.
+
+### NO CORRECTION CONSTANT, AND THIS TIME THE SWEEP SAYS SO
+
+`body_3d` and `height` both read ~17% low on median, which is the shape of an instrument that can
+be zeroed (`DEPTH_RULER_BIAS`). Driving `reconcileScaleEstimates` with the five real candidate
+lists and the RDL modelled as the hinge it now is:
+
+| | Push | Row | Bench | RDL | Squat | worst | rms |
+|---|---|---|---|---|---|---|---|
+| as shipped | +15.6% | -18.6% | +0.9% | +0.0% | +6.0% | 18.6% | **11.2%** |
+| `body_3d` x1.2 | +17.3% | -17.5% | +2.4% | +1.8% | +7.3% | 17.5% | 11.6% |
+| `body_3d`+`depth` x1.15 | +18.3% | -16.8% | +3.3% | +2.9% | +28.6% | 28.6% | 17.1% |
+| `shoulder` x0.95 | +10.7% | -22.1% | -3.4% | -4.0% | +3.2% | 22.1% | 11.3% |
+
+Every variant is worse on rms, and the larger ones blow the squat out to +28% -- a shifted
+candidate changes which agreement CLUSTER wins, so the blend moves discontinuously. **No
+constant was applied.** Third pairing in a row to reach that answer, and the first to prove it
+rather than argue it.
+
+The sweep also confirms the hinge fix: the RDL reads **0.0%** with its height ruler removed,
+against -7.0% with it.
+
+### THE UN-RACK WAS COUNTING AS REP 1 -- `bar-tracking.ts`, the count-trim's oddness score
+
+**This is the bench's +15.7% mean, and none of it was scale.** Range of motion was +0.9%. The
+segmenter returned TWELVE reps for a ten-rep set:
+
+```
+rep 1  44.4cm  2.48 m/s  conc 0.20s  ecc 0.13s   <- the un-rack
+rep 2  20.1cm  0.49 m/s  conc 0.40s  ecc 1.67s   <- the settle
+rep 3  39.2cm  1.42 m/s  conc 0.30s  ecc 5.40s   <- the hold before the first press
+reps 4-12: nine presses, 0.60-1.01 m/s, mean 0.741
+```
+
+`repConsistency` flagged rep 2 (20.1cm against a 39.2 median) and **could not flag rep 1**, whose
+44.4cm is 13% off the median -- perfectly ordinary. Rep 1 is impossible only in SPEED: 2.48 m/s
+is 3.5x the set median. The count-trim's oddness score weighed amplitude, the whole window and
+the ECCENTRIC's speed, and never the concentric's own, so the bar coming off the hooks looked
+like a rep to every term that was scored.
+
+Replaying the real trace through `capture-replay.ts` is what settled it, rather than reading the
+code: 14 phases, trimmed to 12 by the count rule, and `MAX_COUNT_TRIM_PER_EDGE` was 2 while the
+junk at the front was 3.
+
+**Raising the cap alone is wrong and a sensor-paired take says so.** At 4 it takes set 10 --
+which landed on the OVR -- from ten reps to nine, because without a speed term the scorer cannot
+separate that set's real last press from this set's un-rack: their oddness scores are 1.34/1.61
+against 1.39/1.61. Nearly identical. So the fix is the TERM, and the cap follows it:
+
+- `concSpeed` (the concentric's amplitude over its own duration) joins the oddness score as a
+  fourth log-ratio against the set median. A ratio is scale-free, which is why it works on a take
+  whose ruler is wrong by 1.8x where a centimetre floor does not.
+- `MAX_COUNT_TRIM_PER_EDGE` 2 -> 4, which only matters once the scorer can be trusted that far.
+
+Bench 10-06 then reads **ten reps and 0.73 m/s against the sensor's 0.70 (+4.3%)**, from twelve
+and 0.81 (+15.7%). Set 10 holds at ten and stays on its sensor. And it **closes a known gap**:
+`bench-rerack-is-not-a-rep.test.ts` has stood as `it.fails` since build 575 with the note "the
+day it drops the re-rack this test fails the other way and gets rewritten as a plain assertion" --
+that re-rack is 12.4cm at 0.13 m/s against a 18.7cm / 0.36 median, a speed outlier nothing
+scored. One term fixes both ends of the same set.
+
+**Rule #1 holds and is proved, not asserted.** The trim loop is
+`while (remaining.length > expectedReps && remaining.length > 2)`: it stops AT the athlete's own
+count and can never go under it, whatever the cap. `count-trim-never-empties-a-set.test.ts`
+replays every capture in the corpus and asserts each still produces numbers -- 20 of 20, the box
+jump included. Five captures DO return fewer reps than logged (7, 8, 9, 9, 9 against 10); all
+five fail identically with this change reverted, so they are the segmenter missing reps, not the
+trim removing them, and they are pinned as a list that shrinks.
+
+### Still open
+
+- **The row is the outlier at -18.6%, and every ruler is low on it** (-13.0%, -36.3%, -45.2%).
+  Not a blend problem: no voter is right. The row has been the noisiest lift since 10-02
+  (31.9 / 56.0 / 51.3 cm across one session). Next thing to chase.
+- **The push press reads ROM +15.6% and mean +0.0%**, which can only mean its concentric window
+  is long by about as much as its distance. Worth reading `trimPhaseToDrive` against this take.
+- **A 15MB video upload failed** (`NetworkError`, queued for retry) while the log POST beside it
+  at 1277KB succeeded. The autosave fix is holding -- saves after the first are 41-80KB -- but
+  the VIDEO path still sends 11-15MB in one request.
+
 ## Four lifts beside OVR, build 620, 2026-10-05
 
 Scott re-recorded set 1 of every lift on build 620 and filmed set 4 on the OVR beside it:

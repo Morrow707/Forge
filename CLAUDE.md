@@ -811,7 +811,37 @@ can install. Delete entries as a `beta` ships them.
   against 618's 0), the 13MB autosave is fixed (134KB per save after the first), and the barbell
   detector now finds its object on 124/51/16 frames where 10-04 had 18 of 840. Calibration work:
   uploaded on commit.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 621.
+- Build **622** was cut 2026-10-06 from the three lifts filmed on 621 beside the OVR
+  (docs/camera-tracking-notes.md, "Three lifts beside OVR, build 621, 2026-10-06").
+  **THE UN-RACK WAS COUNTING AS REP 1 ON A BENCH, AND IT COST 15.7% OF THE SET MEAN.** The
+  bench's range of motion was the best this pipeline has produced -- 37.4cm against the sensor's
+  37.1, +0.9% -- and its mean read 0.81 against 0.70. None of that was scale: the segmenter
+  returned TWELVE reps for a ten-rep set, and reps 1-3 were the bar coming off the hooks, the
+  settle and the hold. `repConsistency` flagged the settle (20.1cm against a 39.2 median) and
+  could NOT flag the un-rack, whose 44.4cm is perfectly ordinary -- it is impossible only in
+  SPEED, 2.48 m/s against a set median of 0.70. The count-trim's oddness score weighed amplitude,
+  the whole window and the ECCENTRIC's speed, never the concentric's own, so the un-rack looked
+  like a rep to every term that was scored. `concSpeed` is now a fourth log-ratio term, and
+  `MAX_COUNT_TRIM_PER_EDGE` goes 2 -> 4 behind it. Bench reads ten reps and 0.73 (+4.3%).
+  **The cap alone is wrong and a sensor-paired take proved it:** at 4 without the speed term it
+  takes set 10 from ten reps to nine, because the scorer cannot separate that set's real last
+  press from this set's un-rack (oddness 1.34/1.61 against 1.39/1.61). It also closes
+  `bench-rerack-is-not-a-rep.test.ts`, `it.fails` since build 575, whose own note said the day it
+  drops the re-rack it gets rewritten as a plain assertion -- that re-rack is a speed outlier too.
+  **Rule #1 proved, not asserted:** the trim loop stops AT the athlete's own count and cannot go
+  under it, and `count-trim-never-empties-a-set.test.ts` replays all 20 corpus captures and
+  asserts each still produces numbers. Five return fewer reps than logged; all five fail
+  identically with this change reverted, so they are the segmenter, not the trim, and are pinned
+  as a list that shrinks.
+  **NO correction constant, third pairing running, and this time the sweep proves it:** every
+  bias variant is worse on rms and the larger ones blow the squat to +28% by flipping which
+  agreement cluster wins. **And the blend beats every ruler it is built from** -- median absolute
+  error 7.0% against 13-17% for each voter, the first direct evidence that inverse-variance
+  weighting is earning its keep. **This also CORRECTS the 10-05 note:** `shoulder_width` looked
+  1.29x high against the other candidates, but against the SENSOR it is the least biased of the
+  four (+5.5% median). The other rulers were low, not the shoulder high. Not refitting it on
+  10-05 was the right call for the wrong reason. Calibration work: uploaded on commit.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 622.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

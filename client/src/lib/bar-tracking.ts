@@ -1964,7 +1964,7 @@ export function summarizeTrackedSet(
   // long keeps its reps), and it never removes a rep that scores under MIN_COUNT_TRIM_ODDNESS --
   // a rep that looks like the others stays, whatever the athlete typed. Under-counting is still
   // the worse failure.
-  const MAX_COUNT_TRIM_PER_EDGE = 2;
+  const MAX_COUNT_TRIM_PER_EDGE = 4;
   const MIN_COUNT_TRIM_ODDNESS = 1;
   const countTrimmed = new Set<number>();
   if (expectedReps != null && expectedReps > 0) {
@@ -1979,7 +1979,9 @@ export function summarizeTrackedSet(
         const window = seconds(ecc ? ecc.startIdx : phase.startIdx, phase.endIdx);
         const eccSeconds = ecc ? seconds(ecc.startIdx, ecc.endIdx) : 0;
         const eccSpeed = ecc && eccSeconds > 0 ? Math.abs(ySmoothed[ecc.endIdx] - ySmoothed[ecc.startIdx]) / eccSeconds : null;
-        return { amplitude, window, eccSpeed };
+        const concSeconds = seconds(phase.startIdx, phase.endIdx);
+        const concSpeed = concSeconds > 0 ? amplitude / concSeconds : null;
+        return { amplitude, window, eccSpeed, concSpeed };
       };
       const medianOf = (values: number[]) => {
         const sorted = values.filter((v) => v > 0).sort((a, b) => a - b);
@@ -1989,12 +1991,14 @@ export function summarizeTrackedSet(
       const medAmp = medianOf(all.map((s) => s.amplitude));
       const medWin = medianOf(all.map((s) => s.window));
       const medEcc = medianOf(all.map((s) => s.eccSpeed ?? 0));
+      const medConc = medianOf(all.map((s) => s.concSpeed ?? 0));
       const oddness = (i: number) => {
         const s = stats(i);
         let score = 0;
         if (medAmp > 0 && s.amplitude > 0) score += Math.abs(Math.log(s.amplitude / medAmp));
         if (medWin > 0 && s.window > 0) score += Math.abs(Math.log(s.window / medWin));
         if (medEcc > 0 && s.eccSpeed != null && s.eccSpeed > 0) score += Math.abs(Math.log(s.eccSpeed / medEcc));
+        if (medConc > 0 && s.concSpeed != null && s.concSpeed > 0) score += Math.abs(Math.log(s.concSpeed / medConc));
         return score;
       };
       let remaining = [...setRun];
