@@ -2886,3 +2886,105 @@ setup (0.83/1.76/49.5 and 0.68/1.02/18.7). The ten real throws run 2.17-3.02 m/s
    to the floor rather than the box top -- Scott's "it thinks I'm doing a broad jump".
 5. **Whether the med ball throw saved this time.** It was destroyed by its own size on 10-04;
    618 carries the trace shedding and the 413 rules that should make that impossible.
+
+## The posture sweep, and what is actually shared between lifts, 2026-10-06
+
+Scott, after the second bench of the day read -43.2% where the first had read +0.9%: "does our
+camera system share everything with every lift? Or does each lift get its own 'camera system' so
+bench and squat are different" / "Or whether a fix for squat screws up bench because they are
+different" / "audit the posture table, keep it as is right now as far as numbers, but make sure
+each lift that we are recording has its own numbers so when we calibrate one lift it isn't
+screwing up others."
+
+**The answer, stated plainly: one code path, per-lift VALUES.** There is no per-lift camera
+system. Eight trackers exist (bar, jump, med ball, kettlebell swing, golf/bat swing, sprint,
+mechanics, horizontal load) and bench, squat, row and press are all the SAME tracker -- the bar
+tracker, `client/src/lib/bar-tracking.ts`. What differs between them is a handful of values
+looked up from the exercise's name:
+
+| Looked up by exercise | Where | What it decides |
+|---|---|---|
+| `postureForExercise` | `exercise-camera-profile.ts` | Whether the HEIGHT ruler may vote at all (standing and hanging yes; seated, lying, supported, bent_over no) |
+| `romBucketForExercise` | same file | Which `MIN_ROM_FRACTION_OF_HEIGHT` entry gates a rep |
+| `TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M` | `bar-tracking.ts` | How far the bar must move before travel counts |
+| `firstMoveForExercise` | `exercise-camera-profile.ts` | Whether the first phase of a rep is the concentric or the eccentric |
+| `expectedCameraView`, `filmGuidanceForExercise` | same file | What is DESCRIBED before recording (never after -- Rule #1) |
+| `movementProfiles` row | DB | Form-fault thresholds, jump outlier percent, position scale correction |
+
+**Everything else is shared by every lift**, and this is the part to keep in mind before fitting
+a constant: `reconcileScaleEstimates` and all eight ruler uncertainties, `HEIGHT_RULER_UNCERTAINTY`,
+`BIACROMIAL_HEIGHT_FRACTION`, the count-trim oddness scorer and `MAX_COUNT_TRIM_PER_EDGE`,
+`MAX_PEAK_TO_MEAN_RATIO`, `DRIVE_ONSET_FRACTION`, the plausibility gates, the arbiter's grip-width
+threshold, and the segmenter itself. **So yes: a constant fitted on the squat moves the bench.**
+That is exactly what the 2026-10-06 bench fix demonstrated in the other direction -- the
+`concSpeed` term was added for a bench un-rack and had to be checked against set 10 (a bench) and
+against the squat and RDL before the cap could go to 4.
+
+The only safe way to make a lift its own is to make the thing that differs a LOOKUP, not a
+constant. Posture is the model for that: it is per-lift by construction, and the hinge fix on
+2026-10-05 took the RDL from -7.0% to 0.0% while leaving the Back Squat's number bit-identical.
+
+### What the sweep found
+
+All 413 library exercises run through `postureForExercise`. (A correction to this section's first
+version, from Scott the same day: only **54** of the 413 can actually be filmed --
+`CANONICAL_VIDEO_ELIGIBLE_NAMES` in `server/seed.ts`, enforced by `exercises.videoEligible` and
+`resolveVideoCheckEnabled`, because video storage scales with how many distinct exercises are
+eligible. `VideoTrackingToggle` excludes nothing, which is what made "all 413 are filmable" look
+true; the gate is the column, not the control. **None of the twenty-two below is on that list**,
+so the sweep is a correctness fix against the day one becomes eligible, not a change to a number
+anyone can produce today -- and the per-lift/shared map above is unaffected, since it is about
+which constants are shared, not about how many lifts reach them.) Before: standing 308, lying 62, seated 22, bent_over 14,
+supported 5, hanging 2. **Twenty-two of the 308 were not standing.** They were reaching the
+default because `postureForExercise` falls through to "standing" for anything it does not
+recognise, and the patterns are a list of spellings:
+
+- **Face-down on a bench or in a plank, resolving standing:** Seal Row, Spider Curl, Frog Pump,
+  Renegade Row (and the two combinations that contain it), Stir the Pot, McGill Curl-Up. The
+  `plank` pattern exists; none of these names says plank.
+- **Hinged, resolving standing:** Bent-Over Dumbbell Rear Delt Raise (the bent-over pattern
+  required the word "row" after it), Cable Pull-Through, Jefferson Curl, Dumbbell and Cable
+  Kickback, Single-Leg RDL to Row, Suitcase Deadlift to Row.
+- **Seated with the chest on a pad, resolving standing:** Machine Row, Pec Deck.
+- **From the knees or a hang, resolving standing:** Toes-to-Bar, Nordic Hamstring Curl, Adductor
+  Rock Back, Dead Hang (which is the one case where moving off standing changes NOTHING -- a hang
+  is one straight line and "hanging" allows the height ruler too).
+
+Each is a label, not a number. **No constant moved in this change** and
+`the-posture-sweep-2026-10-06.test.ts` pins both halves: the twenty-two, and the ten
+sensor-paired lifts resolving exactly as they did before (Back Squat standing, Bench lying,
+Pendlay Row and Romanian Deadlift bent_over, Barbell Shoulder Press standing, Box Jump standing),
+plus the five deadlift variants that stay standing on purpose.
+
+### What the sweep does NOT explain
+
+**The 40% bench spike is not a posture problem and not a code change.** Both 10-06 benches ran on
+the SAME build in the SAME session minutes apart -- +0.9% then -43.2% -- so nothing in the repo
+can account for the difference, and on the second set all three rulers read ~40% low TOGETHER,
+which also rules out the blend picking a bad voter. That remains open and is the thing to look for
+in the 624 export.
+
+The tracker distribution, for the record: of 413 exercises, 377 resolve to the bar tracker, 20 to
+jump, 9 to med ball, 5 to horizontal load, 2 to kettlebell swing. Sprint and mechanics are in the
+SKILL library and are not among the 413.
+
+### The filmable 54, audited the same day
+
+Every one of them resolves a posture, and every bar-tracked one has a ROM bucket, a first move and
+film guidance -- `every-filmable-lift-is-profiled.test.ts` asserts it, because a lift added to the
+canonical list with no entry in those tables falls silently through to the defaults (posture
+"standing", `DEFAULT_MIN_ROM_FRACTION`) and nothing on the take says which numbers came from a
+table and which from a fallback.
+
+Breakdown: 46 bar-tracked (22 strength, 24 Olympic) and 8 jump-tracked. The eight jumps read none
+of the bar-path profile -- `jump-tracking.ts` does not ask for it -- and are listed explicitly in
+that test rather than detected, so a new jump lift has to be added deliberately.
+
+Postures across the 54: standing 46, bent_over 5 (the four rows and the Romanian deadlift), lying
+3 (the four bench variants and the hip thrust). That is the whole blast radius of the hinge and
+lying rules on anything that can currently be filmed.
+
+**One gap, recorded rather than filled: Hip Thrust has no ROM bucket.** Its rep gate is
+`DEFAULT_MIN_ROM_FRACTION`, which may well be right for a short-travel thrust, but no hip thrust
+has been filmed beside the sensor and Scott's instruction on the sweep was to leave the numbers
+alone. `NO_ROM_BUCKET_YET` in that test is the list, and it shrinks when one is measured.
