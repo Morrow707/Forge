@@ -73,6 +73,7 @@ import {
   type FormFaultThresholds,
   type ScaleEstimate,
   measurePostureFromFrames,
+  gripAcrossBodyFractionFromFrames,
 } from "@/lib/pose-tracking";
 import {
   buildTrackingDiagnostics,
@@ -1191,6 +1192,42 @@ export function AvBarTrackerDialog({
     ];
     const plateScale = plateRejectedReasons.length > 0 ? null : plateScaleRaw;
 
+    // WHAT THE OBJECT GATE THREW AWAY, AND WHETHER THE RULER THAT THREW IT AWAY WAS INTACT.
+    //
+    // Both plate gates above -- `size_vs_grip` and the shape verdict's `too_large_for_a_plate` --
+    // are measured against the BODY, which is the design (Rule #2: the object is judged by a
+    // signal the object tracker has no hand in). On the bench press of build 632 that gate threw
+    // away a plate detected on 18 frames at 0.88-1.00 confidence with an aspect ratio of 0.80,
+    // which is a disc, and the scale then fell to body rulers alone on the one posture where
+    // every body ruler is foreshortened. The take read 39.3% low.
+    //
+    // The gate may still have been right -- that box was 457px, and a 45cm plate at 457px implies
+    // 0.98e-3 m/unit, which would have read the set at 5.9cm, far worse. So this does NOT reopen
+    // the gate and nothing here changes a number. What it records is the two things nobody could
+    // read afterwards:
+    //
+    //   - `gripAcrossBodyFraction`: how much of the measured grip span lies ACROSS the body
+    //     rather than along it. A supine athlete filmed from the side has both wrists stacked
+    //     down the lens, so the yardstick EVERY object gate is measured against collapses -- and
+    //     a collapsed yardstick makes every plate look too large. Near 1 is an intact yardstick;
+    //     small means the gate was judging with a broken ruler, whatever its verdict.
+    //   - `plateScaleIfAdmitted`: the scale the refused plate would have produced. Without it a
+    //     refusal cannot be scored against the sensor at all, which is why three sessions of
+    //     `plateRejectedReasons` have been unactionable.
+    //
+    // Same rotation-invariance as assessSubjectFacing, fixed the same day, and for the same
+    // reason: a span measured along the image means something different once the body turns.
+    const objectGateDiagnostics = (() => {
+      const grip = gripAcrossBodyFractionFromFrames(calibrationInput);
+      return {
+        gripAcrossBodyFraction: grip,
+        plateScaleIfAdmitted:
+          plateScaleRaw?.scale != null ? Math.round(plateScaleRaw.scale * 1e8) / 1e8 : null,
+        rejectedReasons: plateRejectedReasons,
+        appliedCorrection: false as const,
+      };
+    })();
+
     // SHOULDER BREADTH, WHERE THE BODY'S LENGTH IS UNAVAILABLE.
     //
     // A bench press was refused outright, on the exercise's NAME: lying down means height cannot
@@ -1426,6 +1463,7 @@ export function AvBarTrackerDialog({
       // are assigned below for the three takes that made them necessary.
       shoulderRuler?: NonNullable<TrackingDiagnostics["calibration"]>["shoulderRuler"];
       axisForeshortening?: NonNullable<TrackingDiagnostics["calibration"]>["axisForeshortening"];
+      objectGate?: NonNullable<TrackingDiagnostics["calibration"]>["objectGate"];
       scaleWitnesses?: NonNullable<TrackingDiagnostics["calibration"]>["scaleWitnesses"];
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
       axisSource?: MovementAxisSource;
@@ -2131,6 +2169,7 @@ export function AvBarTrackerDialog({
         spanSpreadFraction: shoulderScale.spanSpreadFraction,
       };
       calibrationDiagnostics.axisForeshortening = axisForeshortening;
+      calibrationDiagnostics.objectGate = objectGateDiagnostics;
       // HOW MANY WITNESSES THE SCALE ACTUALLY HAD. `scaleCorroborated` already says yes or no;
       // this says how thin. One witness is the state every badly-wrong take of this session was
       // in, so it is recorded as a number rather than counted off the candidate list by hand.

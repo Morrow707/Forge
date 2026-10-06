@@ -443,6 +443,14 @@ export type TrackingDiagnostics = {
       appliedCorrection: boolean;
       rejectedBecause: string | null;
     };
+    /** WHAT THE OBJECT GATE THREW AWAY, AND WHETHER THE RULER THAT THREW IT AWAY WAS INTACT.
+     *  See objectGateDiagnostics in av-bar-tracker-dialog.tsx. Measured, gates nothing. */
+    objectGate?: {
+      gripAcrossBodyFraction: number | null;
+      plateScaleIfAdmitted: number | null;
+      rejectedReasons: string[];
+      appliedCorrection: boolean;
+    };
     /** How many rulers actually carried weight. One is the state every badly-wrong take of the
      *  2026-10-06 session was in, so it is a number here rather than something counted by hand. */
     scaleWitnesses?: { votingCount: number; sources: string[] };

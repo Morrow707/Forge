@@ -3512,3 +3512,69 @@ Next to look at, and it needs one more paired row before anything is fitted to i
 **Confirmed working on the phone from this export**, both build-632 fixes: the replayed-save
 omission fix holds (saves of 188KB, 208KB, 186KB where the 2026-10-05 session climbed to 7.8MB)
 and `setRangeOfMotion` reports which reps it used on every take.
+
+### CORRECTION, same day: the bench was NOT filmed from the head end
+
+Scott, reading the section above: "No I did not film the bench from head end, I have filmed every
+single bench press from this angle, every single one." He is right and the screenshot settles it --
+the phone sits beside the bench, square to the side, as it has for every bench press in this repo's
+history.
+
+**THE PIPELINE TOLD ME OTHERWISE, AND THAT IS THE BUG.** `cameraView.subjectFacing` read
+`facing_camera` and the export carried the head-on note with it, and I reasoned from that field
+instead of from the footage. One line in `assessSubjectFacing` did it:
+
+```
+const shoulderSpread = Math.abs(lShoulder.x - rShoulder.x);   // along the IMAGE
+const ratio = shoulderSpread / torsoLength;                   // torso length in ANY direction
+```
+
+On an upright athlete those two agree, because the torso runs up the image and the shoulders run
+across it. **On a SUPINE athlete the body's long axis is horizontal**, so every landmark error
+ALONG the body lands in x and is counted as shoulder breadth. The bench's shoulder span came back
+112.9 units against the same athlete's 81.2 on a standing press minutes earlier -- not a wider
+athlete, a ruler measuring down the body. 2026-09-22 saw the same thing twice (88.0 and 115.3 on
+two bench sets minutes apart) and the note written then blamed foreshortening; the measurement was
+the problem.
+
+The spread is now the component PERPENDICULAR to the torso's own axis, which is what shoulder
+breadth means in every posture. **No threshold moved** -- `FACING_CAMERA_SHOULDER_RATIO` and
+`SIDE_ON_SHOULDER_RATIO` are what they were -- and on an upright athlete the perpendicular
+component IS the x-spread to floating point, so every standing lift is bit-identical (the whole
+suite, the OVR fixtures and the 20-capture corpus are green and unchanged).
+`a-supine-athlete-is-not-head-on.test.ts` pins it and was mutation-tested: reverting the one line
+turns all four cases red.
+
+**Third instance in three days of one error class.** The RDL's height ruler (10-05) measured a
+stature across a hinged torso; the shoulder press's posture label (10-06) denied a ruler on an
+upright lift; this measures an image axis against a body that has turned. The first two were fixed
+by labelling the posture. This one is fixed by making the measurement rotation-invariant, which is
+the better shape where it is available: it needs no label to be right.
+
+**What this does NOT fix is the bench's -39.3%, and the chase is worth recording so it is not
+repeated.** With the angle correctly read as side-on, the arithmetic above still stands: no
+candidate that take produced can reach the 5.942e-3 the sensor requires. Two things were tried and
+rejected, each for a measured reason:
+
+- **Measuring the shoulder RULER across the body too**, which is the identical bug. It is correct
+  and it is unshippable today: on a side-on supine athlete the across-body span is near zero, so
+  the ruler returns nothing, the bench falls to body_3d alone and reads **-43.9%** -- worse. That
+  is a refusal arriving before its replacement, which this repo has shipped once and will not
+  again. `shoulder-scale.test.ts` had already said a geometric signal would be worth keeping if
+  anyone found one; this is that signal, and it is recorded here rather than acted on.
+- **Admitting the refused plate.** The bench's object system DID find its implement -- 18 frames at
+  0.88-1.00 confidence, aspect ratio 0.80, which is a disc -- and both gates that threw it away
+  (`size_vs_grip`, `too_large_for_a_plate`) measure it against the GRIP, the one yardstick a supine
+  side-on athlete cannot provide. That is Rule #4's "a rejected object read is a bug report"
+  exactly. But the box was 457px, and a 45cm plate at 457px implies 0.98e-3 m/unit, which reads the
+  set at 5.9cm. The gate was right on this take even though its yardstick is suspect -- the row's
+  shoulder ruler, one section up, is the same shape.
+
+So two measurements are added instead of a guess, both `appliedCorrection: false`:
+`calibration.objectGate.gripAcrossBodyFraction` (is the yardstick every object gate is judged by
+intact, or collapsed down the lens?) and `plateScaleIfAdmitted` (what the refused plate would have
+produced -- without which three sessions of `plateRejectedReasons` have been unscoreable against
+the sensor). Plus `calibration.axisForeshortening`, whose premise is now open rather than answered:
+on a side-on bench the bar's travel SHOULD be fully in the image plane, so a ratio near 1 says the
+39% is a scale error after all and a ratio near 1.65 says the camera could not see the movement.
+**Read those three on the next bench before anything acts on them.**

@@ -1289,6 +1289,47 @@ export function gripWidthScaleFromFrames(
   };
 }
 
+/** How much of the measured grip span lies ACROSS the body rather than along it, median over the
+ *  frames that have both wrists and both hips; null when no frame does.
+ *
+ *  The grip span is the yardstick EVERY object gate is measured against (see the arbiter and
+ *  plateReadIsPlausibleAgainstGrip), and on a supine athlete filmed from the side both wrists are
+ *  stacked down the lens, so the span that remains runs ALONG the body and is not a grip at all.
+ *  A gate judging with that yardstick will call any plate too large -- which is what the bench of
+ *  build 632 did, to a plate detected on 18 frames at 0.88-1.00 confidence.
+ *
+ *  Near 1 is an intact yardstick. It MEASURES AND GATES NOTHING; it is recorded so a refusal can
+ *  be scored against the sensor, which three sessions of plateRejectedReasons could not be. */
+export function gripAcrossBodyFractionFromFrames(
+  frames: { worldLandmarks: Landmark[] }[],
+): number | null {
+  const vals: number[] = [];
+  for (const f of frames) {
+    const lm = f.worldLandmarks;
+    const lw = lm[POSE_LANDMARKS.LEFT_WRIST];
+    const rw = lm[POSE_LANDMARKS.RIGHT_WRIST];
+    const ls = lm[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rs = lm[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const lh = lm[POSE_LANDMARKS.LEFT_HIP];
+    const rh = lm[POSE_LANDMARKS.RIGHT_HIP];
+    if (!visible(lw) || !visible(rw) || !visible(ls) || !visible(rs) || !visible(lh) || !visible(rh)) {
+      continue;
+    }
+    const dx = lw.x - rw.x;
+    const dy = lw.y - rw.y;
+    const full = Math.hypot(dx, dy);
+    if (!(full > 0)) continue;
+    const axisX = (ls.x + rs.x) / 2 - (lh.x + rh.x) / 2;
+    const axisY = (ls.y + rs.y) / 2 - (lh.y + rh.y) / 2;
+    const axisLen = Math.hypot(axisX, axisY);
+    if (!(axisLen > 0)) continue;
+    vals.push(Math.abs((dx * -axisY + dy * axisX) / axisLen) / full);
+  }
+  if (vals.length === 0) return null;
+  vals.sort((a, b) => a - b);
+  return Math.round(vals[Math.floor(vals.length / 2)] * 1000) / 1000;
+}
+
 export function shoulderWidthScaleFromFrames(
   frames: { worldLandmarks: Landmark[] }[],
   heightIn: number | null | undefined,
@@ -2537,13 +2578,43 @@ export function assessSubjectFacing(worldLandmarks: Landmark[]): SubjectFacing {
   if (!visible(lShoulder) || !visible(rShoulder) || !visible(lHip) || !visible(rHip)) {
     return "unknown";
   }
-  const shoulderSpread = Math.abs(lShoulder.x - rShoulder.x);
   const shoulderMidX = (lShoulder.x + rShoulder.x) / 2;
   const shoulderMidY = (lShoulder.y + rShoulder.y) / 2;
   const hipMidX = (lHip.x + rHip.x) / 2;
   const hipMidY = (lHip.y + rHip.y) / 2;
   const torsoLength = Math.hypot(shoulderMidX - hipMidX, shoulderMidY - hipMidY);
   if (!(torsoLength > 0)) return "unknown";
+
+  // THE SPREAD IS MEASURED ACROSS THE BODY, NOT ACROSS THE IMAGE.
+  //
+  // Fitted 2026-10-06 -- fixed, rather, because there is no constant in it. This was
+  // `Math.abs(lShoulder.x - rShoulder.x)`, the spread along the IMAGE's horizontal, held against
+  // a torso length that is a length in any direction. On an upright athlete those are the same
+  // thing, because the torso runs up the image and the shoulders run across it. **On a SUPINE
+  // athlete the body's long axis is horizontal**, so every landmark error ALONG the body shows up
+  // in x and is counted as shoulder breadth.
+  //
+  // Scott films every bench press from the side, and has done since the first one. The bench of
+  // build 632 came back `subjectFacing: "facing_camera"` with the note about being filmed head-on
+  // attached to it, which is simply not what happened -- and that wrong sentence was read as
+  // evidence and cost an afternoon. The ratio it was reached by is the whole bug: a side-on
+  // supine athlete must read `side_on`, and with the raw x-spread it cannot, whatever the
+  // thresholds are set to.
+  //
+  // So the spread is the component PERPENDICULAR to the torso's own axis, which is what shoulder
+  // breadth means in every posture and is unchanged on an upright athlete (there the torso axis
+  // IS the image vertical, so the perpendicular component IS the x-spread, to floating point).
+  // No threshold moves; FACING_CAMERA_SHOULDER_RATIO and SIDE_ON_SHOULDER_RATIO are what they
+  // were. This is the third instance in three days of the same error class -- the Romanian
+  // deadlift's height ruler (10-05) and the shoulder press's posture label (10-06) were both a
+  // measurement that assumed an upright body -- and it is the first one fixed by making the
+  // measurement rotation-invariant rather than by labelling the posture.
+  const torsoAxisX = (shoulderMidX - hipMidX) / torsoLength;
+  const torsoAxisY = (shoulderMidY - hipMidY) / torsoLength;
+  const dx = lShoulder.x - rShoulder.x;
+  const dy = lShoulder.y - rShoulder.y;
+  // The perpendicular of (ax, ay) is (-ay, ax); the dot product is the across-body component.
+  const shoulderSpread = Math.abs(dx * -torsoAxisY + dy * torsoAxisX);
   const ratio = shoulderSpread / torsoLength;
   if (ratio >= FACING_CAMERA_SHOULDER_RATIO) return "facing_camera";
   if (ratio <= SIDE_ON_SHOULDER_RATIO) return "side_on";

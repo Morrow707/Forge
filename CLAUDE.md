@@ -1045,16 +1045,41 @@ halves before splitting anything else:
   **THE BENCH'S -39.3% IS NOT A SCALE ERROR, AND THE EXPORT PROVES IT.** Reaching the sensor needs
   5.942e-3 m/unit; the highest candidate the take produced was 3.881e-3 and the best 3D bone
   3.497e-3, so no blend of what it measured can get there -- same shape as the box jump's 28%.
-  Camera pitch is ruled out (7.5 degrees, cos 7.5 = 0.991) and so is the shoulder ruler (its 112.9
-  span looks broken beside the press's 81.2 until you read `subjectFacing: "facing_camera"` -- the
-  bench was filmed from the HEAD END, where the shoulders really are broadside). That is also the
-  one geometry where part of the bar's travel points down the lens, and every distance this
-  pipeline reports is an in-image projection. `client/src/lib/axis-foreshortening.ts` measures the
-  missing axis off the 3D pose that is already running (`body3DJoints` are camera-space metres) and
-  **CORRECTS NOTHING** -- `calibration.axisForeshortening`, `appliedCorrection: false`, the same
-  discipline as `measuredPosture`: one paired take may not move every reported distance in the app.
-  **The number to look for in the next bench export is 1.65.** If it lands there it earns the
-  correction in the build after; if it reads 1.0 the error is elsewhere.
+  Camera pitch is ruled out (7.5 degrees, cos 7.5 = 0.991).
+  **AND `subjectFacing` LIED ABOUT THE ANGLE -- CORRECTED THE SAME DAY.** This entry first said the
+  bench was filmed from the head end, on the strength of `cameraView.subjectFacing: "facing_camera"`.
+  Scott: "No I did not film the bench from head end, I have filmed every single bench press from
+  this angle, every single one." He is right; the pipeline misread its own geometry.
+  `assessSubjectFacing` divided shoulder spread measured along the IMAGE's horizontal by a torso
+  length measured in any direction -- the same on an upright athlete, meaningless on a SUPINE one,
+  whose body's long axis is horizontal so every landmark error ALONG the body is counted as
+  shoulder breadth. That is why the bench's span read 112.9 against the same athlete's 81.2
+  standing, and why 2026-09-22 saw 88.0 and 115.3 on two bench sets minutes apart. The spread is
+  now the component PERPENDICULAR to the torso's own axis; **no threshold moved** and an upright
+  athlete is bit-identical, so every standing lift is unchanged.
+  `a-supine-athlete-is-not-head-on.test.ts`, mutation-tested. **Third instance in three days of one
+  error class** (the RDL's height ruler, the shoulder press's posture label) and the first fixed by
+  making the measurement rotation-invariant rather than by labelling the posture -- the better
+  shape where it is available, since it needs no label to be right.
+  **Do not reason from that field's old verdicts: a supine athlete read as head-on on every bench
+  before this fix.**
+  **The -39.3% is still OPEN, and two fixes were tried and rejected for measured reasons.**
+  Measuring the shoulder RULER across the body is the identical bug and is correct, but the
+  across-body span of a side-on supine athlete is near zero, so the ruler vanishes, the bench falls
+  to body_3d alone and reads **-43.9%** -- a refusal before its replacement, which Rule #1 forbids
+  and this repo has shipped once already. And the bench's object system DID find its plate (18
+  frames, 0.88-1.00 confidence, aspect 0.80, a disc) and both gates that threw it away measure it
+  against the GRIP, the one yardstick a supine side-on athlete cannot provide -- Rule #4's "a
+  rejected object read is a bug report" exactly -- but that box was 457px, and a 45cm plate at
+  457px reads the set at 5.9cm, so the gate was right on this take with a suspect yardstick.
+  So three measurements ship instead of a guess, all `appliedCorrection: false`:
+  `calibration.axisForeshortening` (off the 3D pose already running; on a SIDE-ON bench the travel
+  should be fully in the image plane, so ~1.0 says the 39% is a scale error after all and ~1.65
+  says the camera could not see the movement), and `calibration.objectGate` --
+  `gripAcrossBodyFraction` (is the yardstick every object gate is judged by intact, or collapsed
+  down the lens?) and `plateScaleIfAdmitted` (what the refused plate would have produced, without
+  which three sessions of `plateRejectedReasons` have been unscoreable against the sensor).
+  **Read all three on the next bench before anything acts on them.**
   **AND THE ROW'S SHOULDER RULER WAS REFUSED FOR THE WRONG REASON AND WAS RIGHT BY ACCIDENT.** Span
   68.5 units against an `impliedBodyLengthUnits` under 149 on an athlete folded at the hip, so the
   stature ratio cleared 2 -- the Romanian deadlift bug of 2026-10-05 in its second home. The

@@ -9913,6 +9913,16 @@ export const trackingDiagnosticsSchema = z.object({
         })
         .optional()
         .nullable(),
+      // Declared the day it is added -- zod strips what it does not declare, silently.
+      objectGate: z
+        .object({
+          gripAcrossBodyFraction: z.number().nullable(),
+          plateScaleIfAdmitted: z.number().nullable(),
+          rejectedReasons: z.array(z.string().max(60)).max(12),
+          appliedCorrection: z.boolean(),
+        })
+        .optional()
+        .nullable(),
       scaleWitnesses: z
         .object({ votingCount: z.number(), sources: z.array(z.string().max(60)).max(12) })
         .optional()

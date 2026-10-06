@@ -10,23 +10,27 @@
  *
  * Camera pitch is ruled out and the ruling-out is worth keeping: cameraPitchDeg was 7.5 degrees,
  * and cos 7.5 is 0.991, so the phone's tilt accounts for one per cent of a thirty-nine per cent
- * error. What the take DOES say is `cameraView.subjectFacing: "facing_camera"` -- it was filmed
- * from the head end of the bench, the one geometry where part of the bar's travel points down the
- * lens. Everything this pipeline reports about distance is an in-image projection, and on a take
- * like that the projection is shorter than the movement by a factor nothing recorded.
+ * error.
  *
- * The 3D pose can say what that factor is, and it is already running on every take (Rule #2),
- * so this appoints nothing and switches nothing on: `body3DJoints` are camera-space metres, so
- * the wrist's displacement between the extremes of the take has a full 3D magnitude AND an
- * in-image component, and the ratio of the two is the foreshortening. On a square take it is
- * about 1 and says so.
+ * WHAT IT IS NOT: THE TAKE WAS FILMED FROM THE SIDE, like every bench press Scott has ever
+ * filmed. This file first said it was filmed from the head end, on the strength of
+ * `cameraView.subjectFacing: "facing_camera"` -- which was the pipeline misreading its own
+ * geometry, see assessSubjectFacing, fixed the same day. Do not reason from that field's old
+ * verdicts; a supine athlete read as head-on on every bench before this fix.
  *
- * IT MEASURES AND CORRECTS NOTHING. Same discipline as `measuredPosture` (build 623): one
- * sensor-paired take is not evidence enough to let a new number move every reported distance in
- * the app, and a correction that fired on a take it had misread would move the scale blend, the
- * rep gate and the headline velocity at once. It is recorded so the next pairing can say whether
- * the ratio it measures is the ratio the sensor requires -- on this bench, 1.65 is the number to
- * look for. If it lands there, it earns the correction in the build after.
+ * So the question this measures is open rather than answered: on a side-on bench the bar's
+ * travel SHOULD be fully in the image plane, and if it is, this reads about 1 and the 39% is
+ * somewhere else entirely. The 3D pose is already running on every take (Rule #2), and
+ * `body3DJoints` carry camera-space metres, so the wrist's displacement between the extremes of
+ * the take has a full 3D magnitude AND an in-image component; the ratio of the two settles it
+ * either way. That is the point of recording it: it is the one number that distinguishes "the
+ * camera could not see the movement" from "the movement was seen and mis-scaled", and nothing
+ * in the export could tell those apart.
+ *
+ * IT CORRECTS NOTHING. Same discipline as `measuredPosture` (build 623): one sensor-paired take
+ * is not evidence enough to let a new number move every reported distance in the app, and a
+ * correction that fired on a take it had misread would move the scale blend, the rep gate and
+ * the headline velocity at once. Read it on the next bench before anything acts on it.
  */
 import type { PoseFrame as NativePoseFrame } from "./native-av-preview";
 
