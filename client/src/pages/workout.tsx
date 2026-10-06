@@ -88,6 +88,8 @@ import {
   takePendingLog,
   clearPendingLog,
 } from "@/lib/offline-queue";
+import { Network } from "@capacitor/network";
+import { App as CapacitorApp } from "@capacitor/app";
 import { dropHeavyFields } from "@/lib/log-payload-trim";
 
 /** Fired by the day's reattach listener once a queued clip has landed on its set, so the
@@ -1301,6 +1303,23 @@ export function WorkoutPage({
   // data as safely stored at the moment it demonstrably was not, and the next autosave would
   // then omit it against a server that never had it.
   const capturePersistedRef = useRef<Set<string>>(new Set());
+  /* WHICH CAPTURES A GIVEN PAYLOAD ACTUALLY CARRIED, keyed by the payload object itself.
+   *
+   * capturePersistedRef decides what future saves may OMIT, so a set entering it without
+   * having reached the server is silent, permanent loss of that set's frames. It used to be
+   * filled from itemsRef.current -- the CURRENT state -- inside `if (synced)`, which is
+   * necessary but not sufficient: a capture that finished while a save was in flight was
+   * marked server-held by a save whose payload was built before it existed and therefore never
+   * contained it. Every later save then omitted it, and nothing ever sent it. With a ten-second
+   * save and an analysis finishing in the background, that race is the normal case, not a
+   * corner.
+   *
+   * The payload is the only honest record of what was sent, and it is already handed to
+   * onSuccess as the mutation's variables, so it needs no new plumbing. A WeakMap because the
+   * payload is short-lived and must not be kept alive by this bookkeeping. A payload NOT in the
+   * map -- a replay off the offline queue -- marks nothing, which costs one re-send and can
+   * never lose anything. */
+  const capturesSentRef = useRef<WeakMap<object, Set<string>>>(new WeakMap());
   const captureKey = (itemKey: string, setNumber: number) => `${itemKey}:${setNumber}`;
 
   function setHasCapture(s: SetRow) {
@@ -1317,7 +1336,8 @@ export function WorkoutPage({
     completed: boolean,
     omitPersistedCapture = false,
   ) {
-    return {
+    const sentCaptureKeys = new Set<string>();
+    const payload = {
       assignmentId: Number(assignmentId),
       programDayId: Number(programDayId),
       date,
@@ -1340,6 +1360,8 @@ export function WorkoutPage({
           // trying to avoid re-uploading.
           const omitCapture =
             omitPersistedCapture && capturePersistedRef.current.has(captureKey(it.key, s.setNumber));
+          // Recorded only when this payload really carries the frames -- see capturesSentRef.
+          if (!omitCapture && setHasCapture(s)) sentCaptureKeys.add(captureKey(it.key, s.setNumber));
           const capture = omitCapture
             ? {}
             : {
@@ -1402,6 +1424,8 @@ export function WorkoutPage({
         }),
       })),
     };
+    capturesSentRef.current.set(payload, sentCaptureKeys);
+    return payload;
   }
 
   // How many autosaves in a row have failed -- reset to 0 on any success.
@@ -1641,11 +1665,14 @@ export function WorkoutPage({
       // Anything still queued for this day is now behind what the server holds, so it is not
       // a rescue any more -- replaying it would just be refused as stale. Drop it.
       if (synced) clearPendingLog(dayKey);
+      // ONLY WHAT THIS PAYLOAD ACTUALLY CARRIED. Reading itemsRef.current here instead marked a
+      // capture that finished WHILE this save was in flight -- one the payload was built before
+      // and never contained -- as server-held, after which every later save omitted it and
+      // nothing ever sent it. See capturesSentRef. A payload with no record (a replay off the
+      // offline queue) marks nothing, which costs a re-send and cannot lose anything.
       if (synced) {
-        for (const it of itemsRef.current) {
-          for (const st of it.sets) {
-            if (setHasCapture(st)) capturePersistedRef.current.add(captureKey(it.key, st.setNumber));
-          }
+        for (const key of capturesSentRef.current.get(payload) ?? []) {
+          capturePersistedRef.current.add(key);
         }
       }
       // The offline banner needs to reflect reality regardless of which
@@ -1956,10 +1983,30 @@ export function WorkoutPage({
       });
     }
     resolveOwnPendingLog();
+    /* THE SAME TRIGGERS THE GLOBAL FLUSH USES, because this screen locks that flush out.
+     *
+     * Claiming the day stops flushPendingLogs touching it (it logs "the open workout screen has
+     * claimed this day" and moves on), so while this screen is open these listeners are the
+     * ONLY thing that can rescue a queued save. They were just "online", and startOfflineLogSync
+     * writes down at length why that one is not enough: a phone whose request died with a
+     * TypeError never went offline, so no online event is coming, and a phone that reconnected
+     * while backgrounded never crosses the boundary with a listener running. The global flush
+     * was given networkStatusChange and resume for exactly that reason and this was not, so a
+     * save that failed with the screen still open sat queued until the screen was closed.
+     *
+     * That is what happened on 2026-10-06: a 1510KB save failed with "TypeError: Load failed",
+     * queued, and every flush after it logged SKIPPED while the set it carried never reached
+     * the server. */
     window.addEventListener("online", resolveOwnPendingLog);
+    const netHandle = Network.addListener("networkStatusChange", (status) => {
+      if (status.connectionType !== "none") resolveOwnPendingLog();
+    });
+    const resumeHandle = CapacitorApp.addListener("resume", () => resolveOwnPendingLog());
     return () => {
       releaseDayKeyForFlush(dayKey);
       window.removeEventListener("online", resolveOwnPendingLog);
+      void netHandle.then((h) => h.remove());
+      void resumeHandle.then((h) => h.remove());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayKey]);

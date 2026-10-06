@@ -896,7 +896,38 @@ can install. Delete entries as a `beta` ships them.
   ruler low (-13.0%, -36.3%, -45.2%) and NO mechanism is proposed, because one paired take
   against 31.9/56.0/51.3 from an earlier session is not enough to fit to. Next to film.
   Calibration work: uploaded on commit.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 623.
+- Build **624** was cut 2026-10-06 from Scott's 623 console, and it is a SAVE-PATH build, not a
+  calibration one. Scott: "it rejected my video, which is a direct fucking violation of rule 1."
+  The videos were in fact fine -- every set that reached the server carries `hasVideo: true`, so
+  the video retry queue did its job -- but a SET did not reach the server, and he found that out
+  by reading a debug console, which is the part that is indefensible. Two real bugs behind it,
+  and the 620 logging did not cause either: it made both visible, which is the only reason they
+  were found.
+  **A CAPTURE COULD BE MARKED SERVER-HELD BY A SAVE THAT NEVER CARRIED IT.** `capturePersistedRef`
+  decides what later saves may OMIT (620), and it was filled inside `if (synced)` from
+  `itemsRef.current` -- the state when the RESPONSE lands, not what the REQUEST held. So: a
+  payload is built while set 3 has no capture; set 3's analysis finishes and lands in state; the
+  save succeeds and the loop marks set 3 persisted; every later save omits it and its frames are
+  never sent. Silent and permanent. This file recorded `if (synced)` as the safety and it is
+  necessary, not sufficient. Fixed by recording the keys WHERE OMISSION IS DECIDED, inside
+  `buildLogPayload`, into a `WeakMap` keyed by the payload object -- which `onSuccess` already
+  receives as the mutation's variables, so it needed no new plumbing. A payload with no record
+  (a replay off the queue) marks nothing, which costs a re-send and cannot lose anything.
+  **AND THE SCREEN THAT LOCKS OUT THE GLOBAL FLUSH COULD NOT RESCUE ITS OWN DAY.** The workout
+  screen claims its `dayKey`, so `flushPendingLogs` skips it ("the open workout screen has
+  claimed this day"). While that screen is open its own listeners are therefore the ONLY thing
+  that can replay a queued save -- and they were `online` alone, the one trigger
+  `startOfflineLogSync` documents at length as insufficient. A request that dies with
+  `TypeError: Load failed` never went offline, so no `online` event follows. On 2026-10-06 a
+  1510KB save failed exactly that way, queued, and every flush after it logged SKIPPED. The
+  resolver now listens on the same three signals the global flush does (`online`,
+  `networkStatusChange`, `resume`) and removes all three on unmount.
+  `a-capture-is-never-marked-sent-unless-it-was.test.ts` pins both; mutation-testing each back to
+  the old shape turns four of its seven cases red.
+  **The lesson worth keeping: a guard stated as "X happens only inside `if (synced)`" is about
+  TIMING, not CONTENT.** Both bugs were a correct-looking guard that answered the wrong
+  question -- was the save successful, rather than did this save contain this thing.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 624.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
