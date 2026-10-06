@@ -18,6 +18,7 @@ import {
 } from "@shared/athlete-body-model";
 import { measureLimbsInMetres, measureLimbSpansInUnits } from "@/lib/measure-limbs";
 import { DEPTH_RULER_BIAS, DEPTH_RULER_UNCERTAINTY, body3DScaleFromFrames, depthRulerScale, fovDegFromActiveFormat } from "@/lib/body-3d-ruler";
+import { measureAxisForeshortening } from "@/lib/axis-foreshortening";
 import { body3DCandidate } from "@/lib/body-scale-fallback";
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
@@ -1266,6 +1267,9 @@ export function AvBarTrackerDialog({
     // THE 3D SKELETON, IN METRES, ON THIS TAKE -- see body-3d-ruler.ts. A peer under overwatch
     // like every other candidate below; it decides nothing on its own.
     const body3DScale = body3DScaleFromFrames(rawFrames, heightIn, limbSpansUnits);
+    // HOW MUCH OF THE MOVEMENT POINTED DOWN THE LENS -- see axis-foreshortening.ts. Measured off
+    // the 3D pose that is already running, recorded, and applied to NOTHING.
+    const axisForeshortening = measureAxisForeshortening(rawFrames);
     const body3DRulerDiagnostics = {
       limbs: body3DScale.limbs,
       heightSource: body3DScale.heightSource,
@@ -1421,6 +1425,7 @@ export function AvBarTrackerDialog({
       // The shoulder ruler refused or not, and how many rulers actually voted -- see where these
       // are assigned below for the three takes that made them necessary.
       shoulderRuler?: NonNullable<TrackingDiagnostics["calibration"]>["shoulderRuler"];
+      axisForeshortening?: NonNullable<TrackingDiagnostics["calibration"]>["axisForeshortening"];
       scaleWitnesses?: NonNullable<TrackingDiagnostics["calibration"]>["scaleWitnesses"];
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
       axisSource?: MovementAxisSource;
@@ -2125,6 +2130,7 @@ export function AvBarTrackerDialog({
         rejectedBecause: shoulderScale.rejectedBecause,
         spanSpreadFraction: shoulderScale.spanSpreadFraction,
       };
+      calibrationDiagnostics.axisForeshortening = axisForeshortening;
       // HOW MANY WITNESSES THE SCALE ACTUALLY HAD. `scaleCorroborated` already says yes or no;
       // this says how thin. One witness is the state every badly-wrong take of this session was
       // in, so it is recorded as a number rather than counted off the candidate list by hand.

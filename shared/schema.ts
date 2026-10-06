@@ -9899,6 +9899,20 @@ export const trackingDiagnosticsSchema = z.object({
         })
         .optional()
         .nullable(),
+      // HOW MUCH OF THE MOVEMENT POINTED DOWN THE LENS. Declared the day it is added, same
+      // reason as shoulderRuler above: zod strips what it does not declare, silently.
+      axisForeshortening: z
+        .object({
+          ratio: z.number().nullable(),
+          displacement3DM: z.number().nullable(),
+          displacementInImageM: z.number().nullable(),
+          displacementAlongLensM: z.number().nullable(),
+          framesUsed: z.number(),
+          appliedCorrection: z.boolean(),
+          rejectedBecause: z.string().max(60).nullable(),
+        })
+        .optional()
+        .nullable(),
       scaleWitnesses: z
         .object({ votingCount: z.number(), sources: z.array(z.string().max(60)).max(12) })
         .optional()

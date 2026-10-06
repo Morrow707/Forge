@@ -3440,3 +3440,75 @@ confidence AND overwatch agreed are self-labelled training data of exactly the q
 -- corroborated by a second system rather than by an eyeball. That is a real pipeline and a real
 build; it needs the stored videos, which is a server-side piece, and it should not be started in
 the same hour as a calibration session.
+
+## Three lifts beside OVR, build 632, 2026-10-06
+
+Forge set 2, OVR set 5; bench is set 5 for both. The new diagnostics from build 632 answered the
+open question on their first take, which is the point of adding them.
+
+| lift | Forge mean | OVR | err | Forge ROM | OVR | err | reps | witnesses |
+|---|---|---|---|---|---|---|---|---|
+| Barbell Shoulder Press | 1.10 | 1.12 | **-1.8%** | 60.3 | 61.5 | **-1.9%** | 9/10 | 3 |
+| Pendlay Row | 1.13 | 1.01 | +11.9% | 46.9 | 55.4 | -15.3% | 10/10 | **1** |
+| Bench Press | 0.56 | 0.72 | -22.2% | 21.6 | 35.6 | **-39.3%** | 10/10 | 2 |
+
+**THE SHOULDER PRESS IS THE BEST STANDING-LIFT RESULT THIS PIPELINE HAS PRODUCED**, and it is
+the control for everything below: three witnesses, the height ruler voting at 66.7% (the posture
+fix of build 623 is what lets it), `shoulderRuler.spanSpreadFraction` 0.063, and both headline
+numbers inside 2%. Nothing in this session's changes touches it, deliberately.
+
+**THE BENCH'S -39.3% IS NOT A SCALE ERROR, AND THE EXPORT PROVES IT RATHER THAN SUGGESTING IT.**
+Getting 21.6cm to the sensor's 35.6 needs 5.942e-3 m/unit. The highest candidate the take
+produced was the shoulder ruler's 3.881e-3 and the best 3D bone was 3.497e-3, so no blend of what
+that take measured can reach the sensor's number. Same shape as the box jump's 28% (build 619).
+Two things are ruled out and the ruling-out is the useful part:
+
+- **Camera pitch.** `cameraPitchDeg` 7.5, and cos 7.5 is 0.991 -- one per cent of a thirty-nine
+  per cent error. The gravity work of build 632 was the roll half; pitch is not the other half.
+- **The shoulder ruler being wrong.** `medianSpanUnits` 112.9 against the press's 81.2 reads like
+  a broken ruler until you read `cameraView.subjectFacing: "facing_camera"` -- this bench was
+  filmed from the HEAD END, which is the one geometry where the shoulders are genuinely broadside
+  and the span is genuinely wide. The ruler was working.
+
+It is also the geometry where part of the bar's travel points down the lens, and everything this
+pipeline reports about distance is an in-image projection. `client/src/lib/axis-foreshortening.ts`
+is the measurement: the 3D pose is already running on every take (Rule #2), `body3DJoints` carry
+camera-space metres, so the wrist's displacement between the extremes of the take has both a full
+3D magnitude and an in-image component, and the ratio is the foreshortening.
+**IT CORRECTS NOTHING** -- same discipline as `measuredPosture` (build 623), because one paired
+take cannot be allowed to move every reported distance in the app, and a correction that fired on
+a take it had misread would move the scale blend, the rep gate and the headline velocity at once.
+Recorded as `calibration.axisForeshortening` with `appliedCorrection: false`.
+**On this bench the number to look for next take is 1.65.** If it lands there, it earns the
+correction in the build after; if it reads 1.0, the bench's error is somewhere else and no
+correction should ever have been applied.
+
+**THE ROW'S SHOULDER RULER WAS REFUSED FOR THE WRONG REASON AND HAPPENED TO BE RIGHT.** Span 68.5
+units, implying a stature of 297.6, against an `impliedBodyLengthUnits` under 149 on an athlete
+FOLDED AT THE HIP -- so the ratio cleared 2 and `implausible_span` fired. That is the Romanian
+deadlift bug of 2026-10-05 in its second home: a nose-to-ankle span shortens legitimately on a
+hinge. The refusal was nonetheless the right answer, because that take's span disagreed with
+ITSELF by 46.4% and reinstating the ruler takes the row from -15.3% to **+17.5%**. A guard that is
+right by accident cannot be tuned, and the next hinge it refuses may be a good ruler. So:
+
+- The body-length yardstick is consulted only where a body length is a stature (`standing`,
+  `seated`, `supported`, or an unknown posture).
+- `MAX_SHOULDER_SPAN_SPREAD` (0.4) refuses on the span's own self-disagreement, which carries no
+  posture assumption at all. Fitted as the one value that refuses the row (0.464) and keeps both
+  accepted takes (press 0.063, bench 0.21) -- the three cases are the fit, and
+  `the-shoulder-ruler-states-its-own-noise.test.ts` breaks if it moves.
+- **The ruler now states its own measured noise**, floored at `BIACROMIAL_TOLERANCE_FRACTION`:
+  `uncertaintyFraction = max(0.2, spanSpreadFraction)`. The floor stays because a take can agree
+  with itself and still be biased, so the spread can only ever LOOSEN the ruler. It moves nothing
+  measurable today (the press is under the floor, the bench changes by 0.1cm, the row is refused)
+  and that is the point -- every future take's weight becomes attributable to a number the export
+  carries. The whole unit suite, the OVR fixtures and the 20-capture replay corpus are unchanged.
+
+**The row's +11.9% mean against a -15.3% ROM is the remaining open number**, and the two cannot
+both be scale: a scale error moves distance and velocity the same way. Its `setRangeOfMotion`
+dropped reps 3 and 8 and used eight of ten, so the mean is over a shorter window than the ROM.
+Next to look at, and it needs one more paired row before anything is fitted to it.
+
+**Confirmed working on the phone from this export**, both build-632 fixes: the replayed-save
+omission fix holds (saves of 188KB, 208KB, 186KB where the 2026-10-05 session climbed to 7.8MB)
+and `setRangeOfMotion` reports which reps it used on every take.

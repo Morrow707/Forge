@@ -819,6 +819,14 @@ export const HEIGHT_RULER_UNCERTAINTY = 0.1;
 // in the other axis. Refusing here is right; there is nothing to measure.
 const MIN_SHOULDER_BROADSIDE_RATIO = 2;
 
+/** A shoulder span whose median absolute deviation exceeds this fraction of itself is not a
+ *  measurement of anybody's shoulders. 0.4, fitted 2026-10-06 as the one value that refuses the
+ *  Pendlay Row of build 632 (0.464, and reinstating it costs the row 17.5%) while keeping the
+ *  standing press (0.063) and the bench (0.21) -- both of which were accepted before and both of
+ *  which this must not change. It replaces a body-length ratio that a hinge defeats; see
+ *  shoulderWidthScaleFromFrames. */
+const MAX_SHOULDER_SPAN_SPREAD = 0.4;
+
 /**
  * Real-world scale from the athlete's shoulder breadth, for a body whose length the camera
  * cannot see. Metres per pixel-space unit, with the honest uncertainty of the estimate.
@@ -1328,7 +1336,7 @@ export function shoulderWidthScaleFromFrames(
   // with it -- in that order, not this one. Never ship the refusal before the replacement.
   //
   // (The posture argument itself stands and is written up in docs/camera-tracking-notes.md.)
-  void posture;
+  // posture IS read below, for the body-length yardstick only -- never to refuse a take.
 
   const widths: number[] = [];
   let framesRejectedForAngle = 0;
@@ -1380,8 +1388,35 @@ export function shoulderWidthScaleFromFrames(
   // body facing the camera -- one of them is behind the other, or the tracker has them somewhere
   // it should not. Refusing there costs a take its metres and keeps every rep count, tempo and
   // ratio, which is a far better trade than a number wrong by a factor of six.
+  //
+  // AND THE YARDSTICK ONLY MEANS SOMETHING ON AN UPRIGHT ATHLETE. Fitted 2026-10-06 from the
+  // Pendlay Row filmed beside the OVR on build 632: the shoulder span read 68.5 units, implying
+  // a stature of 297.6, against an impliedBodyLengthUnits of under 149 on an athlete FOLDED AT
+  // THE HIP -- so the ratio cleared 2 and the ruler was refused. The refusal happened to be the
+  // right answer (that take's span disagreed with ITSELF by 46.4%, and reinstating the ruler
+  // takes the row from -15.3% to +17.5%) and it was reached for entirely the wrong reason: a
+  // nose-to-ankle span shortens legitimately on a hinge, which is the Romanian deadlift bug of
+  // 2026-10-05 in its second home. A guard that is right by accident cannot be tuned, and the
+  // next hinge it refuses may be a good ruler.
+  //
+  // So the guard asks the body length only where a body length is a stature, and the span's own
+  // self-disagreement -- spanSpreadFraction, measured every take, no posture assumption in it --
+  // is what refuses a non-upright take. A ruler that moves by half its own length across one set
+  // is not measuring shoulders whatever the posture is.
+  const bodyLengthIsAStature =
+    posture == null || posture === "standing" || posture === "seated" || posture === "supported";
+  if (spanSpreadFraction > MAX_SHOULDER_SPAN_SPREAD) {
+    return {
+      ...empty,
+      framesUsed: widths.length,
+      framesRejectedForAngle,
+      medianSpanUnits,
+      spanSpreadFraction,
+      rejectedBecause: "implausible_span",
+    };
+  }
   const impliedHeightUnits = medianSpanUnits / BIACROMIAL_HEIGHT_FRACTION;
-  const bodyUnits = impliedBodyLengthUnits(frames);
+  const bodyUnits = bodyLengthIsAStature ? impliedBodyLengthUnits(frames) : null;
   if (bodyUnits != null) {
     const ratio = impliedHeightUnits / bodyUnits;
     if (ratio < 0.5 || ratio > 2) {
@@ -1396,13 +1431,30 @@ export function shoulderWidthScaleFromFrames(
     }
   }
 
+  // THE RULER STATES ITS OWN MEASURED CONFIDENCE, NEVER TIGHTER THAN THE FITTED FLOOR.
+  //
+  // BIACROMIAL_TOLERANCE_FRACTION is fitted ACROSS takes (0.2, from a 12.0% spread of implied
+  // scale over nine of them). spanSpreadFraction is this take's disagreement WITH ITSELF, and
+  // the two bench press takes of 2026-10-06 measured 6.3% on the standing press and 21.0% on
+  // the bench -- the same athlete, the same ruler, a factor of three apart in noise and until
+  // now identical in stated confidence. reconcileScaleEstimates weights inverse-variance, so a
+  // ruler that cannot hold still was voting as though it could.
+  //
+  // The floor stays because a take can agree with itself and still be biased: six per cent of
+  // self-agreement is not evidence that the shoulder ruler is twice as good as the height
+  // ruler, and the cross-take fit is the only thing that can say what it is worth at its best.
+  // So the spread can only ever LOOSEN this ruler, never tighten it.
+  //
+  // It moves nothing measurable today, and that is on purpose: the press's 6.3% is under the
+  // floor, the bench's 21.0% changes its blend by 0.1cm, and the row is refused. What it buys
+  // is that the next take's weight is attributable to a number the export carries.
   return {
     scale,
-    uncertaintyFraction: BIACROMIAL_TOLERANCE_FRACTION,
+    uncertaintyFraction: Math.max(BIACROMIAL_TOLERANCE_FRACTION, spanSpreadFraction),
     framesUsed: widths.length,
     framesRejectedForAngle,
     medianSpanUnits,
-      spanSpreadFraction,
+    spanSpreadFraction,
     rejectedBecause: null,
   };
 }

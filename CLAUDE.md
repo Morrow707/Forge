@@ -1035,6 +1035,39 @@ halves before splitting anything else:
   **`FITTED_OVERRIDES` is EMPTY and the test fails if an entry appears** -- no constant here has ever been fitted on one lift in isolation, and the registry is
   machinery for doing that safely, not permission to guess. See docs/camera-tracking-notes.md,
   "One set of numbers per filmable thing".
+- Build **633** was cut 2026-10-06 from the three lifts filmed on 632 beside the OVR
+  (docs/camera-tracking-notes.md, "Three lifts beside OVR, build 632, 2026-10-06"). The build-632
+  diagnostics answered their own open question on the first take, which is what they were for.
+  **THE BARBELL SHOULDER PRESS READ -1.8% ON THE MEAN AND -1.9% ON RANGE OF MOTION** -- the best
+  standing-lift result this pipeline has produced, three witnesses, the height ruler voting at
+  66.7% because build 623 stopped calling it seated. It is the control, and nothing in 633 touches
+  it.
+  **THE BENCH'S -39.3% IS NOT A SCALE ERROR, AND THE EXPORT PROVES IT.** Reaching the sensor needs
+  5.942e-3 m/unit; the highest candidate the take produced was 3.881e-3 and the best 3D bone
+  3.497e-3, so no blend of what it measured can get there -- same shape as the box jump's 28%.
+  Camera pitch is ruled out (7.5 degrees, cos 7.5 = 0.991) and so is the shoulder ruler (its 112.9
+  span looks broken beside the press's 81.2 until you read `subjectFacing: "facing_camera"` -- the
+  bench was filmed from the HEAD END, where the shoulders really are broadside). That is also the
+  one geometry where part of the bar's travel points down the lens, and every distance this
+  pipeline reports is an in-image projection. `client/src/lib/axis-foreshortening.ts` measures the
+  missing axis off the 3D pose that is already running (`body3DJoints` are camera-space metres) and
+  **CORRECTS NOTHING** -- `calibration.axisForeshortening`, `appliedCorrection: false`, the same
+  discipline as `measuredPosture`: one paired take may not move every reported distance in the app.
+  **The number to look for in the next bench export is 1.65.** If it lands there it earns the
+  correction in the build after; if it reads 1.0 the error is elsewhere.
+  **AND THE ROW'S SHOULDER RULER WAS REFUSED FOR THE WRONG REASON AND WAS RIGHT BY ACCIDENT.** Span
+  68.5 units against an `impliedBodyLengthUnits` under 149 on an athlete folded at the hip, so the
+  stature ratio cleared 2 -- the Romanian deadlift bug of 2026-10-05 in its second home. The
+  refusal was still correct (that span disagreed with ITSELF by 46.4%; reinstating the ruler takes
+  the row from -15.3% to +17.5%), and a guard that is right by accident cannot be tuned. So the
+  body-length yardstick is consulted only where a body length IS a stature, `MAX_SHOULDER_SPAN_SPREAD`
+  (0.4) refuses on the span's own self-disagreement, and the ruler states its own measured noise,
+  `max(BIACROMIAL_TOLERANCE_FRACTION, spanSpreadFraction)` -- floored, so the spread can only ever
+  LOOSEN it. **It moves nothing measurable today** (press under the floor, bench 0.1cm, row
+  refused) and that is the point: every future take's weight is attributable to a number the export
+  carries. Whole unit suite, OVR fixtures and 20-capture replay corpus unchanged.
+  Open and NOT fitted: the row's +11.9% mean beside a -15.3% ROM, which cannot both be scale.
+  Calibration work: uploaded on commit.
 - **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
   **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
   the numbering in this file has drifted twice. Read the run list, not the last number written

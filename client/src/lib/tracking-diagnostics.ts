@@ -430,6 +430,19 @@ export type TrackingDiagnostics = {
       rejectedBecause: string | null;
       spanSpreadFraction: number | null;
     };
+    /** HOW MUCH OF THE MOVEMENT THE IMAGE PLANE COULD NOT SEE, off the 3D pose. Measured,
+     *  recorded, applied to NOTHING -- see axis-foreshortening.ts. The bench press of build 632
+     *  read 39.3% low with every ruler too low to explain it and cameraPitchDeg at 7.5 degrees;
+     *  it was filmed from the head end, and this is the number that says whether that is why. */
+    axisForeshortening?: {
+      ratio: number | null;
+      displacement3DM: number | null;
+      displacementInImageM: number | null;
+      displacementAlongLensM: number | null;
+      framesUsed: number;
+      appliedCorrection: boolean;
+      rejectedBecause: string | null;
+    };
     /** How many rulers actually carried weight. One is the state every badly-wrong take of the
      *  2026-10-06 session was in, so it is a number here rather than something counted by hand. */
     scaleWitnesses?: { votingCount: number; sources: string[] };
