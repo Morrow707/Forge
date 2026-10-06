@@ -896,8 +896,10 @@ can install. Delete entries as a `beta` ships them.
   ruler low (-13.0%, -36.3%, -45.2%) and NO mechanism is proposed, because one paired take
   against 31.9/56.0/51.3 from an earlier session is not enough to fit to. Next to film.
   Calibration work: uploaded on commit.
-- Build **624** was cut 2026-10-06 from Scott's 623 console, and it is a SAVE-PATH build, not a
-  calibration one. Scott: "it rejected my video, which is a direct fucking violation of rule 1."
+- Build **625** was cut 2026-10-06 from Scott's 623 console (run 624, `d619c07d`, was a
+  verify_build; the beta went out as run/build **625** from `0daa3e6e`), and it is a SAVE-PATH
+  build, not a calibration one. **This is the build that landed on the phone**; the posture sweep
+  is in 626 behind it. Scott: "it rejected my video, which is a direct fucking violation of rule 1."
   The videos were in fact fine -- every set that reached the server carries `hasVideo: true`, so
   the video retry queue did its job -- but a SET did not reach the server, and he found that out
   by reading a debug console, which is the part that is indefensible. Two real bugs behind it,
@@ -972,7 +974,75 @@ can install. Delete entries as a `beta` ships them.
   **AND THE POSTURE SWEEP ABOVE TOUCHED NOTHING FILMABLE** -- none of its twenty-two exercises is
   on this list, so it is a correctness fix against the day one of them becomes eligible, not a
   change to any number anyone can produce today.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 625; the posture sweep is on the branch, waiting on Scott finishing with 625 before it merges.
+- **ONE SET OF NUMBERS PER FILMABLE THING: 270 records** (54 exercises + 216 skill drills),
+  `shared/camera-tunables-by-lift.ts`, 2026-10-06. Scott: "every single thing that can be filmed
+  needs its own system, because again, if we're testing let's say a 40 yard dash, it shouldn't
+  change any bench press numbers" / "Don't change the numbers that are already there, just make
+  sure they are their own separate individual numbers" / "So copy and paste."
+  Twelve constants are now per-lift -- the rep gate (min/max ROM fraction, travel onset), the
+  headline numbers (`maxPeakToMeanRatio`, `driveOnsetFraction`, deviation ceiling), segmentation
+  (`maxCountTrimPerEdge`, `minCountTrimOddness`) and four ruler uncertainties.
+  `cameraTunablesFor(name, romBucket)` returns a FRESH record every call plus a `sources` map
+  saying whether each number is shared, from the ROM bucket, or FITTED on this lift;
+  `summarizeTrackedSet` reads all twelve off it and the bar dialog resolves it once per take.
+  **NOTHING MOVED**, proved three ways: `camera-tunables-are-a-copy.test.ts` pins every value
+  against the constant it was copied from (those are now EXPORTED from `bar-tracking.ts` for that
+  purpose -- change one, change both, like the Swift arbiter); the OVR fixtures and the 20-capture
+  replay corpus are green and unchanged; and `every-filmable-thing-has-its-own-numbers.test.ts`
+  resolves all 270, asserts no two share a record, and scribbles on one to prove the other 269 are
+  untouched -- with Scott's example as a named assertion.
+  **THE GATES ARE SPLIT TOO** (Scott, same day, overruling the first version: "Split those too,
+  every single thing should be the same but separate, if we change the gate on med ball throws it
+  might change the gate on a golf swing and yes they are similar but very different"). He is right
+  and the argument for leaving them shared was wrong: a gate is only "physics" once you have fixed
+  WHICH movement it is about -- 3 m/s is impossible for a bar and ordinary for a thrown med ball.
+  Eleven more fields, copied from each tracker's own constant via `GATES_BY_TRACKER`
+  (`maxPlausibleSpeedMps` bar 3 / kb 8 / golf and bat 15 / mechanics 20 / med ball 25, the accel
+  and velocity-change gates, `minTrackingConfidence`, both occlusion windows, and overwatch's four
+  yardstick gates). `robustPeakSpeed`, `plausibleMean` and `rejectImplausibleAccelerationSpikes`
+  take their gate as a defaulted parameter.
+  **THE ARBITER IS PLUMBED (2026-10-06).** `AvTrackerArbiter.Tunables` + `static var active`,
+  reset from `arbiterTunables` on EVERY capture at both native entry points (live and from a
+  file), sent by the bar dialog at Record and at Stop. The `static let`s stay as the defaults and
+  as what `tracker-arbiter.test.ts` pins against the TypeScript constants, so the two cannot drift
+  on the value they share; an absent or non-positive value falls back to the DEFAULT, never to the
+  last take (a stale static would be exactly the leak this exists to stop, and invisible).
+  `the-arbiter-reads-this-lifts-numbers.test.ts` is the ratchet and was mutation-tested in both
+  directions. Native change: needs `verify_build`.
+
+## WHAT "ITS OWN NUMBERS" MEANS, AND WHAT IT DOES NOT MEAN
+
+Scott, 2026-10-06, settling it in one sentence: **"the overwatch is fine, it can learn to
+understand the difference, what mattered was calibrating numbers not leaking to other numbers."**
+
+That is the whole principle behind the 270-record registry, and it cuts both ways, so read both
+halves before splitting anything else:
+
+- **WHAT MUST NEVER LEAK IS A FITTED NUMBER.** A threshold measured on a med ball throw, a bench
+  press or a 40-yard dash belongs to that movement and may not move what any other movement is
+  judged by. That is the entire reason `shared/camera-tunables-by-lift.ts` hands out a fresh
+  record per identity and the tests scribble on one to prove the other 269 are untouched.
+- **JUDGEMENT IS ALLOWED TO BE SHARED, AND SHOULD BE.** Overwatch stays ONE referee across every
+  movement -- it can and should learn to tell a thrown ball from a swung club. Splitting the
+  arbiter itself into 270 arbiters is NOT what this asked for and would break Rule #2 (one
+  arbiter, owning no sensor, judging both trackers). The same goes for the body tracker, the
+  object tracker, the segmenter and the scale blend: one implementation, many movements.
+- **So the test of any future split is: "is this a NUMBER somebody could fit from one take?"** If
+  yes, it is per-lift. If it is a RULE, a mechanism or a piece of reasoning, it stays shared and
+  gets better for every lift at once. The RDL hinge, the box jump's flagged rep and the bench
+  un-rack were all fixed by changing a rule or a label, and every lift got the benefit -- that is
+  the shape to keep, not something to split away.
+  **`FITTED_OVERRIDES` is EMPTY and the test fails if an entry appears** -- no constant here has ever been fitted on one lift in isolation, and the registry is
+  machinery for doing that safely, not permission to guess. See docs/camera-tracking-notes.md,
+  "One set of numbers per filmable thing".
+- **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
+  **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
+  the numbering in this file has drifted twice. Read the run list, not the last number written
+  down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
+  posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
+  branch `verify_build` for the arbiter plumbing. The next beta is therefore 628 or later.
+- **Queued, not yet in a build:** the 270-record per-lift tunables registry including the split
+  gates, and the native arbiter plumbing, on the branch.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

@@ -1366,6 +1366,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 return nil
             }
             let trackingMode = call.getString("trackingMode")
+            // THIS LIFT'S ARBITER NUMBERS, reset for this capture -- see AvTrackerArbiter.reset.
+            // Nothing sent means the defaults, which is what every take used before this existed.
+            AvTrackerArbiter.reset(from: call.getObject("arbiterTunables"))
             return AvFrameContext(
                 // .up, not a derived orientation: the data output's connection already rotated
                 // the buffer (see continueStart). The file path cannot do that and derives its
@@ -1858,6 +1861,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // `equipment` prop) or nil/anything else, which just means "not enabled." See
         // AvCoreMlImplementDetector's own header comment.
         let trackingMode = call.getString("trackingMode")
+        // Same reset on the file path. Both entry points, or a take analysed from a file would
+        // silently keep whatever the last live capture set.
+        AvTrackerArbiter.reset(from: call.getObject("arbiterTunables"))
         let url = URL(fileURLWithPath: pathString)
         // Held for the whole read. startRecording already marked this path active when it was
         // written; re-marking is harmless (a Set) and covers the case where the recording was
@@ -3518,6 +3524,46 @@ private enum AvTrackerArbiter {
     // Keep in sync with MIN_YARDSTICK_SAMPLES_FOR_STABILITY in shared/tracker-arbiter.ts.
     static let minYardstickSamplesForStability = 5
 
+    // THIS LIFT'S OWN THREE NUMBERS, handed down from the capture that is starting.
+    //
+    // Scott, 2026-10-06, after being told these three were per-lift in TypeScript and still one
+    // shared value on the phone: "Plumb the arbiter, and the overwatch is fine, it can learn to
+    // understand the difference, what mattered was calibrating numbers not leaking to other
+    // numbers."
+    //
+    // Which is the distinction this struct exists to hold. Overwatch's JOB is unchanged and is
+    // allowed to generalise across lifts -- it is one referee that understands many movements,
+    // and nothing here splits it into 270 referees. What is per-lift is the NUMBERS it compares
+    // against, so a threshold fitted on a med ball throw cannot move what a bench press is
+    // judged by. See shared/camera-tunables-by-lift.ts, which is where the values come from, and
+    // CLAUDE.md's note on the difference.
+    //
+    // The static lets above remain the DEFAULTS and the thing shared/tracker-arbiter.test.ts pins
+    // against the TypeScript constants, so the two cannot drift on the value they share. `active`
+    // starts at those defaults and is RESET on every capture start (see reset(from:)) -- a
+    // mutable static that kept a previous take's numbers would be a leak of exactly the kind this
+    // change exists to stop, and it would be invisible.
+    struct Tunables {
+        var maxLockDistanceInYardsticks = AvTrackerArbiter.maxLockDistanceInYardsticks
+        var maxPlateSizeInYardsticks = AvTrackerArbiter.maxPlateSizeInYardsticks
+        var maxYardstickDeviationRatio = AvTrackerArbiter.maxYardstickDeviationRatio
+    }
+
+    static var active = Tunables()
+
+    /// Called once at the start of every capture, live or from a file. An absent or unreadable
+    /// value falls back to that constant's default rather than to whatever the last take used,
+    /// so a web layer that sends nothing behaves exactly as it did before this existed.
+    static func reset(from options: [String: Any]?) {
+        var next = Tunables()
+        if let options {
+            if let v = options["maxLockDistanceInYardsticks"] as? Double, v > 0 { next.maxLockDistanceInYardsticks = v }
+            if let v = options["maxPlateSizeInYardsticks"] as? Double, v > 0 { next.maxPlateSizeInYardsticks = v }
+            if let v = options["maxYardstickDeviationRatio"] as? Double, v > 0 { next.maxYardstickDeviationRatio = v }
+        }
+        active = next
+    }
+
     // MOTION CORRELATION (overwatch). Over a short window of tracked frames, the hands and the
     // locked region have to move together: an implement in the athlete's hands cannot travel a
     // grip width while the hands stay put, and the hands cannot travel a grip width while the
@@ -3652,7 +3698,7 @@ private enum AvTrackerArbiter {
         let typical = sorted[sorted.count / 2]
         guard typical > 0 else { return (true, nil) }
         let ratio = max(currentPx, typical) / min(currentPx, typical)
-        return (ratio <= maxYardstickDeviationRatio, ratio)
+        return (ratio <= active.maxYardstickDeviationRatio, ratio)
     }
 
     /// The whole referee in one call. The body is checked FIRST, because every statement the
@@ -3726,7 +3772,7 @@ private enum AvTrackerArbiter {
         guard let yardstick, yardstick.px > 0, frameWidth > 0, frameHeight > 0 else { return true }
         let largestSidePx = max(Double(box.width) * frameWidth, Double(box.height) * frameHeight)
         if largestSidePx < yardstick.px * minCandidateSizeInYardsticks { return false }
-        if label == "plate", largestSidePx > yardstick.px * maxPlateSizeInYardsticks { return false }
+        if label == "plate", largestSidePx > yardstick.px * active.maxPlateSizeInYardsticks { return false }
         return true
     }
 
@@ -3788,7 +3834,7 @@ private enum AvTrackerArbiter {
         if let yardstick {
             let inYardsticks = gap / yardstick.px
             return Verdict(
-                plausible: inYardsticks <= maxLockDistanceInYardsticks,
+                plausible: inYardsticks <= active.maxLockDistanceInYardsticks,
                 distanceInYardsticks: inYardsticks,
                 basis: .yardstick
             )

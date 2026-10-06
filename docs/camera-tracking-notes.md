@@ -2988,3 +2988,187 @@ lying rules on anything that can currently be filmed.
 `DEFAULT_MIN_ROM_FRACTION`, which may well be right for a short-travel thrust, but no hip thrust
 has been filmed beside the sensor and Scott's instruction on the sweep was to leave the numbers
 alone. `NO_ROM_BUCKET_YET` in that test is the list, and it shrinks when one is measured.
+
+## One set of numbers per filmable thing, 2026-10-06 (270 records)
+
+Scott, after being told that bench and squat share one code path and that a constant fitted on
+one moves the other: "give each 54 exercises, and while you're at it all of the speed/agility,
+and skills that can be filmed too, I don't know that number, but every single thing that can be
+filmed needs its own system, because again, if we're testing let's say a 40 yard dash, it
+shouldn't change any bench press numbers." Then, on what the numbers start as: "Don't change the
+numbers that are already there, just make sure they are their own separate individual numbers" /
+"So copy and paste."
+
+**The number he did not know is 216.** 54 filmable exercises plus 216 filmable skill drills =
+**270 identities**, each with its own record in `shared/camera-tunables-by-lift.ts`.
+
+### What is now per-lift
+
+Twelve constants, every one of them a number a sensor comparison has moved or could move:
+`minRomFractionOfHeight`, `maxRomFractionOfHeight`, `travelOnsetMarginM`, `maxPeakToMeanRatio`,
+`driveOnsetFraction`, `maxDeviationFractionOfHeight`, `maxCountTrimPerEdge`,
+`minCountTrimOddness`, `heightRulerUncertainty`, `depthRulerBias`, `depthRulerUncertainty`,
+`ankle3DRulerUncertainty`.
+
+`cameraTunablesFor(name, romBucket)` returns a FRESH record every call, plus a `sources` map
+saying for each number whether it is the shared starting value, a rom-bucket value, or one
+FITTED on this lift. `summarizeTrackedSet` takes the record as its last argument and reads every
+one of those constants off it; `implausibleRangeOfMotion` and `implausibleBarPathDeviation` take
+it too. `av-bar-tracker-dialog.tsx` resolves it once per take from the exercise's name.
+
+### Why a factory and not 270 hand-typed blocks
+
+"Copy and paste" is the semantics, and the semantics is what was built: one independent,
+separately writable record per identity, with nothing shared between them at read time. Typing
+the same twelve numbers out 270 times would be ~4,000 lines nobody can review, and the first typo
+in it would be a per-lift calibration nobody intended -- the exact failure this is meant to
+prevent. The values live in one place to read rather than 270 places to compare, and a fitted
+number is a one-line override beside the lift's name, which is the line a reviewer actually needs
+to see.
+
+### What is deliberately NOT per-lift
+
+The plausibility gates (a frame implying an impossible velocity), the occlusion windows and the
+arbiter's grip-width threshold. Those are statements about physics and about the camera, not
+about the lift, and splitting them 270 ways would mean 270 uncalibrated guesses where today there
+is one considered number. Rule #2 applies to constants as much as to sensors: a number nobody can
+fit is not improved by having more copies of it.
+
+### Nothing moved, and it is proved three ways
+
+- `camera-tunables-are-a-copy.test.ts` asserts every value in the registry against the constant
+  it was copied from (the originals are now exported from `bar-tracking.ts` for exactly this, the
+  same "change one, change both" rule as the Swift arbiter port). A value edited in one place and
+  not the other fails rather than drifting.
+- The whole suite, including the four OVR fixture comparisons and the 20-capture replay corpus
+  (`count-trim-never-empties-a-set.test.ts`), is green and unchanged -- 326 files, 3,602 tests.
+- `every-filmable-thing-has-its-own-numbers.test.ts` resolves all 270, asserts no two share a
+  record and none is the frozen template, and scribbles on one to assert the other 269 are
+  untouched. Scott's own example is an assertion by name: **A 40-YARD DASH CALIBRATION DOES NOT
+  REACH THE BENCH PRESS.**
+
+`FITTED_OVERRIDES` is **empty**, and the test fails if an entry appears. That is the correct state
+today: not one constant in this pipeline has ever been fitted on a single lift in isolation --
+the RDL, the box jump and the bench were all fixed by changing a LABEL or a RULE, and the 10-06
+bias sweep is on the record as evidence against fitting blind. The registry is the machinery for
+doing it safely when a sensor-paired take justifies it; it is not permission to start guessing.
+
+### The gates are split too, 2026-10-06 (and one of them is only half-split)
+
+Scott, on the first version leaving the plausibility gates shared: "Split those too, every single
+thing should be the same but separate, if we change the gate on med ball throws it might change
+the gate on a golf swing and yes they are similar but very different."
+
+**He is right, and the argument for leaving them shared was wrong in a way worth writing down.**
+The claim was that a gate describes physics and the camera rather than the lift. But a gate is
+only "physics" once you have already fixed WHICH movement you are talking about: 3 m/s is
+impossible for a bar and ordinary for a thrown med ball; 15 m/s is a sane ceiling for a grip on a
+golf club and nonsense for a kettlebell. The constants were in fact ALREADY per-tracker for
+exactly that reason -- they just shared one value across every lift inside a tracker, so 46 bar
+lifts shared one number and the 8 jumps shared another.
+
+Eleven more fields, each copied from the tracker's own constant: `maxPlausibleSpeedMps`
+(bar 3 / kb 8 / golf and bat 15 / mechanics 20 / med ball 25), `maxPlausibleAccelG`,
+`maxPlausibleVelocityChangePct`, `minTrackingConfidence`, the two occlusion windows, and
+overwatch's `maxLockDistanceInYardsticks`, `maxPlateAspectRatio`, `maxPlateSizeInYardsticks`,
+`maxYardstickDeviationRatio`. `GATES_BY_TRACKER` holds each tracker's values and
+`cameraTunablesFor(identity, romBucket, tracker)` copies them into the identity's own record,
+tagging each `"tracker"` in the sources map. `robustPeakSpeed`, `plausibleMean` and
+`rejectImplausibleAccelerationSpikes` now take their gate as a parameter, defaulted to the
+constant, so every existing caller is unchanged and `summarizeTrackedSet` passes the record's.
+
+**ONE IS ONLY HALF-SPLIT, AND THAT IS RECORDED RATHER THAN HIDDEN: overwatch's four gates.**
+Overwatch has to act mid-clip, so it runs natively (`AvTrackerArbiter`), and the native side is
+handed a tracking MODE, not a tunables record. The four are per-lift on the TypeScript side today
+-- which is what the replay harness and every test read -- and the Swift copy keeps the shared
+default until the record is plumbed through the plugin. `tracker-arbiter.test.ts` compares Swift
+against the DEFAULT, so the two cannot drift on the value they do share. **A fitted per-lift
+arbiter number would be inert on the phone until that plumbing lands, so do not fit one before
+then: it would read as applied and not be.** That plumbing is the next piece of this work and is
+an `ios/` change, which under Rule #2 means naming the sensor it touches -- it touches none, it
+only changes which number overwatch compares against, and it removes nothing.
+
+Still green and still bit-identical: 326 files, 3,602 tests, the four OVR fixtures and the
+20-capture replay corpus included. The new assertion carries his example by name: **A MED BALL
+GATE AND A GOLF SWING GATE ARE THE SAME KIND OF THING AND NOT THE SAME NUMBER.**
+
+## Three lifts beside OVR, build 625, 2026-10-06 (second session)
+
+Scott filmed bench, Pendlay row and barbell shoulder press on 625 and sent the export plus the
+OVR screens. Camera roll was between **-0.7 and -3.4 degrees on all twelve takes** -- the phone
+was level on every one. That single fact decides two of the three findings below.
+
+| Set 3 | Forge mean | OVR | | Forge ROM | OVR | |
+|---|---|---|---|---|---|---|
+| Barbell Shoulder Press | 0.98 | 0.88 | **+11.4%** | 69.7cm | 64.0 | **+8.9%** |
+| Pendlay Row | 1.24 | 1.02 | **+21.6%** | 42.6cm | 54.6 | **-22.0%** |
+| Bench Press | 1.13 | 0.65 | **+73.8%** | 44.0cm | 37.8 | **+16.3%** |
+
+### THE MEAN DIVIDED ONE WINDOW'S DISTANCE BY ANOTHER WINDOW'S TIME
+
+The bench is the finding, and it is not scale. **A scale error moves distance and velocity by
+the same factor**; this take's velocity error is four and a half times its distance error. So the
+clock was wrong, and the rep rows say exactly how: bench rep 3 reported **27.0cm in 0.13
+seconds** (2.29 m/s, on a 135lb bench whose every sensor rep sat between 0.63 and 0.73), rep 8
+77.0cm in 0.33s, and Pendlay row rep 3 51.8cm in 0.13s.
+
+One line in `summarizeTrackedSet` did it:
+
+```
+const romM = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);   // WHOLE phase
+const mean = romM / driveDuration;                                            // DRIVE window
+```
+
+`trimPhaseToDrive` deliberately cuts the slow start and finish off the phase, so the drive window
+is a strict SUBSET of it -- and the whole rep's distance was being credited to only the fast
+part's time. On a clean rep the two windows nearly coincide and the error is small, which is why
+the 10-06 morning bench read +0.9% on range of motion and still +15.7% on the mean and nobody
+separated the two. Where the trim bites hard -- one glitch frame lifts the rep's peak, the
+threshold is a FRACTION of that peak, so the window collapses -- it is unbounded.
+
+Fixed by measuring the distance over the window the time is measured over (`driveRomM`). The
+REPORTED range of motion is untouched and stays the whole phase: that is the rep's real travel and
+it is the number already measuring correctly. Two windows, two jobs -- the split this function
+already makes for the travel window; the mean was the one number reading across both. No constant
+was fitted. Replayed on the export it takes the bench from +73.8% to +61.5% and kills the 2.29 and
+2.73 rep spikes; the remaining gap is the segmenter (the harness returns 7 reps to the device's 9
+on that take, the known replay divergence), which is the next thing to look at.
+
+### "BAR TILTED ~28 DEGREES" WAS THE CAMERA ANGLE, AND NOW IT KNOWS WHERE DOWN IS
+
+Scott, on the fault: "this is the angle I filmed at, all camera systems need to be using gravity
+adjust to reference what down is, so weird angles down spawn a wrong tilt or shift number."
+
+Right, and the export says which half of it gravity fixes. Two rotations put a level bar on a
+slant in frame:
+
+- **ROLL** -- the phone turned. Every line in the image turns with it, so the bar against gravity
+  is the image angle MINUS the roll. CoreMotion measures it per take. **Now subtracted**, which is
+  the fix as asked. It is also, on this session, worth almost nothing: the roll never exceeded
+  3.4 degrees.
+- **PERSPECTIVE** -- the phone off to one side. The near plate sits lower and larger in frame than
+  the far one and the wrist-to-wrist line rotates with the viewing geometry. **This is all of
+  Scott's 28 degrees.** `gripAxisFromVerticalDeg` on the nine barbell takes read 9.9, 11, 15.8,
+  17.7, 19.4, 23.8, 33.3, 39.7 and 52.6 -- on a level phone, so none of it is roll. Set 9 beside
+  the OVR (build 575) is the controlled case: phone upright, bar going straight up and down, grip
+  line 28 degrees off square.
+
+Gravity cannot undo perspective, so the COACHING CLAIM stands down instead: when the phone was
+level and the viewing geometry alone rotates the grip line by more than the amount this fault
+calls a problem, the fault cannot tell the two apart and does not speak. The threshold is the
+FAULT'S OWN (`barTiltMaxDeg`), floored at `MIN_PERSPECTIVE_GRIP_ROTATION_DEG` -- not a number of
+its own, so it tracks whatever the fault is set to.
+
+**Rule #1, as always: one sentence is withheld, nothing else.** The tilt readings, the trace, the
+range of motion and every other fault are written exactly as before, and
+`the-tilt-fault-knows-where-down-is.test.ts` asserts the drift fault still fires on the same take.
+
+### Still open
+
+- **The row's range of motion is 22% LOW while its mean is 22% HIGH.** Those cannot both be scale
+  and they point opposite ways; the mean is the window bug above, the range of motion is not.
+- **Bench set 2 is internally consistent and low on both** (-35% mean, -43% range of motion),
+  which is the signature of a genuine scale error -- the opposite of set 3. Two sets of the same
+  lift, minutes apart, failing in two different ways.
+- **Every set counted 9 or 10 reps against 10 logged.** The three that read 9 are the three that
+  carry the window bug's spikes, so re-check the count after this fix lands rather than before.

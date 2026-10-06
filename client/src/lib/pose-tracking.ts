@@ -3135,6 +3135,27 @@ function resolveFormFaultThresholds(
 // about 2 degrees, comfortably inside any tilt threshold worth reporting.
 export const MIN_TILT_GRIP_SPAN_PX = 110;
 
+/** How far the grip line may sit from square before its angle is read as the viewing geometry
+ *  rather than as the bar.
+ *
+ *  MEASURED, not guessed. On the 2026-10-06 session the phone's roll was between -0.7 and -3.4
+ *  degrees on all twelve takes -- level, every one -- while `gripAxisFromVerticalDeg` read 9.9,
+ *  11, 15.8, 17.7, 19.4, 23.8, 33.3, 39.7 and 52.6. None of that rotation is roll, so all of it
+ *  is perspective, and the tilt fault fired on three of those takes at 20, 22, 28 and 29 degrees
+ *  "toward the left arm". Set 9 beside the OVR (build 575) is the controlled case: phone upright,
+ *  bar going straight up and down, grip line 28 degrees off square.
+ *
+ *  The effective floor is this OR the fault's own threshold, whichever is higher -- see the use
+ *  site. Recorded per take so a sensor-paired set can revise it. */
+export const MIN_PERSPECTIVE_GRIP_ROTATION_DEG = 8;
+
+/** Mirrors bar-tracking.ts's MAX_ROLL_FOR_IMAGE_VERTICAL_DEG. It lives twice rather than being
+ *  imported because bar-tracking.ts is the heavier module and pose-tracking.ts is loaded by the
+ *  live path; `the-tilt-fault-knows-where-down-is.test.ts` asserts the two are equal, the same
+ *  change-one-change-both arrangement the Swift arbiter port uses. Both mean the one thing: the
+ *  roll below which the image vertical IS gravity. */
+export const MAX_ROLL_FOR_LEVEL_PHONE_DEG = 15;
+
 export function detectFormFaults(
   frames: PoseFrame[],
   barPathDeviationCm: number,
@@ -3197,6 +3218,32 @@ export function detectFormFaults(
   // is noise, and a coaching claim built on noise is worse than none. Undefined leaves the
   // behaviour exactly as it was, so no existing caller changes.
   tiltGripSpanPx?: number | null,
+  // WHERE DOWN IS, FROM THE PHONE RATHER THAN FROM THE IMAGE. Scott, 2026-10-06, on a bench
+  // filmed from an angle that reported "Bar tilted ~28 degrees toward the left arm": "this is
+  // the angle I filmed at, all camera systems need to be using gravity adjust to reference what
+  // down is, so weird angles down spawn a wrong tilt or shift number."
+  //
+  // Two separate rotations put a level bar on a slant in the image, and gravity answers exactly
+  // one of them:
+  //   ROLL -- the phone itself rotated. Every line in the image turns by the roll, so the bar's
+  //     tilt against gravity is the image tilt MINUS the roll. CoreMotion measures it per take
+  //     (cameraRollDeg), which is a sensor the pose tracker has no hand in -- the same witness
+  //     reconcileMovementAxis already uses to decide which way is up.
+  //   PERSPECTIVE -- the phone off to one side. The near plate sits lower and larger in frame
+  //     than the far one, so the wrist-to-wrist line is rotated by the viewing geometry and no
+  //     amount of gravity can undo it. Set 9 beside the OVR (build 575) is the measured case:
+  //     phone upright, roll under 5 degrees, bar going straight up and down, grip line 28
+  //     degrees off square. That is this exact number, and it was not the bar.
+  //
+  // So the roll is SUBTRACTED (the fix Scott asked for), and when what is left is still far off
+  // square while the phone was near level, the rotation is perspective and the COACHING CLAIM
+  // stands down -- same reasoning, and the same precedent, as the grip-span floor below.
+  cameraRollDeg?: number | null,
+  // How far the grip line sat from square, in degrees, as reconcileMovementAxis measured it
+  // (gripAxisFromVerticalDeg). This is the perspective yardstick: it is produced by the grip,
+  // not by the tilt, so it can say the tilt is unsupportable without being the tilt's own
+  // opinion of itself.
+  gripAxisFromVerticalDeg?: number | null,
 ): FormFault[] {
   const faults: FormFault[] = [];
   // Every distance-based fault label below respects the same device-level
@@ -3504,15 +3551,35 @@ export function detectFormFaults(
   // MIN_TILT_GRIP_SPAN_PX resolves to well under the tilt threshold, so a fault that fires is
   // one the separation could actually support.
   const tiltSpanUsable = tiltGripSpanPx == null || tiltGripSpanPx >= MIN_TILT_GRIP_SPAN_PX;
-  if (tiltAngles.length && tiltSpanUsable) {
+  // The phone was near level and the grip line is still well off square: what is rotating the
+  // line is the viewing angle, not the bar. Nothing is withheld but the sentence -- the tilt
+  // numbers, the trace and every other fault are written exactly as before (RULE #1).
+  const rollKnown = cameraRollDeg != null && Number.isFinite(cameraRollDeg);
+  const perspectiveRotatesTheGrip =
+    rollKnown &&
+    Math.abs(cameraRollDeg as number) <= MAX_ROLL_FOR_LEVEL_PHONE_DEG &&
+    gripAxisFromVerticalDeg != null &&
+    // Against the FAULT'S OWN threshold, not a number of its own. If the viewing geometry alone
+    // rotates the grip line by more than the amount this fault calls a problem, the fault cannot
+    // tell the two apart on this take -- whatever that threshold is set to.
+    gripAxisFromVerticalDeg >= Math.max(MIN_PERSPECTIVE_GRIP_ROTATION_DEG, thresholds.barTiltMaxDeg);
+  if (tiltAngles.length && tiltSpanUsable && !perspectiveRotatesTheGrip) {
     // 95th percentile of |tilt|, not a raw max -- see percentile's own
     // comment. Sign comes from the first sample that reaches this robust
     // magnitude, so the label still says which side was actually dropping.
+    // THE ROLL COMES OFF FIRST. A camera rolled by r turns every line in the image by r, so the
+    // bar's angle against GRAVITY is its angle in the image less the roll -- this is the whole of
+    // Scott's "gravity adjust to reference what down is" for this fault. Unknown roll (an older
+    // export, the web path) leaves the reading exactly as it was, so nothing that worked before
+    // changes.
+    const againstGravity = rollKnown
+      ? tiltAngles.map((t) => t - (cameraRollDeg as number))
+      : tiltAngles;
     const worstMagnitude = percentile(
-      tiltAngles.map((t) => Math.abs(t)),
+      againstGravity.map((t) => Math.abs(t)),
       0.95,
     );
-    const worstTilt = tiltAngles.find((t) => Math.abs(t) >= worstMagnitude) ?? 0;
+    const worstTilt = againstGravity.find((t) => Math.abs(t) >= worstMagnitude) ?? 0;
     if (Math.abs(worstTilt) > thresholds.barTiltMaxDeg) {
       const side = worstTilt > 0 ? "right" : "left";
       faults.push({

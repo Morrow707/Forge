@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/queryClient";
@@ -123,6 +123,8 @@ import {
 } from "@/lib/exercise-camera-profile";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import type { Landmark } from "@mediapipe/tasks-vision";
+
+import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
 
 /** AVFoundation + Vision bar-path/full mode tracking -- the last tracker mode converted off
  * ARKit (see ArBarTrackerDialog for the fallback this replaces, kept completely untouched per
@@ -729,6 +731,24 @@ export function AvBarTrackerDialog({
       ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment]
       : undefined;
 
+  // OVERWATCH'S THREE NUMBERS FOR THIS LIFT, handed to the native arbiter with every capture.
+  //
+  // Scott, 2026-10-06: "Plumb the arbiter, and the overwatch is fine, it can learn to understand
+  // the difference, what mattered was calibrating numbers not leaking to other numbers." Before
+  // this, these three were per-lift in TypeScript and one shared value on the phone -- which is
+  // where overwatch actually runs -- so a fitted number would have read as applied and not been.
+  // Overwatch itself is untouched and stays ONE referee across every movement (Rule #2); only
+  // the thresholds it compares against are the lift's own. Absent, the native side uses the same
+  // defaults it always has (AvTrackerArbiter.reset).
+  const arbiterTunables = useMemo(() => {
+    const { values } = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName));
+    return {
+      maxLockDistanceInYardsticks: values.maxLockDistanceInYardsticks,
+      maxPlateSizeInYardsticks: values.maxPlateSizeInYardsticks,
+      maxYardstickDeviationRatio: values.maxYardstickDeviationRatio,
+    };
+  }, [exerciseName]);
+
   useEffect(() => {
     if (!open) return;
     setSaving(false);
@@ -936,6 +956,11 @@ export function AvBarTrackerDialog({
       const result = await stopRecordingAndAnalyze({
         onAnalysisProgress: (percent) => onAnalysisProgress?.(forSetNumber, percent),
         trackingMode: coreMlTrackingMode,
+        // Overwatch's three thresholds for THIS lift -- see arbiterTunables above. Sent at Stop
+        // as well as at Record, because the file path resets them separately (both entry points
+        // call AvTrackerArbiter.reset, or a take analysed from a file would keep whatever the
+        // last live capture set).
+        arbiterTunables,
         // Same strides at Record and at Stop, so the live feeder and the file feeder stay one
         // measurement. See BAR_SENSOR_STRIDES.
         ...BAR_SENSOR_STRIDES,
@@ -2102,6 +2127,7 @@ export function AvBarTrackerDialog({
       }
     }
 
+    const liftTunables = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName));
     const metrics = summarizeTrackedSet(
       trace,
       loadKg,
@@ -2126,6 +2152,12 @@ export function AvBarTrackerDialog({
       // The set's prescribed reps choose between the segmenter's own candidate gates -- the
       // bench take whose un-rack and re-rack outweighed its presses (segmentPhasesRelative).
       targetReps ?? null,
+      // THIS LIFT'S OWN NUMBERS, not the pipeline's (shared/camera-tunables-by-lift.ts). Resolved
+      // once per take from the exercise's name, so a number fitted on one lift is written into
+      // that lift's record and cannot reach another -- Scott, 2026-10-06: "if we're testing let's
+      // say a 40 yard dash, it shouldn't change any bench press numbers." Identical values to
+      // before today, by construction (camera-tunables-are-a-copy.test.ts).
+      liftTunables,
     );
     if (!metrics) {
       // "MAKE SURE THE BAR STAYS IN FRAME" WAS A GUESS, AND ON A REAL TAKE IT WAS WRONG.
@@ -2326,6 +2358,14 @@ export function AvBarTrackerDialog({
       formFaultThresholds,
       // The grip separation the tilt angle would be divided by. See MIN_TILT_GRIP_SPAN_PX.
       gripWidthPx ?? null,
+      // WHERE DOWN IS. The phone's own roll from CoreMotion, so the bar's tilt is measured
+      // against gravity rather than against the image -- the same witness reconcileMovementAxis
+      // uses for the movement axis, now reaching the fault that makes a claim about the bar.
+      // See detectFormFaults' own comment for what gravity does and does not fix here.
+      recordingStats.cameraRollDeg ?? null,
+      // And how far perspective had already rotated the grip line, measured by the grip rather
+      // than by the tilt, so the two are independent.
+      axisWitness.gripAxisFromVerticalDeg,
     );
 
     if (movementType === "Squat" && laterality !== "unilateral") {
@@ -2620,7 +2660,7 @@ export function AvBarTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ trackingMode: coreMlTrackingMode, ...BAR_SENSOR_STRIDES });
+                  startRecording({ trackingMode: coreMlTrackingMode, arbiterTunables, ...BAR_SENSOR_STRIDES });
                 }}
                 disabled={!supported || !heightIn}
               >

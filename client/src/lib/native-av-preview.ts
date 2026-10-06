@@ -312,6 +312,14 @@ interface AvBodyTrackingPlugin {
     sampleEveryNthFrame?: number;
     detectBox?: boolean;
     trackingMode?: string;
+    /** Overwatch's own thresholds for this lift, passed through to AvTrackerArbiter.reset on the
+     *    native side. Absent means the native defaults, which is what every take used before
+     *    per-lift numbers existed. See shared/camera-tunables-by-lift.ts. */
+    arbiterTunables?: {
+        maxLockDistanceInYardsticks: number;
+        maxPlateSizeInYardsticks: number;
+        maxYardstickDeviationRatio: number;
+    };
     // How often, in raw frames, the 3D body pose and hand pose run on this take (both feeders).
     // Strides, never switches -- CLAUDE.md Rule #2. Default 9 and 1.
     body3DStride?: number;
@@ -337,6 +345,14 @@ interface AvBodyTrackingPlugin {
     sampleEveryNthFrame?: number;
     detectBox?: boolean;
     trackingMode?: string;
+    /** Overwatch's own thresholds for this lift, passed through to AvTrackerArbiter.reset on the
+     *    native side. Absent means the native defaults, which is what every take used before
+     *    per-lift numbers existed. See shared/camera-tunables-by-lift.ts. */
+    arbiterTunables?: {
+        maxLockDistanceInYardsticks: number;
+        maxPlateSizeInYardsticks: number;
+        maxYardstickDeviationRatio: number;
+    };
     body3DStride?: number;
     handPoseStride?: number;
   }): Promise<AvAnalysisResult>;
