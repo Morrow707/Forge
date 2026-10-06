@@ -2988,3 +2988,67 @@ lying rules on anything that can currently be filmed.
 `DEFAULT_MIN_ROM_FRACTION`, which may well be right for a short-travel thrust, but no hip thrust
 has been filmed beside the sensor and Scott's instruction on the sweep was to leave the numbers
 alone. `NO_ROM_BUCKET_YET` in that test is the list, and it shrinks when one is measured.
+
+## One set of numbers per filmable thing, 2026-10-06 (270 records)
+
+Scott, after being told that bench and squat share one code path and that a constant fitted on
+one moves the other: "give each 54 exercises, and while you're at it all of the speed/agility,
+and skills that can be filmed too, I don't know that number, but every single thing that can be
+filmed needs its own system, because again, if we're testing let's say a 40 yard dash, it
+shouldn't change any bench press numbers." Then, on what the numbers start as: "Don't change the
+numbers that are already there, just make sure they are their own separate individual numbers" /
+"So copy and paste."
+
+**The number he did not know is 216.** 54 filmable exercises plus 216 filmable skill drills =
+**270 identities**, each with its own record in `shared/camera-tunables-by-lift.ts`.
+
+### What is now per-lift
+
+Twelve constants, every one of them a number a sensor comparison has moved or could move:
+`minRomFractionOfHeight`, `maxRomFractionOfHeight`, `travelOnsetMarginM`, `maxPeakToMeanRatio`,
+`driveOnsetFraction`, `maxDeviationFractionOfHeight`, `maxCountTrimPerEdge`,
+`minCountTrimOddness`, `heightRulerUncertainty`, `depthRulerBias`, `depthRulerUncertainty`,
+`ankle3DRulerUncertainty`.
+
+`cameraTunablesFor(name, romBucket)` returns a FRESH record every call, plus a `sources` map
+saying for each number whether it is the shared starting value, a rom-bucket value, or one
+FITTED on this lift. `summarizeTrackedSet` takes the record as its last argument and reads every
+one of those constants off it; `implausibleRangeOfMotion` and `implausibleBarPathDeviation` take
+it too. `av-bar-tracker-dialog.tsx` resolves it once per take from the exercise's name.
+
+### Why a factory and not 270 hand-typed blocks
+
+"Copy and paste" is the semantics, and the semantics is what was built: one independent,
+separately writable record per identity, with nothing shared between them at read time. Typing
+the same twelve numbers out 270 times would be ~4,000 lines nobody can review, and the first typo
+in it would be a per-lift calibration nobody intended -- the exact failure this is meant to
+prevent. The values live in one place to read rather than 270 places to compare, and a fitted
+number is a one-line override beside the lift's name, which is the line a reviewer actually needs
+to see.
+
+### What is deliberately NOT per-lift
+
+The plausibility gates (a frame implying an impossible velocity), the occlusion windows and the
+arbiter's grip-width threshold. Those are statements about physics and about the camera, not
+about the lift, and splitting them 270 ways would mean 270 uncalibrated guesses where today there
+is one considered number. Rule #2 applies to constants as much as to sensors: a number nobody can
+fit is not improved by having more copies of it.
+
+### Nothing moved, and it is proved three ways
+
+- `camera-tunables-are-a-copy.test.ts` asserts every value in the registry against the constant
+  it was copied from (the originals are now exported from `bar-tracking.ts` for exactly this, the
+  same "change one, change both" rule as the Swift arbiter port). A value edited in one place and
+  not the other fails rather than drifting.
+- The whole suite, including the four OVR fixture comparisons and the 20-capture replay corpus
+  (`count-trim-never-empties-a-set.test.ts`), is green and unchanged -- 326 files, 3,602 tests.
+- `every-filmable-thing-has-its-own-numbers.test.ts` resolves all 270, asserts no two share a
+  record and none is the frozen template, and scribbles on one to assert the other 269 are
+  untouched. Scott's own example is an assertion by name: **A 40-YARD DASH CALIBRATION DOES NOT
+  REACH THE BENCH PRESS.**
+
+`FITTED_OVERRIDES` is **empty**, and the test fails if an entry appears. That is the correct state
+today: not one constant in this pipeline has ever been fitted on a single lift in isolation --
+the RDL, the box jump and the bench were all fixed by changing a LABEL or a RULE, and the 10-06
+bias sweep is on the record as evidence against fitting blind. The registry is the machinery for
+doing it safely when a sensor-paired take justifies it; it is not permission to start guessing.

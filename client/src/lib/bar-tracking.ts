@@ -13,6 +13,8 @@
 import type { CaptureDeviceInfo } from "./native-av-preview";
 import type { TrackingDiagnostics } from "./tracking-diagnostics";
 
+import { cameraTunablesFor, type ResolvedCameraTunables } from "@shared/camera-tunables-by-lift";
+
 // x/y/z are real-world meters from MediaPipe's worldLandmarks (hip-centered
 // origin), not pixels -- no pixelsPerMeter calibration needed to interpret
 // them. y follows pose-tracking.ts's worldVerticalSign convention (smaller y
@@ -1420,8 +1422,15 @@ export function summarizeTrackedSet(
   // logged. Chooses BETWEEN the gates the trace itself proposes (see segmentPhasesRelative); it
   // never invents a rep or removes one on its own. Null keeps the old ladder order.
   expectedReps: number | null = null,
+  // THIS LIFT'S OWN NUMBERS (shared/camera-tunables-by-lift.ts). One record per filmable thing,
+  // so a number fitted on the 40-yard dash cannot reach the bench press. The default resolves
+  // the same values this function used before the registry existed -- the rom-bucket tables were
+  // copied into it verbatim and `camera-tunables-are-a-copy.test.ts` asserts each against its
+  // original constant, so an existing caller that passes nothing is bit-identical.
+  tunables: ResolvedCameraTunables = cameraTunablesFor(null, romKind),
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
+  const tune = tunables.values;
   const minRepAmplitudeCm = repAmplitudeGateCm(romKind, heightIn);
 
   // Repair single-frame implausible-acceleration glitches before anything
@@ -1515,9 +1524,9 @@ export function summarizeTrackedSet(
     // the sensor's definition of the concentric, fitted to the sensor. Same split as speedsMps
     // against speedsReportedMps, and for the same reason: changing what a number is read over
     // must not change which reps exist.
-    const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx, travelOnsetMarginFor(romKind));
+    const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx, tune.travelOnsetMarginM);
     const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
-    const drive = trimPhaseToDrive(speedsMps, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx) ?? moving;
+    const drive = trimPhaseToDrive(speedsMps, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx, tune.driveOnsetFraction) ?? moving;
     const driveDuration = (points[drive.endIdx].t - points[drive.startIdx].t) / 1000;
     // RANGE OF MOTION OVER THE TIME THE BAR WAS TRAVELLING -- a bar sensor's definition of mean
     // concentric velocity, and the one this is calibrated against. The sample mean of the
@@ -1547,8 +1556,8 @@ export function summarizeTrackedSet(
     // lift. Floored and capped rather than dropped (Rule #1: the rep keeps its number), and
     // both counted so the report can say how often the instantaneous read was unusable.
     const peakFloored = rawPeak < mean;
-    const peakCapped = rawPeak > mean * MAX_PEAK_TO_MEAN_RATIO;
-    const peak = peakFloored ? mean : peakCapped ? mean * MAX_PEAK_TO_MEAN_RATIO : rawPeak;
+    const peakCapped = rawPeak > mean * tune.maxPeakToMeanRatio;
+    const peak = peakFloored ? mean : peakCapped ? mean * tune.maxPeakToMeanRatio : rawPeak;
     return {
       peak,
       mean,
@@ -1964,8 +1973,8 @@ export function summarizeTrackedSet(
   // long keeps its reps), and it never removes a rep that scores under MIN_COUNT_TRIM_ODDNESS --
   // a rep that looks like the others stays, whatever the athlete typed. Under-counting is still
   // the worse failure.
-  const MAX_COUNT_TRIM_PER_EDGE = 4;
-  const MIN_COUNT_TRIM_ODDNESS = 1;
+  const MAX_COUNT_TRIM_PER_EDGE = tune.maxCountTrimPerEdge;
+  const MIN_COUNT_TRIM_ODDNESS = tune.minCountTrimOddness;
   const countTrimmed = new Set<number>();
   if (expectedReps != null && expectedReps > 0) {
     const setRun = runs.find((r) => r.length === largestRun);
@@ -2594,7 +2603,13 @@ export function computeRepTrustScores(
 // ANSWER possible". It needs no view of the camera at all, so no angle can defeat it. It is a
 // backstop, not a cure: it makes a bad calibration fail loudly instead of publishing confident
 // nonsense. Getting a right answer for a given angle is a separate problem.
-const MAX_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
+// THESE TABLES ARE NOW THE ORIGINALS THE REGISTRY IS CHECKED AGAINST, and that is the only
+// reason they are still here. shared/camera-tunables-by-lift.ts holds a per-lift COPY of every
+// value in them (Scott, 2026-10-06: "make sure they are their own separate individual numbers"),
+// and `camera-tunables-are-a-copy.test.ts` asserts each copy against the entry below -- so a
+// value edited here without the registry following fails rather than drifting silently. Same
+// shape as the Swift arbiter port: change one, change both.
+export const MAX_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
   // Bounded by arm length. Upper arm plus forearm is ~0.35 of height, and a press cannot
   // exceed it; 0.5 leaves generous room for a long-armed athlete and a deep arch.
   horizontal_press_or_row: 0.5,
@@ -2622,7 +2637,7 @@ const MAX_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
 // exceed their own height, so the catch-all has to sit above 1.0 or it would reject correct
 // Olympic lifts -- see this file's note in docs/camera-tracking-notes.md about those needing
 // their own model regardless.
-const DEFAULT_MAX_ROM_FRACTION = 1.3;
+export const DEFAULT_MAX_ROM_FRACTION = 1.3;
 
 // The other half, and it was missing. A ceiling alone only catches a scale read too LARGE. A
 // simulation over 48 realistic camera positions produced published ranges of motion from 6.1cm
@@ -2633,7 +2648,7 @@ const DEFAULT_MAX_ROM_FRACTION = 1.3;
 // Set well under any real working range: a bench press moves the bar roughly 0.2x of standing
 // height even for a very short-armed lifter benching to a high touch point, so 0.08 leaves
 // generous room while still catching a scale several times too small.
-const MIN_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
+export const MIN_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
   horizontal_press_or_row: 0.08,
   squat: 0.10,
   deadlift: 0.12,
@@ -2646,7 +2661,7 @@ const MIN_ROM_FRACTION_OF_HEIGHT: Record<string, number> = {
   dip_or_pushup: 0.05,
 };
 
-const DEFAULT_MIN_ROM_FRACTION = 0.05;
+export const DEFAULT_MIN_ROM_FRACTION = 0.05;
 
 /**
  * How far the tracked point travelled along the lift across a whole take, end to end.
@@ -2685,18 +2700,15 @@ export function implausibleRangeOfMotion(
   // caller that does not have the trace in hand is no worse off than before this existed -- it
   // just gets the old, sometimes-wrong attribution on the floor branch below.
   traceSpanCm?: number | null,
+  // This lift's own rep gate. The default resolves the same two fractions the tables above hold
+  // (they were copied into the registry verbatim), so a caller that passes nothing is unchanged.
+  tunables: ResolvedCameraTunables = cameraTunablesFor(null, movementPattern),
 ): string | null {
   if (!heightIn || heightIn <= 0) return null;
   if (romCm == null || !Number.isFinite(romCm) || romCm <= 0) return null;
   const heightCm = heightIn * 2.54;
-  const fraction = movementPattern
-    ? (MAX_ROM_FRACTION_OF_HEIGHT[movementPattern] ?? DEFAULT_MAX_ROM_FRACTION)
-    : DEFAULT_MAX_ROM_FRACTION;
-  const ceilingCm = heightCm * fraction;
-  const floorFraction = movementPattern
-    ? (MIN_ROM_FRACTION_OF_HEIGHT[movementPattern] ?? DEFAULT_MIN_ROM_FRACTION)
-    : DEFAULT_MIN_ROM_FRACTION;
-  const floorCm = heightCm * floorFraction;
+  const ceilingCm = heightCm * tunables.values.maxRomFractionOfHeight;
+  const floorCm = heightCm * tunables.values.minRomFractionOfHeight;
   if (romCm < floorCm) {
     const underBy = Math.round((floorCm / romCm) * 10) / 10;
     // A range of motion under the floor has two causes that look identical in this number alone,
@@ -2768,11 +2780,11 @@ export function implausibleRangeOfMotion(
 // the worst genuine take runs 0.12 of standing height, so 0.20 is most of a factor of two clear
 // of anything real while still catching the metre-wide readings, which are scale failures
 // wearing a form fault's clothing.
-const MAX_DEVIATION_FRACTION_OF_HEIGHT: Record<string, number> = {
+export const MAX_DEVIATION_FRACTION_OF_HEIGHT: Record<string, number> = {
   olympic: 0.3,
 };
 
-const DEFAULT_MAX_DEVIATION_FRACTION = 0.2;
+export const DEFAULT_MAX_DEVIATION_FRACTION = 0.2;
 
 /**
  * Whether a computed bar path deviation is physically possible for this athlete and movement.
@@ -2789,14 +2801,12 @@ export function implausibleBarPathDeviation(
   deviationCm: number | null,
   heightIn: number | null | undefined,
   movementPattern: string | null | undefined,
+  tunables: ResolvedCameraTunables = cameraTunablesFor(null, movementPattern),
 ): string | null {
   if (!heightIn || heightIn <= 0) return null;
   if (deviationCm == null || !Number.isFinite(deviationCm) || deviationCm <= 0) return null;
   const heightCm = heightIn * 2.54;
-  const fraction = movementPattern
-    ? (MAX_DEVIATION_FRACTION_OF_HEIGHT[movementPattern] ?? DEFAULT_MAX_DEVIATION_FRACTION)
-    : DEFAULT_MAX_DEVIATION_FRACTION;
-  const ceilingCm = heightCm * fraction;
+  const ceilingCm = heightCm * tunables.values.maxDeviationFractionOfHeight;
   if (deviationCm <= ceilingCm) return null;
   const overBy = Math.round((deviationCm / ceilingCm) * 10) / 10;
   // "about 1x further than it can drift" is not a sentence that says anything -- it rounds to 1

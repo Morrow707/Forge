@@ -124,6 +124,8 @@ import {
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import type { Landmark } from "@mediapipe/tasks-vision";
 
+import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
+
 /** AVFoundation + Vision bar-path/full mode tracking -- the last tracker mode converted off
  * ARKit (see ArBarTrackerDialog for the fallback this replaces, kept completely untouched per
  * the plan's own Context section). Same "needs a held implement, not just a body joint" problem
@@ -2102,6 +2104,7 @@ export function AvBarTrackerDialog({
       }
     }
 
+    const liftTunables = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName));
     const metrics = summarizeTrackedSet(
       trace,
       loadKg,
@@ -2126,6 +2129,12 @@ export function AvBarTrackerDialog({
       // The set's prescribed reps choose between the segmenter's own candidate gates -- the
       // bench take whose un-rack and re-rack outweighed its presses (segmentPhasesRelative).
       targetReps ?? null,
+      // THIS LIFT'S OWN NUMBERS, not the pipeline's (shared/camera-tunables-by-lift.ts). Resolved
+      // once per take from the exercise's name, so a number fitted on one lift is written into
+      // that lift's record and cannot reach another -- Scott, 2026-10-06: "if we're testing let's
+      // say a 40 yard dash, it shouldn't change any bench press numbers." Identical values to
+      // before today, by construction (camera-tunables-are-a-copy.test.ts).
+      liftTunables,
     );
     if (!metrics) {
       // "MAKE SURE THE BAR STAYS IN FRAME" WAS A GUESS, AND ON A REAL TAKE IT WAS WRONG.

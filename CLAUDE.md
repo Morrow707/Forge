@@ -972,7 +972,32 @@ can install. Delete entries as a `beta` ships them.
   **AND THE POSTURE SWEEP ABOVE TOUCHED NOTHING FILMABLE** -- none of its twenty-two exercises is
   on this list, so it is a correctness fix against the day one of them becomes eligible, not a
   change to any number anyone can produce today.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 625; the posture sweep is on the branch, waiting on Scott finishing with 625 before it merges.
+- **ONE SET OF NUMBERS PER FILMABLE THING: 270 records** (54 exercises + 216 skill drills),
+  `shared/camera-tunables-by-lift.ts`, 2026-10-06. Scott: "every single thing that can be filmed
+  needs its own system, because again, if we're testing let's say a 40 yard dash, it shouldn't
+  change any bench press numbers" / "Don't change the numbers that are already there, just make
+  sure they are their own separate individual numbers" / "So copy and paste."
+  Twelve constants are now per-lift -- the rep gate (min/max ROM fraction, travel onset), the
+  headline numbers (`maxPeakToMeanRatio`, `driveOnsetFraction`, deviation ceiling), segmentation
+  (`maxCountTrimPerEdge`, `minCountTrimOddness`) and four ruler uncertainties.
+  `cameraTunablesFor(name, romBucket)` returns a FRESH record every call plus a `sources` map
+  saying whether each number is shared, from the ROM bucket, or FITTED on this lift;
+  `summarizeTrackedSet` reads all twelve off it and the bar dialog resolves it once per take.
+  **NOTHING MOVED**, proved three ways: `camera-tunables-are-a-copy.test.ts` pins every value
+  against the constant it was copied from (those are now EXPORTED from `bar-tracking.ts` for that
+  purpose -- change one, change both, like the Swift arbiter); the OVR fixtures and the 20-capture
+  replay corpus are green and unchanged; and `every-filmable-thing-has-its-own-numbers.test.ts`
+  resolves all 270, asserts no two share a record, and scribbles on one to prove the other 269 are
+  untouched -- with Scott's example as a named assertion.
+  **NOT per-lift, on purpose:** the plausibility gates, the occlusion windows and the arbiter's
+  grip-width threshold. Those are statements about physics and the camera, not about the lift, and
+  270 copies would be 270 uncalibrated guesses where there is one considered number (Rule #2
+  applies to constants too). **`FITTED_OVERRIDES` is EMPTY and the test fails if an entry
+  appears** -- no constant here has ever been fitted on one lift in isolation, and the registry is
+  machinery for doing that safely, not permission to guess. See docs/camera-tracking-notes.md,
+  "One set of numbers per filmable thing".
+- **Queued, not yet in a build:** the 270-record per-lift tunables registry, on the branch.
+  Build **626** was cut from `5cdd12aa` with the posture sweep and the filmable-54 audit.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
