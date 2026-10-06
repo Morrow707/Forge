@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { buildWelcomeEmail } from "./welcome-email";
 import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * THE WELCOME EMAIL MAY ONLY NAME WHAT THE READER ACTUALLY HAS.
@@ -76,5 +78,55 @@ describe("the welcome email a Free Agent gets", () => {
     // read as a form letter.
     expect(freeAgent).toContain("Welcome, Priya");
     expect(freeAgent).not.toContain("Welcome, Priya Raghunathan");
+  });
+});
+
+/* AND THE OTHER TWELVE EMAILS, SCANNED RATHER THAN LISTED.
+ *
+ * Added by the pass-G audit, 2026-10-06. Checklist row G3 is "every email the system sends...
+ * nothing promises a feature the tier does not have", and the cases above cover the welcome
+ * email alone -- which is the one that got this wrong (it promised a Free Agent the AI program
+ * builder, two tiers up at $9.99). Every other builder in server/*email*.ts is transactional
+ * and makes no feature claim at all today, so the useful assertion is not "check them" but
+ * "fail when one STARTS making a claim", which is the same reasoning as the tracker-dialog scan:
+ * the next one will not be on anybody's list.
+ *
+ * A builder that genuinely needs to describe a paid feature is not blocked -- it gets added to
+ * COVERED below, with cases of its own beside the welcome email's.
+ */
+describe("no other email builder makes a tier-gated feature claim", () => {
+  const COVERED = new Set(["welcome-email.ts"]);
+  // The entitlements a tier can lack. Phrased as the words a marketing sentence would use,
+  // not as flag names: hasVideoFormCheck never appears in an email, "form check" does.
+  const CLAIMS =
+    /\bAI (?:coach|program builder|chat|training chat)\b|\bcamera\b|\bform check\b|\bvideo (?:analysis|review)\b|\bskills? (?:bank|library)\b/i;
+
+  const builders = readdirSync(join(process.cwd(), "server"))
+    .filter((f) => /email.*\.ts$/.test(f) && !/\.test\.ts$|\.itest\.ts$/.test(f));
+
+  it("finds the email builders at all", () => {
+    expect(builders.length).toBeGreaterThanOrEqual(12);
+    expect(builders).toContain("welcome-email.ts");
+  });
+
+  it.each(builders.filter((f) => !COVERED.has(f)))("%s makes no feature claim", (file) => {
+    const src = readFileSync(join(process.cwd(), "server", file), "utf8");
+    // Comments are prose about the code, not copy that reaches a reader.
+    const copy = src
+      .split("\n")
+      .filter((l) => {
+        const t = l.trim();
+        return !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*");
+      })
+      .join("\n");
+    const hit = copy.match(CLAIMS);
+    expect(
+      hit,
+      `${file} names "${hit?.[0]}" in copy that reaches a reader. An email cannot know the ` +
+        `recipient's tier unless it was written to, so a feature sentence here promises ` +
+        `something a Basic or AI Coach Free Agent may not have -- which is the bug the ` +
+        `welcome email shipped. Either drop the sentence, or gate it on the entitlement and ` +
+        `add this file to COVERED with cases of its own.`,
+    ).toBeNull();
   });
 });
