@@ -274,7 +274,19 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
   // live trace it cannot build properly. The stride is this hook's own constant, the same one
   // stopRecordingAndAnalyze passes to analyzeAvRecording, because the native side refuses a
   // live trace measured to a different one.
-  function startRecording(options?: { detectBox?: boolean; trackingMode?: string; body3DStride?: number; handPoseStride?: number }) {
+  function startRecording(options?: {
+    detectBox?: boolean;
+    trackingMode?: string;
+    body3DStride?: number;
+    handPoseStride?: number;
+    // Overwatch's thresholds for this lift, forwarded to the native arbiter. See
+    // shared/camera-tunables-by-lift.ts and AvTrackerArbiter.reset.
+    arbiterTunables?: {
+      maxLockDistanceInYardsticks: number;
+      maxPlateSizeInYardsticks: number;
+      maxYardstickDeviationRatio: number;
+    };
+  }) {
     setError(null);
     setRecording(true);
     recordStartedAtRef.current = Date.now();
@@ -341,6 +353,14 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     // native-av-preview.ts's PoseCoreMlImplement) -- every other caller
     // omits this and analysis behaves exactly as before.
     trackingMode?: string;
+    /** Overwatch's own thresholds for this lift, passed through to AvTrackerArbiter.reset on the
+     *    native side. Absent means the native defaults, which is what every take used before
+     *    per-lift numbers existed. See shared/camera-tunables-by-lift.ts. */
+    arbiterTunables?: {
+        maxLockDistanceInYardsticks: number;
+        maxPlateSizeInYardsticks: number;
+        maxYardstickDeviationRatio: number;
+    };
     // Fired the instant the recorded blob exists -- right after native stopRecording()
     // resolves, BEFORE Vision analysis (the "Analyzing recording" step) even starts, let
     // alone finishes. The upload doesn't depend on anything Vision produces (metrics get
@@ -390,6 +410,14 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     body3DStride?: number;
     handPoseStride?: number;
     trackingMode?: string;
+    /** Overwatch's own thresholds for this lift, passed through to AvTrackerArbiter.reset on the
+     *    native side. Absent means the native defaults, which is what every take used before
+     *    per-lift numbers existed. See shared/camera-tunables-by-lift.ts. */
+    arbiterTunables?: {
+        maxLockDistanceInYardsticks: number;
+        maxPlateSizeInYardsticks: number;
+        maxYardstickDeviationRatio: number;
+    };
     onBlobReady?: (blob: Blob) => void;
     onRecordingStopped?: () => void;
     onAnalysisProgress?: (percent: number) => void;

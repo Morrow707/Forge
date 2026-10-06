@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/queryClient";
@@ -731,6 +731,24 @@ export function AvBarTrackerDialog({
       ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment]
       : undefined;
 
+  // OVERWATCH'S THREE NUMBERS FOR THIS LIFT, handed to the native arbiter with every capture.
+  //
+  // Scott, 2026-10-06: "Plumb the arbiter, and the overwatch is fine, it can learn to understand
+  // the difference, what mattered was calibrating numbers not leaking to other numbers." Before
+  // this, these three were per-lift in TypeScript and one shared value on the phone -- which is
+  // where overwatch actually runs -- so a fitted number would have read as applied and not been.
+  // Overwatch itself is untouched and stays ONE referee across every movement (Rule #2); only
+  // the thresholds it compares against are the lift's own. Absent, the native side uses the same
+  // defaults it always has (AvTrackerArbiter.reset).
+  const arbiterTunables = useMemo(() => {
+    const { values } = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName));
+    return {
+      maxLockDistanceInYardsticks: values.maxLockDistanceInYardsticks,
+      maxPlateSizeInYardsticks: values.maxPlateSizeInYardsticks,
+      maxYardstickDeviationRatio: values.maxYardstickDeviationRatio,
+    };
+  }, [exerciseName]);
+
   useEffect(() => {
     if (!open) return;
     setSaving(false);
@@ -938,6 +956,11 @@ export function AvBarTrackerDialog({
       const result = await stopRecordingAndAnalyze({
         onAnalysisProgress: (percent) => onAnalysisProgress?.(forSetNumber, percent),
         trackingMode: coreMlTrackingMode,
+        // Overwatch's three thresholds for THIS lift -- see arbiterTunables above. Sent at Stop
+        // as well as at Record, because the file path resets them separately (both entry points
+        // call AvTrackerArbiter.reset, or a take analysed from a file would keep whatever the
+        // last live capture set).
+        arbiterTunables,
         // Same strides at Record and at Stop, so the live feeder and the file feeder stay one
         // measurement. See BAR_SENSOR_STRIDES.
         ...BAR_SENSOR_STRIDES,
@@ -2629,7 +2652,7 @@ export function AvBarTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ trackingMode: coreMlTrackingMode, ...BAR_SENSOR_STRIDES });
+                  startRecording({ trackingMode: coreMlTrackingMode, arbiterTunables, ...BAR_SENSOR_STRIDES });
                 }}
                 disabled={!supported || !heightIn}
               >

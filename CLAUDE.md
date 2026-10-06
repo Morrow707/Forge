@@ -999,13 +999,37 @@ can install. Delete entries as a `beta` ships them.
   and velocity-change gates, `minTrackingConfidence`, both occlusion windows, and overwatch's four
   yardstick gates). `robustPeakSpeed`, `plausibleMean` and `rejectImplausibleAccelerationSpikes`
   take their gate as a defaulted parameter.
-  **OVERWATCH'S FOUR ARE ONLY HALF-SPLIT, on purpose and recorded:** overwatch acts mid-clip so it
-  runs natively, and the native side is handed a tracking MODE, not a record. They are per-lift in
-  TypeScript (what the harness and the tests read) and the Swift copy keeps the shared default
-  until the record is plumbed through the plugin; `tracker-arbiter.test.ts` compares Swift against
-  that DEFAULT so the two cannot drift. **A fitted per-lift arbiter number is inert on the phone
-  until that lands -- do not fit one before then, it would read as applied and not be.** That
-  plumbing is the next piece of this work.
+  **THE ARBITER IS PLUMBED (2026-10-06).** `AvTrackerArbiter.Tunables` + `static var active`,
+  reset from `arbiterTunables` on EVERY capture at both native entry points (live and from a
+  file), sent by the bar dialog at Record and at Stop. The `static let`s stay as the defaults and
+  as what `tracker-arbiter.test.ts` pins against the TypeScript constants, so the two cannot drift
+  on the value they share; an absent or non-positive value falls back to the DEFAULT, never to the
+  last take (a stale static would be exactly the leak this exists to stop, and invisible).
+  `the-arbiter-reads-this-lifts-numbers.test.ts` is the ratchet and was mutation-tested in both
+  directions. Native change: needs `verify_build`.
+
+## WHAT "ITS OWN NUMBERS" MEANS, AND WHAT IT DOES NOT MEAN
+
+Scott, 2026-10-06, settling it in one sentence: **"the overwatch is fine, it can learn to
+understand the difference, what mattered was calibrating numbers not leaking to other numbers."**
+
+That is the whole principle behind the 270-record registry, and it cuts both ways, so read both
+halves before splitting anything else:
+
+- **WHAT MUST NEVER LEAK IS A FITTED NUMBER.** A threshold measured on a med ball throw, a bench
+  press or a 40-yard dash belongs to that movement and may not move what any other movement is
+  judged by. That is the entire reason `shared/camera-tunables-by-lift.ts` hands out a fresh
+  record per identity and the tests scribble on one to prove the other 269 are untouched.
+- **JUDGEMENT IS ALLOWED TO BE SHARED, AND SHOULD BE.** Overwatch stays ONE referee across every
+  movement -- it can and should learn to tell a thrown ball from a swung club. Splitting the
+  arbiter itself into 270 arbiters is NOT what this asked for and would break Rule #2 (one
+  arbiter, owning no sensor, judging both trackers). The same goes for the body tracker, the
+  object tracker, the segmenter and the scale blend: one implementation, many movements.
+- **So the test of any future split is: "is this a NUMBER somebody could fit from one take?"** If
+  yes, it is per-lift. If it is a RULE, a mechanism or a piece of reasoning, it stays shared and
+  gets better for every lift at once. The RDL hinge, the box jump's flagged rep and the bench
+  un-rack were all fixed by changing a rule or a label, and every lift got the benefit -- that is
+  the shape to keep, not something to split away.
   **`FITTED_OVERRIDES` is EMPTY and the test fails if an entry appears** -- no constant here has ever been fitted on one lift in isolation, and the registry is
   machinery for doing that safely, not permission to guess. See docs/camera-tracking-notes.md,
   "One set of numbers per filmable thing".
