@@ -927,7 +927,7 @@ can install. Delete entries as a `beta` ships them.
   **The lesson worth keeping: a guard stated as "X happens only inside `if (synced)`" is about
   TIMING, not CONTENT.** Both bugs were a correct-looking guard that answered the wrong
   question -- was the save successful, rather than did this save contain this thing.
-- Build **625** carries the posture sweep (2026-10-06): all 413 library exercises run through
+- Build **626** carries the posture sweep (2026-10-06): all 413 library exercises run through
   `postureForExercise`, and **twenty-two were resolving to the default, "standing", while being
   done face-down on a bench, folded into a plank, hinged at the hip or hanging** (Seal Row, Spider
   Curl, Frog Pump, Renegade Row, Stir the Pot, McGill Curl-Up, Machine Row, Pec Deck, Bent-Over
@@ -952,7 +952,7 @@ can install. Delete entries as a `beta` ships them.
   exercises in `server/seed.ts`, 377 resolve to the bar tracker, 20 to jump, 9 to med ball, 5 to
   horizontal load and 2 to kettlebell swing. Sprint and mechanics are in the SKILL library and are
   not among the 413.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 625.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 625; the posture sweep is on the branch, waiting on Scott finishing with 625 before it merges.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
