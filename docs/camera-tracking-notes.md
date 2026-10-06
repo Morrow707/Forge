@@ -2926,8 +2926,15 @@ constant. Posture is the model for that: it is per-lift by construction, and the
 
 ### What the sweep found
 
-All 413 library exercises (every one of them filmable -- `VideoTrackingToggle` excludes nothing)
-run through `postureForExercise`. Before: standing 308, lying 62, seated 22, bent_over 14,
+All 413 library exercises run through `postureForExercise`. (A correction to this section's first
+version, from Scott the same day: only **54** of the 413 can actually be filmed --
+`CANONICAL_VIDEO_ELIGIBLE_NAMES` in `server/seed.ts`, enforced by `exercises.videoEligible` and
+`resolveVideoCheckEnabled`, because video storage scales with how many distinct exercises are
+eligible. `VideoTrackingToggle` excludes nothing, which is what made "all 413 are filmable" look
+true; the gate is the column, not the control. **None of the twenty-two below is on that list**,
+so the sweep is a correctness fix against the day one becomes eligible, not a change to a number
+anyone can produce today -- and the per-lift/shared map above is unaffected, since it is about
+which constants are shared, not about how many lifts reach them.) Before: standing 308, lying 62, seated 22, bent_over 14,
 supported 5, hanging 2. **Twenty-two of the 308 were not standing.** They were reaching the
 default because `postureForExercise` falls through to "standing" for anything it does not
 recognise, and the patterns are a list of spellings:
@@ -2960,3 +2967,24 @@ in the 624 export.
 The tracker distribution, for the record: of 413 exercises, 377 resolve to the bar tracker, 20 to
 jump, 9 to med ball, 5 to horizontal load, 2 to kettlebell swing. Sprint and mechanics are in the
 SKILL library and are not among the 413.
+
+### The filmable 54, audited the same day
+
+Every one of them resolves a posture, and every bar-tracked one has a ROM bucket, a first move and
+film guidance -- `every-filmable-lift-is-profiled.test.ts` asserts it, because a lift added to the
+canonical list with no entry in those tables falls silently through to the defaults (posture
+"standing", `DEFAULT_MIN_ROM_FRACTION`) and nothing on the take says which numbers came from a
+table and which from a fallback.
+
+Breakdown: 46 bar-tracked (22 strength, 24 Olympic) and 8 jump-tracked. The eight jumps read none
+of the bar-path profile -- `jump-tracking.ts` does not ask for it -- and are listed explicitly in
+that test rather than detected, so a new jump lift has to be added deliberately.
+
+Postures across the 54: standing 46, bent_over 5 (the four rows and the Romanian deadlift), lying
+3 (the four bench variants and the hip thrust). That is the whole blast radius of the hinge and
+lying rules on anything that can currently be filmed.
+
+**One gap, recorded rather than filled: Hip Thrust has no ROM bucket.** Its rep gate is
+`DEFAULT_MIN_ROM_FRACTION`, which may well be right for a short-travel thrust, but no hip thrust
+has been filmed beside the sensor and Scott's instruction on the sweep was to leave the numbers
+alone. `NO_ROM_BUCKET_YET` in that test is the list, and it shrinks when one is measured.

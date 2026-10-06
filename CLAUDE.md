@@ -948,10 +948,30 @@ can install. Delete entries as a `beta` ships them.
   constant -- posture is the model: the hinge fix took the RDL from -7.0% to 0.0% and left the Back
   Squat bit-identical. Any constant fitted on one lift is checked against the others before it
   ships, as the 10-06 `concSpeed` term was. See docs/camera-tracking-notes.md, "The posture sweep".
-- **Every library exercise can be filmed.** `VideoTrackingToggle` excludes nothing: of the 413
-  exercises in `server/seed.ts`, 377 resolve to the bar tracker, 20 to jump, 9 to med ball, 5 to
-  horizontal load and 2 to kettlebell swing. Sprint and mechanics are in the SKILL library and are
-  not among the 413.
+- **ONLY 54 OF THE 413 LIBRARY EXERCISES CAN BE FILMED, AND THE LIST ALREADY EXISTS.** Corrected
+  2026-10-06 the same day, after this file briefly said every exercise was filmable -- it is not,
+  and the reason is video storage. Scott: "we don't need to film clamshells or bicep curls, tricep
+  extensions for example, we don't need that video storage."
+  `CANONICAL_VIDEO_ELIGIBLE_NAMES` in `server/seed.ts` is the set: 22 strength lifts (the canonical
+  version of each main-lift pattern only -- Bench Press but not Board/Spoto/Larsen Press), all 24
+  Olympic lifts (each a distinct skill, not a variant) and 8 plyometrics. Everything else is
+  backfilled `exercises.videoEligible = false`, the coach's toggle is not drawn for it, and
+  `resolveVideoCheckEnabled` in `storage.ts` refuses to turn video on for it whatever the client
+  sent -- so the gate is real on both sides. **`VideoTrackingToggle` itself excludes nothing**,
+  which is what made the wrong claim look true; the gate is the column, not the control.
+  Nullable on purpose: null and true both read as eligible and only an explicit false restricts,
+  so the backfill can never silently re-restrict one an admin flipped back on. Storage cost scales
+  with how many DISTINCT exercises are eligible, not with library size.
+  Skill drills have their own eligibility, by skillType rather than by name
+  (`MECHANICS_ELIGIBLE_SKILL_TYPES`, `SPRINT_TIMING_ELIGIBLE_SKILL_TYPES` plus twelve named
+  footwork drills); sprint and mechanics are in the SKILL library and are not among the 413.
+  `every-filmable-lift-is-profiled.test.ts` pins the 54 and asserts each has a posture, a ROM
+  bucket, a first move and film guidance, so a lift added to the list cannot land on the DEFAULTS
+  unnoticed. **One known gap, recorded not filled: Hip Thrust has no ROM bucket** and so uses
+  `DEFAULT_MIN_ROM_FRACTION`; nobody has filmed one beside the sensor.
+  **AND THE POSTURE SWEEP ABOVE TOUCHED NOTHING FILMABLE** -- none of its twenty-two exercises is
+  on this list, so it is a correctness fix against the day one of them becomes eligible, not a
+  change to any number anyone can produce today.
 - **Queued, not yet in a build:** nothing. Everything on `main` is in 625; the posture sweep is on the branch, waiting on Scott finishing with 625 before it merges.
 
 Two things worth saying out loud when someone tests this:
