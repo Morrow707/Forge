@@ -3366,3 +3366,77 @@ this?" and read the wrong state. 624 asked "did this save succeed?" when the que
 this save CONTAIN this?". This one asked "is this the payload I built?" when the question was
 "did the payload that just succeeded carry this capture?" -- and the answer is in the payload,
 which is the only thing that made the trip.
+
+## The segmenter, swept and NOT changed, 2026-10-06
+
+The three things queued after 631, worked in order. Two produced a change; one produced a reason
+not to make one, which is the more useful result of the two.
+
+### The rep windows found the merge in one line
+
+Wiring `windows` through to the rep rows paid for itself immediately. Barbell Shoulder Press s3,
+nine reps counted against ten logged:
+
+```
+rep1..rep8   phase 0.75-0.90s   phaseRom 62-80cm   driveRom 59-77cm
+rep9         phase 1.593s       phaseRom 93.4cm    driveRom 66.0cm
+```
+
+**Rep 9 is two reps.** Its phase carries 93.4cm on a set whose reps are 62-80, over twice the
+typical duration, and the drive window correctly found 66.0cm of it. Nothing else in the rep row
+says that: the mean, the peak and the reported range of motion all look ordinary, and
+`repConsistency` cannot flag it because 93.4 is only 1.4x the median. A rep with a long LEAD-IN
+(bar held still before the press) and two reps MERGED into one are identical in every field this
+export carried before today -- `phaseRomCm` beside `driveRomCm` separates them at a glance.
+
+This is also the second independent confirmation of the morning's mean fix: before it, rep 9 would
+have reported 93.4cm over the drive window's 0.884s = 1.06 m/s on a set averaging 0.75.
+
+### The merged-phase constants were swept, and the trade is real
+
+`splitMergedPhases` exists for exactly this and did not fire. Both its constants were swept across
+the whole 20-capture corpus, measuring rep counts against what the athlete logged:
+
+- **`MERGED_PHASE_MIN_SPAN_RATIO` 1.5 -> 1.15: NO EFFECT AT ALL.** Identical undercounts at every
+  value. It is not the binding condition and refitting it would have been motion without movement.
+- **`MERGED_PHASE_MIN_DIP` is the binding one, and it trades one failure for another:**
+
+| dip | corpus undercounts | suite |
+|---|---|---|
+| 0.5 (today) | 6 of 20 | green |
+| 0.45 | 6 of 20 | green |
+| 0.4 | 6 of 20 | **breaks the oblique bench** |
+| 0.35 | 5 of 20 | breaks it too |
+| 0.3 | **4 of 20** (bench set 9 and the un-rack capture both reach 10/10) | **invents a phantom rep** on the overlong test |
+
+**So it is NOT changed.** 0.3 fixes two corpus captures by breaking a sensor-paired behaviour --
+`overlong-phantom-rep` lands on ten where the tracker saw nine, which is a rep that did not happen
+appearing on an athlete's card. Under-counting loses evidence; over-counting invents it, and the
+second is worse. And 0.4 and 0.45 cost without gaining, so there is no value that takes the two
+wins without the loss.
+
+**What that tells us is worth more than the constant would have been:** the merged rep and the
+phantom rep are not separable by dip SIZE. A merged rep is two real presses with a shallow
+reversal between them; a phantom is dead time with a wobble in it. Telling those apart needs a
+term the dip does not have -- the same lesson as build 622, where raising the count-trim cap alone
+was wrong and only worked once `concSpeed` gave the scorer a term that could separate the cases.
+The `windows` block is what makes that term findable in the next export.
+
+### The CoreML detector: what I can and cannot do
+
+43 labelled boxes across 41 images -- plate 12, kettlebell 12, med_ball 10, **barbell 3**,
+dumbbell 1, and a handful of balls -- against 225 unlabelled images in `training-data/med-ball/raw`.
+That is why the barbell class has never produced a single detection on any take.
+
+**The fix is labelling, and it is not something to do carelessly.** This detector is a RULER: the
+box's width sets the real-world scale, so a box 15% off produces a scale 15% off, confidently, on
+every take that locks to it. Eyeballed boxes would be fabricated calibration data, which is the
+exact failure class this session has spent the day removing. Labelling 225 images properly is the
+work, and it is honest work rather than a code change.
+
+**The principled alternative, written down rather than built:** every capture already carries
+`objectDetection` and `objectLock` telemetry, and frames where the detector locked at high
+confidence AND overwatch agreed are self-labelled training data of exactly the quality this needs
+-- corroborated by a second system rather than by an eyeball. That is a real pipeline and a real
+build; it needs the stored videos, which is a server-side piece, and it should not be started in
+the same hour as a calibration session.

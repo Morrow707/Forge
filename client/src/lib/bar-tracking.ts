@@ -147,6 +147,22 @@ export type RepBreakdown = {
   // nothing to lower first.
   eccentricSeconds: number | null;
   eccentricVelocityMps: number | null;
+  /** THE THREE WINDOWS THIS REP WAS MEASURED OVER. Diagnostics only; nothing reads these to
+   *  compute a number. The phase is the whole segmented movement, the travel window is what the
+   *  rep filters were fitted on, the drive window is what the reported concentric is. A drive far
+   *  shorter than its travel, or a drive distance far short of the phase distance, is the shape
+   *  of the 2026-10-06 mean bug returning. Also the fastest way to tell a rep with a long LEAD-IN
+   *  (phase 9.4s, travel 0.5s -- the bar held still before the press) from two reps merged into
+   *  one, which the rep count cannot distinguish and which look identical in every other field. */
+  windows?: {
+    phaseSeconds: number;
+    travelSeconds: number;
+    driveSeconds: number;
+    phaseRomCm: number;
+    driveRomCm: number;
+    driveSamples: number;
+    driveFellBackToTravel: boolean;
+  };
 };
 
 /** `c` is the point's tracking confidence, two decimals. Added 2026-09-28 because the replay
@@ -2213,6 +2229,7 @@ export function summarizeTrackedSet(
         loadKg && loadKg > 0 ? Math.round(loadKg * GRAVITY_MPS2 * phase.mean) : null,
       eccentricSeconds: pairedEccentric ? Math.round(pairedEccentric.duration * 100) / 100 : null,
       eccentricVelocityMps: pairedEccentric ? Math.round(pairedEccentric.mean * 100) / 100 : null,
+      windows: phase.windows,
     });
   });
 

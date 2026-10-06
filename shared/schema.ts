@@ -9137,6 +9137,25 @@ export const repBreakdownEntrySchema = z.object({
   // stop (nothing to lower first).
   eccentricSeconds: z.number().optional().nullable(),
   eccentricVelocityMps: z.number().optional().nullable(),
+  // THE THREE WINDOWS THIS REP WAS MEASURED OVER -- diagnostics only, nothing computes from them.
+  // Declared here the day they were added: a zod object strips what it does not declare, with no
+  // error anywhere, and that has bitten twice. They exist because the 2026-10-06 mean bug (whole
+  // phase's distance over the drive window's time) was invisible in every export, and because a
+  // rep with a long LEAD-IN and two reps MERGED into one are indistinguishable in every other
+  // field -- on the shoulder press that same day, rep 9 read phaseRom 93.4 against a driveRom of
+  // 66.0 on a set whose reps were 63-68, which is a merge, in one line.
+  windows: z
+    .object({
+      phaseSeconds: z.number(),
+      travelSeconds: z.number(),
+      driveSeconds: z.number(),
+      phaseRomCm: z.number(),
+      driveRomCm: z.number(),
+      driveSamples: z.number(),
+      driveFellBackToTravel: z.boolean(),
+    })
+    .optional()
+    .nullable(),
 });
 
 export const armPathTraceSchema = z.object({
