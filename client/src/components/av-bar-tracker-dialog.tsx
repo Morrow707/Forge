@@ -2358,6 +2358,14 @@ export function AvBarTrackerDialog({
       formFaultThresholds,
       // The grip separation the tilt angle would be divided by. See MIN_TILT_GRIP_SPAN_PX.
       gripWidthPx ?? null,
+      // WHERE DOWN IS. The phone's own roll from CoreMotion, so the bar's tilt is measured
+      // against gravity rather than against the image -- the same witness reconcileMovementAxis
+      // uses for the movement axis, now reaching the fault that makes a claim about the bar.
+      // See detectFormFaults' own comment for what gravity does and does not fix here.
+      recordingStats.cameraRollDeg ?? null,
+      // And how far perspective had already rotated the grip line, measured by the grip rather
+      // than by the tilt, so the two are independent.
+      axisWitness.gripAxisFromVerticalDeg,
     );
 
     if (movementType === "Squat" && laterality !== "unilateral") {

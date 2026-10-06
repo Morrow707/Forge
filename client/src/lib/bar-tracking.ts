@@ -1548,11 +1548,34 @@ export function summarizeTrackedSet(
     // instantaneous speeds over a window that includes the slow start is not distance over time.
     // Capped at the same plausibility ceiling every other reported speed is.
     const romM = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
+    // THE DISTANCE AND THE TIME MUST COME FROM THE SAME WINDOW.
+    //
+    // 2026-10-06, the bench beside the OVR: mean 1.13 against the sensor's 0.65, +73.8%, while
+    // the SAME take's range of motion read 44.0cm against 37.8, only +16.3%. A scale error moves
+    // both by the same factor, so a velocity error four times the size of the distance error is
+    // not scale -- it is the clock. Rep 3 of that set reported 27.0cm in 0.13 SECONDS (2.29 m/s
+    // on a 135lb bench whose every sensor rep sat at 0.63-0.73); rep 3 of the row, 51.8cm in
+    // 0.13s.
+    //
+    // The cause is one line: `romM` spans the WHOLE phase (startIdx..endIdx) and `driveDuration`
+    // spans the DRIVE window, which is a strict subset of it -- trimPhaseToDrive deliberately
+    // cuts the slow start and finish away. So the whole rep's distance was being credited to
+    // only the fast part's time. On a clean rep the two windows nearly coincide and the error is
+    // small, which is why the 10-06 bench landed +0.9% on range of motion and still +15.7% on the
+    // mean; where the trim bites hard -- a single glitch frame lifts the rep's peak, the
+    // threshold is a fraction of that peak, and the window collapses -- it is unbounded.
+    //
+    // The distance over the drive window is what the drive window's duration is the time for.
+    // The REPORTED range of motion is untouched and stays the whole phase: that is the rep's
+    // actual travel and it is the number already measuring correctly (the comment above says so,
+    // and the sensor agrees). Two windows, two jobs -- the same split this function already
+    // makes for the travel window; the mean was reading across both.
+    const driveRomM = Math.abs(ySmoothed[drive.endIdx] - ySmoothed[drive.startIdx]);
     const slice = speedsReportedMps.slice(drive.startIdx, drive.endIdx + 1);
     const confidenceSlice = confidences.slice(drive.startIdx, drive.endIdx + 1);
     const mean =
-      driveDuration > 0 && romM > 0
-        ? Math.min(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, romM / driveDuration)
+      driveDuration > 0 && driveRomM > 0
+        ? Math.min(tune.maxPlausibleSpeedMps, driveRomM / driveDuration)
         : plausibleMean(slice, confidenceSlice, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
     // peak/peakIdx (index within the whole trace, used to report how long
     // it took to reach peak velocity, a standard VBT metric) come from

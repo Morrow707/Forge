@@ -3091,3 +3091,84 @@ only changes which number overwatch compares against, and it removes nothing.
 Still green and still bit-identical: 326 files, 3,602 tests, the four OVR fixtures and the
 20-capture replay corpus included. The new assertion carries his example by name: **A MED BALL
 GATE AND A GOLF SWING GATE ARE THE SAME KIND OF THING AND NOT THE SAME NUMBER.**
+
+## Three lifts beside OVR, build 625, 2026-10-06 (second session)
+
+Scott filmed bench, Pendlay row and barbell shoulder press on 625 and sent the export plus the
+OVR screens. Camera roll was between **-0.7 and -3.4 degrees on all twelve takes** -- the phone
+was level on every one. That single fact decides two of the three findings below.
+
+| Set 3 | Forge mean | OVR | | Forge ROM | OVR | |
+|---|---|---|---|---|---|---|
+| Barbell Shoulder Press | 0.98 | 0.88 | **+11.4%** | 69.7cm | 64.0 | **+8.9%** |
+| Pendlay Row | 1.24 | 1.02 | **+21.6%** | 42.6cm | 54.6 | **-22.0%** |
+| Bench Press | 1.13 | 0.65 | **+73.8%** | 44.0cm | 37.8 | **+16.3%** |
+
+### THE MEAN DIVIDED ONE WINDOW'S DISTANCE BY ANOTHER WINDOW'S TIME
+
+The bench is the finding, and it is not scale. **A scale error moves distance and velocity by
+the same factor**; this take's velocity error is four and a half times its distance error. So the
+clock was wrong, and the rep rows say exactly how: bench rep 3 reported **27.0cm in 0.13
+seconds** (2.29 m/s, on a 135lb bench whose every sensor rep sat between 0.63 and 0.73), rep 8
+77.0cm in 0.33s, and Pendlay row rep 3 51.8cm in 0.13s.
+
+One line in `summarizeTrackedSet` did it:
+
+```
+const romM = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);   // WHOLE phase
+const mean = romM / driveDuration;                                            // DRIVE window
+```
+
+`trimPhaseToDrive` deliberately cuts the slow start and finish off the phase, so the drive window
+is a strict SUBSET of it -- and the whole rep's distance was being credited to only the fast
+part's time. On a clean rep the two windows nearly coincide and the error is small, which is why
+the 10-06 morning bench read +0.9% on range of motion and still +15.7% on the mean and nobody
+separated the two. Where the trim bites hard -- one glitch frame lifts the rep's peak, the
+threshold is a FRACTION of that peak, so the window collapses -- it is unbounded.
+
+Fixed by measuring the distance over the window the time is measured over (`driveRomM`). The
+REPORTED range of motion is untouched and stays the whole phase: that is the rep's real travel and
+it is the number already measuring correctly. Two windows, two jobs -- the split this function
+already makes for the travel window; the mean was the one number reading across both. No constant
+was fitted. Replayed on the export it takes the bench from +73.8% to +61.5% and kills the 2.29 and
+2.73 rep spikes; the remaining gap is the segmenter (the harness returns 7 reps to the device's 9
+on that take, the known replay divergence), which is the next thing to look at.
+
+### "BAR TILTED ~28 DEGREES" WAS THE CAMERA ANGLE, AND NOW IT KNOWS WHERE DOWN IS
+
+Scott, on the fault: "this is the angle I filmed at, all camera systems need to be using gravity
+adjust to reference what down is, so weird angles down spawn a wrong tilt or shift number."
+
+Right, and the export says which half of it gravity fixes. Two rotations put a level bar on a
+slant in frame:
+
+- **ROLL** -- the phone turned. Every line in the image turns with it, so the bar against gravity
+  is the image angle MINUS the roll. CoreMotion measures it per take. **Now subtracted**, which is
+  the fix as asked. It is also, on this session, worth almost nothing: the roll never exceeded
+  3.4 degrees.
+- **PERSPECTIVE** -- the phone off to one side. The near plate sits lower and larger in frame than
+  the far one and the wrist-to-wrist line rotates with the viewing geometry. **This is all of
+  Scott's 28 degrees.** `gripAxisFromVerticalDeg` on the nine barbell takes read 9.9, 11, 15.8,
+  17.7, 19.4, 23.8, 33.3, 39.7 and 52.6 -- on a level phone, so none of it is roll. Set 9 beside
+  the OVR (build 575) is the controlled case: phone upright, bar going straight up and down, grip
+  line 28 degrees off square.
+
+Gravity cannot undo perspective, so the COACHING CLAIM stands down instead: when the phone was
+level and the viewing geometry alone rotates the grip line by more than the amount this fault
+calls a problem, the fault cannot tell the two apart and does not speak. The threshold is the
+FAULT'S OWN (`barTiltMaxDeg`), floored at `MIN_PERSPECTIVE_GRIP_ROTATION_DEG` -- not a number of
+its own, so it tracks whatever the fault is set to.
+
+**Rule #1, as always: one sentence is withheld, nothing else.** The tilt readings, the trace, the
+range of motion and every other fault are written exactly as before, and
+`the-tilt-fault-knows-where-down-is.test.ts` asserts the drift fault still fires on the same take.
+
+### Still open
+
+- **The row's range of motion is 22% LOW while its mean is 22% HIGH.** Those cannot both be scale
+  and they point opposite ways; the mean is the window bug above, the range of motion is not.
+- **Bench set 2 is internally consistent and low on both** (-35% mean, -43% range of motion),
+  which is the signature of a genuine scale error -- the opposite of set 3. Two sets of the same
+  lift, minutes apart, failing in two different ways.
+- **Every set counted 9 or 10 reps against 10 logged.** The three that read 9 are the three that
+  carry the window bug's spikes, so re-check the count after this fix lands rather than before.

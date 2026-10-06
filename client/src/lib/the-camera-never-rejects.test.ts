@@ -60,7 +60,9 @@ describe("a claim about technique needs the measurement behind it", () => {
   it("gates the tilt fault on the grip separation it is divided by", () => {
     const src = read("client/src/lib/pose-tracking.ts");
     expect(src).toContain("MIN_TILT_GRIP_SPAN_PX");
-    expect(src).toContain("if (tiltAngles.length && tiltSpanUsable)");
+    // The condition gained a third term on 2026-10-06 (the perspective stand-down -- see
+    // the-tilt-fault-knows-where-down-is.test.ts). Both guards must still be in it.
+    expect(src).toContain("if (tiltAngles.length && tiltSpanUsable && !perspectiveRotatesTheGrip)");
   });
 
   it("still writes every metric and every diagnostic on such a take", () => {
