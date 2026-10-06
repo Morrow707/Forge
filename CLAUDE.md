@@ -896,8 +896,10 @@ can install. Delete entries as a `beta` ships them.
   ruler low (-13.0%, -36.3%, -45.2%) and NO mechanism is proposed, because one paired take
   against 31.9/56.0/51.3 from an earlier session is not enough to fit to. Next to film.
   Calibration work: uploaded on commit.
-- Build **624** was cut 2026-10-06 from Scott's 623 console, and it is a SAVE-PATH build, not a
-  calibration one. Scott: "it rejected my video, which is a direct fucking violation of rule 1."
+- Build **625** was cut 2026-10-06 from Scott's 623 console (run 624, `d619c07d`, was a
+  verify_build; the beta went out as run/build **625** from `0daa3e6e`), and it is a SAVE-PATH
+  build, not a calibration one. **This is the build that landed on the phone**; the posture sweep
+  is in 626 behind it. Scott: "it rejected my video, which is a direct fucking violation of rule 1."
   The videos were in fact fine -- every set that reached the server carries `hasVideo: true`, so
   the video retry queue did its job -- but a SET did not reach the server, and he found that out
   by reading a debug console, which is the part that is indefensible. Two real bugs behind it,
@@ -1033,9 +1035,14 @@ halves before splitting anything else:
   **`FITTED_OVERRIDES` is EMPTY and the test fails if an entry appears** -- no constant here has ever been fitted on one lift in isolation, and the registry is
   machinery for doing that safely, not permission to guess. See docs/camera-tracking-notes.md,
   "One set of numbers per filmable thing".
+- **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
+  **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
+  the numbering in this file has drifted twice. Read the run list, not the last number written
+  down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
+  posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
+  branch `verify_build` for the arbiter plumbing. The next beta is therefore 628 or later.
 - **Queued, not yet in a build:** the 270-record per-lift tunables registry including the split
-  gates, on the branch.
-  Build **626** was cut from `5cdd12aa` with the posture sweep and the filmable-54 audit.
+  gates, and the native arbiter plumbing, on the branch.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
