@@ -3163,12 +3163,76 @@ its own, so it tracks whatever the fault is set to.
 range of motion and every other fault are written exactly as before, and
 `the-tilt-fault-knows-where-down-is.test.ts` asserts the drift fault still fires on the same take.
 
-### Still open
+### The three loose ends, chased the same session
 
-- **The row's range of motion is 22% LOW while its mean is 22% HIGH.** Those cannot both be scale
-  and they point opposite ways; the mean is the window bug above, the range of motion is not.
-- **Bench set 2 is internally consistent and low on both** (-35% mean, -43% range of motion),
-  which is the signature of a genuine scale error -- the opposite of set 3. Two sets of the same
-  lift, minutes apart, failing in two different ways.
-- **Every set counted 9 or 10 reps against 10 logged.** The three that read 9 are the three that
-  carry the window bug's spikes, so re-check the count after this fix lands rather than before.
+Scott: "Fix those 3 things why did you leave them? Every calibration needs to include every fix
+necessary or else we are testing useless data." Right -- a build that ships with a known cause
+unfixed produces a session nobody can attribute. All three were the same two bugs.
+
+**THE SHOULDER RULER WAS TRUSTED TWICE AS MUCH AS IT EARNS, AND IT CARRIED 80% OF THE BLEND.**
+`BIACROMIAL_TOLERANCE_FRACTION` was 0.1, set from how much biacromial-to-height varies BETWEEN
+PEOPLE. That is a real uncertainty and the wrong quantity: for one athlete filmed six times in an
+afternoon the between-person term is a constant BIAS, and what sets the weight is the ruler's own
+MEASUREMENT NOISE. That is measurable with no sensor -- within a session the true scale barely
+moves, so the spread of a ruler's implied scale across takes IS its noise:
+
+| ruler | measured spread | uncertainty used | |
+|---|---|---|---|
+| height | 5.3% | 0.1 | about right |
+| body_3d | 11.8% | 0.2 | about right |
+| **shoulder_width** | **12.0%** | **0.1** | **4x the weight on identical noise** |
+| depth | 24.8% | 0.2 | optimistic, and it gets 0% weight anyway |
+
+Inverse variance squares the ratio, so shoulder_width carried **80% of the entire blend on every
+lying or bent-over lift**, where the height ruler is absent -- and both of the session's scale
+errors followed it off in opposite directions. 0.1 -> 0.2.
+
+**This CORRECTS the 10-06 morning note**, which read shoulder_width's low BIAS (+5.5% median, the
+least biased of the four) as a reason to leave its uncertainty alone. Bias and variance are
+different numbers and the blend needs the second.
+
+**THE SET'S RANGE OF MOTION WAS A MEAN OVER EVERY REP, FRAGMENTS INCLUDED.** The row's per-rep
+range read 19, 33, 52, 37, 34, 49, 58, 52, 49 -- five reps between 49 and 58 against a sensor
+saying 50 to 60, plus four fragments the segmenter split. The mean of all nine is 42.6; the mean
+of the ones that agree is 49.5. **The set's number was dragged below every honest rep in it by
+reps the pipeline could already tell were broken.** Third time this shape has been found (build
+577's peak bound, build 621's `repsForSetBest`), and this file's own note said to go looking for
+any other set-level statistic over reps already identifiable as wrong. A mean is one.
+
+`setRangeOfMotionCm` uses `repConsistency`'s own rule -- the same median and the same
+`REP_ROM_OUTLIER_FRACTION` the diagnostics already report the set by, so the number on the card
+and the flag beside it cannot disagree -- and falls back to every rep when none agrees (Rule #1).
+
+**It is the MEAN of the survivors, not the median, and a sensor-paired set decided that.** The
+first version took the median and set 8 beside the OVR went from within 1% of the sensor's range
+of motion to 10.5% under it: an honest set's reps are not symmetric about their middle, and the
+mean of the real ones is what the sensor's number matches. Dropping the fragments is the whole
+fix; swapping the estimator too was a second change and the wrong one.
+
+### What the three fixes do, measured
+
+Computed from the device's own rep rows and scale candidates (the replay harness cannot re-derive
+device scale from a stored trace -- `STORED_TRACE_ALONG_AXIS`):
+
+| Set 3, range of motion | before | after | sensor |
+|---|---|---|---|
+| Barbell Shoulder Press | +8.9% | **-2.0%** | 64.0cm |
+| Bench Press | +16.4% | **+2.8%** | 37.8cm |
+| Pendlay Row | -22.0% | **-12.6%** | 54.6cm |
+
+Median absolute error 16.4% -> 2.8%. **Bench set 2's -43% is the same shoulder-ruler story read
+the other way**: its shoulder span measured 120.2px against 95.7 and 96.1 on the sets either side,
+the agreement cut dropped it as the outlier, and body_3d was left holding 100% of the weight
+alone -- a lone uncorroborated ruler, which is Rule #4's complaint exactly. With shoulder_width's
+weight halved the cut has less to overturn.
+
+**The rep count is NOT separately fixed and is not separately broken**: the three sets that read 9
+against 10 logged are the three carrying the window bug's fragments, and the fragments are what
+the segmenter split. Worth reading on the next export, which is the right order now that the
+fragments no longer set the set's number.
+
+**Still genuinely open: the row's remaining -12.6%.** Every ruler on that take reads low together
+(body_3d 0.00371, shoulder 0.00424, depth 0.00332 against the 0.00530 the sensor requires), which
+is not a blend problem and not a projection problem (ruled out 10-06 morning: across-axis travel
+adds 1.3%). No mechanism is proposed, because inventing one is how a bias constant gets fitted to
+a single lift.

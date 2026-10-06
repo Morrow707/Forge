@@ -83,8 +83,13 @@ describe("shoulderWidthScaleFromFrames", () => {
 
   it("carries an honest uncertainty rather than pretending to be exact", () => {
     const result = shoulderWidthScaleFromFrames(frames(0.5), HEIGHT_IN);
+    // 0.2 since 2026-10-06, refit from this ruler's MEASURED spread across nine takes in one
+    // session (12.0%, the same as body_3d's) rather than from between-person biacromial
+    // variation, which is a bias and not what inverse-variance weighting needs. See
+    // BIACROMIAL_TOLERANCE_FRACTION's own comment. The bound that matters is that it is never
+    // claimed to be exact and never worse than the depth ruler.
     expect(result.uncertaintyFraction).toBeGreaterThan(0.05);
-    expect(result.uncertaintyFraction).toBeLessThan(0.2);
+    expect(result.uncertaintyFraction).toBeLessThanOrEqual(0.2);
   });
 
   it("refuses when the shoulders are turned away, since the width is foreshortened too", () => {
