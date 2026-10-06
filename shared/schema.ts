@@ -9667,6 +9667,37 @@ export const trackingDiagnosticsSchema = z.object({
     .array(z.object({ t: z.number(), kind: z.string(), value: z.number().optional() }))
     .nullable()
     .optional(),
+  // WHY EACH FAULT RULE DECIDED WHAT IT DID. A zod object strips what it does not declare,
+  // silently -- this has bitten twice -- so the fields are spelled out here the day they are
+  // added, and shared/tracking-diagnostics-roundtrip.test.ts derives the list from the client
+  // type rather than restating it. See FormFaultEvidence in client/src/lib/pose-tracking.ts.
+  faultEvidence: z
+    .array(
+      z.object({
+        code: z.string().max(40),
+        fired: z.boolean(),
+        measured: z.number().nullable(),
+        threshold: z.number().nullable(),
+        suppressedBecause: z.string().max(60).optional(),
+        // Free-form by design: a rule's inputs differ per rule. Bounded so a bug cannot turn the
+        // diagnostics blob into a payload problem -- see the 13MB autosave of build 620.
+        inputs: z.record(z.union([z.number(), z.string().max(60), z.null()])).optional(),
+      }),
+    )
+    .max(40)
+    .nullable()
+    .optional(),
+  // Which reps the set's range of motion was computed from, and which it left out.
+  setRangeOfMotion: z
+    .object({
+      usedRepNumbers: z.array(z.number()).max(100),
+      droppedRepNumbers: z.array(z.number()).max(100),
+      fellBackToAllReps: z.boolean(),
+      medianRomCm: z.number().nullable(),
+      valueCm: z.number(),
+    })
+    .nullable()
+    .optional(),
   repConsistency: z
     .object({
       repsMeasured: z.number(),
@@ -9831,6 +9862,28 @@ export const trackingDiagnosticsSchema = z.object({
       // Declared so a REJECTED plate read keeps its number. A zod object strips what it does not
       // declare, silently -- see plateMeasuredPx in client/src/lib/tracking-diagnostics.ts for
       // why the rejected reads are the ones worth keeping.
+      // THE SHOULDER RULER, REFUSED OR NOT, and how many rulers actually voted. Added 2026-10-06:
+      // three takes decided by body_3d alone read 34-43% low and the export could not say why the
+      // second witness was missing. A zod object strips what it does not declare, silently -- this
+      // has bitten twice -- so these are spelled out the day they are added.
+      shoulderRuler: z
+        .object({
+          scale: z.number().nullable(),
+          uncertaintyFraction: z.number(),
+          medianSpanUnits: z.number().nullable(),
+          framesUsed: z.number(),
+          framesRejectedForAngle: z.number(),
+          // Loose string, same reasoning as plateRejectedReasons below: a new refusal reason must
+          // never be the thing that makes an insert fail.
+          rejectedBecause: z.string().max(60).nullable(),
+          spanSpreadFraction: z.number().nullable(),
+        })
+        .optional()
+        .nullable(),
+      scaleWitnesses: z
+        .object({ votingCount: z.number(), sources: z.array(z.string().max(60)).max(12) })
+        .optional()
+        .nullable(),
       plateMeasuredPx: z.number().optional().nullable(),
       plateToGripRatio: z.number().optional().nullable(),
       // See plateRejectedReasons in client/src/lib/tracking-diagnostics.ts. A loose string array

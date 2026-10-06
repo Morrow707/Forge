@@ -3236,3 +3236,93 @@ fragments no longer set the set's number.
 is not a blend problem and not a projection problem (ruled out 10-06 morning: across-axis travel
 adds 1.3%). No mechanism is proposed, because inventing one is how a bias constant gets fitted to
 a single lift.
+
+## Three lifts beside OVR, build 629, 2026-10-06 (third session)
+
+Forge bench is set 4, the other two are set 1; every OVR set is 4.
+
+| | Forge mean | OVR | | Forge ROM | OVR | | reps |
+|---|---|---|---|---|---|---|---|
+| Barbell Shoulder Press | 1.02 | 1.04 | **-1.9%** | 68.4 | 63.5 | +7.7% | 9/10 |
+| Pendlay Row | 0.87 | 1.02 | -14.7% | 36.0 | 54.6 | **-34.1%** | 10/10 |
+| Bench Press | 0.46 | 0.70 | -34.3% | 21.8 | 35.8 | **-39.1%** | 8/10 |
+
+**The shoulder press is the morning's work landing: -1.9% on the mean, from +11.4%.** The window
+fix did what it was supposed to. **And the tilt fault is gone from the bench** -- `formFaults` on
+that take is empty where the morning's carried "Bar tilted ~28 degrees", with the roll at -2.6 and
+the grip line 14 degrees off square. The perspective stand-down works.
+
+### ONE WITNESS IS WHERE EVERY BAD NUMBER CAME FROM, AND THAT IS NOW MEASURED
+
+Read off `scaleCandidates` across both sessions, and it is the cleanest signal this pipeline has
+produced:
+
+| take | rulers that voted | result |
+|---|---|---|
+| Shoulder Press s1 | height 66.7% + body_3d + shoulder | **-1.9% mean, +7.7% ROM** |
+| Bench s1 (10-05) | shoulder 80% + body_3d 20% | +12% |
+| Bench s3 (10-05) | shoulder 80% + body_3d 20% | +16% |
+| Row s3 (10-05) | shoulder 80% + body_3d 20% | -22% |
+| **Bench s2 (10-05)** | **body_3d ALONE, 100%** | **-43%** |
+| **Row s1 (10-06)** | **body_3d ALONE, 100%** | **-34%** |
+| **Bench s4 (10-06)** | **body_3d ALONE, 100%** | **-39%** |
+
+**Three for three.** Every take decided by one ruler read 34-43% low; every take with two or more
+landed inside 22%, and the one with three landed inside 8%. `scaleCorroborated` was already false
+on all three, and nothing acted on it or made it findable.
+
+This is RULE #4 measured on real sets rather than argued: *a number corroborated by one system is
+not a trusted number, it is an assertion.* It has been in CLAUDE.md since 2026-10-05 as a
+statement about the OBJECT tracker; these three takes say it holds just as hard among the body
+rulers, and names the price: about 38%.
+
+### AND THE EXPORT COULD NOT SAY WHY THE SECOND WITNESS WAS MISSING
+
+On all three the shoulder ruler was simply ABSENT from `scaleCandidates`. `ShoulderScaleReading`
+has carried `rejectedBecause`, `framesRejectedForAngle` and the span it measured since it was
+written, and **none of it has ever reached the export**: a refused ruler contributed nothing at
+all, not even a reason. So the single most important question about the three worst takes of two
+sessions -- why was this ruler not there -- had no answer in the data.
+
+Fixed, and it is the first of the export additions below. `calibration.shoulderRuler` now arrives
+on every take, refused or not: the scale, the uncertainty, the span it measured, the frames it
+used, the frames it threw out for angle, the refusal reason, and how much the ruler disagreed with
+ITSELF across the take (`spanSpreadFraction` -- the per-take version of the cross-take spread the
+morning's uncertainty refit was computed from by hand). `calibration.scaleWitnesses` says how many
+rulers actually carried weight, so "one witness" is a number rather than something counted off a
+list afterwards.
+
+**No constant was fitted from this.** The three takes average -38.7%, which is tempting and would
+be fitting a bias to one ruler from three takes of one athlete in one room. The work is finding
+why the shoulder ruler refuses, and the export now carries the answer for the next session.
+
+## What the export carries about faults, from 2026-10-06
+
+Scott: "Can we add anything to the camera export to give us more information on faults?" Three of
+that day's four fixes needed numbers the export did not have and were reconstructed by arithmetic
+across nine takes, so: yes, and here is what was missing.
+
+- **`faultEvidence`** -- every fault rule's decision, fired or not: what it measured, what it was
+  judged against, and `inputs` carrying the other measurements it read. A fault shipped as
+  `{code, label}`, a sentence with none of its inputs: "Bar tilted ~28 degrees" said nothing about
+  what 28 was measured from, or that the phone's roll was -2.9 and the grip line already 15.8
+  degrees off square.
+- **The suppressed ones, with a reason.** This pipeline now withholds two coaching claims on
+  purpose -- the grip-span floor and the perspective stand-down -- and without this a withheld
+  claim and an absent problem are identical in every export. Same complaint CLAUDE.md makes about
+  overwatch: a guard that cannot be shown to have fired is a guard nobody can tune. It applies at
+  least as hard to a guard that silences something.
+- **`repBreakdown[].windows`** -- the three windows per rep side by side: phase, travel and drive,
+  each with its own seconds AND its own displacement, plus the sample count and whether the drive
+  trim fell back. The bug found that morning (the mean dividing the whole phase's distance by the
+  drive window's time) was invisible and had to be inferred from a 0.13s concentric. With these on
+  the rep it reads off the page.
+- **`setRangeOfMotion`** -- which reps the set's range of motion was computed from and which it
+  dropped. A set statistic that silently drops reps is one nobody can reproduce from the rep rows
+  beside it, and as of this morning it drops them.
+- **`calibration.shoulderRuler` and `calibration.scaleWitnesses`** -- see above.
+
+Every one is declared in `trackingDiagnosticsSchema` in the same change. A zod object strips what
+it does not declare, silently, and this has bitten twice;
+`the-export-says-why-a-ruler-refused.test.ts` parses a payload through the real schema rather than
+trusting that.

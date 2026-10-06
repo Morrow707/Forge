@@ -1389,6 +1389,36 @@ export function repAmplitudeGateCm(romKind: string | null, heightIn?: number | n
 // otherwise-close call, not a substitute for what was actually measured.
 export type FirstPhaseHint = "concentric" | "eccentric" | null;
 
+/** Which reps the set's range of motion was computed from, and which were left out.
+ *
+ *  A set statistic that silently drops reps is one nobody can audit -- the number on the card
+ *  stops being reproducible from the rep rows beside it. Diagnostics only. */
+export type SetRangeOfMotionProvenance = {
+  usedRepNumbers: number[];
+  droppedRepNumbers: number[];
+  /** True when nothing agreed and the fallback took every rep (Rule #1). */
+  fellBackToAllReps: boolean;
+  medianRomCm: number | null;
+  valueCm: number;
+};
+
+export function setRangeOfMotionProvenance(
+  reps: { repNumber: number; romCm: number }[],
+): SetRangeOfMotionProvenance {
+  const consistency = repConsistency(reps);
+  const outliers = new Set(consistency?.outlierReps ?? []);
+  const usable = reps.filter((r) => Number.isFinite(r.romCm) && r.romCm > 0);
+  const kept = consistency ? usable.filter((r) => !outliers.has(r.repNumber)) : [];
+  const fellBack = kept.length === 0;
+  return {
+    usedRepNumbers: (fellBack ? usable : kept).map((r) => r.repNumber),
+    droppedRepNumbers: fellBack ? [] : usable.filter((r) => outliers.has(r.repNumber)).map((r) => r.repNumber),
+    fellBackToAllReps: fellBack,
+    medianRomCm: consistency?.medianRomCm ?? null,
+    valueCm: setRangeOfMotionCm(reps),
+  };
+}
+
 /** The set's range of motion: the median of the reps that agree with each other, falling back to
  *  every rep when too few do. See the call site for the Pendlay row that prompted it. */
 export function setRangeOfMotionCm(reps: { repNumber: number; romCm: number }[]): number {
@@ -1637,6 +1667,23 @@ export function summarizeTrackedSet(
       peakIdx,
       peakFloored,
       peakCapped,
+      // THE THREE WINDOWS, SIDE BY SIDE. Diagnostics only; nothing reads these to compute a
+      // number. Added 2026-10-06 because the bug found that day -- the mean dividing the whole
+      // phase's distance by the drive window's time -- was invisible in every export and had to
+      // be inferred from a 0.13s concentric. With these three on the rep it reads off the page:
+      // a drive window far shorter than its travel window, or a drive distance far short of the
+      // phase distance, is the shape of that failure returning.
+      windows: {
+        phaseSeconds: Math.round(((points[phase.endIdx].t - points[phase.startIdx].t) / 1000) * 1000) / 1000,
+        travelSeconds: Math.round(duration * 1000) / 1000,
+        driveSeconds: Math.round(driveDuration * 1000) / 1000,
+        phaseRomCm: Math.round(romM * 1000) / 10,
+        driveRomCm: Math.round(driveRomM * 1000) / 10,
+        /** Samples in the drive window. A window of 3 or 4 is a fragment however long it reads. */
+        driveSamples: drive.endIdx - drive.startIdx + 1,
+        /** True when trimPhaseToDrive gave up and the travel window was used instead. */
+        driveFellBackToTravel: drive === moving,
+      },
     };
   });
 

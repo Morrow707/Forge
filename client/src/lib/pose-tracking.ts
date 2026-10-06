@@ -798,8 +798,12 @@ const BIACROMIAL_TOLERANCE_FRACTION = 0.2;
  * appointed, and the blend still decides from agreement -- one ruler's stated confidence is
  * brought into line with its measured error, which is how DEPTH_RULER_BIAS and
  * BODY_3D_CORRECTED_UNCERTAINTY were each set. 0.1 is also exactly
- * BIACROMIAL_TOLERANCE_FRACTION above, which is right: both are body-span rulers built from the
- * same landmark set, and neither has a reason to be more certain than the other.
+ * BIACROMIAL_TOLERANCE_FRACTION was until 2026-10-06. They are no longer equal and the reason is
+ * MEASURED: across nine takes in one session the height ruler's implied scale spread 5.3% and the
+ * shoulder ruler's 12.0%. Both are body-span rulers from the same landmark set, but a long span is
+ * far less sensitive to landmark noise than a short one -- the same few pixels of jitter are a
+ * twentieth of a stature and a sixth of a shoulder breadth. So height keeps 0.1 and the shoulder
+ * went to 0.2; see BIACROMIAL_TOLERANCE_FRACTION's own comment.
  *
  * ONE CONSTANT FOR BOTH DIALOGS, which is why it lives here. The bar tracker and the jump
  * tracker each hardcoded 0.05 separately. It costs the box jump about 1% (44.0cm to 43.5cm,
@@ -1184,6 +1188,15 @@ export type ShoulderScaleReading = {
   framesUsed: number;
   framesRejectedForAngle: number;
   medianSpanUnits: number | null;
+  /** HOW MUCH THIS RULER DISAGREED WITH ITSELF ACROSS THE TAKE, as MAD over the median.
+   *
+   *  The paragraph on shoulderWidthScaleFromFrames records two bench sets measuring the same
+   *  shoulders 31% apart and concludes "a ruler that disagrees with itself by a third between two
+   *  sets is not a ruler" -- and then nothing in the export ever carried that spread, so it could
+   *  only ever be noticed by comparing takes by hand afterwards. On 2026-10-06 the uncertainty
+   *  refit was done exactly that way, across nine takes in a spreadsheet. With this on the take,
+   *  the ruler states its own reliability on the one capture, every capture. */
+  spanSpreadFraction: number | null;
   rejectedBecause:
     | "no_height"
     | "too_few_frames"
@@ -1295,6 +1308,7 @@ export function shoulderWidthScaleFromFrames(
     scale: null,
     uncertaintyFraction: BIACROMIAL_TOLERANCE_FRACTION,
     framesUsed: 0,
+    spanSpreadFraction: null,
     framesRejectedForAngle: 0,
     medianSpanUnits: null,
     rejectedBecause: null,
@@ -1342,6 +1356,14 @@ export function shoulderWidthScaleFromFrames(
     return { ...empty, framesRejectedForAngle, rejectedBecause: "too_few_frames" };
   }
 
+  // Median absolute deviation over the median, not a range: one bad frame is exactly the outlier
+  // this is meant to survive rather than be defined by. Same estimator repConsistency uses.
+  const spanSpreadFraction = (() => {
+    const devs = widths.map((w) => Math.abs(w - medianSpanUnits)).sort((a, b) => a - b);
+    const mad = devs[Math.floor(devs.length / 2)];
+    return Math.round((mad / medianSpanUnits) * 1000) / 1000;
+  })();
+
   const realWidthM = heightIn * 0.0254 * BIACROMIAL_HEIGHT_FRACTION;
   const scale = realWidthM / medianSpanUnits;
 
@@ -1368,6 +1390,7 @@ export function shoulderWidthScaleFromFrames(
         framesUsed: widths.length,
         framesRejectedForAngle,
         medianSpanUnits,
+      spanSpreadFraction,
         rejectedBecause: "implausible_span",
       };
     }
@@ -1379,6 +1402,7 @@ export function shoulderWidthScaleFromFrames(
     framesUsed: widths.length,
     framesRejectedForAngle,
     medianSpanUnits,
+      spanSpreadFraction,
     rejectedBecause: null,
   };
 }
@@ -3092,6 +3116,46 @@ export type FormFault = {
   label: string;
 };
 
+/** WHY A FAULT FIRED, OR WHY IT DID NOT. Diagnostics only -- nothing here reaches an athlete.
+ *
+ * Added 2026-10-06, after a calibration session in which three of the four fixes needed numbers
+ * the export did not carry and had to be reconstructed by arithmetic across nine takes. A fault
+ * shipped as `{code, label}` -- a sentence with none of its inputs. "Bar tilted ~28 degrees"
+ * said nothing about what 28 was measured from, what it was judged against, or that the phone's
+ * roll was -2.9 and the grip line was already 15.8 degrees off square.
+ *
+ * TWO THINGS, AND THE SECOND IS THE ONE THAT WAS MISSING ENTIRELY:
+ *
+ *  - A fault that FIRED records what it measured and what it was judged against, so a threshold
+ *    can be refitted from takes rather than from argument.
+ *  - A fault that was SUPPRESSED records that it was, and why. This pipeline now withholds two
+ *    coaching claims on purpose -- the grip-span floor and the perspective stand-down -- and
+ *    without this a withheld claim and an absent problem look identical in every export. That is
+ *    the same complaint CLAUDE.md makes about overwatch: a guard that cannot be shown to have
+ *    fired is a guard nobody can tune. It applies at least as hard to a guard that silences
+ *    something.
+ *
+ * `inputs` carries the other measurements the decision read, so a correlation that took a
+ * spreadsheet across nine takes is readable on one. */
+export type FormFaultEvidence = {
+  code: FormFault["code"];
+  /** Did the athlete see a sentence for this? */
+  fired: boolean;
+  /** The number the rule read, in the rule's own units (degrees, cm, a ratio). */
+  measured: number | null;
+  /** The number it was judged against. */
+  threshold: number | null;
+  /** Set only when `fired` is false AND the rule would otherwise have fired: why it was held
+   *  back. Absent on a fault that simply had nothing to report. */
+  suppressedBecause?:
+    | "grip_span_too_short"
+    | "perspective_rotates_the_grip"
+    | "no_samples";
+  /** Whatever else the decision read. Free-form on purpose: a rule's inputs differ per rule, and
+   *  a fixed shape here would be edited every time one is. */
+  inputs?: Record<string, number | string | null>;
+};
+
 // Heuristic biomechanics over a whole tracked set, not a single frame --
 // these fire on the WORST point observed across the set (e.g. the most
 // caved-in a knee got on any rep), so a single sloppy rep among five clean
@@ -3273,8 +3337,15 @@ export function detectFormFaults(
   // not by the tilt, so it can say the tilt is unsupportable without being the tilt's own
   // opinion of itself.
   gripAxisFromVerticalDeg?: number | null,
+  // WHY EACH RULE DECIDED WHAT IT DID, pushed into rather than returned, so the return type and
+  // every one of this function's callers stay exactly as they are. A caller that passes nothing
+  // gets today's behaviour and pays nothing. See FormFaultEvidence.
+  evidence?: FormFaultEvidence[],
 ): FormFault[] {
   const faults: FormFault[] = [];
+  const note = (e: FormFaultEvidence) => {
+    if (evidence) evidence.push(e);
+  };
   // Every distance-based fault label below respects the same device-level
   // cm/in preference distance-unit.ts already drives for jump height --
   // defaults to inches (see loadDistanceUnitPref's own comment), same as
@@ -3554,10 +3625,19 @@ export function detectFormFaults(
     }
   }
 
-  if (usesSharedBar && barPathDeviationCm > thresholds.barPathDeviationMaxCm) {
-    faults.push({
+  if (usesSharedBar) {
+    const fired = barPathDeviationCm > thresholds.barPathDeviationMaxCm;
+    if (fired) {
+      faults.push({
+        code: "bar_path_drift",
+        label: `Bar drifted ${formatDistanceCm(barPathDeviationCm, distanceUnit)} off a straight vertical line`,
+      });
+    }
+    note({
       code: "bar_path_drift",
-      label: `Bar drifted ${formatDistanceCm(barPathDeviationCm, distanceUnit)} off a straight vertical line`,
+      fired,
+      measured: Math.round(barPathDeviationCm * 10) / 10,
+      threshold: thresholds.barPathDeviationMaxCm,
     });
   }
 
@@ -3592,6 +3672,25 @@ export function detectFormFaults(
     // rotates the grip line by more than the amount this fault calls a problem, the fault cannot
     // tell the two apart on this take -- whatever that threshold is set to.
     gripAxisFromVerticalDeg >= Math.max(MIN_PERSPECTIVE_GRIP_ROTATION_DEG, thresholds.barTiltMaxDeg);
+  // Every branch of this decision is recorded, including the two that silence it. A withheld
+  // claim and an absent problem are indistinguishable without this.
+  const tiltInputs = {
+    cameraRollDeg: rollKnown ? (cameraRollDeg as number) : null,
+    gripAxisFromVerticalDeg: gripAxisFromVerticalDeg ?? null,
+    gripSpanPx: tiltGripSpanPx ?? null,
+    samples: tiltAngles.length,
+    rawWorstDeg:
+      tiltAngles.length > 0
+        ? Math.round(percentile(tiltAngles.map((t) => Math.abs(t)), 0.95) * 10) / 10
+        : null,
+  };
+  if (!tiltAngles.length) {
+    note({ code: "bar_tilt", fired: false, measured: null, threshold: thresholds.barTiltMaxDeg, suppressedBecause: "no_samples", inputs: tiltInputs });
+  } else if (!tiltSpanUsable) {
+    note({ code: "bar_tilt", fired: false, measured: tiltInputs.rawWorstDeg, threshold: thresholds.barTiltMaxDeg, suppressedBecause: "grip_span_too_short", inputs: tiltInputs });
+  } else if (perspectiveRotatesTheGrip) {
+    note({ code: "bar_tilt", fired: false, measured: tiltInputs.rawWorstDeg, threshold: thresholds.barTiltMaxDeg, suppressedBecause: "perspective_rotates_the_grip", inputs: tiltInputs });
+  }
   if (tiltAngles.length && tiltSpanUsable && !perspectiveRotatesTheGrip) {
     // 95th percentile of |tilt|, not a raw max -- see percentile's own
     // comment. Sign comes from the first sample that reaches this robust
@@ -3609,13 +3708,23 @@ export function detectFormFaults(
       0.95,
     );
     const worstTilt = againstGravity.find((t) => Math.abs(t) >= worstMagnitude) ?? 0;
-    if (Math.abs(worstTilt) > thresholds.barTiltMaxDeg) {
+    const tiltFired = Math.abs(worstTilt) > thresholds.barTiltMaxDeg;
+    if (tiltFired) {
       const side = worstTilt > 0 ? "right" : "left";
       faults.push({
         code: "bar_tilt",
         label: `Bar tilted ~${Math.round(Math.abs(worstTilt))}° toward the ${side} arm`,
       });
     }
+    // `measured` is the GRAVITY-CORRECTED angle, which is what the rule judged; the uncorrected
+    // one sits in inputs.rawWorstDeg beside the roll, so the correction's size is readable.
+    note({
+      code: "bar_tilt",
+      fired: tiltFired,
+      measured: Math.round(Math.abs(worstTilt) * 10) / 10,
+      threshold: thresholds.barTiltMaxDeg,
+      inputs: { ...tiltInputs, side: worstTilt > 0 ? "right" : "left" },
+    });
   }
 
   // 5th/95th spread rather than raw min/max, same reasoning as everywhere

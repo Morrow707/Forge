@@ -27,6 +27,16 @@ export type BodyScaleFallbacks = {
   shoulders: ShoulderScaleReading;
   /** Diagnostics rows in the shape `scaleCandidates` already carries. */
   diagnostics: { source: string; scale: number; measured: number | null; samples: number | null }[];
+  /** The shoulder ruler, refused or not, in the shape `calibration.shoulderRuler` carries. */
+  shoulderRuler: {
+    scale: number | null;
+    uncertaintyFraction: number;
+    medianSpanUnits: number | null;
+    framesUsed: number;
+    framesRejectedForAngle: number;
+    rejectedBecause: string | null;
+    spanSpreadFraction: number | null;
+  };
   /** The 3D ruler bone by bone, in the shape `calibration.body3DRuler` carries. */
   body3DRuler: {
     limbs: Body3DScaleReading["limbs"];
@@ -83,6 +93,29 @@ export function bodyScaleFallbacks(
       ? [{ source: "shoulder_width", scale: shoulders.scale, measured: shoulders.medianSpanUnits, samples: shoulders.framesUsed }]
       : []),
   ];
+  // WHY A RULER IS NOT IN THE VOTE. Added 2026-10-06, and the session that forced it is the
+  // reason: on three takes across two days the shoulder ruler was simply ABSENT from
+  // scaleCandidates, body_3d stood alone at 100% of the weight, and all three read 34-43% LOW
+  // (bench -43%, bench -39%, row -34%) while every corroborated take landed inside 8%. That is
+  // Rule #4 measured on real sets -- "a number corroborated by one system is not a trusted
+  // number, it is an assertion" -- and the export could not say WHY the second witness was
+  // missing, because a refused ruler contributed nothing at all rather than a reason.
+  //
+  // `ShoulderScaleReading` has carried `rejectedBecause`, `framesRejectedForAngle` and the span
+  // it measured since it was written. None of it ever reached the export. It does now, refused or
+  // not, which is the same rule the capture-diagnostics section states for a failed take: the
+  // capture whose record matters most is the one that failed.
+  const shoulderRuler = {
+    scale: shoulders.scale,
+    uncertaintyFraction: shoulders.uncertaintyFraction,
+    medianSpanUnits: shoulders.medianSpanUnits,
+    framesUsed: shoulders.framesUsed,
+    framesRejectedForAngle: shoulders.framesRejectedForAngle,
+    rejectedBecause: shoulders.rejectedBecause,
+    /** How much this ruler disagreed with ITSELF across the take -- see spanSpreadFraction. */
+    spanSpreadFraction: shoulders.spanSpreadFraction,
+  };
+
   const body3DRuler = {
     limbs: body3D.limbs,
     heightSource: body3D.heightSource,
@@ -94,5 +127,5 @@ export function bodyScaleFallbacks(
     frameWidth: nativeFrames.find((f) => f.frameWidth > 0)?.frameWidth ?? null,
     frameHeight: nativeFrames.find((f) => f.frameHeight > 0)?.frameHeight ?? null,
   };
-  return { candidates, body3D, shoulders, diagnostics, body3DRuler };
+  return { candidates, body3D, shoulders, diagnostics, body3DRuler, shoulderRuler };
 }

@@ -418,6 +418,21 @@ export type TrackingDiagnostics = {
     // threshold, retrain the model, move the camera), and a single boolean collapsed them into
     // one indistinguishable "rejected".
     plateRejectedReasons?: string[];
+    /** THE SHOULDER RULER, REFUSED OR NOT. A refused ruler used to contribute nothing at all --
+     *  not even a reason -- and three takes across 2026-10-05/06 were decided by body_3d alone
+     *  because of it, every one of them 34-43% low. See body-scale-fallback.ts's shoulderRuler. */
+    shoulderRuler?: {
+      scale: number | null;
+      uncertaintyFraction: number;
+      medianSpanUnits: number | null;
+      framesUsed: number;
+      framesRejectedForAngle: number;
+      rejectedBecause: string | null;
+      spanSpreadFraction: number | null;
+    };
+    /** How many rulers actually carried weight. One is the state every badly-wrong take of the
+     *  2026-10-06 session was in, so it is a number here rather than something counted by hand. */
+    scaleWitnesses?: { votingCount: number; sources: string[] };
   } | null;
   // WHAT THE TRACE ITSELF CAME OUT AS, AND WHAT THE SEGMENTER MADE OF IT.
   //
@@ -510,6 +525,25 @@ export type TrackingDiagnostics = {
   /** WHAT THE JUMP STATE MACHINE DECIDED, in take order -- see jump-tracking.ts's
    *  JumpSegmentationEvent. Five logged box jumps came back as two with nothing to say why. */
   jumpEvents?: { t: number; kind: string; value?: number }[] | null;
+  /** WHY EACH FAULT RULE DECIDED WHAT IT DID -- see FormFaultEvidence in pose-tracking.ts. The
+   *  ones that fired carry what they measured and what they were judged against; the ones that
+   *  were held back carry why. Diagnostics only; nothing here reaches an athlete. */
+  faultEvidence?: {
+    code: string;
+    fired: boolean;
+    measured: number | null;
+    threshold: number | null;
+    suppressedBecause?: string;
+    inputs?: Record<string, number | string | null>;
+  }[];
+  /** Which reps the set's range of motion was computed from, and which it left out. */
+  setRangeOfMotion?: {
+    usedRepNumbers: number[];
+    droppedRepNumbers: number[];
+    fellBackToAllReps: boolean;
+    medianRomCm: number | null;
+    valueCm: number;
+  };
   repConsistency?: {
     repsMeasured: number;
     medianRomCm: number;
@@ -725,6 +759,8 @@ export function buildTrackingDiagnostics(args: {
   ankle3D?: TrackingDiagnostics["ankle3D"];
   rotation3D?: TrackingDiagnostics["rotation3D"];
   limbMeasurementsM?: TrackingDiagnostics["limbMeasurementsM"];
+  faultEvidence?: TrackingDiagnostics["faultEvidence"];
+  setRangeOfMotion?: TrackingDiagnostics["setRangeOfMotion"];
   repConsistency?: TrackingDiagnostics["repConsistency"];
   cameraView?: TrackingDiagnostics["cameraView"];
   jumpEvents?: TrackingDiagnostics["jumpEvents"];
@@ -740,6 +776,8 @@ export function buildTrackingDiagnostics(args: {
     ankle3D: args.ankle3D ?? null,
     rotation3D: args.rotation3D ?? null,
     limbMeasurementsM: args.limbMeasurementsM ?? null,
+    faultEvidence: args.faultEvidence,
+    setRangeOfMotion: args.setRangeOfMotion,
     repConsistency: args.repConsistency ?? null,
     cameraView: args.cameraView ?? null,
     jumpEvents: args.jumpEvents ?? null,

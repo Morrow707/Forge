@@ -126,6 +126,9 @@ import type { Landmark } from "@mediapipe/tasks-vision";
 
 import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
 
+import { setRangeOfMotionProvenance } from "@/lib/bar-tracking";
+import type { FormFaultEvidence } from "@/lib/pose-tracking";
+
 /** AVFoundation + Vision bar-path/full mode tracking -- the last tracker mode converted off
  * ARKit (see ArBarTrackerDialog for the fallback this replaces, kept completely untouched per
  * the plan's own Context section). Same "needs a held implement, not just a body joint" problem
@@ -1415,6 +1418,10 @@ export function AvBarTrackerDialog({
       scaleCandidates: typeof scaleCandidatesWithWeights;
       scaleOutliers: { source: string; ratioToChosen: number }[];
       scaleCorroborated: boolean;
+      // The shoulder ruler refused or not, and how many rulers actually voted -- see where these
+      // are assigned below for the three takes that made them necessary.
+      shoulderRuler?: NonNullable<TrackingDiagnostics["calibration"]>["shoulderRuler"];
+      scaleWitnesses?: NonNullable<TrackingDiagnostics["calibration"]>["scaleWitnesses"];
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
       axisSource?: MovementAxisSource;
       gripAxisFromVerticalDeg?: number | null;
@@ -2105,6 +2112,28 @@ export function AvBarTrackerDialog({
         : null;
       calibrationDiagnostics.positionScaleCorrection = positionScaleCorrection ?? null;
       calibrationDiagnostics.body3DRuler = body3DRulerDiagnostics;
+      // THE SHOULDER RULER, REFUSED OR NOT. Three takes across 2026-10-05/06 had this ruler
+      // silently absent from scaleCandidates, body_3d alone at 100% of the weight, and all three
+      // read 34-43% LOW while every corroborated take landed inside 8%. The export could not say
+      // why the second witness was missing. See shoulderRuler in body-scale-fallback.ts.
+      calibrationDiagnostics.shoulderRuler = {
+        scale: shoulderScale.scale,
+        uncertaintyFraction: shoulderScale.uncertaintyFraction,
+        medianSpanUnits: shoulderScale.medianSpanUnits,
+        framesUsed: shoulderScale.framesUsed,
+        framesRejectedForAngle: shoulderScale.framesRejectedForAngle,
+        rejectedBecause: shoulderScale.rejectedBecause,
+        spanSpreadFraction: shoulderScale.spanSpreadFraction,
+      };
+      // HOW MANY WITNESSES THE SCALE ACTUALLY HAD. `scaleCorroborated` already says yes or no;
+      // this says how thin. One witness is the state every badly-wrong take of this session was
+      // in, so it is recorded as a number rather than counted off the candidate list by hand.
+      calibrationDiagnostics.scaleWitnesses = {
+        votingCount: (calibrationDiagnostics.scaleCandidates ?? []).filter(
+          (candidate) => (candidate as { weightPct?: number }).weightPct !== 0,
+        ).length,
+        sources: (calibrationDiagnostics.scaleCandidates ?? []).map((candidate) => candidate.source),
+      };
       calibrationDiagnostics.gripPairsUsed = gripPairs.length;
       calibrationDiagnostics.traceTravelAlongCm = (maxAlong - minAlong) * 100;
       calibrationDiagnostics.traceTravelAcrossCm = (maxAcross - minAcross) * 100;
@@ -2128,6 +2157,7 @@ export function AvBarTrackerDialog({
     }
 
     const liftTunables = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName));
+    const faultEvidence: FormFaultEvidence[] = [];
     const metrics = summarizeTrackedSet(
       trace,
       loadKg,
@@ -2366,6 +2396,10 @@ export function AvBarTrackerDialog({
       // And how far perspective had already rotated the grip line, measured by the grip rather
       // than by the tilt, so the two are independent.
       axisWitness.gripAxisFromVerticalDeg,
+      // WHY EACH RULE DECIDED WHAT IT DID, including the ones that said nothing. See
+      // FormFaultEvidence: a withheld coaching claim and an absent problem are indistinguishable
+      // without this, and two rules now withhold on purpose.
+      faultEvidence,
     );
 
     if (movementType === "Squat" && laterality !== "unilateral") {
@@ -2446,6 +2480,14 @@ export function AvBarTrackerDialog({
       calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
       trace: traceDiagnostics(metrics.repBreakdown.length, metrics),
       limbMeasurementsM,
+      // WHY EVERY FAULT RULE DECIDED WHAT IT DID, the ones that fired and the ones that were
+      // held back. See FormFaultEvidence.
+      faultEvidence,
+      // WHICH REPS THE SET'S RANGE OF MOTION WAS COMPUTED FROM. A set statistic that silently
+      // drops reps is one nobody can reproduce from the rep rows beside it.
+      setRangeOfMotion: setRangeOfMotionProvenance(
+        metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
+      ),
       repConsistency: repConsistency(
         metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
       ),
