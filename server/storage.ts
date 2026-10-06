@@ -5497,6 +5497,38 @@ export const storage = {
     return Array.from(new Set(rows.map((r) => r.athleteId)));
   },
 
+  /* THE TEAM NARROWING, FOR THE READS THAT DO NOT GO THROUGH getRosterAthleteForCoach.
+   *
+   * Added 2026-10-06 by the pass-E audit. CLAUDE.md states the design as "every per-athlete
+   * coach route 404s through getRosterAthleteForCoach, so scoping only the list would hide a
+   * name and leave every URL working" -- and that was true of the athlete-detail family and
+   * NOT true of the analytics family, the calendar or the leaderboard, which take an athleteId
+   * from a query string (or no athleteId at all) and filtered on getEffectiveCoachIds alone.
+   * A narrowed staff coach could not see an off-team athlete on the roster or open their
+   * detail page, and could still read their exercise history, force-velocity profile, form
+   * overwatch, recent sessions and calendar, and see their name and numbers on the coach
+   * leaderboard, by asking for them directly. That is exactly the bug the design note warns
+   * about, one layer further in.
+   *
+   * Both of these return the UNRESTRICTED answer for a primary coach, a solo coach and a staff
+   * coach with no assignment anywhere -- getCoachTeamScope returns null for each, which is what
+   * keeps "the first assignment is what turns narrowing on" true. Both ride the per-request
+   * memo getCoachTeamScope already has, so adding them to a query costs no round trip.
+   */
+  async athleteIsInCoachScope(coachId: number, athleteId: number): Promise<boolean> {
+    const scope = await this.getCoachTeamScope(coachId);
+    if (scope === null) return true;
+    const allowed = await this.getScopedRosterAthleteIds(scope);
+    return allowed.includes(athleteId);
+  },
+
+  /** The athlete ids a narrowed coach may see, or null when they may see every one. */
+  async athleteIdsInCoachScope(coachId: number): Promise<number[] | null> {
+    const scope = await this.getCoachTeamScope(coachId);
+    if (scope === null) return null;
+    return this.getScopedRosterAthleteIds(scope);
+  },
+
   async getAdmins() {
     return db.query.users.findMany({ where: eq(users.role, "admin") });
   },
@@ -5657,6 +5689,8 @@ export const storage = {
   // can no longer see or remove through the roster. Returns false (no-op)
   // if the athlete wasn't on this staff's roster to begin with.
   async removeAthleteFromCoach(coachId: number, athleteId: number) {
+    // Team narrowing: a narrowed staff coach cannot remove an athlete they cannot see.
+    if (!(await this.athleteIsInCoachScope(coachId, athleteId))) return false;
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const onRoster = await db.query.coachAthletes.findFirst({
       where: and(
@@ -20677,9 +20711,28 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     athleteId?: number,
   ) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
+    /* TEAM NARROWING. The calendar names athletes (it joins `athlete: true` below), so for a
+     * narrowed staff coach it listed every athlete in the program -- including the ones whose
+     * detail page 404s for them -- and an explicit ?athleteId= read off anybody's assignment.
+     * Null scope (a primary, a solo coach, a staff coach with no assignment) is unrestricted. */
+    // ...plus the coach's own id, ALWAYS: a coach who programs their own training creates an
+    // assignments row with coachId === athleteId (see /api/coach/my/assignments and the note
+    // below), and they are not a member of any team, so narrowing without this would hide a
+    // narrowed staff coach's OWN calendar from them.
+    const scopeIds = await this.athleteIdsInCoachScope(coachId);
+    const allowedAthleteIds = scopeIds === null ? null : Array.from(new Set([...scopeIds, coachId]));
+    if (allowedAthleteIds !== null && athleteId && !allowedAthleteIds.includes(athleteId)) {
+      return [];
+    }
+    const athleteFilter =
+      athleteId != null
+        ? eq(assignments.athleteId, athleteId)
+        : allowedAthleteIds !== null
+          ? inArray(assignments.athleteId, allowedAthleteIds)
+          : undefined;
     const rawAssignments = await db.query.assignments.findMany({
-      where: athleteId
-        ? and(inArray(assignments.coachId, coachIds), eq(assignments.athleteId, athleteId))
+      where: athleteFilter
+        ? and(inArray(assignments.coachId, coachIds), athleteFilter)
         : inArray(assignments.coachId, coachIds),
       with: {
         athlete: true,
@@ -24129,6 +24182,9 @@ ${catalog}`;
   // estimated 1RM (Epley), PR flags, and CV metrics when present. Athletes
   // never see this rollup -- only the live number during their own set.
   async getExerciseAnalyticsForCoach(coachId: number, athleteId: number, exerciseId: number) {
+    // Team narrowing: see athleteIsInCoachScope. A narrowed staff coach reads nothing
+    // about an athlete who is not on one of their teams.
+    if (!(await this.athleteIsInCoachScope(coachId, athleteId))) return [];
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const peRows = await db
       .select({
@@ -25179,6 +25235,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // for, scoped to this coach -- not just CV-tracked ones, so the coach can
   // drill into plain weight/PR history too.
   async getExercisesWithHistoryForAthlete(coachId: number, athleteId: number) {
+    // Team narrowing: see athleteIsInCoachScope. A narrowed staff coach reads nothing
+    // about an athlete who is not on one of their teams.
+    if (!(await this.athleteIsInCoachScope(coachId, athleteId))) return [];
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const peRows = await db
       .selectDistinct({ id: exercises.id, name: exercises.name })
@@ -25259,6 +25318,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   },
 
   async getSkillExercisesWithHistoryForCoachAthlete(coachId: number, athleteId: number) {
+    // Team narrowing: see athleteIsInCoachScope. A narrowed staff coach reads nothing
+    // about an athlete who is not on one of their teams.
+    if (!(await this.athleteIsInCoachScope(coachId, athleteId))) return [];
     const coachIds = await this.getEffectiveCoachIds(coachId);
     return db
       .selectDistinct({ id: skillExercises.id, name: skillExercises.name })
@@ -25883,6 +25945,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // sessions across everything this athlete has logged, so picking an
   // athlete is never a dead end even before drilling into one exercise.
   async getRecentSessionsForAthlete(coachId: number, athleteId: number, limit = 8) {
+    // Team narrowing: see athleteIsInCoachScope. A narrowed staff coach reads nothing
+    // about an athlete who is not on one of their teams.
+    if (!(await this.athleteIsInCoachScope(coachId, athleteId))) return [];
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const owned = await db
       .select({ id: assignments.id })
@@ -26715,7 +26780,20 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // guarantee the viewing athlete's own row survives the cap.
   async getLeaderboardForExercise(coachId: number, exerciseId: number) {
     const full = await this.getFullLeaderboardForExercise(coachId, exerciseId);
-    return full.slice(0, LEADERBOARD_MAX_ROWS);
+    /* TEAM NARROWING, AND IT HAS TO HAPPEN BEFORE THE CAP.
+     *
+     * A leaderboard is the surface where this matters most: it puts athletes' NAMES in an
+     * order, which is the comparative claim CLAUDE.md's leaderboard-privacy note is about. A
+     * narrowed staff coach saw every athlete in the program here, including the ones whose
+     * detail page 404s for them. Filtering after the slice would also silently shrink a
+     * narrowed coach's board below LEADERBOARD_MAX_ROWS, so the filter goes first.
+     *
+     * Only the COACH-facing entry point is narrowed. getFullLeaderboardForExercise is also what
+     * the athlete-facing view reads, and an athlete's board is bounded by their own coach's
+     * roster, not by a staff assignment they have nothing to do with. */
+    const allowed = await this.athleteIdsInCoachScope(coachId);
+    const scoped = allowed === null ? full : full.filter((r) => allowed.includes(r.id));
+    return scoped.slice(0, LEADERBOARD_MAX_ROWS);
   },
 
   async getFullLeaderboardForExercise(coachId: number, exerciseId: number) {
@@ -26834,7 +26912,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     distanceYards?: number | null,
   ) {
     const full = await this.getFullSpeedLeaderboardForExercise(coachId, skillExerciseId, distanceYards);
-    return full.slice(0, LEADERBOARD_MAX_ROWS);
+    // Team narrowing, before the cap, for the same reasons as the strength board above.
+    const allowed = await this.athleteIdsInCoachScope(coachId);
+    const scoped = allowed === null ? full : full.filter((r) => allowed.includes(r.id));
+    return scoped.slice(0, LEADERBOARD_MAX_ROWS);
   },
 
   // Which sprint distances this drill actually has times at, for the
