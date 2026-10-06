@@ -1424,7 +1424,24 @@ export function WorkoutPage({
         }),
       })),
     };
+    // THE RECORD TRAVELS WITH THE PAYLOAD, not beside it in a WeakMap.
+    //
+    // 2026-10-06, off Scott's 629 console: saves back to 7.0, 7.6 and 7.8MB and climbing, where
+    // build 620 had them at 134KB after the first. The omission was wired correctly and simply
+    // never got to act, because that session was full of 409s and NetworkErrors -- and a payload
+    // REPLAYED off the offline queue has been serialised to a file and read back, so it is a
+    // different object and the WeakMap no longer knows it. 624's note called that "one re-send
+    // that can never lose anything"; on a flaky connection it is EVERY re-send, forever, and the
+    // payload grows until it fails. Which is the 13MB failure of build 620 returning by another
+    // door: a 16MB video upload and a 409 in that same log are what it cost.
+    //
+    // So the list is carried on the payload itself and survives the round trip through the queue
+    // file. `sentCaptureKeys` is stripped by the server's zod like any undeclared field, so it
+    // costs the wire a few dozen bytes of key strings and nothing else. The WeakMap stays as the
+    // fast path for a payload that never left memory, and the two cannot disagree because both
+    // are written here, from the same Set, at the one place omission is decided.
     capturesSentRef.current.set(payload, sentCaptureKeys);
+    (payload as { sentCaptureKeys?: string[] }).sentCaptureKeys = [...sentCaptureKeys];
     return payload;
   }
 
@@ -1671,9 +1688,14 @@ export function WorkoutPage({
       // nothing ever sent it. See capturesSentRef. A payload with no record (a replay off the
       // offline queue) marks nothing, which costs a re-send and cannot lose anything.
       if (synced) {
-        for (const key of capturesSentRef.current.get(payload) ?? []) {
-          capturePersistedRef.current.add(key);
-        }
+        // The WeakMap for a payload still in memory; the payload's own list for one replayed off
+        // the queue, which is a different object entirely. Either way this marks ONLY what this
+        // save carried -- never the current state, which is what 624 fixed.
+        const carried =
+          capturesSentRef.current.get(payload) ??
+          (payload as { sentCaptureKeys?: string[] }).sentCaptureKeys ??
+          [];
+        for (const key of carried) capturePersistedRef.current.add(key);
       }
       // The offline banner needs to reflect reality regardless of which
       // save path triggered it -- only the toast and the query refetch

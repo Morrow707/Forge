@@ -41,7 +41,9 @@ describe("a save carries the new capture and not the confirmed ones", () => {
     // frames would be omitted from the retry that was supposed to rescue them.
     const marker = src.indexOf("capturePersistedRef.current.add");
     expect(marker).toBeGreaterThan(-1);
-    const before = src.slice(Math.max(0, marker - 300), marker);
+    // Widened 2026-10-06: the fallback for a replayed payload sits between the guard and the
+    // marking, so the window has to clear it. The guard itself is unchanged.
+    const before = src.slice(Math.max(0, marker - 700), marker);
     expect(before).toContain("if (synced)");
   });
 

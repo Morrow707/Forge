@@ -37,7 +37,11 @@ describe("capturePersistedRef only ever records what a payload really carried", 
   });
 
   it("marks from the payload on success, never from current state", () => {
-    expect(src).toContain("for (const key of capturesSentRef.current.get(payload) ?? []) {");
+    // Reshaped 2026-10-06 when the replay path was fixed: the source is now the WeakMap OR the
+    // payload's own list. The PROPERTY is what matters and is what this asserts -- the keys come
+    // from the payload, by either route, and never from the live state.
+    expect(src).toContain("capturesSentRef.current.get(payload)");
+    expect(src).toContain("capturePersistedRef.current.add(key)");
     // The shape that lost a set: iterating live state inside the success handler.
     expect(src).not.toMatch(
       /if \(synced\) \{\s*for \(const it of itemsRef\.current\)[\s\S]*?capturePersistedRef\.current\.add/,
@@ -46,15 +50,20 @@ describe("capturePersistedRef only ever records what a payload really carried", 
 
   it("still requires a SYNCED save -- an offline resolve must not mark anything", () => {
     // Necessary as well as not sufficient: queueing resolves onSuccess with synced === false.
-    const idx = src.indexOf("for (const key of capturesSentRef.current.get(payload) ?? []) {");
+    const idx = src.indexOf("capturesSentRef.current.get(payload)");
     expect(idx).toBeGreaterThan(0);
-    expect(src.slice(Math.max(0, idx - 200), idx)).toContain("if (synced) {");
+    expect(src.slice(Math.max(0, idx - 400), idx)).toContain("if (synced) {");
   });
 
-  it("marks nothing for a payload it has no record of, which is the safe direction", () => {
-    // A replay off the offline queue is not in the WeakMap. `?? []` makes that a no-op: the
-    // capture stays un-marked and is re-sent, which costs bandwidth and can never lose data.
-    expect(src).toContain("capturesSentRef.current.get(payload) ?? []");
+  it("marks nothing for a payload that carried no record either way", () => {
+    // Still ends in `?? []`, so a payload with neither a WeakMap entry nor a list marks nothing:
+    // the capture stays un-marked and is re-sent, which costs bandwidth and can never lose data.
+    //
+    // 2026-10-06: a REPLAY off the queue used to land here on every retry, which on a flaky
+    // connection meant nothing was ever marked and the payload grew to 7.8MB. It now carries its
+    // own list -- see a-replayed-save-still-marks-what-it-sent.test.ts -- so this is the floor
+    // rather than the normal case.
+    expect(src).toMatch(/sentCaptureKeys \?\?\s*\[\];/);
     expect(src).toContain("useRef<WeakMap<object, Set<string>>>(new WeakMap())");
   });
 });

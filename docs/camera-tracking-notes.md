@@ -3326,3 +3326,43 @@ Every one is declared in `trackingDiagnosticsSchema` in the same change. A zod o
 it does not declare, silently, and this has bitten twice;
 `the-export-says-why-a-ruler-refused.test.ts` parses a payload through the real schema rather than
 trusting that.
+
+
+## The 7.8MB save, and why build 620's fix never got to act (2026-10-06)
+
+Off Scott's build-629 debug console: `log POST sending 7084KB`, then `7627KB`, then `7771KB`,
+climbing all session, where build 620 had the same path at **134KB after the first save**. Beside
+them in the same log: a 409, two `NetworkError: Can't reach Forge`, and a 16MB video upload that
+failed and queued.
+
+**The omission was wired correctly and simply never ran.** `capturePersistedRef` -- what decides
+which captures a later save may OMIT -- is filled in `onSuccess` from a WeakMap keyed by the
+payload OBJECT (build 624, and that keying is right: it is what stops a capture being marked by a
+save that was built before it existed). But a payload REPLAYED off the offline queue has been
+serialised to a file and read back, so it is a different object, and the WeakMap has never heard
+of it.
+
+Build 624's own note called that "one re-send, which costs bandwidth and can never lose anything."
+On a clean connection that is true. **On a flaky one every save is a replay**, nothing is ever
+marked, nothing is ever omitted, and the payload grows until it fails -- which is build 620's 13MB
+failure arriving through another door. The 409 and the two network errors in that log are what it
+cost, and a 7.8MB body from a phone is a payload problem, not a network one.
+
+**The record now travels WITH the payload** (`sentCaptureKeys`, an array of the same keys, written
+at the one place omission is decided) so it survives the round trip through the queue file. The
+WeakMap stays as the fast path for a payload that never left memory, and the two cannot disagree
+because both are written from the same Set in the same statement. The server's log schema is a
+plain `z.object`, so the extra key is stripped on arrival and costs the wire a few dozen bytes of
+strings against the megabytes it stops re-sending.
+
+`a-replayed-save-still-marks-what-it-sent.test.ts` pins it and was mutation-tested. Two older
+pins had to be widened rather than deleted -- they assert the PROPERTY (the keys come from the
+payload, never from live state; the marking still sits inside `if (synced)`) rather than the exact
+line, which is what they should have asserted in the first place.
+
+**The lesson, and it is the third time this family has bitten:** a correct-looking guard that
+answers a slightly different question than the one being asked. 620 asked "has the server got
+this?" and read the wrong state. 624 asked "did this save succeed?" when the question was "did
+this save CONTAIN this?". This one asked "is this the payload I built?" when the question was
+"did the payload that just succeeded carry this capture?" -- and the answer is in the payload,
+which is the only thing that made the trip.
