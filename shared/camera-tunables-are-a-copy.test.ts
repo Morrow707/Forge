@@ -15,6 +15,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MAX_PLAUSIBLE_LIFT_VELOCITY_MPS,
+  MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT,
+  MIN_TRACKING_CONFIDENCE,
   DEFAULT_MAX_DEVIATION_FRACTION,
   DEFAULT_MAX_ROM_FRACTION,
   DEFAULT_MIN_ROM_FRACTION,
@@ -29,6 +32,12 @@ import {
 import { ANKLE_3D_RULER_UNCERTAINTY } from "../client/src/lib/ankle-3d-ruler";
 import { DEPTH_RULER_BIAS, DEPTH_RULER_UNCERTAINTY } from "../client/src/lib/body-3d-ruler";
 import { HEIGHT_RULER_UNCERTAINTY } from "../client/src/lib/pose-tracking";
+import {
+  MAX_LOCK_DISTANCE_IN_YARDSTICKS,
+  MAX_PLATE_ASPECT_RATIO,
+  MAX_PLATE_SIZE_IN_YARDSTICKS,
+  MAX_YARDSTICK_DEVIATION_RATIO,
+} from "./tracker-arbiter";
 import {
   FITTED_OVERRIDES,
   SHARED_CAMERA_TUNABLES,
@@ -60,6 +69,40 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     expect(SHARED_CAMERA_TUNABLES.depthRulerBias).toBe(DEPTH_RULER_BIAS);
     expect(SHARED_CAMERA_TUNABLES.depthRulerUncertainty).toBe(DEPTH_RULER_UNCERTAINTY);
     expect(SHARED_CAMERA_TUNABLES.ankle3DRulerUncertainty).toBe(ANKLE_3D_RULER_UNCERTAINTY);
+    // The gates, split per tracker on Scott's second instruction.
+    expect(SHARED_CAMERA_TUNABLES.maxPlausibleSpeedMps).toBe(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
+    expect(SHARED_CAMERA_TUNABLES.maxPlausibleVelocityChangePct).toBe(MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT);
+    expect(SHARED_CAMERA_TUNABLES.minTrackingConfidence).toBe(MIN_TRACKING_CONFIDENCE);
+    expect(SHARED_CAMERA_TUNABLES.maxLockDistanceInYardsticks).toBe(MAX_LOCK_DISTANCE_IN_YARDSTICKS);
+    expect(SHARED_CAMERA_TUNABLES.maxPlateAspectRatio).toBe(MAX_PLATE_ASPECT_RATIO);
+    expect(SHARED_CAMERA_TUNABLES.maxPlateSizeInYardsticks).toBe(MAX_PLATE_SIZE_IN_YARDSTICKS);
+    expect(SHARED_CAMERA_TUNABLES.maxYardstickDeviationRatio).toBe(MAX_YARDSTICK_DEVIATION_RATIO);
+  });
+
+  it("copies each tracker's own speed gate, from that tracker's own file", () => {
+    // Read off the trackers themselves: MAX_PLAUSIBLE_BALL_SPEED_MPS (av-medball-tracker-dialog),
+    // MAX_PLAUSIBLE_KB_SWING_SPEED_MPS (kb-swing-tracking), MAX_PLAUSIBLE_GRIP_SPEED_MPS
+    // (swing-tracking), MAX_PLAUSIBLE_WRIST_SPEED_MPS (mechanics-tracking).
+    expect(cameraTunablesFor("Med Ball Chest Pass", null, "med_ball").values.maxPlausibleSpeedMps).toBe(25);
+    expect(cameraTunablesFor("Kettlebell Swing", null, "kb_swing").values.maxPlausibleSpeedMps).toBe(8);
+    expect(cameraTunablesFor("Golf Swing", null, "golf_swing").values.maxPlausibleSpeedMps).toBe(15);
+    expect(cameraTunablesFor("Pitching Drill", null, "mechanics").values.maxPlausibleSpeedMps).toBe(20);
+    expect(cameraTunablesFor("Back Squat", "squat", "bar").values.maxPlausibleSpeedMps).toBe(
+      MAX_PLAUSIBLE_LIFT_VELOCITY_MPS,
+    );
+  });
+
+  it("A MED BALL GATE AND A GOLF SWING GATE ARE THE SAME KIND OF THING AND NOT THE SAME NUMBER", () => {
+    // Scott, 2026-10-06: "if we change the gate on med ball throws it might change the gate on a
+    // golf swing and yes they are similar but very different."
+    const ball = cameraTunablesFor("Medicine Ball Rotational Throw", null, "med_ball");
+    const swing = cameraTunablesFor("Golf Swing", null, "golf_swing");
+    expect(ball.values.maxPlausibleSpeedMps).not.toBe(swing.values.maxPlausibleSpeedMps);
+    const swingBefore = { ...swing.values };
+    ball.values.maxPlausibleSpeedMps = 99;
+    ball.values.minTrackingConfidence = 0.99;
+    expect(swing.values).toEqual(swingBefore);
+    expect(ball.sources.maxPlausibleSpeedMps).toBe("tracker");
   });
 
   it.each(ROM_BUCKETS)("copies the %s bucket's rep gate exactly", (bucket) => {

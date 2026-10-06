@@ -3052,3 +3052,42 @@ today: not one constant in this pipeline has ever been fitted on a single lift i
 the RDL, the box jump and the bench were all fixed by changing a LABEL or a RULE, and the 10-06
 bias sweep is on the record as evidence against fitting blind. The registry is the machinery for
 doing it safely when a sensor-paired take justifies it; it is not permission to start guessing.
+
+### The gates are split too, 2026-10-06 (and one of them is only half-split)
+
+Scott, on the first version leaving the plausibility gates shared: "Split those too, every single
+thing should be the same but separate, if we change the gate on med ball throws it might change
+the gate on a golf swing and yes they are similar but very different."
+
+**He is right, and the argument for leaving them shared was wrong in a way worth writing down.**
+The claim was that a gate describes physics and the camera rather than the lift. But a gate is
+only "physics" once you have already fixed WHICH movement you are talking about: 3 m/s is
+impossible for a bar and ordinary for a thrown med ball; 15 m/s is a sane ceiling for a grip on a
+golf club and nonsense for a kettlebell. The constants were in fact ALREADY per-tracker for
+exactly that reason -- they just shared one value across every lift inside a tracker, so 46 bar
+lifts shared one number and the 8 jumps shared another.
+
+Eleven more fields, each copied from the tracker's own constant: `maxPlausibleSpeedMps`
+(bar 3 / kb 8 / golf and bat 15 / mechanics 20 / med ball 25), `maxPlausibleAccelG`,
+`maxPlausibleVelocityChangePct`, `minTrackingConfidence`, the two occlusion windows, and
+overwatch's `maxLockDistanceInYardsticks`, `maxPlateAspectRatio`, `maxPlateSizeInYardsticks`,
+`maxYardstickDeviationRatio`. `GATES_BY_TRACKER` holds each tracker's values and
+`cameraTunablesFor(identity, romBucket, tracker)` copies them into the identity's own record,
+tagging each `"tracker"` in the sources map. `robustPeakSpeed`, `plausibleMean` and
+`rejectImplausibleAccelerationSpikes` now take their gate as a parameter, defaulted to the
+constant, so every existing caller is unchanged and `summarizeTrackedSet` passes the record's.
+
+**ONE IS ONLY HALF-SPLIT, AND THAT IS RECORDED RATHER THAN HIDDEN: overwatch's four gates.**
+Overwatch has to act mid-clip, so it runs natively (`AvTrackerArbiter`), and the native side is
+handed a tracking MODE, not a tunables record. The four are per-lift on the TypeScript side today
+-- which is what the replay harness and every test read -- and the Swift copy keeps the shared
+default until the record is plumbed through the plugin. `tracker-arbiter.test.ts` compares Swift
+against the DEFAULT, so the two cannot drift on the value they do share. **A fitted per-lift
+arbiter number would be inert on the phone until that plumbing lands, so do not fit one before
+then: it would read as applied and not be.** That plumbing is the next piece of this work and is
+an `ios/` change, which under Rule #2 means naming the sensor it touches -- it touches none, it
+only changes which number overwatch compares against, and it removes nothing.
+
+Still green and still bit-identical: 326 files, 3,602 tests, the four OVR fixtures and the
+20-capture replay corpus included. The new assertion carries his example by name: **A MED BALL
+GATE AND A GOLF SWING GATE ARE THE SAME KIND OF THING AND NOT THE SAME NUMBER.**

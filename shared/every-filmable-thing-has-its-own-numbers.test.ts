@@ -18,7 +18,11 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 
 import { romBucketForExercise } from "../client/src/lib/exercise-camera-profile";
-import { SHARED_CAMERA_TUNABLES, cameraTunablesFor } from "./camera-tunables-by-lift";
+import {
+  SHARED_CAMERA_TUNABLES,
+  cameraTunablesFor,
+  type FilmingTracker,
+} from "./camera-tunables-by-lift";
 
 const SEED = path.resolve(__dirname, "../server/seed.ts");
 const src = fs.readFileSync(SEED, "utf8");
@@ -48,6 +52,17 @@ function filmableDrills(): { name: string; skillType: string }[] {
   return out;
 }
 
+const JUMPS = new Set([
+  "Box Jump",
+  "Broad Jump",
+  "Depth Jump",
+  "Countermovement Jump",
+  "Squat Jump",
+  "Tuck Jump",
+  "Standing Long Jump",
+  "Lateral Bound",
+]);
+
 describe("every filmable thing has its own numbers", () => {
   const exercises = filmableExercises();
   const drills = filmableDrills();
@@ -71,13 +86,25 @@ describe("every filmable thing has its own numbers", () => {
 
   it("gives all 270 of them their own record, and no two the same one", () => {
     const seen = new Set<object>();
-    const identities = [
-      ...exercises.map((name) => ({ name, bucket: romBucketForExercise(name) })),
-      ...drills.map((d) => ({ name: d.name, bucket: null })),
+    // A drill's tracker is sprint-timed for Agility/Starts/Footwork and mechanics for the rest
+    // -- the same split server/seed.ts's eligibility rule makes.
+    const SPRINT_TIMED = new Set(["Agility", "Starts", "Footwork"]);
+    const identities: { name: string; bucket: string | null; tracker: FilmingTracker }[] = [
+      ...exercises.map((name) => ({
+        name,
+        bucket: romBucketForExercise(name),
+        tracker: (JUMPS.has(name) ? "jump" : "bar") as FilmingTracker,
+      })),
+      ...drills.map((d) => ({
+        name: d.name,
+        bucket: null,
+        tracker: (SPRINT_TIMED.has(d.skillType) ? "sprint" : "mechanics") as FilmingTracker,
+      })),
     ];
     expect(identities.length).toBe(270);
-    for (const { name, bucket } of identities) {
-      const resolved = cameraTunablesFor(name, bucket);
+    for (const { name, bucket, tracker } of identities) {
+      const resolved = cameraTunablesFor(name, bucket, tracker);
+      expect(resolved.tracker).toBe(tracker);
       expect(resolved.identity).toBe(name);
       // Not the frozen template: a record that WAS the template would make every lift share one.
       expect(resolved.values).not.toBe(SHARED_CAMERA_TUNABLES);

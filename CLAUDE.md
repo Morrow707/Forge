@@ -989,14 +989,28 @@ can install. Delete entries as a `beta` ships them.
   replay corpus are green and unchanged; and `every-filmable-thing-has-its-own-numbers.test.ts`
   resolves all 270, asserts no two share a record, and scribbles on one to prove the other 269 are
   untouched -- with Scott's example as a named assertion.
-  **NOT per-lift, on purpose:** the plausibility gates, the occlusion windows and the arbiter's
-  grip-width threshold. Those are statements about physics and the camera, not about the lift, and
-  270 copies would be 270 uncalibrated guesses where there is one considered number (Rule #2
-  applies to constants too). **`FITTED_OVERRIDES` is EMPTY and the test fails if an entry
-  appears** -- no constant here has ever been fitted on one lift in isolation, and the registry is
+  **THE GATES ARE SPLIT TOO** (Scott, same day, overruling the first version: "Split those too,
+  every single thing should be the same but separate, if we change the gate on med ball throws it
+  might change the gate on a golf swing and yes they are similar but very different"). He is right
+  and the argument for leaving them shared was wrong: a gate is only "physics" once you have fixed
+  WHICH movement it is about -- 3 m/s is impossible for a bar and ordinary for a thrown med ball.
+  Eleven more fields, copied from each tracker's own constant via `GATES_BY_TRACKER`
+  (`maxPlausibleSpeedMps` bar 3 / kb 8 / golf and bat 15 / mechanics 20 / med ball 25, the accel
+  and velocity-change gates, `minTrackingConfidence`, both occlusion windows, and overwatch's four
+  yardstick gates). `robustPeakSpeed`, `plausibleMean` and `rejectImplausibleAccelerationSpikes`
+  take their gate as a defaulted parameter.
+  **OVERWATCH'S FOUR ARE ONLY HALF-SPLIT, on purpose and recorded:** overwatch acts mid-clip so it
+  runs natively, and the native side is handed a tracking MODE, not a record. They are per-lift in
+  TypeScript (what the harness and the tests read) and the Swift copy keeps the shared default
+  until the record is plumbed through the plugin; `tracker-arbiter.test.ts` compares Swift against
+  that DEFAULT so the two cannot drift. **A fitted per-lift arbiter number is inert on the phone
+  until that lands -- do not fit one before then, it would read as applied and not be.** That
+  plumbing is the next piece of this work.
+  **`FITTED_OVERRIDES` is EMPTY and the test fails if an entry appears** -- no constant here has ever been fitted on one lift in isolation, and the registry is
   machinery for doing that safely, not permission to guess. See docs/camera-tracking-notes.md,
   "One set of numbers per filmable thing".
-- **Queued, not yet in a build:** the 270-record per-lift tunables registry, on the branch.
+- **Queued, not yet in a build:** the 270-record per-lift tunables registry including the split
+  gates, on the branch.
   Build **626** was cut from `5cdd12aa` with the posture sweep and the filmable-54 audit.
 
 Two things worth saying out loud when someone tests this:

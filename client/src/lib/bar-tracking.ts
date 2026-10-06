@@ -648,9 +648,12 @@ export function savitzkyGolay(values: number[], window: number): number[] {
 // (this sandbox has no camera to test against).
 const MAX_PLAUSIBLE_ACCEL_G = 6;
 
-export function rejectImplausibleAccelerationSpikes(points: TrackedPoint[]): TrackedPoint[] {
+export function rejectImplausibleAccelerationSpikes(
+  points: TrackedPoint[],
+  maxAccelG = MAX_PLAUSIBLE_ACCEL_G,
+): TrackedPoint[] {
   if (points.length < 3) return points;
-  const maxAccelMps2 = MAX_PLAUSIBLE_ACCEL_G * GRAVITY_MPS2;
+  const maxAccelMps2 = maxAccelG * GRAVITY_MPS2;
 
   // Pass 1: flag every interior point whose local (3-point) acceleration
   // implies something physically impossible. A single one-frame glitch
@@ -869,10 +872,16 @@ function robustPeakSpeed(
   startIdx: number,
   endIdx: number,
   confidences?: number[],
+  // THIS MOVEMENT'S GATES, not the pipeline's. Scott, 2026-10-06: "if we change the gate on med
+  // ball throws it might change the gate on a golf swing and yes they are similar but very
+  // different." Defaulted to the bar's own constants, so a caller that passes nothing behaves
+  // exactly as it did -- see shared/camera-tunables-by-lift.ts.
+  maxSpeedMps = MAX_PLAUSIBLE_LIFT_VELOCITY_MPS,
+  minConfidence = MIN_TRACKING_CONFIDENCE,
 ): { peak: number; peakIdx: number } {
   const samples: { v: number; idx: number }[] = [];
   for (let i = startIdx; i <= endIdx; i++) {
-    if (confidences && confidences[i] < MIN_TRACKING_CONFIDENCE) continue;
+    if (confidences && confidences[i] < minConfidence) continue;
     samples.push({ v: speedsMps[i], idx: i });
   }
   // Confidence filtering emptied the window (a genuinely bad stretch, not
@@ -893,7 +902,7 @@ function robustPeakSpeed(
   // contiguous smoothing-window edge effect corrupts several consecutive
   // frames near the start of a trace (worst exactly where robustPeakSpeed's
   // own moving-average edge-effect note above applies hardest).
-  const plausible = pool0.filter((s) => s.v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
+  const plausible = pool0.filter((s) => s.v <= maxSpeedMps);
   // Every remaining sample is above the physical ceiling -- the whole phase
   // was corrupted (a real rep never does this). The old behavior fell back
   // to the raw, over-ceiling pool here, which defeated the ceiling entirely
@@ -901,7 +910,7 @@ function robustPeakSpeed(
   // reported "24 m/s" bar speed). Clamping to the ceiling keeps this
   // function's "never just report zero" stance -- still a non-zero,
   // physically-real number -- without ever surfacing an impossible one.
-  if (plausible.length === 0) return { peak: MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, peakIdx: pool0[0].idx };
+  if (plausible.length === 0) return { peak: maxSpeedMps, peakIdx: pool0[0].idx };
   const sorted = [...plausible].sort((a, b) => a.v - b.v);
   const peak = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))].v;
   const peakIdx = plausible.find((s) => s.v >= peak)?.idx ?? startIdx;
@@ -914,17 +923,22 @@ function robustPeakSpeed(
 // enough to be the reported peak. Shared by summarizeTrackedSet's
 // phaseStats and velocityForWindow below so both mean calculations get the
 // same protection robustPeakSpeed already gives peak.
-function plausibleMean(speeds: number[], confidences?: number[]): number {
+function plausibleMean(
+  speeds: number[],
+  confidences?: number[],
+  maxSpeedMps = MAX_PLAUSIBLE_LIFT_VELOCITY_MPS,
+  minConfidence = MIN_TRACKING_CONFIDENCE,
+): number {
   if (speeds.length === 0) return 0;
   const confident = confidences
-    ? speeds.filter((_, i) => confidences[i] >= MIN_TRACKING_CONFIDENCE)
+    ? speeds.filter((_, i) => confidences[i] >= minConfidence)
     : speeds;
   const pool0 = confident.length > 0 ? confident : speeds;
-  const plausible = pool0.filter((v) => v <= MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
+  const plausible = pool0.filter((v) => v <= maxSpeedMps);
   // Same clamp-instead-of-raw-fallback fix as robustPeakSpeed above -- see
   // its comment. A window entirely above the physical ceiling shouldn't get
   // to report its own impossible average as the rep's mean speed either.
-  if (plausible.length === 0) return MAX_PLAUSIBLE_LIFT_VELOCITY_MPS;
+  if (plausible.length === 0) return maxSpeedMps;
   return plausible.reduce((a, b) => a + b, 0) / plausible.length;
 }
 
@@ -1437,7 +1451,7 @@ export function summarizeTrackedSet(
   // downstream (smoothing, phase segmentation, bar-path deviation) ever
   // sees them -- see rejectImplausibleAccelerationSpikes above. `points` is
   // used everywhere below instead of the raw parameter.
-  const repairedPoints = rejectImplausibleAccelerationSpikes(rawPoints);
+  const repairedPoints = rejectImplausibleAccelerationSpikes(rawPoints, tune.maxPlausibleAccelG);
   const scaledPoints =
     positionScaleCorrection !== 1
       ? repairedPoints.map((p) => ({ ...p, x: p.x * positionScaleCorrection, y: p.y * positionScaleCorrection, z: p.z * positionScaleCorrection }))
@@ -1517,7 +1531,7 @@ export function summarizeTrackedSet(
     // is the one number already measuring correctly.
     // The peak is found over the whole phase first, because the travel window is anchored on it
     // -- see trimPhaseToTravel. The speed-based trim only ever finds a window this one contains.
-    const wholePhasePeak = robustPeakSpeed(speedsReportedMps, phase.startIdx, phase.endIdx, confidences);
+    const wholePhasePeak = robustPeakSpeed(speedsReportedMps, phase.startIdx, phase.endIdx, confidences, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
     // TWO WINDOWS, TWO JOBS. The travel-margin window is what every phantom and rack-move
     // filter below was fitted on (duration ratios, implausibly-fast, overlong), so it keeps
     // deciding which phases are reps. The drive window (trimPhaseToDrive) is what is REPORTED:
@@ -1539,13 +1553,13 @@ export function summarizeTrackedSet(
     const mean =
       driveDuration > 0 && romM > 0
         ? Math.min(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, romM / driveDuration)
-        : plausibleMean(slice, confidenceSlice);
+        : plausibleMean(slice, confidenceSlice, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
     // peak/peakIdx (index within the whole trace, used to report how long
     // it took to reach peak velocity, a standard VBT metric) come from
     // robustPeakSpeed rather than a raw max -- see its own comment above.
     // Measured over the moving window too: time-to-peak-velocity counted from a turning point
     // the athlete then stood at for two seconds is not time to peak velocity.
-    const { peak: rawPeak, peakIdx } = robustPeakSpeed(speedsReportedMps, drive.startIdx, drive.endIdx, confidences);
+    const { peak: rawPeak, peakIdx } = robustPeakSpeed(speedsReportedMps, drive.startIdx, drive.endIdx, confidences, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
     // A REP'S PEAK IS BOUNDED BY ITS OWN MEAN. Set 10 beside OVR (build 576, 2026-09-30): rep 2
     // read a peak of 0.15 m/s against a mean of 0.52 -- impossible, a peak is never below the
     // average of the window it is read over -- because a hand dropout froze the trace mid-rep

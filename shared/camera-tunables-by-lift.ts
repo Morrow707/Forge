@@ -70,6 +70,44 @@ export type CameraTunables = {
   depthRulerUncertainty: number;
   /** The 3D ankle ruler's uncertainty. */
   ankle3DRulerUncertainty: number;
+  // --- the gates: what the pipeline will believe about one frame ----------------------------
+  //
+  // SPLIT ON SCOTT'S SECOND INSTRUCTION, 2026-10-06: "Split those too, every single thing should
+  // be the same but separate, if we change the gate on med ball throws it might change the gate
+  // on a golf swing and yes they are similar but very different."
+  //
+  // The first version of this file left these shared, on the argument that they describe physics
+  // and the camera rather than the lift. He overruled it, and he is right about the thing the
+  // argument missed: a gate is only "physics" once you have fixed WHICH movement you are talking
+  // about. 3 m/s is impossible for a bar and ordinary for a thrown med ball; 15 m/s is a sane
+  // ceiling for a golf club head and nonsense for a kettlebell. The constants were ALREADY
+  // per-tracker for exactly that reason -- they just shared one value across every lift inside a
+  // tracker, so the 46 bar lifts shared one and the 8 jumps shared another.
+  /** Ceiling on a single frame's speed for THIS movement, m/s. */
+  maxPlausibleSpeedMps: number;
+  /** Ceiling on a frame-to-frame acceleration, in g. */
+  maxPlausibleAccelG: number;
+  /** The most a set's velocity may change across it before the fatigue number is withheld, %. */
+  maxPlausibleVelocityChangePct: number;
+  /** How confident a landmark or an object box must be before its position is used. */
+  minTrackingConfidence: number;
+  /** The gap either side of which an occlusion is NOT interpolated across, ms. */
+  occlusionMinGapMs: number;
+  occlusionMaxGapMs: number;
+  // --- overwatch's gates, per movement -------------------------------------------------------
+  //
+  // THE SWIFT PORT STILL USES ONE VALUE EACH, and that is recorded rather than hidden: overwatch
+  // has to act mid-clip, so it runs natively (`AvTrackerArbiter`), and the native side is handed
+  // a tracking mode, not a tunables record. These four are per-lift on the TypeScript side today
+  // -- which is what the replay harness and every test read -- and the Swift copy keeps the
+  // shared default until the record is plumbed through the plugin. `tracker-arbiter.test.ts`
+  // compares Swift against the DEFAULT, so the two cannot drift on the value they do share, and
+  // a fitted per-lift arbiter number would be inert on the phone until that plumbing lands.
+  // Do not fit one before then; it would read as applied and not be.
+  maxLockDistanceInYardsticks: number;
+  maxPlateAspectRatio: number;
+  maxPlateSizeInYardsticks: number;
+  maxYardstickDeviationRatio: number;
 };
 
 /** TODAY'S VALUES, and the only place they are written down. Read off the constants they came
@@ -88,7 +126,58 @@ export const SHARED_CAMERA_TUNABLES: Readonly<CameraTunables> = Object.freeze({
   depthRulerBias: 0.9, // DEPTH_RULER_BIAS
   depthRulerUncertainty: 0.2, // DEPTH_RULER_UNCERTAINTY
   ankle3DRulerUncertainty: 0.2, // ANKLE_3D_RULER_UNCERTAINTY
+  maxPlausibleSpeedMps: 3, // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS -- the bar's, overridden per tracker
+  maxPlausibleAccelG: 6, // MAX_PLAUSIBLE_ACCEL_G
+  maxPlausibleVelocityChangePct: 100, // MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT
+  minTrackingConfidence: 0.5, // MIN_TRACKING_CONFIDENCE
+  occlusionMinGapMs: 70, // OCCLUSION_MIN_GAP_MS
+  occlusionMaxGapMs: 200, // OCCLUSION_MAX_GAP_MS
+  maxLockDistanceInYardsticks: 2.5, // MAX_LOCK_DISTANCE_IN_YARDSTICKS
+  maxPlateAspectRatio: 1.7, // MAX_PLATE_ASPECT_RATIO
+  maxPlateSizeInYardsticks: 2.0, // MAX_PLATE_SIZE_IN_YARDSTICKS
+  maxYardstickDeviationRatio: 2.0, // MAX_YARDSTICK_DEVIATION_RATIO
 });
+
+/** Which tracker films an identity. The caller knows it -- every tracker dialog names its own
+ *  mode already (see resolve-tracking-mode.ts), and a skill drill is mechanics or sprint-timed by
+ *  its skillType -- so it is passed in rather than re-derived here, which would put a client
+ *  module's name patterns into shared/. */
+export type FilmingTracker =
+  | "bar"
+  | "jump"
+  | "med_ball"
+  | "kb_swing"
+  | "golf_swing"
+  | "baseball_swing"
+  | "sprint"
+  | "mechanics"
+  | "horizontal_load";
+
+/** THE GATES EACH TRACKER USES TODAY, copied from the tracker's own constant. These are the
+ *  numbers that were already per-tracker; copying them in is what makes an identity's record
+ *  complete, so no lift reads half its numbers from its own record and half from somewhere
+ *  else. A tracker absent from a field keeps the shared value above. */
+const GATES_BY_TRACKER: Record<FilmingTracker, Partial<CameraTunables>> = {
+  // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, bar-tracking.ts.
+  bar: {},
+  // A jump's gates are flight-time bounded rather than speed bounded (jump-tracking.ts), so the
+  // speed ceiling is the bar's until a jump take says otherwise.
+  jump: {},
+  // MAX_PLAUSIBLE_BALL_SPEED_MPS, av-medball-tracker-dialog.tsx. A thrown ball leaves the hand
+  // far faster than any bar moves, which is the whole of Scott's point.
+  med_ball: { maxPlausibleSpeedMps: 25 },
+  // MAX_PLAUSIBLE_KB_SWING_SPEED_MPS, kb-swing-tracking.ts.
+  kb_swing: { maxPlausibleSpeedMps: 8 },
+  // MAX_PLAUSIBLE_GRIP_SPEED_MPS, swing-tracking.ts -- the GRIP, not the club head.
+  golf_swing: { maxPlausibleSpeedMps: 15 },
+  baseball_swing: { maxPlausibleSpeedMps: 15 },
+  // MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC is in yards per second and stays in its own file;
+  // a sprint has no metre-per-second frame gate to copy.
+  sprint: {},
+  // MAX_PLAUSIBLE_WRIST_SPEED_MPS, mechanics-tracking.ts.
+  mechanics: { maxPlausibleSpeedMps: 20 },
+  horizontal_load: {},
+};
 
 /** A NEW record every call. This is the "copy and paste": nothing below holds a reference to
  *  the object above, so writing to one identity's record is invisible to every other. */
@@ -126,7 +215,7 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
 /** Where each of an identity's numbers came from. The report prints this, so a reader can tell
  *  a number fitted on this lift from one that is still the shared starting value -- the
  *  distinction Rule #4 makes about corroboration, applied to constants. */
-export type TunableSource = "shared" | "rom_bucket" | "fitted";
+export type TunableSource = "shared" | "tracker" | "rom_bucket" | "fitted";
 
 export type ResolvedCameraTunables = {
   /** This identity's own record. Mutating it affects nothing else. */
@@ -134,6 +223,8 @@ export type ResolvedCameraTunables = {
   sources: Record<keyof CameraTunables, TunableSource>;
   /** The name the record was resolved for, as the capture recorded it. */
   identity: string;
+  /** Which tracker's gates it was built from. */
+  tracker: FilmingTracker;
 };
 
 /** THIS IDENTITY'S OWN NUMBERS. A fresh record every call, so two lifts analysed in one session
@@ -142,10 +233,16 @@ export type ResolvedCameraTunables = {
 export function cameraTunablesFor(
   identity: string | null | undefined,
   romBucket?: string | null,
+  tracker: FilmingTracker = "bar",
 ): ResolvedCameraTunables {
   const values = freshTunables();
   const sources = {} as Record<keyof CameraTunables, TunableSource>;
   for (const key of Object.keys(values) as (keyof CameraTunables)[]) sources[key] = "shared";
+
+  for (const [key, value] of Object.entries(GATES_BY_TRACKER[tracker]) as [keyof CameraTunables, number][]) {
+    values[key] = value;
+    sources[key] = "tracker";
+  }
 
   const bucket = romBucket ? BY_ROM_BUCKET[romBucket] : undefined;
   if (bucket) {
@@ -163,5 +260,5 @@ export function cameraTunablesFor(
     }
   }
 
-  return { values, sources, identity: identity ?? "(unnamed)" };
+  return { values, sources, identity: identity ?? "(unnamed)", tracker };
 }
