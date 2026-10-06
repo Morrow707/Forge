@@ -9749,6 +9749,24 @@ export const trackingDiagnosticsSchema = z.object({
         .enum(["height", "plate", "box", "both", "shoulder_width", "grip_width", "body_model", "body_3d", "depth"])
         .optional()
         .nullable(),
+      /* WHAT THE EXERCISE CLAIMED AND WHAT THE BODY LOOKED LIKE, 2026-10-06.
+       *
+       * Posture decides which rulers a take gets -- bent_over and seated drop the height ruler
+       * -- and it has only ever been read off the exercise NAME. Two takes in two days say
+       * that table can be wrong in both directions: the RDL was mapped standing and is a hinge
+       * (its height ruler was wrongly present, -7.0% of the sensor), and a "Barbell Shoulder
+       * Press" (seated, no height ruler) was filmed beside an OVR that called it a PUSH PRESS,
+       * which is standing. Recorded so a mismatch is readable in the export rather than guessed
+       * at from a screenshot. Measures only; nothing reads these back to choose a ruler. */
+      posture: z.string().max(40).optional().nullable(),
+      measuredPosture: z
+        .object({
+          torsoFromVerticalDeg: z.number().optional().nullable(),
+          heightToShoulderRatio: z.number().optional().nullable(),
+          framesUsed: z.number().optional().nullable(),
+        })
+        .optional()
+        .nullable(),
       scaleCandidates: z
         .array(
           z.object({

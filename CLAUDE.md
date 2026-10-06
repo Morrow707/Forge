@@ -841,7 +841,35 @@ can install. Delete entries as a `beta` ships them.
   1.29x high against the other candidates, but against the SENSOR it is the least biased of the
   four (+5.5% median). The other rulers were low, not the shoulder high. Not refitting it on
   10-05 was the right call for the wrong reason. Calibration work: uploaded on commit.
-- **Queued, not yet in a build:** nothing. Everything on `main` is in 622.
+- Build **623** was cut 2026-10-06 right after 622, from Scott reading the comparison:
+  **THE BARBELL SHOULDER PRESS WAS MAPPED `seated` AND IS STANDING.** Scott: "Make barbell
+  shoulder press standing, I am doing it standing, a barbell seated shoulder press is something
+  different." Not cosmetic: `postureAllowsHeightCalibration` is false for seated, so every
+  Barbell Shoulder Press ever filmed was denied its height ruler and scaled on the shoulder and
+  3D rulers alone -- the exact candidate list the 10-06 take carried when it read range of
+  motion +15.6%. The library's own instructions said "Seated, bar at collarbone", so the app was
+  telling him to sit down for a lift he does standing; that text and the camera profile's framing
+  note are fixed with it. **Same class as the RDL hinge, opposite direction** -- there a ruler
+  was wrongly PRESENT (-7.0%), here wrongly ABSENT.
+  **AND THE FRAMES NOW SAY WHAT POSTURE THEY SAW.** Two posture mislabels in two days, each
+  costing a ruler, neither visible in any export, because posture has only ever been read off
+  the exercise NAME. `measurePostureFromFrames` records `calibration.measuredPosture` beside
+  `calibration.posture`: `torsoFromVerticalDeg` (near 0 upright, approaching 90 on a hinge --
+  would have caught the RDL) and `heightToShoulderRatio` (separates SEATED from STANDING, which
+  the angle cannot since both are upright -- would have caught the shoulder press). **It
+  measures and overrides nothing**: one mislabelled take is not evidence enough to let the
+  frames outvote the library, and a posture that flipped mid-pipeline would move every ruler
+  under it at once. Both are angles or ratios, so neither needs a scale -- the point, since they
+  must be readable on a take whose ruler is in question. Declared in
+  `trackingDiagnosticsSchema` (zod strips undeclared fields silently; this has bitten twice) and
+  the export selects the whole column, so they arrive with the build and need no Render deploy.
+  Also ruled out, which saved chasing it: **the row's -18.6% is not a projection error.** Per
+  rep, across-axis travel is 0.6-4.7cm against 41-60cm along it, so the full 2D path magnitude
+  would raise the set's range of motion by 1.3%, not 19%. It is a genuine scale error with every
+  ruler low (-13.0%, -36.3%, -45.2%) and NO mechanism is proposed, because one paired take
+  against 31.9/56.0/51.3 from an earlier session is not enough to fit to. Next to film.
+  Calibration work: uploaded on commit.
+- **Queued, not yet in a build:** nothing. Everything on `main` is in 623.
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,

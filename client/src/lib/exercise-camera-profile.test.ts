@@ -22,7 +22,6 @@ describe("postureForExercise", () => {
     "Leg Extension",
     "Machine Shoulder Press",
     "Machine Chest Press",
-    "Barbell Shoulder Press",
     "Preacher Curl",
     "Concentration Curl",
     "Seated Calf Raise",
@@ -73,8 +72,16 @@ describe("postureForExercise", () => {
   // A conventional deadlift stays: it finishes standing tall under load, and dropping the squat's
   // height ruler as a control reads 25% HIGH, so the ruler plainly belongs on a standing lift.
   // See client/src/lib/four-lifts-beside-ovr-2026-10-05.test.ts for the measured figures.
+  /* "Barbell Shoulder Press" LEFT the seated list on 2026-10-06. Scott: "Make barbell shoulder
+   * press standing, I am doing it standing, a barbell seated shoulder press is something
+   * different." It had been seated since the list was written, and the library's own
+   * instructions ("Seated, bar at collarbone") were wrong with it -- both fixed together. Not
+   * cosmetic: seated refuses height calibration, so every one of these ever filmed was scaled
+   * without its height ruler. The 2026-10-06 take beside the OVR read range of motion +15.6%
+   * on exactly that shortened candidate list. */
   it.each([
     "Back Squat",
+    "Barbell Shoulder Press",
     "Deadlift",
     "Overhead Press",
     "Push Press",

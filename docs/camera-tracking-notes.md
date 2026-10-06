@@ -938,6 +938,63 @@ Worth recording so nobody re-investigates them from scratch:
   a shared design decision worth revisiting on its own terms -- reporting the ceiling as though it
   were a measurement is still questionable -- not a defect in one module.
 
+### THE BARBELL SHOULDER PRESS WAS MAPPED SEATED AND IS STANDING
+
+Scott, 2026-10-06, reading the comparison: "Make barbell shoulder press standing, I am doing it
+standing, a barbell seated shoulder press is something different."
+
+That settles the push press row above and it is not cosmetic. `postureAllowsHeightCalibration`
+is false for `seated`, so **every Barbell Shoulder Press ever filmed was denied its height
+ruler** and scaled on the shoulder and 3D rulers alone -- which is exactly the candidate list
+the 10-06 take carried when it read range of motion +15.6%. The library's own instructions said
+"Seated, bar at collarbone ... removing leg drive isolates the shoulders more than a standing
+Overhead Press", so the app was telling the athlete to sit down for a lift he does standing;
+that text and the camera profile's "The seat, both plates" framing note are fixed in the same
+change.
+
+**Same class as the RDL hinge (2026-10-05), opposite direction.** There a ruler was wrongly
+PRESENT and cost -7.0%; here one was wrongly ABSENT. Both were a static name-to-posture table
+being wrong about a lift, and in both cases nothing in the pipeline could notice, because
+posture has only ever been read off the exercise NAME.
+
+What the corrected posture does to the number is NOT predictable from this export: the height
+ruler was never computed on that take, so there is no candidate to add to the blend offline.
+The next filmed shoulder press answers it.
+
+### The frames now say what posture they saw -- `measurePostureFromFrames`
+
+Two posture mislabels in two days, each costing a ruler, and neither visible in any export. So
+the take now records what the BODY looked like beside what the exercise claimed:
+`calibration.posture` (the profile's answer) and `calibration.measuredPosture`:
+
+- `torsoFromVerticalDeg` -- median angle of the hip->shoulder vector from the image vertical.
+  Near 0 standing or seated, approaching 90 on a hinge. This is what would have caught the RDL.
+- `heightToShoulderRatio` -- median (ankle->shoulder vertical extent) / (shoulder span). This is
+  what separates SEATED from STANDING, which the torso angle cannot, since both are upright.
+  Compare against `MIN_HEIGHT_TO_SHOULDER_RATIO` (2.5). This is what would have caught the
+  shoulder press.
+
+**It measures and records, and nothing reads it back to choose a ruler.** One mislabelled take
+is not evidence enough to let the frames outvote the library, and a posture that flipped
+mid-pipeline would move every ruler under it at once. Both numbers are angles or ratios, so
+neither needs a scale -- which is the point, since they have to be readable on a take whose
+ruler is the thing in question. `measured-posture.test.ts` pins the three cases and the
+no-override. The export carries the whole `trackingDiagnostics` column, so these arrive with
+the build and need no Render deploy.
+
+### The row's -18.6% is NOT a projection error, and that was worth ruling out
+
+The obvious suspect, given a bent-over lift and a gravity-derived movement axis, is that the bar
+travels diagonally and Forge reports only its vertical component. Measured off the trace, per
+rep, the across-axis travel is 0.6 to 4.7cm on nine of the ten reps against 41-60cm along it, so
+the full 2D path magnitude would raise the set's range of motion by **1.3%**, not 19%.
+
+So the row is a genuine scale error, and on that take every ruler was low: `shoulder_width`
+-13.0%, `body_3d` -36.3%, `depth` -45.2%. No voter was right, which is why the blend could not
+save it. **No mechanism is proposed here on purpose** -- one paired take on this build, against
+31.9 / 56.0 / 51.3 cm across one earlier session, is not enough to fit anything to. It is the
+next thing to film deliberately.
+
 ### Still open, ranked
 
 Not fixed here, in the order they are worth taking:

@@ -1477,6 +1477,86 @@ const SHOULDER_BREADTH_FRACTION = 0.245;
 // has overlapping shoulders and a tiny shoulder width, which only pushes this ratio up.
 const MIN_HEIGHT_TO_SHOULDER_RATIO = 2.5;
 
+/* WHAT THE FRAMES SAY ABOUT POSTURE, BESIDE WHAT THE EXERCISE NAME CLAIMS.
+ *
+ * Added 2026-10-06. Posture decides which rulers a take gets -- a `bent_over` or `seated` lift
+ * drops the height ruler entirely (postureAllowsHeightCalibration) -- and it is currently
+ * decided by the exercise's NAME alone, from a static table. Nothing has ever checked that
+ * table against the body the camera actually saw.
+ *
+ * Two takes in two days say that is worth measuring. The Romanian Deadlift was mapped standing
+ * and is a hinge, which cost it its height ruler being WRONGLY PRESENT (-7.0% of the sensor,
+ * fixed 2026-10-05). And on 2026-10-06 a lift logged as "Barbell Shoulder Press" -- seated in
+ * the library, so no height ruler -- was filmed beside an OVR that recorded it as a PUSH PRESS,
+ * which is standing with leg drive. If that is what was performed, the take was denied a ruler
+ * it should have had, which is the same bug in the other direction.
+ *
+ * THIS MEASURES AND RECORDS. It changes no scale and overrides no profile, because one
+ * mislabelled take is not evidence enough to let the frames outvote the library, and a posture
+ * that flips mid-pipeline would move every ruler under it. It exists so the NEXT pairing can
+ * answer "was he actually standing?" from the export instead of from a screenshot -- the
+ * standing rule that when a fix needs a number the export does not carry, the field lands in
+ * the same change.
+ *
+ * Both numbers are RATIOS or angles, so neither needs a scale, which is the point: they are
+ * readable on a take whose ruler is the thing in question.
+ */
+export type MeasuredPosture = {
+  /** Median angle of the hip->shoulder vector from the image vertical, degrees. A standing or
+   *  seated torso is near 0; a hinged row or RDL approaches 90. */
+  torsoFromVerticalDeg: number | null;
+  /** Median (ankle->shoulder vertical extent) / (shoulder span). Separates STANDING from SEATED,
+   *  which the torso angle cannot: both are upright, but a seated athlete's ankles sit under
+   *  their knees so the extent collapses. Compare against MIN_HEIGHT_TO_SHOULDER_RATIO. */
+  heightToShoulderRatio: number | null;
+  framesUsed: number;
+};
+
+export function measurePostureFromFrames(
+  frames: { worldLandmarks: Landmark[] }[],
+): MeasuredPosture {
+  const angles: number[] = [];
+  const ratios: number[] = [];
+  for (const f of frames) {
+    const lm = f.worldLandmarks;
+    const lSh = lm[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rSh = lm[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const lHip = lm[POSE_LANDMARKS.LEFT_HIP];
+    const rHip = lm[POSE_LANDMARKS.RIGHT_HIP];
+    if (!visible(lSh) || !visible(rSh)) continue;
+    const shoulderSpan = Math.hypot(lSh.x - rSh.x, lSh.y - rSh.y);
+    const shX = (lSh.x + rSh.x) / 2;
+    const shY = (lSh.y + rSh.y) / 2;
+    if (visible(lHip) && visible(rHip)) {
+      const hipX = (lHip.x + rHip.x) / 2;
+      const hipY = (lHip.y + rHip.y) / 2;
+      const dx = shX - hipX;
+      const dy = shY - hipY;
+      if (Math.hypot(dx, dy) > 0) {
+        // Image y runs downward, so a torso standing straight up has dy negative and |dy| large.
+        angles.push((Math.atan2(Math.abs(dx), Math.abs(dy)) * 180) / Math.PI);
+      }
+    }
+    const lAnk = lm[POSE_LANDMARKS.LEFT_ANKLE];
+    const rAnk = lm[POSE_LANDMARKS.RIGHT_ANKLE];
+    if (shoulderSpan > 0 && (visible(lAnk) || visible(rAnk))) {
+      const ankleY = visible(lAnk) && visible(rAnk) ? Math.max(lAnk.y, rAnk.y) : visible(lAnk) ? lAnk.y : rAnk.y;
+      const extent = Math.abs(ankleY - shY);
+      if (extent > 0) ratios.push(extent / shoulderSpan);
+    }
+  }
+  const median = (v: number[]) => {
+    if (v.length === 0) return null;
+    const s = [...v].sort((a, b) => a - b);
+    return Math.round(s[Math.floor(s.length / 2)] * 100) / 100;
+  };
+  return {
+    torsoFromVerticalDeg: median(angles),
+    heightToShoulderRatio: median(ratios),
+    framesUsed: Math.max(angles.length, ratios.length),
+  };
+}
+
 // Whether the implied standing height is anatomically consistent with the shoulder width
 // measured on the same frame. Returns true when shoulder width can't be measured at all --
 // this is a check for a specific, identifiable failure, not another visibility gate.

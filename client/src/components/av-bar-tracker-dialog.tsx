@@ -71,6 +71,7 @@ import {
   type PoseFrame,
   type FormFaultThresholds,
   type ScaleEstimate,
+  measurePostureFromFrames,
 } from "@/lib/pose-tracking";
 import {
   buildTrackingDiagnostics,
@@ -1068,6 +1069,9 @@ export function AvBarTrackerDialog({
     // spanning only ~0.77 of their standing height, so the scale came out ~30% large on every
     // seated press, pulldown, row and leg machine, quietly enough to clear every other check.
     const posture = postureForExercise(exerciseName);
+    // What the FRAMES say about posture, recorded beside what the name claims. Measures only;
+    // see measurePostureFromFrames for why it never overrides the profile.
+    const measuredPosture = measurePostureFromFrames(calibrationInput);
     // movementType is passed as well as the name: the name patterns are a list of spellings and
     // the library keeps growing, so the taxonomy backstops the floor and hold work whose name
     // gives nothing away (a plank, a bird dog, a stretch).
@@ -1412,6 +1416,8 @@ export function AvBarTrackerDialog({
       velocitySmoothingMs?: number;
       traceTravelAcrossCm?: number;
       tracePointsDroppedOffAxis?: number;
+      posture?: string;
+      measuredPosture?: { torsoFromVerticalDeg: number | null; heightToShoulderRatio: number | null; framesUsed: number };
       referenceObject?: ReferenceObjectRead | null;
       gripWidthPx?: number | null;
       plateRejectedAgainstGrip?: boolean;
@@ -1420,6 +1426,10 @@ export function AvBarTrackerDialog({
       plateRejectedReasons?: string[];
     } = {
       scaleSource,
+      // The posture the exercise's own profile claims, and what the body actually looked like.
+      // A take where these disagree is a take whose rulers were chosen on the wrong premise.
+      posture,
+      measuredPosture,
       scaleCandidates: scaleCandidatesWithWeights,
       scaleOutliers: scaleVerdict.outliers.map((o) => ({
         source: o.source,

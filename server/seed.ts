@@ -1012,7 +1012,7 @@ async function main() {
         equipment: "Barbell",
         movementType: "Press",
         laterality: "bilateral" as const,
-        instructions: "Seated, bar at collarbone, press straight overhead without arching the back -- removing leg drive isolates the shoulders more than a standing Overhead Press.",
+        instructions: "Standing, bar at the collarbone, press straight overhead without arching the back. A seated barbell shoulder press is a different exercise.",
       },
       {
         name: "Dip",

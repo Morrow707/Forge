@@ -85,7 +85,16 @@ const POSTURE_BY_NAME = new Map<string, CameraPosture>([
   ["Reverse Hyper", "lying"],
   ["Skull Crusher", "lying"],
   ["Turkish Get-Up", "lying"],
-  ["Barbell Shoulder Press", "seated"],
+  /* STANDING, and it was "seated" until 2026-10-06. Scott: "Make barbell shoulder press
+   * standing, I am doing it standing, a barbell seated shoulder press is something different."
+   * The library's own instructions said "Seated, bar at collarbone" and were wrong with it;
+   * both are fixed in the same change. This is not cosmetic -- postureAllowsHeightCalibration
+   * is false for seated, so every Barbell Shoulder Press ever filmed was denied its height
+   * ruler and scaled on the shoulder and 3D rulers alone. The 2026-10-06 take beside the OVR
+   * read range of motion +15.6% with exactly that candidate list. Same class as the RDL hinge
+   * (2026-10-05) and the opposite direction: there a ruler was wrongly PRESENT, here wrongly
+   * ABSENT. A genuinely seated press is a different exercise and keeps "seated". */
+  ["Barbell Shoulder Press", "standing"],
   ["Bench Dip", "seated"],
   ["Concentration Curl", "seated"],
   ["Lat Pulldown", "seated"],
@@ -516,7 +525,7 @@ const FILM_GUIDANCE_BY_NAME = new Map<string, ExerciseFilmGuidance>([
   }],
   ["Barbell Shoulder Press", {
     view: "Square to the side, level with the bar at shoulder height, seeing full lockout.",
-    inFrame: "The seat, both plates, the bar at the shoulders and overhead.",
+    inFrame: "Both plates, the feet, the bar at the shoulders and overhead.",
     follows: "The bar.",
     oneRep: "One rep = bar at the collarbone, press to lockout, lower to the collarbone.",
   }],
