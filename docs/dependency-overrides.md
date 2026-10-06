@@ -71,3 +71,24 @@ tree.
 
 If app icons ever do need regenerating, `npx @capacitor/assets generate` fetches
 it on demand without putting any of that back in the lockfile.
+
+## `postcss-selector-parser: ^7.1.6`
+
+GHSA-rj75-hqrm-r3gf, published 2026-10-06: quadratic complexity in flat
+selector parsing allows CPU exhaustion. Everything below 7.1.6 is affected and
+Tailwind 3.4.19 pins 6.1.4, both directly and through `postcss-nested`.
+
+Unlike the `braces` advisory beside it in
+`scripts/npm-audit-allowlist.json`, this one HAS a fixed version, so it gets an
+override rather than an allowlist entry -- the allowlist is for advisories with
+nowhere to go.
+
+A 6 -> 7 major bump of the parser Tailwind builds every class name with is not
+obviously safe, so it was verified rather than assumed: the built stylesheet is
+**byte-identical** before and after (81,780 bytes, same md5), and Vite's
+content-hashed filename came back unchanged at `index-W2Lj-gpn.css`, which is
+an independent check on the same fact. The 7.x line dropped Node 12 support and
+changed internals; nothing Tailwind calls moved.
+
+Drop the override once Tailwind ships a release that asks for >= 7.1.6 itself.
+
