@@ -1,0 +1,40 @@
+{
+  "image": "IMG_0042_frame0.jpg",
+  "boxes": [
+    {
+      "class": "plate",
+      "x_center": 0.363,
+      "y_center": 0.53,
+      "width": 0.281,
+      "height": 0.183
+    },
+    {
+      "class": "plate",
+      "x_center": 0.696,
+      "y_center": 0.072,
+      "width": 0.296,
+      "height": 0.144
+    },
+    {
+      "class": "plate",
+      "x_center": 0.499,
+      "y_center": 0.067,
+      "width": 0.096,
+      "height": 0.133
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.43,
+      "y_center": 0.511,
+      "width": 0.119,
+      "height": 0.089
+    },
+    {
+      "class": "barbell",
+      "x_center": 0.881,
+      "y_center": 0.111,
+      "width": 0.074,
+      "height": 0.222
+    }
+  ]
+}

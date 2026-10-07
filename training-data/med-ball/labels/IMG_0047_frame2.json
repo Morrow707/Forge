@@ -1,0 +1,26 @@
+{
+  "image": "IMG_0047_frame2.jpg",
+  "boxes": [
+    {
+      "class": "med_ball",
+      "x_center": 0.858,
+      "y_center": 0.3766,
+      "width": 0.0662,
+      "height": 0.0451
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.9336,
+      "y_center": 0.3686,
+      "width": 0.0745,
+      "height": 0.051
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.9882,
+      "y_center": 0.3632,
+      "width": 0.0236,
+      "height": 0.0516
+    }
+  ]
+}

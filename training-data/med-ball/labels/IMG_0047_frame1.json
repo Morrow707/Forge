@@ -1,0 +1,40 @@
+{
+  "image": "IMG_0047_frame1.jpg",
+  "boxes": [
+    {
+      "class": "med_ball",
+      "x_center": 0.8028,
+      "y_center": 0.3475,
+      "width": 0.0721,
+      "height": 0.0475
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.8785,
+      "y_center": 0.3395,
+      "width": 0.0818,
+      "height": 0.0537
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.958,
+      "y_center": 0.3343,
+      "width": 0.0838,
+      "height": 0.054
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.976,
+      "y_center": 0.2685,
+      "width": 0.048,
+      "height": 0.0567
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.9771,
+      "y_center": 0.3814,
+      "width": 0.0457,
+      "height": 0.0411
+    }
+  ]
+}
