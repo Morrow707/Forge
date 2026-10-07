@@ -1166,8 +1166,49 @@ export function travelOnsetMarginFor(romKind: string | null | undefined): number
  *  first drive. Seven hundredths it is; the next sensor-paired squat says whether the long
  *  side is the fraction or that take. Decided on speedsMps (the decision array), never the
  *  reported one. Falls back to the travel margin when the window would collapse, so a rep is
- *  never left without one. */
-export const DRIVE_ONSET_FRACTION = 0.07;
+ *  never left without one.
+ *
+ *  REFITTED TO 0.04 ON 2026-10-07, OFF THIRTEEN SENSOR-PAIRED SETS AND NO NEW FILMING. Seven
+ *  hundredths was fitted on six sets against three clean benches. There are thirteen now -- five
+ *  bench sets from 09-29/09-30, the oblique bench, the 10-02 bench, row and push press, two back
+ *  squats, and the shoulder press, row and bench of 10-07 -- and every one of them stores its own
+ *  trace, so the fit is a replay, not a lift. Scott, 2026-10-07: "calibrate the numbers so we can
+ *  get more accurate without lifts."
+ *
+ *  THE QUANTITY FITTED IS THE SENSOR'S OWN CONCENTRIC TIME, which it reports with none of Forge's
+ *  scale in it: its range of motion over its mean velocity. That matters, because the scale error
+ *  and the timing error were read as one thing for three sessions (docs/camera-tracking-notes.md,
+ *  "Three lifts beside OVR, build 634"). Scored on the window itself across all thirteen, median
+ *  |error| is 11.4% at 0.07 and 7.4% at 0.04, and leave-one-out picks 0.03 or 0.04 with every
+ *  single set withheld in turn -- never 0.07.
+ *
+ *  Scored on the number the athlete actually reads, the set's mean velocity, excluding the four
+ *  sets whose REP COUNT is wrong (a miscounted set has a different fault and may not be allowed
+ *  to choose a timing constant -- at 0.07 those four read +113%, +114%, +20% and +2%):
+ *
+ *      fraction   median |err|    rms     bias
+ *      0.07           17.2%      21.4%    +0.9%
+ *      0.05           15.6%      19.6%    -3.1%
+ *      0.04           10.4%      19.0%    -4.4%    <- rms minimum
+ *      0.03            8.7%      19.2%    -8.7%
+ *      0.02            7.2%      20.1%   -12.0%
+ *
+ *  0.03 and below buy a little median by paying in BIAS, which is the worse error of the two: a
+ *  bias moves every athlete's number the same way, a spread does not. 0.04 is the rms minimum on
+ *  the window AND on the mean, with the smallest bias of the candidates that improve on 0.07.
+ *  Across all thirteen it takes the mean's median error from 20.0% to 10.4% and its rms from
+ *  48.2% to 36.2%.
+ *
+ *  IT CANNOT CHANGE WHICH REPS EXIST, checked rather than assumed: the drive window is REPORTED,
+ *  while the travel window is what every phantom and rack-move filter was fitted on (see the
+ *  two-windows comment in phaseStats). Every fraction swept from 0.10 to 0.01 returned exactly
+ *  the same rep count on all thirteen sets.
+ *
+ *  SHARED, NOT PER-LIFT. This is the default all 269 filmable things are handed and it moves for
+ *  them together -- right, because it was fitted across five movements (bench, row, push press,
+ *  back squat, shoulder press) and is a property of how a bar sensor defines a concentric, not of
+ *  any one lift. FITTED_OVERRIDES stays empty. See CLAUDE.md, "What 'its own numbers' means." */
+export const DRIVE_ONSET_FRACTION = 0.04;
 
 export function trimPhaseToDrive(
   speeds: number[],

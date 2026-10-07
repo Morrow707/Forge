@@ -186,6 +186,8 @@ export type AvAnalysisResult = {
   liveFallbackReason?: string;
   liveCoverage?: number;
   liveDropRate?: number;
+  // The upload copy's own telemetry -- see tracking-diagnostics.ts's videoAsset.
+  videoAsset?: Record<string, number>;
   readerErrorMessage?: string;
   // Analysis-time device/pipeline conditions, read once at the end of the Vision loop -- see
   // AvBodyTrackingPlugin.swift's own comments on thermalStateDescription/

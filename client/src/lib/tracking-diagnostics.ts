@@ -175,6 +175,28 @@ export type TrackingDiagnostics = {
     liveCoverage?: number;
     liveDropRate?: number;
     liveMissRate?: number;
+    // WHAT THE COACH'S COPY ACTUALLY WROTE, as opposed to what it meant to.
+    //
+    // The 720p upload copy is encoded from the data-output feed while the athlete lifts, and
+    // until 2026-10-07 it kept one DELIVERED frame in four -- a divisor fitted to the camera's
+    // nominal 120fps, applied to a feed the capture had already thinned to about 30 by dropping
+    // frames as late (which is what liveDropRate near 3.0 says). The stride landed twice and the
+    // saved clip ran at 6.0fps, measured off a screen recording of the real player. Nothing in
+    // any export described the saved FILE, only the analysis, so the question could not be asked
+    // of a diagnostics download at all. These are that answer, and they gate nothing (Rule #1).
+    videoAsset?: {
+      framesDelivered?: number;
+      framesAppended?: number;
+      skippedForCadence?: number;
+      // The encoder refusing a frame, which is the OTHER way the copy loses one.
+      skippedNotReady?: number;
+      targetFrameRate?: number;
+      // What the file really runs at: appended frames over the span they cover. This is the
+      // number to read against targetFrameRate.
+      measuredFrameRate?: number;
+      largestGapSeconds?: number;
+      spanSeconds?: number;
+    };
     // HOW THE PHONE WAS HELD. Median gravity read from CoreMotion over the recording: pitch is
     // positive when the lens tilts down toward the floor, roll is a sideways lean, both in
     // degrees from a phone held upright in portrait. Recorded, not yet corrected for -- the
@@ -768,6 +790,28 @@ export function buildTrackingDiagnostics(args: {
     liveCoverage?: number;
     liveDropRate?: number;
     liveMissRate?: number;
+    // WHAT THE COACH'S COPY ACTUALLY WROTE, as opposed to what it meant to.
+    //
+    // The 720p upload copy is encoded from the data-output feed while the athlete lifts, and
+    // until 2026-10-07 it kept one DELIVERED frame in four -- a divisor fitted to the camera's
+    // nominal 120fps, applied to a feed the capture had already thinned to about 30 by dropping
+    // frames as late (which is what liveDropRate near 3.0 says). The stride landed twice and the
+    // saved clip ran at 6.0fps, measured off a screen recording of the real player. Nothing in
+    // any export described the saved FILE, only the analysis, so the question could not be asked
+    // of a diagnostics download at all. These are that answer, and they gate nothing (Rule #1).
+    videoAsset?: {
+      framesDelivered?: number;
+      framesAppended?: number;
+      skippedForCadence?: number;
+      // The encoder refusing a frame, which is the OTHER way the copy loses one.
+      skippedNotReady?: number;
+      targetFrameRate?: number;
+      // What the file really runs at: appended frames over the span they cover. This is the
+      // number to read against targetFrameRate.
+      measuredFrameRate?: number;
+      largestGapSeconds?: number;
+      spanSeconds?: number;
+    };
     // HOW THE PHONE WAS HELD. Median gravity read from CoreMotion over the recording: pitch is
     // positive when the lens tilts down toward the floor, roll is a sideways lean, both in
     // degrees from a phone held upright in portrait. Recorded, not yet corrected for -- the

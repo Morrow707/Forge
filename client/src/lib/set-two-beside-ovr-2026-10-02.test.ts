@@ -15,11 +15,16 @@ const read = (p: string) => readFileSync(new URL(`../../../${p}`, import.meta.ur
 describe("the Pendlay row's pickup is not a rep", () => {
   // Sensor: nine rows, mean 1.02 m/s, peak 1.68, ROM 19.5in (49.5cm). The device counted ten,
   // the first being the bar coming off the floor: 96.8cm over 3.7s against a 54cm median.
-  it("counts nine rows and lands on the sensor's mean", () => {
+  // The title used to say this landed on the sensor's mean and the number pinned was 1.02. The
+  // sensor read 0.85, so 1.02 was +20% and the title was wrong about its own assertion. The
+  // 2026-10-07 drive-window refit takes it to 0.91, +7%, and the pin says which is which now.
+  it("counts nine rows, and the mean moves from +20% to +7% of the sensor", () => {
     const result = replayCapture((row as StoredCapture[])[0]);
     expect(result.repCount).toBe(9);
     const m = result.metrics!;
-    expect(m.meanVelocityMps).toBeCloseTo(1.02, 1);
+    expect(m.meanVelocityMps).toBeCloseTo(0.91, 1);
+    const sensorMean = 0.85;
+    expect(Math.abs(m.meanVelocityMps! - sensorMean) / sensorMean).toBeLessThan(0.1);
     expect(Math.abs(m.romCm! - 49.5) / 49.5).toBeLessThan(0.05);
     expect(Math.min(...m.repBreakdown.map((r) => r.startT))).toBeGreaterThan(5_000);
   });

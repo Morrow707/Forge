@@ -9521,6 +9521,24 @@ export const trackingDiagnosticsSchema = z.object({
       // liveDropRate beside it counts every frame the capture discarded, most of which the
       // stride was going to skip anyway -- see the Swift side's missRate comment.
       liveMissRate: z.number().optional(),
+      // WHAT THE COACH'S COPY ACTUALLY WROTE. The 720p upload copy kept one DELIVERED frame in
+      // four until 2026-10-07, a divisor fitted to the camera's nominal 120fps applied to a feed
+      // the capture had already thinned to ~30 -- so the saved clip ran at 6.0fps, measured off a
+      // screen recording of the real player. Nothing in any export described the saved FILE, only
+      // the analysis. Declared here because zod strips what it does not declare, silently, which
+      // has cost three sessions of diagnostics already. Measured; gates nothing (Rule #1).
+      videoAsset: z
+        .object({
+          framesDelivered: z.number().optional(),
+          framesAppended: z.number().optional(),
+          skippedForCadence: z.number().optional(),
+          skippedNotReady: z.number().optional(),
+          targetFrameRate: z.number().optional(),
+          measuredFrameRate: z.number().optional(),
+          largestGapSeconds: z.number().optional(),
+          spanSeconds: z.number().optional(),
+        })
+        .optional(),
       // How the phone was held, from CoreMotion -- see tracking-diagnostics.ts.
       cameraPitchDeg: z.number().optional(),
       cameraRollDeg: z.number().optional(),

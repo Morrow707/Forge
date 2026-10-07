@@ -118,7 +118,7 @@ export const SHARED_CAMERA_TUNABLES: Readonly<CameraTunables> = Object.freeze({
   maxRomFractionOfHeight: 1.3, // DEFAULT_MAX_ROM_FRACTION
   travelOnsetMarginM: 0.01, // TRAVEL_ONSET_MARGIN_M
   maxPeakToMeanRatio: 2.0, // MAX_PEAK_TO_MEAN_RATIO
-  driveOnsetFraction: 0.07, // DRIVE_ONSET_FRACTION
+  driveOnsetFraction: 0.04, // DRIVE_ONSET_FRACTION
   maxDeviationFractionOfHeight: 0.2, // DEFAULT_MAX_DEVIATION_FRACTION
   maxCountTrimPerEdge: 4, // bar-tracking.ts, build 622
   minCountTrimOddness: 1,

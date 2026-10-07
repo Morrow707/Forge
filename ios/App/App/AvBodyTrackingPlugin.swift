@@ -131,6 +131,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // could not be made, in which case the JS side falls back to compressForUpload exactly as
     // before -- the copy is an optimisation, never a step the save depends on.
     private var pendingUploadCopy: (url: URL, bytes: Int)?
+    // What the last upload copy managed, read into trackingDiagnostics.videoAsset by whichever
+    // analysis path runs next. Written on liveAnalysisQueue as the writer finishes; nil until a
+    // take has produced one. Measured only -- nothing reads it to decide anything (Rule #1).
+    private var lastUploadCopyTelemetry: [String: Any]?
     private var stopWaitGroup: DispatchGroup?
     // WHY THE LAST TAKE FELL BACK TO THE FILE READ. Every capture in the 2026-09-28 export ran
     // the file path and nothing on the report said why, so the gate could not be tuned. Set by
@@ -156,6 +160,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     // Both feeders decode to the same budget, or they are two different measurements and a
     // calibration run describes whichever one happened to produce the take.
     private static let analysisDecodeMaxDimension: CGFloat = 1280
+    // The coach's copy is for watching a lift back, not for measuring one -- 30fps is smooth to
+    // the eye and keeps the upload small. The capture stays at whatever rate the session chose
+    // (120 on this phone) and the movie file keeps every frame of it; only this copy is thinned.
+    private static let uploadCopyTargetFrameRate: Double = 30
 
     // LIVE ANALYSIS IS OFF, AND THE CAMERA COMES FIRST.
     //
@@ -1398,12 +1406,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // asked for: a coach's video is wanted on every take, a live trace only on some.
         let copyURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("forge-upload-\(UUID().uuidString).mp4")
-        let copyStride = max(1, Int((activeCaptureFrameRate / 30.0).rounded()))
         let copyAvailable = videoDataOutput != nil
         Self.liveAnalysisQueue.async {
             self.liveRun = liveContext.map { AvLiveAnalysisRun(ctx: $0) }
             self.uploadCopyWriter = copyAvailable
-                ? AvUploadCopyWriter(url: copyURL, stride: copyStride, log: { [weak self] in self?.logDiag($0) })
+                ? AvUploadCopyWriter(
+                    url: copyURL, targetFrameRate: Self.uploadCopyTargetFrameRate,
+                    log: { [weak self] in self?.logDiag($0) })
                 : nil
         }
         if copyAvailable { Self.markPathActive(copyURL.path) }
@@ -1459,8 +1468,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 group.leave()
                 return
             }
+            let telemetry = writer.telemetry
             writer.finish { result in
                 DispatchQueue.main.async {
+                    // Written beside pendingUploadCopy, on main, so both analysis paths read it
+                    // from the same place activeCaptureFrameRate is read from.
+                    self.lastUploadCopyTelemetry = telemetry
                     self.pendingUploadCopy = result
                     group.leave()
                 }
@@ -1820,6 +1833,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
         if let maxInterFrameGapSeconds = state.maxInterFrameGapSeconds {
             result["maxInterFrameGapSeconds"] = maxInterFrameGapSeconds
+        }
+        if let videoAsset = lastUploadCopyTelemetry {
+            result["videoAsset"] = videoAsset
         }
         logDiag(
             "live analysis usable: \(state.processedCount) frames processed, \(state.trackedCount) tracked, "
@@ -2192,6 +2208,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // was filmed at.
         let captureFrameRateAtAnalysis = self.activeCaptureFrameRate
         let freeDiskSpaceBytes = availableDiskSpaceBytes()
+        let videoAssetTelemetry = self.lastUploadCopyTelemetry
         logDiag(
             "analyzeRecording conditions: thermalState=\(thermalState) lowPowerMode=\(lowPowerModeEnabled) "
                 + "freeDiskSpaceBytes=\(freeDiskSpaceBytes.map { String($0) } ?? "unknown") "
@@ -2314,6 +2331,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 // bridge treats a missing key as "no confident box read," not a zeroed default.
                 if let boxTopNormalizedY = boxTopNormalizedY {
                     result["boxTopNormalizedY"] = boxTopNormalizedY
+                }
+                if let videoAsset = videoAssetTelemetry {
+                    result["videoAsset"] = videoAsset
                 }
                 if let freeDiskSpaceBytes = freeDiskSpaceBytes {
                     result["freeDiskSpaceBytes"] = freeDiskSpaceBytes
@@ -3105,35 +3125,84 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
 // liveAnalysisQueue and nowhere else, which is what lets it -- and the AvFrameRunState it owns
 // -- be plain mutable state with no locking.
 /// Encodes the coach's 720p copy from the live capture buffers as they arrive, so the upload
-/// file exists the moment recording stops. One frame in `stride` (about 30fps), H.264, scaled
-/// by the encoder from whatever size the data output delivers. Everything here runs on
+/// file exists the moment recording stops. `targetFrameRate` frames a second, H.264, scaled by
+/// the encoder from whatever size the data output delivers. Everything here runs on
 /// liveAnalysisQueue; `finish` calls back on an AVFoundation queue.
+///
+/// THE CADENCE IS TIME, NOT A COUNT OF CALLBACKS, AND THE DIFFERENCE WAS 6FPS AGAINST 30.
+///
+/// This used to keep one delivered frame in `stride`, with `stride = round(captureRate / 30)`
+/// -- 4 at 120fps. The arithmetic is only right if the delegate receives all 120, and it does
+/// not: `AVCaptureVideoDataOutput` discards a frame that arrives while this queue is busy with
+/// Vision, which is what `liveDropRate` near 3.0 has been recording all along (90 of every 120
+/// dropped as late, so `didOutput` fires about 30 times a second). Dividing that by 4 again
+/// applied the stride twice and wrote the coach a 7.5fps file; measured off a screen recording
+/// of the real player on 2026-10-07, the saved clip ran at 6.0fps -- 75% of the frames in it
+/// identical to the one before. The 120fps `.mov` from `movieFileOutput` was never affected:
+/// this is the upload copy alone.
+///
+/// Sampling on the presentation timestamp is right at any delivery rate, which a fixed divisor
+/// can never be, and is the same fix the live ANALYSIS cadence took in build 594 (see
+/// `AvLiveAnalysisRun.lastProcessedPresentationSeconds`) -- including its 0.75 slack, so a frame
+/// arriving a shade early is kept rather than deferred into the next interval.
+///
+/// Nothing here gates, corrects or withholds anything (Rule #1): a frame not kept is counted and
+/// reported, and the copy failing entirely still falls back to `compressForUpload`.
 ///
 /// Best effort throughout: a frame the input is not ready for is skipped (counted), and any
 /// failure finishes with nil so the JS side falls back to compressForUpload. A slower upload
 /// is always better than no video.
 private final class AvUploadCopyWriter {
     private let url: URL
-    private let stride: Int
+    private let targetInterval: Double
     private let log: (String) -> Void
     private var writer: AVAssetWriter?
     private var input: AVAssetWriterInput?
-    private var frameIndex = 0
+    private var delivered = 0
     private var appended = 0
+    private var skippedForCadence = 0
     private var skippedNotReady = 0
+    private var lastKeptSeconds: Double?
+    private var firstKeptSeconds: Double?
+    private var lastAppendedSeconds: Double?
+    private var largestGapSeconds: Double = 0
     private var failed = false
     private let startedAt = Date()
 
-    init(url: URL, stride: Int, log: @escaping (String) -> Void) {
+    init(url: URL, targetFrameRate: Double, log: @escaping (String) -> Void) {
         self.url = url
-        self.stride = stride
+        self.targetInterval = 1.0 / max(1.0, targetFrameRate)
         self.log = log
     }
 
+    /// What the copy actually managed, for `trackingDiagnostics.videoAsset`. Measured, never
+    /// acted on.
+    var telemetry: [String: Any] {
+        let span = (lastAppendedSeconds ?? 0) - (firstKeptSeconds ?? 0)
+        return [
+            "framesDelivered": delivered,
+            "framesAppended": appended,
+            "skippedForCadence": skippedForCadence,
+            "skippedNotReady": skippedNotReady,
+            "targetFrameRate": (1.0 / targetInterval * 10).rounded() / 10,
+            "measuredFrameRate": span > 0 ? (Double(max(0, appended - 1)) / span * 10).rounded() / 10 : 0,
+            "largestGapSeconds": (largestGapSeconds * 1000).rounded() / 1000,
+            "spanSeconds": (span * 1000).rounded() / 1000,
+        ]
+    }
+
     func append(_ sampleBuffer: CMSampleBuffer) {
-        let index = frameIndex
-        frameIndex += 1
-        guard !failed, index % stride == 0 else { return }
+        delivered += 1
+        guard !failed else { return }
+        let seconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        // The cadence the ANALYSIS path uses, for the reason given above the class. 0.75 of the
+        // interval rather than the whole of it: a 30fps target fed by a 29.9fps delivery would
+        // otherwise miss every other frame to rounding.
+        if let last = lastKeptSeconds, seconds.isFinite, seconds - last < targetInterval * 0.75 {
+            skippedForCadence += 1
+            return
+        }
+        if seconds.isFinite { lastKeptSeconds = seconds }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         if writer == nil {
@@ -3173,7 +3242,7 @@ private final class AvUploadCopyWriter {
                 writer.startSession(atSourceTime: pts)
                 self.writer = writer
                 self.input = input
-                log("upload copy: writing \(w)x\(h) at 1 in \(stride) frames")
+                log("upload copy: writing \(w)x\(h) targeting \(Int((1.0 / targetInterval).rounded()))fps")
             } catch {
                 failed = true
                 log("upload copy: \(error.localizedDescription), falling back to the export")
@@ -3186,6 +3255,14 @@ private final class AvUploadCopyWriter {
         }
         if input.append(sampleBuffer) {
             appended += 1
+            let seconds = CMTimeGetSeconds(pts)
+            if seconds.isFinite {
+                if firstKeptSeconds == nil { firstKeptSeconds = seconds }
+                if let previous = lastAppendedSeconds {
+                    largestGapSeconds = max(largestGapSeconds, seconds - previous)
+                }
+                lastAppendedSeconds = seconds
+            }
         } else {
             failed = true
             log("upload copy: append failed (\(writer?.error?.localizedDescription ?? "?")), falling back")
@@ -3198,6 +3275,9 @@ private final class AvUploadCopyWriter {
         let url = self.url
         let appended = self.appended
         let skipped = self.skippedNotReady
+        let cadence = self.skippedForCadence
+        let delivered = self.delivered
+        let measured = (telemetry["measuredFrameRate"] as? Double) ?? 0
         let seconds = Date().timeIntervalSince(startedAt)
         let discard: () -> Void = {
             try? FileManager.default.removeItem(at: url)
@@ -3219,8 +3299,9 @@ private final class AvUploadCopyWriter {
                 return
             }
             self.log(
-                "upload copy: \(appended) frames, \(skipped) skipped, \(bytes / 1_000_000)MB, "
-                    + "\(String(format: "%.1f", seconds))s of capture"
+                "upload copy: \(appended) frames, \(skipped) not ready, \(cadence) off-cadence "
+                    + "of \(delivered) delivered, \(String(format: "%.1f", measured))fps measured, "
+                    + "\(bytes / 1_000_000)MB, \(String(format: "%.1f", seconds))s of capture"
             )
             completion((url, bytes))
         }

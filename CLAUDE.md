@@ -1140,6 +1140,41 @@ halves before splitting anything else:
   differently each way; the bench's pair clears 0.4 anchored on the larger and fails anchored on
   the smaller, and on a two-candidate take that decides everything. `pairwise` now shows both
   directions. Calibration work: uploaded on commit.
+- Build **638+** was cut 2026-10-07 from a screen recording and the traces already in the repo --
+  no new filming on either half. Scott: "calibrate the numbers so we can get more accurate without
+  lifts, build what you need, then upload."
+  **THE COACH'S SAVED VIDEO HAS BEEN RUNNING AT 6.0 FRAMES A SECOND.** Scott: "the video is very
+  choppy, almost glitchy or laggy on playback." Measured off his screen recording of the real
+  player: 75% of consecutive frames in the video region are pixel-identical, and the distinct-frame
+  rate lands on exactly 1/6s at every threshold from 0.5 to 3.0 grey levels. **The camera is fine
+  and the 120fps `.mov` is fine** -- Scott pushed back on the first explanation and was right, the
+  export says `captureFrameRate: 120` on every take. What is thin is the DATA-OUTPUT feed:
+  `AVCaptureVideoDataOutput` discards a frame arriving while `liveAnalysisQueue` is busy with
+  Vision, which is what `liveDropRate` near 3.0 has always meant (90 of 120 dropped as late, so
+  the delegate fires ~30 times a second), and `AvUploadCopyWriter` then kept one DELIVERED frame
+  in `round(120/30) = 4`. **The stride landed twice.** It samples on the presentation timestamp
+  now, the same fix the live analysis cadence took in build 594, which is right at any delivery
+  rate where a fixed divisor is right at one. It does NOT touch any number: the copy and the
+  analysis are independent consumers of the same callback.
+  **AND NO EXPORT HAS EVER DESCRIBED THE SAVED FILE.** `skippedNotReady` was counted into the debug
+  console alone, so the question had to be answered from a screen recording. `videoAsset` carries
+  the delivered/appended/skipped counts, the target and MEASURED frame rate, the largest gap and
+  the span, on BOTH analysis paths, declared in `trackingDiagnosticsSchema` and printed as a
+  "Saved video" row. Records and gates nothing (Rule #1).
+  **`DRIVE_ONSET_FRACTION` 0.07 -> 0.04, FITTED ON THIRTEEN SENSOR-PAIRED SETS, REPLAYED.** The
+  quantity fitted is the SENSOR's own concentric time (its range over its mean), which carries none
+  of Forge's scale -- the separation build 634 made is what let this be fitted at all. On the
+  athlete-facing mean, excluding the four sets whose rep count is wrong (a miscounted set has a
+  different fault and may not choose a timing constant): median error 17.2% -> 10.4%, rms 21.4% ->
+  19.0% (the minimum), bias +0.9% -> -4.4%. 0.03 and below buy median by paying in BIAS, which is
+  the worse error. Leave-one-out picks 0.03 or 0.04 with every set withheld in turn and never 0.07.
+  **It cannot change which reps exist and that is checked**: every fraction from 0.10 to 0.01
+  returns the same rep count on all thirteen. SHARED, not per-lift -- fitted across five movements,
+  so all 269 move together and `FITTED_OVERRIDES` stays empty.
+  **Two sets move the wrong way and are recorded, not smoothed over** (squat set 2, 0.83 -> 0.80 of
+  the sensor; this session's row). **Still open**: the bench's -23.9% window does not respond,
+  because its segmented PHASE (0.464s) is already shorter than the sensor's concentric (0.504s) --
+  a ceiling no trim can lift, and the next thing to look at. Calibration work: uploaded on commit.
 - **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
   **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
   the numbering in this file has drifted twice. Read the run list, not the last number written

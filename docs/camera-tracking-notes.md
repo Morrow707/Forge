@@ -3723,3 +3723,137 @@ apart, which clears a 0.4 tolerance anchored on the larger and fails it anchored
 The largest-cluster loop hides it most of the time; on a two-candidate take it decides everything.
 `pairwise` now records both directions so the next take shows it rather than hiding it, and a
 symmetric measure is a change to make with a paired take in hand, not on a Friday.
+
+## The coach's copy was 6fps, and the concentric window refitted without filming, 2026-10-07
+
+Two separate pieces of work, one build. Neither needed a lift: the first was settled from a screen
+recording Scott sent of the app playing a saved clip, the second from the thirteen sensor-paired
+traces already in the repo.
+
+### The saved video ran at 6.0 frames a second. `AvUploadCopyWriter`.
+
+Scott: *"I just noticed the video is very choppy, almost glitchy or laggy on playback."* It was,
+and it was not the player.
+
+Measured off his screen recording (60fps, 673 frames, 11.2s of the real playback UI). In the video
+region, 75% of consecutive frames are pixel-identical -- the median frame-to-frame difference is
+0.01 of a grey level, which is encoder noise. Counting only frames that genuinely changed, at five
+different thresholds:
+
+| threshold | distinct frames | median gap | effective rate |
+|---|---|---|---|
+| 0.5 | 73 | 0.150s | 6.7 fps |
+| 0.8 | 65 | 0.1667s | **6.0 fps** |
+| 1.2 | 56 | 0.1667s | **6.0 fps** |
+| 2.0 | 48 | 0.1667s | **6.0 fps** |
+| 3.0 | 33 | 0.1667s | **6.0 fps** |
+
+Stable across every threshold at exactly 1/6s, and the detector can resolve 60fps -- there is a run
+of sixteen consecutive single-refresh changes where the pause overlay animates.
+
+**THE STRIDE WAS BEING APPLIED TWICE.** Scott pushed back on the first explanation and was right to:
+the camera IS at 120fps and the export says so (`captureFrameRate: 120`, `sampleStride: 4` on all
+six takes of the session). The 120fps `.mov` from `AVCaptureMovieFileOutput` was never affected.
+What is thin is the OTHER output. `AVCaptureVideoDataOutput` discards a frame that arrives while
+`liveAnalysisQueue` is busy with Vision, which is precisely what `liveDropRate` near 3.0 has been
+recording all along -- 90 of every 120 dropped as late, so `captureOutput(didOutput:)` fires about
+30 times a second. `AvUploadCopyWriter.append` then kept `index % stride == 0` on a counter of
+DELIVERED frames, with `stride = round(activeCaptureFrameRate / 30)` = 4. 30 / 4 = 7.5, and the
+remainder to the measured 6.0 is `skippedNotReady`, the encoder refusing a frame.
+
+The fix is the one the live ANALYSIS cadence already took in build 594: sample on the
+**presentation timestamp**, keeping a frame when 1/30s of real time has passed since the last kept
+one, with the same 0.75 slack. That is right at any delivery rate, which a fixed divisor can only
+ever be at one. `uploadCopyTargetFrameRate` is 30 and is the only rate in it now.
+
+**IT DOES NOT TOUCH THE NUMBERS.** The copy and the analysis are independent consumers of the same
+callback and the copy's cadence gates nothing in the analysis. The analysis has its own,
+separately measured shortfall (`liveCoverage` 0.80-0.85 on this session's six takes, largest gap
+1.91s), which is still open.
+
+**AND NOTHING IN ANY EXPORT HAS EVER DESCRIBED THE SAVED FILE.** `skippedNotReady` was counted and
+written to the debug console only, so "is the video choppy" could not be asked of a diagnostics
+download at all -- the question had to be answered from a screen recording. `videoAsset` now
+carries `framesDelivered`, `framesAppended`, `skippedForCadence`, `skippedNotReady`,
+`targetFrameRate`, `measuredFrameRate`, `largestGapSeconds` and `spanSeconds`, emitted on BOTH
+analysis paths (a take that fell back to the file read still wrote a copy, and that is exactly the
+take whose video is worth asking about), declared in `trackingDiagnosticsSchema` because zod strips
+what it does not declare, and printed by the tracking report as a "Saved video" row. It records and
+gates nothing (Rule #1); a copy that cannot be made still falls back to `compressForUpload`.
+`the-coachs-copy-is-not-six-fps.test.ts` pins the cadence, the absence of the old divisor, both
+loss counters and the two emission points.
+
+### `DRIVE_ONSET_FRACTION` 0.07 -> 0.04, fitted on thirteen sets with no new filming
+
+Scott: *"calibrate the numbers so we can get more accurate without lifts, build what you need."*
+What was needed was a sweep over every sensor-paired take in the repo, which is what the stored
+traces are for.
+
+**THE QUANTITY FITTED IS THE SENSOR'S OWN CONCENTRIC TIME** -- its range of motion over its mean
+velocity -- which carries none of Forge's scale. That separation is the whole reason this fit is
+possible now and was not before: the scale error and the timing error were read as one thing until
+build 634's pairing split them.
+
+Thirteen sets: five benches from 09-29/09-30, the oblique bench, the 10-02 bench, row and push
+press, two back squats, and this session's shoulder press, row and bench. Per-set drive-window
+error against the sensor:
+
+| set | 0.07 | 0.04 | 0.03 |
+|---|---|---|---|
+| bench-set7 | -3.2% | -0.5% | +5.8% |
+| bench-set8 | -20.4% | -7.4% | +1.6% |
+| bench-set9 | -30.8% | -18.7% | -5.6% |
+| bench-set10 | +1.2% | +4.7% | +6.8% |
+| bench-oblique | -11.4% | -1.8% | +8.5% |
+| bench-10-02 | +48.5% | +53.8% | +55.1% |
+| row-10-02 | -10.3% | +1.0% | +2.9% |
+| push-press-10-02 | +5.0% | +11.7% | +17.7% |
+| squat-set1 | +3.2% | +5.0% | +12.3% |
+| squat-set2 | +21.3% | +25.9% | +26.8% |
+| 10-07 press | -11.4% | -1.2% | +3.5% |
+| 10-07 row | -13.0% | -11.5% | -3.6% |
+| 10-07 bench | -27.9% | -23.9% | -23.9% |
+
+Leave-one-out, scored on median absolute error with each set withheld in turn, picks 0.03 eleven
+times and 0.04 three times. **It never picks 0.07.**
+
+Scored on the number the athlete actually reads -- the set's mean velocity -- and excluding the
+four sets whose REP COUNT is wrong, because a miscounted set has a different fault and may not be
+allowed to choose a timing constant (at 0.07 those four read +113%, +114%, +20% and +2%):
+
+| fraction | median \|err\| | rms | bias |
+|---|---|---|---|
+| 0.07 | 17.2% | 21.4% | +0.9% |
+| 0.05 | 15.6% | 19.6% | -3.1% |
+| **0.04** | **10.4%** | **19.0%** | **-4.4%** |
+| 0.03 | 8.7% | 19.2% | -8.7% |
+| 0.02 | 7.2% | 20.1% | -12.0% |
+
+**0.03 and below buy a little median by paying in bias, and bias is the worse error**: it moves
+every athlete's number the same way where a spread does not. 0.04 is the rms minimum on the window
+and on the mean, with the smallest bias of the candidates that improve on 0.07. Across all
+thirteen it takes the mean's median error from 20.0% to 10.4% and the rms from 48.2% to 36.2%.
+
+**TWO SETS MOVE THE WRONG WAY AND BOTH ARE RECORDED RATHER THAN SMOOTHED OVER**: squat set 2 goes
+0.83 -> 0.80 of the sensor and this session's row stays low. A longer window divides the same
+distance by more time, so a set already reading LOW reads lower. The trade was made with the whole
+table on screen.
+
+**IT CANNOT CHANGE WHICH REPS EXIST, and that is checked rather than argued**: the drive window is
+REPORTED while the travel window is what every phantom and rack-move filter was fitted on, and
+every fraction swept from 0.10 to 0.01 returned exactly the same rep count on all thirteen sets.
+`the-drive-window-was-fitted-on-thirteen-sets.test.ts` is the ratchet and was mutation-tested in
+both directions.
+
+**SHARED, NOT PER-LIFT.** It was fitted across five movements and is a property of how a bar sensor
+defines a concentric, so it moves for all 269 filmable things together. `FITTED_OVERRIDES` stays
+empty.
+
+**One test told a lie and was corrected while fixing it**: `set-two-beside-ovr-2026-10-02.test.ts`
+was titled "lands on the sensor's mean" and pinned 1.02 against a sensor that read 0.85, which is
++20%. It now reads 0.91 (+7%) and the pin says which is which.
+
+**Still open and NOT fitted**: the bench's -23.9% window, which does not move with the fraction
+because its whole segmented PHASE (0.464s) is shorter than the sensor's concentric (0.504s) -- a
+ceiling no trim can lift, and the next thing to look at. Also `bench-10-02` at +48-55% and
+`squat-set2` at +21-27%, neither of which responds to this constant either.

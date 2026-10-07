@@ -100,6 +100,17 @@ type TrackingDiagnostics = {
     liveDropRate?: number;
     liveMissRate?: number;
     liveSkippedForCadence?: number;
+    // The upload copy's own telemetry -- see shared/schema.ts's videoAsset.
+    videoAsset?: {
+      framesDelivered?: number;
+      framesAppended?: number;
+      skippedForCadence?: number;
+      skippedNotReady?: number;
+      targetFrameRate?: number;
+      measuredFrameRate?: number;
+      largestGapSeconds?: number;
+      spanSeconds?: number;
+    };
   } | null;
   ankle3D?: {
     outcome: string;
@@ -516,6 +527,23 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
             : "")
           + (d.recording.liveFallbackReason != null
             ? `; fell back because ${d.recording.liveFallbackReason}`
+            : ""),
+      });
+    }
+    // THE SAVED CLIP, not the analysis. These are different code paths and read differently: a
+    // take can analyse well and still write the coach a 6fps video, which is what every take
+    // before 2026-10-07 did. measuredFrameRate against targetFrameRate is the whole answer.
+    const videoAsset = d.recording.videoAsset;
+    if (videoAsset != null) {
+      const n = (v: number | undefined) => (v == null ? "?" : `${v}`);
+      lines.push({
+        label: "Saved video",
+        value:
+          `${n(videoAsset.measuredFrameRate)}fps measured against ${n(videoAsset.targetFrameRate)} target`
+          + ` -- ${n(videoAsset.framesAppended)} written of ${n(videoAsset.framesDelivered)} delivered`
+          + ` (${n(videoAsset.skippedForCadence)} off-cadence, ${n(videoAsset.skippedNotReady)} encoder not ready)`
+          + (videoAsset.largestGapSeconds != null
+            ? `, largest gap ${videoAsset.largestGapSeconds}s`
             : ""),
       });
     }
