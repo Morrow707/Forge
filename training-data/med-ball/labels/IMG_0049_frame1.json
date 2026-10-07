@@ -1,0 +1,40 @@
+{
+  "image": "IMG_0049_frame1.jpg",
+  "boxes": [
+    {
+      "class": "baseball",
+      "x_center": 0.0267,
+      "y_center": 0.1631,
+      "width": 0.0523,
+      "height": 0.0669
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.2362,
+      "y_center": 0.1518,
+      "width": 0.0925,
+      "height": 0.0722
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.5764,
+      "y_center": 0.1548,
+      "width": 0.0566,
+      "height": 0.0441
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.7567,
+      "y_center": 0.1547,
+      "width": 0.0568,
+      "height": 0.044
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.0298,
+      "y_center": 0.9191,
+      "width": 0.0425,
+      "height": 0.0865
+    }
+  ]
+}

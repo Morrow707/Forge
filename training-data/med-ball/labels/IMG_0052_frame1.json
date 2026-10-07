@@ -1,0 +1,40 @@
+{
+  "image": "IMG_0052_frame1.jpg",
+  "boxes": [
+    {
+      "class": "baseball",
+      "x_center": 0.311,
+      "y_center": 0.495,
+      "width": 0.0153,
+      "height": 0.0983
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.2471,
+      "y_center": 0.2721,
+      "width": 0.1387,
+      "height": 0.5441
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.18,
+      "y_center": 0.7321,
+      "width": 0.36,
+      "height": 0.4124
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.3288,
+      "y_center": 0.5741,
+      "width": 0.0104,
+      "height": 0.0759
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.3256,
+      "y_center": 0.5595,
+      "width": 0.0063,
+      "height": 0.0474
+    }
+  ]
+}

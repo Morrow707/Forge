@@ -1,0 +1,33 @@
+{
+  "image": "IMG_0051_frame2.jpg",
+  "boxes": [
+    {
+      "class": "baseball",
+      "x_center": 0.04,
+      "y_center": 0.522,
+      "width": 0.081,
+      "height": 0.067
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.225,
+      "y_center": 0.522,
+      "width": 0.096,
+      "height": 0.067
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.526,
+      "y_center": 0.519,
+      "width": 0.104,
+      "height": 0.072
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.748,
+      "y_center": 0.519,
+      "width": 0.104,
+      "height": 0.072
+    }
+  ]
+}

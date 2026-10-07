@@ -1,0 +1,33 @@
+{
+  "image": "IMG_0050_frame1.jpg",
+  "boxes": [
+    {
+      "class": "baseball",
+      "x_center": 0.081,
+      "y_center": 0.2161,
+      "width": 0.0853,
+      "height": 0.0723
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.2888,
+      "y_center": 0.2128,
+      "width": 0.0989,
+      "height": 0.0787
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.609,
+      "y_center": 0.2412,
+      "width": 0.0678,
+      "height": 0.0508
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.7767,
+      "y_center": 0.2454,
+      "width": 0.0632,
+      "height": 0.0489
+    }
+  ]
+}

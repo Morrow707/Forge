@@ -1,0 +1,33 @@
+{
+  "image": "IMG_0055_frame1.jpg",
+  "boxes": [
+    {
+      "class": "tennis_ball",
+      "x_center": 0.173,
+      "y_center": 0.502,
+      "width": 0.126,
+      "height": 0.094
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.492,
+      "y_center": 0.502,
+      "width": 0.096,
+      "height": 0.072
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.744,
+      "y_center": 0.502,
+      "width": 0.081,
+      "height": 0.061
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.919,
+      "y_center": 0.5,
+      "width": 0.089,
+      "height": 0.067
+    }
+  ]
+}

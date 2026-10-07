@@ -1,0 +1,40 @@
+{
+  "image": "IMG_0053_frame1.jpg",
+  "boxes": [
+    {
+      "class": "tennis_ball",
+      "x_center": 0.1739,
+      "y_center": 0.4795,
+      "width": 0.3477,
+      "height": 0.1371
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.6065,
+      "y_center": 0.4078,
+      "width": 0.5287,
+      "height": 0.2798
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.7521,
+      "y_center": 0.3595,
+      "width": 0.4958,
+      "height": 0.3811
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.8254,
+      "y_center": 0.2771,
+      "width": 0.3493,
+      "height": 0.5543
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.4161,
+      "y_center": 0.7768,
+      "width": 0.8321,
+      "height": 0.4464
+    }
+  ]
+}
