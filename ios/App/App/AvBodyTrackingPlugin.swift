@@ -1837,6 +1837,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         if let videoAsset = lastUploadCopyTelemetry {
             result["videoAsset"] = videoAsset
         }
+        // UNGATED, unlike objectLock: overwatch judges every frame of every capture mode, so its
+        // verdict belongs on every take -- including the four with no implement, where it has
+        // been running and being discarded. See AvOverwatch.telemetry.
+        result["overwatch"] = overwatch.telemetry
         logDiag(
             "live analysis usable: \(state.processedCount) frames processed, \(state.trackedCount) tracked, "
                 + "\(run.droppedFrames) dropped, \(String(format: "%.2f", run.elapsedSeconds))s of capture"
@@ -2209,6 +2213,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let captureFrameRateAtAnalysis = self.activeCaptureFrameRate
         let freeDiskSpaceBytes = availableDiskSpaceBytes()
         let videoAssetTelemetry = self.lastUploadCopyTelemetry
+        // Snapshotted with the others rather than read inside the settle closure -- by then the
+        // next capture may have reset it.
+        let overwatchTelemetry = self.overwatch.telemetry
         logDiag(
             "analyzeRecording conditions: thermalState=\(thermalState) lowPowerMode=\(lowPowerModeEnabled) "
                 + "freeDiskSpaceBytes=\(freeDiskSpaceBytes.map { String($0) } ?? "unknown") "
@@ -2335,6 +2342,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 if let videoAsset = videoAssetTelemetry {
                     result["videoAsset"] = videoAsset
                 }
+                result["overwatch"] = overwatchTelemetry
                 if let freeDiskSpaceBytes = freeDiskSpaceBytes {
                     result["freeDiskSpaceBytes"] = freeDiskSpaceBytes
                 }
@@ -3988,6 +3996,12 @@ private final class AvOverwatch {
     private var identicalLandmarkRun = 0
     private(set) var framesFrozen = 0
     private(set) var framesBodySuspect = 0
+    private(set) var framesJudged = 0
+    private(set) var framesFrozenByImage = 0
+    private(set) var framesFrozenByLandmarks = 0
+    private(set) var framesWithYardstick = 0
+    private(set) var longestFrozenRun = 0
+    private var currentFrozenRun = 0
 
     /// One frame's verdict, shared by every object tracker that runs on it.
     struct FrameVerdict {
@@ -3997,7 +4011,46 @@ private final class AvOverwatch {
     }
 
     var summary: String {
-        "framesFrozen=\(framesFrozen) framesBodySuspect=\(framesBodySuspect)"
+        "framesJudged=\(framesJudged) framesFrozen=\(framesFrozen) framesBodySuspect=\(framesBodySuspect)"
+    }
+
+    /// OVERWATCH'S OWN VERDICT, ON EVERY MODE, FOR THE FIRST TIME.
+    ///
+    /// judge() has always run on every frame of every capture mode -- it is called before either
+    /// object tracker, exactly as the architecture requires. What did NOT happen is any record of
+    /// what it found: `summary` went to one debug log line, and the only overwatch numbers in the
+    /// export rode inside `objectLock`, which is gated on `coreMlDetectionEnabled`. So on the four
+    /// modes with no implement (jump, sprint, mechanics, horizontal_load) overwatch ran and had
+    /// its reading discarded on every take -- Rule #4's own words for the worst case, "runs and
+    /// has its reading discarded, which is indistinguishable from being off and is worse, because
+    /// the diagnostics read as though it was there". And `framesFrozen` -- a tracker sticking on a
+    /// frame, the single failure overwatch exists to break -- had never reached an export on ANY
+    /// mode, including the ones that do have an object.
+    ///
+    /// Scott, 2026-10-07: "they will find frames and stick for no rhyme or reason because they
+    /// don't know any better ... the ai overwatch, when it can learn, can figure out what's
+    /// happening and can guide the cameras to more accurate recordings, make sure every single
+    /// camera system ... has this overwatch."
+    ///
+    /// Nothing can be learned from a number nobody writes down, so this is the prerequisite for
+    /// that and not the thing itself. It RECORDS and GATES NOTHING (Rule #1), it appoints no
+    /// sensor and removes none (Rule #2) -- judge() is unchanged; this only reports what it
+    /// already decided.
+    var telemetry: [String: Any] {
+        [
+            "framesJudged": framesJudged,
+            // A tracker stuck on a frame: either the image is bit-identical to the last one, or
+            // the body landmarks came back identical frozenLandmarkFrames times running.
+            "framesFrozen": framesFrozen,
+            "framesFrozenByImage": framesFrozenByImage,
+            "framesFrozenByLandmarks": framesFrozenByLandmarks,
+            "longestFrozenRun": longestFrozenRun,
+            // The body's own span disagreeing with its recent history -- the abstention that
+            // skips a frame rather than convicting the object on a ruler that just moved.
+            "framesBodySuspect": framesBodySuspect,
+            "framesWithYardstick": framesWithYardstick,
+            "frozenLandmarkFrames": AvOverwatch.frozenLandmarkFrames,
+        ]
     }
 
     func reset() {
@@ -4007,6 +4060,12 @@ private final class AvOverwatch {
         identicalLandmarkRun = 0
         framesFrozen = 0
         framesBodySuspect = 0
+        framesJudged = 0
+        framesFrozenByImage = 0
+        framesFrozenByLandmarks = 0
+        framesWithYardstick = 0
+        longestFrozenRun = 0
+        currentFrozenRun = 0
     }
 
     func judge(
@@ -4016,9 +4075,11 @@ private final class AvOverwatch {
         yardstick: AvTrackerArbiter.Yardstick?,
         frameWidth: Double, frameHeight: Double
     ) -> FrameVerdict {
+        framesJudged += 1
         // THE BODY FIRST, as everywhere else in this pipeline.
         var bodySuspect = false
         if let yardstick {
+            framesWithYardstick += 1
             yardstickHistory.select(yardstick.source)
             let stability = AvTrackerArbiter.bodyReadIsStable(
                 currentPx: yardstick.px, recentPx: yardstickHistory.recent
@@ -4038,17 +4099,33 @@ private final class AvOverwatch {
         // THEN THE FRAME: is there anything new here?
         var frozen = false
         if let signature = AvOverwatch.frameSignature(pixelBuffer) {
-            if let last = lastFrameSignature, last == signature { frozen = true }
+            if let last = lastFrameSignature, last == signature {
+                frozen = true
+                framesFrozenByImage += 1
+            }
             lastFrameSignature = signature
         }
         if !landmarkSignature.isEmpty, let last = lastLandmarkSignature, last == landmarkSignature {
             identicalLandmarkRun += 1
-            if identicalLandmarkRun + 1 >= AvOverwatch.frozenLandmarkFrames { frozen = true }
+            if identicalLandmarkRun + 1 >= AvOverwatch.frozenLandmarkFrames {
+                frozen = true
+                framesFrozenByLandmarks += 1
+            }
         } else {
             identicalLandmarkRun = 0
         }
         lastLandmarkSignature = landmarkSignature.isEmpty ? nil : landmarkSignature
-        if frozen { framesFrozen += 1 }
+        // The two causes are counted separately because they mean different things: an identical
+        // IMAGE is the camera or the decoder handing back the same frame, and identical LANDMARKS
+        // on a moving image is Vision returning a stale answer. The second is the one that makes
+        // a tracker stick, and the run LENGTH is what separates a blink from a lock.
+        if frozen {
+            framesFrozen += 1
+            currentFrozenRun += 1
+            if currentFrozenRun > longestFrozenRun { longestFrozenRun = currentFrozenRun }
+        } else {
+            currentFrozenRun = 0
+        }
 
         return FrameVerdict(
             body: AvCoreMlImplementDetector.BodyContext(

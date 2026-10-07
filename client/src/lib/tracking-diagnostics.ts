@@ -180,6 +180,20 @@ export type TrackingDiagnostics = {
     liveCoverage?: number;
     liveDropRate?: number;
     liveMissRate?: number;
+    /** OVERWATCH'S OWN VERDICT, on every capture mode -- see shared/schema.ts. It judges every
+     *  frame of every mode and always did; its numbers only ever rode inside `objectLock`, which
+     *  is gated on the CoreML detector, so four modes ran it and discarded the answer. Measured;
+     *  gates nothing. */
+    overwatch?: {
+      framesJudged?: number;
+      framesFrozen?: number;
+      framesFrozenByImage?: number;
+      framesFrozenByLandmarks?: number;
+      longestFrozenRun?: number;
+      framesBodySuspect?: number;
+      framesWithYardstick?: number;
+      frozenLandmarkFrames?: number;
+    };
     // WHAT THE COACH'S COPY ACTUALLY WROTE, as opposed to what it meant to.
     //
     // The 720p upload copy is encoded from the data-output feed while the athlete lifts, and
@@ -844,6 +858,20 @@ export function buildTrackingDiagnostics(args: {
     liveCoverage?: number;
     liveDropRate?: number;
     liveMissRate?: number;
+    /** OVERWATCH'S OWN VERDICT, on every capture mode -- see shared/schema.ts. It judges every
+     *  frame of every mode and always did; its numbers only ever rode inside `objectLock`, which
+     *  is gated on the CoreML detector, so four modes ran it and discarded the answer. Measured;
+     *  gates nothing. */
+    overwatch?: {
+      framesJudged?: number;
+      framesFrozen?: number;
+      framesFrozenByImage?: number;
+      framesFrozenByLandmarks?: number;
+      longestFrozenRun?: number;
+      framesBodySuspect?: number;
+      framesWithYardstick?: number;
+      frozenLandmarkFrames?: number;
+    };
     // WHAT THE COACH'S COPY ACTUALLY WROTE, as opposed to what it meant to.
     //
     // The 720p upload copy is encoded from the data-output feed while the athlete lifts, and

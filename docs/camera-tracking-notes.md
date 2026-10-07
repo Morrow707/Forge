@@ -4090,3 +4090,74 @@ drops in the sibling query were caused by.
 **Still manual, and next:** the residuals are shown to a model that proposes; nothing yet reads
 them straight into the blend's uncertainties, which is the version with no model in the loop at
 all and is the better end state. The evidence has to accumulate before that is worth wiring.
+
+## Overwatch on all 269, and what it has to record before it can learn, 2026-10-07
+
+Scott, after the learning work above: *"my thought wasn't for it to become the ruler of all
+things, but if it could learn it could help the cameras that are purely objective, they will find
+frames and stick for no rhyme or reason because they don't know any better, whether they are right
+or wrong the camera doesn't know nor does it care but the ai overwatch, when it can learn, can
+figure out what's happening and can guide the cameras to more accurate recordings, make sure every
+single camera system, all [the] lifts and skills training have this overwatch."*
+
+That framing is better than the one it corrected, and CLAUDE.md already licenses it: *"the
+overwatch is fine, it can learn to understand the difference, what mattered was calibrating
+numbers not leaking to other numbers."* **Recognising a stuck tracker is a RULE, not a fitted
+number** — so it is shared, and every movement gets the benefit at once.
+
+### What the audit found, and a correction to what was said first
+
+`AvOverwatch.judge()` **does run on every frame of every capture mode**, before either object
+tracker, exactly as the architecture requires. The first reading of the audit — that overwatch
+never runs on the implement-less modes — was wrong and is corrected here.
+
+What is true is worse, in Rule #4's own words. Its findings went to **one debug log line**
+(`overwatch=\(overwatch.summary)`), and the only overwatch numbers that reached an export rode
+inside `objectLock`, which is gated on `coreMlDetectionEnabled` — which is `coreMlTargetLabel
+!= nil`, which comes from `trackingMode`, which **jump, sprint, mechanics and horizontal-load
+still do not pass**. So on those four it ran and had its reading discarded on every take:
+*"indistinguishable from being off and worse, because the diagnostics read as though it was
+there."*
+
+And the part that applies to every mode including the ones with an object: **`framesFrozen` has
+never reached an export in this repo's history.** A tracker stuck on a frame is the single failure
+overwatch exists to break, it has been counted since the day overwatch was written, and no
+calibration session has ever been able to read it.
+
+### What ships
+
+`AvOverwatch.telemetry`, emitted on BOTH analysis paths and **gated on nothing**:
+
+| field | what it separates |
+|---|---|
+| `framesJudged` | the denominator — a frozen count means nothing without it |
+| `framesFrozen` | frames where the tracker had nothing new |
+| `framesFrozenByImage` | the camera or decoder repeating a frame |
+| `framesFrozenByLandmarks` | Vision returning a stale answer on a moving image — **the one that makes a tracker stick** |
+| `longestFrozenRun` | a blink against a lock |
+| `framesBodySuspect` | the body's span disagreeing with its own history |
+| `framesWithYardstick` | the denominator for that |
+| `frozenLandmarkFrames` | the threshold it was judged by, so a refit is attributable |
+
+The two freeze causes are counted apart because they mean different things and only one of them
+is a tracker problem. It **records and gates nothing** (Rule #1): `judge()` is untouched and still
+makes every decision; this reports what it already decided. It appoints no sensor and removes none
+(Rule #2).
+
+`overwatch-reports-on-every-mode.test.ts` pins both emissions, that neither is wrapped in the
+detector's flag (which is exactly how the four modes went silent), the two separated causes, the
+per-capture reset, the zod declaration, and that the telemetry getter contains no branch — a
+getter that started deciding something would be overwatch growing a sensor.
+
+### Why this is the prerequisite and not the thing
+
+Nothing can be learned from a number nobody writes down. With `framesFrozenByLandmarks` and
+`longestFrozenRun` on every take across all 269 identities, "this tracker sticks on this kind of
+movement" becomes a measurable claim for the first time — and a measurable claim is the only kind
+`summarizeScaleEvidenceForMovement` can hand to the learning loop. The guidance half (overwatch
+acting on a learned pattern) is the next step and wants the evidence first.
+
+**Still not done:** the four implement-less trackers pass no `trackingMode` at all, so their
+object detector is inert and Rule #4's "name what it DOES have — a box, a ground plane — or
+record explicitly that it has none" is unmet. That is a separate change and is named here so it
+is not mistaken for finished.

@@ -100,6 +100,16 @@ type TrackingDiagnostics = {
     liveDropRate?: number;
     liveMissRate?: number;
     liveSkippedForCadence?: number;
+    overwatch?: {
+      framesJudged?: number;
+      framesFrozen?: number;
+      framesFrozenByImage?: number;
+      framesFrozenByLandmarks?: number;
+      longestFrozenRun?: number;
+      framesBodySuspect?: number;
+      framesWithYardstick?: number;
+      frozenLandmarkFrames?: number;
+    };
     // The upload copy's own telemetry -- see shared/schema.ts's videoAsset.
     videoAsset?: {
       framesDelivered?: number;
@@ -528,6 +538,20 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
           + (d.recording.liveFallbackReason != null
             ? `; fell back because ${d.recording.liveFallbackReason}`
             : ""),
+      });
+    }
+    // OVERWATCH, on every mode. framesFrozen against framesJudged is how often a tracker stuck
+    // on a frame; longestFrozenRun separates a blink from a lock.
+    const ow = d.recording.overwatch;
+    if (ow != null) {
+      const n = (v: number | undefined) => (v == null ? "?" : `${v}`);
+      lines.push({
+        label: "Overwatch",
+        value:
+          `${n(ow.framesJudged)} frames judged, ${n(ow.framesFrozen)} frozen `
+          + `(${n(ow.framesFrozenByImage)} same image, ${n(ow.framesFrozenByLandmarks)} same landmarks, `
+          + `longest run ${n(ow.longestFrozenRun)}), ${n(ow.framesBodySuspect)} body suspect `
+          + `of ${n(ow.framesWithYardstick)} with a yardstick`,
       });
     }
     // THE SAVED CLIP, not the analysis. These are different code paths and read differently: a

@@ -9598,6 +9598,24 @@ export const trackingDiagnosticsSchema = z.object({
           spanSeconds: z.number().optional(),
         })
         .optional(),
+      // OVERWATCH'S OWN VERDICT, ON EVERY CAPTURE MODE. It judges every frame of every mode and
+      // always has, but its numbers only ever rode inside `objectLock`, which is gated on the
+      // CoreML detector being enabled -- so on jump, sprint, mechanics and horizontal_load it ran
+      // and was discarded on every take, and `framesFrozen` (a tracker stuck on a frame, the one
+      // failure overwatch exists to break) never reached an export on ANY mode. Nothing can be
+      // learned from a number nobody writes down. Records and gates nothing (Rule #1).
+      overwatch: z
+        .object({
+          framesJudged: z.number().optional(),
+          framesFrozen: z.number().optional(),
+          framesFrozenByImage: z.number().optional(),
+          framesFrozenByLandmarks: z.number().optional(),
+          longestFrozenRun: z.number().optional(),
+          framesBodySuspect: z.number().optional(),
+          framesWithYardstick: z.number().optional(),
+          frozenLandmarkFrames: z.number().optional(),
+        })
+        .optional(),
       // How the phone was held, from CoreMotion -- see tracking-diagnostics.ts.
       cameraPitchDeg: z.number().optional(),
       cameraRollDeg: z.number().optional(),

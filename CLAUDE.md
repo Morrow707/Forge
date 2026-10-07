@@ -1284,6 +1284,38 @@ halves before splitting anything else:
   **Next, and not yet wired:** nothing reads the residuals straight into the blend's
   uncertainties -- the version with no model in the loop, which wants evidence to accumulate
   first. Server-side: ships on a Render deploy, no build.
+- **OVERWATCH NOW REPORTS ON ALL 269, AND `framesFrozen` HAD NEVER REACHED AN EXPORT** (2026-10-07).
+  Scott: "they will find frames and stick for no rhyme or reason because they don't know any
+  better ... the ai overwatch, when it can learn, can figure out what's happening and can guide
+  the cameras ... make sure every single camera system [has] this overwatch." That framing is
+  right and this file already licenses it -- recognising a stuck tracker is a RULE, not a fitted
+  number, so it is shared and every movement gets it at once.
+  **CORRECTION to the first reading of the audit:** `AvOverwatch.judge()` DOES run on every frame
+  of every mode, before either object tracker. What was wrong is that its findings went to one
+  debug log line, and the only overwatch numbers in an export rode inside `objectLock`, gated on
+  `coreMlDetectionEnabled` (= `coreMlTargetLabel != nil` = `trackingMode`, which jump, sprint,
+  mechanics and horizontal-load still do not pass). So on those four it ran and was DISCARDED
+  every take -- Rule #4's "indistinguishable from being off and worse". And on EVERY mode,
+  including the ones with an object, **`framesFrozen` -- a tracker stuck on a frame, the single
+  failure overwatch exists to break -- has never reached an export in this repo's history.**
+  **`AvOverwatch.telemetry` ships on BOTH paths, gated on nothing**: `framesJudged` (the
+  denominator), `framesFrozen` split into `framesFrozenByImage` (camera/decoder repeating) and
+  `framesFrozenByLandmarks` (Vision returning a stale answer on a moving image -- the one that
+  makes a tracker stick), `longestFrozenRun` (a blink against a lock), `framesBodySuspect`,
+  `framesWithYardstick`, and the threshold it was judged by. Records and gates nothing (Rule #1);
+  `judge()` is untouched and still makes every decision.
+  `overwatch-reports-on-every-mode.test.ts` pins both emissions, that NEITHER is wrapped in the
+  detector's flag (exactly how the four went silent), the split causes, the per-capture reset, the
+  zod declaration, and that the telemetry getter contains no branch -- a getter that started
+  deciding would be overwatch growing a sensor.
+  **Why this is the prerequisite, not the thing:** nothing can be learned from a number nobody
+  writes down. With these on every take across all 269, "this tracker sticks on this movement"
+  becomes measurable for the first time, and a measurable claim is the only kind the learning loop
+  can be handed.
+  **STILL NOT DONE, named so it is not mistaken for finished:** the four implement-less trackers
+  pass no `trackingMode`, so their object detector is inert and Rule #4's "name what it DOES have
+  -- a box, a ground plane -- or record explicitly that it has none" is unmet.
+  Native change: calibration work, uploaded on commit.
 - **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
   **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
   the numbering in this file has drifted twice. Read the run list, not the last number written
