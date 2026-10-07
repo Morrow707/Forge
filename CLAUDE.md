@@ -152,6 +152,23 @@ caused by how this repo is pushed to:
   contention or a superseding run; a cancellation with NO steps recorded is a job that never got
   a runner at all. Read `started_at` / `completed_at` on the JOB, not the run's wall clock, which
   includes queue time.
+- **CodeQL goes red on GitHub's own infrastructure, twice over, and neither is a code problem.**
+  Added 2026-10-07, run 1108 on `9c66b332`: three of five legs failed while CI on the same SHA
+  succeeded and deployed. **Read the ANNOTATIONS, not the step list** -- every leg failed at
+  "Perform CodeQL Analysis", which looks like a real finding and was not:
+  `gh api repos/{owner}/{repo}/check-runs/<id>/annotations` said so in one line each.
+  - `Analyze (swift)`: "The job was not started because it repeatedly failed to be acquired (5
+    attempts)", beside a notice about macOS arm64 capacity. It never got a runner -- the same
+    thing as the no-steps-recorded cancellation above, reported differently.
+  - `Analyze (javascript-typescript)`: "attempted to run with improved incremental analysis but it
+    did not complete successfully ... possible reason is disk space constraints ... **This failure
+    has been recorded in the Actions cache, so the next CodeQL analysis will run without improved
+    incremental analysis.**" It is GitHub's own optimisation running out of disk, and it SELF-HEALS
+    -- the re-run does not use it. A re-run of the failed jobs is the whole fix and is the one
+    legitimate re-run (the job died before analysing anything).
+  **Nothing hangs off CodeQL.** `deploy` hangs off CI's `build-and-migrate`, so a red CodeQL beside
+  a green CI means the commit reached Render. Check that before reading a red check as a blocked
+  deploy -- it is one `gh api .../jobs` call on the CI run.
 - **CodeQL goes red when a newer push supersedes it.** It runs only on `main` pushes with
   `cancel-in-progress: true`, so several pushes in a few minutes leave half its matrix legs
   cancelled and the check reads failure. That is the setting working; the fix is fewer rapid
