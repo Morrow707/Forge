@@ -1,0 +1,26 @@
+{
+  "image": "IMG_0026_frame1.jpg",
+  "boxes": [
+    {
+      "class": "plate",
+      "x_center": 0.4409,
+      "y_center": 0.448,
+      "width": 0.5973,
+      "height": 0.4876
+    },
+    {
+      "class": "plate",
+      "x_center": 0.1892,
+      "y_center": 0.4395,
+      "width": 0.2036,
+      "height": 0.4077
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4843,
+      "y_center": 0.8386,
+      "width": 0.5122,
+      "height": 0.2564
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "image": "IMG_0031_frame1.jpg",
+  "boxes": [
+    {
+      "class": "plate",
+      "x_center": 0.3233,
+      "y_center": 0.4557,
+      "width": 0.6467,
+      "height": 0.8688
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3246,
+      "y_center": 0.8759,
+      "width": 0.6491,
+      "height": 0.2482
+    }
+  ]
+}
