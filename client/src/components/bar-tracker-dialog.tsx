@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { declareObjectSystem } from "@shared/capture-object-system";
 import {
   Dialog,
   DialogContent,
@@ -2117,6 +2118,7 @@ export function BarTrackerDialog({
     // block is what this call exists to carry. A guard that cannot be shown to have fired is a
     // guard nobody can tune.
     metrics.trackingDiagnostics = buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("bar"),
       outcome: "tracked",
       rawFrames: [],
       objectLock: overwatchRef.current.telemetry,

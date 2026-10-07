@@ -1,4 +1,5 @@
 import type { MovementProfile } from "@shared/schema";
+import { declareObjectSystem } from "@shared/capture-object-system";
 import { bodyScaleFallbacks } from "@/lib/body-scale-fallback";
 import { separationFrom3D, twoDSeparationIsDegenerate } from "@/lib/rotation-3d";
 import { useEffect, useRef, useState } from "react";
@@ -357,6 +358,7 @@ export function AvSwingTrackerDialog({
             trust: rotation?.trust ?? null,
             captureDeviceInfo,
             trackingDiagnostics: buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_swing", { coreMlClass: sport === "golf" ? "golf_ball" : "baseball" }),
               outcome: "tracked",
               rawFrames: nativeRawFrames,
               recording: recordingStats,
@@ -381,6 +383,7 @@ export function AvSwingTrackerDialog({
 
     if (!metrics) {
       const diagnostics = buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_swing", { coreMlClass: sport === "golf" ? "golf_ball" : "baseball" }),
         outcome: "empty_no_clean_read",
         message: "Couldn't get a clean read on this take. The clip is saved.",
         rawFrames: nativeRawFrames,

@@ -1,4 +1,5 @@
 import type { MovementProfile } from "@shared/schema";
+import { declareObjectSystem } from "@shared/capture-object-system";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -366,6 +367,7 @@ export function AvKbSwingTrackerDialog({
         message,
         captureDeviceInfo,
         buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_kb_swing"),
           outcome: "empty_calibration_failed",
           message,
           rawFrames,
@@ -432,6 +434,7 @@ export function AvKbSwingTrackerDialog({
         message,
         captureDeviceInfo,
         buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_kb_swing"),
           outcome: "empty_no_clean_read",
           message,
           rawFrames,
@@ -489,6 +492,7 @@ export function AvKbSwingTrackerDialog({
       trust: blended?.trust ?? null,
       captureDeviceInfo,
       trackingDiagnostics: buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_kb_swing"),
         outcome: "tracked",
         rawFrames,
         recording: recordingStats,

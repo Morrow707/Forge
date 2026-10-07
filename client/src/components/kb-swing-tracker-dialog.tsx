@@ -1,4 +1,6 @@
 import type { MovementProfile } from "@shared/schema";
+import { declareObjectSystem } from "@shared/capture-object-system";
+import { samplingOnlyDiagnostics } from "@/lib/tracking-diagnostics";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -384,6 +386,14 @@ export function KbSwingTrackerDialog({
       peakSpeedMps: blended?.speedMps ?? wristMetrics.peakSpeedMps,
       trust: blended?.trust ?? null,
       captureDeviceInfo: null,
+      // The native machinery is absent on the web path and always was; the SAMPLING and the
+      // object-system declaration are not -- both are derived from what this path already has.
+      // Found by every-capture-names-its-object-system.test.ts's scan, which is what a scan is for.
+      trackingDiagnostics: samplingOnlyDiagnostics(
+        traceRef.current.map((p) => ({ t: p.t })),
+        "tracked",
+        declareObjectSystem("kb_swing"),
+      ),
     };
 
     if (!blob) {

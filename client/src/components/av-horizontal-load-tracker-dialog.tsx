@@ -1,4 +1,7 @@
 import type { MovementProfile } from "@shared/schema";
+import { declareObjectSystem } from "@shared/capture-object-system";
+import { type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
+import { measureTraceSampling } from "@/lib/trace-sampling";
 import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
@@ -62,6 +65,10 @@ export type HorizontalLoadSetMetrics = {
   // into trust_score_pct. See capture-trust.ts's asSingleRepTrust.
   trustScores?: RepTrustScore[] | null;
   captureDeviceInfo?: CaptureDeviceInfo | null;
+  // A sled or a carry wrote NO trackingDiagnostics at all until 2026-10-07 -- no sampling, and
+  // no statement of what its object system was. See shared/capture-object-system.ts: this mode
+  // has none, and saying so is the whole point (Rule #4).
+  trackingDiagnostics?: TrackingDiagnostics | null;
 };
 
 const CHECKPOINT_COLOR = "#facc15";
@@ -410,7 +417,17 @@ export function AvHorizontalLoadTrackerDialog({
 
   function finishWithResult(metrics: HorizontalLoadSetMetrics) {
     changeStep("review");
-    setResult({ ...metrics, captureDeviceInfo: captureDeviceInfoRef.current });
+    setResult({
+      ...metrics,
+      captureDeviceInfo: captureDeviceInfoRef.current,
+      trackingDiagnostics: {
+        outcome: "tracked",
+        sampling: measureTraceSampling(
+          (skeletonFramesRef.current ?? []).map((f) => ({ t: f.t })),
+        ),
+        objectSystem: declareObjectSystem("av_horizontal_load"),
+      } as TrackingDiagnostics,
+    });
   }
 
   function markManualStart() {

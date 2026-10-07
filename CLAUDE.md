@@ -1316,6 +1316,49 @@ halves before splitting anything else:
   pass no `trackingMode`, so their object detector is inert and Rule #4's "name what it DOES have
   -- a box, a ground plane -- or record explicitly that it has none" is unmet.
   Native change: calibration work, uploaded on commit.
+- **EVERY CAPTURE MODE NOW NAMES ITS OBJECT SYSTEM, AND TWO MORE SILENT MODES TURNED UP**
+  (2026-10-07). This closes the item the overwatch-telemetry commit named as NOT done: Rule #4's
+  "name what it DOES have -- a box, a ground plane -- or record explicitly that it has none, so
+  overwatch's silence is a recorded fact and not an absence."
+  **FOUR TRACKERS HAD ANSWERED BY SILENCE SINCE THEY WERE WRITTEN.** av-jump, av-sprint,
+  av-mechanics and av-horizontal-load pass no `trackingMode`, so `targetLabel` returns nil, the
+  detector is inert and `coreMlDetectionEnabled` is false -- and nothing in any export says
+  whether that is a decision or a bug, because both look like an absent key. The 2026-10-04 box
+  jump is the cost: the rectangle box detector DID run (`detectBox`) and the diagnostics read as
+  though no object system existed.
+  `shared/capture-object-system.ts` is the declaration, one record per tracker:
+  `declared` ("coreml" / "box" / "none"), the CoreML class actually asked for on THIS take
+  (per-exercise on the bar, fixed elsewhere), the secondary class, whether the box detector ran,
+  and a sentence of reason for whoever reads the export. `declareObjectSystem` returns a FRESH
+  record per take, like `cameraTunablesFor`. It is declared in `trackingDiagnosticsSchema` (zod
+  strips what it does not declare; this has bitten twice) and printed as an "Object system" row.
+  **It records and gates nothing** (Rule #1) and the test asserts no dialog branches on it.
+  **The scan found two the plan did not**, which is why it is a scan and never a list:
+  `kb-swing-tracker-dialog.tsx` and `medball-tracker-dialog.tsx` (the web halves) wrote NO
+  diagnostics at all under a comment saying the blob is native-only. Half true -- the detector is
+  native-only, the sampling measure and the declaration are not. Both now send
+  `samplingOnlyDiagnostics`, so those two modes have a sampling read for the first time as well.
+  The two horizontal-load dialogs wrote nothing either and now do.
+  `every-capture-names-its-object-system.test.ts` scans the dialog directory, checks EVERY
+  `buildTrackingDiagnostics` call site rather than just the file (a dialog with six and a
+  declaration on five is the real bug), names the four implement-less modes explicitly, and pins
+  the zod declaration. Whole unit suite green. Client change: calibration work, uploaded on commit.
+- **ALL 266 TRAINING IMAGES ARE LABELLED: 43 BOXES -> 1611, BARBELL 3 -> 146** (2026-10-07).
+  The undertrained CoreML model is recorded above as the cause of the object witness being wrong
+  by a factor on every sensor-paired take (`plateScaleIfAdmitted` 3.9x / 4.7x / 1.9x too small on
+  2026-10-07), and 225 of the 266 images in `training-data/med-ball/raw` were unlabelled. They
+  are now all labelled: plate 465, dumbbell 430, med_ball 201, kettlebell 150, **barbell 146**,
+  baseball 108, golf_ball 72, tennis_ball 39.
+  **The 225 are also the half that matters.** They are 1440x1920 portrait with objects at 2-15%
+  of the frame -- the geometry the phone hands the detector -- against 26-56% in the 41 close-ups
+  labelled before. A detector trained on close-ups predicts boxes TOO LARGE, which a scale
+  pipeline reads as a scale too small: the measured symptom exactly.
+  Method and its limits are in `training-data/med-ball/README.md`: every box placed by eye at
+  950px on a 20-cell grid and verified by eye on a contact sheet, the ORB carry between a clip's
+  frames only ever a starting point (dropped or replaced wherever it drifted), 22 honest
+  negatives, and the dense dumbbell racks recorded as COARSE rather than quietly presented as
+  tight. `prepare_dataset.py` runs clean on all 266. **Training the model is the next step and
+  has not been run.**
 - **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
   **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
   the numbering in this file has drifted twice. Read the run list, not the last number written

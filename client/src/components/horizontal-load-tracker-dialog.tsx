@@ -1,4 +1,6 @@
 import type { MovementProfile } from "@shared/schema";
+import { declareObjectSystem } from "@shared/capture-object-system";
+import { samplingOnlyDiagnostics } from "@/lib/tracking-diagnostics";
 import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
@@ -424,7 +426,14 @@ export function HorizontalLoadTrackerDialog({
 
   function finishWithResult(metrics: HorizontalLoadSetMetrics) {
     changeStep("review");
-    setResult(metrics);
+    setResult({
+      ...metrics,
+      trackingDiagnostics: samplingOnlyDiagnostics(
+        framesRef.current.map((f) => ({ t: f.t })),
+        "tracked",
+        declareObjectSystem("horizontal_load"),
+      ),
+    });
   }
 
   function markManualStart() {

@@ -1,6 +1,7 @@
 import { measureFrameSampling, measureTraceSampling, type TraceSampling } from "./trace-sampling";
 import type { PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { estimateImplementDiameterM, isPlausibleMedBallSize } from "@/lib/pose-tracking";
+import type { CaptureObjectSystem } from "@shared/capture-object-system";
 
 // Client-side mirror of trackingDiagnosticsSchema in shared/schema.ts -- kept in sync by hand,
 // same pattern CaptureDeviceInfo (native-av-preview.ts) already uses rather than importing the
@@ -151,6 +152,12 @@ export type TrackingDiagnostics = {
    *  timestamps the trace already carries -- see trace-sampling.ts. Null for a trace too short to
    *  have a cadence. Measured; gates nothing (Rule #1). */
   sampling?: TraceSampling | null;
+  /** WHAT THE OBJECT SYSTEM WAS, declared by the tracker rather than inferred from an absent
+   *  key -- see shared/capture-object-system.ts. Rule #4 asks every mode to name the object it
+   *  expects or record explicitly that it has none; four modes have answered by silence since
+   *  they were written, and silence and a broken detector look identical in an export.
+   *  Declared; gates nothing (Rule #1). */
+  objectSystem?: CaptureObjectSystem | null;
   // Present only on a "scale_free_only" capture. Lives here rather than in repBreakdown because
   // that type's velocity fields are non-null and read by every chart downstream; widening them
   // to carry a null for this one case would push the question onto all of them.
@@ -794,10 +801,12 @@ function median(values: number[]): number {
 export function samplingOnlyDiagnostics(
   points: { t: number }[] | null | undefined,
   outcome: TrackingOutcome = "tracked",
+  objectSystem: CaptureObjectSystem | null = null,
 ): TrackingDiagnostics {
   return {
     outcome,
     sampling: measureTraceSampling(points),
+    objectSystem,
     message: null,
     recording: null,
     bodyPose: null,
@@ -830,6 +839,12 @@ export function buildTrackingDiagnostics(args: {
    *  timestamps the trace already carries -- see trace-sampling.ts. Null for a trace too short to
    *  have a cadence. Measured; gates nothing (Rule #1). */
   sampling?: TraceSampling | null;
+  /** WHAT THE OBJECT SYSTEM WAS, declared by the tracker rather than inferred from an absent
+   *  key -- see shared/capture-object-system.ts. Rule #4 asks every mode to name the object it
+   *  expects or record explicitly that it has none; four modes have answered by silence since
+   *  they were written, and silence and a broken detector look identical in an export.
+   *  Declared; gates nothing (Rule #1). */
+  objectSystem?: CaptureObjectSystem | null;
   message?: string | null;
   /** Only ever set alongside outcome "scale_free_only". */
   scaleFree?: ScaleFreeSummary | null;
@@ -943,6 +958,7 @@ export function buildTrackingDiagnostics(args: {
     // the same way for every capture mode -- see trace-sampling.ts for the row whose rep 8 held
     // five samples across 0.55 seconds with nothing in any export saying so.
     sampling: measureFrameSampling(args.rawFrames),
+    objectSystem: args.objectSystem ?? null,
     trace: args.trace ?? null,
     gravity: args.gravity ?? null,
     boxRise: args.boxRise ?? null,

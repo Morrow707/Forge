@@ -9495,6 +9495,20 @@ export const trackingDiagnosticsSchema = z.object({
     })
     .nullable()
     .optional(),
+  // WHAT THE OBJECT SYSTEM WAS, declared by the tracker -- see shared/capture-object-system.ts.
+  // Declared here because zod STRIPS what it does not declare, silently, which has bitten this
+  // blob twice; a declaration that never reached the database would be the same silence this
+  // field exists to end.
+  objectSystem: z
+    .object({
+      declared: z.enum(["coreml", "box", "none"]),
+      coreMlClass: z.string().nullable(),
+      secondaryCoreMlClass: z.string().nullable(),
+      boxDetector: z.boolean(),
+      reason: z.string(),
+    })
+    .nullable()
+    .optional(),
   outcome: z.enum([
     "tracked",
     "empty_calibration_failed",

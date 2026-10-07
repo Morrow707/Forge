@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { declareObjectSystem } from "@shared/capture-object-system";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/queryClient";
@@ -2071,6 +2072,7 @@ export function AvBarTrackerDialog({
           scaleRefusalMessage,
           captureDeviceInfo,
           buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_bar", { coreMlClass: coreMlTrackingMode ?? null }),
             outcome: "scale_free_only",
             message: scaleRefusalMessage,
             rawFrames,
@@ -2092,6 +2094,7 @@ export function AvBarTrackerDialog({
         scaleRefusalMessage,
         captureDeviceInfo,
         buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_bar", { coreMlClass: coreMlTrackingMode ?? null }),
           outcome: "empty_calibration_failed",
           message: scaleRefusalMessage,
           rawFrames,
@@ -2302,6 +2305,7 @@ export function AvBarTrackerDialog({
           message,
           captureDeviceInfo,
           buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_bar", { coreMlClass: coreMlTrackingMode ?? null }),
             outcome: "scale_free_only",
             message,
             rawFrames,
@@ -2323,6 +2327,7 @@ export function AvBarTrackerDialog({
         message,
         captureDeviceInfo,
         buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_bar", { coreMlClass: coreMlTrackingMode ?? null }),
           outcome: "empty_no_clean_read",
           message,
           rawFrames,
@@ -2393,6 +2398,7 @@ export function AvBarTrackerDialog({
         metrics,
         captureDeviceInfo,
         buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_bar", { coreMlClass: coreMlTrackingMode ?? null }),
           outcome: "scale_suspect",
           message,
           rawFrames,
@@ -2543,6 +2549,7 @@ export function AvBarTrackerDialog({
     );
     metrics.captureDeviceInfo = captureDeviceInfo;
     metrics.trackingDiagnostics = buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_bar", { coreMlClass: coreMlTrackingMode ?? null }),
       outcome: "tracked",
       rawFrames,
       trackingMode: coreMlTrackingMode,

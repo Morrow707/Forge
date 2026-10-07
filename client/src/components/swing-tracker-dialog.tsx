@@ -1,4 +1,5 @@
 import { samplingOnlyDiagnostics } from "@/lib/tracking-diagnostics";
+import { declareObjectSystem } from "@shared/capture-object-system";
 import type { MovementProfile } from "@shared/schema";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -277,7 +278,7 @@ export function SwingTrackerDialog({
             rotationTrace: rotation?.trace ?? [],
             trust: rotation?.trust ?? null,
             captureDeviceInfo: null,
-            trackingDiagnostics: samplingOnlyDiagnostics(framesRef.current),
+            trackingDiagnostics: samplingOnlyDiagnostics(framesRef.current, "tracked", declareObjectSystem("swing")),
           }
         : null;
 

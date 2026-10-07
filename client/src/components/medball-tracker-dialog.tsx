@@ -1,4 +1,6 @@
 import type { MovementProfile } from "@shared/schema";
+import { declareObjectSystem } from "@shared/capture-object-system";
+import { samplingOnlyDiagnostics } from "@/lib/tracking-diagnostics";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -444,6 +446,13 @@ export function MedballTrackerDialog({
       trust,
       repBreakdown,
       captureDeviceInfo: null,
+      // See the kettlebell dialog's note: native-only is true of the detector, not of the
+      // sampling measure or of saying which object system this take had.
+      trackingDiagnostics: samplingOnlyDiagnostics(
+        framesRef.current.map((f) => ({ t: f.t })),
+        "tracked",
+        declareObjectSystem("medball"),
+      ),
     };
 
     toast.success(

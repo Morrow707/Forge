@@ -54,6 +54,14 @@ type ObjectLockLine = {
 };
 
 type TrackingDiagnostics = {
+  // WHAT THE OBJECT SYSTEM WAS, declared by the tracker -- see shared/capture-object-system.ts.
+  objectSystem?: {
+    declared?: "coreml" | "box" | "none";
+    coreMlClass?: string | null;
+    secondaryCoreMlClass?: string | null;
+    boxDetector?: boolean;
+    reason?: string;
+  } | null;
   outcome:
     | "tracked"
     | "empty_calibration_failed"
@@ -538,6 +546,21 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
           + (d.recording.liveFallbackReason != null
             ? `; fell back because ${d.recording.liveFallbackReason}`
             : ""),
+      });
+    }
+    // WHAT THE OBJECT SYSTEM WAS, in the tracker's own words. A take with no object now says so
+    // and says why; before 2026-10-07 the four implement-less modes said nothing, and a declared
+    // "none" and a detector that silently never ran printed identically here (not at all).
+    const os = d.objectSystem;
+    if (os != null) {
+      lines.push({
+        label: "Object system",
+        value:
+          `${os.declared ?? "?"}`
+          + (os.coreMlClass ? `, CoreML ${os.coreMlClass}` : "")
+          + (os.secondaryCoreMlClass ? ` + ${os.secondaryCoreMlClass}` : "")
+          + (os.boxDetector ? ", box detector on" : "")
+          + (os.reason ? ` -- ${os.reason}` : ""),
       });
     }
     // OVERWATCH, on every mode. framesFrozen against framesJudged is how often a tracker stuck

@@ -1,4 +1,5 @@
 import { measureTraceSampling } from "@/lib/trace-sampling";
+import { declareObjectSystem } from "@shared/capture-object-system";
 import { skillCameraProfile } from "@shared/skill-camera-profile";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -477,7 +478,7 @@ export function MechanicsTrackerDialog({
         // so a sprint or mechanics take that went wrong left no account of itself, which is
         // exactly what CLAUDE.md's capture-diagnostics rules exist to prevent. Measured;
         // gates nothing, and an older server that ignores the key still logs the capture.
-        trackingDiagnostics: { outcome: "tracked", sampling: measureTraceSampling(framesRef.current) },
+        trackingDiagnostics: { outcome: "tracked", sampling: measureTraceSampling(framesRef.current), objectSystem: declareObjectSystem("mechanics") },
         // ARC-1 -- the normalized confidence column both capture tracks now
         // share (see skillSessionLogs.trustScorePct's own schema comment).
         trustScorePct: result.trust?.score ?? null,

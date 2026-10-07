@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { declareObjectSystem } from "@shared/capture-object-system";
 import { ankleRiseFrom3D, ankle3DScaleErrorRatio } from "@/lib/ankle-3d-ruler";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -403,6 +404,7 @@ export function AvJumpTrackerDialog({
 
     if (scaleFactor == null) {
       const diagnostics = buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_jump", { boxDetector: usesBox === true }),
         outcome: "empty_calibration_failed",
         message:
           "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved.",
@@ -628,6 +630,7 @@ export function AvJumpTrackerDialog({
     }
     if (!metrics) {
       const diagnostics = buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_jump", { boxDetector: usesBox === true }),
         outcome: "empty_no_clean_read",
         message: "Couldn't get a clean read on this take. The clip is saved.",
         rawFrames: nativeRawFrames,
@@ -688,6 +691,7 @@ export function AvJumpTrackerDialog({
     );
     metrics.captureDeviceInfo = captureDeviceInfo;
     metrics.trackingDiagnostics = buildTrackingDiagnostics({
+          objectSystem: declareObjectSystem("av_jump", { boxDetector: usesBox === true }),
       outcome: "tracked",
       rawFrames: nativeRawFrames,
       recording: recordingStats,
