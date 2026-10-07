@@ -1,0 +1,40 @@
+{
+  "image": "IMG_0030.jpg",
+  "boxes": [
+    {
+      "class": "plate",
+      "x_center": 0.474,
+      "y_center": 0.444,
+      "width": 0.237,
+      "height": 0.2
+    },
+    {
+      "class": "plate",
+      "x_center": 0.296,
+      "y_center": 0.4,
+      "width": 0.178,
+      "height": 0.156
+    },
+    {
+      "class": "plate",
+      "x_center": 0.489,
+      "y_center": 0.656,
+      "width": 0.267,
+      "height": 0.2
+    },
+    {
+      "class": "plate",
+      "x_center": 0.504,
+      "y_center": 0.867,
+      "width": 0.267,
+      "height": 0.2
+    },
+    {
+      "class": "plate",
+      "x_center": 0.974,
+      "y_center": 0.75,
+      "width": 0.052,
+      "height": 0.056
+    }
+  ]
+}

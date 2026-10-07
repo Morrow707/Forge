@@ -1,0 +1,40 @@
+{
+  "image": "IMG_0043.jpg",
+  "boxes": [
+    {
+      "class": "barbell",
+      "x_center": 0.193,
+      "y_center": 0.18,
+      "width": 0.385,
+      "height": 0.05
+    },
+    {
+      "class": "plate",
+      "x_center": 0.363,
+      "y_center": 0.606,
+      "width": 0.43,
+      "height": 0.233
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.119,
+      "y_center": 0.586,
+      "width": 0.089,
+      "height": 0.072
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.119,
+      "y_center": 0.615,
+      "width": 0.089,
+      "height": 0.072
+    },
+    {
+      "class": "barbell",
+      "x_center": 0.514,
+      "y_center": 0.45,
+      "width": 0.052,
+      "height": 0.544
+    }
+  ]
+}

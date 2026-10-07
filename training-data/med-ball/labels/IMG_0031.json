@@ -1,0 +1,19 @@
+{
+  "image": "IMG_0031.jpg",
+  "boxes": [
+    {
+      "class": "plate",
+      "x_center": 0.403,
+      "y_center": 0.358,
+      "width": 0.807,
+      "height": 0.706
+    },
+    {
+      "class": "plate",
+      "x_center": 0.444,
+      "y_center": 0.861,
+      "width": 0.711,
+      "height": 0.256
+    }
+  ]
+}
