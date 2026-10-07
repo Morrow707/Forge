@@ -1,0 +1,68 @@
+{
+  "image": "IMG_0057_frame1.jpg",
+  "boxes": [
+    {
+      "class": "tennis_ball",
+      "x_center": 0.2307,
+      "y_center": 0.5536,
+      "width": 0.0573,
+      "height": 0.0358
+    },
+    {
+      "class": "tennis_ball",
+      "x_center": 0.2877,
+      "y_center": 0.541,
+      "width": 0.0542,
+      "height": 0.0356
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.363,
+      "y_center": 0.5207,
+      "width": 0.0452,
+      "height": 0.0304
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.409,
+      "y_center": 0.5131,
+      "width": 0.043,
+      "height": 0.0302
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.4569,
+      "y_center": 0.5021,
+      "width": 0.0409,
+      "height": 0.03
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.5013,
+      "y_center": 0.4933,
+      "width": 0.0387,
+      "height": 0.0283
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.5448,
+      "y_center": 0.4846,
+      "width": 0.0368,
+      "height": 0.0281
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.5988,
+      "y_center": 0.4739,
+      "width": 0.0339,
+      "height": 0.0271
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.6783,
+      "y_center": 0.4555,
+      "width": 0.0288,
+      "height": 0.0264
+    }
+  ]
+}

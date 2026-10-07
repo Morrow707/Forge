@@ -1,6 +1,26 @@
 {
   "image": "IMG_0061_frame1.jpg",
   "boxes": [
-    { "class": "med_ball", "x_center": 0.4908, "y_center": 0.4816, "width": 0.1903, "height": 0.1428 }
+    {
+      "class": "med_ball",
+      "x_center": 0.5944,
+      "y_center": 0.7178,
+      "width": 0.0326,
+      "height": 0.0919
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.6383,
+      "y_center": 0.8496,
+      "width": 0.0582,
+      "height": 0.1651
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.5113,
+      "y_center": 0.5102,
+      "width": 0.1409,
+      "height": 0.3809
+    }
   ]
 }

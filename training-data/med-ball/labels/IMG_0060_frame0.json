@@ -1,0 +1,26 @@
+{
+  "image": "IMG_0060_frame0.jpg",
+  "boxes": [
+    {
+      "class": "med_ball",
+      "x_center": 0.047,
+      "y_center": 0.108,
+      "width": 0.096,
+      "height": 0.094
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.059,
+      "y_center": 0.522,
+      "width": 0.119,
+      "height": 0.133
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.511,
+      "y_center": 0.539,
+      "width": 0.193,
+      "height": 0.144
+    }
+  ]
+}

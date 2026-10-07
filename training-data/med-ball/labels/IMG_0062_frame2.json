@@ -1,0 +1,19 @@
+{
+  "image": "IMG_0062_frame2.jpg",
+  "boxes": [
+    {
+      "class": "med_ball",
+      "x_center": 0.319,
+      "y_center": 0.497,
+      "width": 0.193,
+      "height": 0.139
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.647,
+      "y_center": 0.519,
+      "width": 0.17,
+      "height": 0.139
+    }
+  ]
+}
