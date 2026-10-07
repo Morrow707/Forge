@@ -1,0 +1,82 @@
+{
+  "image": "IMG_0034_frame1.jpg",
+  "boxes": [
+    {
+      "class": "med_ball",
+      "x_center": 0.2756,
+      "y_center": 0.1642,
+      "width": 0.261,
+      "height": 0.1702
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.5328,
+      "y_center": 0.1579,
+      "width": 0.2637,
+      "height": 0.1802
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.2776,
+      "y_center": 0.3842,
+      "width": 0.2431,
+      "height": 0.1824
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.5455,
+      "y_center": 0.3853,
+      "width": 0.2386,
+      "height": 0.1737
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.3165,
+      "y_center": 0.5665,
+      "width": 0.2134,
+      "height": 0.1709
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.5587,
+      "y_center": 0.5651,
+      "width": 0.2305,
+      "height": 0.1757
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.5311,
+      "y_center": 0.7187,
+      "width": 0.2043,
+      "height": 0.1534
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.1762,
+      "y_center": 0.7286,
+      "width": 0.1292,
+      "height": 0.105
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.337,
+      "y_center": 0.7381,
+      "width": 0.1797,
+      "height": 0.1504
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.5824,
+      "y_center": 0.7872,
+      "width": 0.1456,
+      "height": 0.0816
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7948,
+      "y_center": 0.4464,
+      "width": 0.0984,
+      "height": 0.1409
+    }
+  ]
+}

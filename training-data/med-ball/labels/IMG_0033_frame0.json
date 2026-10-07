@@ -1,0 +1,75 @@
+{
+  "image": "IMG_0033_frame0.jpg",
+  "boxes": [
+    {
+      "class": "med_ball",
+      "x_center": 0.121,
+      "y_center": 0.506,
+      "width": 0.141,
+      "height": 0.1
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.447,
+      "y_center": 0.506,
+      "width": 0.141,
+      "height": 0.1
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.773,
+      "y_center": 0.463,
+      "width": 0.141,
+      "height": 0.106
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.267,
+      "y_center": 0.55,
+      "width": 0.133,
+      "height": 0.1
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.059,
+      "y_center": 0.597,
+      "width": 0.119,
+      "height": 0.094
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.433,
+      "y_center": 0.608,
+      "width": 0.156,
+      "height": 0.106
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.622,
+      "y_center": 0.608,
+      "width": 0.148,
+      "height": 0.106
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.696,
+      "y_center": 0.544,
+      "width": 0.148,
+      "height": 0.111
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.8,
+      "y_center": 0.606,
+      "width": 0.148,
+      "height": 0.1
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.307,
+      "y_center": 0.647,
+      "width": 0.156,
+      "height": 0.094
+    }
+  ]
+}

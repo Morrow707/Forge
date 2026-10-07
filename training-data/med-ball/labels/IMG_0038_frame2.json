@@ -1,0 +1,110 @@
+{
+  "image": "IMG_0038_frame2.jpg",
+  "boxes": [
+    {
+      "class": "kettlebell",
+      "x_center": 0.2582,
+      "y_center": 0.4759,
+      "width": 0.1791,
+      "height": 0.1637
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.4137,
+      "y_center": 0.4775,
+      "width": 0.1938,
+      "height": 0.1703
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.5627,
+      "y_center": 0.479,
+      "width": 0.2,
+      "height": 0.1765
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.7188,
+      "y_center": 0.4806,
+      "width": 0.2153,
+      "height": 0.1832
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.8685,
+      "y_center": 0.4822,
+      "width": 0.2305,
+      "height": 0.1896
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.9433,
+      "y_center": 0.4834,
+      "width": 0.1135,
+      "height": 0.1948
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.2069,
+      "y_center": 0.6769,
+      "width": 0.172,
+      "height": 0.1372
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3581,
+      "y_center": 0.6864,
+      "width": 0.186,
+      "height": 0.1428
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5218,
+      "y_center": 0.6967,
+      "width": 0.2016,
+      "height": 0.149
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.6995,
+      "y_center": 0.7079,
+      "width": 0.2194,
+      "height": 0.1556
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.8655,
+      "y_center": 0.7182,
+      "width": 0.2183,
+      "height": 0.1607
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.1969,
+      "y_center": 0.8182,
+      "width": 0.1843,
+      "height": 0.1414
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3616,
+      "y_center": 0.8347,
+      "width": 0.2006,
+      "height": 0.1479
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5413,
+      "y_center": 0.8527,
+      "width": 0.2192,
+      "height": 0.1551
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.711,
+      "y_center": 0.8695,
+      "width": 0.2204,
+      "height": 0.1602
+    }
+  ]
+}
