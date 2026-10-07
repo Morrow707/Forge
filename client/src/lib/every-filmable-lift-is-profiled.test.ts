@@ -117,3 +117,33 @@ describe("every filmable lift is profiled", () => {
     expect(postureForExercise("Hex Bar Deadlift")).toBe("standing");
   });
 });
+
+/* A LIFT ADDED TO THE CANONICAL LIST LATER MUST ACTUALLY BECOME FILMABLE.
+ *
+ * The seed's videoEligible backfill only moves a row still at null, which is what stops a reseed
+ * re-restricting one an admin re-enabled. The mirror case bit on 2026-10-07: Barbell Shoulder
+ * Press was restricted by an earlier deploy, then took Overhead Press's place on this list, and
+ * stayed `false` -- the coach's toggle would never have come back, and nothing anywhere would
+ * have said why. Proved by running the seed against a database an earlier deploy had already
+ * touched; it is invisible on a fresh one, which is why the suites were all green.
+ *
+ * This is a scan rather than a round trip because the promotion is a loop inside the seed with no
+ * seam to call. It fails if somebody deletes the promotion or stops keying it on this list.
+ */
+describe("the canonical list promotes what an earlier deploy restricted", () => {
+  const src = fs.readFileSync(SEED, "utf8");
+
+  it("promotes a canonical lift sitting at videoEligible=false", () => {
+    const i = src.indexOf("let videoPromoted = 0;");
+    expect(i, "the promotion loop is gone -- a lift added to the list stays restricted").toBeGreaterThan(0);
+    const loop = src.slice(i, i + 700);
+    expect(loop).toContain("videoEligible !== false");
+    expect(loop).toContain("CANONICAL_VIDEO_ELIGIBLE_NAMES.has");
+    expect(loop).toContain("videoEligible: true");
+  });
+
+  it("still only ever restricts a row that is null, so a re-enabled lift stays enabled", () => {
+    const i = src.indexOf("let videoRestricted = 0;");
+    expect(src.slice(i, i + 500)).toContain("videoEligible !== null");
+  });
+});

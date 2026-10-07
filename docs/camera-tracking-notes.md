@@ -3628,3 +3628,36 @@ Squat" across 10 referencing column(s)`, `"Bat Speed Overload/Underload Rounds" 
 "Overload/Underload Bat Drill" across 5`, zero merge lines on the third run.
 `merging-a-duplicate-keeps-the-history.itest.ts` logs a real set against the duplicate and asserts
 it survives pointing at the survivor; dropping the repoint turns that case red.
+
+### Overhead Press retired into Barbell Shoulder Press, and the bug that found
+
+Scott, 2026-10-07: "Keep barbell shoulder press remover overhead press." Two rows for one lift,
+same muscle group, equipment, movement type and laterality, instructions saying the same thing
+twice. The survivor is the one every posture fix and every sensor pairing points at, and the one
+he actually logs -- it read **-1.8% on the mean and -1.9% on range of motion** against the OVR on
+build 632, the best standing-lift result this pipeline has produced, *while formally restricted
+from being filmed at all*.
+
+Barbell Shoulder Press TAKES OVER the retired name's place in `CANONICAL_VIDEO_ELIGIBLE_NAMES`,
+so the filmable count stays 54. It needed no new camera profile: it already resolved to the same
+ROM bucket (`overhead_press`), the same first move (`concentric`), the same posture (`standing`,
+from build 623) and its own film guidance.
+
+**AND THE SWAP ALONE WOULD NOT HAVE WORKED.** Running the seed against a database an earlier
+deploy had already touched -- rather than a fresh one -- showed Barbell Shoulder Press coming out
+of the merge at `videoEligible: false`. The backfill only ever moves a row still at `null`, which
+is exactly what stops a reseed re-restricting one an admin re-enabled; the cost is the mirror
+case, where a lift restricted last week and added to the canonical list this week stays restricted
+forever. The coach's toggle would simply never have come back, and no test would have said so:
+the whole suite was green, because on a FRESH database the row is created already eligible and the
+bug cannot occur.
+
+So the seed now promotes membership of the canonical 54 explicitly, to `true` rather than back to
+`null`. The list is a deliberate edit to code and a lift on it is eligible by definition; this
+does override an admin who restricted one of the 54 by hand, and that is the right way round --
+an admin who wants a canonical lift off camera takes it off the list. Nothing outside the list is
+touched, so the original guarantee holds.
+
+**The lesson is about where the test ran, not what it asserted.** Seed logic that branches on
+"what is already in the database" cannot be proved on an empty one. Run it against a database a
+previous version of the seed has already written to.

@@ -678,16 +678,6 @@ async function main() {
         instructions: "Heavy dumbbells at sides, walk tall with a braced core for distance or time.",
       },
       {
-        name: "Overhead Press",
-        category: "strength" as const,
-        muscleGroup: "Shoulders",
-        secondaryMuscles: ["Triceps", "Core", "Traps"],
-        equipment: "Barbell",
-        movementType: "Press",
-        laterality: "bilateral" as const,
-        instructions: "Bar at collarbone, press overhead, keep ribs down and glutes tight.",
-      },
-      {
         name: "Barbell Curl",
         category: "accessory" as const,
         muscleGroup: "Biceps",
@@ -3108,7 +3098,7 @@ async function main() {
       // Strength -- the canonical version of each main-lift pattern only
       "Back Squat", "Front Squat", "Box Squat", "Goblet Squat", "Trap Bar Squat",
       "Deadlift", "Romanian Deadlift", "Sumo Deadlift", "Hex Bar Deadlift", "Hip Thrust",
-      "Overhead Press", "Push Press", "Dumbbell Shoulder Press", "Arnold Press",
+      "Barbell Shoulder Press", "Push Press", "Dumbbell Shoulder Press", "Arnold Press",
       "Bench Press", "Incline Barbell Bench Press", "Close-Grip Bench Press", "Dumbbell Bench Press",
       "Bent-Over Row", "T-Bar Row", "Single-Arm Dumbbell Row", "Pendlay Row",
       // Olympic -- every lift
@@ -3139,6 +3129,34 @@ async function main() {
     }
     if (videoRestricted > 0) {
       console.log(`Set videoEligible=false on ${videoRestricted} exercise(s) outside the canonical main-lift list.`);
+    }
+
+    // A LIFT ADDED TO THE CANONICAL LIST LATER IS STILL RESTRICTED BY THE BACKFILL ABOVE.
+    //
+    // Found 2026-10-07 by running the seed against a database an earlier deploy had already
+    // touched, which is the only place it shows. The backfill only ever moves a row still at
+    // null, on purpose -- that is what stops a reseed re-restricting one an admin re-enabled.
+    // The cost is the mirror case: an exercise restricted on an earlier deploy and added to
+    // CANONICAL_VIDEO_ELIGIBLE_NAMES on a later one stays false forever, because it is no longer
+    // null for the backfill to skip. Barbell Shoulder Press hit exactly that -- added to the list
+    // the day it took Overhead Press's place, already false from the week before, and the coach's
+    // toggle would simply never have come back.
+    //
+    // So membership of the canonical 54 is promoted explicitly, to `true` rather than back to
+    // null: the list is a deliberate edit to code, and a lift on it is eligible by definition.
+    // This DOES override an admin who restricted one of the 54 by hand, and that is the right way
+    // round -- the list is the stronger statement, and an admin who wants a canonical lift off
+    // camera should take it off the list. Everything not on the list is untouched here, so the
+    // original guarantee (a reseed never re-restricts what an admin re-enabled) is intact.
+    let videoPromoted = 0;
+    for (const existingEx of await storage.getAllExercises()) {
+      if (existingEx.videoEligible !== false) continue;
+      if (!CANONICAL_VIDEO_ELIGIBLE_NAMES.has(existingEx.name)) continue;
+      await storage.updateExercise(existingEx.id, { videoEligible: true });
+      videoPromoted++;
+    }
+    if (videoPromoted > 0) {
+      console.log(`Promoted videoEligible=true on ${videoPromoted} exercise(s) now on the canonical main-lift list.`);
     }
   }
 
@@ -5831,7 +5849,7 @@ async function main() {
                   { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 4, reps: "5", weight: "225 lbs", restSeconds: 150 },
                   { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 4, reps: "5", weight: "185 lbs", restSeconds: 150 },
                   { exerciseId: testExerciseId("Bent-Over Row"), orderIndex: 2, sets: 3, reps: "8", weight: "135 lbs", restSeconds: 90 },
-                  { exerciseId: testExerciseId("Overhead Press"), orderIndex: 3, sets: 3, reps: "8", weight: "95 lbs", restSeconds: 90 },
+                  { exerciseId: testExerciseId("Barbell Shoulder Press"), orderIndex: 3, sets: 3, reps: "8", weight: "95 lbs", restSeconds: 90 },
                   { exerciseId: testExerciseId("Plank"), orderIndex: 4, sets: 3, reps: "60s hold", weight: "Bodyweight", restSeconds: 60 },
                 ],
               },
@@ -5882,7 +5900,7 @@ async function main() {
                 isRestDay: false,
                 exercises: [
                   { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 3, reps: "5", weight: "205 lbs", restSeconds: 150, videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Overhead Press"), orderIndex: 1, sets: 3, reps: "6", weight: "85 lbs", restSeconds: 90, videoCheckEnabled: true },
+                  { exerciseId: testExerciseId("Barbell Shoulder Press"), orderIndex: 1, sets: 3, reps: "6", weight: "85 lbs", restSeconds: 90, videoCheckEnabled: true },
                   { exerciseId: testExerciseId("Bulgarian Split Squat"), orderIndex: 2, sets: 3, reps: "8/side", weight: "Bodyweight", restSeconds: 90, videoCheckEnabled: true },
                   { exerciseId: testExerciseId("Deadlift"), orderIndex: 3, sets: 3, reps: "5", weight: "275 lbs", restSeconds: 150, videoCheckEnabled: true },
                 ],
@@ -5903,7 +5921,7 @@ async function main() {
                   { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 4, reps: "3", weight: "80% 1RM", restSeconds: 180 },
                   { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 4, reps: "5", weight: "75% 1RM", restSeconds: 150 },
                   { exerciseId: testExerciseId("Deadlift"), orderIndex: 2, sets: 3, reps: "3", weight: "85% 1RM", restSeconds: 180 },
-                  { exerciseId: testExerciseId("Overhead Press"), orderIndex: 3, sets: 3, reps: "6", weight: "70% 1RM", restSeconds: 90 },
+                  { exerciseId: testExerciseId("Barbell Shoulder Press"), orderIndex: 3, sets: 3, reps: "6", weight: "70% 1RM", restSeconds: 90 },
                 ],
               },
               {

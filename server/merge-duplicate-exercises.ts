@@ -128,6 +128,12 @@ export const DUPLICATE_EXERCISE_MERGES: {
 }[] = [
   {
     table: "exercises",
+    from: "Overhead Press",
+    into: "Barbell Shoulder Press",
+    why: "Scott: \"Keep barbell shoulder press remover overhead press\". Two rows for one lift -- same muscle group, equipment, movement type and laterality, and instructions saying the same thing twice. The survivor is the one every posture fix and every sensor pairing points at, and the one he logs; it TAKES OVER the retired name's place in CANONICAL_VIDEO_ELIGIBLE_NAMES, so the filmable count stays 54 and the lift that produced -1.8% against the OVR is finally eligible rather than restricted.",
+  },
+  {
+    table: "exercises",
     from: "Anderson Squat",
     into: "Pin Squat",
     why: "Scott: \"call it pin squat\". The seed described them as different (an eccentric down to the pins against a dead start with none); he overruled that on his own library and his call governs how his coaches name a lift.",
