@@ -1175,6 +1175,44 @@ halves before splitting anything else:
   the sensor; this session's row). **Still open**: the bench's -23.9% window does not respond,
   because its segmented PHASE (0.464s) is already shorter than the sensor's concentric (0.504s) --
   a ceiling no trim can lift, and the next thing to look at. Calibration work: uploaded on commit.
+- **EVERY CAPTURE MODE NOW SAYS HOW WELL IT WAS SAMPLED, AND TWO WORSE GAPS TURNED UP DOING IT**
+  (2026-10-07). Scott: "if you're leaving things open and not guessing, add the diagnostic to the
+  export so we can hammer it down, make sure every skill and exercise video capture export gives
+  the same diagnostic as well."
+  **A REP MEASURED ON FIVE SAMPLES READS LIKE A REP MEASURED ON TWENTY**, in every field any
+  export has ever carried. Replaying the 10-07 Pendlay row, rep 8 spans 0.550s on FIVE points and
+  rep 7 0.759s on nine, on a take whose median cadence is 29.4Hz -- effective rates of 9-15Hz
+  inside single reps, and every number for them computed over those points.
+  `client/src/lib/trace-sampling.ts` is the one measure (samples, span, median interval, effective
+  Hz, largest gap, dropouts past 3x the median, seconds lost in them, `cadenceHeld`), derived from
+  timestamps the trace already carries so EVERY mode can report it -- native, web and Android
+  alike -- and a replay offline computes the identical thing. It is NOT `liveCoverage`, which
+  counts frames the CAPTURE discarded against a nominal rate and is native-only.
+  **AND THE PHASE EDGES ARE ON EVERY REP** (`windows.openSpeedFraction`, `closeSpeedFraction`,
+  `gapBeforeSeconds`, `gapAfterSeconds`, `phaseSamples`, `sampleIntervalSeconds`), because the
+  phase is a CEILING on every window inside it and nothing could see where its edges landed. The
+  fractions divide by the denominator `trimPhaseToDrive` itself thresholds on (`speedsMps` at the
+  peak index), never `wholePhasePeak.peak`, which is read off a different array -- mixing them
+  made the first run unreadable.
+  **`skill_session_logs` HAD NO `trackingDiagnostics` COLUMN AT ALL.** Nine of the fifteen tracker
+  dialogs -- every sprint, mechanics and horizontal-load tracker, so all 215 skill drills -- had
+  nowhere to write one. `workout_set_entries` has carried one since 2026-09-16 and the skill half
+  was never built, so a skill capture that went wrong left no account of itself. Column added and
+  the migration run against a throwaway database, insert path and input schema wired.
+  **AND THE EXPORT WAS WORKOUT SETS ONLY**, so even with a column a skill capture would have
+  appeared nowhere: `getRecentSkillCapturesForAdmin` plus a `skillCaptures` key on the download,
+  its own list rather than merged (a skill capture has no load, reps, bar path or range of
+  motion). Additive, so every existing reader of the file keeps working.
+  **The scan found one more than the plan did**, which is why it is a scan:
+  `every-capture-says-how-it-was-sampled.test.ts` reads the dialog directory rather than holding a
+  list and caught `swing-tracker-dialog.tsx` setting `trackingDiagnostics: null` under a comment
+  saying the blob is native-only. Half true -- the sampling is not.
+  `samplingOnlyDiagnostics` is the blob for a mode with a trace and none of the native machinery,
+  nulling what it cannot honestly fill rather than zeroing it.
+  **Still open and still not guessed at**: the bench's phase is shorter than the sensor's
+  concentric. The edges say gaps are 0.000 and the short reps are sample-starved, which is the
+  first mechanism tying `liveCoverage` to the numbers rather than to the video -- a hypothesis,
+  recorded, NOT fitted. Calibration work: uploaded on commit.
 - **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
   **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
   the numbering in this file has drifted twice. Read the run list, not the last number written

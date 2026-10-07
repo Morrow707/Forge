@@ -3915,7 +3915,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       "Content-Disposition",
       `attachment; filename="forge-captures-${new Date().toISOString().slice(0, 10)}.json"`,
     );
-    res.send(JSON.stringify({ exportedAt: new Date().toISOString(), captures }, null, 2));
+    // THE SKILL CAPTURES RIDE ALONG IN THE SAME FILE, as their own list rather than merged into
+    // `captures`. Until 2026-10-07 this export was workout sets only, so a sprint or a mechanics
+    // drill could be filmed, analysed and saved and never appear in any diagnostic anybody read --
+    // and skill_session_logs had no diagnostics column for it to appear WITH. Both halves are
+    // fixed; see getRecentSkillCapturesForAdmin for why they stay two shapes rather than one with
+    // a column of nulls down the skill side. An additive key: every existing reader of this file
+    // keeps working.
+    const skillCaptures = (await storage.getRecentSkillCapturesForAdmin(limit)).map((c) => ({
+      ...c,
+      // A url is a file path, not a diagnostic, and this export is pseudonymous. Whether the clip
+      // exists is the part worth reporting.
+      hasVideo: c.hasVideo != null,
+    }));
+    res.send(
+      JSON.stringify({ exportedAt: new Date().toISOString(), captures, skillCaptures }, null, 2),
+    );
   });
 
   app.get("/api/admin/tracking-report/entries", requireRole("admin"), async (req, res) => {

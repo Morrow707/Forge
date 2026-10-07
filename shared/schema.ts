@@ -1885,6 +1885,15 @@ export const skillSessionLogs = pgTable(
     // unlike a workout set, a skill session log is created once and never
     // resubmitted/autosaved over, so createdAt is already a stable
     // reference time.
+    // EVERY SKILL DRILL EVER FILMED HAS PRODUCED NO DIAGNOSTICS AT ALL, and that was found on
+    // 2026-10-07 only because Scott asked for the sampling diagnostic on "every skill and exercise
+    // video capture export". Nine of the fifteen tracker dialogs -- every sprint, mechanics and
+    // horizontal-load tracker, so all 215 skill drills -- had nowhere to write one: this column
+    // did not exist. workout_set_entries has carried trackingDiagnostics since 2026-09-16 and the
+    // skill half was simply never built, so a skill capture that went wrong left no account of
+    // itself, which is the exact failure the Capture diagnostics section of CLAUDE.md exists to
+    // prevent. Same json blob, same trackingDiagnosticsSchema.
+    trackingDiagnostics: json("tracking_diagnostics"),
     videoFavorited: boolean("video_favorited").notNull().default(false),
     pendingDeletionAt: date("pending_deletion_at"),
     // See workoutSetEntries.staleAccountPendingDeletionAt's own comment --
@@ -8986,6 +8995,13 @@ export const formFaultSchema = z.object({
 });
 
 export const createSkillSessionLogSchema = z.object({
+  // THE SAME BLOB THE WORKOUT PATH HAS CARRIED SINCE 2026-09-16. A skill capture had nowhere to
+  // write one until 2026-10-07 (see skillSessionLogs.trackingDiagnostics), so a sprint or a
+  // mechanics drill that went wrong left no account of itself. Optional, so an older client that
+  // sends none still logs its capture -- the diagnostics are never what a save depends on.
+  // Lazy because trackingDiagnosticsSchema is declared further down this file and a plain
+  // reference here reads it before assignment. Same schema, same stripping behaviour.
+  trackingDiagnostics: z.lazy(() => trackingDiagnosticsSchema).optional().nullable(),
   skillAssignmentId: z.number(),
   skillProgramDayId: z.number(),
   skillProgramExerciseId: z.number(),
@@ -9153,6 +9169,25 @@ export const repBreakdownEntrySchema = z.object({
       driveRomCm: z.number(),
       driveSamples: z.number(),
       driveFellBackToTravel: z.boolean(),
+      // WHERE THE PHASE'S OWN EDGES LANDED. The drive and travel windows are strict subsets of
+      // the phase, so the phase is a CEILING on both -- and the 2026-10-07 refit found a bench
+      // whose phase (0.464s) was already shorter than the sensor's concentric (0.504s), which no
+      // trim fraction could reach past. That was only visible by replaying the corpus offline,
+      // because the export carried the window lengths and nothing about the edges. Optional so a
+      // capture written before they existed still parses.
+      //
+      // openSpeedFraction near 0 means the phase opened at the turnaround, where a sensor puts
+      // it; well above 0 means it opened after the bar was already moving. A gapBefore/After of a
+      // sample or two beside a short window says the concentric was CLIPPED rather than paused.
+      // phaseSamples with sampleIntervalSeconds is the resolution floor: at ~30Hz a 0.5s
+      // concentric is fifteen samples, so one sample either way is 7% and an 8% shortfall may be
+      // rounding rather than a fault.
+      phaseSamples: z.number().optional(),
+      sampleIntervalSeconds: z.number().optional(),
+      openSpeedFraction: z.number().nullable().optional(),
+      closeSpeedFraction: z.number().nullable().optional(),
+      gapBeforeSeconds: z.number().nullable().optional(),
+      gapAfterSeconds: z.number().nullable().optional(),
     })
     .optional()
     .nullable(),
@@ -9436,6 +9471,30 @@ const objectLockDiagnosticsSchema = z.object({
 });
 
 export const trackingDiagnosticsSchema = z.object({
+  // HOW WELL THE CAMERA SAMPLED THIS TAKE. Derived from the timestamps the trace already carries
+  // and computed identically for every capture mode, so a web tracker, a skill drill and a native
+  // take all answer the same question the same way. It exists because a rep measured on FIVE
+  // samples and a rep measured on twenty read identically in every other field: replaying the
+  // 2026-10-07 Pendlay row, rep 8 spans 0.550s and holds five points on a take whose median
+  // cadence is 29.4Hz, and nothing in any export said so. Declared here the day it was added --
+  // zod strips what it does not declare, silently, which has now bitten three times.
+  // Measured; gates nothing (Rule #1).
+  sampling: z
+    .object({
+      samples: z.number(),
+      spanSeconds: z.number(),
+      medianIntervalSeconds: z.number(),
+      effectiveHz: z.number(),
+      largestGapSeconds: z.number(),
+      // Gaps past three times the median -- the sampler having slept, as opposed to the cadence.
+      dropouts: z.number(),
+      secondsInDropouts: z.number(),
+      // Not the native path's liveCoverage: that counts frames the CAPTURE discarded against a
+      // nominal rate, this is what survived into the trace against the trace's own cadence.
+      cadenceHeld: z.number(),
+    })
+    .nullable()
+    .optional(),
   outcome: z.enum([
     "tracked",
     "empty_calibration_failed",

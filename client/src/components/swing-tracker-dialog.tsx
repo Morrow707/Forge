@@ -1,3 +1,4 @@
+import { samplingOnlyDiagnostics } from "@/lib/tracking-diagnostics";
 import type { MovementProfile } from "@shared/schema";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -49,9 +50,14 @@ const EMPTY_SWING_METRICS: AvSwingSetMetrics = {
  *   so there's no separate post-recording "analyzing" pass or its own concurrent-upload
  *   optimization to reason about -- upload just starts once the recorder's own blob exists,
  *   after metrics are already computed.
- * - captureDeviceInfo/trackingDiagnostics stay null -- both are native-AV-only diagnostics with
- *   no MediaPipe equivalent, same convention every other Android tracker dialog already follows
- *   (bar-tracker-dialog.tsx never sets either either). */
+ * - captureDeviceInfo stays null -- a native-AV-only diagnostic with no MediaPipe equivalent,
+ *   the same convention every other Android tracker dialog follows.
+ * - trackingDiagnostics USED to stay null for the same stated reason, and that reason was only
+ *   ever half true. Most of the blob is native-only; the SAMPLING measure is not, because it is
+ *   derived from the timestamps this dialog's own trace already carries. Scott, 2026-10-07:
+ *   "make sure every skill and exercise video capture export gives the same diagnostic as well."
+ *   So this take now reports how well it was sampled and nothing else -- see trace-sampling.ts.
+ *   Measured; gates nothing (Rule #1). */
 export function SwingTrackerDialog({
   open,
   onOpenChange,
@@ -271,7 +277,7 @@ export function SwingTrackerDialog({
             rotationTrace: rotation?.trace ?? [],
             trust: rotation?.trust ?? null,
             captureDeviceInfo: null,
-            trackingDiagnostics: null,
+            trackingDiagnostics: samplingOnlyDiagnostics(framesRef.current),
           }
         : null;
 

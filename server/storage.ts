@@ -11443,6 +11443,7 @@ Hard rules, no exceptions:
       skillExerciseId: onThisDay.skillExerciseId,
       athleteId,
       trackingLevel: input.trackingLevel,
+      trackingDiagnostics: input.trackingDiagnostics ?? null,
       elapsedSeconds: input.elapsedSeconds ?? null,
       distanceYards: input.distanceYards ?? null,
       presetId: input.presetId ?? null,
@@ -24532,6 +24533,58 @@ ${catalog}`;
       .orderBy(desc(workoutSetEntries.id))
       .limit(limit);
   },
+  /** THE SKILL HALF OF THE CAPTURE REPORT, which did not exist until 2026-10-07.
+   *
+   *  Every surface that reads capture diagnostics -- the admin tracking report, the export Scott
+   *  downloads, every calibration session this repo has run -- reads workout_set_entries and
+   *  nothing else. So a sprint or a mechanics drill could be filmed, analysed and saved, and no
+   *  diagnostic of it reached anybody; worse, skill_session_logs had no column to put one in, so
+   *  there was nothing to read even if something had looked. Scott: "make sure every skill and
+   *  exercise video capture export gives the same diagnostic as well."
+   *
+   *  Returned as its OWN list rather than merged into the tracked-set rows. The two are different
+   *  shapes -- a skill capture has no load, no reps, no bar path and no range of motion -- and
+   *  flattening them into one row type would mean a column of nulls on every skill row and a
+   *  reader that cannot tell "not measured here" from "measured and empty". The replay corpus and
+   *  the report formatter both index off the existing shape too, and widening it to carry a
+   *  different kind of capture is how the tracked-set query acquired three silent drops.
+   *
+   *  Membership is any skill capture with a diagnostics blob OR a camera-derived number, for the
+   *  same reason the tracked-set filter is: a capture that lost its own explanation has to be
+   *  visible AS that. Nothing about the drill's identity is inner-joined -- see the tracked-set
+   *  query's own comment on the three silent drops that cost. */
+  async getRecentSkillCapturesForAdmin(limit: number) {
+    return db
+      .select({
+        createdAt: skillSessionLogs.createdAt,
+        // The id, never a name -- this report is pseudonymous, exactly as the tracked-set one is.
+        athleteId: skillSessionLogs.athleteId,
+        trackingLevel: skillSessionLogs.trackingLevel,
+        drillName: skillExercises.name,
+        setNumber: skillSessionLogs.setNumber,
+        elapsedSeconds: skillSessionLogs.elapsedSeconds,
+        distanceYards: skillSessionLogs.distanceYards,
+        cameraAngle: skillSessionLogs.cameraAngle,
+        trustScorePct: skillSessionLogs.trustScorePct,
+        hasVideo: skillSessionLogs.videoUrl,
+        trackingDiagnostics: skillSessionLogs.trackingDiagnostics,
+      })
+      .from(skillSessionLogs)
+      // LEFT, not inner: skillExerciseId is nullable, and an inner join does not produce a row
+      // with a missing name, it produces no row -- for a capture that really happened.
+      .leftJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
+      .where(
+        or(
+          isNotNull(skillSessionLogs.trackingDiagnostics),
+          isNotNull(skillSessionLogs.elapsedSeconds),
+          isNotNull(skillSessionLogs.peakWristSpeedMps),
+          isNotNull(skillSessionLogs.trustScorePct),
+        ),
+      )
+      .orderBy(desc(skillSessionLogs.createdAt))
+      .limit(limit);
+  },
+
 
   // Powers the admin-only /api/admin/tracking-report route -- system-wide (not scoped to one
   // coach's roster, unlike getExerciseAnalyticsForCoach above), most-recent-first, and only

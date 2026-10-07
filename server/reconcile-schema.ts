@@ -463,6 +463,7 @@ CREATE TABLE IF NOT EXISTS "skill_session_logs" (
   "video_favorited" boolean NOT NULL DEFAULT false,
   "pending_deletion_at" date
 );
+ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "tracking_diagnostics" json;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "video_favorited" boolean NOT NULL DEFAULT false;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "pending_deletion_at" date;
 ALTER TABLE "skill_session_logs" ADD COLUMN IF NOT EXISTS "hip_shoulder_separation_deg" real;

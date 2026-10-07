@@ -3857,3 +3857,66 @@ was titled "lands on the sensor's mean" and pinned 1.02 against a sensor that re
 because its whole segmented PHASE (0.464s) is shorter than the sensor's concentric (0.504s) -- a
 ceiling no trim can lift, and the next thing to look at. Also `bench-10-02` at +48-55% and
 `squat-set2` at +21-27%, neither of which responds to this constant either.
+
+### Every capture mode now says how well it was sampled, 2026-10-07
+
+Scott, after the drive-window refit: *"if you're leaving things open and not guessing, add the
+diagnostic to the export so we can hammer it down, make sure every skill and exercise video
+capture export gives the same diagnostic as well."*
+
+**WHAT WAS OPEN.** The bench's reported concentric would not move at any drive fraction, because
+its segmented PHASE (0.464s) was already shorter than the sensor's concentric (0.504s). Windows
+are strict subsets of the phase, so the fit had run out of room before it started -- and that was
+only discoverable by replaying the corpus offline, because the export carried the three window
+LENGTHS and nothing about where the phase's own edges landed.
+
+**THE PHASE EDGES ARE NOW ON EVERY REP** (`windows.openSpeedFraction`, `closeSpeedFraction`,
+`gapBeforeSeconds`, `gapAfterSeconds`, `phaseSamples`, `sampleIntervalSeconds`). Each separates a
+specific cause: a phase that opened late has the bar already moving at its first sample; a phase
+clipped by its neighbour shows dead time; a phase at the resolution limit is not a bug at all (at
+30Hz a 0.5s concentric is fifteen samples, so one sample either way is 7%).
+
+The fractions are divided by **the denominator `trimPhaseToDrive` itself thresholds on**
+(`speedsMps` at the peak index), not `wholePhasePeak.peak`, which is read off `speedsReportedMps`
+-- a different array. Mixing them made the first run unreadable: the row came back with a close
+fraction of 2.259, which is only a statement about the two arrays disagreeing.
+
+**READ ON THE THREE 10-07 LIFTS, THE EDGES SAY IT IS SAMPLING, NOT GEOMETRY.** Gaps are 0.000
+throughout, so nothing is clipped by a neighbour. What there is instead, per rep: the row's rep 8
+spans 0.550s on **five samples**, rep 7 0.759s on nine; the bench's reps 5 and 10 are 6 and 7
+samples. On a take whose median cadence is 29.4Hz those are effective rates of 9-15Hz inside
+single reps. Every number for those reps was computed over those points. This is the first
+mechanism connecting `liveCoverage` 0.80-0.85 to the numbers themselves rather than to the video,
+and it is a HYPOTHESIS for the short phase, not a finding -- it is recorded, not fitted.
+
+**AND THE SAME MEASURE NOW RUNS ON EVERY CAPTURE MODE** (`client/src/lib/trace-sampling.ts`):
+samples, span, median interval, effective Hz, largest gap, dropouts past three times the median,
+seconds lost in them, and `cadenceHeld`. Derived from timestamps the trace already carries, so a
+web tracker, an Android tracker and a native take all answer the same question the same way, and
+a replay offline computes the identical thing. It is NOT `liveCoverage`: that counts frames the
+CAPTURE discarded against a nominal rate and is native-only; this is what survived into the trace,
+against the trace's own cadence.
+
+**TWO REAL GAPS FOUND WHILE DOING IT, BOTH WORSE THAN THE THING ASKED FOR:**
+
+- **`skill_session_logs` had no `trackingDiagnostics` column at all.** Nine of the fifteen tracker
+  dialogs -- every sprint, mechanics and horizontal-load tracker, so all 215 skill drills -- had
+  nowhere to write a diagnostic. `workout_set_entries` has carried one since 2026-09-16 and the
+  skill half was simply never built, so a skill capture that went wrong left no account of itself:
+  the exact failure the Capture diagnostics rules exist to prevent. Column added, migration run
+  against a throwaway database, insert path and input schema wired, four dialogs now send it.
+- **The export was workout sets only.** Even with a column, a skill capture would have appeared
+  nowhere: every diagnostics surface reads `workout_set_entries`. `getRecentSkillCapturesForAdmin`
+  and a `skillCaptures` key on the download. Its own list, not merged into `captures` -- a skill
+  capture has no load, no reps, no bar path and no range of motion, and flattening them would mean
+  a column of nulls down one side and a reader that cannot tell "not measured here" from "measured
+  and empty". Additive, so every existing reader of the file keeps working.
+
+**The scan found one more than the plan did.** `every-capture-says-how-it-was-sampled.test.ts`
+scans `*tracker-dialog.tsx` rather than holding a list -- the same reason
+`refused-capture-survives.test.ts` does -- and immediately caught `swing-tracker-dialog.tsx`,
+which set `trackingDiagnostics: null` under a comment saying the blob is native-AV-only. Half
+true: most of it is, the SAMPLING is not, because it comes from the trace that dialog already has.
+`samplingOnlyDiagnostics` is the blob for a mode with a trace and none of the native machinery --
+everything it cannot honestly fill is null rather than zeroed, since a frameCount of 0 on a take
+that recorded frames would be a lie.

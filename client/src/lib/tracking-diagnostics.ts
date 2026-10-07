@@ -1,3 +1,4 @@
+import { measureFrameSampling, measureTraceSampling, type TraceSampling } from "./trace-sampling";
 import type { PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { estimateImplementDiameterM, isPlausibleMedBallSize } from "@/lib/pose-tracking";
 
@@ -146,6 +147,10 @@ export type ObjectLockDiagnostics = {
 
 export type TrackingDiagnostics = {
   outcome: TrackingOutcome;
+  /** HOW WELL THE CAMERA SAMPLED THIS TAKE, measured identically for every capture mode from the
+   *  timestamps the trace already carries -- see trace-sampling.ts. Null for a trace too short to
+   *  have a cadence. Measured; gates nothing (Rule #1). */
+  sampling?: TraceSampling | null;
   // Present only on a "scale_free_only" capture. Lives here rather than in repBreakdown because
   // that type's velocity fields are non-null and read by every chart downstream; widening them
   // to carry a null for this one case would push the question onto all of them.
@@ -760,8 +765,57 @@ function median(values: number[]): number {
 // AV tracker dialog, from data each one already has in hand -- nothing new captured natively,
 // just packaged and persisted instead of thrown away the moment the dialog closes. See this
 // file's own TrackingDiagnostics comment, and trackingDiagnosticsSchema in shared/schema.ts.
+/** A diagnostics blob for a capture mode that has a TRACE but none of the native-AV machinery.
+ *
+ *  The web and Android trackers (swing, sprint, mechanics) have no AVAssetReader, no CoreML
+ *  detector and no object lock, so most of this blob genuinely has nothing to say for them and
+ *  was left null for years -- reasonably. What was NOT reasonable is that the sampling measure
+ *  went with it: it is derived from the timestamps the trace already carries, so every mode can
+ *  report it, and until 2026-10-07 no mode but the native ones did. Scott: "make sure every skill
+ *  and exercise video capture export gives the same diagnostic as well."
+ *
+ *  Everything it cannot honestly fill is null rather than zeroed -- a frameCount of 0 on a take
+ *  that recorded frames would be a lie, where a null reads as "this mode does not measure it".
+ *  Measured; gates nothing (Rule #1). */
+export function samplingOnlyDiagnostics(
+  points: { t: number }[] | null | undefined,
+  outcome: TrackingOutcome = "tracked",
+): TrackingDiagnostics {
+  return {
+    outcome,
+    sampling: measureTraceSampling(points),
+    message: null,
+    recording: null,
+    bodyPose: null,
+    objectDetection: null,
+    trace: null,
+    gravity: null,
+    boxRise: null,
+    ankle3D: null,
+    rotation3D: null,
+    limbMeasurementsM: null,
+    faultEvidence: null,
+    setRangeOfMotion: null,
+    repConsistency: null,
+    objectLock: null,
+    objectLockSecondary: null,
+    calibration: null,
+    // Cast through unknown on purpose, and this is the honest shape rather than a shortcut. The
+    // TS type describes what the NATIVE path produces, where bodyPose, objectDetection and
+    // recording are always filled; this mode has no AVAssetReader, no CoreML detector and no
+    // object lock, so there is nothing true to put in them and a zeroed frameCount on a take that
+    // really recorded frames would be a lie. The zod schema -- which is what actually validates
+    // this at the boundary and what decides what reaches the database -- has only `outcome`
+    // required and always has, so a null here round-trips exactly as the schema intends.
+  } as unknown as TrackingDiagnostics;
+}
+
 export function buildTrackingDiagnostics(args: {
   outcome: TrackingOutcome;
+  /** HOW WELL THE CAMERA SAMPLED THIS TAKE, measured identically for every capture mode from the
+   *  timestamps the trace already carries -- see trace-sampling.ts. Null for a trace too short to
+   *  have a cadence. Measured; gates nothing (Rule #1). */
+  sampling?: TraceSampling | null;
   message?: string | null;
   /** Only ever set alongside outcome "scale_free_only". */
   scaleFree?: ScaleFreeSummary | null;
@@ -856,6 +910,11 @@ export function buildTrackingDiagnostics(args: {
 }): TrackingDiagnostics {
   return {
     outcome: args.outcome,
+    // HOW WELL THE CAMERA SAMPLED, on every take that reaches this builder. Derived from the
+    // frames the caller already passes, so no dialog had to be changed to get it, and computed
+    // the same way for every capture mode -- see trace-sampling.ts for the row whose rep 8 held
+    // five samples across 0.55 seconds with nothing in any export saying so.
+    sampling: measureFrameSampling(args.rawFrames),
     trace: args.trace ?? null,
     gravity: args.gravity ?? null,
     boxRise: args.boxRise ?? null,

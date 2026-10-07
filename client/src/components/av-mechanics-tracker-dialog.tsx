@@ -1,3 +1,4 @@
+import { measureTraceSampling, type TraceSampling } from "@/lib/trace-sampling";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -113,6 +114,7 @@ export function AvMechanicsTrackerDialog({
   setNumber?: number;
 }) {
   const qc = useQueryClient();
+  const samplingRef = useRef<TraceSampling | null>(null);
   const recordedBlobRef = useRef<Blob | null>(null);
 
   const stepRef = useRef<Step>("warning");
@@ -213,6 +215,9 @@ export function AvMechanicsTrackerDialog({
     });
 
     const effectiveThresholds = thresholds ?? DEFAULT_SKILL_FAULT_THRESHOLDS;
+    // Measured off the frames the analysis actually ran on, and held for save() -- `frames` is
+    // local to this function and the POST happens later. See trace-sampling.ts.
+    samplingRef.current = measureTraceSampling(frames);
     const mechanicsResult = analyzeMechanics(frames, mode, effectiveThresholds);
     if (scaleFactor == null) {
       // Only the genuinely scale-dependent metrics get nulled -- see this
@@ -287,6 +292,12 @@ export function AvMechanicsTrackerDialog({
         skillProgramDayId,
         skillProgramExerciseId,
         trackingLevel: "mechanics",
+        // EVERY SKILL CAPTURE NOW SAYS HOW WELL IT WAS SAMPLED. Until 2026-10-07 a skill
+        // drill wrote no diagnostics at all -- skill_session_logs had no column for them --
+        // so a sprint or mechanics take that went wrong left no account of itself, which is
+        // exactly what CLAUDE.md's capture-diagnostics rules exist to prevent. Measured;
+        // gates nothing, and an older server that ignores the key still logs the capture.
+        trackingDiagnostics: { outcome: "tracked", sampling: samplingRef.current },
         // ARC-1 -- the normalized confidence column both capture tracks now
         // share (see skillSessionLogs.trustScorePct's own schema comment).
         trustScorePct: result.trust?.score ?? null,

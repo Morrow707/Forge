@@ -1639,7 +1639,38 @@ export function summarizeTrackedSet(
   // see splitMergedPhases.
   const phases = splitMergedPhases(rawPhases, ySmoothed, points.map((p) => p.t));
 
-  const phaseStats = phases.map((phase) => {
+  // THE PHASE BOUNDARY IS A CEILING ON EVERY WINDOW INSIDE IT, AND NOTHING COULD SEE IT.
+  //
+  // The 2026-10-07 refit took the reported concentric from a median 17.2% error to 10.4% across
+  // thirteen sensor-paired sets, and ONE set would not move at any fraction: the bench's segmented
+  // phase was 0.464s against the sensor's 0.504s concentric. The drive and travel windows are
+  // strict subsets of the phase, so no trim can reach past it -- the fit had already run out of
+  // room before it started. That was only discovered by replaying the corpus offline, because the
+  // export carried the three window LENGTHS and nothing about where the phase's own edges landed.
+  //
+  // These are that. Each one distinguishes a specific cause of a short phase, and none of them is
+  // read to compute anything (Rule #1):
+  //
+  //   - a phase that OPENS LATE has the bar already moving at its first sample, so
+  //     openSpeedFraction is well above zero. A phase that opens at the true turnaround is near 0.
+  //   - a phase CLIPPED BY ITS NEIGHBOUR shows up as dead time: gapBeforeSeconds / gapAfterSeconds
+  //     are the interval between this phase and the adjacent one. The segmenter is entitled to a
+  //     pause between reps; it is not entitled to one in the middle of a drive, and a gap of a
+  //     sample or two beside a window that reads short says which of those happened.
+  //   - a phase at the RESOLUTION LIMIT is not a bug at all. At the ~30Hz these traces run, a
+  //     0.5s concentric is fifteen samples and a boundary can only land on one of them, so +/-1
+  //     sample is +/-7%. phaseSamples and sampleIntervalSeconds say whether an 8% shortfall is a
+  //     measurement or a rounding, which is the question the bench is sitting on right now and
+  //     could not be answered from any export.
+  const phaseSampleIntervalSeconds = (() => {
+    const gaps: number[] = [];
+    for (let i = 1; i < points.length; i++) gaps.push((points[i].t - points[i - 1].t) / 1000);
+    if (!gaps.length) return 0;
+    const sorted = [...gaps].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  })();
+
+  const phaseStats = phases.map((phase, phaseIdx) => {
     // Timing comes from the moving part of the phase; displacement still comes from the phase's
     // own endpoints -- see trimPhaseToMovement for why those are two different windows, and for
     // the calibration run that separated them. startIdx/endIdx below stay untrimmed on purpose:
@@ -1740,6 +1771,40 @@ export function summarizeTrackedSet(
         driveSamples: drive.endIdx - drive.startIdx + 1,
         /** True when trimPhaseToDrive gave up and the travel window was used instead. */
         driveFellBackToTravel: drive === moving,
+        /** Samples in the whole phase. With sampleIntervalSeconds, the resolution floor on every
+         *  window inside it: a boundary can only land on a sample. */
+        phaseSamples: phase.endIdx - phase.startIdx + 1,
+        sampleIntervalSeconds: Math.round(phaseSampleIntervalSeconds * 10000) / 10000,
+        /** Speed at the phase's own edges as a fraction of its peak. Near 0 means the phase opened
+         *  (or closed) at the turnaround, which is where a sensor puts it; well above 0 means the
+         *  segmenter started the rep after the bar was already moving, and the phase -- and so
+         *  every window inside it -- is short at that end. */
+        //
+        // DIVIDED BY THE DENOMINATOR THE DRIVE TRIM ITSELF USES, which is speedsMps at the peak
+        // INDEX, not wholePhasePeak.peak -- that peak is read off speedsReportedMps, a different
+        // array. Mixing them made this unreadable on its first run: the row came back with a
+        // close fraction of 2.259, a phase edge apparently 2.26x its own peak, which is only a
+        // statement about the two arrays disagreeing. Against the same number trimPhaseToDrive
+        // thresholds on, these are directly comparable to driveOnsetFraction, which is the point:
+        // an edge already above the fraction is an edge the trim was never going to move.
+        openSpeedFraction:
+          speedsMps[wholePhasePeak.peakIdx] > 0
+            ? Math.round((speedsMps[phase.startIdx] / speedsMps[wholePhasePeak.peakIdx]) * 1000) / 1000
+            : null,
+        closeSpeedFraction:
+          speedsMps[wholePhasePeak.peakIdx] > 0
+            ? Math.round((speedsMps[phase.endIdx] / speedsMps[wholePhasePeak.peakIdx]) * 1000) / 1000
+            : null,
+        /** Dead time between this phase and its neighbours. A pause between reps is legitimate;
+         *  a gap beside a window reading short says the concentric was clipped, not paused. */
+        gapBeforeSeconds:
+          phaseIdx > 0
+            ? Math.round(((points[phase.startIdx].t - points[phases[phaseIdx - 1].endIdx].t) / 1000) * 1000) / 1000
+            : null,
+        gapAfterSeconds:
+          phaseIdx < phases.length - 1
+            ? Math.round(((points[phases[phaseIdx + 1].startIdx].t - points[phase.endIdx].t) / 1000) * 1000) / 1000
+            : null,
       },
     };
   });
