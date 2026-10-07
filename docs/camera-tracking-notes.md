@@ -4020,3 +4020,73 @@ row matches neither and is left alone — which a blanket re-sync from the seed 
 and these rows are admin-editable. **Second instance of this class in two days** (the other was
 `videoEligible: false` surviving the canonical-list swap): a seed correction is invisible on a
 fresh database, which is the only kind every test in this repo runs against.
+
+## The learning loop existed and had never been shown a capture, 2026-10-07
+
+Scott, three times in one evening: *"How do we make it so the ai overwatch learns? It should, we
+tried to build it before"* / *"if we could fix it into the camera export and have you teach it as
+you go or have it learn from the videos it can see"* / *"Ai overwatch needs to learn."*
+
+### First, what overwatch is, because the name misleads
+
+`arbitrate()` in `shared/tracker-arbiter.ts` is a **pure function**. Its whole input is this
+frame's object centre, the body yardstick, and a window of recent spans from THIS take; it
+returns `agree | object_suspect | body_suspect | cannot_judge` and keeps nothing. Every take
+starts from zero. It does not learn what a bar looks like, where an athlete should stand, or what
+a camera should expect — and it must not: Rule #2 makes it the one arbiter that owns no sensor,
+and a model inside it would make it a leader. **The only thing in the whole pipeline that learns
+across takes is `users.bodyModel`**, a per-athlete grip span.
+
+### And the loop he remembered building is real, complete, and was fed textbooks
+
+`/admin/movement-knowledge` proposes a versioned `movementProfile`; an admin reviews it;
+`applyMovementProfileProposal` archives the old row and publishes the new one with full history
+and revert; `summarizeTrackedSet` has read `positionScaleCorrection` off it since it was built.
+The comment is explicit: *"a chat proposal has zero effect on a live tracker until this explicit
+step."* Nothing about that machinery is missing.
+
+What was missing was the input. The library path's entire prompt was:
+
+    Passages retrieved from the library for "${movementType}": ...
+    Propose what these passages support for this movement's tracking profile
+
+**It proposed camera thresholds from textbooks.** It had never seen a trace, a ruler, a window or
+a scale blend, which is why it has never contributed a number in its life.
+
+### What it is fed now, and why it is RESIDUALS and not a correction
+
+`summarizeScaleEvidenceForMovement` reads recent captures of a movement and, for each scale
+ruler, computes its distance from the consensus that take actually used — `median` (that ruler's
+bias on this movement) and `spread` (its measured variance) — plus `cadenceHeld`, the drive
+window's share of the phase, and how often the rep count disagreed with what the athlete logged.
+Both proposal paths carry it; a movement nobody has filmed says so rather than implying evidence.
+
+**The distinction is the whole design.** A blanket `positionScaleCorrection` has been declined six
+sessions running because the errors CONTRADICT each other — 2026-10-07 read bench −21% beside
+press +13%, same day, same athlete, same camera. Averaging that hides it, and handing the
+contradiction to a model to average does not make it true, so the prompt says in words: *do not
+propose positionScaleCorrection from this.* What IS consistent is the per-ruler residual, and
+`reconcileScaleEstimates` is **already inverse-variance weighted** — it is simply being handed
+variances somebody guessed. A measured variance per ruler per movement is the honest version of a
+number that is currently invented, and it needs no new mechanism at all.
+
+### What it deliberately does NOT do
+
+- **It does not touch the arbiter.** Overwatch stays one shared referee across every movement —
+  judgement is shared, fitted numbers are not (CLAUDE.md, "What 'its own numbers' means").
+- **It writes nothing.** The summariser is read-only and the admin apply step is still the only
+  thing that can move a live number. A loop that could publish its own proposal would be a model
+  editing the tracker with nobody reading it.
+- **It never sees the footage, and that is a feature.** The diagnostics ARE the measurement; the
+  video is 13MB of it. Keeping the learning off the clips also keeps it off athletes' clips.
+- **Aggregates only.** No user id, no name, no set id — counts and medians over a movement, the
+  same standing every admin analytics surface has.
+
+`the-camera-loop-learns-from-captures.test.ts` pins the shape rather than the model's output:
+both prompts carry the evidence, the honest empty case, residuals not corrections, no athlete,
+read-only, the no-consensus capture contributing nothing, and the left join that three silent
+drops in the sibling query were caused by.
+
+**Still manual, and next:** the residuals are shown to a model that proposes; nothing yet reads
+them straight into the blend's uncertainties, which is the version with no model in the loop at
+all and is the better end state. The evidence has to accumulate before that is worth wiring.

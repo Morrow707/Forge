@@ -17569,9 +17569,18 @@ Current active profile for ${movementType}${
         : " -- none applied yet, the tracker is using its built-in hardcoded defaults."
     }`;
 
+    // The library half used to be the WHOLE input: this loop proposed camera thresholds from
+    // textbooks and had never been shown a capture. Passages still come first -- they are what a
+    // threshold MEANS -- and the measurements now sit beside them.
+    const libraryEvidence = await this.summarizeScaleEvidenceForMovement(movementType).catch(() => null);
+    const libraryEvidenceBlock =
+      libraryEvidence && libraryEvidence.capturesRead > 0
+        ? `\n\nAnd what Forge's own camera has measured for "${movementType}", over ${libraryEvidence.capturesRead} capture(s) (aggregates only, no athlete):\n${JSON.stringify(libraryEvidence, null, 2)}\n\nrulerResiduals is each scale ruler against the consensus its take used: "median" is bias, "spread" is measured variance. Where the passages and the measurements disagree, say so rather than averaging them. Do not propose positionScaleCorrection from this.`
+        : "";
+
     const userPrompt = `Passages retrieved from the library for "${movementType}":
 
-${passageBlock}
+${passageBlock}${libraryEvidenceBlock}
 
 Propose what these passages support for this movement's tracking profile, or call ask_question if they support nothing concrete.`;
 
@@ -17715,9 +17724,20 @@ Current active profile for ${movementType}${
       .map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`)
       .join("\n");
 
+    // WHAT THE CAMERA HAS MEASURED FOR THIS MOVEMENT, which this loop could not see until
+    // 2026-10-07. See summarizeScaleEvidenceForMovement for why it is residuals and not a
+    // correction, and why it carries no athlete. Best-effort: a movement nobody has filmed
+    // returns zero captures and the block says so, rather than the prompt pretending to
+    // evidence it does not have.
+    const evidence = await this.summarizeScaleEvidenceForMovement(movementType).catch(() => null);
+    const evidenceBlock =
+      evidence && evidence.capturesRead > 0
+        ? `\n\nWhat the camera has actually measured for "${movementType}", over ${evidence.capturesRead} capture(s) with a usable scale blend (aggregates only, no athlete):\n${JSON.stringify(evidence, null, 2)}\n\nHow to read it: rulerResiduals is each scale ruler's position relative to the consensus that take used -- "median" is that ruler's bias on this movement and "spread" is its measured variance, which is the number reconcileScaleEstimates currently has to guess. A ruler with a large spread should be trusted LESS, not corrected. Do not propose positionScaleCorrection from this: the scale errors across movements contradict each other and a blanket correction hides that rather than fixing it.`
+        : `\n\nNo camera captures with a usable scale blend exist for "${movementType}" yet, so there is no measured evidence to propose from.`;
+
     const userPrompt = `Conversation so far:
 ${historyText}
-${sourceText ? `\n\nExtracted text from the URL the admin just shared:\n${sourceText}` : ""}
+${sourceText ? `\n\nExtracted text from the URL the admin just shared:\n${sourceText}` : ""}${evidenceBlock}
 
 Respond to the admin's latest message by calling ask_question or propose_movement_profile.`;
 
@@ -24593,6 +24613,113 @@ ${catalog}`;
   // so a person (or Claude, logged in as its own dedicated admin account) can read exactly what
   // each tracking mode actually recorded for a real set, in plain language, without guessing
   // from the schema comments alone.
+  /** WHAT THE CAMERA HAS ACTUALLY MEASURED FOR THIS MOVEMENT, for the one learning loop that
+   *  already exists and has never been shown a capture.
+   *
+   *  `/admin/movement-knowledge` proposes a versioned `movementProfile`, an admin reviews it and
+   *  `applyMovementProfileProposal` archives the old row and publishes the new one -- a complete
+   *  propose/review/apply/revert loop, wired into `summarizeTrackedSet` since it was built. Its
+   *  entire prompt was "Passages retrieved from the library": it proposed camera thresholds from
+   *  TEXTBOOKS and could not see a trace, a ruler, a window or a blend. Scott, 2026-10-07, asking
+   *  how to make overwatch learn: "if we could fix it into the camera export and have you teach
+   *  it as you go or have it learn from the videos it can see." It does not need the videos --
+   *  the diagnostics ARE the measurement, and keeping the learning off the footage also keeps it
+   *  off athletes' clips, which matters given who is on this platform.
+   *
+   *  WHAT THIS RETURNS IS RESIDUALS, NOT A CORRECTION, and the distinction is the whole design.
+   *  A blanket `positionScaleCorrection` has been declined six sessions running because the
+   *  errors CONTRADICT each other -- on 2026-10-07 the bench read -21% and the press +13% on the
+   *  same day, same athlete, same camera. Averaging that hides it. What is consistent, and what
+   *  the blend is currently fed as an invented number, is how far each RULER sits from the
+   *  consensus and how much it varies: `reconcileScaleEstimates` is inverse-variance weighted, so
+   *  a measured variance per ruler per movement is the honest version of a number somebody
+   *  guessed. That is learning that fits the architecture rather than bolting a model onto it.
+   *
+   *  AGGREGATES ONLY, NO ATHLETE. Nothing here carries a user id, a name or a set id -- it is
+   *  counts and medians over a movement, the same standing every other admin analytics surface
+   *  has (see CLAUDE.md, "Athlete data leaving the platform"). It is also READ-ONLY: it proposes
+   *  nothing and writes nothing. The admin apply step stays exactly where it is. */
+  async summarizeScaleEvidenceForMovement(movementType: string, limit = 40) {
+    const rows = await db
+      .select({
+        diagnostics: workoutSetEntries.trackingDiagnostics,
+        romCm: workoutSetEntries.romCm,
+        loggedReps: workoutSetEntries.reps,
+        repBreakdown: workoutSetEntries.repBreakdown,
+      })
+      .from(workoutSetEntries)
+      // LEFT to exercises, for the same reason the tracked-set report is: exerciseId is nullable,
+      // and an inner join does not produce a row with a missing name, it produces no row -- three
+      // silent drops have already been found in that query. The movementType filter does the
+      // narrowing; the join only has to not delete anything on the way.
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .leftJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      .where(
+        and(
+          eq(exercises.movementType, movementType),
+          isNotNull(workoutSetEntries.trackingDiagnostics),
+        ),
+      )
+      .orderBy(desc(workoutSetEntries.id))
+      .limit(limit);
+
+    const residuals = new Map<string, number[]>();
+    const cadence: number[] = [];
+    const driveOverPhase: number[] = [];
+    let captures = 0;
+    let repCountMismatches = 0;
+
+    for (const row of rows) {
+      const d = row.diagnostics as any;
+      const blend = d?.calibration?.scaleBlend;
+      const inputs: { source?: string; scale?: number }[] = blend?.inputs ?? [];
+      // The consensus this take actually used. Without it a residual has nothing to be against,
+      // so the capture contributes nothing rather than contributing a guess.
+      const consensus = Number(d?.calibration?.scaleMetersPerUnit ?? blend?.blendedScale);
+      if (Number.isFinite(consensus) && consensus > 0 && inputs.length) {
+        captures++;
+        for (const c of inputs) {
+          if (!c?.source || !Number.isFinite(Number(c.scale)) || Number(c.scale) <= 0) continue;
+          const list = residuals.get(c.source) ?? [];
+          list.push(Number(c.scale) / consensus - 1);
+          residuals.set(c.source, list);
+        }
+      }
+      const held = Number(d?.sampling?.cadenceHeld);
+      if (Number.isFinite(held)) cadence.push(held);
+      const reps: any[] = (row.repBreakdown as any[]) ?? [];
+      const logged = Number(row.loggedReps);
+      if (Number.isFinite(logged) && reps.length && reps.length !== logged) repCountMismatches++;
+      for (const r of reps) {
+        const phase = Number(r?.windows?.phaseSeconds);
+        const drive = Number(r?.windows?.driveSeconds);
+        if (phase > 0 && drive > 0) driveOverPhase.push(drive / phase);
+      }
+    }
+
+    const stat = (xs: number[]) => {
+      if (!xs.length) return null;
+      const sorted = [...xs].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+      const spread = Math.sqrt(xs.reduce((s, x) => s + (x - median) ** 2, 0) / xs.length);
+      return { n: xs.length, median: Math.round(median * 1e4) / 1e4, spread: Math.round(spread * 1e4) / 1e4 };
+    };
+
+    return {
+      movementType,
+      capturesRead: captures,
+      setsRead: rows.length,
+      // THE NUMBER THE BLEND IS CURRENTLY GUESSING. `spread` is the measured variance an
+      // inverse-variance blend wants; `median` says whether a ruler is biased on this movement.
+      rulerResiduals: Object.fromEntries(
+        [...residuals.entries()].map(([source, xs]) => [source, stat(xs)]),
+      ),
+      cadenceHeld: stat(cadence),
+      driveWindowShareOfPhase: stat(driveOverPhase),
+      repCountMismatches,
+    };
+  },
+
   async getRecentTrackedSetsForAdmin(limit: number) {
     return db
       .select({

@@ -1256,6 +1256,34 @@ halves before splitting anything else:
   (the other was `videoEligible: false` surviving the canonical-list swap): a seed correction is
   invisible on a fresh database, which is the only kind the tests run against.
   Calibration work: uploaded on commit.
+- **THE LEARNING LOOP EXISTED AND HAD NEVER BEEN SHOWN A CAPTURE** (2026-10-07). Scott, three
+  times: "How do we make it so the ai overwatch learns? It should, we tried to build it before."
+  **Overwatch itself learns nothing and must not.** `arbitrate()` is a PURE FUNCTION -- this
+  frame's object centre, the body yardstick, recent spans from THIS take, returning one of four
+  verdicts and keeping nothing. Rule #2 makes it the one arbiter owning no sensor; a model inside
+  it would make it a leader. The only thing in the pipeline that learns across takes is
+  `users.bodyModel`.
+  **The loop he remembered IS real and complete**: `/admin/movement-knowledge` proposes a
+  versioned `movementProfile`, an admin reviews, `applyMovementProfileProposal` archives and
+  publishes with revert, and `summarizeTrackedSet` reads `positionScaleCorrection` off it. What
+  was missing was the INPUT -- its whole prompt was "Passages retrieved from the library", so it
+  proposed CAMERA thresholds from TEXTBOOKS and had never seen a trace, a ruler or a blend.
+  **`summarizeScaleEvidenceForMovement` is the fix**: per scale ruler, its distance from the
+  consensus that take used -- `median` (bias on this movement) and `spread` (measured variance) --
+  plus `cadenceHeld`, the drive window's share of the phase, and rep-count mismatches. Both
+  proposal paths carry it; a movement nobody filmed says so rather than implying evidence.
+  **RESIDUALS, NEVER A CORRECTION, and the prompt says so in words.** A blanket
+  `positionScaleCorrection` has been declined six sessions because the errors contradict each
+  other (bench -21% beside press +13%, same day same athlete), and handing a contradiction to a
+  model to average does not make it true. `reconcileScaleEstimates` is ALREADY inverse-variance
+  weighted -- it is just being handed guessed variances, so a measured one is the honest version
+  of a number that is currently invented, with no new mechanism.
+  **It writes nothing, touches no arbiter, never sees footage, and carries no athlete.** The admin
+  apply step is still the only thing that moves a live number.
+  `the-camera-loop-learns-from-captures.test.ts` pins the shape, not the model's output.
+  **Next, and not yet wired:** nothing reads the residuals straight into the blend's
+  uncertainties -- the version with no model in the loop, which wants evidence to accumulate
+  first. Server-side: ships on a Render deploy, no build.
 - **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
   **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
   the numbering in this file has drifted twice. Read the run list, not the last number written
