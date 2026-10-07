@@ -4343,6 +4343,43 @@ async function main() {
     // already created. Idempotent, so it costs one query per pair on every deploy after the first.
     await mergeNamedDuplicateExercises();
 
+    // A CORRECTED INSTRUCTION ONLY REACHES A FRESH DATABASE, AND THAT HID A FIX FOR TWO WEEKS.
+    //
+    // The insert loop creates an exercise by NAME and nothing re-syncs `instructions` after, so a
+    // correction to the seed text lands on a new install and never on one an earlier deploy has
+    // already written to. Build 623 corrected the Barbell Shoulder Press -- it is STANDING, and
+    // `postureForExercise` was fixed with it, which is the half that moves the numbers -- but on
+    // 2026-10-07 the app on Scott's phone still read "Seated, bar at collarbone, press straight
+    // overhead" under a lift he does standing, two weeks after the fix. He saw it in a screenshot;
+    // nothing in the repo could have.
+    //
+    // Same shape as LIVE_DOCUMENT_PATCHES: keyed on the exact text that was wrong, so it rewrites
+    // that and only that. An admin who has since edited the row has text that matches neither and
+    // is left alone -- which a blanket re-sync from the seed could not promise, and these rows are
+    // admin-editable. Idempotent: once rewritten the `from` no longer matches.
+    const CORRECTED_EXERCISE_INSTRUCTIONS: { name: string; from: string; to: string }[] = [
+      {
+        name: "Barbell Shoulder Press",
+        from:
+          "Seated, bar at collarbone, press straight overhead without arching the back -- removing"
+          + " leg drive isolates the shoulders more than a standing Overhead Press.",
+        to:
+          "Standing, bar at the collarbone, press straight overhead without arching the back."
+          + " A seated barbell shoulder press is a different exercise.",
+      },
+    ];
+    let instructionsCorrected = 0;
+    for (const existingEx of await storage.getAllExercises()) {
+      const patch = CORRECTED_EXERCISE_INSTRUCTIONS.find((p) => p.name === existingEx.name);
+      if (!patch) continue;
+      if ((existingEx.instructions ?? "").trim() !== patch.from.trim()) continue;
+      await storage.updateExercise(existingEx.id, { instructions: patch.to });
+      instructionsCorrected++;
+    }
+    if (instructionsCorrected > 0) {
+      console.log(`[seed] corrected instructions on ${instructionsCorrected} exercise(s)`);
+    }
+
     // Cross-sport Skill Bank paywall: which drills every Free Agent gets
     // free regardless of their signup sport (see
     // getVisibleSkillExercisesForFreeAgent and

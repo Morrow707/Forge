@@ -1213,6 +1213,49 @@ halves before splitting anything else:
   concentric. The edges say gaps are 0.000 and the short reps are sample-starved, which is the
   first mechanism tying `liveCoverage` to the numbers rather than to the video -- a hypothesis,
   recorded, NOT fitted. Calibration work: uploaded on commit.
+- **BUILD 639 BESIDE THE OVR, 2026-10-07: THE TIMING REFIT LANDED AND SCALE IS ALL THAT IS LEFT.**
+  Set 3 of each lift is the first take with `DRIVE_ONSET_FRACTION` at 0.04; sets 1 and 2 of the
+  same session are the pre-refit control on 637.
+  **The concentric window against the sensor went from -13.5% / -22.9% / -22.7% to +1.0% / -1.1% /
+  +10.6%** (press, row, bench). Two of three inside 1.1%, on takes the fit was not made on.
+  **And the mean's error is now arithmetic on the scale error.** Bench ROM is 21.3% low and its
+  window 10.6% long, so the mean must read `(1-0.213)/(1+0.106)-1 = -28.9%` and it reads -28.6%.
+  Nothing is hiding in the velocity computation.
+  **THE SAMPLE-STARVATION HYPOTHESIS IS DEAD, KILLED BY ITS OWN DIAGNOSTIC ON ITS FIRST RUN.** The
+  bench reports `sampling: {samples: 787, effectiveHz: 30, dropouts: 0, cadenceHeld: 1}` -- a
+  flawless take -- and its ROM is still 21.3% low. Recorded as a hypothesis last session,
+  disproved this one. It earned its keep elsewhere: the press lost 18 dropouts and 3.861s
+  (`cadenceHeld` 0.854, largest gap 1.868s) and returned NINE reps for a ten-rep set -- the first
+  miscount to arrive with a measured cause attached.
+  **THE OBJECT WITNESS IS WRONG BY A FACTOR AND THE GATES WERE RIGHT ON ALL THREE.**
+  `plateScaleIfAdmitted` (added build 633 for exactly this) against the scale each take needs:
+  bench 0.001149 vs 0.004477 (**3.9x too small**), row 0.000986 vs ~0.004629 (**4.7x**), press
+  0.001598 vs ~0.003112 (1.9x). Admitting the plate would have made every one far worse. The gate
+  is not too tight -- the detector's box is wrong, and the cause is already recorded: the CoreML
+  model is undertrained (barbell 3 labelled boxes, 225 of 266 images unlabelled). **Labelling that
+  data is now the highest-value camera work in the repo.**
+  **NOTHING WAS REFITTED AND THE EVIDENCE FORBIDS IT.** On the bench the two body rulers AGREE
+  (`shoulder_width` 0.003502, `body_3d` 0.003525, 0.7% apart) and are BOTH 27% low -- Rule #4's
+  failure exactly, body rulers corroborating nothing. The row is the opposite: shoulder 0.005892
+  against body_3d 0.003367, truth between them at ~0.004629. Two takes, two contradictory
+  corrections; fitting either moves the other the wrong way.
+  **Caveat on the press, stated not fitted:** logged as a Barbell Shoulder Press, performed as a
+  push press, and `axisForeshortening.ratio` is **1.452** against 1.029/1.036 on the other two. Its
+  +13.1% ROM is not cleanly scale and must not be pooled until a press is filmed without the dip.
+  **The 6fps video fix is confirmed on the phone**: `videoAsset.measuredFrameRate` 25.9 / 25.2 /
+  39.9 against a 30 target, `skippedNotReady: 0` on all three. The bench's 39.9 is the 0.75 cadence
+  slack's ceiling (its delegate got the full 120fps); harmless, recorded, not changed.
+  **AND A FIX FROM BUILD 623 HAD NEVER REACHED THE PHONE.** Scott's screenshot showed the Barbell
+  Shoulder Press still reading "Seated, bar at collarbone ... more than a standing Overhead Press".
+  `seed.ts` has carried the standing text for two weeks; the insert loop creates an exercise by
+  NAME and **nothing re-syncs `instructions`**, so the correction only ever landed on a fresh
+  database. The posture LABEL was fixed at the time and is the half that moves numbers, so no
+  measurement was affected. `CORRECTED_EXERCISE_INSTRUCTIONS` fixes it keyed on the exact wrong
+  text, like `LIVE_DOCUMENT_PATCHES` -- a blanket re-sync would silently revert an admin's own edit
+  on every deploy, and these rows are admin-editable. **Second instance of this class in two days**
+  (the other was `videoEligible: false` surviving the canonical-list swap): a seed correction is
+  invisible on a fresh database, which is the only kind the tests run against.
+  Calibration work: uploaded on commit.
 - **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
   **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
   the numbering in this file has drifted twice. Read the run list, not the last number written

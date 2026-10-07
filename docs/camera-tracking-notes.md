@@ -3920,3 +3920,103 @@ true: most of it is, the SAMPLING is not, because it comes from the trace that d
 `samplingOnlyDiagnostics` is the blob for a mode with a trace and none of the native machinery --
 everything it cannot honestly fill is null rather than zeroed, since a frameCount of 0 on a take
 that recorded frames would be a lie.
+
+## Three lifts beside OVR, build 639, 2026-10-07: the timing fit lands, scale is all that is left
+
+Set 3 of each lift, filmed on build 639 — the first takes with `DRIVE_ONSET_FRACTION` at 0.04.
+Sets 1 and 2 of the same session were filmed on 637 and are the pre-refit control.
+
+### THE REFIT VALIDATED ON A TAKE IT WAS NOT FITTED TO
+
+The concentric window against the sensor's own (its range over its mean):
+
+| lift | set 1, fraction 0.07 | set 3, fraction 0.04 |
+|---|---|---|
+| Barbell Shoulder Press | -13.5% | **+1.0%** |
+| Pendlay Row | -22.9% | **-1.1%** |
+| Bench Press | -22.7% | **+10.6%** |
+
+Two of the three are inside 1.1%. That is the single largest accuracy move this pipeline has
+made, it needed no new constant beyond the one fitted offline, and it was predicted in advance.
+
+### AND THE MEAN'S ERROR IS NOW ARITHMETIC ON THE SCALE ERROR
+
+| lift | mean | peak | ROM | concentric |
+|---|---|---|---|---|
+| Barbell Shoulder Press | +15.5% | +22.7% | +13.1% | +1.0% |
+| Pendlay Row | -8.0% | -29.9% | **-21.4%** | -1.1% |
+| Bench Press | -28.6% | -27.5% | **-21.3%** | +10.6% |
+
+The bench proves it in one line: ROM is 21.3% low and the window is 10.6% long, so the mean
+must read `(1 - 0.213) / (1 + 0.106) - 1 = -28.9%`, and it reads **-28.6%**. There is no third
+error hiding in the velocity computation. **Scale is the whole of what is left.**
+
+### AND THE SAMPLE-STARVATION HYPOTHESIS IS DEAD, KILLED BY ITS OWN DIAGNOSTIC ON ITS FIRST RUN
+
+The 10-07 note proposed that the short phases were sample-starved. The bench set 3 reports
+`sampling: { samples: 787, effectiveHz: 30, largestGapSeconds: 0.1, dropouts: 0, cadenceHeld: 1 }`
+— a flawless take — and its ROM is still 21.3% low. **A perfectly sampled take has the same scale
+error, so sampling was never the cause of it.** Recorded as a hypothesis last session and
+disproved this one, which is what the field was built for.
+
+It earned its keep elsewhere in the same export: the shoulder press lost 18 dropouts and 3.861s
+(`cadenceHeld: 0.854`, largest gap 1.868s) and returned **nine reps for a ten-rep set**. That is
+the first time a miscount has arrived with a measured cause attached.
+
+### THE OBJECT WITNESS IS WRONG BY A FACTOR, AND THE GATES WERE RIGHT ON ALL THREE
+
+`plateScaleIfAdmitted` — added in build 633 precisely so three sessions of `plateRejectedReasons`
+could be scored — settles it. The scale each take needs to reach the sensor, against what the
+refused plate would have produced:
+
+| lift | scale needed | plateScaleIfAdmitted | factor |
+|---|---|---|---|
+| Bench Press | 0.004477 | 0.001149 | **3.9x too small** |
+| Pendlay Row | ~0.004629 | 0.000986 | **4.7x too small** |
+| Barbell Shoulder Press | ~0.003112 | 0.001598 | 1.9x too small |
+
+Admitting the plate would have made every one of them dramatically worse. **The gate is not too
+tight; the detector's box is wrong**, and `size_vs_grip`, `aspect_ratio` and `too_large_for_a_plate`
+all fired correctly. Rule #4 says a rejected object read is a bug report — this says which
+component the bug is in, and CLAUDE.md already names the cause: the CoreML model is undertrained
+(barbell 3 labelled boxes, 225 of 266 raw images unlabelled).
+
+**So NOTHING was refitted this round, and the evidence forbids it.** On the bench the two body
+rulers AGREE with each other (`shoulder_width` 0.003502, `body_3d` 0.003525, 0.7% apart) and are
+BOTH 27% low — exactly the failure Rule #4 describes, body rulers agreeing by construction and
+corroborating nothing. No blend of what the bench measured reaches 0.004477; the highest candidate
+it produced was `depth` at 0.003837. The row is the opposite shape: `shoulder_width` 0.005892
+against `body_3d` 0.003367, 1.75x apart, with the truth at ~0.004629 — between them, much nearer
+the shoulder. **Two takes, two contradictory corrections; fitting either moves the other the wrong
+way.** The work is the detector.
+
+**One caveat on the press, stated rather than fitted:** it is logged as a Barbell Shoulder Press
+and performed as a push press, and its `axisForeshortening.ratio` is **1.452** against 1.029 and
+1.036 on the other two — a real along-lens component (4.32m against 4.10m in-image). Its +13.1%
+ROM is not cleanly a scale error and it should not be pooled with the other two until a press is
+filmed without the dip.
+
+### The saved video is fixed, measured on the phone
+
+`videoAsset` on the three takes: `measuredFrameRate` 25.9, 25.2 and 39.9 against a 30 target, with
+`skippedNotReady: 0` on all three. The 6.0fps of the morning is gone. The bench's 39.9 is the
+0.75 cadence slack working as written — its delegate received the full 120fps (3817 frames in
+31.9s) and the slack admits a frame at 0.025s, so 40fps is the ceiling. Harmless for watching and
+about a third more bytes than intended; recorded, not changed.
+
+### A fix that had never reached the phone
+
+Scott's screenshot showed the Barbell Shoulder Press still reading *"Seated, bar at collarbone,
+press straight overhead ... removing leg drive isolates the shoulders more than a standing
+Overhead Press"* — the text build 623 corrected two weeks ago. `seed.ts` has carried the right
+words since; the insert loop creates an exercise by NAME and nothing re-syncs `instructions`, so
+the correction only ever landed on a fresh database. The posture LABEL was fixed at the time and
+is the half that moves the numbers, so no measurement was affected — but the app has been telling
+him to sit down for a lift he does standing.
+
+`CORRECTED_EXERCISE_INSTRUCTIONS` is the fix, keyed on the exact wrong text the way
+`LIVE_DOCUMENT_PATCHES` is: it rewrites that and only that, so an admin who has since edited the
+row matches neither and is left alone — which a blanket re-sync from the seed could not promise,
+and these rows are admin-editable. **Second instance of this class in two days** (the other was
+`videoEligible: false` surviving the canonical-list swap): a seed correction is invisible on a
+fresh database, which is the only kind every test in this repo runs against.
