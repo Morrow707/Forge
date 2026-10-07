@@ -1,0 +1,103 @@
+{
+  "image": "IMG_0020_frame2.jpg",
+  "boxes": [
+    {
+      "class": "dumbbell",
+      "x_center": 0.1661,
+      "y_center": 0.3568,
+      "width": 0.1329,
+      "height": 0.1226
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3194,
+      "y_center": 0.3557,
+      "width": 0.1342,
+      "height": 0.1232
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.4747,
+      "y_center": 0.3547,
+      "width": 0.1362,
+      "height": 0.1238
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.6241,
+      "y_center": 0.3537,
+      "width": 0.1382,
+      "height": 0.1244
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.7748,
+      "y_center": 0.3527,
+      "width": 0.1402,
+      "height": 0.1249
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.1664,
+      "y_center": 0.4879,
+      "width": 0.1456,
+      "height": 0.1209
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3324,
+      "y_center": 0.4874,
+      "width": 0.1472,
+      "height": 0.1215
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.4934,
+      "y_center": 0.487,
+      "width": 0.1494,
+      "height": 0.1221
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.6559,
+      "y_center": 0.4865,
+      "width": 0.1516,
+      "height": 0.1227
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.8191,
+      "y_center": 0.4861,
+      "width": 0.1539,
+      "height": 0.1233
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.1864,
+      "y_center": 0.6287,
+      "width": 0.1449,
+      "height": 0.1194
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3587,
+      "y_center": 0.6289,
+      "width": 0.1467,
+      "height": 0.1201
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5317,
+      "y_center": 0.6292,
+      "width": 0.1491,
+      "height": 0.1207
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.7074,
+      "y_center": 0.6295,
+      "width": 0.1515,
+      "height": 0.1213
+    }
+  ]
+}

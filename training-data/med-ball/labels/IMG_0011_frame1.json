@@ -1,0 +1,33 @@
+{
+  "image": "IMG_0011_frame1.jpg",
+  "boxes": [
+    {
+      "class": "plate",
+      "x_center": 0.4876,
+      "y_center": 0.4418,
+      "width": 0.0904,
+      "height": 0.0665
+    },
+    {
+      "class": "barbell",
+      "x_center": 0.4795,
+      "y_center": 0.4555,
+      "width": 0.2209,
+      "height": 0.0635
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6455,
+      "y_center": 0.3419,
+      "width": 0.0825,
+      "height": 0.1056
+    },
+    {
+      "class": "plate",
+      "x_center": 0.646,
+      "y_center": 0.2383,
+      "width": 0.0912,
+      "height": 0.1038
+    }
+  ]
+}

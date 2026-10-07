@@ -1,0 +1,103 @@
+{
+  "image": "IMG_0020_frame1.jpg",
+  "boxes": [
+    {
+      "class": "dumbbell",
+      "x_center": 0.1404,
+      "y_center": 0.3213,
+      "width": 0.1368,
+      "height": 0.1242
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.2927,
+      "y_center": 0.3185,
+      "width": 0.139,
+      "height": 0.1248
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.4473,
+      "y_center": 0.3156,
+      "width": 0.1413,
+      "height": 0.1254
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5962,
+      "y_center": 0.3129,
+      "width": 0.1435,
+      "height": 0.126
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.7465,
+      "y_center": 0.3101,
+      "width": 0.1458,
+      "height": 0.1266
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.1458,
+      "y_center": 0.4539,
+      "width": 0.1512,
+      "height": 0.1254
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3127,
+      "y_center": 0.4516,
+      "width": 0.1538,
+      "height": 0.1261
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.4749,
+      "y_center": 0.4493,
+      "width": 0.1564,
+      "height": 0.1267
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.6389,
+      "y_center": 0.447,
+      "width": 0.159,
+      "height": 0.1274
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.8037,
+      "y_center": 0.4446,
+      "width": 0.1616,
+      "height": 0.1281
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.1716,
+      "y_center": 0.5994,
+      "width": 0.1526,
+      "height": 0.1265
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3472,
+      "y_center": 0.5978,
+      "width": 0.1554,
+      "height": 0.1273
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5239,
+      "y_center": 0.5961,
+      "width": 0.1582,
+      "height": 0.128
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.7035,
+      "y_center": 0.5945,
+      "width": 0.1611,
+      "height": 0.1287
+    }
+  ]
+}

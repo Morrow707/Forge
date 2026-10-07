@@ -1,0 +1,89 @@
+{
+  "image": "IMG_0019_frame1.jpg",
+  "boxes": [
+    {
+      "class": "dumbbell",
+      "x_center": 0.2235,
+      "y_center": 0.3052,
+      "width": 0.1769,
+      "height": 0.1722
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.4351,
+      "y_center": 0.3159,
+      "width": 0.1867,
+      "height": 0.1745
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.6458,
+      "y_center": 0.3265,
+      "width": 0.1891,
+      "height": 0.1764
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.8453,
+      "y_center": 0.3366,
+      "width": 0.1913,
+      "height": 0.1782
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.9758,
+      "y_center": 0.3463,
+      "width": 0.0484,
+      "height": 0.1791
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.2189,
+      "y_center": 0.5139,
+      "width": 0.199,
+      "height": 0.1853
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.4389,
+      "y_center": 0.5274,
+      "width": 0.2017,
+      "height": 0.1875
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.6816,
+      "y_center": 0.5423,
+      "width": 0.2047,
+      "height": 0.1899
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.9128,
+      "y_center": 0.5575,
+      "width": 0.1745,
+      "height": 0.1923
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.2648,
+      "y_center": 0.729,
+      "width": 0.1975,
+      "height": 0.1842
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5157,
+      "y_center": 0.7471,
+      "width": 0.2005,
+      "height": 0.1867
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.7732,
+      "y_center": 0.7658,
+      "width": 0.2037,
+      "height": 0.1892
+    }
+  ]
+}
