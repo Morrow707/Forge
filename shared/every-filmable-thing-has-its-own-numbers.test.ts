@@ -1,4 +1,16 @@
-// ALL 270 FILMABLE THINGS RESOLVE THEIR OWN RECORD: 54 exercises and 216 skill drills.
+// ALL 269 FILMABLE THINGS RESOLVE THEIR OWN RECORD: 54 exercises and 215 skill drills.
+//
+// It was 216 drills until 2026-10-07, when a scan of the library found "Overload/Underload Bat
+// Drill" and "Bat Speed Overload/Underload Rounds" were one drill written twice -- and BOTH were
+// filmable (skillType Hitting is Mechanics-eligible), so one movement held two of these records.
+// That is the exact failure this file exists to prevent, arriving from the other direction:
+// calibrate the bat swing on one identity and the other silently keeps the old numbers, and an
+// athlete who logs both has their history split across two names for the same swing. Scott:
+// "Call it overload/underload". See server/merge-duplicate-exercises.ts.
+//
+// THIS COUNT GOING DOWN IS NOT ALWAYS GOOD NEWS. It should only ever move when somebody meant it
+// to -- a merge like that one, or a lift added to CANONICAL_VIDEO_ELIGIBLE_NAMES. A silent drop
+// is a filmable thing that lost its record and is now falling back to shared numbers.
 //
 // Scott, 2026-10-06: "give each 54 exercises, and while you're at it all of the speed/agility,
 // and skills that can be filmed too, I don't know that number, but every single thing that can
@@ -67,11 +79,11 @@ describe("every filmable thing has its own numbers", () => {
   const exercises = filmableExercises();
   const drills = filmableDrills();
 
-  it("counts 54 exercises and 216 drills", () => {
+  it("counts 54 exercises and 215 drills", () => {
     // Pinned so a change to either eligibility rule is a decision somebody made on purpose --
     // video storage is the whole reason the lists are short (see videoEligible's own comment).
     expect(exercises.length).toBe(54);
-    expect(drills.length).toBe(216);
+    expect(drills.length).toBe(215);
   });
 
   it("covers the speed and agility work Scott named", () => {
@@ -84,7 +96,7 @@ describe("every filmable thing has its own numbers", () => {
     expect(drills.some((d) => d.name.startsWith("Ladder Drill"))).toBe(true);
   });
 
-  it("gives all 270 of them their own record, and no two the same one", () => {
+  it("gives all 269 of them their own record, and no two the same one", () => {
     const seen = new Set<object>();
     // A drill's tracker is sprint-timed for Agility/Starts/Footwork and mechanics for the rest
     // -- the same split server/seed.ts's eligibility rule makes.
@@ -101,7 +113,7 @@ describe("every filmable thing has its own numbers", () => {
         tracker: (SPRINT_TIMED.has(d.skillType) ? "sprint" : "mechanics") as FilmingTracker,
       })),
     ];
-    expect(identities.length).toBe(270);
+    expect(identities.length).toBe(269);
     for (const { name, bucket, tracker } of identities) {
       const resolved = cameraTunablesFor(name, bucket, tracker);
       expect(resolved.tracker).toBe(tracker);
@@ -115,10 +127,10 @@ describe("every filmable thing has its own numbers", () => {
         expect(Number.isFinite((resolved.values as Record<string, number>)[key])).toBe(true);
       }
     }
-    expect(seen.size).toBe(270);
+    expect(seen.size).toBe(269);
   });
 
-  it("writing on any one of the 270 leaves the other 269 alone", () => {
+  it("writing on any one of the 269 leaves the other 268 alone", () => {
     const all = [...exercises, ...drills.map((d) => d.name)];
     const before = all.map((name) => ({ ...cameraTunablesFor(name, romBucketForExercise(name)).values }));
     // Scribble on one drill's record the way a fitted calibration eventually will.

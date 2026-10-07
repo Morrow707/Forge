@@ -3578,3 +3578,53 @@ the sensor). Plus `calibration.axisForeshortening`, whose premise is now open ra
 on a side-on bench the bar's travel SHOULD be fully in the image plane, so a ratio near 1 says the
 39% is a scale error after all and a ratio near 1.65 says the camera could not see the movement.
 **Read those three on the next bench before anything acts on them.**
+
+## The library had one drill under two names, and both were filmable
+
+2026-10-07. Scott, after the Overhead Press / Barbell Shoulder Press duplicate came up: "Look
+through the rest of exercise library. Are there any that are close?"
+
+The scan groups every exercise by muscle group, equipment, movement type and laterality, then
+compares instruction text inside each group. **The first pass found nothing and was wrong**: the
+known pair scored 0.25 against a threshold of 0.30, because build 623 had appended "A seated
+barbell shoulder press is a different exercise" to one of them and the extra sentence diluted the
+overlap. A duplicate-finder that misses the duplicate you already have proves nothing, so the
+threshold was lowered until it caught that one and every candidate above it was read by hand.
+
+Four pairs are the same movement written twice. **One of them matters to the camera and it is not
+the one that started the search:**
+
+> **"Overload/Underload Bat Drill" and "Bat Speed Overload/Underload Rounds" are one drill, and
+> BOTH were filmable.** Both carry `skillType: "Hitting"`, which is in
+> `MECHANICS_ELIGIBLE_SKILL_TYPES`, so one movement held **two of the 270 camera-tunable
+> records**. That is the failure `shared/camera-tunables-by-lift.ts` exists to prevent, arriving
+> from the opposite direction: the registry stops a number fitted on one movement leaking into
+> another, and here one movement had two sets of numbers that could never agree. Calibrate the bat
+> swing on one and the other silently keeps the old values; an athlete who logs both has their
+> history split across two identities for the same swing.
+
+The count is now **269 (54 exercises + 215 drills)**, and
+`every-filmable-thing-has-its-own-numbers.test.ts` carries a note saying that a count going DOWN
+is only good news when somebody meant it -- a silent drop is a filmable thing that lost its record
+and is falling back to shared numbers.
+
+**Scott named the survivors** ("Call it overload/underload, call it ankle cars, call it pin squat")
+and overruled the scan on the one pair it got wrong: "Cossack and lateral lunges are different,
+keep them different." Diamond Push-Up / Close-Grip Push-Up is a real duplicate and is NOT merged --
+neither is filmable, so collapsing them buys nothing and costs somebody's logged sets a migration.
+
+**Why the merge is a repoint and not a delete.** Ten foreign keys point at `exercises.id` and five
+at `skill_exercises.id` in the live schema, nearly all `onDelete: cascade` -- program rows, workout
+log entries, session logs, class drill trees. `DELETE FROM exercises WHERE name = 'Anderson Squat'`
+does not tidy the library; it deletes every set anybody logged against it.
+`server/merge-duplicate-exercises.ts` discovers its referencing columns from `information_schema`
+rather than holding a list, because the cost of forgetting one is not a failed merge but a silent
+cascade found weeks later. One transaction, so a unique-constraint refusal rolls the whole thing
+back and nothing is deleted; it never deletes without a survivor; it is a no-op once run.
+
+Proved on a throwaway Postgres the way the production path actually runs -- duplicates inserted as
+an earlier deploy would have left them, then the seed re-run: `"Anderson Squat" merged into "Pin
+Squat" across 10 referencing column(s)`, `"Bat Speed Overload/Underload Rounds" merged into
+"Overload/Underload Bat Drill" across 5`, zero merge lines on the third run.
+`merging-a-duplicate-keeps-the-history.itest.ts` logs a real set against the duplicate and asserts
+it survives pointing at the survivor; dropping the repoint turns that case red.

@@ -36,6 +36,7 @@ import { coreAgreementText } from "./seed-data/signup-agreement";
 import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
 import { REQUIRED_DOCUMENTS, documentAudienceFor } from "@shared/required-documents";
 import { AI_TERMS_OF_USE } from "./seed-data/ai-terms-of-use-draft";
+import { mergeNamedDuplicateExercises } from "./merge-duplicate-exercises";
 
 const LEGAL_DOC_TYPES = legalDocumentTypeEnum.enumValues;
 
@@ -2784,7 +2785,6 @@ async function main() {
       { name: "Zercher Squat", category: "strength" as const, muscleGroup: "Quads", secondaryMuscles: ["Glutes", "Core", "Back"], equipment: "Barbell", movementType: "Squat", laterality: "bilateral" as const, instructions: "Bar cradled in the crooks of the elbows, squat to depth keeping the torso upright against the front-loaded bar." },
       { name: "Safety Bar Squat", category: "strength" as const, muscleGroup: "Quads", secondaryMuscles: ["Glutes", "Hamstrings", "Core"], equipment: "Barbell", movementType: "Squat", laterality: "bilateral" as const, instructions: "Cambered safety-squat bar shifts load slightly forward and frees the hands -- squat to depth as with a back squat." },
       { name: "Pin Squat", category: "strength" as const, muscleGroup: "Quads", secondaryMuscles: ["Glutes", "Hamstrings"], equipment: "Barbell", movementType: "Squat", laterality: "bilateral" as const, instructions: "Squat down onto safety pins set at a fixed depth, pause fully dead on the pins to kill the stretch reflex, then drive up from a full stop." },
-      { name: "Anderson Squat", category: "strength" as const, muscleGroup: "Quads", secondaryMuscles: ["Glutes", "Hamstrings"], equipment: "Barbell", movementType: "Squat", laterality: "bilateral" as const, instructions: "Start from a dead stop on pins at the bottom of the squat with no eccentric -- builds bottom-position drive without any stretch-reflex assistance." },
       { name: "Pause Back Squat", category: "strength" as const, muscleGroup: "Quads", secondaryMuscles: ["Glutes", "Hamstrings", "Core"], equipment: "Barbell", movementType: "Squat", laterality: "bilateral" as const, instructions: "Squat to depth and hold 2-3 seconds at the bottom before driving up -- removes the stretch reflex and exposes a weak bottom position." },
       { name: "Pause Front Squat", category: "strength" as const, muscleGroup: "Quads", secondaryMuscles: ["Glutes", "Core"], equipment: "Barbell", movementType: "Squat", laterality: "bilateral" as const, instructions: "Front-rack squat to depth, hold 2-3 seconds at the bottom keeping the elbows up and torso vertical, then stand." },
       { name: "Trap Bar Squat", category: "strength" as const, muscleGroup: "Quads", secondaryMuscles: ["Glutes", "Hamstrings"], equipment: "Trap Bar", movementType: "Squat", laterality: "bilateral" as const, instructions: "Stand inside the trap bar, squat to depth -- the neutral grip and centered load make this the easiest bar-loaded squat pattern to teach." },
@@ -2984,7 +2984,6 @@ async function main() {
       { name: "Downward Dog", category: "mobility" as const, muscleGroup: "Shoulders", secondaryMuscles: ["Hamstrings", "Calves", "Back"], equipment: "Bodyweight", movementType: "Mobility", laterality: "bilateral" as const, instructions: "Hands and feet on the floor, hips lifted high into an inverted V, pressing the heels toward the floor and the chest toward the thighs." },
       { name: "Thread the Needle", category: "mobility" as const, muscleGroup: "Back", secondaryMuscles: ["Shoulders"], equipment: "Bodyweight", movementType: "Mobility", laterality: "unilateral" as const, instructions: "From all fours, thread one arm under the body and through to the opposite side, rotating through the upper back, then return." },
       { name: "Supine Windshield Wipers", category: "mobility" as const, muscleGroup: "Obliques", secondaryMuscles: ["Core", "Hip Flexors"], equipment: "Bodyweight", movementType: "Mobility", laterality: "bilateral" as const, instructions: "Lying on the back with knees bent and lifted, rock both knees side to side under control, keeping the shoulders flat." },
-      { name: "Ankle Circles", category: "mobility" as const, muscleGroup: "Ankle", equipment: "Bodyweight", movementType: "Mobility", laterality: "unilateral" as const, instructions: "Lift one foot off the floor and slowly circle the ankle through its full range in each direction." },
       { name: "Hip Flexor Rock", category: "mobility" as const, muscleGroup: "Hip Flexors", equipment: "Bodyweight", movementType: "Activation", laterality: "unilateral" as const, instructions: "Half-kneeling with the pelvis tucked, gently rock forward and back to actively pump the hip flexor stretch rather than holding it static." },
       { name: "Prone Press-Up", category: "mobility" as const, muscleGroup: "Lower Back", equipment: "Bodyweight", movementType: "Mobility", laterality: "bilateral" as const, instructions: "Lying face down, press the upper body up through the arms while letting the hips stay on the floor, extending through the low back." },
     ];
@@ -3404,13 +3403,6 @@ async function main() {
         equipment: ["Resistance Band", "Anchor Point"],
         instructions:
           "Anchor a band at hip height behind the hitter and swing against the resistance to train explosive hip rotation strength through the swing path.",
-      },
-      {
-        name: "Bat Speed Overload/Underload Rounds",
-        skillType: "Hitting",
-        equipment: ["Weighted Bats", "Standard Bat"],
-        instructions:
-          "Alternate sets of swings between a heavier and lighter bat, then a standard bat, to train the nervous system to produce more bat speed through contrast.",
       },
       {
         name: "Max-Intent Tee Rounds",
@@ -4321,6 +4313,18 @@ async function main() {
       console.log(`Set videoEligible=false on ${skillVideoRestricted} skill drill(s) outside the camera-tracking-eligible set.`);
     }
 
+    // COLLAPSE THE LIBRARY ROWS THAT ARE ONE MOVEMENT WRITTEN TWICE.
+    //
+    // Runs HERE, after both libraries exist and after the videoEligible backfills, because a
+    // merge needs its survivor to be present -- mergeDuplicateExercise stands down rather than
+    // deleting the last copy if it is not. See server/merge-duplicate-exercises.ts for why this
+    // is a repoint and not a delete (almost every foreign key onto these two tables cascades).
+    //
+    // The duplicates' own seed definitions are GONE from the lists above, so they are not
+    // recreated after being merged; this call is what moves the history off rows an older deploy
+    // already created. Idempotent, so it costs one query per pair on every deploy after the first.
+    await mergeNamedDuplicateExercises();
+
     // Cross-sport Skill Bank paywall: which drills every Free Agent gets
     // free regardless of their signup sport (see
     // getVisibleSkillExercisesForFreeAgent and
@@ -4420,7 +4424,7 @@ async function main() {
           "Rotational Med Ball Scoop Throw",
           "Standing Rotational Med Ball Throw",
           "Resisted Rotation Drill",
-          "Bat Speed Overload/Underload Rounds",
+          "Overload/Underload Bat Drill",
           "Max-Intent Tee Rounds",
         ],
         6: [
