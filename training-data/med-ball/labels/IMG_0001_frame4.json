@@ -1,0 +1,61 @@
+{
+  "image": "IMG_0001_frame4.jpg",
+  "boxes": [
+    {
+      "class": "plate",
+      "x_center": 0.5164,
+      "y_center": 0.4143,
+      "width": 0.2328,
+      "height": 0.1423
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5073,
+      "y_center": 0.5683,
+      "width": 0.2216,
+      "height": 0.1352
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4816,
+      "y_center": 0.7051,
+      "width": 0.1922,
+      "height": 0.1246
+    },
+    {
+      "class": "plate",
+      "x_center": 0.2491,
+      "y_center": 0.7973,
+      "width": 0.1902,
+      "height": 0.1344
+    },
+    {
+      "class": "plate",
+      "x_center": 0.2709,
+      "y_center": 0.5125,
+      "width": 0.1086,
+      "height": 0.076
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8884,
+      "y_center": 0.6042,
+      "width": 0.1722,
+      "height": 0.0555
+    },
+    {
+      "class": "plate",
+      "x_center": 0.199,
+      "y_center": 0.4671,
+      "width": 0.0744,
+      "height": 0.0464
+    },
+    {
+      "class": "barbell",
+      "x_center": 0.8617,
+      "y_center": 0.6688,
+      "width": 0.2765,
+      "height": 0.3886
+    }
+  ]
+}

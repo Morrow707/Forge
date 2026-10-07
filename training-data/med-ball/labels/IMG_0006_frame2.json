@@ -1,0 +1,26 @@
+{
+  "image": "IMG_0006_frame2.jpg",
+  "boxes": [
+    {
+      "class": "plate",
+      "x_center": 0.5146,
+      "y_center": 0.5306,
+      "width": 0.158,
+      "height": 0.1261
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3208,
+      "y_center": 0.4733,
+      "width": 0.0805,
+      "height": 0.0756
+    },
+    {
+      "class": "barbell",
+      "x_center": 0.4763,
+      "y_center": 0.524,
+      "width": 0.378,
+      "height": 0.1488
+    }
+  ]
+}

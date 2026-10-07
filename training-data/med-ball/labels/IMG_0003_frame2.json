@@ -1,4 +1,47 @@
 {
   "image": "IMG_0003_frame2.jpg",
-  "boxes": []
+  "boxes": [
+    {
+      "class": "plate",
+      "x_center": 0.4987,
+      "y_center": 0.3936,
+      "width": 0.1187,
+      "height": 0.0718
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5029,
+      "y_center": 0.4731,
+      "width": 0.1134,
+      "height": 0.0749
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4996,
+      "y_center": 0.5434,
+      "width": 0.1055,
+      "height": 0.0614
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3637,
+      "y_center": 0.5922,
+      "width": 0.0929,
+      "height": 0.0486
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3353,
+      "y_center": 0.4632,
+      "width": 0.0631,
+      "height": 0.0472
+    },
+    {
+      "class": "barbell",
+      "x_center": 0.3574,
+      "y_center": 0.4695,
+      "width": 0.1289,
+      "height": 0.0155
+    }
+  ]
 }
