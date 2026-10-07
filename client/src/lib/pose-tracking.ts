@@ -848,6 +848,25 @@ export type ScaleEstimate = {
   demoted?: boolean;
 };
 
+/** The blend's own account of how it decided. Recorded, never read by the pipeline. */
+export type ScaleBlendTrace = {
+  inputs: { source: string; scale: number; uncertaintyFraction: number; demoted?: boolean }[];
+  toleranceMultiple: number;
+  /** The in-plane 3D ruler and the depth ruler are one sensor, so they vote once -- this is the
+   *  witness they became, and null when the take had only one of them. */
+  collapsedPose3d: { from: string[]; scale: number; uncertaintyFraction: number } | null;
+  voters: { source: string; scale: number; uncertaintyFraction: number }[];
+  /** The candidate the winning cluster was anchored on. The agreement test is asymmetric --
+   *  `|other/anchor - 1|` is a different number read each way -- so which anchor won decides
+   *  membership on a two-candidate take, and that is exactly what was unreadable before. */
+  clusterAnchor: string | null;
+  cluster: string[];
+  /** Every pair, both directions, with the tolerance each was judged against. */
+  pairwise: { anchor: string; other: string; ratio: number; tolerance: number; agrees: boolean }[];
+  blended: boolean;
+  plateSteppedOut: boolean;
+};
+
 export type ScaleVerdict = {
   scale: number | null;
   /** Which sources were used for the chosen number. */
@@ -860,6 +879,19 @@ export type ScaleVerdict = {
   /** True when two or more independent sources agreed -- the only case where anything here is
    *  corroborated rather than merely asserted. */
   corroborated: boolean;
+  /** EVERY STEP THE BLEND TOOK, SO A WEIGHT NOBODY EXPECTED CAN BE READ RATHER THAN GUESSED AT.
+   *
+   *  Added 2026-10-07. The bench filmed on build 634 recorded its weights as body_3d 100% /
+   *  shoulder_width 0%, and replaying this function against that take's exported candidates --
+   *  on the very commit the build was cut from -- returns 50/50. The row and the press replay
+   *  exactly; only the bench disagrees, and nothing in the export could say why, because
+   *  everything between the candidate list and the weights was invisible: whether the 3D pair
+   *  collapsed, which anchor won the cluster, whether the body-ruler average fired, whether a
+   *  plate stepped out. Scott: "So if you can't see, and can't guess, then put it in the export
+   *  file I download, that way we can exactly see what's happening."
+   *
+   *  `inputs` is the list EXACTLY as passed, so a take can be replayed offline with no phone. */
+  blendTrace?: ScaleBlendTrace;
   /** WHAT EACH VOTER WAS ACTUALLY WORTH IN THE BLEND, as a percentage of the total weight.
    *
    *  Added 2026-10-05. The four lifts beside the OVR on 2026-10-04 came back 8% low on range of
@@ -1093,14 +1125,29 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
   // The largest set that agrees with each other, preferring the one anchored on the most
   // trustworthy source when two clusters are the same size.
   let best: ScaleEstimate[] = [ranked[0]];
+  let clusterAnchor: ScaleEstimate | null = ranked[0] ?? null;
+  const pairwise: ScaleBlendTrace["pairwise"] = [];
   for (const anchor of ranked) {
     const cluster = ranked.filter((other) => {
       const tolerance =
         Math.max(anchor.uncertaintyFraction, other.uncertaintyFraction) * SCALE_AGREEMENT_MULTIPLE;
       const ratio = other.scale / anchor.scale;
-      return Math.abs(ratio - 1) <= tolerance;
+      const agrees = Math.abs(ratio - 1) <= tolerance;
+      if (anchor !== other) {
+        pairwise.push({
+          anchor: anchor.source,
+          other: other.source,
+          ratio: Math.round(ratio * 1000) / 1000,
+          tolerance: Math.round(tolerance * 1000) / 1000,
+          agrees,
+        });
+      }
+      return agrees;
     });
-    if (cluster.length > best.length) best = cluster;
+    if (cluster.length > best.length) {
+      best = cluster;
+      clusterAnchor = anchor;
+    }
   }
 
   // THE TWO BODY RULERS ARE AVERAGED WHEN THEY ARE ALL THE TAKE HAS, WHETHER OR NOT THEY AGREE.
@@ -1132,6 +1179,7 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
   // of the vote and is reported as the outlier it is. A plate that agrees with anything keeps
   // its rank; a plate that is the only other ruler keeps it too (one against one is a tie
   // rank is allowed to break).
+  let plateSteppedOut = false;
   if (best.length === 1 && best[0].source === "plate" && voters.length >= 3) {
     const withoutPlate = voters.filter((e) => e.source !== "plate");
     const rerankedWithoutPlate = [...withoutPlate].sort((a, b) => rank(a) - rank(b));
@@ -1146,6 +1194,7 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     }
     best = bestWithoutPlate;
     voters = withoutPlate;
+    plateSteppedOut = true;
   }
 
   const onlyBodyRulers = voters.every((e) => BODY_RULERS.includes(e.source));
@@ -1179,7 +1228,45 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     source: e.source,
     weightPct: Math.round((weightOf(e) / totalWeight) * 1000) / 10,
   }));
-  return { scale, agreedSources, outliers, corroborated: best.length > 1 && !blended, blended, weights };
+  // THE TRACE IS A RECORDING AND GATES NOTHING (Rule #1). It is built from state the blend has
+  // already finished using; no branch above reads it, nothing below can refuse on it, and the
+  // number returned is identical with it removed. `the-blend-shows-its-work.test.ts` pins that.
+  const round = (v: number) => Math.round(v * 1e8) / 1e8;
+  const blendTrace: ScaleBlendTrace = {
+    inputs: estimates.map((e) => ({
+      source: e.source,
+      scale: round(e.scale),
+      uncertaintyFraction: e.uncertaintyFraction,
+      ...(e.demoted ? { demoted: true } : {}),
+    })),
+    toleranceMultiple: SCALE_AGREEMENT_MULTIPLE,
+    collapsedPose3d: collapsed
+      ? {
+          from: pose3d.map((p) => p.source),
+          scale: round(collapsed.scale),
+          uncertaintyFraction: collapsed.uncertaintyFraction,
+        }
+      : null,
+    voters: voters.map((e) => ({
+      source: e.source,
+      scale: round(e.scale),
+      uncertaintyFraction: e.uncertaintyFraction,
+    })),
+    clusterAnchor: clusterAnchor?.source ?? null,
+    cluster: best.map((e) => e.source),
+    pairwise,
+    blended,
+    plateSteppedOut,
+  };
+  return {
+    scale,
+    agreedSources,
+    outliers,
+    corroborated: best.length > 1 && !blended,
+    blended,
+    weights,
+    blendTrace,
+  };
 }
 
 export type ShoulderScaleReading = {

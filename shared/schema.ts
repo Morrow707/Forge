@@ -9923,6 +9923,34 @@ export const trackingDiagnosticsSchema = z.object({
         })
         .optional()
         .nullable(),
+      // Declared the day it is added -- zod strips what it does not declare, silently.
+      scaleBlend: z
+        .object({
+          inputs: z.array(z.object({
+            source: z.string().max(80), scale: z.number(), uncertaintyFraction: z.number(),
+            demoted: z.boolean().optional(),
+          })).max(16),
+          toleranceMultiple: z.number(),
+          collapsedPose3d: z.object({
+            from: z.array(z.string().max(80)).max(4), scale: z.number(), uncertaintyFraction: z.number(),
+          }).nullable(),
+          voters: z.array(z.object({
+            source: z.string().max(80), scale: z.number(), uncertaintyFraction: z.number(),
+          })).max(16),
+          clusterAnchor: z.string().max(80).nullable(),
+          cluster: z.array(z.string().max(80)).max(16),
+          pairwise: z.array(z.object({
+            anchor: z.string().max(80), other: z.string().max(80),
+            ratio: z.number(), tolerance: z.number(), agrees: z.boolean(),
+          })).max(64),
+          blended: z.boolean(),
+          plateSteppedOut: z.boolean(),
+          identity: z.string().max(120),
+          romBucket: z.string().max(60).nullable(),
+          rulerUncertainties: z.record(z.string().max(40), z.number()),
+        })
+        .optional()
+        .nullable(),
       scaleWitnesses: z
         .object({ votingCount: z.number(), sources: z.array(z.string().max(60)).max(12) })
         .optional()

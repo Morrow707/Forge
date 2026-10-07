@@ -1464,6 +1464,7 @@ export function AvBarTrackerDialog({
       shoulderRuler?: NonNullable<TrackingDiagnostics["calibration"]>["shoulderRuler"];
       axisForeshortening?: NonNullable<TrackingDiagnostics["calibration"]>["axisForeshortening"];
       objectGate?: NonNullable<TrackingDiagnostics["calibration"]>["objectGate"];
+      scaleBlend?: NonNullable<TrackingDiagnostics["calibration"]>["scaleBlend"];
       scaleWitnesses?: NonNullable<TrackingDiagnostics["calibration"]>["scaleWitnesses"];
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
       axisSource?: MovementAxisSource;
@@ -2170,6 +2171,32 @@ export function AvBarTrackerDialog({
       };
       calibrationDiagnostics.axisForeshortening = axisForeshortening;
       calibrationDiagnostics.objectGate = objectGateDiagnostics;
+      // EVERY STEP THE SCALE BLEND TOOK, plus WHICH of the 54 filmable identities' numbers were
+      // in play. Scott, 2026-10-07: "if you can't see, and can't guess, then put it in the export
+      // file I download, that way we can exactly see what's happening."
+      //
+      // The identity is here because the record is per capture and each capture belongs to ONE
+      // filmable thing: `shared/camera-tunables-by-lift.ts` hands this take its own record, and
+      // without the name on the row you cannot tell whose numbers produced the weights. The
+      // MECHANISM stays shared -- one blend, one arbiter, read the "its own numbers" section --
+      // what is per-lift is the numbers it was handed, so those are what get written down.
+      //
+      // It is a RECORDING. It gates nothing and withholds nothing (Rule #1): the scale returned
+      // is identical with this block deleted, which `the-blend-shows-its-work.test.ts` proves.
+      if (scaleVerdict.blendTrace) {
+        const t = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName)).values;
+        calibrationDiagnostics.scaleBlend = {
+          ...scaleVerdict.blendTrace,
+          identity: exerciseName,
+          romBucket: romBucketForExercise(exerciseName) ?? null,
+          rulerUncertainties: {
+            height: t.heightRulerUncertainty,
+            depth: t.depthRulerUncertainty,
+            depthBias: t.depthRulerBias,
+            ankle3d: t.ankle3DRulerUncertainty,
+          },
+        };
+      }
       // HOW MANY WITNESSES THE SCALE ACTUALLY HAD. `scaleCorroborated` already says yes or no;
       // this says how thin. One witness is the state every badly-wrong take of this session was
       // in, so it is recorded as a number rather than counted off the candidate list by hand.

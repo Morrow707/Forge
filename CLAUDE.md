@@ -1110,6 +1110,36 @@ halves before splitting anything else:
   carries. Whole unit suite, OVR fixtures and 20-capture replay corpus unchanged.
   Open and NOT fitted: the row's +11.9% mean beside a -15.3% ROM, which cannot both be scale.
   Calibration work: uploaded on commit.
+- Build **635+** was cut 2026-10-07 from the three lifts filmed on 634 beside the OVR
+  (docs/camera-tracking-notes.md, "Three lifts beside OVR, build 634, 2026-10-07").
+  **THE BENCH IS A SCALE ERROR AND `axisForeshortening` SETTLED IT FIRST TAKE: 1.009**, where 1.65
+  would have meant the camera could not see the movement. The geometry chase is closed. Two more
+  confirmed the same way: `subjectFacing` reads `side_on` on the bench (the rotation-invariant
+  facing fix works on real footage), and `gripAcrossBodyFraction` is 0.956-0.999 on all three, so
+  the object gate's yardstick is intact and the collapsed-yardstick hypothesis is dead.
+  **SCALE AND TIMING ARE TWO DIFFERENT ERRORS AND EVERY EARLIER SESSION READ THEM AS ONE.** The
+  bench's ROM is 26% LOW while its mean is 20% HIGH, which cannot both be scale. The concentric
+  window is short on all three (-13.5%, -22.9%, -22.7%) and the drive window the mean is computed
+  over is 38% short on the bench. Proof in one line: the bench's true ROM over the sensor's time
+  is 0.690, the OVR's mean exactly -- the velocity computation is sound, both its inputs are wrong.
+  `windows` (already exported) says the TRAVEL trim does the cutting, not `DRIVE_ONSET_FRACTION`.
+  That is the next fit and it is now well-posed. **NOTHING was refitted this round**: a constant
+  fitted at the end of a long session is how a bad one gets in.
+  **AND WHAT COULD NOT BE SEEN WENT INTO THE EXPORT RATHER THAN BEING GUESSED AT.** The bench
+  recorded `body_3d` 100% / `shoulder_width` 0%; replaying the blend on that take's own candidates,
+  on 634's commit, returns 50/50, and nothing in between was visible. Scott: "So if you can't see,
+  and can't guess, then put it in the export file I download, that way we can exactly see what's
+  happening." `calibration.scaleBlend` carries the inputs exactly as passed (a take replays offline
+  with no phone), the tolerance, the collapsed 3D witness, the voters, the winning cluster AND ITS
+  ANCHOR, every pair in both directions, and the blended/plateSteppedOut flags -- plus `identity`,
+  `romBucket` and the ruler uncertainties THIS lift was handed, since the record is per capture and
+  each capture is one of the 54. The mechanism stays shared; the numbers it was given are what get
+  written down. **It records and gates nothing** (Rule #1), pinned by
+  `the-blend-shows-its-work.test.ts`.
+  **Recorded, not fixed: the agreement test is ASYMMETRIC.** `|other/anchor - 1| <= tol` reads
+  differently each way; the bench's pair clears 0.4 anchored on the larger and fails anchored on
+  the smaller, and on a two-candidate take that decides everything. `pairwise` now shows both
+  directions. Calibration work: uploaded on commit.
 - **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
   **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
   the numbering in this file has drifted twice. Read the run list, not the last number written

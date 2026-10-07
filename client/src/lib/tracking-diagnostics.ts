@@ -451,6 +451,27 @@ export type TrackingDiagnostics = {
       rejectedReasons: string[];
       appliedCorrection: boolean;
     };
+    /** EVERY STEP THE SCALE BLEND TOOK, and whose numbers it was handed.
+     *
+     *  Added 2026-10-07 because a weight nobody could explain is a weight nobody can fix: the
+     *  build-634 bench recorded body_3d 100% / shoulder_width 0% and the same function replayed
+     *  on the same commit returns 50/50, with nothing in between visible. Carries the inputs
+     *  exactly as passed, so a take replays offline with no phone. Records; gates nothing. */
+    scaleBlend?: {
+      inputs: { source: string; scale: number; uncertaintyFraction: number; demoted?: boolean }[];
+      toleranceMultiple: number;
+      collapsedPose3d: { from: string[]; scale: number; uncertaintyFraction: number } | null;
+      voters: { source: string; scale: number; uncertaintyFraction: number }[];
+      clusterAnchor: string | null;
+      cluster: string[];
+      pairwise: { anchor: string; other: string; ratio: number; tolerance: number; agrees: boolean }[];
+      blended: boolean;
+      plateSteppedOut: boolean;
+      /** Which of the 54 filmable identities this capture is, and the numbers it was handed. */
+      identity: string;
+      romBucket: string | null;
+      rulerUncertainties: Record<string, number>;
+    };
     /** How many rulers actually carried weight. One is the state every badly-wrong take of the
      *  2026-10-06 session was in, so it is a number here rather than something counted by hand. */
     scaleWitnesses?: { votingCount: number; sources: string[] };

@@ -3661,3 +3661,65 @@ touched, so the original guarantee holds.
 **The lesson is about where the test ran, not what it asserted.** Seed logic that branches on
 "what is already in the database" cannot be proved on an empty one. Run it against a database a
 previous version of the seed has already written to.
+
+## Three lifts beside OVR, build 634, 2026-10-07: two errors, and they are separable
+
+| lift | mean | OVR | err | peak | OVR | err | ROM | OVR | err | witnesses |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Barbell Shoulder Press (logged for a push press) | 1.40 | 1.09 | +28.4% | 1.79 | 1.65 | +8.5% | 71.4 | 64.3 | +11.1% | 3 |
+| Pendlay Row | 1.06 | 1.17 | -9.4% | 1.32 | 1.89 | -30.2% | 35.2 | 56.1 | **-37.3%** | 2 |
+| Bench Press | 0.83 | 0.69 | +20.3% | 1.08 | 0.97 | +11.3% | 25.7 | 34.8 | -26.1% | **1** |
+
+**THE BENCH IS A SCALE ERROR, AND `axisForeshortening` SETTLED IT ON ITS FIRST TAKE.** Build 633's
+note said ~1.65 would mean the camera could not see the movement and ~1.0 would mean a scale error
+after all. It read **1.009**. The geometry chase is closed; do not reopen it.
+Two more the same way: `subjectFacing` now reads `side_on` on the bench, so the rotation-invariant
+facing fix works on real footage and not only on fixtures; and `objectGate.gripAcrossBodyFraction`
+is 0.956-0.999 on all three, so the yardstick every object gate is judged by is INTACT -- which
+kills the collapsed-yardstick hypothesis rather than confirming it.
+
+**SCALE AND TIMING ARE TWO DIFFERENT ERRORS AND EVERY EARLIER SESSION READ THEM AS ONE.** The
+bench's range of motion is 26% LOW while its mean is 20% HIGH. Those cannot both be scale: a scale
+error moves distance and velocity the same way. Mean is distance over time, and both inputs are
+wrong independently --
+
+    OVR's own avg-over-ROM implies a concentric of   press 0.590s   row 0.480s   bench 0.504s
+    Forge's concentricSeconds                              0.51      0.37        0.39   (-13.5%, -22.9%, -22.7%)
+    Forge's DRIVE window, which the mean is over           --        0.332       0.310  (bench -38%)
+
+and the proof is one line: the bench's true ROM (0.348m) over the sensor's time (0.504s) is
+**0.690**, the OVR's mean exactly. **The velocity computation is sound. Both of its inputs are
+wrong.** `windows` (per rep, already exported) shows where: phase 0.600s -> travel 0.367s ->
+drive 0.334s, so the TRAVEL trim does the cutting, not `DRIVE_ONSET_FRACTION`. That is the next
+fit, and it is now well-posed: three paired lifts, same sign, and a measurement that separates it
+from scale.
+
+**AND ONE THING I COULD NOT SEE, WHICH IS WHY THE EXPORT GREW.** The bench recorded its weights as
+`body_3d` 100% / `shoulder_width` 0%; replaying `reconcileScaleEstimates` against that take's own
+exported candidates, on the commit build 634 was cut from, returns **50/50**. The row and the press
+replay exactly. Everything between the candidate list and the weights was invisible -- whether the
+3D pair collapsed into one witness, which anchor won the cluster, whether the body-ruler average
+fired, whether a plate stepped out -- so the only options were to guess a mechanism or to stop.
+Scott: *"So if you can't see, and can't guess, then put it in the export file I download, that way
+we can exactly see what's happening."*
+
+`calibration.scaleBlend` is that: the inputs EXACTLY as passed (so a take replays offline with no
+phone), the tolerance multiple, the collapsed 3D witness and what it stood for, the voters, the
+winning cluster AND ITS ANCHOR, every pair in both directions with the tolerance each was judged
+against, and the `blended` / `plateSteppedOut` flags. It also carries `identity`, `romBucket` and
+the ruler uncertainties this lift was handed, because the record is per capture and each capture
+belongs to ONE of the 54 filmable things -- without the name on the row you cannot tell whose
+numbers produced the weights. The MECHANISM stays shared (one blend, one arbiter); what is
+per-lift is the numbers it was given, so those are what get written down.
+
+**It is a recording and it gates nothing** (Rule #1). `the-blend-shows-its-work.test.ts` asserts
+the number is identical whatever the trace says, that a take where every ruler disagrees with
+every other still produces a number, and that replaying from the trace's own inputs reproduces
+the verdict.
+
+**A real defect found while looking, recorded not yet fixed: the agreement test is ASYMMETRIC.**
+`|other/anchor - 1| <= tolerance` reads differently each way round -- the bench's pair is 1.44x
+apart, which clears a 0.4 tolerance anchored on the larger and fails it anchored on the smaller.
+The largest-cluster loop hides it most of the time; on a two-candidate take it decides everything.
+`pairwise` now records both directions so the next take shows it rather than hiding it, and a
+symmetric measure is a change to make with a paired take in hand, not on a Friday.
