@@ -63,7 +63,7 @@ function currentUser(req: Request) {
 function forgeSide(now: Date): InstitutionalAgreementForgeSide {
   return {
     signerName: process.env.INSTITUTIONAL_AGREEMENT_SIGNER_NAME || "Scott Morrow",
-    signerTitle: process.env.INSTITUTIONAL_AGREEMENT_SIGNER_TITLE || "Founder",
+    signerTitle: process.env.INSTITUTIONAL_AGREEMENT_SIGNER_TITLE || "Founder and CEO",
     // The Effective Date is the date the copy is generated, which is what the header line and the
     // Forge signature date both carry.
     effectiveDate: now.toLocaleDateString("en-US", {
