@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
 import { MarketingNav, MarketingFooter } from "@/components/marketing-shell";
-import { bandForAthleteCount, formatCents } from "@shared/billing-tiers";
+import { bandForAthleteCount, formatCents, BETA_NOT_CHARGING_NOTICE } from "@shared/billing-tiers";
 import {
   FREE_AGENT_TIERS,
   FREE_AGENT_TIER_ORDER,
@@ -525,6 +525,8 @@ export default function LandingPage() {
                 </h3>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">Training on your own.</p>
+              {/* Same sentence as /pricing and the high-schools FAQ, from the same constant. */}
+              <p className="mt-1 text-sm font-semibold">{BETA_NOT_CHARGING_NOTICE}</p>
               <div className={cn("mt-6 grid gap-4 sm:grid-cols-2", FREE_AGENT_TIER_GRID_COLS)}>
                 {FREE_AGENT_CARDS.map((t) => (
                   <div key={t.name} className="rounded-lg border border-border p-5">

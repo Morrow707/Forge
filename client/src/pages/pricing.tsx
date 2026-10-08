@@ -13,6 +13,7 @@ import {
   formatCents,
   ORG_PER_ATHLETE_CENTS,
   ORG_BLOCK_SIZE,
+  BETA_NOT_CHARGING_NOTICE,
 } from "@shared/billing-tiers";
 import {
   FREE_AGENT_TIERS,
@@ -20,6 +21,7 @@ import {
   FREE_AGENT_TIER_GRID_COLS,
   FREE_AGENT_ADD_ONS,
   SPORT_COACH_ADD_ON_IDS,
+  addOnIsOffered,
   ALL_CLASSES_ADD_ON_ID,
 } from "@shared/free-agent-tiers";
 import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
@@ -68,6 +70,10 @@ export default function PricingPage() {
             One roster-based plan per program. Every tier includes AI coaching, form-check video
             analysis, programming, and nutrition, personalization scales with you.
           </p>
+          {/* Said BEFORE any number on the page, because the page's whole job is to quote
+              numbers and none of them is being collected yet. One constant, three surfaces --
+              see BETA_NOT_CHARGING_NOTICE for why it is not three sentences. */}
+          <p className="text-sm font-semibold">{BETA_NOT_CHARGING_NOTICE}</p>
         </div>
 
         {/* Every tier above claims "form-check video analysis" as a real, working feature, and
@@ -262,20 +268,32 @@ export default function PricingPage() {
             </p>
             <p className="mt-1 text-muted-foreground">{CLASS_PRICING_LINE}</p>
           </div>
-          <p className="mb-4 mt-8 text-center text-sm text-muted-foreground">
-            Sport-specialist coaches, available as add-ons on any Free Agent tier:
-          </p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {SPORT_COACH_ADD_ON_IDS.map((id) => {
-              const addOn = FREE_AGENT_ADD_ONS[id];
-              return (
-                <div key={id} className="rounded-md border border-border p-3 text-center text-sm">
-                  <span className="font-semibold">{addOn.label}</span>
-                  <span className="text-muted-foreground">, {formatCents(addOn.monthlyPriceCents)}/mo</span>
-                </div>
-              );
-            })}
-          </div>
+          {/* A WITHDRAWN ADD-ON IS NOT PRICED ON A PUBLIC PAGE. The heading goes with the
+              cards, for the reason athlete/upgrade.tsx already spells out: with the sport
+              coaches withheld, "available as add-ons on any Free Agent tier" is an offer of an
+              empty shelf. All three are withdrawn today (WITHDRAWN_ADD_ONS), so this whole
+              block renders nothing -- and it was pricing them at $7.99/mo on the one page a
+              stranger reads, in the sitemap at priority 0.9, while every checkout path refused
+              them (createFreeAgentAddOnCheckout) and the signed-in upgrade screen correctly
+              drew no card at all. Found 2026-10-08 by the launch audit's price sweep. */}
+          {SPORT_COACH_ADD_ON_IDS.filter(addOnIsOffered).length > 0 && (
+            <>
+              <p className="mb-4 mt-8 text-center text-sm text-muted-foreground">
+                Sport-specialist coaches, available as add-ons on any Free Agent tier:
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {SPORT_COACH_ADD_ON_IDS.filter(addOnIsOffered).map((id) => {
+                  const addOn = FREE_AGENT_ADD_ONS[id];
+                  return (
+                    <div key={id} className="rounded-md border border-border p-3 text-center text-sm">
+                      <span className="font-semibold">{addOn.label}</span>
+                      <span className="text-muted-foreground">, {formatCents(addOn.monthlyPriceCents)}/mo</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           <div className="mx-auto mt-6 flex max-w-lg items-start gap-3 rounded-md border border-border p-4 text-sm">
             <Video className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />

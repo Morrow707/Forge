@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import {
   FREE_AGENT_ADD_ONS,
   SPORT_COACH_ADD_ON_IDS,
+  addOnIsOffered,
   type FreeAgentAddOnId,
 } from "@shared/free-agent-tiers";
 import { formatCents } from "@shared/billing-tiers";
@@ -123,7 +124,17 @@ export default function AthleteSportCoaches() {
               // On iOS the price shown has to be StoreKit's own, and a missing one
               // means there is no Product to buy. On the web the Stripe checkout
               // quotes the shared constant.
-              const sellable = billingOpen && (!nativeIap || iapPrice !== null);
+              // A WITHDRAWN ADD-ON IS NEVER SELLABLE, whatever the billing switch says.
+              //
+              // The card stays -- this page is also how somebody who HOLDS one opens it, and
+              // WITHDRAWN_ADD_ONS' own comment is explicit that an admin still reaches them
+              // because testing is what stands between here and offering them. What goes is the
+              // price and the buy button. Without this the three withdrawn sport coaches became
+              // a priced offer the moment BILLING_LIVE flipped, on a product whose checkout
+              // refuses it (createFreeAgentAddOnCheckout) -- money asked for, nothing to grant.
+              // Latent rather than live only because billingOpen is false today.
+              const offered = addOnIsOffered(id);
+              const sellable = offered && billingOpen && (!nativeIap || iapPrice !== null);
               const price = nativeIap ? iapPrice : formatCents(addOn.monthlyPriceCents);
               return (
                 <Card
@@ -181,7 +192,13 @@ export default function AthleteSportCoaches() {
                       // plan" was the other wrong answer: there is no plan this is
                       // in, and nothing sells it yet.
                       <p className="mt-auto rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
-                        Not available yet, this coach will be purchasable when billing opens.
+                        {offered
+                          ? "Not available yet, this coach will be purchasable when billing opens."
+                          : // A withdrawn coach is not waiting on the billing switch, so promising
+                            // it "when billing opens" is a date that will not arrive. Same standard
+                            // as the beta sentence above it: the branch is read precisely by the
+                            // people for whom the other wording would be false.
+                            "Not available yet, this coach is still being tested."}
                       </p>
                     )}
                     {unlocked && !owned && (

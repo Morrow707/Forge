@@ -13,6 +13,7 @@
  * The second because whether an emailed claim link is verifiable consent is with counsel
  * (docs/legal-open-questions.md, question 5), and this page describes the mechanism instead. */
 import { ORG_PER_ATHLETE_CENTS } from "./billing-tiers";
+import { BETA_NOT_CHARGING_NOTICE } from "./billing-tiers";
 import { MOVEMENTS } from "./movement-library";
 import { VIDEO_RETENTION } from "./video-retention";
 
@@ -25,7 +26,7 @@ const validatedList = `${validated.slice(0, -1).join(", ")} and ${validated[vali
 export const HIGH_SCHOOLS_FAQ: FaqEntry[] = [
   {
     question: "What does Forge cost a school?",
-    answer: `${perAthlete} per athlete per month, in roster bands, with no per-coach fee. During the beta nothing is charged: a school picks its band at signup by typing how many athletes it expects, and billing is switched on for everyone at the same time, later.`,
+    answer: `${perAthlete} per athlete per month, in roster bands, with no per-coach fee. ${BETA_NOT_CHARGING_NOTICE} A school picks its band at signup by typing how many athletes it expects, and billing is switched on for everyone at the same time, later.`,
   },
   {
     question: "What happens when an athlete under 18 is added to a roster?",
