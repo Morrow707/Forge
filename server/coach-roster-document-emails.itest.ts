@@ -149,9 +149,24 @@ describe("sending a public document to the roster", () => {
     const types = list.body.map((d: any) => d.type);
     expect(types).toContain("privacy_policy");
     expect(types).toContain("terms_of_service");
-    // The parental notice is a legal type but not a public one.
-    expect(types).not.toContain("parental_notice");
-    const refused = await client.post("/api/coach/legal-documents/parental_notice/email-roster");
+    // THE PARENTAL NOTICE IS SENDABLE AS OF 2026-10-08, and this assertion was its opposite.
+    //
+    // It was excluded from PUBLIC_LEGAL_DOC_TYPES, so this file pinned "a legal type but not a
+    // public one" using it as the example. It is public now -- it 404'd on both public routes on
+    // the live host while the other six served, which is indefensible for the one document
+    // addressed to a guardian who may have no account -- and being roster-emailable is the point
+    // rather than a side effect: it is the document a coach has the most obvious reason to send
+    // to every guardian at once, and until now the one they could not.
+    expect(types).toContain("parental_notice");
+    // The refusal still has to be proved, so it needs a type that is genuinely not public. The
+    // institutional agreement is the right one and a better case than the parental notice ever
+    // was: it is a real legalDocumentTypeEnum value, it is deliberately absent from both
+    // LEGAL_DOC_TYPES and the public set, and it is a SCHOOL's contract -- filled with one
+    // coach's own details and signed by them (server/institutional-agreement-routes.ts). A coach
+    // blasting it to every parent on their roster is a real defect, where sending them the notice
+    // addressed to them is the feature.
+    expect(types).not.toContain("institutional_agreement");
+    const refused = await client.post("/api/coach/legal-documents/institutional_agreement/email-roster");
     expect(refused.status).toBe(404);
     expect(testOutbox).toHaveLength(0);
   });

@@ -943,18 +943,51 @@ async function hasAthletePaidForAiAccess(
     // skills builder is. Video stays its own upgrade, which is the split the price
     // list actually sells.
     const account = await storage.getFreeAgentBillingAccount(athleteId);
-    const entitlements = entitlementsForFreeAgentTier(account?.freeAgentTier ?? null);
-    // SKILLS HAS ITS OWN FLAG NOW, AND IT USED TO RIDE ON hasAiChat.
-    //
-    // A skill session is largely a CAMERA session -- sprint timing and mechanics scoring are the
-    // whole of what a skill drill measures -- so skills belong with video form-check, not with
-    // the chat coach. Riding on hasAiChat put the camera-dependent half of the product inside
-    // the one tier explicitly sold without camera access. See FreeAgentTierDef.hasSkills.
-    if (entitlement === "video") return entitlements.hasVideoFormCheck;
-    if (entitlement === "skillsAi") return entitlements.hasSkills;
-    return entitlements.hasAiChat;
+    return tierGrants(account?.freeAgentTier ?? null, entitlement);
   }
+  // A TIER ON FILE IS HONOURED WHETHER OR NOT THE MONEY SWITCH IS ON.
+  //
+  // Until 2026-10-08 this line was the whole of the not-live branch, so with BILLING_LIVE off
+  // every Free Agent was refused the camera, the skills side and the AI chat REGARDLESS of what
+  // they held -- only the one hardcoded demo address got through. That is the right default for
+  // an account with nothing on file (nobody should get a paid feature because billing is off),
+  // and it was wrong for an account that HAS a tier, because of where freeAgentTier comes from:
+  // nothing writes it but an admin assigning one on /admin/billing, or a verified purchase
+  // (server/billing.ts' Stripe webhook and applyAppleIapVerification).
+  //
+  // So a TestFlight tester who bought AI Coach + Video in the StoreKit sandbox -- which is what
+  // builds 612 to 614 were cut to prove -- had the purchase verified, the row written, and the
+  // upgrade screen marking it as their current plan (build 613), and still saw no record button.
+  // That is precisely the "numbers on screen, video gone ... a paywall that reads as a bug"
+  // failure cameraAccessFor's own comment says it exists to prevent, arriving by a different
+  // door. It also made the launch audit's "three Free Agents, one per tier, each seeing exactly
+  // its tier" row unrunnable before launch day, since the only way to see a tier at all was to
+  // turn the money on platform-wide.
+  //
+  // This GRANTS only what an admin or a verified purchase put on the account, and a tier is null
+  // for every account that has neither, so nothing any real account sees today changes.
+  const assigned = await storage.getFreeAgentBillingAccount(athleteId);
+  if (assigned?.freeAgentTier) return tierGrants(assigned.freeAgentTier, entitlement);
   return COMPED_FREE_AGENT_ENTITLEMENTS[email]?.has(entitlement) ?? false;
+}
+
+/** The three Free Agent gates read off a resolved tier.
+ *
+ * ONE function, TWO callers -- the money-on branch above and the tier-on-file branch below it --
+ * for the reason cameraAccessFor's own comment gives about itself: two copies of a mapping this
+ * shape drift silently, and the drift is only ever visible to the athlete it strands mid-set.
+ *
+ * SKILLS HAS ITS OWN FLAG, AND IT USED TO RIDE ON hasAiChat. A skill session is largely a CAMERA
+ * session -- sprint timing and mechanics scoring are the whole of what a skill drill measures --
+ * so skills belong with video form-check, not with the chat coach. Riding on hasAiChat put the
+ * camera-dependent half of the product inside the one tier explicitly sold without camera
+ * access. See FreeAgentTierDef.hasSkills.
+ */
+function tierGrants(freeAgentTier: string | null, entitlement: AiEntitlement): boolean {
+  const entitlements = entitlementsForFreeAgentTier(freeAgentTier);
+  if (entitlement === "video") return entitlements.hasVideoFormCheck;
+  if (entitlement === "skillsAi") return entitlements.hasSkills;
+  return entitlements.hasAiChat;
 }
 
 // Gates the "full function" AI features -- program builder chat/draft, AI
