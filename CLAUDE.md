@@ -2908,3 +2908,93 @@ acted on.
   forbids and that the scan above exists to catch. If it is ever genuinely wanted it is its own
   decision, taken after 1.0 is approved, and it means removing the in-app purchase path
   entirely rather than adding a web one beside it.
+
+## The launch audit's reachable rows, run 2026-10-08 against the live host
+
+Scott: "look over the rest of the audit, now that you have access to the url can you fix some of
+the other things on your own?" Six dimensions probed read-only against
+`forgeperformancesystems.com` (GET and HEAD only; no write was ever sent to production, and no
+real athlete's clip was fetched to establish anything below -- every upload probe used a
+made-up filename, which is enough because the gate answers 403 before the file lookup and an
+ungated path answers 404).
+
+**A MINOR'S FORM-CHECK CLIP WAS PUBLIC BY URL THE MOMENT A COACH SAVED IT AS A REFERENCE.** The
+one finding that mattered. `POST /api/coach/reference-clips/from-athlete` calls
+`copyUploadedFile(videoUrl, "reference-clips")`; the source is in `form-videos` and gated, and
+`reference-clips` was in no list, so the copy was served with no session, no signature and no
+expiry, forever. The row records `source: "from_athlete"` and `sourceAthleteId`, so the server
+knew whose footage it was. `knowledge-sources` -- the purchased textbook -- was unclassified the
+same way. Both gated; signing is a global `res.json` sweep keyed on the same predicate, so
+nothing needed rewiring and nothing broke.
+**THE HAND-WRITTEN LIST WAS THE REAL DEFECT.** `media-url-signing.test.ts` is thorough about the
+scheme and named four of six gated directories by hand; a list cannot fail for a directory nobody
+put on it. `every-upload-directory-is-classified.test.ts` now DISCOVERS all fourteen (both
+spellings -- the `path.join(UPLOADS_ROOT, "x")` destination and the `/uploads/x/` stored URL,
+because a scan knowing only one would have missed this exactly where it mattered) and requires
+each to be gated or listed public with a reason. It also asserts `copyUploadedFile` only ever
+writes into a gated directory, which is the general rule: **a copy of a gated file is still that
+file.** The six left public each carry their reason; `team-logos` and `team-branding` cannot be
+gated at all, since they draw on `/team/:slug` and the login screen before there is a session.
+
+**A PURCHASED TIER WAS NOT HONOURED WITH `BILLING_LIVE` OFF, AND THE TWO SIDES OF THE APP READ
+OPPOSITE SWITCHES.** Worth keeping at hand, because each reads as the other's bug:
+- **Coach** (`getEntitlements`): `!ENFORCEMENT_ENABLED || isBetaAccount || trialActive` ->
+  everything unlocked. With `BILLING_ENFORCEMENT_ENABLED` unset, flipping `isBetaAccount` off on
+  one coach changes NOTHING; the global switch short-circuits first.
+- **Free Agent** (`hasAthletePaidForAiAccess`): never consulted `isBetaAccount` at all. It asked
+  `BILLING_LIVE`, and with it off returned false for EVERY Free Agent -- no camera, no skills, no
+  AI chat, whatever they held -- bar the hardcoded `freeagent@forge.app`.
+So a tester who bought AI Coach + Video in the StoreKit sandbox had the purchase verified, the row
+written and build 613's upgrade screen marking it their current plan, and still saw no record
+button. Builds 612-614 proved those purchases were RECORDED; nothing proved they were HONOURED.
+A tier on file is now honoured either way (`tierGrants`, one function for both branches). It grants
+only what an admin or a verified purchase put there, and signup never writes `freeAgentTier`, so
+no real account's experience changed. **FOUR AUDIT ROWS WERE UNRUNNABLE BECAUSE OF THIS** -- B6,
+D1, D9 and F2 all say to flip `isBetaAccount` to see a Free Agent gate, which could never have
+worked. B6 works now; the coach-side rows still need the global enforcement switch.
+**Do not set `BILLING_LIVE=true` to run the audit** -- it also opens every web checkout
+(`chargingClosed`) against real Stripe prices.
+
+**THREE WITHDRAWN SPORT COACHES WERE PRICED AT $7.99/mo ON `/pricing`**, live, in the sitemap at
+priority 0.9, while `createFreeAgentAddOnCheckout` refused all three. `athlete/upgrade.tsx` had
+filtered correctly all along and carries the argument ("A card saying $7.99, coming soon is still
+an offer"), which makes the other two surfaces an oversight. `/pricing` now filters, heading and
+all. `athlete/sport-coaches.tsx` is fixed DIFFERENTLY on purpose: that page is how somebody who
+HOLDS one opens it, so the card stays and only the price and buy button go. Latent there, because
+`billingOpen` is false today. `tier-withdrawal-machinery.test.ts` had no add-on half at all --
+that is why nothing caught it -- and now scans every surface mapping `SPORT_COACH_ADD_ON_IDS`.
+
+**AND NO PUBLIC PAGE SAID NOTHING WAS BEING CHARGED.** This file asserted that "the pricing page
+still says Forge is not charging yet" and row F3 repeated it; the only such sentence in the repo
+was `/pricing`'s `<meta name="description">`, which no reader sees, plus one hardcoded clause in a
+`/for-high-schools` FAQ answer. `BETA_NOT_CHARGING_NOTICE` is now one constant on all three
+surfaces, which is the load-bearing part: at launch the sentence has to leave all three at once.
+**The Terms are deliberately excluded** -- s11 describes the paid plans on purpose, and
+`beta-pricing-notice.test.ts` says so in words so nobody sprays the constant over every
+money-mentioning surface.
+
+**TWO AUDIT ROWS NOW PASS ON EVIDENCE, and one warning goes with them.**
+- **E1's signed-out quarter.** All 280 registered `GET /api` routes fetched with no cookie: 274
+  returned 401, and not one returned a name, an email, a date of birth, a stack trace or a 500.
+  Only nine have no auth middleware on the line and all nine are deliberately public. Zero
+  unguarded write routes (from source -- no write was sent). The authed page prefixes all return a
+  byte-identical 4,884-byte SPA shell. Traversal holds; `X-Forwarded-For` cannot bypass the rate
+  limiters (`trust proxy` is 1, not `true`); the waiver directory is gated. The other three
+  quarters of E1 need real credentials and are still Scott's.
+- **G2, better than the two validators would have answered it.** 20/20 JSON-LD blocks parse, every
+  @type real, **zero invented property names**, and the no-ratings rule verified on the LIVE output
+  rather than the source. Open Graph complete on all 24 pages with every declared
+  `og:image:width/height` matching the real PNG IHDR; `og:url` == canonical, `og:title` == title,
+  `twitter:image` == `og:image` throughout. Titles 35-59 chars and distinct, descriptions 59-149
+  and distinct. **The Smart App Banner is confirmed on the live host for the first time**:
+  `<meta name="apple-itunes-app" content="app-id=6801950011">`. `facebookexternalhit`, `Twitterbot`
+  and `Googlebot` each receive the same prerendered HTML as an anonymous fetch.
+- **THE WARNING: Google's Rich Results Test WILL report the Software App item as missing required
+  fields, and that is CORRECT.** The `SoftwareApplication` node carries no `aggregateRating` and no
+  `review` because Forge has none. Do not "fix" it by inventing one -- `seo-head.test.ts` refuses
+  exactly that, and it would be a fabricated rating on a public page.
+
+**Recorded, not fixed:** CSP is report-only by documented decision (`/api/csp-report` is
+collecting the signal); and `ratelimit-remaining` moves non-monotonically across requests, which
+reads as per-instance in-memory counters on Render -- so the effective limit is multiplied by the
+instance count, which matters only once there is real traffic.
