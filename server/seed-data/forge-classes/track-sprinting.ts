@@ -35,13 +35,13 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
         {
           title: "The Drills, and Your Baseline",
           body:
-            "The A-Skip is the drill that ties posture, arms and legs together: a skip with the knee driving up to hip height, the foot under the knee, the opposite arm driving, and the foot striking the ground under the body. Done slowly and correctly it is the whole sprint stride in miniature, which is why it is in nearly every chapter.\n\nYour baseline is two things. A 40-Yard Dash, timed with a stopwatch or the track's clock, from a standing start, best of three. And a video of the run from the side.\n\nBe honest about the time and keep the video. Chapter 6 asks you to run it again and compare, and the video will show you what the clock cannot: whether you are running differently, not just faster.",
+            "The A-Skip is the drill that ties posture, arms and legs together: a skip with the knee driving up to hip height, the foot under the knee, the opposite arm driving, and the foot striking the ground under the body. Done slowly and correctly it is the whole sprint stride in miniature, which is why it is in nearly every chapter.\n\nYour baseline is two things. A 40-Yard Dash, timed with a stopwatch or the track's clock, from a standing start, best of three. And a video of the run.\n\nBe honest about the time and keep the video. Chapter 6 asks you to run it again and compare, and the video will show you what the clock cannot: whether you are running differently, not just faster.",
         },
         keyPoints([
           "Nobody is just fast. Sprinting is a movement with parts, each drilled and fixed.",
           "Posture: tall, hips under the shoulders, a lean from the ankles. Never sitting, never bending.",
           "Arms swing from the shoulder, front to back, cheek to hip, hands relaxed. They set the rhythm.",
-          "The A-Skip is the stride in miniature. Baseline: a timed 40 and a video from the side.",
+          "The A-Skip is the stride in miniature. Baseline: a timed 40 and a video of the run.",
         ]),
       ],
       flashcards: [
@@ -90,7 +90,7 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
         {
           questionText: "What are the two parts of your baseline?",
           answers: [
-            { answerText: "A timed 40-yard dash from a standing start, best of three, and a video from the side.", isCorrect: true, explanation: "The video shows whether you run differently, not just faster." },
+            { answerText: "A timed 40-yard dash from a standing start, best of three, and a video of the run.", isCorrect: true, explanation: "The video shows whether you run differently, not just faster." },
             { answerText: "A mile time and a bodyweight.", isCorrect: false, explanation: "No." },
             { answerText: "A vertical jump.", isCorrect: false, explanation: "No." },
             { answerText: "A 40 only.", isCorrect: false, explanation: "The video is the second part." },
@@ -289,13 +289,13 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
         {
           title: "How Long Top Speed Lasts",
           body:
-            "Here is the thing most sprinters do not know. In a 100 meters, a well-trained sprinter reaches top speed somewhere between fifty and seventy meters and holds it for a short stretch, maybe ten to twenty meters, before it begins to fade. The rest of the race is getting there and holding on.\n\nThat changes how you train. Acceleration gets you to top speed sooner, which gives you more of the race at your best; speed endurance, in the next chapter, is what keeps the fade small. Top speed itself is the smallest part of the race and the hardest to move.\n\nSo the Max Velocity drill is run in small doses, fully rested, a few runs a session. Top speed is practised fresh or it is not practised at all; a tired top-speed run teaches a slower stride.",
+            "Here is the thing most sprinters do not know. In a 100 meters, a well-trained sprinter reaches top speed somewhere between fifty and seventy meters and holds it for a short stretch, maybe ten to twenty meters, before it begins to fade. The rest of the race is getting there and holding on.\n\nThat changes how you train. Acceleration gets you to top speed sooner, which gives you more of the race at your best; speed endurance, in the next chapter, is what keeps the fade small. Top speed itself is the smallest part of the race and the hardest to move.\n\nSo the Max Velocity drill is run in small doses, fully rested, a few runs a session. Top speed is practiced fresh or it is not practiced at all; a tired top-speed run teaches a slower stride.",
         },
         keyPoints([
           "Top speed is the Chapter 1 posture at full stride: tall, knee high, foot under the hips, short contacts. One cue per run.",
           "Front-side mechanics: the action in front of the body. Step over the knee.",
           "The foot strikes on the ball, under the hips, ankle stiff like a spring. Slapping is a collapsing ankle.",
-          "Top speed is a short stretch of the race. Practise it fresh, in small doses, or not at all.",
+          "Top speed is a short stretch of the race. Practice it fresh, in small doses, or not at all.",
         ]),
       ],
       flashcards: [
@@ -312,7 +312,7 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
           answers: [
             { answerText: "Top speed is as fast as the legs cycle, and forcing tenses the body and slows the cycle.", isCorrect: true, explanation: "There is no pushing harder here." },
             { answerText: "Because it is dangerous.", isCorrect: false, explanation: "Not the reason given." },
-            { answerText: "Because the referee penalises it.", isCorrect: false, explanation: "No." },
+            { answerText: "Because the referee penalizes it.", isCorrect: false, explanation: "No." },
             { answerText: "It does not; force is good.", isCorrect: false, explanation: "The chapter says the opposite." },
           ],
         },
@@ -342,12 +342,12 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
           ],
         },
         {
-          questionText: "Why is top speed practised in small doses, fully rested?",
+          questionText: "Why is top speed practiced in small doses, fully rested?",
           answers: [
-            { answerText: "A tired top-speed run teaches a slower stride.", isCorrect: true, explanation: "Practised fresh or not at all." },
+            { answerText: "A tired top-speed run teaches a slower stride.", isCorrect: true, explanation: "Practiced fresh or not at all." },
             { answerText: "Because it is boring.", isCorrect: false, explanation: "No." },
             { answerText: "To save the track.", isCorrect: false, explanation: "No." },
-            { answerText: "It should be practised tired, to build endurance.", isCorrect: false, explanation: "Endurance is the next chapter and a different session." },
+            { answerText: "It should be practiced tired, to build endurance.", isCorrect: false, explanation: "Endurance is the next chapter and a different session." },
           ],
         },
       ],
@@ -366,7 +366,7 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
         {
           title: "Training the Hold",
           body:
-            "Speed endurance is trained by running at or near top speed for longer than top speed lasts, with full recovery between runs, so that the body learns to hold the stride as the fuel runs down.\n\nThe Change of Pace Running drill is the simplest version: runs of sixty to a hundred and twenty meters with sections at full speed and sections at a controlled float, so you practise the exact thing a race asks for, keeping the stride when the effort has to drop. The Max Velocity Mechanics runs can be extended to fifty or sixty meters for the same reason, but only a few, and only rested.\n\nThe rule is quality over volume. Six good runs with full rest teach the hold. Twelve tired runs teach the fade.",
+            "Speed endurance is trained by running at or near top speed for longer than top speed lasts, with full recovery between runs, so that the body learns to hold the stride as the fuel runs down.\n\nThe Change of Pace Running drill is the simplest version: runs of sixty to a hundred and twenty meters with sections at full speed and sections at a controlled float, so you practice the exact thing a race asks for, keeping the stride when the effort has to drop. The Max Velocity Mechanics runs can be extended to fifty or sixty meters for the same reason, but only a few, and only rested.\n\nThe rule is quality over volume. Six good runs with full rest teach the hold. Twelve tired runs teach the fade.",
         },
         {
           title: "Running the Last Twenty",
@@ -376,7 +376,7 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
         {
           title: "Slowing Down",
           body:
-            "After the line, the race is not over for the body. Stopping from full speed in a few strides is where hamstrings go, and the Deceleration Mechanics drill is the answer: a gradual slow-down over twenty to thirty meters, the stride lengthening and the body rising, no sudden braking, no sitting back.\n\nPractise it after every fast run, not just in races. The body that has rehearsed slowing down does it automatically when it is tired and the mind has gone.\n\nThe A-Skip closes the session as it opens it, slowly, as a cool-down and a reminder of the stride you are trying to keep.",
+            "After the line, the race is not over for the body. Stopping from full speed in a few strides is where hamstrings go, and the Deceleration Mechanics drill is the answer: a gradual slow-down over twenty to thirty meters, the stride lengthening and the body rising, no sudden braking, no sitting back.\n\nPractice it after every fast run, not just in races. The body that has rehearsed slowing down does it automatically when it is tired and the mind has gone.\n\nThe A-Skip closes the session as it opens it, slowly, as a cool-down and a reminder of the stride you are trying to keep.",
         },
         keyPoints([
           "Nobody speeds up at the end. The winner slows down least. The fade is delayed and shrunk, never removed.",
@@ -391,7 +391,7 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
         { front: "How is speed endurance trained?", back: "Runs at or near top speed for longer than top speed lasts, with full recovery between them." },
         { front: "Six good runs versus twelve tired runs", back: "Six teach the hold; twelve teach the fade." },
         { front: "The three cues for the last twenty meters", back: "Relax, tall, quick." },
-        { front: "Why practise slowing down?", back: "Sudden stops from full speed are where hamstrings go." },
+        { front: "Why practice slowing down?", back: "Sudden stops from full speed are where hamstrings go." },
       ],
       quizQuestions: [
         {
@@ -423,7 +423,7 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
           ],
         },
         {
-          questionText: "Why practise deceleration after every fast run, not just in races?",
+          questionText: "Why practice deceleration after every fast run, not just in races?",
           answers: [
             { answerText: "A body that has rehearsed slowing down does it automatically when tired and the mind has gone.", isCorrect: true, explanation: "Gradual, over twenty to thirty meters, no sudden braking." },
             { answerText: "To add distance to the session.", isCorrect: false, explanation: "No." },
@@ -462,7 +462,7 @@ export const TRACK_SPRINTING_CLASS: ForgeClassContent = {
         {
           title: "Back to Your Baseline",
           body:
-            "In Chapter 1 you ran a 40-Yard Dash, best of three, and filmed it from the side. Run it again, the same way, same start, same clock.\n\nCompare the time. Then compare the video, part by part: the first three steps under the hips, the drive held low, the rise gradual, the stride tall and in front, the arms cheek to hip, the face loose.\n\nIf the time moved, good. If the video shows a different runner, better, because a changed stride keeps paying after a single time has been beaten. You are not just fast now. You are fast on purpose, and you know which part to work on next.",
+            "In Chapter 1 you ran a 40-Yard Dash, best of three, and filmed it. Run it again, the same way, same start, same clock, same video.\n\nCompare the time. Then compare the video, part by part: the first three steps under the hips, the drive held low, the rise gradual, the stride tall and in front, the arms cheek to hip, the face loose.\n\nIf the time moved, good. If the video shows a different runner, better, because a changed stride keeps paying after a single time has been beaten. You are not just fast now. You are fast on purpose, and you know which part to work on next.",
         },
         keyPoints([
           "A race plan is one cue for each of the four parts, decided before the warm-up and never changed on the line.",

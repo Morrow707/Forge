@@ -120,7 +120,7 @@ export const FUNDAMENTALS_CLASS: ForgeClassContent = {
           "Training breaks the body down; sleep is when it builds back stronger.",
           "Teenage athletes need eight to ten hours. Nine is a good target.",
           "Phone out of the bed, caffeine only in the morning, worries written down.",
-          "A twenty-minute nap before four o'clock helps a short night.",
+          "A twenty- to thirty-minute nap before four o'clock helps a short night.",
           "Easy movement on a rest day beats lying still. Gadgets do not replace sleep.",
         ]),
       ],
@@ -316,7 +316,7 @@ export const FUNDAMENTALS_CLASS: ForgeClassContent = {
           },
         },
         {
-          questionText: "Put the safe order for learning a new lift.",
+          questionText: "Put the steps for learning a new lift in the safe order.",
           questionType: "ordering",
           payload: { items: ["Bodyweight only", "Empty bar", "Light weight, same technique every rep", "Add weight slowly"], explanation: "Earn the weight. The athlete who learns it light first is still lifting later." },
         },
@@ -426,7 +426,7 @@ export const FUNDAMENTALS_CLASS: ForgeClassContent = {
         {
           title: "Setting Goals You Control",
           body:
-            "A goal like \"make varsity\" is fine to want, but you cannot control it, so it is a bad thing to measure a week by. The goals that work are the ones you fully own: train four times this week, hit every warm-up, sleep nine hours five nights out of seven, log every set honestly.\n\nAdd a few measurable targets with dates: squat a certain weight for three reps by the end of the block, take a tenth off a sprint time by the end of the season. Write them down in Forge or on paper, and look at them every week. A goal in your head drifts.\n\nWhen you hit one, set the next one slightly harder, not much harder. When you miss one, ask why with your coach, adjust it, and keep going. Missing a goal and adjusting is how the goal system is supposed to work; it is not failing.\n\nThe last thing this class asks: go back to the baseline you set in the first chapter's drill day, the sprint time or the lift, and compare it with where you are now. That gap, whatever size it is, is yours. Keep the log going and come back in another month.",
+            "A goal like \"make varsity\" is fine to want, but you cannot control it, so it is a bad thing to measure a week by. The goals that work are the ones you fully own: train four times this week, hit every warm-up, sleep nine hours five nights out of seven, log every set honestly.\n\nAdd a few measurable targets with dates: squat a certain weight for three reps by the end of the block, take a tenth off a sprint time by the end of the season. Write them down in Forge or on paper, and look at them every week. A goal in your head drifts.\n\nWhen you hit one, set the next one slightly harder, not much harder. When you miss one, ask why with your coach, adjust it, and keep going. Missing a goal and adjusting is how the goal system is supposed to work; it is not failing.\n\nThe last thing this class asks: go back to the first numbers you logged, the sprint time or the lift, and compare them with where you are now. That gap, whatever size it is, is yours. Keep the log going and come back in another month.",
         },
         keyPoints([
           "Log everything, honestly, with a word about how it felt. A true bad week beats a flattering one.",

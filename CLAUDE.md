@@ -1629,6 +1629,41 @@ then "Build it all in order and what you suggested". Coaches already create clas
   in the search, since the videos are empty"). The YouTube search links are gone; the slot is
   `videoUrl` on the page and a real clip goes in when he sends one. An unverified id is an
   invented screen (Rule #3), so none is guessed.
+- **THE 2026-10-08 PROOFREAD, AND HOW A TRACK CORRECTION REACHES PRODUCTION.** Scott: "read
+  over the athlete and coaches classes, just check for spelling, grammar, and make sure the
+  information actually matches." All nine athlete classes (the eight plus American Hitting) and
+  all twenty-four Coaches Corner tracks were read in full, by file ownership, five sessions in
+  parallel. Spelling is US everywhere now (the Coaches Corner tracks were UK-spelled in fourteen
+  files: "practise", "fibre", "favour", "centre"; 87 words moved). Information fixes worth
+  knowing: the corner three is NOT the shortest three on a high-school court (NFHS is one even
+  arc; page, flashcard and fill-blank all said it was), a red dot is a slider's spin not a
+  curveball's, a high crotch has the head OUTSIDE the hip, riding time is a college rule, a
+  back-row setter may attack from behind the line, RPE is a Rating, the moment arm is the
+  DISTANCE (the track called the product the moment arm, three places), the strength profile
+  caps at twelve reps not six, the readiness score reads hydration, a wrestler's periods are
+  folkstyle's three-by-two, and "Forge's asymmetry flags are built for exactly this read" now
+  carries the camera caveat. **Rule #1 reached the classes too**: eleven sentences told the
+  athlete where to film from ("from the side", "down the line and from the pitcher's view") and
+  now say "the same way each time". Left as written and worth a coach's eye: the hitting class's
+  "later, deeper" cue on a high pitch; soccer's "the other eighty-nine" minutes (a high-school
+  game is eighty).
+  **A CORRECTED TRACK LESSON NEVER REACHED PRODUCTION BEFORE THIS.** The athlete classes re-sync
+  pages, cards and quiz on every deploy (`seed-forge-classes.ts`), but a Coaches Corner track is
+  created by title once and its lessons never touched again, because an admin can edit them from
+  the builder -- so every text fix above would have landed on a fresh database only, the Barbell
+  Shoulder Press instructions bug in its third home. `server/seed-coaches-corner-lessons.ts`
+  (`resyncRepoTrackLessons`, called from the track seed) overwrites a stored lesson or quiz
+  question ONLY when its current text hashes to a version Forge shipped
+  (`shipped-lesson-hashes.ts`: `SHIPPED_LESSON_CONTENT_HASHES`, `SHIPPED_QUIZ_QUESTION_HASHES`,
+  append-only; the first 96 and 157 are the text at `00ce07df`, before the proofread). An
+  admin-edited row hashes to nothing there and is left alone and named in the deploy log.
+  Questions and answers are updated IN PLACE by orderIndex, never deleted, because attempts hang
+  off their ids. **After editing any track, run `npx tsx scripts/record-shipped-lesson-hashes.ts`
+  and commit**: `shipped-lesson-hashes.test.ts` fails until the new version is recorded, which is
+  what lets the correction after this one recognise it. `coaches-corner-lesson-resync.itest.ts`
+  proves all three branches on real rows. The original seven tracks moved out of `seed.ts` into
+  `seed-data/coaches-corner/original-seven.ts` for this (byte-identical plus the proofread), so
+  `ALL_COACHES_CORNER_TRACKS` is the one list. Server-side: ships on a Render deploy, no build.
 
 ## Full Personalization: the Branding page, and what it reaches
 

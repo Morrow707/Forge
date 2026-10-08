@@ -1,4 +1,5 @@
 import type { SeedAcademyTrack } from "./types";
+import { COACHES_CORNER_TRACKS_ORIGINAL } from "./original-seven";
 import { ENERGY_SYSTEMS_TRACK } from "./energy-systems";
 import { SPEED_AGILITY_TRACK } from "./speed-agility";
 import { PLYOMETRICS_TRACK } from "./plyometrics";
@@ -48,6 +49,9 @@ export const COACHES_CORNER_TRACKS_2026_10_04: SeedAcademyTrack[] = [
 
 /** Every repo-written track, both batches, for the tests and anything that needs the lot. */
 export const ALL_REPO_COACHES_CORNER_TRACKS: SeedAcademyTrack[] = [...COACHES_CORNER_TRACKS_2026_10, ...COACHES_CORNER_TRACKS_2026_10_04];
+
+/** Every repo-written track, the original seven first: the order the seed creates them in. */
+export const ALL_COACHES_CORNER_TRACKS: SeedAcademyTrack[] = [...COACHES_CORNER_TRACKS_ORIGINAL, ...ALL_REPO_COACHES_CORNER_TRACKS];
 
 /** Learning paths (2026-10-03): ordered sets of the tracks above and the original seven, for
  * a kind of coach. Track titles, resolved at seed time; a title that does not exist is

@@ -19,12 +19,12 @@ export const VOLLEYBALL_CLASS: ForgeClassContent = {
         {
           title: "The Only Uncontested Contact",
           body:
-            "Every other contact in volleyball depends on what the other team did. The serve depends on you. That makes it the one skill in the game you can own completely, and the one most players under-practise because it looks easy.\n\nA serve has three jobs, in order: get it in, make it hard to pass, and put it where the passer does not want it. A missed serve gives the point away with nobody touching the ball; a serve that is easy to pass hands the other team a perfect first contact. Only a serve that does the first two jobs is allowed to try the third.\n\nStart with the Underhand Serve Fundamentals if you need a serve you never miss. There is no shame in it, and a serve in is always better than a serve out.",
+            "Every other contact in volleyball depends on what the other team did. The serve depends on you. That makes it the one skill in the game you can own completely, and the one most players under-practice because it looks easy.\n\nA serve has three jobs, in order: get it in, make it hard to pass, and put it where the passer does not want it. A missed serve gives the point away with nobody touching the ball; a serve that is easy to pass hands the other team a perfect first contact. Only a serve that does the first two jobs is allowed to try the third.\n\nStart with the Underhand Serve Fundamentals if you need a serve you never miss. There is no shame in it, and a serve in is always better than a serve out.",
         },
         {
           title: "The Toss Is the Serve",
           body:
-            "Nearly every serving error starts with the toss. A toss that drifts behind you makes the contact late and the ball long; a toss that drifts in front makes the contact early and the ball into the net. A toss that is the same every time makes the serve the same every time.\n\nFor a float serve the toss is low and in front of the hitting shoulder, barely higher than your reach, so there is almost no time for it to drift. Lift it with a flat hand rather than flicking it, and let it leave the hand without spin.\n\nPractise the toss without hitting it: toss, catch, toss, catch, until twenty in a row land in the same spot. Then add the hit.",
+            "Nearly every serving error starts with the toss. A toss that drifts behind you makes the contact late and the ball long; a toss that drifts in front makes the contact early and the ball into the net. A toss that is the same every time makes the serve the same every time.\n\nFor a float serve the toss is low and in front of the hitting shoulder, barely higher than your reach, so there is almost no time for it to drift. Lift it with a flat hand rather than flicking it, and let it leave the hand without spin.\n\nPractice the toss without hitting it: toss, catch, toss, catch, until twenty in a row land in the same spot. Then add the hit.",
         },
         {
           title: "The Float Serve",
@@ -195,7 +195,7 @@ export const VOLLEYBALL_CLASS: ForgeClassContent = {
         {
           title: "Feet Under the Ball",
           body:
-            "A setter gets to the ball before it gets to him, and that means the feet. The Setter Footwork and Positioning drill is about arriving under the ball, stopped, square to the target, with the right foot slightly forward, before the hands ever touch it.\n\nSet from a stable base and the ball goes where you intend. Set on the move and the ball goes where the movement sends it. Most bad sets are late feet, the same as most bad passes.\n\nThe setter's home is a step off the net, right of centre, facing the left side. From there the forward set to the outside is natural and the back set to the right side is a hip extension. Get home early on every pass; a setter who is still moving when the pass arrives has already lost the quick option.",
+            "A setter gets to the ball before it gets to him, and that means the feet. The Setter Footwork and Positioning drill is about arriving under the ball, stopped, square to the target, with the right foot slightly forward, before the hands ever touch it.\n\nSet from a stable base and the ball goes where you intend. Set on the move and the ball goes where the movement sends it. Most bad sets are late feet, the same as most bad passes.\n\nThe setter's home is a step off the net, right of center, facing the left side. From there the forward set to the outside is natural and the back set to the right side is a hip extension. Get home early on every pass; a setter who is still moving when the pass arrives has already lost the quick option.",
         },
         {
           title: "Setting Off a Bad Pass",
@@ -217,7 +217,7 @@ export const VOLLEYBALL_CLASS: ForgeClassContent = {
       flashcards: [
         { front: "Where is a set played?", back: "Above the forehead, with the fingers, both hands touching and releasing at the same instant." },
         { front: "The ball is loud on your hands. What is wrong?", back: "It is in your palms. Soft hands take the ball at the fingertips." },
-        { front: "The setter's home", back: "A step off the net, right of centre, facing the left side." },
+        { front: "The setter's home", back: "A step off the net, right of center, facing the left side." },
         { front: "The rule off a bad pass", back: "Get a hittable ball to a hitter. A high, slow set to the outside is always possible." },
         { front: "What is tempo?", back: "How high and fast the set is, which decides when the hitter has to leave." },
         { front: "When does a quick set work?", back: "When the pass is good and the setter is home, delivered as the hitter is already in the air." },
@@ -451,7 +451,7 @@ export const VOLLEYBALL_CLASS: ForgeClassContent = {
         {
           title: "Reading the Other Side",
           body:
-            "Before the rally, look across the net and ask three questions. Who is their best hitter and where is she? A good team sets its best hitter in a tight spot, and the block should be ready there. Where is the setter? Front row means she can attack; back row means she cannot, and the block has one fewer hitter to watch. Who is passing badly? Serve at that player.\n\nDuring the rally, the pass tells you the set. A bad pass means a high set to the outside, and the block can go there early. A good pass means anything is possible, and the block has to wait on the setter's hands.\n\nNone of this is complicated. It is a habit of looking, the same as the first touch in soccer or the leverage read in football, and it makes every contact arrive earlier.",
+            "Before the rally, look across the net and ask three questions. Who is their best hitter and where is she? A good team sets its best hitter in a tight spot, and the block should be ready there. Where is the setter? Front row means she can attack at the net; back row means she cannot attack above the net from in front of the attack line, and the block has one fewer hitter to watch. Who is passing badly? Serve at that player.\n\nDuring the rally, the pass tells you the set. A bad pass means a high set to the outside, and the block can go there early. A good pass means anything is possible, and the block has to wait on the setter's hands.\n\nNone of this is complicated. It is a habit of looking, the same as the first touch in soccer or the leverage read in football, and it makes every contact arrive earlier.",
         },
         {
           title: "Between Points",
@@ -461,7 +461,7 @@ export const VOLLEYBALL_CLASS: ForgeClassContent = {
         {
           title: "Back to Your Serve",
           body:
-            "In Chapter 1 you ran the Serve Target Accuracy drill for the first time. Run it again, same targets, and count: serves in, serves to the target, serves that spun.\n\nCompare with the first run. Then compare the toss on video from the side: the same spot every time, or still drifting?\n\nThe serve was the first thing in this class because it is the contact you own. If it is better now, you have learned the one lesson this whole class is about: every contact counts, and every one of them is built in the same way, feet first, the same every time, read before it arrives. Carry that into the next five.",
+            "In Chapter 1 you ran the Serve Target Accuracy drill for the first time. Run it again, same targets, and count: serves in, serves to the target, serves that spun.\n\nCompare with the first run. Then compare the toss on video: the same spot every time, or still drifting?\n\nThe serve was the first thing in this class because it is the contact you own. If it is better now, you have learned the one lesson this whole class is about: every contact counts, and every one of them is built in the same way, feet first, the same every time, read before it arrives. Carry that into the next five.",
         },
         keyPoints([
           "Every contact ends with the next one started. Land and move; get off the net before the set.",

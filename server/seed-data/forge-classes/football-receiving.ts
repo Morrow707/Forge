@@ -264,7 +264,7 @@ export const FOOTBALL_RECEIVING_CLASS: ForgeClassContent = {
     {
       title: "Hands",
       description:
-        "A receiver who gets open and drops the ball has done nothing. This chapter is about catching: the hands, the eyes, catching in traffic, and the thing most receivers never practise, catching a bad ball.",
+        "A receiver who gets open and drops the ball has done nothing. This chapter is about catching: the hands, the eyes, catching in traffic, and the thing most receivers never practice, catching a bad ball.",
       drills: ["Comeback Catch and Sideline Awareness", "Slant Route Technique", "Reaction Ball Footwork", "Catch-and-Shoot Reps"],
       content: [
         {
@@ -285,13 +285,13 @@ export const FOOTBALL_RECEIVING_CLASS: ForgeClassContent = {
         {
           title: "The Bad Ball",
           body:
-            "Quarterbacks miss. The ball comes high, low, behind, early, late. A receiver who only practises catching perfect passes drops the imperfect ones, and in a game most of them are imperfect.\n\nSo practise the bad ball on purpose. Balls behind you, where the body has to turn and the hands have to reach back. Balls low, where the pinkies come together and the knees bend. Balls high, where you have to climb and still bring it in. The Reaction Ball Footwork drill belongs here: an unpredictable bounce makes the hands and feet adjust together, which is exactly what a bad throw asks of them.\n\nThe Catch-and-Shoot Reps drill is borrowed from basketball for one reason: it asks for hands that catch while the feet are moving and the eyes are somewhere else a moment later. Any catch-and-move rep builds the same thing.",
+            "Quarterbacks miss. The ball comes high, low, behind, early, late. A receiver who only practices catching perfect passes drops the imperfect ones, and in a game most of them are imperfect.\n\nSo practice the bad ball on purpose. Balls behind you, where the body has to turn and the hands have to reach back. Balls low, where the pinkies come together and the knees bend. Balls high, where you have to climb and still bring it in. The Reaction Ball Footwork drill belongs here: an unpredictable bounce makes the hands and feet adjust together, which is exactly what a bad throw asks of them.\n\nThe Catch-and-Shoot Reps drill is borrowed from basketball for one reason: it asks for hands that catch while the feet are moving and the eyes are somewhere else a moment later. Any catch-and-move rep builds the same thing.",
         },
         keyPoints([
           "Hands, not body. Thumbs together high, pinkies together low, hands to the ball, see it in, tuck.",
           "Most drops are eye problems. Eyes through the catch, then look up.",
           "In traffic: catch early with the hands out front, tuck high and tight, eyes on the ball through the hit.",
-          "Practise the bad ball on purpose. In a game, most of them are.",
+          "Practice the bad ball on purpose. In a game, most of them are.",
           "Fifty catches a day, for the rest of your career.",
         ]),
       ],
@@ -301,7 +301,7 @@ export const FOOTBALL_RECEIVING_CLASS: ForgeClassContent = {
         { front: "What causes most drops?", back: "The eyes leaving the ball a moment before it arrives." },
         { front: "The rule for the eyes", back: "Eyes through the catch: watch it in, watch the tuck, then look up." },
         { front: "Three things for a catch in traffic", back: "Catch early with hands out front, tuck high and tight, eyes on the ball through the hit." },
-        { front: "Why practise bad throws?", back: "In a game most throws are imperfect; a receiver who only catches perfect passes drops the rest." },
+        { front: "Why practice bad throws?", back: "In a game most throws are imperfect; a receiver who only catches perfect passes drops the rest." },
       ],
       quizQuestions: [
         {
@@ -333,17 +333,17 @@ export const FOOTBALL_RECEIVING_CLASS: ForgeClassContent = {
           questionText: "Why is the slant drill in this chapter run with a partner closing on the catch?",
           answers: [
             { answerText: "So that catching with somebody in your space stops being new.", isCorrect: true, explanation: "Not to hit you, but to be there." },
-            { answerText: "To practise tackling.", isCorrect: false, explanation: "This is a receiving class." },
+            { answerText: "To practice tackling.", isCorrect: false, explanation: "This is a receiving class." },
             { answerText: "To make the drill harder for no reason.", isCorrect: false, explanation: "The reason is the game: on a slant the ball and the defender arrive together." },
             { answerText: "It is not; the drill is run alone.", isCorrect: false, explanation: "The chapter says a partner closes on the catch." },
           ],
         },
         {
-          questionText: "Why practise catching bad throws on purpose?",
+          questionText: "Why practice catching bad throws on purpose?",
           answers: [
-            { answerText: "Because in a game most throws are imperfect, and a receiver who only catches perfect ones drops the rest.", isCorrect: true, explanation: "High, low, behind, early, late: practise all of them." },
+            { answerText: "Because in a game most throws are imperfect, and a receiver who only catches perfect ones drops the rest.", isCorrect: true, explanation: "High, low, behind, early, late: practice all of them." },
             { answerText: "To embarrass the quarterback.", isCorrect: false, explanation: "No." },
-            { answerText: "Because bad throws are easier to catch.", isCorrect: false, explanation: "They are harder, which is the point of practising them." },
+            { answerText: "Because bad throws are easier to catch.", isCorrect: false, explanation: "They are harder, which is the point of practicing them." },
             { answerText: "Coaches do not recommend it.", isCorrect: false, explanation: "The chapter does." },
           ],
         },
@@ -456,7 +456,7 @@ export const FOOTBALL_RECEIVING_CLASS: ForgeClassContent = {
         {
           title: "The Sideline and the End Zone",
           body:
-            "Two places on the field change the catch. On the sideline, the feet decide whether the catch counts, and the rule for your level decides how many feet. Know the rule. Then practise catching with the sideline as a fact you can feel, not a thing you look at: the Comeback Catch and Sideline Awareness drill is built on exactly that, and the point of the earlier reps was to put the sideline in your feet so the eyes can stay on the ball.\n\nIn the end zone, the field gets short. Routes that break at ten yards have nowhere to go, so the breaks get sharper and the throws get faster. The back line is a sideline too, and the same rule applies: feel it, do not look for it.",
+            "Two places on the field change the catch. On the sideline, the feet decide whether the catch counts, and the rule for your level decides how many feet. Know the rule. Then practice catching with the sideline as a fact you can feel, not a thing you look at: the Comeback Catch and Sideline Awareness drill is built on exactly that, and the point of the earlier reps was to put the sideline in your feet so the eyes can stay on the ball.\n\nIn the end zone, the field gets short. Routes that break at ten yards have nowhere to go, so the breaks get sharper and the throws get faster. The back line is a sideline too, and the same rule applies: feel it, do not look for it.",
         },
         {
           title: "After the Catch",
@@ -466,7 +466,7 @@ export const FOOTBALL_RECEIVING_CLASS: ForgeClassContent = {
         {
           title: "Back to Your Release",
           body:
-            "In Chapter 1 you ran the 20-Yard Dash as a release test: three steps out of your stance, repeated. Run it again. Film it from the side.\n\nCompare. Is the stance the same every rep? Has the false step gone? Are the first three steps driving? Then watch a route from Chapter 2 beside one from today: same stem, sharper break, the eyes in the right place.\n\nWhat you are looking for is not a faster time. It is a receiver whose release, routes, breaks and hands look like one player's, every rep. That is what a defense cannot read, and that is what gets you the ball.",
+            "In Chapter 1 you ran the 20-Yard Dash as a release test: three steps out of your stance, repeated. Run it again. Film it the same way you did then.\n\nCompare. Is the stance the same every rep? Has the false step gone? Are the first three steps driving? Then watch a route from Chapter 2 beside one from today: same stem, sharper break, the eyes in the right place.\n\nWhat you are looking for is not a faster time. It is a receiver whose release, routes, breaks and hands look like one player's, every rep. That is what a defense cannot read, and that is what gets you the ball.",
         },
         keyPoints([
           "Track the deep ball by its arc: run under it, arrive as it does, catch at full extension.",
@@ -519,7 +519,7 @@ export const FOOTBALL_RECEIVING_CLASS: ForgeClassContent = {
             { answerText: "The same stance, no false step, three driving steps: one player's release every rep.", isCorrect: true, explanation: "Not a faster time." },
             { answerText: "A faster forty time.", isCorrect: false, explanation: "The chapter says it is not about the time." },
             { answerText: "More catches.", isCorrect: false, explanation: "The release test is about the first three steps." },
-            { answerText: "A reason to stop practising.", isCorrect: false, explanation: "No." },
+            { answerText: "A reason to stop practicing.", isCorrect: false, explanation: "No." },
           ],
         },
       ],

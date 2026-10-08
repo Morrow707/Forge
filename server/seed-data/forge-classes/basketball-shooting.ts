@@ -29,12 +29,12 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
         {
           title: "Arc, Line and Soft Hands",
           body:
-            "A shot can be on line and still miss, and it can be off line and still go in. The reason is arc. A flat shot sees a small target; a shot with a high arc sees the whole rim. Most misses on a flat shot are long or short, which is the arc telling you it never had a chance.\n\nThe cue for arc is a high release and a full follow-through: fingers in the rim, elbow above the eyes. The cue for line is the elbow under the ball and the ball travelling straight past the face, not around it.\n\nSoft hands come from the fingertips. A ball shot off the palm comes out flat and hard. A ball shot off the fingertips has backspin, and backspin is what makes a shot that touches the rim fall in instead of bouncing out.",
+            "A shot can be on line and still miss, and it can be off line and still go in. The reason is arc. A flat shot sees a small target; a shot with a high arc sees the whole rim. Most misses on a flat shot are long or short, which is the arc telling you it never had a chance.\n\nThe cue for arc is a high release and a full follow-through: fingers in the rim, elbow above the eyes. The cue for line is the elbow under the ball and the ball traveling straight past the face, not around it.\n\nSoft hands come from the fingertips. A ball shot off the palm comes out flat and hard. A ball shot off the fingertips has backspin, and backspin is what makes a shot that touches the rim fall in instead of bouncing out.",
         },
         {
           title: "Your Baseline",
           body:
-            "Before you change anything, measure where you are. Three numbers, and a video.\n\n- Fifty form shots from five feet, one hand, and count the makes.\n- Twenty-five free throws and count the makes.\n- Twenty-five catch-and-shoot jump shots from a spot you like, about fifteen feet, and count the makes.\n\nFilm the free throws from the side. You will come back to this video in Chapter 6 and compare the form, not just the count.\n\nBe honest with the numbers. A baseline that is padded cheats only you, and the whole point of the last chapter is to see how far you moved.",
+            "Before you change anything, measure where you are. Three numbers, and a video.\n\n- Fifty form shots from five feet, one hand, and count the makes.\n- Twenty-five free throws and count the makes.\n- Twenty-five catch-and-shoot jump shots from a spot you like, about fifteen feet, and count the makes.\n\nFilm the free throws, from wherever you have room, and remember the spot. You will come back to this video in Chapter 6 and compare the form, not just the count.\n\nBe honest with the numbers. A baseline that is padded cheats only you, and the whole point of the last chapter is to see how far you moved.",
         },
         keyPoints([
           "One shot, repeated, in every situation. If the form changes with the situation, it is not yours yet.",
@@ -111,7 +111,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
         {
           title: "Spots and the Corner",
           body:
-            "A game does not ask you to shoot from anywhere. It asks you to shoot from four or five places, over and over: the corners, the wings, the top, the elbows. The Spot-Up Shooting Circuit rotates through those spots so that the shot from each one becomes familiar: the angle of the backboard, the distance, the way the feet set up.\n\nThe corner three is its own skill. It is the shortest three on the floor, the backboard is at a strange angle, and the sideline is right behind your heels. Corner Three Reps is about catching with the feet already behind the line, square to the rim, and shooting without a look down. A shooter who has to check the line is not ready.\n\nTrack your makes by spot. Every shooter has a favourite spot and a weak one, and the weak one is where the next week of practice goes.",
+            "A game does not ask you to shoot from anywhere. It asks you to shoot from four or five places, over and over: the corners, the wings, the top, the elbows. The Spot-Up Shooting Circuit rotates through those spots so that the shot from each one becomes familiar: the angle of the backboard, the distance, the way the feet set up.\n\nThe corner three is its own skill. On college and pro courts it is the shortest three on the floor; on most high-school courts the line is one even arc, so it is no closer, but the backboard is at a strange angle and the sideline is right behind your heels. Corner Three Reps is about catching with the feet already behind the line, square to the rim, and shooting without a look down. A shooter who has to check the line is not ready.\n\nTrack your makes by spot. Every shooter has a favorite spot and a weak one, and the weak one is where the next week of practice goes.",
         },
         {
           title: "Reading the Pass",
@@ -130,7 +130,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
         { front: "What is a catch-and-shoot really?", back: "Be ready, catch, shoot. The first part separates shooters from players who can shoot." },
         { front: "The hop", back: "A small two-footed jump timed with the catch, landing square to the rim." },
         { front: "The one-two", back: "Inside foot lands, outside foot steps into the shot. Squares up from an angle and leaves a pivot." },
-        { front: "Why is the corner three its own skill?", back: "Shortest three, strange backboard angle, sideline right behind the heels." },
+        { front: "Why is the corner three its own skill?", back: "The shortest three on a college or pro court (no closer on a high-school arc), a strange backboard angle, and the sideline right behind the heels." },
         { front: "What do you track in the spot-up circuit?", back: "Makes by spot, so you know your weak spot and where next week's practice goes." },
         { front: "When is the read on a pass made?", back: "Before the catch. A shooter who catches and then thinks has lost the window." },
       ],
@@ -156,9 +156,9 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
           ],
         },
         {
-          questionText: "The corner three is the ___ three on the floor.",
+          questionText: "On a college or pro court, the corner three is the ___ three on the floor.",
           questionType: "fill_blank",
-          payload: { accepted: ["shortest", "closest", "short"], explanation: "The line is closer to the rim in the corner, with the sideline right behind your heels." },
+          payload: { accepted: ["shortest", "closest", "short"], explanation: "Those lines run straight near the sideline, so the corner is closer to the rim. A high-school arc is one even curve, so there the corner is no closer; the sideline behind your heels is the same either way." },
         },
         {
           questionText: "The pass is on target but the defender is closing hard. What is the read?",
@@ -189,7 +189,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
         {
           title: "The Handle Serves the Shot",
           body:
-            "Every move in this chapter exists for one reason: to get the feet set and the ball in the pocket with enough space to shoot the same shot as Chapter 1. The dribble is not the point. The shot is the point.\n\nThat changes how you practise handling. A crossover that looks great and leaves you off balance is useless to a shooter. A plain change of pace that gets a defender back on his heels and gives you a clean pull-up is gold. The Change-of-Pace Attack Dribble and the Crossover Series are in this chapter's drill day so that the moves get practised into a shot, not on their own.\n\nOne rule: the last dribble is the hardest. A hard last dribble brings the ball up into the pocket on its own, so the hands do not have to go hunting for it.",
+            "Every move in this chapter exists for one reason: to get the feet set and the ball in the pocket with enough space to shoot the same shot as Chapter 1. The dribble is not the point. The shot is the point.\n\nThat changes how you practice handling. A crossover that looks great and leaves you off balance is useless to a shooter. A plain change of pace that gets a defender back on his heels and gives you a clean pull-up is gold. The Change-of-Pace Attack Dribble and the Crossover Series are in this chapter's drill day so that the moves get practiced into a shot, not on their own.\n\nOne rule: the last dribble is the hardest. A hard last dribble brings the ball up into the pocket on its own, so the hands do not have to go hunting for it.",
         },
         {
           title: "The Pull-Up",
@@ -204,7 +204,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
         {
           title: "Keeping the Shot the Same",
           body:
-            "Film ten catch-and-shoot jumpers and ten pull-ups from the side and compare them. The release, the arc, the follow-through should look identical. If they do not, the dribble is changing the shot, and the fix is in the stop, not in the shot.\n\nCommon tells:\n\n- The ball comes from the hip instead of the pocket: the last dribble was soft.\n- The shot drifts forward: the stop was not a stop.\n- The elbow flares: the body was turned at the stop and the arm is compensating.\n\nEach of them is a footwork problem wearing a shooting problem's clothes. Fix the feet and the shot comes back.",
+            "Film ten catch-and-shoot jumpers and ten pull-ups from the same spot and compare them. The release, the arc, the follow-through should look identical. If they do not, the dribble is changing the shot, and the fix is in the stop, not in the shot.\n\nCommon tells:\n\n- The ball comes from the hip instead of the pocket: the last dribble was soft.\n- The shot drifts forward: the stop was not a stop.\n- The elbow flares: the body was turned at the stop and the arm is compensating.\n\nEach of them is a footwork problem wearing a shooting problem's clothes. Fix the feet and the shot comes back.",
         },
         keyPoints([
           "The handle serves the shot. A move that leaves you off balance is useless to a shooter.",
@@ -215,7 +215,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
         ]),
       ],
       flashcards: [
-        { front: "Why does a shooter practise handling?", back: "To get the feet set and the ball in the pocket with space for the same shot as Chapter 1." },
+        { front: "Why does a shooter practice handling?", back: "To get the feet set and the ball in the pocket with space for the same shot as Chapter 1." },
         { front: "The rule about the last dribble", back: "It is the hardest dribble. It brings the ball up into the pocket on its own." },
         { front: "What matters most on a pull-up?", back: "The stop. Square, under control, up not forward, land where you jumped." },
         { front: "The step-back mistake", back: "Fading: pushing back during the shot instead of before it. Land first, then shoot straight up." },
@@ -356,7 +356,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
     {
       title: "The Free Throw and Pressure",
       description:
-        "The free throw is the only shot in basketball nobody guards, and it is still missed. This chapter is about the routine, the breath, and how to practise pressure so a game is not the first time you feel it.",
+        "The free throw is the only shot in basketball nobody guards, and it is still missed. This chapter is about the routine, the breath, and how to practice pressure so a game is not the first time you feel it.",
       drills: ["Free Throw Routine Reps", "Form Shooting - Close Range", "Contested Shot Reps"],
       content: [
         {
@@ -411,7 +411,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
           payload: { accepted: ["eyes", "spot", "spot on the rim", "look", "focus"], explanation: "A spot on the rim gives the eyes a job, so they do not see the scoreboard." },
         },
         {
-          questionText: "Which of these is a way the chapter suggests to practise pressure?",
+          questionText: "Which of these is a way the chapter suggests to practice pressure?",
           answers: [
             { answerText: "Shoot free throws tired, in pairs, with a consequence on a miss.", isCorrect: true, explanation: "Pressure is cost, and cost can be built into practice." },
             { answerText: "Shoot fifty in a row fresh at the start of practice.", isCorrect: false, explanation: "Fresh at the start is the opposite of what the chapter asks." },
@@ -452,7 +452,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
         {
           title: "Reading the Defender",
           body:
-            "The defender tells you which shot to take, if you look.\n\n- Defender back, hands down: the catch-and-shoot. He has given you the shot.\n- Defender closing hard, high hands: shot fake, one dribble, pull-up or drive. He has given you the drive.\n- Defender square and close, on balance: move the ball. He has given you nothing, and the next pass will find somebody he cannot guard.\n\nThe Pressure Dribbling vs. Defender drill is in this chapter so that the read gets practised against a live body. Reads are learned against people, not cones.",
+            "The defender tells you which shot to take, if you look.\n\n- Defender back, hands down: the catch-and-shoot. He has given you the shot.\n- Defender closing hard, high hands: shot fake, one dribble, pull-up or drive. He has given you the drive.\n- Defender square and close, on balance: move the ball. He has given you nothing, and the next pass will find somebody he cannot guard.\n\nThe Pressure Dribbling vs. Defender drill is in this chapter so that the read gets practiced against a live body. Reads are learned against people, not cones.",
         },
         {
           title: "Shot Selection Is a Team Skill",
@@ -467,7 +467,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
         {
           title: "Back to Your Baseline",
           body:
-            "In Chapter 1 you counted fifty form shots, twenty-five free throws and twenty-five catch-and-shoot jumpers, and you filmed the free throws from the side. Do all of it again.\n\nCompare the counts. Then compare the videos: the release point, the arc, the follow-through, side by side. Then compare something the numbers do not show: does the shot look the same from the catch, off the dribble and at the line?\n\nIf it does, you have a shot. Not a finished one; nobody has a finished one. But one that is yours, that you can take into any situation and trust. That is what a shooter is. Now go take ten thousand more.",
+            "In Chapter 1 you counted fifty form shots, twenty-five free throws and twenty-five catch-and-shoot jumpers, and you filmed the free throws. Do all of it again, from the same spot.\n\nCompare the counts. Then compare the videos: the release point, the arc, the follow-through, side by side. Then compare something the numbers do not show: does the shot look the same from the catch, off the dribble and at the line?\n\nIf it does, you have a shot. Not a finished one; nobody has a finished one. But one that is yours, that you can take into any situation and trust. That is what a shooter is. Now go take ten thousand more.",
         },
         keyPoints([
           "A good shot: on balance, in your range, open enough. A bad shot that goes in is still a bad shot.",

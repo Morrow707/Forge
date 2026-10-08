@@ -24,12 +24,12 @@ export const SOCCER_ATTACKING_CLASS: ForgeClassContent = {
         {
           title: "Look Before It Arrives",
           body:
-            "The decision about the touch is made before the ball gets to you. In the second the pass is travelling, the head comes up: where is the nearest defender, where is the space, where are my teammates. Then the eyes come back to the ball for the touch itself.\n\nPlayers who never look up receive the ball and then look, and by then the picture has changed. Players who look while the ball travels receive it already knowing where it goes next.\n\nThis is a habit, not a talent. Build it in the Wall Passing drill: every pass against the wall, look over your shoulder while the ball is on its way back, then take the touch. It feels slow for a week and then it is the fastest thing you do.",
+            "The decision about the touch is made before the ball gets to you. In the second the pass is traveling, the head comes up: where is the nearest defender, where is the space, where are my teammates. Then the eyes come back to the ball for the touch itself.\n\nPlayers who never look up receive the ball and then look, and by then the picture has changed. Players who look while the ball travels receive it already knowing where it goes next.\n\nThis is a habit, not a talent. Build it in the Wall Passing drill: every pass against the wall, look over your shoulder while the ball is on its way back, then take the touch. It feels slow for a week and then it is the fastest thing you do.",
         },
         {
           title: "Cushion, Push, Turn",
           body:
-            "Three kinds of first touch cover most of the game.\n\n**The cushion.** For a ball arriving fast or in the air, the receiving surface gives as the ball arrives, taking pace off it so it drops at your feet. The First Touch - Aerial Ball drill is all cushion: chest, thigh, foot, each one a soft landing.\n\n**The push.** For a ball you want to move into space, the touch sends it a yard or two in the direction of your next action. Firm, directed, with the inside or outside of the foot. The ball should arrive where your second step lands.\n\n**The turn.** For a ball arriving with your back to goal, the touch takes you round in one movement, so that you are facing forward with the ball in front of you. The Sole Roll Control drill is the simplest turn: trap under the sole, roll it across your body, and the turn is done.\n\nWhich touch depends on the look you took while the ball was travelling.",
+            "Three kinds of first touch cover most of the game.\n\n**The cushion.** For a ball arriving fast or in the air, the receiving surface gives as the ball arrives, taking pace off it so it drops at your feet. The First Touch - Aerial Ball drill is all cushion: chest, thigh, foot, each one a soft landing.\n\n**The push.** For a ball you want to move into space, the touch sends it a yard or two in the direction of your next action. Firm, directed, with the inside or outside of the foot. The ball should arrive where your second step lands.\n\n**The turn.** For a ball arriving with your back to goal, the touch takes you round in one movement, so that you are facing forward with the ball in front of you. The Sole Roll Control drill is the simplest turn: trap under the sole, roll it across your body, and the turn is done.\n\nWhich touch depends on the look you took while the ball was traveling.",
         },
         {
           title: "Under Pressure",
@@ -38,14 +38,14 @@ export const SOCCER_ATTACKING_CLASS: ForgeClassContent = {
         },
         keyPoints([
           "A first touch is a decision: the ball moves a yard on purpose, into the next action.",
-          "Look while the ball is travelling, then eyes back to the ball for the touch.",
+          "Look while the ball is traveling, then eyes back to the ball for the touch.",
           "Cushion for pace, push for space, turn for a ball with your back to goal.",
           "Under pressure: receive on the back foot, touch away from the defender.",
         ]),
       ],
       flashcards: [
         { front: "What is the first touch for?", back: "Putting the ball where your next action starts. Not stopping it." },
-        { front: "When is the touch decided?", back: "Before the ball arrives, while it is travelling, with the head up." },
+        { front: "When is the touch decided?", back: "Before the ball arrives, while it is traveling, with the head up." },
         { front: "The cushion", back: "The surface gives as the ball arrives, taking pace off so it drops at your feet." },
         { front: "The push", back: "A firm, directed touch that sends the ball a yard or two into the next action." },
         { front: "The turn", back: "A touch that takes you round in one movement with the ball in front of you." },
@@ -70,7 +70,7 @@ export const SOCCER_ATTACKING_CLASS: ForgeClassContent = {
               { left: "Push", right: "A ball you want to move into space" },
               { left: "Turn", right: "A ball arriving with your back to goal" },
             ],
-            explanation: "Which touch depends on the look you took while the ball travelled.",
+            explanation: "Which touch depends on the look you took while the ball traveled.",
           },
         },
         {
@@ -81,7 +81,7 @@ export const SOCCER_ATTACKING_CLASS: ForgeClassContent = {
         {
           questionText: "When should you look up to read the picture?",
           answers: [
-            { answerText: "While the ball is travelling to you, before the touch.", isCorrect: true, explanation: "Then the eyes come back to the ball for the touch itself." },
+            { answerText: "While the ball is traveling to you, before the touch.", isCorrect: true, explanation: "Then the eyes come back to the ball for the touch itself." },
             { answerText: "After the touch, once the ball is under control.", isCorrect: false, explanation: "By then the picture has changed." },
             { answerText: "Never; keep your eyes on the ball at all times.", isCorrect: false, explanation: "The eyes return to the ball for the touch, but the look comes first." },
             { answerText: "Only when a coach shouts.", isCorrect: false, explanation: "No." },
@@ -122,13 +122,13 @@ export const SOCCER_ATTACKING_CLASS: ForgeClassContent = {
         {
           title: "When Not to Dribble",
           body:
-            "The best dribblers dribble less than you think. They take a defender on when the numbers favour it, and they pass when they do not.\n\nTake him on when: you are one-on-one with space behind him, a teammate is not in a better position, and the move puts you closer to goal. Pass when: there are two defenders, a teammate is open and forward, or losing the ball here would leave your team exposed.\n\nThe decision is made before you receive the ball, in the look from Chapter 1. A player who receives the ball and then decides whether to dribble has already waited too long. Dribbling is a choice with a reason, never a reflex.",
+            "The best dribblers dribble less than you think. They take a defender on when the numbers favor it, and they pass when they do not.\n\nTake him on when: you are one-on-one with space behind him, a teammate is not in a better position, and the move puts you closer to goal. Pass when: there are two defenders, a teammate is open and forward, or losing the ball here would leave your team exposed.\n\nThe decision is made before you receive the ball, in the look from Chapter 1. A player who receives the ball and then decides whether to dribble has already waited too long. Dribbling is a choice with a reason, never a reflex.",
         },
         keyPoints([
           "Close control first: the ball never more than a step from the foot that touches it next.",
           "Change of pace beats change of direction. Slow, slow, fast; the move is how the fast part starts.",
           "Two moves, owned, in different directions, at speed, with either foot.",
-          "Take a defender on when the numbers favour it. Dribbling is a choice with a reason.",
+          "Take a defender on when the numbers favor it. Dribbling is a choice with a reason.",
         ]),
       ],
       flashcards: [
@@ -171,7 +171,7 @@ export const SOCCER_ATTACKING_CLASS: ForgeClassContent = {
         {
           questionText: "Which situation says pass rather than dribble?",
           answers: [
-            { answerText: "Two defenders in front of you and a teammate open and forward.", isCorrect: true, explanation: "Take a defender on when the numbers favour it." },
+            { answerText: "Two defenders in front of you and a teammate open and forward.", isCorrect: true, explanation: "Take a defender on when the numbers favor it." },
             { answerText: "One-on-one with space behind the defender.", isCorrect: false, explanation: "That is a take-on." },
             { answerText: "You feel like it.", isCorrect: false, explanation: "Dribbling is a choice with a reason, never a reflex." },
             { answerText: "The crowd wants a trick.", isCorrect: false, explanation: "No." },
@@ -421,7 +421,7 @@ export const SOCCER_ATTACKING_CLASS: ForgeClassContent = {
           questionText: "Why arrive in the box late and fast rather than early?",
           answers: [
             { answerText: "A player standing in the box is marked; a player arriving at speed has to be found.", isCorrect: true, explanation: "Read the crosser's body and go." },
-            { answerText: "Because the referee penalises standing still.", isCorrect: false, explanation: "No." },
+            { answerText: "Because the referee penalizes standing still.", isCorrect: false, explanation: "No." },
             { answerText: "To save energy.", isCorrect: false, explanation: "No." },
             { answerText: "It is better to arrive early.", isCorrect: false, explanation: "The chapter says the opposite." },
           ],
@@ -451,7 +451,7 @@ export const SOCCER_ATTACKING_CLASS: ForgeClassContent = {
         {
           title: "Three Options, Always",
           body:
-            "Whenever the ball arrives, an attacker has three options and should know which one before the touch: pass, dribble, shoot.\n\nIf the shot is on, shoot. Chances are rare and a shot that is on is never the wrong choice. If a teammate is in a better position, pass. If neither, and the defender in front of you can be beaten, dribble. In that order, decided during the scan.\n\nThe Turn and Control Under Pressure drill is where the three options get practised with a defender on you: receive, turn, and in the same movement already know whether the shot, the pass or the dribble is the answer. The touch from Chapter 1 sets up whichever one it is.",
+            "Whenever the ball arrives, an attacker has three options and should know which one before the touch: pass, dribble, shoot.\n\nIf the shot is on, shoot. Chances are rare and a shot that is on is never the wrong choice. If a teammate is in a better position, pass. If neither, and the defender in front of you can be beaten, dribble. In that order, decided during the scan.\n\nThe Turn and Control Under Pressure drill is where the three options get practiced with a defender on you: receive, turn, and in the same movement already know whether the shot, the pass or the dribble is the answer. The touch from Chapter 1 sets up whichever one it is.",
         },
         {
           title: "Playing Under Pressure",
@@ -466,7 +466,7 @@ export const SOCCER_ATTACKING_CLASS: ForgeClassContent = {
         {
           title: "Back to Your First Touch",
           body:
-            "Go back to the First Touch drills from Chapter 1 and film them from the side, as you did then or should have. Then film a few minutes of a small-sided game.\n\nCompare. Does the ball move a yard on purpose on every touch? Does the head come up while the ball is travelling? In the game, does the touch set up the pass, the dribble or the shot, or does it stop the ball and wait?\n\nAn attacker is not somebody with tricks. He is somebody whose first touch, decision and finish are one movement. If the film shows that, you have become one. Keep scanning.",
+            "Go back to the First Touch drills from Chapter 1 and film them the same way you did then. Then film a few minutes of a small-sided game.\n\nCompare. Does the ball move a yard on purpose on every touch? Does the head come up while the ball is traveling? In the game, does the touch set up the pass, the dribble or the shot, or does it stop the ball and wait?\n\nAn attacker is not somebody with tricks. He is somebody whose first touch, decision and finish are one movement. If the film shows that, you have become one. Keep scanning.",
         },
         keyPoints([
           "Scan every few seconds, not only when the ball is coming. A player who scans plays a second ahead.",

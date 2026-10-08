@@ -67,7 +67,7 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
       {
         title: "Establishing Your Baseline",
         body:
-          "The final step in this chapter is building your baseline: a swing video and an Athletic Hitting Assessment, both taken before you start training the concepts in this program.\n\nThe baseline video should be recorded the same way you'll want to compare it later — same camera angle (down the line and from the pitcher's view are both useful), same type of pitch (front toss or a machine at a comfortable, competitive speed), and a handful of swings so you're not judging yourself off one single rep. This isn't about grading your swing as \"good\" or \"bad.\" It's a snapshot in time.\n\nThe Athletic Hitting Assessment looks beyond just the swing itself. It looks at things like your athletic position and balance, how well you track pitches, your timing and rhythm, and how you move to produce bat speed — a broad look across all Five Pillars, not just the shape of your swing.\n\nBe honest with yourself during this process. The whole value of a baseline is that it's real. A baseline that's inflated or coached-up to look better than it actually is only cheats you out of an accurate measurement of your own growth. At the end of this program, in Chapter 8, you'll come back to this exact video and assessment and compare it to where you've ended up. That comparison is one of the most valuable parts of the entire course."
+          "The final step in this chapter is building your baseline: a swing video and an Athletic Hitting Assessment, both taken before you start training the concepts in this program.\n\nThe baseline video should be recorded the same way you'll want to compare it later — same camera angle each time, whichever one you have, same type of pitch (front toss or a machine at a comfortable, competitive speed), and a handful of swings so you're not judging yourself off one single rep. This isn't about grading your swing as \"good\" or \"bad.\" It's a snapshot in time.\n\nThe Athletic Hitting Assessment looks beyond just the swing itself. It looks at things like your athletic position and balance, how well you track pitches, your timing and rhythm, and how you move to produce bat speed — a broad look across all Five Pillars, not just the shape of your swing.\n\nBe honest with yourself during this process. The whole value of a baseline is that it's real. A baseline that's inflated or coached-up to look better than it actually is only cheats you out of an accurate measurement of your own growth. At the end of this program, in Chapter 8, you'll come back to this exact video and assessment and compare it to where you've ended up. That comparison is one of the most valuable parts of the entire course."
       },
       {
         title: "Key Points: What Every Hitter Must Know",
@@ -522,7 +522,7 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
       {
         title: "Key Points: Seeing the Ball",
         body:
-          "Key points:\n- You cannot hit what you do not see well. Seeing comes before everything else.\n- A still head and quiet eyes give you the clearest look at the pitch.\n- Read the pitch early: velocity, spin and location are recognised before the ball is halfway there.\n- Tracking is trainable. Set up a visual environment that makes seeing easier, then drill it."
+          "Key points:\n- You cannot hit what you do not see well. Seeing comes before everything else.\n- A still head and quiet eyes give you the clearest look at the pitch.\n- Read the pitch early: velocity, spin and location are recognized before the ball is halfway there.\n- Tracking is trainable. Set up a visual environment that makes seeing easier, then drill it."
       }
     ],
     quizQuestions: [
@@ -745,7 +745,7 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
       {
         title: "Key Points: Timing, Rhythm and Tempo",
         body:
-          "Key points:\n- \"Just start earlier\" is bad advice. Timing comes from organising your movement, not from guessing.\n- Rhythm, then tempo, then timing: the sequence that makes you ready on time pitch after pitch.\n- Movement creates timing, and that movement has to match the pitcher in front of you.\n- Tension is timing's silent killer. A tense hitter is late even when they started early."
+          "Key points:\n- \"Just start earlier\" is bad advice. Timing comes from organizing your movement, not from guessing.\n- Rhythm, then tempo, then timing: the sequence that makes you ready on time pitch after pitch.\n- Movement creates timing, and that movement has to match the pitcher in front of you.\n- Tension is timing's silent killer. A tense hitter is late even when they started early."
       }
     ],
     quizQuestions: [
@@ -1466,7 +1466,7 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
           },
           {
             orderIndex: 1,
-            answerText: "Because breaking balls are illegal to throw to hitters under 18U.",
+            answerText: "Because breaking balls are illegal to throw to hitters under 18.",
             isCorrect: false,
             explanation:
               "This isn't a real rule and isn't mentioned in the chapter — the reasoning given is entirely about timing and recognition, not legality by age group."
@@ -1612,7 +1612,7 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
       {
         title: "How to Evaluate an At-Bat",
         body:
-          "A simple, practical way to evaluate any at-bat — win, loss, hit, or out — is to walk back through the Five Pillars and honestly ask a question about each one. Did I see it? Was I tracking the pitch early and clearly, or did I lose it at some point? Did I decide well? Was my swing-or-take decision based on real information, or was I guessing? Did I move athletically? Was my movement efficient and on-time, or did something feel rushed, late, or disconnected? Did I adjust? If the pitch wasn't what I expected, was I able to respond, or did I stay locked into my original plan? And finally, how did I compete? Did I bring real focus and competitiveness to the at-bat, regardless of how it turned out?\n\nThis kind of evaluation takes less than a minute per at-bat once it becomes a habit, and it gives a hitter something far more useful than \"I got a hit\" or \"I struck out.\" It identifies specifically which pillar needs attention, which is exactly the kind of information that makes practice time actually productive instead of just repetitive."
+          "A simple, practical way to evaluate any at-bat — win, loss, hit, or out — is to walk back through the Five Pillars and honestly ask a question about each one. Did I see it? Was I tracking the pitch early and clearly, or did I lose it at some point? Did I decide well? Was my swing-or-take decision based on real information, or was I guessing? Did I move athletically? Was my movement efficient and on time, or did something feel rushed, late, or disconnected? Did I adjust? If the pitch wasn't what I expected, was I able to respond, or did I stay locked into my original plan? And finally, how did I compete? Did I bring real focus and competitiveness to the at-bat, regardless of how it turned out?\n\nThis kind of evaluation takes less than a minute per at-bat once it becomes a habit, and it gives a hitter something far more useful than \"I got a hit\" or \"I struck out.\" It identifies specifically which pillar needs attention, which is exactly the kind of information that makes practice time actually productive instead of just repetitive."
       },
       {
         title: "Recognizing Timing, Movement, and Pitch-Selection Problems",
@@ -1647,7 +1647,7 @@ export const AMERICAN_HITTING_CHAPTERS: AmericanHittingChapterContent[] = [
       {
         title: "Key Points: Becoming Your Own Coach",
         body:
-          "Key points:\n- Judge an at-bat by its process, not its outcome. A good decision can still end in an out.\n- Use video and statistics to find timing, movement and pitch-selection problems, not to grade yourself.\n- Productive practice means consistent work on a few things, not constant change.\n- Compare today against your Chapter 1 baseline, and build a hitting identity that is yours."
+          "Key points:\n- Judge an at-bat by its process, not its outcome. A good decision can still end in an out.\n- Use video and statistics to find timing, movement and pitch-selection problems, not to grade yourself.\n- Productive practice means consistent work on one thing at a time, not constant change.\n- Compare today against your Chapter 1 baseline, and build a hitting identity that is yours."
       }
     ],
     quizQuestions: [

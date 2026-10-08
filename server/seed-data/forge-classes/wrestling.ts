@@ -113,7 +113,7 @@ export const WRESTLING_CLASS: ForgeClassContent = {
         {
           title: "Single, Double, High Crotch",
           body:
-            "**The single leg** attacks one leg. The head goes to the outside of the hip, both hands lock behind the knee, and the finish lifts or runs the leg. It is the most common attack in wrestling because it is the one most often available. The Single Leg Takedown drill works the shot and the finishes.\n\n**The double leg** attacks both legs. The head goes to the side, the arms wrap behind both knees, and the hips drive through the opponent to the mat. It is the most powerful finish when the opponent is square and his hands are out of the way. The Double Leg Takedown drill works the drive.\n\n**The high crotch** attacks one leg from the inside, with the head inside and the arm deep across the thigh. It is what a single becomes when the opponent's leg is not where you expected. The High Crotch Takedown drill works the switch from one attack to the other.\n\nYour coach decides which of these fits your body and your level. Most wrestlers own one and are competent at the other two.",
+            "**The single leg** attacks one leg. The head goes to the outside of the hip, both hands lock behind the knee, and the finish lifts or runs the leg. It is the most common attack in wrestling because it is the one most often available. The Single Leg Takedown drill works the shot and the finishes.\n\n**The double leg** attacks both legs. The head goes to the side, the arms wrap behind both knees, and the hips drive through the opponent to the mat. It is the most powerful finish when the opponent is square and his hands are out of the way. The Double Leg Takedown drill works the drive.\n\n**The high crotch** attacks one leg from the inside, with the head outside the hip and the arm deep across the thigh. It is what a single becomes when the opponent's leg is not where you expected. The High Crotch Takedown drill works the switch from one attack to the other.\n\nYour coach decides which of these fits your body and your level. Most wrestlers own one and are competent at the other two.",
         },
         {
           title: "Setups",
@@ -292,7 +292,7 @@ export const WRESTLING_CLASS: ForgeClassContent = {
         {
           title: "Never Stop Moving",
           body:
-            "The worst thing a bottom wrestler can do is lie still. A still wrestler is being ridden, gives up riding time, and is one mistake from being turned.\n\nThe chain is the answer. Stand-up, sit-out, switch, back to base, stand-up again, with no pause between them. Every move the top wrestler stops has cost him position for the next one.\n\nThere is a conditioning truth under this: escaping is tiring, and the wrestler who has drilled the chain until it is automatic escapes in the third period when the one who has not cannot. The drills in this chapter are not about learning the escapes. They are about never having to think about them.",
+            "The worst thing a bottom wrestler can do is lie still. A still wrestler is being ridden and is one mistake from being turned.\n\nThe chain is the answer. Stand-up, sit-out, switch, back to base, stand-up again, with no pause between them. Every move the top wrestler stops has cost him position for the next one.\n\nThere is a conditioning truth under this: escaping is tiring, and the wrestler who has drilled the chain until it is automatic escapes in the third period when the one who has not cannot. The drills in this chapter are not about learning the escapes. They are about never having to think about them.",
         },
         keyPoints([
           "The base: hands in front of the knees, back flat, head up, hips under you. Move first on the whistle.",
@@ -430,7 +430,7 @@ export const WRESTLING_CLASS: ForgeClassContent = {
           questionText: "What does the chapter say about learning the turns?",
           answers: [
             { answerText: "Learn them from your coach on the mat with a partner who knows what is coming; the class says what they are for, not how to do them alone.", isCorrect: true, explanation: "Every turn has a limit the rules and the coach set." },
-            { answerText: "Practise them alone on a dummy until they are perfect.", isCorrect: false, explanation: "The chapter says never alone." },
+            { answerText: "Practice them alone on a dummy until they are perfect.", isCorrect: false, explanation: "The chapter says never alone." },
             { answerText: "Try them on a smaller partner first.", isCorrect: false, explanation: "The partner has to know what is coming; size is not the rule." },
             { answerText: "They are too dangerous to learn at all.", isCorrect: false, explanation: "They are learned, with the coach, within the limits." },
           ],

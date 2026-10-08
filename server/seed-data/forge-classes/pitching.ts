@@ -117,7 +117,7 @@ export const PITCHING_CLASS: ForgeClassContent = {
         {
           title: "The Arm Path and the Finish",
           body:
-            "The arm's job is to be on time. When the front foot lands, the throwing hand should be up, roughly at head height with the ball facing away from the target. Early and the arm fights the body; late and the shoulder takes the strain.\n\nThe Towel Drill trains the path and the finish without a ball: a towel in the throwing hand, a target held out in front at full extension, and the goal of snapping the towel onto the target every rep. It teaches the body to get out over the front leg and finish long instead of pulling off.\n\nThe finish tells the truth about the delivery. A pitcher who finishes square to the plate, chest over the front knee, glove tucked, with the throwing arm finishing across the body, has done the work in order. A pitcher who falls off toward first base has opened early and the ball probably ran arm-side.\n\nWatch your own finish on video from the side and from behind. The camera does not have to measure anything to show you where you landed.",
+            "The arm's job is to be on time. When the front foot lands, the throwing hand should be up, roughly at head height with the ball facing away from the target. Early and the arm fights the body; late and the shoulder takes the strain.\n\nThe Towel Drill trains the path and the finish without a ball: a towel in the throwing hand, a target held out in front at full extension, and the goal of snapping the towel onto the target every rep. It teaches the body to get out over the front leg and finish long instead of pulling off.\n\nThe finish tells the truth about the delivery. A pitcher who finishes square to the plate, chest over the front knee, glove tucked, with the throwing arm finishing across the body, has done the work in order. A pitcher who falls off toward first base has opened early and the ball probably ran arm-side.\n\nWatch your own finish on video. The camera does not have to measure anything to show you where you landed.",
         },
         keyPoints([
           "Repeatable beats perfect. A delivery that repeats lets you fix one thing at a time.",
@@ -142,7 +142,7 @@ export const PITCHING_CLASS: ForgeClassContent = {
             { answerText: "Because a repeated delivery makes every miss mean something, so you can fix one thing at a time.", isCorrect: true, explanation: "If everything changes on every pitch, a miss tells you nothing." },
             { answerText: "Because perfect deliveries are against the rules.", isCorrect: false, explanation: "Rules have nothing to do with it." },
             { answerText: "Because every good pitcher has the same delivery.", isCorrect: false, explanation: "The chapter says the opposite: ten pitchers, ten different deliveries." },
-            { answerText: "Because repeating is easier than practising.", isCorrect: false, explanation: "Repeating a delivery is the practice." },
+            { answerText: "Because repeating is easier than practicing.", isCorrect: false, explanation: "Repeating a delivery is the practice." },
           ],
         },
         {
@@ -372,12 +372,12 @@ export const PITCHING_CLASS: ForgeClassContent = {
         {
           title: "The Breaking Ball",
           body:
-            "A curveball or slider works on movement: the ball leaves the hand on one line and arrives on another. The spin creates the break, and the spin comes from the fingers getting out in front of the ball at release rather than behind it.\n\nThe Curveball Spin Drill is about spin, not break. Throw it short, to a partner, and watch the ball: a tight, fast rotation with a red dot in the middle is what you are after. Break follows spin; chase the spin and the break arrives.\n\nTwo cautions. First, the elbow stays up through release; a dropped elbow to \"get around\" the ball is what hurts arms on breaking balls. Second, the pitch has to be thrown for a strike before it is thrown as a chase pitch, or the hitter learns to take it. Your coach decides when you are ready to add a breaking ball; some arms are ready at fifteen and some are not.",
+            "A curveball or slider works on movement: the ball leaves the hand on one line and arrives on another. The spin creates the break, and the spin comes from the fingers getting out in front of the ball at release rather than behind it.\n\nThe Curveball Spin Drill is about spin, not break. Throw it short, to a partner, and watch the ball: a tight, fast forward rotation is what you are after. Break follows spin; chase the spin and the break arrives.\n\nTwo cautions. First, the elbow stays up through release; a dropped elbow to \"get around\" the ball is what hurts arms on breaking balls. Second, the pitch has to be thrown for a strike before it is thrown as a chase pitch, or the hitter learns to take it. Your coach decides when you are ready to add a breaking ball; some arms are ready at fifteen and some are not.",
         },
         {
           title: "Sequencing: When to Throw What",
           body:
-            "Off-speed pitches are set up by the fastball. A changeup after a fastball in the same spot is a different pitch from a changeup after a changeup, because the hitter's clock is set by the last thing he saw.\n\nSome patterns that hold up at every level:\n\n- Establish the fastball early in the at-bat so the hitter has to respect it.\n- A changeup is best when the hitter is ahead in the count and sitting fastball.\n- A breaking ball for a strike early in the count is a pitch the hitter did not plan for.\n- Never throw the same off-speed pitch twice in a row to the same spot without a reason.\n\nThe Bullpen Session with the off-speed mix is where you practise sequences, not pitches: fastball away, changeup away, fastball in. Throw the pitches in the order you would use them in a game, and you will find out which sequences you can actually execute.",
+            "Off-speed pitches are set up by the fastball. A changeup after a fastball in the same spot is a different pitch from a changeup after a changeup, because the hitter's clock is set by the last thing he saw.\n\nSome patterns that hold up at every level:\n\n- Establish the fastball early in the at-bat so the hitter has to respect it.\n- A changeup is best when the hitter is ahead in the count and sitting fastball.\n- A breaking ball for a strike early in the count is a pitch the hitter did not plan for.\n- Never throw the same off-speed pitch twice in a row to the same spot without a reason.\n\nThe Bullpen Session with the off-speed mix is where you practice sequences, not pitches: fastball away, changeup away, fastball in. Throw the pitches in the order you would use them in a game, and you will find out which sequences you can actually execute.",
         },
         keyPoints([
           "An off-speed pitch works only while the hitter thinks it is a fastball: same arm speed, slot, delivery and release. Only the grip changes.",
@@ -390,7 +390,7 @@ export const PITCHING_CLASS: ForgeClassContent = {
         { front: "What has to look identical on an off-speed pitch?", back: "Arm speed, arm slot, delivery and release point. Only the grip changes." },
         { front: "Which off-speed pitch comes first and why?", back: "The changeup: kindest to the arm, useful against the most hitters." },
         { front: "Where does a changeup have to be?", back: "At the knees or below. Up in the zone it is a slow fastball." },
-        { front: "What does the Curveball Spin Drill chase?", back: "Tight, fast spin with a red dot in the middle. Break follows spin." },
+        { front: "What does the Curveball Spin Drill chase?", back: "Tight, fast forward spin. Break follows spin." },
         { front: "Breaking-ball safety cue", back: "Elbow up through release. A dropped elbow is what hurts arms." },
         { front: "What sets the hitter's clock?", back: "The last pitch he saw. Sequence off the fastball." },
       ],
@@ -465,7 +465,7 @@ export const PITCHING_CLASS: ForgeClassContent = {
         {
           title: "Reading Your Own Outings",
           body:
-            "After an outing, the score tells you less than you think. A pitcher can throw well and lose, or throw badly and win. The things to read are the ones you control.\n\nStart with strikes: how many first-pitch strikes, how many at-bats where you got ahead. Then command: in the bullpen before the game and in the game, how often did the pitch land near the glove. Then the misses: were they in one direction (one fault to fix) or everywhere (the delivery was changing)? Then the sequences: which ones worked, which pitch did the hitters sit on.\n\nWrite it down the same way each time, and you will see what to practise before the next outing.",
+            "After an outing, the score tells you less than you think. A pitcher can throw well and lose, or throw badly and win. The things to read are the ones you control.\n\nStart with strikes: how many first-pitch strikes, how many at-bats where you got ahead. Then command: in the bullpen before the game and in the game, how often did the pitch land near the glove. Then the misses: were they in one direction (one fault to fix) or everywhere (the delivery was changing)? Then the sequences: which ones worked, which pitch did the hitters sit on.\n\nWrite it down the same way each time, and you will see what to practice before the next outing.",
         },
         {
           title: "Back to Your Baseline",
@@ -526,7 +526,7 @@ export const PITCHING_CLASS: ForgeClassContent = {
             { answerText: "Proof the number moved and a clear idea of the one thing to work on next.", isCorrect: true, explanation: "Not a perfect score: evidence the dial moved." },
             { answerText: "A perfect twenty out of twenty.", isCorrect: false, explanation: "The chapter says it is not a perfect number you are after." },
             { answerText: "A higher velocity than Chapter 1.", isCorrect: false, explanation: "The baseline counts location, not speed." },
-            { answerText: "A reason to stop practising.", isCorrect: false, explanation: "The last line is one more season." },
+            { answerText: "A reason to stop practicing.", isCorrect: false, explanation: "The last line is one more season." },
           ],
         },
       ],
