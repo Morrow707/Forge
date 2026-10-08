@@ -119,7 +119,7 @@ import {
   entitlementsForFreeAgentTier,
   type FreeAgentTierId,
 } from "@shared/free-agent-tiers";
-import { verifyAppleTransaction, APPLE_IAP_LIVE } from "./apple-iap";
+import { verifyAppleTransaction, appleVerifyRefusal, APPLE_IAP_LIVE } from "./apple-iap";
 import { GOOGLE_PLAY_BILLING_LIVE, verifyGooglePlayPurchase } from "./google-play-billing";
 import { publicSignupOpen, inviteCodeAccepted } from "./signup-availability";
 import { publicOrigin as sharedPublicOrigin } from "./public-origin";
@@ -10888,10 +10888,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
       const verified = await verifyAppleTransaction(parsed.data.signedTransactionInfo);
-      if (!verified) {
-        return res.status(502).json({ message: "Apple In-App Purchase isn't set up yet." });
+      if (!verified.ok) {
+        const refusal = appleVerifyRefusal(verified);
+        return res.status(refusal.status).json(refusal.body);
       }
-      const result = await storage.applyAppleIapVerification(user.id, verified);
+      const result = await storage.applyAppleIapVerification(user.id, verified.transaction);
       if (!result.ok) return res.status(422).json({ message: result.error });
       res.status(204).end();
     },
@@ -10915,10 +10916,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(403).json({ message: "Nothing is sold to this account in the app." });
     }
     const verified = await verifyAppleTransaction(parsed.data.signedTransactionInfo);
-    if (!verified) return res.status(502).json({ message: "Apple In-App Purchase isn't set up yet." });
+    if (!verified.ok) {
+      const refusal = appleVerifyRefusal(verified);
+      return res.status(refusal.status).json(refusal.body);
+    }
     const result = await storage.applyAppleIapVerification(
       user.id,
-      verified,
+      verified.transaction,
       user.role === "coach" ? "coach" : "free_agent",
     );
     if (!result.ok) return res.status(422).json({ message: result.error });

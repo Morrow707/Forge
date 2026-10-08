@@ -172,6 +172,14 @@ async function verifyAndFinishOnce(transaction: AppleIapTransaction): Promise<vo
     // anywhere of which step refused it.
     if (err instanceof ApiError && err.status === 401) {
       logDebug("IAP", `${transaction.productId}: not signed in yet, will retry after sign-in`);
+    } else if (err instanceof ApiError && err.status === 410) {
+      // A RETIRED PRODUCT (RETIRED_APPLE_PRODUCT_IDS): a sandbox transaction for an id that was
+      // created wrong and replaced. The server will never record it and StoreKit will replay it
+      // at every launch until it is finished, so it is finished HERE, with nothing granted -- the
+      // one refusal that does not leave the transaction open. Every other refusal still does.
+      logDebug("IAP", `${transaction.productId}: retired product, finishing with StoreKit so it stops replaying`);
+      await AppleIap.finishTransaction({ transactionId: transaction.transactionId });
+      return;
     } else {
       logDebug("IAP", `server verify refused ${transaction.productId}: ${err?.status ?? "no status"} ${err?.message ?? String(err)}`);
     }

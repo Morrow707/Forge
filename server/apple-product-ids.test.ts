@@ -118,4 +118,39 @@ describe("the verifier recognises every product Forge sells at Apple", () => {
     expect(isKnownAppleProductId("com.foreperformancesystems.forge.addon.coaches_corner_v1")).toBe(true);
     expect(isKnownAppleProductId("com.foreperformancesystems.forge.freeagent.nothing_v2")).toBe(false);
   });
+
+  // 2026-10-08, build 643's console: four refusals on every cold start for ai_coach_v2 and
+  // ai_coach_video_v2, sandbox transactions from the day before both were recreated as _v3.
+  // The server refused them as unknown (502, "isn't set up yet" -- wrong on both counts) and the
+  // app never finished them, so StoreKit replayed them forever. A retired id is its own answer.
+  it("knows the retired ids apart from the unknown ones, and never sells a retired one", async () => {
+    const { isKnownAppleProductId, isRetiredAppleProductId, appleVerifyRefusal } = await import("./apple-iap");
+    const { RETIRED_APPLE_PRODUCT_IDS } = await import("@shared/free-agent-tiers");
+    expect(RETIRED_APPLE_PRODUCT_IDS).toContain("com.foreperformancesystems.forge.freeagent.ai_coach_v2");
+    expect(RETIRED_APPLE_PRODUCT_IDS).toContain("com.foreperformancesystems.forge.freeagent.ai_coach_video_v2");
+    for (const id of RETIRED_APPLE_PRODUCT_IDS) {
+      expect(isRetiredAppleProductId(id)).toBe(true);
+      expect(isKnownAppleProductId(id)).toBe(false);
+      expect(productIdsInSwift()).not.toContain(id);
+    }
+    expect(isRetiredAppleProductId("com.foreperformancesystems.forge.freeagent.nothing_v2")).toBe(false);
+    // Only the retired answer tells the phone to finish; 502 is reserved for "not configured".
+    expect(appleVerifyRefusal({ ok: false, reason: "retired_product", productId: "x" })).toMatchObject({ status: 410, body: { retired: true } });
+    expect(appleVerifyRefusal({ ok: false, reason: "unknown_product", productId: "x" }).status).toBe(422);
+    expect(appleVerifyRefusal({ ok: false, reason: "unknown_product", productId: "x" }).body).not.toHaveProperty("retired");
+    expect(appleVerifyRefusal({ ok: false, reason: "not_configured" }).status).toBe(502);
+    expect(appleVerifyRefusal({ ok: false, reason: "invalid" }).status).toBe(422);
+  });
+
+  it("the phone finishes a retired transaction on 410 and nothing else", () => {
+    const src = readFileSync("client/src/lib/apple-iap.ts", "utf8");
+    const idx = src.indexOf("err.status === 410");
+    expect(idx).toBeGreaterThan(0);
+    const branch = src.slice(idx, idx + 700);
+    expect(branch).toMatch(/AppleIap\.finishTransaction\(\{ transactionId: transaction\.transactionId \}\)/);
+    expect(branch).toMatch(/return;/);
+    // The 401 and the generic branches still throw, so an unknown product stays unfinished.
+    expect(src).toMatch(/err\.status === 401\)[\s\S]{0,200}not signed in yet/);
+    expect((src.match(/AppleIap\.finishTransaction\(/g) ?? []).length).toBe(2);
+  });
 });

@@ -204,6 +204,23 @@ export function appleProductIdForFreeAgentTier(tier: FreeAgentTierId): string {
   return `${APPLE_BUNDLE_ID}.freeagent.${tier}${APPLE_TIER_PRODUCT_SUFFIX[tier]}`;
 }
 
+/** THE GRAVESTONES THEMSELVES, as data. Every product id above that was created and then
+ * replaced. Apple keeps a sandbox transaction for one of these alive forever: StoreKit replays an
+ * unfinished transaction at every launch until the app finishes it, and the server refused these
+ * (not a product Forge sells) without the app ever finishing them -- so build 643's console
+ * showed four refusals for ai_coach_v2 / ai_coach_video_v2 on every cold start, three days after
+ * both were recreated as _v3 (2026-10-08). A transaction for an id on this list is answered
+ * 410 by the verify route and FINISHED by the app, so it stops coming back; nothing is granted
+ * for it, because nothing was ever sold under it to a real customer (the app was never in the
+ * store while they existed). An id that is neither sold nor retired is still refused and left
+ * unfinished, which is the recoverable state for a real purchase of something the server does
+ * not know yet (the build-611 bug). */
+export const RETIRED_APPLE_PRODUCT_IDS: readonly string[] = [
+  `${APPLE_BUNDLE_ID}.freeagent.ai_coach_v2`,
+  `${APPLE_BUNDLE_ID}.freeagent.ai_coach_video_v2`,
+  `${APPLE_BUNDLE_ID}.freeagent.family_v2`,
+];
+
 /** THE THREE SPORT COACHES, WHICH ARE ONE KIND OF THING.
  *
  * Each is an AI chat coach for a sport, and server/storage.ts keys its prompts, labels and

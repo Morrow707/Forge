@@ -755,6 +755,24 @@ can install. Delete entries as a `beta` ships them.
   from the purchase record alone and nothing else. `coach@forge.app` left
   `COMPED_COACHES_CORNER_COACHES` (now empty). The Free Agent's camera comp stays for App Review.
   `server/demo-accounts-are-sold-to.itest.ts` proves both.
+- **BUILD 643'S CONSOLE PROVED ALL CLASSES AND EXPOSED FOUR ZOMBIE TRANSACTIONS** (2026-10-08).
+  Scott: "i only did sandbox for the free agent profile, how do we know it worked". Off his
+  console: `purchase requested: ...addon.all_classes_v1` -> `StoreKit transaction ... verifying`
+  -> `server recorded ...all_classes_v1, finishing with StoreKit`, and the Classes page opened
+  with every chapter. The 613 hold-until-sign-in also worked on its first real cold start:
+  `signed in, re-sending 6 held transaction(s)`. **But four of the six were refused 502 "Apple
+  In-App Purchase isn't set up yet"** -- sandbox transactions for `ai_coach_v2` and
+  `ai_coach_video_v2`, the gravestone ids recreated as `_v3` on 10-05. The server did not know
+  them, so it refused; the app never finishes a refused transaction (the right rule for a real
+  purchase the server does not know yet, build 611's bug); so StoreKit replayed them at every
+  launch, forever, and the message blamed configuration. Three fixes, each its own thing:
+  `RETIRED_APPLE_PRODUCT_IDS` in `shared/free-agent-tiers.ts` names the gravestones as data;
+  `verifyAppleTransaction` returns a REASON instead of null and `appleVerifyRefusal` maps it --
+  502 is now reserved for the verifier being unconfigured, an unknown product is 422 and stays
+  unfinished, a retired product is **410 with `retired: true`**; and the phone finishes a
+  transaction ONLY on that 410 (`verifyAndFinishOnce`), with nothing granted, so it never comes
+  back. `apple-product-ids.test.ts` pins the list, the statuses and that 410 is the one branch
+  that finishes. Client half needs a build; server half ships on Render.
 - Build **614** was cut 2026-10-05 right after 613, from the locked demo Free Agent's screen:
   the All Classes card read "Free while Forge is in beta" with nothing to tap, because it gated
   the PHONE on `BILLING_LIVE` too. Both rails now follow their own switch, the split the tier

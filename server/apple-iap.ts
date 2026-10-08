@@ -39,8 +39,7 @@ import {
   appleProductIdForFreeAgentTier,
   appleProductIdForFreeAgentAddOn,
   appleProductIdForCoachAddOn,
-  type FreeAgentTierId,
-} from "@shared/free-agent-tiers";
+  type FreeAgentTierId, RETIRED_APPLE_PRODUCT_IDS } from "@shared/free-agent-tiers";
 import { COACH_PURCHASABLE_ADD_ON_ORDER } from "@shared/billing-tiers";
 
 export const APPLE_IAP_LIVE = process.env.APPLE_IAP_LIVE === "true";
@@ -138,9 +137,19 @@ function getVerifier(): SignedDataVerifier | null {
  * a missing root cert, or a transaction for a product this app doesn't
  * recognize all resolve the same way: no entitlement is ever granted for
  * something that wasn't cryptographically verified end to end. */
-export async function verifyAppleTransaction(signedTransactionInfo: string): Promise<VerifiedAppleTransaction | null> {
+/** Why a transaction was not verified. Each one is answered differently by the route
+ * (appleVerifyRefusal) and by the phone: only "retired_product" tells the app to FINISH the
+ * transaction so StoreKit stops replaying it; every other refusal leaves it unfinished, which is
+ * the recoverable state. */
+export type AppleVerifyRefusalReason = "not_configured" | "incomplete" | "unknown_product" | "retired_product" | "invalid";
+
+export type AppleVerifyResult =
+  | { ok: true; transaction: VerifiedAppleTransaction }
+  | { ok: false; reason: AppleVerifyRefusalReason; productId?: string };
+
+export async function verifyAppleTransaction(signedTransactionInfo: string): Promise<AppleVerifyResult> {
   const verifier = getVerifier();
-  if (!verifier) return null;
+  if (!verifier) return { ok: false, reason: "not_configured" };
   try {
     const decoded = await verifier.verifyAndDecodeTransaction(signedTransactionInfo);
     if (!decoded.originalTransactionId || !decoded.productId || decoded.expiresDate == null) {
@@ -150,22 +159,29 @@ export async function verifyAppleTransaction(signedTransactionInfo: string): Pro
         expiresDate: decoded.expiresDate,
         environment: decoded.environment,
       });
-      return null;
+      return { ok: false, reason: "incomplete", productId: decoded.productId };
     }
     // Every product Forge sells at Apple, not only the tiers. The first version of this check
     // asked tierForAppleProductId alone, which refused All Classes and Coaches Corner with a 502
     // ("isn't set up yet") the moment they went on sale, Apple having already taken the money.
     // Which KIND of product it is gets decided in applyAppleIapVerification; here the question
     // is only whether it is ours.
+    if (isRetiredAppleProductId(decoded.productId)) {
+      console.warn("Apple IAP: transaction for a retired product; the app will finish it", decoded.productId, decoded.environment);
+      return { ok: false, reason: "retired_product", productId: decoded.productId };
+    }
     if (!isKnownAppleProductId(decoded.productId)) {
       console.error("Apple IAP: transaction for a product this app does not sell", decoded.productId, decoded.environment);
-      return null;
+      return { ok: false, reason: "unknown_product", productId: decoded.productId };
     }
     return {
-      originalTransactionId: decoded.originalTransactionId,
-      productId: decoded.productId,
-      expiresAt: new Date(decoded.expiresDate),
-      environment: String(decoded.environment ?? "unknown"),
+      ok: true,
+      transaction: {
+        originalTransactionId: decoded.originalTransactionId,
+        productId: decoded.productId,
+        expiresAt: new Date(decoded.expiresDate),
+        environment: String(decoded.environment ?? "unknown"),
+      },
     };
   } catch (err) {
     console.error(
@@ -173,7 +189,27 @@ export async function verifyAppleTransaction(signedTransactionInfo: string): Pro
       err instanceof Error ? err.message : err,
       `(verifier environment ${APPLE_IAP_ENVIRONMENT}, bundle ${APPLE_BUNDLE_ID})`,
     );
-    return null;
+    return { ok: false, reason: "invalid" };
+  }
+}
+
+/** The HTTP answer for each refusal, shared by both verify routes. 502 is reserved for the
+ * verifier not being configured -- it used to be the answer for EVERY refusal, so a transaction
+ * for a product this app does not sell read as "Apple In-App Purchase isn't set up yet" on a
+ * server where it was set up fine (build 643's console, 2026-10-08). 410 is the one the phone
+ * acts on: a retired product is finished with StoreKit and never sent again. */
+export function appleVerifyRefusal(refusal: Extract<AppleVerifyResult, { ok: false }>): { status: number; body: { message: string; retired?: true } } {
+  switch (refusal.reason) {
+    case "not_configured":
+      return { status: 502, body: { message: "Apple In-App Purchase isn't set up yet." } };
+    case "retired_product":
+      return { status: 410, body: { message: `${refusal.productId ?? "This product"} is no longer sold; nothing is owed on it.`, retired: true } };
+    case "unknown_product":
+      return { status: 422, body: { message: `Forge does not sell ${refusal.productId ?? "this product"} in the app.` } };
+    case "incomplete":
+      return { status: 422, body: { message: "That purchase could not be read." } };
+    case "invalid":
+      return { status: 422, body: { message: "That purchase could not be verified with Apple." } };
   }
 }
 
@@ -188,6 +224,10 @@ export const KNOWN_APPLE_PRODUCT_IDS: ReadonlySet<string> = new Set([
 
 export function isKnownAppleProductId(productId: string): boolean {
   return KNOWN_APPLE_PRODUCT_IDS.has(productId);
+}
+
+export function isRetiredAppleProductId(productId: string): boolean {
+  return RETIRED_APPLE_PRODUCT_IDS.includes(productId);
 }
 
 // Built from appleProductIdForFreeAgentTier rather than a second hand-typed

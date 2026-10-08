@@ -55,6 +55,16 @@ describe("a StoreKit transaction is verified once, however many paths deliver it
     // The ordering the whole file is built on: a transaction is never finished before the grant
     // is real, or a failed verify would throw the receipt away.
     const body = src.slice(src.indexOf("async function verifyAndFinishOnce"));
-    expect(body.indexOf("server recorded")).toBeLessThan(body.indexOf("finishTransaction"));
+    const recorded = body.indexOf("server recorded");
+    expect(recorded).toBeGreaterThan(0);
+    expect(body.indexOf("AppleIap.finishTransaction(", recorded)).toBeGreaterThan(recorded);
+    // The ONE finish allowed before the grant is for a retired product (the server's 410,
+    // RETIRED_APPLE_PRODUCT_IDS): nothing is ever granted for it and StoreKit would replay it
+    // forever otherwise (2026-10-08). Any other early finish would throw a real receipt away.
+    const before = body.slice(0, recorded);
+    expect((before.match(/AppleIap\.finishTransaction\(/g) ?? []).length).toBe(1);
+    const retiredBranch = before.indexOf("err.status === 410");
+    expect(retiredBranch).toBeGreaterThan(0);
+    expect(before.indexOf("AppleIap.finishTransaction(")).toBeGreaterThan(retiredBranch);
   });
 });
