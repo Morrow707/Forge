@@ -60,6 +60,7 @@ import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
 import { extractVideoFrames } from "@/lib/video-frames";
 import type { RepMetrics } from "@/lib/bar-tracking";
+import { repsForSetBest } from "@/lib/jump-tracking";
 import type { JumpSetMetrics } from "@/lib/jump-tracking";
 import type { PoseFrame } from "@/lib/pose-tracking";
 import { toKg, fromKg } from "@/lib/bar-tracking";
@@ -4288,9 +4289,35 @@ function ExerciseLogContent({
               const repBreakdown = item.materials.usesBox
                 ? metrics.repBreakdown.map((r) => ({ ...r, jumpHeightCm: r.peakHeightCm }))
                 : metrics.repBreakdown;
+              /* BUILD 621'S FIX NEVER REACHED THE ATHLETE'S SCREEN, BECAUSE THIS LINE
+               * RECOMPUTED THE HEADLINE AND IGNORED THE FLAG.
+               *
+               * A 61cm box jump reported 238.4cm on 2026-10-05. Its seven reps were
+               * [70.6, 71.5, 2.4, 71.7, 70.3, 67.5, 265.5] -- five within 1.6cm of each other
+               * and two measured from a baseline that had walked off. BOTH were already
+               * flagged by outlierAgainstSet, and build 621 added repsForSetBest so the set
+               * read 61.1cm instead of the worst rep it had.
+               *
+               * That fix protects `metrics.bestJumpHeightCm` -- which this expression consults
+               * ONLY when repBreakdown is empty. On the path every real box jump takes, the
+               * page threw it away and took a bare Math.max over every rep, flagged ones
+               * included. So the number the athlete saw, the PR badge and the history row were
+               * all still the 2026-10-05 number.
+               *
+               * CLAUDE.md names this exact search: "the next place to look for it is any other
+               * set-level Math.max over reps." This was it, one page away from the fix.
+               *
+               * Rule #1 is kept by repsForSetBest itself: when every rep is flagged there is
+               * nothing to prefer and it falls back to all of them, so a number always comes
+               * out, and every rep keeps its row and its flag either way. */
               const jumpHeightCm =
                 repBreakdown.length > 0
-                  ? Math.max(...repBreakdown.map((r) => r.jumpHeightCm))
+                  ? Math.max(
+                      ...repsForSetBest(
+                        repBreakdown,
+                        repBreakdown.map((r) => r.likelyTrackingGlitch),
+                      ).map((r) => r.jumpHeightCm),
+                    )
                   : metrics.bestJumpHeightCm;
               onUpdateSet(
                 targetSetNumber,
@@ -4460,6 +4487,15 @@ function ExerciseLogContent({
                 horizontalLoadDistanceYards: metrics?.distanceYards ?? null,
                 horizontalLoadAvgSpeedYardsPerSec: metrics?.avgSpeedYardsPerSec ?? null,
                 captureDeviceInfo: metrics?.captureDeviceInfo ?? null,
+                // BUILT BY BOTH SLED DIALOGS AND DROPPED HERE. av-horizontal-load and its web
+                // sibling each assemble a blob -- the sampling measure, and declareObjectSystem
+                // saying in words that this mode HAS no object witness, which is the whole point
+                // of Rule #4's "record explicitly that it has none, so overwatch's silence is a
+                // recorded fact and not an absence". This handler was the only one of the five
+                // capture handlers on this page that never mapped the key, so all of it was
+                // thrown away between the dialog and the server and both sled modes have
+                // appeared in every export with no diagnostics at all.
+                trackingDiagnostics: metrics?.trackingDiagnostics ?? null,
                 skeletonFrames: skeletonFrames ?? null,
                 ...videoPatch,
               },
