@@ -10,9 +10,17 @@ export type ConsentType = (typeof consentTypeEnum.enumValues)[number];
  *
  * `page` is the public page in the app (null when there is nothing to open: a payment
  * verification is an observation, not a document anyone signs). `pdfType` is the type
- * `/api/legal-documents/:type.pdf` serves, and is null for documents that have no PDF route --
- * the research consent lives in shared/research-consent.ts, the institutional agreement is a
- * signed PDF on the coach's own record.
+ * `/api/legal-documents/:type.pdf` serves, and is null only where that route serves no copy --
+ * the institutional agreement is a per-coach signed PDF on that coach's own record, not a public
+ * document type.
+ *
+ * THE RESEARCH CONSENT IS SERVED THERE AND THIS ENTRY SAID IT WAS NOT, from the commit that
+ * built the route (2b495e44, "research consent page and PDF") until 2026-10-08. Its text is a
+ * code constant (shared/research-consent.ts) and it is deliberately absent from LEGAL_DOC_TYPES,
+ * so the route carries it on an explicit branch AHEAD of the enum lookup -- and "not in the enum"
+ * was read here as "has no PDF route". It is not the same thing. The one list of what a person
+ * agreed to therefore offered no durable copy of the only consent whose record outlives the
+ * account (see retainSubjectAfterDeletion). Check the route, not the enum, before nulling one.
  */
 export type ConsentCatalogEntry = {
   label: string;
@@ -33,7 +41,11 @@ export const CONSENT_CATALOG: Record<ConsentType, ConsentCatalogEntry> = {
     page: "/assumption-of-risk",
     pdfType: "assumption_of_risk",
   },
-  research_data_use: { label: "Research consent", page: "/research-consent", pdfType: null },
+  research_data_use: {
+    label: "Research consent",
+    page: "/research-consent",
+    pdfType: "research_consent",
+  },
   /* Both were null until 2026-10-08, because the notice had no public page and no PDF -- so a
    * guardian reading "What you've agreed to" saw the label of the one document addressed to
    * THEM and no way to reread it. It has both now. */
@@ -42,8 +54,27 @@ export const CONSENT_CATALOG: Record<ConsentType, ConsentCatalogEntry> = {
     page: "/parent-notice",
     pdfType: "parental_notice",
   },
+  /* The coach's attestation is a code constant (shared/coach-attestation.ts) shown to the coach
+   * as they provision the slot, not a published document -- it has no page and no PDF to point
+   * at, which is why this one stays null while the guardian's row below does not. */
   coach_coppa_consent: { label: "Coach's attestation for an under-13 account", page: null, pdfType: null },
-  guardian_coppa_consent: { label: "Guardian's consent for an under-13 account", page: null, pdfType: null },
+  /* THE NOTICE IS THE DOCUMENT BEHIND THIS ROW, and this entry said there was none until
+   * 2026-10-08. storage.claimGuardianInvite writes it as `documentText: notice?.content`, the
+   * parental_notice row (seed.ts says so in as many words: "for an athlete under 13 it is what
+   * guardian_coppa_consent records as the thing agreed to"). So the same document the row above
+   * resolves to, for the same reason -- and a guardian comparing the two rows got two different
+   * answers about one document while this one was null. The guardian of an under-13 is the one
+   * reader in the system with no account history of their own to fall back on.
+   *
+   * The write has a `?? agreedToTermsText` fallback for a missing notice row, which the seed
+   * makes unreachable: nextParentalNotice(null) returns the draft, so every deploy creates the
+   * row before any claim can reach it. A record written under that fallback would still be
+   * matched by its own documentVersion, which the row carries separately. */
+  guardian_coppa_consent: {
+    label: "Guardian's consent for an under-13 account",
+    page: "/parent-notice",
+    pdfType: "parental_notice",
+  },
   guardian_payment_verification: {
     label: "Payment verification of parental consent",
     page: null,

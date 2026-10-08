@@ -154,7 +154,12 @@ export function jsonLdForRoute(origin: string, route: PublicRoute, imageAbsolute
       name: route.title,
       description: route.description,
       isPartOf: { "@id": `${base}/#website` },
-      primaryImageOfPage: imageAbsolute,
+      // ImageObject, not a bare URL: schema.org ranges primaryImageOfPage on ImageObject ALONE,
+      // and unlike image/logo/isPartOf the JSON-LD context does not declare it "@type": "@id", so a
+      // string there expands to a literal and every validator reports a range violation on all 20
+      // pages. Benign to Google (WebPage is not a rich-result type) and exactly the kind of
+      // standing noise that hides a real error from the next person who pastes a URL in.
+      primaryImageOfPage: { "@type": "ImageObject", url: imageAbsolute },
       inLanguage: "en",
     },
   ];
@@ -165,7 +170,9 @@ export function jsonLdForRoute(origin: string, route: PublicRoute, imageAbsolute
     graph.push({
       "@type": "Article",
       headline: route.title,
-      about: movement.name,
+      // Same range rule as primaryImageOfPage above: about ranges on Thing, and the context does
+      // not coerce it, so a bare string is a Text literal where a node is required.
+      about: { "@type": "Thing", name: movement.name },
       description: route.description,
       mainEntityOfPage: `${base}${route.path}`,
       publisher: { "@id": `${base}/#organization` },

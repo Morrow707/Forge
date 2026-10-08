@@ -139,6 +139,29 @@ describe("the structured data", () => {
     }
   });
 
+  it("gives every node-ranged property a node, never a bare string", () => {
+    // schema.org declares "@type": "@id" in its JSON-LD context for the properties whose range
+    // includes URL (image, logo, url, isPartOf, mainEntityOfPage), so a string there is a node
+    // reference and is fine. It does NOT for primaryImageOfPage (range: ImageObject) or about
+    // (range: Thing), so a string in those expands to a LITERAL and a validator reports a range
+    // violation on every page -- benign to Google, and noise that hides a real error from the
+    // next person who pastes a URL into a validator.
+    for (const p of pages) {
+      const graph = jsonLd(p.html)["@graph"];
+      const page = graph.find((n: { "@type": string }) => n["@type"] === "WebPage");
+      expect(page.primaryImageOfPage, `${p.route.path} primaryImageOfPage`).toEqual({
+        "@type": "ImageObject",
+        url: ogImage(p.html),
+      });
+      const article = graph.find((n: { "@type": string }) => n["@type"] === "Article");
+      if (article) {
+        expect(typeof article.about, `${p.route.path} Article.about`).toBe("object");
+        expect(article.about["@type"], `${p.route.path} Article.about type`).toBe("Thing");
+        expect(article.about.name, `${p.route.path} Article.about name`).toBeTruthy();
+      }
+    }
+  });
+
   it("never claims what nobody has measured", () => {
     // No ratings, no review counts, no accuracy claims. The camera caveat is on the page in
     // words; schema.org has no field for "these numbers are not yet accurate" and a rich result

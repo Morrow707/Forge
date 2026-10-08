@@ -120,6 +120,45 @@ describe("verifyMediaUrl", () => {
     expect(verifyMediaUrl(path, undefined, undefined)).toBe(false);
   });
 
+  /* A GATED DIRECTORY IS GATED AT EVERY DEPTH.
+   *
+   * isGatedUploadPath matches exactly two segments, which is every stored path's real shape, so a
+   * third slash walked straight past the gate: /uploads/waivers/sub/clearance.pdf was treated as
+   * public and served unsigned. Found 2026-10-08 by the launch audit's signed-out sweep and
+   * confirmed live on a made-up filename -- /uploads/waivers/nonexistent.pdf answered 403 (the
+   * gate fires before the file lookup) and /uploads/waivers/sub/nonexistent.pdf answered 404.
+   *
+   * Latent, because every writer puts files flat, and that is exactly the standing of the
+   * traversal hole this module already records: a gate held shut by what nobody happens to do
+   * rather than by its own check. A nested writer is one path.join away. */
+  it.each([
+    "/uploads/waivers/sub/clearance.pdf",
+    "/uploads/form-videos/2026/a.mp4",
+    "/uploads/reference-clips/athlete-1/a.mp4",
+    "/uploads/knowledge-sources/book/page-1.pdf",
+    "/uploads/reviews/a/b/c.mp4",
+  ])("refuses the nested path %s outright, signature or not", (nested) => {
+    expect(verifyMediaUrl(nested, undefined, undefined)).toBe(false);
+    // Denied even WITH a signature minted for it: there is no legitimate nested path, so letting
+    // a signed one through would be inventing a shape no writer produces.
+    const { exp, sig } = parse(signMediaUrl(nested));
+    expect(verifyMediaUrl(nested, exp, sig)).toBe(false);
+  });
+
+  it("still lets a nested path under a PUBLIC directory through", () => {
+    // Deny-only, and only for the gated directories -- the property that makes this change
+    // incapable of making a public file unreachable. lesson-videos is deliberately public.
+    expect(verifyMediaUrl("/uploads/lesson-videos/sub/a.mp4", undefined, undefined)).toBe(true);
+  });
+
+  it("leaves isGatedUploadPath alone, so nothing starts signing a nested path", () => {
+    // The module's own comment is explicit that signMediaUrl uses isGatedUploadPath to decide
+    // what to SIGN, and widening it there would start signing URLs it should not. So the nested
+    // rule lives in verifyMediaUrl as a deny, beside isWalkedUploadPath, and this pins the split.
+    expect(isGatedUploadPath("/uploads/waivers/sub/clearance.pdf")).toBe(false);
+    expect(signMediaUrl("/uploads/waivers/sub/clearance.pdf")).toBe("/uploads/waivers/sub/clearance.pdf");
+  });
+
   it("refuses non-string exp or sig, including arrays a repeated query param produces", () => {
     const { exp, sig } = parse(signMediaUrl(path));
     expect(verifyMediaUrl(path, [exp], sig)).toBe(false);

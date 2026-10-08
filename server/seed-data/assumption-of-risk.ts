@@ -4,6 +4,7 @@ import {
   FORGE_LEGAL_ENTITY,
   GOVERNING_LAW_CLAUSE,
 } from "@shared/contact";
+import { isShippedVersion, ASSUMPTION_OF_RISK_PRIOR_SHIPPED } from "./shipped-versions";
 
 // The assumption-of-risk release. Forge's only genuine liability waiver: every
 // other legal document here either grants a licence, describes data handling, or
@@ -125,3 +126,22 @@ BY AGREEING, YOU CONFIRM THAT YOU HAVE READ THIS DOCUMENT, THAT YOU UNDERSTAND I
 12. CONTACT
 
 ${FORGE_LEGAL_ENTITY}, ${FORGE_POSTAL_ADDRESS} -- ${FORGE_CONTACT_EMAIL}`;
+
+
+/** What the stored Assumption of Risk and Release should become. `null` leaves it alone.
+ *
+ * See ASSUMPTION_OF_RISK_PRIOR_SHIPPED in shipped-versions.ts for why this exists and why its list
+ * is empty today. Only a version Forge shipped is replaced; an admin's own wording is theirs. */
+export function nextAssumptionOfRisk(
+  current: string | null,
+  // THE LIST AS A DEFAULTED PARAMETER, the same shape robustPeakSpeed and plausibleMean use for
+  // their gates. It is empty today, so a test that drove this function could not tell "consults
+  // the list" from "always returns null" -- and mutation testing proved it: replacing this line
+  // with `return null` left the whole suite green. Passing a list in is what makes the lane's own
+  // behaviour assertable before there is anything in it to assert against.
+  prior: readonly string[] = ASSUMPTION_OF_RISK_PRIOR_SHIPPED,
+): string | null {
+  if (current === null) return ASSUMPTION_OF_RISK_RELEASE;
+  if (current === ASSUMPTION_OF_RISK_RELEASE) return null;
+  return isShippedVersion(current, prior) ? ASSUMPTION_OF_RISK_RELEASE : null;
+}

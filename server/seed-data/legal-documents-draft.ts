@@ -23,6 +23,7 @@ import {
   isShippedVersion,
   PARENTAL_NOTICE_PRIOR_SHIPPED,
   PRIVACY_POLICY_PRIOR_SHIPPED,
+  EULA_PRIOR_SHIPPED,
 } from "./shipped-versions";
 
 const DRAFT_NOTICE =
@@ -293,6 +294,24 @@ export function nextParentalNotice(current: string | null): string | null {
 /** What the stored privacy policy should become. `null` leaves it alone -- an admin's own wording
  * is theirs, and only a version Forge shipped is replaced. See PRIVACY_POLICY_PRIOR_SHIPPED for
  * why this one needed a lane rather than another patch. */
+/** What the stored EULA should become. `null` leaves it alone.
+ *
+ * See EULA_PRIOR_SHIPPED for why this exists and why its list is empty. Only a version Forge
+ * shipped is replaced; an admin's own wording is theirs. */
+export function nextEula(
+  current: string | null,
+  // THE LIST AS A DEFAULTED PARAMETER, the same shape robustPeakSpeed and plausibleMean use for
+  // their gates. It is empty today, so a test that drove this function could not tell "consults
+  // the list" from "always returns null" -- and mutation testing proved it: replacing this line
+  // with `return null` left the whole suite green. Passing a list in is what makes the lane's own
+  // behaviour assertable before there is anything in it to assert against.
+  prior: readonly string[] = EULA_PRIOR_SHIPPED,
+): string | null {
+  if (current === null) return EULA_DRAFT;
+  if (current === EULA_DRAFT) return null;
+  return isShippedVersion(current, prior) ? EULA_DRAFT : null;
+}
+
 export function nextPrivacyPolicy(current: string | null): string | null {
   if (current === null) return PRIVACY_POLICY_DRAFT;
   if (current === PRIVACY_POLICY_DRAFT) return null;

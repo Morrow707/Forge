@@ -122,6 +122,35 @@ export const PARENTAL_NOTICE_PRIOR_SHIPPED = [
   "9d1daabfad4224bc61f4baf36694857d350eb966f10a0c7156f018696662647c",
 ] as const;
 
+/* THE THREE DOCUMENTS THAT HAD NO LANE AT ALL, added 2026-10-08.
+ *
+ * The EULA, the Assumption of Risk and the AI Terms of Use were seeded with a bare
+ * `if (!(await storage.getLegalDocument(x)))` -- created when absent and never touched again --
+ * so a correction to any of the three reached a FRESH database only. Every existing installation
+ * would have kept the old text, silently, with the repo showing the new one.
+ *
+ * That is the fourth instance of this class in this repo: the Barbell Shoulder Press
+ * instructions (2026-10-07, two weeks stale on the phone), `videoEligible` surviving the
+ * canonical-list swap, and the Coaches Corner track lessons (2026-10-08, every proofread fix
+ * landing on fresh databases only). Each was found the same way -- by looking at what a live
+ * installation actually serves rather than at what the seed would produce.
+ *
+ * ALL THREE ARRAYS ARE EMPTY ON PURPOSE, and that is not an oversight. The live host serves text
+ * whose sha256 is byte-identical to the current source for all three (checked against
+ * forgeperformancesystems.com on 2026-10-08), so there is no prior version to migrate away from
+ * yet. The lane is machinery for the NEXT correction, in the same spirit as FITTED_OVERRIDES and
+ * the tier-withdrawal machinery: it exists so that the edit after this one propagates instead of
+ * being invisible, and an empty list is the honest state until an edit happens.
+ *
+ * WHEN YOU EDIT ONE OF THESE THREE: append the hash of the text you are replacing to its array
+ * below, and update its pinned current hash in shipped-versions.test.ts. That test fails until
+ * you do, which is the whole point -- it is what lets the correction AFTER yours recognise
+ * yours. Same discipline as scripts/record-shipped-lesson-hashes.ts for a track lesson.
+ */
+export const EULA_PRIOR_SHIPPED = [] as const;
+export const ASSUMPTION_OF_RISK_PRIOR_SHIPPED = [] as const;
+export const AI_TERMS_OF_USE_PRIOR_SHIPPED = [] as const;
+
 /** EVERY stored shape of the privacy policy Forge ever shipped, current one excluded.
 
  * Two entries per version, deliberately: an installation that has redeployed holds the shape

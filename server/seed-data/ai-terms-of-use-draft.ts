@@ -1,3 +1,4 @@
+import { isShippedVersion, AI_TERMS_OF_USE_PRIOR_SHIPPED } from "./shipped-versions";
 /** The Artificial Intelligence Terms of Use, second revision, 2026-09-17. VERBATIM.
  *
  * REVIEWED BY COUNSEL (Scott, 2026-09-19: "we used the AI terms of use as a draft, a lawyer
@@ -97,3 +98,22 @@ Forge Performance Systems LLC
 5145 North 7th Street, D-237
 Phoenix, Arizona 85014
 Email: forgeperformancesystems@outlook.com`;
+
+
+/** What the stored AI Terms of Use should become. `null` leaves it alone.
+ *
+ * See AI_TERMS_OF_USE_PRIOR_SHIPPED in shipped-versions.ts for why this exists and why its list
+ * is empty today. Only a version Forge shipped is replaced; an admin's own wording is theirs. */
+export function nextAiTermsOfUse(
+  current: string | null,
+  // THE LIST AS A DEFAULTED PARAMETER, the same shape robustPeakSpeed and plausibleMean use for
+  // their gates. It is empty today, so a test that drove this function could not tell "consults
+  // the list" from "always returns null" -- and mutation testing proved it: replacing this line
+  // with `return null` left the whole suite green. Passing a list in is what makes the lane's own
+  // behaviour assertable before there is anything in it to assert against.
+  prior: readonly string[] = AI_TERMS_OF_USE_PRIOR_SHIPPED,
+): string | null {
+  if (current === null) return AI_TERMS_OF_USE;
+  if (current === AI_TERMS_OF_USE) return null;
+  return isShippedVersion(current, prior) ? AI_TERMS_OF_USE : null;
+}

@@ -210,8 +210,37 @@ function isWalkedUploadPath(pathname: string): boolean {
   return normalized.split("/").some((segment) => segment === "..");
 }
 
+// A GATED DIRECTORY IS GATED AT EVERY DEPTH, not only at the one shape these paths happen to
+// have today.
+//
+// isGatedUploadPath is /^\/uploads\/([^/]+)\/[^/]+$/ -- EXACTLY two segments, because that is
+// what every stored path is. So /uploads/waivers/sub/clearance.pdf has three, does not match, is
+// treated as public, and is served with no signature: a minor's medical clearance behind a gate
+// that the extra slash walks straight past. Confirmed live on 2026-10-08 against a made-up
+// filename -- /uploads/waivers/nonexistent.pdf answers 403 because the gate fires before the
+// file lookup, /uploads/waivers/sub/nonexistent.pdf answers 404 because it never fired.
+//
+// LATENT, not exploitable: every writer puts files flat (the multer destinations and
+// copyUploadedFile all build `${dir}/${uuid}${ext}`), so there is nothing nested to fetch. That
+// is the same standing as the traversal hole this file already records -- "the gate was being
+// held shut by a dependency's behaviour rather than by its own check, and that is only true
+// until someone reorders the middleware or serves these files another way." A nested writer is
+// one `path.join(dir, athleteId, name)` away, and would ship a public file with no sign of it.
+//
+// DENIED outright rather than made to require a signature, and shaped as a deny-only check
+// beside isWalkedUploadPath rather than by widening isGatedUploadPath, for the reason that
+// function's own comment gives: signMediaUrl uses it to decide what to SIGN, and nothing should
+// start signing a path no writer produces. There is no legitimate nested path to let through, so
+// "deny" loses nothing; the day one exists, it is a decision made here.
+function isNestedPathInGatedDir(pathname: string): boolean {
+  const match = /^\/uploads\/([^/]+)\/(.+)$/.exec(pathname);
+  if (!match) return false;
+  return GATED_UPLOAD_DIRS.has(match[1]) && match[2].includes("/");
+}
+
 export function verifyMediaUrl(pathname: string, exp: unknown, sig: unknown): boolean {
   if (isWalkedUploadPath(pathname)) return false;
+  if (isNestedPathInGatedDir(pathname)) return false;
   if (!isGatedUploadPath(pathname)) return true;
   if (typeof exp !== "string" || typeof sig !== "string") return false;
   const expNum = Number(exp);

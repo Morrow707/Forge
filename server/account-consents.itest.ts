@@ -104,7 +104,15 @@ describe("GET /api/account/consents", () => {
     expect(research).toMatchObject({
       label: "Research consent",
       page: "/research-consent",
-      pdfUrl: null,
+      // WAS null until 2026-10-08, and that was wrong rather than intended. The consent catalog
+      // carried pdfType: null for this one because the research consent is deliberately absent
+      // from LEGAL_DOC_TYPES -- its text is a code constant (shared/research-consent.ts) and the
+      // route serves it on an explicit branch AHEAD of the enum lookup. "Not in the enum" had
+      // been read as "has no PDF route", and they are not the same thing: the route serves it
+      // (verified live, 200 application/pdf). So this listing offered no durable copy of the one
+      // consent whose record OUTLIVES the account (retainSubjectAfterDeletion), which is the one
+      // a person has the strongest reason to keep.
+      pdfUrl: "/api/legal-documents/research_consent.pdf",
       state: "withdrawn",
       stale: false,
       givenBy: "you",

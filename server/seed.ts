@@ -29,15 +29,15 @@ import type { SeedAcademyTrack } from "./seed-data/coaches-corner/types";
 // carrying the draft is recognised by BIOMETRIC_WAIVER_DRAFT_SNAPSHOT_PREFIX, which is its own
 // constant in biometric-release.ts. The draft body is kept only as the evidence that prefix is
 // right -- see biometric-release.test.ts.
-import { PRIVACY_POLICY_DRAFT, EULA_DRAFT, nextParentalNotice, nextPrivacyPolicy } from "./seed-data/legal-documents-draft";
+import { PRIVACY_POLICY_DRAFT, EULA_DRAFT, nextEula, nextParentalNotice, nextPrivacyPolicy } from "./seed-data/legal-documents-draft";
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments, HEALTHCARE_NOTICE_MARKER } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
 import { DEMO_ACCOUNT_EMAILS } from "./device-trust-policy";
 import { coreAgreementText } from "./seed-data/signup-agreement";
-import { ASSUMPTION_OF_RISK_RELEASE } from "./seed-data/assumption-of-risk";
+import { ASSUMPTION_OF_RISK_RELEASE, nextAssumptionOfRisk } from "./seed-data/assumption-of-risk";
 import { REQUIRED_DOCUMENTS, documentAudienceFor } from "@shared/required-documents";
-import { AI_TERMS_OF_USE } from "./seed-data/ai-terms-of-use-draft";
+import { AI_TERMS_OF_USE, nextAiTermsOfUse } from "./seed-data/ai-terms-of-use-draft";
 import { mergeNamedDuplicateExercises } from "./merge-duplicate-exercises";
 
 const LEGAL_DOC_TYPES = legalDocumentTypeEnum.enumValues;
@@ -5545,14 +5545,29 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
     await storage.updateLegalDocument("parental_notice", nextNotice);
     if (storedNotice) console.log("Replaced the previous notice to parent or guardian.");
   }
-  if (!(await storage.getLegalDocument("eula"))) {
-    await storage.updateLegalDocument("eula", EULA_DRAFT);
-  }
-  if (!(await storage.getLegalDocument("assumption_of_risk"))) {
-    await storage.updateLegalDocument("assumption_of_risk", ASSUMPTION_OF_RISK_RELEASE);
-  }
-  if (!(await storage.getLegalDocument("ai_terms_of_use"))) {
-    await storage.updateLegalDocument("ai_terms_of_use", AI_TERMS_OF_USE);
+  // THE SAME LANE AS THE NOTICE ABOVE, for the three documents that had none until 2026-10-08.
+  //
+  // These were `if (!(await getLegalDocument(x)))` -- created when absent and never touched
+  // again -- so a correction to the EULA, the Assumption of Risk or the AI Terms reached a FRESH
+  // database only, and every existing installation kept the old text with nothing to show it.
+  // The fourth instance of that class in this repo; see EULA_PRIOR_SHIPPED for the other three
+  // and for why the prior-shipped lists are empty today.
+  //
+  // Each next*() returns null when the stored text is already current OR when it is an admin's
+  // own wording, so this is a no-op on every installation today and replaces only a version
+  // Forge itself shipped.
+  for (const [type, next] of [
+    ["eula", nextEula(((await storage.getLegalDocument("eula"))?.content) ?? null)],
+    [
+      "assumption_of_risk",
+      nextAssumptionOfRisk(((await storage.getLegalDocument("assumption_of_risk"))?.content) ?? null),
+    ],
+    [
+      "ai_terms_of_use",
+      nextAiTermsOfUse(((await storage.getLegalDocument("ai_terms_of_use"))?.content) ?? null),
+    ],
+  ] as const) {
+    if (next) await storage.updateLegalDocument(type, next);
   }
 
   // THE THREE DEMO ACCOUNTS COME WITH THEIR PAPERWORK ALREADY ON FILE.

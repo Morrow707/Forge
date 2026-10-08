@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { AI_TERMS_OF_USE } from "./ai-terms-of-use-draft";
+import { AI_TERMS_OF_USE, nextAiTermsOfUse } from "./ai-terms-of-use-draft";
 
 const read = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 
@@ -20,19 +20,34 @@ describe("the AI terms", () => {
     expect(read("server/reconcile-schema.ts")).toContain(
       `ALTER TYPE "legal_document_type" ADD VALUE IF NOT EXISTS 'ai_terms_of_use';`,
     );
-    expect(read("server/seed.ts")).toContain('updateLegalDocument("ai_terms_of_use", AI_TERMS_OF_USE)');
+    // The seed reaches it through its migration lane rather than by naming the text (see
+    // nextAiTermsOfUse); before 2026-10-08 this read the literal create-only call.
+    expect(read("server/seed.ts")).toContain("nextAiTermsOfUse(");
     expect(read("client/src/App.tsx")).toContain('<Route path="/ai-terms"');
     expect(read("client/src/pages/legal-document.tsx")).toContain('docType="ai_terms_of_use"');
     // Admin-editable like every other one, or the only way to correct it is a deploy.
     expect(read("client/src/pages/admin/documents.tsx")).toContain("ai_terms_of_use:");
   });
 
-  it("is seeded only when absent, so an admin edit is never overwritten", () => {
-    // Every deploy runs the seed. updateLegalDocument behind a getLegalDocument check is what
-    // stops it reverting text somebody fixed in the admin tab.
-    expect(read("server/seed.ts")).toMatch(
-      /if \(!\(await storage\.getLegalDocument\("ai_terms_of_use"\)\)\) \{\s*\n\s*await storage\.updateLegalDocument\("ai_terms_of_use", AI_TERMS_OF_USE\);/,
-    );
+  it("never overwrites an admin edit, which is now the LANE's job rather than an absence check", () => {
+    // THE PROPERTY IS UNCHANGED AND THE MECHANISM IS NOT. This used to pin the literal
+    // `if (!(await storage.getLegalDocument("ai_terms_of_use")))` form, which did keep an admin's
+    // wording -- and also meant a CORRECTION to the document reached a fresh database only, so
+    // every existing installation kept the old text forever with nothing to show it. Found
+    // 2026-10-08; see AI_TERMS_OF_USE_PRIOR_SHIPPED for the other two documents it applied to and
+    // for the three earlier instances of that class in this repo.
+    //
+    // nextAiTermsOfUse keeps the same guarantee by a different route: it replaces the stored text
+    // only when that text is one Forge itself shipped, so anything an admin wrote -- from scratch
+    // or as an addition -- is left alone. Asserted on the function rather than on the seed's
+    // source shape, because the behaviour is the thing being promised.
+    expect(nextAiTermsOfUse("Something an admin wrote from scratch.")).toBeNull();
+    expect(nextAiTermsOfUse(`${AI_TERMS_OF_USE}\n\nAnd our own extra clause.`)).toBeNull();
+    // ...while a database with none still gets the document, and a current one is left untouched.
+    expect(nextAiTermsOfUse(null)).toBe(AI_TERMS_OF_USE);
+    expect(nextAiTermsOfUse(AI_TERMS_OF_USE)).toBeNull();
+    // And the create-only form it replaced is gone, or both paths would run.
+    expect(read("server/seed.ts")).not.toContain('if (!(await storage.getLegalDocument("ai_terms_of_use")))');
   });
 
   it("no longer carries the four clauses that made the first version unusable", () => {

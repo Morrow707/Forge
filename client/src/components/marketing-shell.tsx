@@ -53,7 +53,10 @@ export function MarketingFooter() {
             <span className="font-display font-bold uppercase tracking-wide text-foreground">
               Forge
             </span>
-            <span>-- Coach. Program. Perform.</span>
+            {/* A middot, not "--": this footer renders on nine public routes and two hyphens
+                beside the wordmark read as a typo. The codebase already uses this separator in
+                159 places. */}
+            <span>· Coach. Program. Perform.</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link href="/for-high-schools" className="hover:text-foreground">For Schools</Link>
