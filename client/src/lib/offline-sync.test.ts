@@ -241,7 +241,23 @@ describe("the video queue is scoped and serialised the same way", () => {
     // Skipped in the flush, in the manual "Upload now", and in the listing
     // the Video Bank renders -- all three, since any one of them left open
     // is a route back into the other athlete's account.
-    expect(src.match(/belongsToCurrentUser/g) ?? []).toHaveLength(4);
+    //
+    // Named one by one rather than counted. This was `toHaveLength(4)`, which is weaker in
+    // the direction that matters (delete a guard, add a mention elsewhere, and the count
+    // still reads 4) and brittle in the direction that does not: 2026-10-08 it went red for
+    // a flush line counting how many of the CURRENT user's clips are holding for Wi-Fi,
+    // which is a log message, not a leak path. A ratchet that fires on something it was not
+    // written to catch is a ratchet people learn to bump.
+    for (const guard of [
+      // listPendingVideos -- what the Video Bank renders.
+      "return readManifest().filter((e) => belongsToCurrentUser(e.ownerId));",
+      // uploadPendingVideoNow -- the manual override, the one path allowed to spend cellular.
+      "if (!belongsToCurrentUser(entry.ownerId)) return;",
+      // runVideoFlush -- the automatic retry on reconnect and resume.
+      "if (!belongsToCurrentUser(entry.ownerId)) {",
+    ]) {
+      expect(src, `a consumption path lost its owner scope: ${guard}`).toContain(guard);
+    }
     // One upload at a time, because "online" and networkStatusChange both
     // fire on the same Wi-Fi reconnect.
     expect(src).toContain("if (videoFlushInFlight) return;");

@@ -451,15 +451,23 @@ export async function uploadOrQueueVideo(
     const status = err instanceof ApiError ? err.status : null;
     const code = err instanceof ApiError ? err.code : undefined;
     if (err instanceof ApiError && isPermanentUploadRejection(status, code)) throw err;
+    // `endpoint`, NOT the form-check literal. This was hardcoded, so the two queue paths in
+    // this one function disagreed: the Wi-Fi gate above queues to `endpoint` (correct), and
+    // this catch queued to /api/athlete/form-video whatever the caller asked for. A sprint or
+    // mechanics clip that failed WHILE ON Wi-Fi was therefore retried to the form-video route
+    // and landed against the wrong record, while the same clip failing OFF Wi-Fi queued
+    // correctly -- so whether a skill video survived depended on which radio was up when it
+    // failed. The `endpoint` parameter exists precisely because the four skill dialogs post
+    // somewhere else; defaulting it and then ignoring it is worse than not having it.
     await persistVideoForUpload(
       blob,
-      "/api/athlete/form-video",
+      endpoint,
       "video",
       filename,
       context,
       err instanceof ApiError ? "server_error" : "offline",
     );
-    logDebug("VIDEO", `${sizeKb}KB queued for retry (${err instanceof ApiError ? "server error" : "offline"})`);
+    logDebug("VIDEO", `${sizeKb}KB queued for retry (${err instanceof ApiError ? "server error" : "offline"}) -> ${endpoint}`);
     return { status: "queued" };
   }
 }
@@ -531,13 +539,60 @@ export async function flushPendingVideos() {
   }
 }
 
+/* EVERY VIDEO FLUSH SAYS WHAT IT DID. A SILENT RETURN IS A LOST CLIP WITH NO RECORD.
+ *
+ * Scott's build 643 console: at 34:27 an 11MB clip failed with "NetworkError: Can't reach
+ * Forge" and logged `queued for retry (offline)`. The app relaunched on Wi-Fi at 51:27 and
+ * the console NEVER MENTIONED THAT CLIP AGAIN. Uploaded, still queued, and dropped all look
+ * identical from the phone, which is the only instrument there is.
+ *
+ * This is the same hole the LOG queue had, found the same way and closed in build 620 (see
+ * flushPendingLogs' own comment in offline-queue.ts: "flush: 1 queued day(s)" six times and
+ * not one outcome line after any of them). The video half was never done. Same tag, same
+ * vocabulary -- ok / retry / DROPPED / SKIPPED -- on purpose, so one console reads as one
+ * instrument rather than two with different manners.
+ *
+ * Four silent exits, each legitimate, each indistinguishable from a crash:
+ *   - the platform has no persistence at all (web),
+ *   - not on Wi-Fi, which is a HOLD and not a failure and reads nothing like one,
+ *   - another account's clip (a bare `continue`, exactly the build-620 shape),
+ *   - a transient failure, whose whole handling is a comment saying "leave it queued".
+ * That last one is the 51:27 case and it wrote nothing anywhere.
+ *
+ * The endpoint is logged with every line because the catch above used to queue every clip to
+ * the form-check route whatever the caller passed. Had this printed, that bug was one glance.
+ *
+ * Nothing about the MECHANISM changes here: the same entries are attempted, the same ones are
+ * dropped, the same ones are kept. Rule #1's reading for the save path applies to the clip
+ * too -- a video that vanishes with no account of itself is the one failure nobody can work
+ * backwards from.
+ */
+function queuedAgeLabel(queuedAt: string): string {
+  const queued = Date.parse(queuedAt);
+  if (!Number.isFinite(queued)) return "age unknown";
+  const minutes = Math.max(0, Math.round((Date.now() - queued) / 60000));
+  return minutes < 60 ? `queued ${minutes}m ago` : `queued ${Math.round(minutes / 60)}h ago`;
+}
+
 async function runVideoFlush() {
-  if (!isVideoOfflinePersistenceSupported() || !(await isOnWifi())) return;
-  for (const entry of readManifest()) {
+  if (!isVideoOfflinePersistenceSupported()) return;
+  if (!(await isOnWifi())) {
+    const held = readManifest().filter((e) => belongsToCurrentUser(e.ownerId)).length;
+    if (held > 0) logDebug("VIDEO", `flush: ${held} queued clip(s) waiting for Wi-Fi`);
+    return;
+  }
+  const manifest = readManifest();
+  if (manifest.length > 0) logDebug("VIDEO", `flush: ${manifest.length} queued clip(s)`);
+  for (const entry of manifest) {
     // Recorded by a different account on this device. Waits for them.
-    if (!belongsToCurrentUser(entry.ownerId)) continue;
+    if (!belongsToCurrentUser(entry.ownerId)) {
+      logDebug("VIDEO", `flush SKIPPED (${entry.label}): recorded by another account on this device, waiting for them to sign in`);
+      continue;
+    }
+    const startedAt = Date.now();
     try {
       await uploadPendingEntry(entry);
+      logDebug("VIDEO", `flush ok (${entry.label}): ${Date.now() - startedAt}ms, ${queuedAgeLabel(entry.queuedAt)} -> ${entry.url}`);
       toast.success(
         entry.reattach
           ? `${entry.label} finished uploading.`
@@ -557,13 +612,17 @@ async function runVideoFlush() {
       const code = err instanceof ApiError ? err.code : undefined;
       if (isPermanentUploadRejection(status, code)) {
         await clearPersistedVideo(entry.id);
+        logDebug("VIDEO", `flush DROPPED (${entry.label}): ${status ?? "?"}${code ? ` ${code}` : ""}, the server will keep refusing it, ${queuedAgeLabel(entry.queuedAt)}`);
         toast.error(
           `${entry.label}: couldn't be uploaded and was not saved, you'll need to re-record it.`,
           { duration: 15000 },
         );
+      } else {
+        // Still offline, the server is having a moment, or the file read itself failed
+        // transiently -- leave it queued and try again on the next flush. This branch WAS the
+        // whole of the 51:27 silence: a comment, and nothing written down.
+        logDebug("VIDEO", `flush retry (${entry.label}): ${status ? `${status} ${code ?? ""}`.trim() : String(err)}, kept on this phone, ${queuedAgeLabel(entry.queuedAt)}`);
       }
-      // Still offline, the server is having a moment, or the file read itself failed
-      // transiently -- leave it queued and try again on the next flush.
     }
   }
 }
