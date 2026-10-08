@@ -64,6 +64,82 @@ function tryCatchPairs(source: string): { tryBody: string; catchBody: string; at
   return pairs;
 }
 
+/* AND THE SAME ASYMMETRY IN THE OTHER SHAPE: if/else.
+ *
+ * The rule above is right and its SHAPE was too narrow. On 2026-10-08 an audit found four
+ * dialogs losing a refused take through a plain `else`, not a `catch` -- av-jump twice,
+ * av-swing and the web swing. Each sits directly under a comment describing this very bug
+ * being fixed in the `catch` six lines above it, and every one of them was green here, because
+ * none of them is in a catch.
+ *
+ *   if (recordVideo && uploadPromise) { ...await...; onCapture(empty); onOpenChange(false); }
+ *   else { toast.error("Couldn't get a clean read on this take. The clip is saved."); }
+ *
+ * The else is the branch taken when there is no upload in flight at all -- a refused take with
+ * the form-check switch off -- so the set got no row, no number and no diagnostics. It also
+ * left the dialog open and spinning, and the message claimed a clip was saved when the
+ * condition for reaching it is that nothing was uploaded.
+ *
+ * Same rule, same escape hatch: if one branch reports the take, its sibling reports the take.
+ * `else if` is deliberately not matched -- a chain is a sequence of conditions, and the final
+ * plain `else` of one still is.
+ */
+function ifElseBranches(source: string): { ifBody: string; elseBody: string; at: number }[] {
+  const out: { ifBody: string; elseBody: string; at: number }[] = [];
+  const re = /\}\s*else\s*\{/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source))) {
+    // Walk back from the `}` that closes the if-body to its matching `{`.
+    let depth = 1;
+    let i = m.index - 1;
+    while (i >= 0 && depth > 0) {
+      if (source[i] === "}") depth++;
+      else if (source[i] === "{") depth--;
+      i--;
+    }
+    if (depth !== 0) continue;
+    const ifBody = source.slice(i + 2, m.index);
+    const elseBlock = matchedBlock(source, m.index + m[0].length - 1);
+    out.push({ ifBody, elseBody: elseBlock.body, at: m.index });
+  }
+  return out;
+}
+
+describe("a capture whose sibling branch reported it", () => {
+  for (const file of TRACKER_DIALOGS) {
+    const source = readFileSync(join(COMPONENTS, file), "utf8");
+    // Only the branches that actually report a take. An if/else about anything else is not
+    // this rule's business.
+    const reporting = ifElseBranches(source).filter((p) => p.ifBody.includes("onCapture("));
+
+    it(`${file} reports the take on every branch, not just the one that worked`, () => {
+      for (const pair of reporting) {
+        if (pair.elseBody.includes(EXEMPTION)) continue;
+        expect(
+          pair.elseBody,
+          `${file}: one branch of this if/else reports the capture and its else does not. ` +
+            `That is the same loss the try/catch rule above pins, in the shape that slipped ` +
+            `past it four times. Call onCapture with the metrics you have, or write ` +
+            `"${EXEMPTION} <why>" in the else.`,
+        ).toContain("onCapture(");
+      }
+    });
+
+    it(`${file} does not leave the dialog open and spinning on the branch it lost`, () => {
+      // The other half of the same bug: no onOpenChange left the dialog open, no
+      // setSaving(false) left it spinning under a toast that said the clip was saved.
+      for (const pair of reporting) {
+        if (pair.elseBody.includes(EXEMPTION)) continue;
+        if (!pair.ifBody.includes("onOpenChange(false)")) continue;
+        expect(
+          pair.elseBody,
+          `${file}: this branch reports the take and never closes the dialog.`,
+        ).toContain("onOpenChange(false)");
+      }
+    });
+  }
+});
+
 describe("a capture whose save path threw", () => {
   it("has tracker dialogs to check at all", () => {
     // Guards the guard. A rename that stopped matching *tracker-dialog.tsx would make every

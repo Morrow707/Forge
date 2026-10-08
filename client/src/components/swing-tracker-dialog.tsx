@@ -283,7 +283,11 @@ export function SwingTrackerDialog({
         : null;
 
     if (!metrics) {
-      const message = "Couldn't get a clean read on this take. The clip is saved.";
+      // "The clip is saved" is true on the upload path below and false in the no-blob branch at
+      // the bottom, which is reached precisely because there is no clip. Split, so neither
+      // reading is a claim the other half makes untrue.
+      const message = "Couldn't get a clean read on this take.";
+      const withClip = `${message} The clip is saved.`;
       if (blob) {
         setSaving(true);
         try {
@@ -295,8 +299,8 @@ export function SwingTrackerDialog({
           );
           toast.error(
             result.status === "queued"
-              ? `${message} (No Wi-Fi, video saved on your device, will upload once connected.)`
-              : `${message} (Video saved for your coach.)`,
+              ? `${withClip} (No Wi-Fi, video saved on your device, will upload once connected.)`
+              : `${withClip} (Video saved for your coach.)`,
           );
           if (result.status === "queued" && !hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
@@ -328,7 +332,26 @@ export function SwingTrackerDialog({
           setSaving(false);
         }
       } else {
-        toast.error(message);
+        /* AND THE SAME LOSS SAT SIX LINES BELOW THE FIX FOR IT.
+         *
+         * The comment above describes this exact bug being fixed -- a refused take's
+         * trackingDiagnostics blob, the only record of WHY it was refused, dropped on the floor
+         * -- and the fix was applied to the `catch` while this `else`, the branch taken whenever
+         * there is no upload in flight at all, kept a bare toast. So a refused take with the
+         * form-check switch OFF produced no row, no number and no diagnostics: the take is
+         * simply gone, which is the one thing Rule #1 forbids outright.
+         *
+         * It was also stuck and it was lying. No onOpenChange left the dialog open; no
+         * setSaving(false) left it spinning; and the message asserted "The clip is saved" when
+         * the condition for reaching this branch is that nothing was ever uploaded.
+         *
+         * refused-capture-survives.test.ts pairs a `try` with its `catch` and so was green on
+         * every one of these -- none of them is in a catch.
+         */
+        toast.error(`${message} Everything the camera did measure is saved.`);
+        onCapture(EMPTY_SWING_METRICS);
+        onOpenChange(false);
+        setSaving(false);
       }
       return;
     }

@@ -378,7 +378,16 @@ export function MedballTrackerDialog({
           setSaving(false);
         }
       } else {
+        /* AND THE SAME LOSS SAT SIX LINES BELOW THE FIX FOR IT. The comment above describes this
+         * exact bug being fixed in the `catch`; this `else` -- the branch taken when there is no
+         * upload in flight at all, i.e. a refused take with the form-check switch off -- kept a
+         * bare toast, so the set got no row, no number and no diagnostics. It also left the
+         * dialog open and spinning. refused-capture-survives.test.ts paired a `try` with its
+         * `catch` and was green on all six of these, because none of them is in a catch. */
         toast.error(message);
+        onCapture(EMPTY_MEDBALL_METRICS);
+        onOpenChange(false);
+        setSaving(false);
       }
     }
 
