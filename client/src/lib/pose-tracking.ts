@@ -1708,6 +1708,19 @@ const SHOULDER_BREADTH_FRACTION = 0.245;
 // width itself partly foreshortened, and ordinary perspective, while still sitting far
 // above the ~1-2 an end-on supine frame produces. A standing athlete filmed from the side
 // has overlapping shoulders and a tiny shoulder width, which only pushes this ratio up.
+/* WHICH FRAMES DECIDE THE HEIGHT RULER. Shared by the ruler and by the posture diagnostic that
+ * reports on it, so the diagnostic describes the frames the ruler really used rather than a
+ * lookalike selection that can drift from it -- change one, change both, the same arrangement
+ * the Swift arbiter port uses for its constants.
+ *
+ * The ruler takes the 10th-percentile SCALE, and scale is height over span, so this is the
+ * athlete at their most EXTENDED: the longest few spans. Not the single longest, because one
+ * stretched landmark would take it every time. See calibrateFromFrames for why the estimator is
+ * a tail rather than a median at all (the error is one-sided -- a frame can only ever measure an
+ * athlete shorter than they are, never taller).
+ */
+export const HEIGHT_RULER_EXTENSION_PERCENTILE = 0.1;
+
 const MIN_HEIGHT_TO_SHOULDER_RATIO = 2.5;
 
 /* WHAT THE FRAMES SAY ABOUT POSTURE, BESIDE WHAT THE EXERCISE NAME CLAIMS.
@@ -1735,9 +1748,38 @@ const MIN_HEIGHT_TO_SHOULDER_RATIO = 2.5;
  * readable on a take whose ruler is the thing in question.
  */
 export type MeasuredPosture = {
-  /** Median angle of the hip->shoulder vector from the image vertical, degrees. A standing or
-   *  seated torso is near 0; a hinged row or RDL approaches 90. */
+  /** MEDIAN angle of the hip->shoulder vector from the image vertical, degrees. Read it as
+   *  "the posture of the typical frame", which is NOT the same question as "is this a hinge" --
+   *  see torsoFromVerticalP90Deg, and the correction note below. */
   torsoFromVerticalDeg: number | null;
+  /** THE SAME ANGLE AT ITS EXTREME (90th percentile), which is what tells a hinge from a
+   *  standing lift. An athlete doing Romanian deadlifts is UPRIGHT BETWEEN REPS and upright
+   *  through the setup and the finish, so the median spends most of the take near zero however
+   *  deep the hinge gets; the bottom of the rep is a minority of frames by construction. The
+   *  2026-10-08 RDL measured 7.13 on this field's median over 436 frames, against a comment
+   *  that promised "approaching 90 on a hinge" -- and the commit that added it claimed it would
+   *  have caught the mislabelled RDL of 2026-10-05. On real footage it would not have: nobody
+   *  reads 7.13 as a hinge. The separation was real but far too small to act on (the same
+   *  session's Back Squat read 1.06), and a diagnostic whose stated meaning its own statistic
+   *  cannot deliver is worse than an absent one, because it gets believed. */
+  torsoFromVerticalP90Deg: number | null;
+  /** The median torso angle over the frames with the LONGEST implied standing span -- the top
+   *  decile, which is exactly the neighbourhood calibrateFromFrames picks its scale from (it
+   *  takes the HEIGHT_RULER_EXTENSION_PERCENTILE-th smallest scale, and scale is height over
+   *  span, so the smallest scales ARE the longest spans). This is the posture question that
+   *  decides a NUMBER: the height ruler is chosen by a handful of frames at maximum extension,
+   *  and whether the torso was upright IN THOSE FRAMES is what says the stature span was
+   *  measured across a standing body. The median over the whole take cannot say it, and on a
+   *  hinge the two come apart -- calibrateFromFrames corrects one-sided COMPRESSION, while a
+   *  hinge rotates the torso OUT OF PLANE and LENGTHENS the apparent span, so the frames that
+   *  win the decile on a hinge are the hinged ones.
+   *
+   *  Computed whether or not the ruler actually ran. It is null on a bent_over or seated lift
+   *  today (postureAllowsHeightCalibration drops the ruler before this matters) and that is
+   *  precisely why it must not be plumbed out of the ruler: the dangerous direction is a lift
+   *  labelled STANDING that is really a hinge, where the ruler does run and nothing says the
+   *  frames disagreed. */
+  torsoAtLongestSpanDeg: number | null;
   /** Median (ankle->shoulder vertical extent) / (shoulder span). Separates STANDING from SEATED,
    *  which the torso angle cannot: both are upright, but a seated athlete's ankles sit under
    *  their knees so the extent collapses. Compare against MIN_HEIGHT_TO_SHOULDER_RATIO. */
@@ -1750,6 +1792,11 @@ export function measurePostureFromFrames(
 ): MeasuredPosture {
   const angles: number[] = [];
   const ratios: number[] = [];
+  // Torso angle paired with the implied standing span on the SAME frame, so the frames the
+  // height ruler would choose can be asked what posture they were in. Only frames that produce
+  // both are kept -- a frame with no readable span is not one the ruler could have picked.
+  const spanAndAngle: { span: number; angle: number }[] = [];
+  let lastSign: 1 | -1 = 1;
   for (const f of frames) {
     const lm = f.worldLandmarks;
     const lSh = lm[POSE_LANDMARKS.LEFT_SHOULDER];
@@ -1767,7 +1814,14 @@ export function measurePostureFromFrames(
       const dy = shY - hipY;
       if (Math.hypot(dx, dy) > 0) {
         // Image y runs downward, so a torso standing straight up has dy negative and |dy| large.
-        angles.push((Math.atan2(Math.abs(dx), Math.abs(dy)) * 180) / Math.PI);
+        const angle = (Math.atan2(Math.abs(dx), Math.abs(dy)) * 180) / Math.PI;
+        angles.push(angle);
+        // Same span and the same vertical sign the height ruler reads, so the decile below is
+        // the ruler's own selection rather than a lookalike that can drift from it.
+        const sign: 1 | -1 = worldVerticalSign(lm) ?? lastSign;
+        lastSign = sign;
+        const span = impliedStandingHeightPixels(lm, sign);
+        if (span != null && span > 0) spanAndAngle.push({ span, angle });
       }
     }
     const lAnk = lm[POSE_LANDMARKS.LEFT_ANKLE];
@@ -1778,13 +1832,28 @@ export function measurePostureFromFrames(
       if (extent > 0) ratios.push(extent / shoulderSpan);
     }
   }
-  const median = (v: number[]) => {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const quantile = (v: number[], q: number) => {
     if (v.length === 0) return null;
     const s = [...v].sort((a, b) => a - b);
-    return Math.round(s[Math.floor(s.length / 2)] * 100) / 100;
+    return round2(s[Math.min(s.length - 1, Math.floor(s.length * q))]);
   };
+  const median = (v: number[]) => quantile(v, 0.5);
+
+  // The top decile BY SPAN, then the median angle within it. Taking the single longest span
+  // would hand the whole diagnostic to one stretched landmark, the same reason the ruler itself
+  // takes a percentile rather than the extreme (see calibrateFromFrames).
+  let torsoAtLongestSpanDeg: number | null = null;
+  if (spanAndAngle.length > 0) {
+    const bySpanDesc = [...spanAndAngle].sort((a, b) => b.span - a.span);
+    const take = Math.max(1, Math.floor(bySpanDesc.length * HEIGHT_RULER_EXTENSION_PERCENTILE));
+    torsoAtLongestSpanDeg = median(bySpanDesc.slice(0, take).map((s) => s.angle));
+  }
+
   return {
     torsoFromVerticalDeg: median(angles),
+    torsoFromVerticalP90Deg: quantile(angles, 0.9),
+    torsoAtLongestSpanDeg,
     heightToShoulderRatio: median(ratios),
     framesUsed: Math.max(angles.length, ratios.length),
   };
@@ -2477,7 +2546,7 @@ export function calibrateFromFrames(
   // athlete at their most extended. Not the single largest: one bad landmark can stretch a span
   // and a pure minimum would take that outlier every time.
   const sorted = [...samples].sort((a, b) => a - b);
-  const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.1));
+  const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * HEIGHT_RULER_EXTENSION_PERCENTILE));
   return sorted[idx];
 }
 

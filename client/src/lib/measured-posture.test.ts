@@ -72,7 +72,16 @@ describe("measurePostureFromFrames", () => {
    * the library. */
   it("returns nulls rather than throwing when there is nothing to measure", () => {
     const empty = measurePostureFromFrames([]);
-    expect(empty).toEqual({ torsoFromVerticalDeg: null, heightToShoulderRatio: null, framesUsed: 0 });
+    // Exact shape on purpose: every field null and none of them undefined or 0. A reader of
+    // the export cannot tell "measured zero degrees" from "could not measure" if a missing
+    // field arrives as 0, and zod would strip an undeclared one silently either way.
+    expect(empty).toEqual({
+      torsoFromVerticalDeg: null,
+      torsoFromVerticalP90Deg: null,
+      torsoAtLongestSpanDeg: null,
+      heightToShoulderRatio: null,
+      framesUsed: 0,
+    });
     const blind = measurePostureFromFrames([frame({})]);
     expect(blind.torsoFromVerticalDeg).toBeNull();
     expect(blind.heightToShoulderRatio).toBeNull();
@@ -91,3 +100,89 @@ describe("measurePostureFromFrames", () => {
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
+/* A MEDIAN ANSWERS "WHAT POSTURE WAS HE IN MOST OF THE TIME". NOBODY IS ASKING THAT.
+ *
+ * Scott filmed a Romanian deadlift on 2026-10-08 and torsoFromVerticalDeg came back 7.13 over
+ * 436 frames, beside a field comment promising "approaching 90 on a hinge" and a commit message
+ * claiming this field would have caught the mislabelled RDL of 2026-10-05. It would not have.
+ * The statistic is a median and an athlete doing RDLs is UPRIGHT BETWEEN REPS, through the
+ * setup and at the finish; the bottom of the rep is a minority of frames by construction. The
+ * separation from a squat was real (7.13 against the same session's 1.06) and far too small for
+ * anyone to act on against a stated expectation of 90.
+ *
+ * Nothing is removed -- the median still ships, and every reader of it keeps working. Two
+ * statistics are added that CAN answer the two questions anyone actually has, and both measure
+ * and gate nothing (Rule #1).
+ */
+describe("a hinge is visible at its extreme, not at its median", () => {
+  // A set the way one is really filmed: mostly upright (setup, lockouts, the finish) with the
+  // hinge itself a minority of the frames. The 2026-10-08 RDL in miniature.
+  const aRealSet = [
+    ...Array(12).fill(standing),
+    ...Array(4).fill(hinged),
+    ...Array(8).fill(standing),
+  ];
+
+  it("THE MEDIAN MISSES IT: a hinged set reads near-upright on the old field", () => {
+    // This is the bug, pinned as a fact rather than argued. If this ever starts failing because
+    // the median became large, the two fields below are no longer load-bearing and this whole
+    // block should be revisited rather than bumped.
+    const m = measurePostureFromFrames(aRealSet);
+    expect(m.torsoFromVerticalDeg!).toBeLessThan(20);
+  });
+
+  it("the 90th percentile sees it", () => {
+    const m = measurePostureFromFrames(aRealSet);
+    expect(m.torsoFromVerticalP90Deg!).toBeGreaterThan(50);
+    // And it stays quiet on a set that really is upright throughout -- otherwise it would just
+    // be a different number that is always large, which diagnoses nothing.
+    const upright = measurePostureFromFrames(Array(24).fill(standing));
+    expect(upright.torsoFromVerticalP90Deg!).toBeLessThan(15);
+  });
+
+  it("the longest-span angle reports the posture of the frames the HEIGHT RULER picks", () => {
+    // The ruler takes the HEIGHT_RULER_EXTENSION_PERCENTILE-th smallest scale, and scale is
+    // height over span, so it is decided by the longest spans -- the athlete at maximum
+    // extension. On a set that is upright at full extension, that is an upright reading.
+    const m = measurePostureFromFrames(aRealSet);
+    expect(m.torsoAtLongestSpanDeg).not.toBeNull();
+    expect(m.torsoAtLongestSpanDeg!).toBeLessThan(20);
+  });
+
+  it("the decile is SHARED with the ruler, so the diagnostic cannot drift from what it reports on", () => {
+    const src = readFileSync(join(process.cwd(), "client/src/lib/pose-tracking.ts"), "utf8");
+    // One declaration, and BOTH readers named. Not a count of mentions: a count is satisfied by
+    // the wrong three occurrences, and it goes red when someone adds a sentence to a comment --
+    // which is exactly how this assertion failed the first time it ran.
+    expect(src.match(/export const HEIGHT_RULER_EXTENSION_PERCENTILE = /g) ?? []).toHaveLength(1);
+    // The ruler picks its scale with it...
+    expect(src).toContain("Math.floor(sorted.length * HEIGHT_RULER_EXTENSION_PERCENTILE)");
+    // ...and the diagnostic picks the frames it reports on with the same one.
+    expect(src).toContain("Math.floor(bySpanDesc.length * HEIGHT_RULER_EXTENSION_PERCENTILE)");
+    // And neither has a bare literal left behind, which is how two numbers that must agree
+    // start disagreeing.
+    expect(src).not.toContain("Math.floor(sorted.length * 0.1)");
+  });
+
+  it("is declared in the schema, because zod strips what it does not declare", () => {
+    // This has bitten twice: takes were filmed specifically to read a diagnostic the insert had
+    // already dropped, silently, with no error anywhere.
+    const schema = readFileSync(join(process.cwd(), "shared/schema.ts"), "utf8");
+    expect(schema).toContain("torsoFromVerticalP90Deg: z.number().optional().nullable()");
+    expect(schema).toContain("torsoAtLongestSpanDeg: z.number().optional().nullable()");
+  });
+
+  it("measures and gates nothing", () => {
+    // Same standing as every other posture field: one mislabelled take is not evidence enough
+    // to let the frames outvote the library, and a posture that flipped mid-pipeline would move
+    // every ruler under it at once.
+    const src = readFileSync(join(process.cwd(), "client/src/lib/pose-tracking.ts"), "utf8");
+    const consumers = src.match(/torsoFromVerticalP90Deg|torsoAtLongestSpanDeg/g) ?? [];
+    // Declared in the type, assigned in the return, and (for the span one) its local. Nothing
+    // reads either back to make a decision.
+    expect(src).not.toMatch(/if \([^)]*torsoFromVerticalP90Deg/);
+    expect(src).not.toMatch(/if \([^)]*torsoAtLongestSpanDeg/);
+    expect(consumers.length).toBeGreaterThan(0);
+  });
+});

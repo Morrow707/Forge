@@ -9921,6 +9921,16 @@ export const trackingDiagnosticsSchema = z.object({
       measuredPosture: z
         .object({
           torsoFromVerticalDeg: z.number().optional().nullable(),
+          /* The median above is the posture of the TYPICAL frame, which is not the question
+           * anyone asks of it. An RDL is upright between reps, through the setup and at the
+           * finish, so its median sits near zero however deep the hinge goes -- the 2026-10-08
+           * Romanian deadlift measured 7.13 over 436 frames against a field comment promising
+           * "approaching 90 on a hinge". The 90th percentile is the extreme the hinge actually
+           * reaches; the longest-span angle is the posture in the frames the HEIGHT RULER picks
+           * its scale from, which is the posture that moves a number. See measurePostureFromFrames.
+           * Both measure and gate nothing (Rule #1). */
+          torsoFromVerticalP90Deg: z.number().optional().nullable(),
+          torsoAtLongestSpanDeg: z.number().optional().nullable(),
           heightToShoulderRatio: z.number().optional().nullable(),
           framesUsed: z.number().optional().nullable(),
         })
