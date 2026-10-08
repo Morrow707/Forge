@@ -12,7 +12,36 @@ const ANTHROPIC_VERSION = "2023-06-01";
 // bigger model buys no real quality gain -- pass { model: fastModel } from
 // the call site. Overridable so a self-hosted instance without Haiku access
 // can point this at the same model as everything else.
-export const fastModel = process.env.ANTHROPIC_FAST_MODEL || "claude-haiku-4-5-20251001";
+//
+// claude-haiku-4-5 -> claude-haiku-5-5, 2026-10-08. Newer AND cheaper, so
+// this is not a downgrade: $1/$5 per MTok becomes $0.10/$0.50 for prompts of
+// 100K tokens or fewer, which every call on this lane is by a wide margin
+// (the largest is one downsampled page image). Past 100K it is $0.50/$2.50 --
+// still half of what 4.5 cost -- so a future long-context feature on this
+// lane gets cheaper too, just less dramatically. The headline 10x overstates
+// the saving: 5.5 uses a newer tokenizer and the same text counts about 30%
+// more tokens, so the real figure lands nearer 7-8x.
+//
+// THE ONE BEHAVIOUR CHANGE THAT COULD HAVE BITTEN, AND WHY IT DOES NOT.
+// Haiku 4.5 thought only when a request asked it to; 5.5 runs adaptive
+// thinking by default, so a response can now BEGIN with thinking blocks and
+// those blocks count against max_tokens. That matters here more than
+// anywhere, because callAnthropic DISCARDS any response with
+// stop_reason "max_tokens" -- a 200-token cap eaten by thinking would not
+// error, it would come back null and the feature would quietly do nothing.
+// Two things make this lane safe as written and both are load-bearing:
+// every helper below finds its block by `type` and never by position, and
+// eight of the nine fast call sites go through a FORCED tool_choice, which
+// returns the tool call with no thinking block at all. The one free-text
+// fast call (pdf-vision.ts, page transcription) runs at 4096. Keep both
+// properties if you add a call site here: a free-text fast call with a small
+// cap is the shape that breaks, and it breaks silently.
+//
+// Also removed on 5.5, each a 400 rather than a quiet failure: temperature,
+// top_p and top_k at any non-default value, thinking budget_tokens, and an
+// assistant prefill. callAnthropic sends none of them (checked 2026-10-08);
+// do not add them for this model.
+export const fastModel = process.env.ANTHROPIC_FAST_MODEL || "claude-haiku-5-5";
 
 // Every AI feature in the app is a no-op until ANTHROPIC_API_KEY is set --
 // same graceful-degrade pattern as Resend (email.ts) and VAPID (push.ts).

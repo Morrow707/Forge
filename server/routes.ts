@@ -6901,8 +6901,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Per page: one downsampled page image plus a short instruction in, one
     // page of transcribed text out. Round numbers on purpose -- a false
     // precision here would be read as a quote.
+    //
+    // Output raised 1,000 -> 1,300 with the 2026-10-08 move to Haiku 5.5: its
+    // tokenizer counts the same text about 30% heavier, and the output here is
+    // transcribed text, so the old figure would under-quote the admin on every
+    // page. Input is left alone -- it is dominated by the page IMAGE, which is
+    // tokenised by pixel area rather than by the text tokenizer.
     const INPUT_TOKENS_PER_PAGE = 2_750;
-    const OUTPUT_TOKENS_PER_PAGE = 1_000;
+    const OUTPUT_TOKENS_PER_PAGE = 1_300;
     const estimatedUsd = estimateUsd({
       model: fastModel,
       inputTokens: pages * INPUT_TOKENS_PER_PAGE,

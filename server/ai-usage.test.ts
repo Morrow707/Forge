@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { estimateUsd, ratesFor } from "./ai-usage";
+import { fastModel } from "./ai";
 
 describe("AI cost estimation", () => {
   it("prices input, output and cache tiers separately", () => {
@@ -44,9 +45,41 @@ describe("AI cost estimation", () => {
     expect(usd!).toBeLessThan(5);
   });
 
-  it("knows the models the app actually calls", () => {
-    for (const model of ["claude-sonnet-5", "claude-haiku-4-5-20251001"]) {
-      expect(ratesFor(model)).not.toBeNull();
+  it("still prices the retired fast model, so history keeps its dollar figure", () => {
+    // Rollup rows are stored against the model id that spent the money. The
+    // 2026-10-08 switch to Haiku 5.5 must not blank out every day before it.
+    for (const model of ["claude-haiku-4-5", "claude-haiku-4-5-20251001"]) {
+      expect(ratesFor(model), `${model} lost its rate`).not.toBeNull();
     }
+  });
+
+  it("prices the same 400-page scan an order of magnitude cheaper on Haiku 5.5", () => {
+    // The before/after that justifies the switch, as the admin's own
+    // pre-flight estimate computes it. Output is 1,300 rather than 1,000 per
+    // page because 5.5's tokenizer counts the same text ~30% heavier -- the
+    // saving survives that and is still close to tenfold.
+    const was = estimateUsd({
+      model: "claude-haiku-4-5",
+      inputTokens: 400 * 2_750, outputTokens: 400 * 1_000,
+      cacheReadTokens: 0, cacheWriteTokens: 0,
+    })!;
+    const now = estimateUsd({
+      model: "claude-haiku-5-5",
+      inputTokens: 400 * 2_750, outputTokens: 400 * 1_300,
+      cacheReadTokens: 0, cacheWriteTokens: 0,
+    })!;
+    expect(now).toBeLessThan(was / 7);
+  });
+
+  // THE RATCHET. A model with no rate on file does not throw and does not read
+  // as free -- estimateUsd returns null, by design (the test above pins that).
+  // But routes.ts asks it for the dollar figure an admin sees BEFORE
+  // authorising a 400-page transcription pass, so a fast model that is not in
+  // the table turns that quote blank at exactly the moment somebody is
+  // deciding whether to spend. Derived from fastModel rather than hand-typed
+  // on purpose: the hand-typed list is what let the id and the rate table
+  // drift apart in the first place.
+  it("has a rate on file for whatever model the app is actually configured to call", () => {
+    expect(ratesFor(fastModel), `no rate on file for fastModel "${fastModel}"`).not.toBeNull();
   });
 });

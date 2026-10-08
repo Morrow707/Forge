@@ -40,6 +40,20 @@ async function withPool<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
 const RATES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
   "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  // The current fast model (see fastModel in ai.ts). ONE CAVEAT THIS TABLE'S
+  // SHAPE CANNOT EXPRESS: Haiku 5.5 has two rate cards chosen by prompt
+  // length -- $0.10/$0.50 at 100K input tokens or fewer, $0.50/$2.50 above
+  // it. The cheap card is the one every call on the fast lane lands on today
+  // by a wide margin (the largest is a single downsampled page image), so it
+  // is the one on file. A feature that starts sending this model six-figure
+  // prompts would be under-reported fivefold here and would need the rate
+  // keyed on prompt length rather than on the model alone. Named so that
+  // lands as a known limit rather than as a wrong number nobody questioned.
+  "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  // Kept after the 2026-10-08 switch to 5.5, not replaced: rollup rows are
+  // stored against the model id that spent the money, so deleting these
+  // would make every day before the switch read "no dollar figure on file"
+  // -- erasing the before half of the comparison that justifies the switch.
   "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
   "claude-haiku-4-5-20251001": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
 };

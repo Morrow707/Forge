@@ -1359,6 +1359,51 @@ halves before splitting anything else:
   negatives, and the dense dumbbell racks recorded as COARSE rather than quietly presented as
   tight. `prepare_dataset.py` runs clean on all 266. **Training the model is the next step and
   has not been run.**
+- **THE FAST MODEL IS `claude-haiku-5-5`** (2026-10-08, Scott: "switch the fast model to haiku
+  5.5 ... everywhere"). `fastModel` in `server/ai.ts` was `claude-haiku-4-5-20251001`. Haiku 5.5
+  REPLACES 4.5 and is newer AND cheaper, so this is not a downgrade and no quality call was made
+  on anyone's behalf: **$1/$5 per MTok becomes $0.10/$0.50** for prompts of 100K tokens or fewer,
+  which every call on this lane is by a wide margin. The headline 10x overstates it -- 5.5's
+  tokenizer counts the same text ~30% heavier, so the real figure is nearer 7-8x. Context goes
+  200K -> 1M, output 64K -> 128K.
+  **THE ONE THING THAT COULD HAVE BITTEN, AND WHY IT DID NOT.** Haiku 4.5 thought only when asked;
+  5.5 runs adaptive thinking BY DEFAULT, so a response can begin with thinking blocks and those
+  count against `max_tokens`. That matters more here than anywhere because `callAnthropic`
+  DISCARDS any response with `stop_reason: "max_tokens"` -- a 200-token cap eaten by thinking
+  would not error, it would return null and the feature would quietly do nothing, which is the
+  exact silent-degradation shape this file exists to prevent. Two properties make the lane safe
+  and both are load-bearing: **every helper in `ai.ts` finds its block by `type`, never by
+  position** (`content.find(b => b.type === "text" | "tool_use")`), and **eight of the nine fast
+  call sites go through a FORCED `tool_choice`**, which returns the tool call with no thinking
+  block at all. The ninth (pdf-vision page transcription) is free text at 4096. **A free-text fast
+  call with a small cap is the shape that breaks, and it breaks silently** -- keep both properties
+  if you add one.
+  Also now a 400 rather than a quiet failure on 5.5: `temperature`/`top_p`/`top_k` at any
+  non-default value, thinking `budget_tokens`, and an assistant prefill. `callAnthropic` sends
+  none of them (checked); do not add them.
+  **THE RATE TABLE IS PART OF THE CHANGE, NOT A FOLLOW-UP.** `routes.ts` asks `estimateUsd` for
+  the dollar figure an admin sees BEFORE authorising a 400-page transcription pass, and a model
+  with no rate on file returns null by design -- so shipping the id without the rate would blank
+  that quote at the moment somebody is deciding whether to spend. The 4.5 rows are KEPT, not
+  replaced: rollup rows are stored against the model id that spent the money, and deleting them
+  would erase the before half of the comparison. `ai-usage.test.ts` holds the ratchet, derived
+  from `fastModel` rather than hand-typed (a hand-typed list is what let the id and the table
+  drift), and it was mutation-tested. The pre-flight's output estimate went 1,000 -> 1,300 tokens
+  a page for the heavier tokenizer; input is left alone, being dominated by a page IMAGE, which
+  is tokenised by pixel area and not by the text tokenizer.
+  **One known limit, recorded not papered over:** Haiku 5.5 has TWO rate cards by prompt length
+  ($0.10/$0.50 at <=100K, $0.50/$2.50 above) and `RATES` is one rate per model. The cheap card is
+  on file because it is the one every call lands on today; a feature that starts sending this
+  model six-figure prompts would be under-reported fivefold and needs the rate keyed on prompt
+  length.
+  **STILL TO DO ON RENDER, AND THE CODE CANNOT DO IT:** `ANTHROPIC_FAST_MODEL` is `sync: false` in
+  `render.yaml`, so if it is pinned to the old id in the Render dashboard this change does nothing
+  in production. Clear it (the in-code default is now correct) or set it to `claude-haiku-5-5`.
+  **NOT changed and deliberately separate:** `defaultModel` is still `claude-sonnet-5`. Its
+  successor `claude-sonnet-5-5` costs the SAME ($2/$10), but **forced `tool_choice` returns a 400
+  on Sonnet 5.5**, and `askClaudeStructured` / `askClaudeVisionStructured` /
+  `askClaudeFileStructured` all force a tool -- so that upgrade is free in money and not free in
+  work, and it is its own decision. Server-side: ships on a Render deploy, no build.
 - **THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`** (`ios/fastlane/Fastfile`), so
   **a `verify_build` run consumes a number without producing a TestFlight build** -- which is why
   the numbering in this file has drifted twice. Read the run list, not the last number written
